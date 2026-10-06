@@ -104,8 +104,13 @@ layout, text and colours as on Windows. Letters are drawn slightly differently b
 font renderer, and the status bar shows that runner's own Git (2.55.0). The other CI screenshots
 were checked by the automated assertions only.
 
-One earlier CI run, for commit `9fd6555`, hung in the test step on macOS and left no log. The runs
-before and after it passed there in about 12 seconds. It is an open issue; see the phase's handoff.
+CI run [37441056204](https://github.com/RahimPasha/VisualCommit/actions/runs/37441056204) did the
+same for `45f3e85`, the commit of the re-run: all 117 tests passed on each platform.
+
+Two other CI runs, for commits `9fd6555` and `f6560c6`, hung in the test step on macOS and left no
+log; the macOS runs before, between and after them passed in about 12 seconds. After stopping git
+was hardened (D36), the default tests ran 14 times in a row on macOS without a hang. The cause is
+likely but not proven; see "Known issues" in the phase's handoff.
 
 ## macOS checklist for the owner
 

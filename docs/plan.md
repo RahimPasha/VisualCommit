@@ -68,8 +68,8 @@ too, but they do not replace it.
    own command, is never part of the default `dotnet test` run or CI, and the owner is told
    before it starts. The harness lives in the repo, so it does not depend on what tools a session
    happens to have. This catches what the scripted run cannot: window frame, display scaling,
-   native dialogs, start-up. It needs the desktop unlocked and uses the real mouse for a few
-   minutes. It uses the 1100×700 size, plus 1920×1080 when that fits the screen at its display
+   native dialogs, start-up. It needs the desktop unlocked and uses the real mouse while it runs:
+   half a minute for phase 0's pass, longer as phases add checks. It uses the 1100×700 size, plus 1920×1080 when that fits the screen at its display
    scaling; the report records the scaling. A real-window screenshot "matches" when it shows the
    same layout, text and state as the scripted screenshot of the same step; the window frame and
    small font-rendering differences are expected. The pass also measures this: it fails when more

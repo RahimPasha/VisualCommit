@@ -52,52 +52,8 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
-      # TEMPORARY: the tests have hung on macOS in some CI runs, and GitHub kept no log of those
-      # runs. This step runs the default tests twelve times, the way the Test step below does,
-      # with a time limit of its own. On a hang it prints the thread stacks of the test programs
-      # that are still running, the process list and what the run printed, then fails. Remove
-      # it once the cause is known (see docs/status.md).
-      - name: Hunt for the hang (temporary)
-        if: runner.os == 'macOS'
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          dotnet tool install --global dotnet-stack > /dev/null 2>&1 || true
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            out="hunt-$i.txt"
-            dotnet test --configuration Release --no-build > "$out" 2>&1 &
-            pid=$!
-            secs=0
-            while kill -0 "$pid" 2>/dev/null; do
-              sleep 1
-              secs=$((secs + 1))
-              if [ "$secs" -ge 80 ]; then
-                echo "::error::HUNG: dotnet test in iteration $i, after ${secs}s"
-                echo "--- processes (state T means stopped)"
-                ps -axo pid,ppid,state,etime,command | grep -E 'VisualCommit|git|sleep|dotnet|[ /]sh ' | grep -v grep || true
-                for host in $(pgrep -f 'bin/Release/net10.0/VisualCommit\.' || true); do
-                  echo "--- managed thread stacks of test program $host: $(ps -o command= -p "$host" | cut -c1-120)"
-                  ( dotnet-stack report -p "$host" 2>&1 | head -300 ) &
-                  stacks=$!
-                  ( sleep 40; kill -9 "$stacks" 2>/dev/null ) &
-                  wait "$stacks" || true
-                done
-                echo "--- what the run printed"
-                tail -60 "$out" || true
-                pkill -9 -f 'bin/Release/net10.0/VisualCommit\.' || true
-                kill -9 "$pid" 2>/dev/null || true
-                exit 1
-              fi
-            done
-            wait "$pid" && code=0 || code=$?
-            echo "iteration $i: dotnet test exit $code after ${secs}s"
-            if [ "$code" -ne 0 ]; then
-              tail -60 "$out" || true
-              exit 1
-            fi
-          done
-
+      # The step has a time limit of its own: if the tests hang, the job goes on, fails and keeps
+      # its log. GitHub had no log for jobs that hung until the whole job was cancelled.
       - name: Test
         timeout-minutes: 5
         run: dotnet test --configuration Release --no-build
