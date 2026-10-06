@@ -81,10 +81,10 @@ every commit.
 - Nothing is in flight. `master` holds everything; the working tree was clean when phase 0 closed.
 - The change for cloud sessions (`b1d2ed0`) touched code after phase 0's gate:
   `AppPaths.DefaultDataDirectory` no longer creates the folder it names, and `RealApp.Launch`
-  clears the git variables it inherits. CI built and tested it in every job and compiled the
-  real-window project, but the real-window pass itself last ran on `0784112`. Its next run on
-  the Windows machine is the first proof of that change in a real window; if phase 0's check 8
-  fails there, look at this change first.
+  clears the git variables it inherits. CI built and tested it in every job, and on 2026-10-06
+  the owner had the real-window pass run on `2730b57` (same code) on the Windows machine: it
+  passed, with each of its three pictures within 0.65% of the scripted one, and the pictures
+  were inspected. So phase 0's checks hold with that change.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
