@@ -20,8 +20,7 @@
                          Classes.light="{Binding !IsDarkTheme}"
                          Command="{Binding ToggleThemeCommand}"
                          ToolTip.Tip="{Binding ThemeSwitchToolTip}"
-                         AutomationProperties.AutomationId="ThemeSwitch"
-                         AutomationProperties.Name="Theme" />
+                         AutomationProperties.AutomationId="ThemeSwitch" />
       </StackPanel>
 
       <StackPanel Orientation="Horizontal">

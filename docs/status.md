@@ -32,8 +32,8 @@ Delivers (from `plan.md`), split into steps:
 
 - [x] 1. Visual-check expectations written to `docs/test-reports/phase-0.md` (before any UI exists)
 - [x] 2. Repo files: `.gitignore`, `.gitattributes`, `.editorconfig`
-- [ ] 3. Solution: `VisualCommit.slnx`, `Directory.Build.props`, `Directory.Packages.props`, all projects created and building
-- [ ] 4. CI workflow for Windows, macOS and Linux; first run read back from GitHub
+- [x] 3. Solution: `VisualCommit.slnx`, `Directory.Build.props`, `Directory.Packages.props`, all projects created and building
+- [x] 4. CI workflow for Windows, macOS and Linux; first run read back from GitHub
 - [x] 5. Git runner: locate git and check its version, with tests
 - [x] 6. Git runner: run asynchronously, stream output, cancel, record each call, with tests
 - [x] 7. Data folder (`VISUALCOMMIT_DATA_DIR`) and JSON settings store, with tests
@@ -45,7 +45,7 @@ Delivers (from `plan.md`), split into steps:
 - [x] 13. Start-up: git detected and shown in the status bar; start-up written to the log
 - [x] 14. Headless UI tests for the shell (`VisualCommit.App.Tests`)
 - [x] 15. Scripted walk-through with screenshots (`VisualCommit.VisualTests`)
-- [ ] 16. Real-window pass harness (`VisualCommit.RealWindowTests`), proven on this machine
+- [x] 16. Real-window pass harness (`VisualCommit.RealWindowTests`), proven on this machine
 - [ ] 17. README
 - [ ] 18. Commands section of `CLAUDE.md` filled in
 
@@ -70,9 +70,9 @@ Closing steps (from `CLAUDE.md`):
 
 ### Next step
 
-Step 4: read the first CI run of the pushed branch with `gh run list --branch phase/0-foundation` and
-fix what it reports. Then step 16: build `tests/VisualCommit.RealWindowTests` (FlaUI) and prove it
-on this machine.
+Steps 17 and 18: write the README and fill in the Commands section of `CLAUDE.md`; record the
+decisions made this phase in `decisions.md` and add `THIRD-PARTY-NOTICES.md`. Then the closing steps,
+starting with the visual test gate (C1).
 
 ### Notes for whoever resumes
 
@@ -88,6 +88,11 @@ on this machine.
   to discover tests with xunit.v3 4.x.
 - A test that needs a second app instance must go through FreshApplication.RunAsync`n  (	ests/VisualCommit.Testing/Headless). Awaiting HeadlessUnitTestSession.Dispatch directly hangs
   the next test.
+- The real-window pass is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release`. It
+  needs the scripted screenshots, so run `dotnet test` at the repo root first. It takes about 30
+  seconds and moves the real mouse.
+- CI was green on all three platforms for commit 66f08a4 (run 37435533667). Pushes that change
+  only docs do not start a CI run.
 - The GitHub repo is private. The `gh` token has the scopes `repo`, `gist` and `read:org` but not
   `workflow`; git itself pushes through Git Credential Manager. If pushing the CI workflow file is
   refused, the owner has to grant the `workflow` scope.

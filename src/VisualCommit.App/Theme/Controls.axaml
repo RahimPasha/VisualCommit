@@ -15,6 +15,8 @@
       <Setter Property="CornerRadius" Value="5" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+      <!-- Screen readers and UI Automation read the label as the button's name. -->
+      <Setter Property="AutomationProperties.Name" Value="{Binding Label, RelativeSource={RelativeSource Self}}" />
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="{TemplateBinding Background}"
