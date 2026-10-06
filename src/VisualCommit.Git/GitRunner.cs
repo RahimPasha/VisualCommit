@@ -227,14 +227,21 @@ public sealed class GitRunner : IGitRunner
     {
         try
         {
+            // Only on Windows is the whole tree stopped: through the job object, with the
+            // process-tree kill as a fallback when the job could not be created.
+            //
+            // On macOS and Linux the tree kill is not used at all. It works by suspending
+            // processes while it walks the process list, and with it in place test runs froze
+            // whole CI machines on macOS (decision D36). There, only git itself is killed. What
+            // git started usually ends by itself when its pipes to git break, and the bounded
+            // waits in RunAsync keep a call from depending on it.
             if (OperatingSystem.IsWindows())
             {
                 job?.Terminate();
-            }
-
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
             }
         }
         catch (Exception)
@@ -244,9 +251,6 @@ public sealed class GitRunner : IGitRunner
 
         try
         {
-            // The tree kill is not all-or-nothing. On macOS and Linux it first suspends each
-            // process and then lists its children; if listing fails, git is left suspended:
-            // alive, holding its pipes, never exiting. A plain kill ends it in every state.
             if (!process.HasExited)
             {
                 process.Kill();

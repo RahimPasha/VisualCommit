@@ -68,7 +68,7 @@ jobs:
           cat > watcher.sh <<'EOF'
           #!/bin/bash
           export PATH="$PATH:$HOME/.dotnet/tools"
-          pattern='dotnet test|bin/Release/net10.0/VisualCommit\.|sleep 20|sleep 60'
+          pattern='dotnet test|bin/Release/net10.0/VisualCommit\.'
           while true; do
             sleep 5
             now=$(date +%s)
@@ -97,7 +97,6 @@ jobs:
                 done
                 pkill -9 -f 'bin/Release/net10.0/VisualCommit\.' || true
                 pkill -9 -f 'dotnet test' || true
-                pkill -9 -f 'sleep 20|sleep 60' || true
                 rm -rf seen
                 mkdir -p seen
                 break

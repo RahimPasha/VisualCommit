@@ -188,7 +188,7 @@ public class GitRunnerTests
     }
 
     [Fact]
-    public async Task Cancelling_stops_git_and_its_child_processes_quickly()
+    public async Task Cancelling_stops_git_and_returns_quickly()
     {
         var calls = new GitCallLog();
         var runner = new GitRunner(GitPath, calls);
@@ -196,7 +196,7 @@ public class GitRunnerTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var run = runner.RunAsync(
-            Script("echo started; sleep 60", onOutputLine: _ => started.TrySetResult()),
+            Script("echo started; sleep 30", onOutputLine: _ => started.TrySetResult()),
             cancellation.Token);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
 
@@ -204,8 +204,9 @@ public class GitRunnerTests
         await cancellation.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
 
-        // The run only returns once the output pipes close, and the sleeping child holds them
-        // open. Returning long before the 60 seconds are over proves the child was stopped too.
+        // The sleeping child of git's shell holds the output pipes open. On Windows it is
+        // stopped together with git; elsewhere only git is stopped and the call must still
+        // return, long before the child's 30 seconds are over.
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15), $"Cancelling took {stopwatch.Elapsed}.");
 
         var call = Assert.Single(calls.Snapshot());
@@ -333,7 +334,7 @@ public class GitRunnerTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => runner.RunAsync(
-                Script("echo first; sleep 60", onOutputLine: _ => throw new InvalidOperationException("handler failed")),
+                Script("echo first; sleep 30", onOutputLine: _ => throw new InvalidOperationException("handler failed")),
                 TestCancelled));
 
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15), $"Stopping took {stopwatch.Elapsed}.");
