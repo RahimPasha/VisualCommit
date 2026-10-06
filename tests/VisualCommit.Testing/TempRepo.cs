@@ -87,7 +87,14 @@ public sealed class TempRepo : IDisposable
     }
 
     /// <summary>Runs git in the repository and returns its result. Throws when git reports an error.</summary>
-    public async Task<GitResult> GitAsync(params string[] arguments)
+    public Task<GitResult> GitAsync(params string[] arguments) => GitWithInputAsync(null, arguments);
+
+    /// <summary>
+    /// Runs git in the repository with <paramref name="input"/> on its standard input, for
+    /// commands that read a stream, such as <c>fast-import</c> to build a large history quickly.
+    /// Throws when git reports an error.
+    /// </summary>
+    public async Task<GitResult> GitWithInputAsync(string? input, params string[] arguments)
     {
         var time = _clock.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture);
         var environment = new Dictionary<string, string?>(Environment)
@@ -96,7 +103,7 @@ public sealed class TempRepo : IDisposable
             ["GIT_COMMITTER_DATE"] = time,
         };
 
-        var command = new GitCommand(arguments) { WorkingDirectory = Path, Environment = environment };
+        var command = new GitCommand(arguments) { WorkingDirectory = Path, Environment = environment, StandardInput = input };
         var result = await Runner.RunAsync(command);
         return result.EnsureSuccess(command);
     }

@@ -14,7 +14,7 @@
                DockPanel.Dock="Top"
                Margin="8,8,8,6"
                PlaceholderText="Filter"
-               AutomationProperties.AutomationId="LeftPanelFilter" />
+               AutomationProperties.AutomationId="FilterBox" />
 
       <StackPanel Name="Sections">
         <StackPanel.Styles>

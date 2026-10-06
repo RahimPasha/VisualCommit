@@ -83,6 +83,18 @@ public sealed class RealApp : IDisposable
             RedirectStandardError = true,
         };
         startInfo.Environment["VISUALCOMMIT_DATA_DIR"] = dataDirectory;
+
+        // The app's git calls must not depend on this machine's git configuration, as in the
+        // scripted walk-through (HeadlessTestApp.IsolateFromTheMachine).
+        var emptyGitConfig = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "isolation", "gitconfig");
+        Directory.CreateDirectory(Path.GetDirectoryName(emptyGitConfig)!);
+        if (!File.Exists(emptyGitConfig))
+        {
+            File.WriteAllText(emptyGitConfig, string.Empty);
+        }
+
+        startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
+        startInfo.Environment["GIT_CONFIG_GLOBAL"] = emptyGitConfig;
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
         process.OutputDataReceived += (_, _) => { };
         process.ErrorDataReceived += (_, _) => { };

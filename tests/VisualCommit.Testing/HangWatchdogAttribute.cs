@@ -29,17 +29,44 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
 
     private static readonly ConcurrentDictionary<string, (string Name, long StartedAt)> Running = new();
     private static readonly Lock StartGate = new();
-    private static Timer? timer;
+    private static Thread? watcher;
     private static long lastEventAt = Stopwatch.GetTimestamp();
     private static string lastEvent = "no test has started";
 
-    public override void Before(MethodInfo methodUnderTest, IXunitTest test)
+    /// <summary>
+    /// Starts the watch as soon as the test framework reads the attribute, so that a run that
+    /// hangs before its first test, or in a test whose runner does not call the hooks below, is
+    /// still caught by the "nothing happens" rule.
+    /// </summary>
+    public HangWatchdogAttribute()
     {
         lock (StartGate)
         {
-            timer ??= new Timer(_ => Check(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-        }
+            if (watcher is not null)
+            {
+                return;
+            }
 
+            // A thread of its own, not a timer: a timer needs the thread pool, and a hang can
+            // be exactly a thread pool with no thread to spare.
+            watcher = new Thread(() =>
+            {
+                while (true)
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(1));
+                    Check();
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "Hang watchdog",
+            };
+            watcher.Start();
+        }
+    }
+
+    public override void Before(MethodInfo methodUnderTest, IXunitTest test)
+    {
         Running[test.UniqueID] = (test.TestDisplayName, Stopwatch.GetTimestamp());
         Note("started " + test.TestDisplayName);
     }

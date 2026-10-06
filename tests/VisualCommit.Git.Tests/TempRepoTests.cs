@@ -104,6 +104,28 @@ public class TempRepoTests
     }
 
     [Fact]
+    public async Task A_history_can_be_built_from_a_stream_on_standard_input()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        const string stream =
+            "commit refs/heads/main\n" +
+            "committer Stream Author <stream@example.com> 1767268800 +0000\n" +
+            "data 6\nFirst\n" +
+            "M 100644 inline a.txt\ndata 2\na\n\n" +
+            "commit refs/heads/main\n" +
+            "committer Stream Author <stream@example.com> 1767268860 +0000\n" +
+            "data 7\nSecond\n" +
+            "M 100644 inline b.txt\ndata 2\nb\n\n";
+
+        await repo.GitWithInputAsync(stream, "fast-import", "--quiet");
+
+        var subjects = (await repo.GitAsync("log", "--format=%s", "main")).StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(["Second", "First"], subjects);
+        Assert.Equal("a\nb\n", (await repo.GitAsync("show", "main:a.txt")).StandardOutput + (await repo.GitAsync("show", "main:b.txt")).StandardOutput);
+    }
+
+    [Fact]
     public async Task A_failing_git_call_throws_with_gits_own_message()
     {
         using var repo = await TempRepo.CreateAsync();

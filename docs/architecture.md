@@ -118,7 +118,8 @@ Rules the runner follows (see D30 and D31):
   is how git writes progress. Handlers run on thread-pool threads: a view model must move to the
   UI thread itself.
 - Cancelling the token stops git and all its child processes, records the call as `Cancelled` and
-  throws `OperationCanceledException`.
+  throws `OperationCanceledException`. Stopping never throws, and a cancelled call returns within
+  10 seconds even if git could not be stopped.
 - Once git has exited, output is read for at most 2 more seconds. A process that git left behind
   (a hook's background job) cannot hold a call up.
 

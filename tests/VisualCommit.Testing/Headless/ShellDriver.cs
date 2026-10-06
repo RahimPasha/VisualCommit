@@ -29,16 +29,25 @@ public sealed class ShellDriver : IDisposable
 
     /// <summary>
     /// Starts the app on <paramref name="dataDirectory"/> through the same start-up code as the
-    /// desktop app, and shows its window at the given size in logical pixels.
+    /// desktop app, and shows its window at the given size in logical pixels. Pass null for a
+    /// size to keep the one the app chose itself, for a check of what the app restores.
     /// </summary>
-    public static ShellDriver Start(string dataDirectory, int width = 1100, int height = 700)
+    public static ShellDriver Start(string dataDirectory, int? width = 1100, int? height = 700)
     {
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
         var session = AppSession.Start(new AppPaths(dataDirectory), application);
-        session.MainWindow.Width = width;
-        session.MainWindow.Height = height;
+        if (width is not null)
+        {
+            session.MainWindow.Width = width.Value;
+        }
+
+        if (height is not null)
+        {
+            session.MainWindow.Height = height.Value;
+        }
+
         session.MainWindow.Show();
 
         var driver = new ShellDriver(session);
@@ -85,6 +94,50 @@ public sealed class ShellDriver : IDisposable
         Window.MouseMove(position);
         Window.MouseDown(position, MouseButton.Left);
         Window.MouseUp(position, MouseButton.Left);
+        Settle();
+    }
+
+    /// <summary>Moves the mouse to the centre of a control and clicks the right button.</summary>
+    public void RightClick(Visual visual) => RightClick(BoundsOf(visual).Center);
+
+    /// <summary>Moves the mouse to a window position and clicks the right button.</summary>
+    public void RightClick(Point position)
+    {
+        Window.MouseMove(position);
+        Window.MouseDown(position, MouseButton.Right);
+        Window.MouseUp(position, MouseButton.Right);
+        Settle();
+    }
+
+    /// <summary>Moves the mouse to the centre of a control and double-clicks the left button.</summary>
+    public void DoubleClick(Visual visual) => DoubleClick(BoundsOf(visual).Center);
+
+    /// <summary>Moves the mouse to a window position and double-clicks the left button.</summary>
+    public void DoubleClick(Point position)
+    {
+        Window.MouseMove(position);
+        for (var click = 0; click < 2; click++)
+        {
+            // Two presses at one spot in quick succession: Avalonia counts them as a double-click.
+            Window.MouseDown(position, MouseButton.Left);
+            Window.MouseUp(position, MouseButton.Left);
+        }
+
+        Settle();
+    }
+
+    /// <summary>Types text into whatever has the keyboard focus, as key presses would.</summary>
+    public void Type(string text)
+    {
+        Window.KeyTextInput(text);
+        Settle();
+    }
+
+    /// <summary>Presses and releases one key, with optional modifiers such as Control.</summary>
+    public void PressKey(Key key, RawInputModifiers modifiers = RawInputModifiers.None)
+    {
+        Window.KeyPress(key, modifiers, PhysicalKey.None, null);
+        Window.KeyRelease(key, modifiers, PhysicalKey.None, null);
         Settle();
     }
 

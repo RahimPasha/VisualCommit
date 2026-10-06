@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
@@ -168,6 +169,86 @@ public class ShellTests
         {
             window.Close();
         }
+    }
+
+    [AvaloniaFact]
+    public async Task Git_calls_of_the_app_under_test_do_not_see_the_configuration_of_the_machine()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var runner = app.Session.Shell.Git!.Runner!;
+
+        var result = await runner.RunAsync(
+            new GitCommand("config", "--list", "--show-scope") { WorkingDirectory = data.Path },
+            TestContext.Current.CancellationToken);
+
+        // Outside a repository only system and user settings could show up, and both are cut off.
+        Assert.DoesNotContain("system\t", result.StandardOutput);
+        Assert.DoesNotContain("global\t", result.StandardOutput);
+    }
+
+    // The three tests below prove the kinds of input the scripted walk-throughs of later phases
+    // rely on, with the one control in the shell that reacts to them: the filter box.
+    [AvaloniaFact]
+    public async Task Typing_goes_to_the_control_that_was_clicked()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var filter = app.Find<TextBox>("FilterBox");
+
+        app.Click(filter);
+        app.Type("feature login");
+
+        Assert.True(filter.IsFocused);
+        Assert.Equal("feature login", filter.Text);
+
+        app.PressKey(Key.A, RawInputModifiers.Control);
+        app.PressKey(Key.Back);
+
+        Assert.Equal(string.Empty, filter.Text ?? string.Empty);
+    }
+
+    [AvaloniaFact]
+    public async Task A_double_click_selects_the_word_under_the_pointer()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var filter = app.Find<TextBox>("FilterBox");
+        app.Click(filter);
+        app.Type("feature login");
+        var area = app.BoundsOf(filter);
+
+        app.DoubleClick(new Point(area.X + 24, area.Center.Y));
+
+        Assert.Equal("feature", filter.SelectedText);
+    }
+
+    [AvaloniaFact]
+    public async Task A_right_click_opens_the_context_menu_of_the_control()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var filter = app.Find<TextBox>("FilterBox");
+        Assert.NotNull(filter.ContextFlyout);
+        Assert.False(filter.ContextFlyout.IsOpen);
+
+        app.RightClick(filter);
+
+        Assert.True(filter.ContextFlyout.IsOpen);
+        filter.ContextFlyout.Hide();
+    }
+
+    [AvaloniaFact]
+    public void A_session_started_without_a_size_keeps_the_size_the_app_chose()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path, width: null, height: null);
+
+        Assert.Equal(new Size(1280, 800), app.Window.ClientSize);
     }
 
     [AvaloniaFact]

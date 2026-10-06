@@ -19,6 +19,9 @@ public sealed class GitRunner : IGitRunner
     /// </summary>
     private static readonly TimeSpan PipeDrainTimeout = TimeSpan.FromSeconds(2);
 
+    /// <summary>How long a cancelled call waits for git to be gone before it returns without it.</summary>
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
+
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
@@ -74,8 +77,15 @@ public sealed class GitRunner : IGitRunner
         var pumps = Task.WhenAll(outputPump, errorPump);
         var exit = process.WaitForExitAsync(CancellationToken.None);
 
-        // Stopping git ends the wait below, so cancellation needs nothing else.
-        using var stopOnCancel = cancellationToken.Register(Stop);
+        // Cancelling stops git, which ends the wait below. Should git not stop, the wait is given
+        // up after StopTimeout: a call that was cancelled must return, whatever git does.
+        var gaveUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var stopOnCancel = cancellationToken.Register(() =>
+        {
+            Stop();
+            _ = Task.Delay(StopTimeout, CancellationToken.None)
+                .ContinueWith(_ => gaveUp.TrySetResult(), TaskScheduler.Default);
+        });
 
         try
         {
@@ -83,21 +93,29 @@ public sealed class GitRunner : IGitRunner
 
             // Wait for git to exit. A pump that fails before that means an output handler
             // threw: awaiting it rethrows the exception at once, without waiting for git.
-            var pending = new List<Task> { exit, outputPump, errorPump };
-            while (!exit.IsCompleted)
+            var pending = new List<Task> { exit, gaveUp.Task, outputPump, errorPump };
+            while (!exit.IsCompleted && !gaveUp.Task.IsCompleted)
             {
                 var finished = await Task.WhenAny(pending).ConfigureAwait(false);
                 await finished.ConfigureAwait(false);
                 pending.Remove(finished);
             }
 
-            await DrainAsync(pumps, output, error).ConfigureAwait(false);
+            if (exit.IsCompleted)
+            {
+                await DrainAsync(pumps, output, error).ConfigureAwait(false);
+            }
+            else
+            {
+                Abandon(pumps, output, error);
+                _log.Warning($"{command.DisplayText} was cancelled but did not stop within {StopTimeout.TotalSeconds:F0} seconds. It is left behind.");
+            }
         }
         catch (Exception ex)
         {
             // An output handler threw, or a pipe broke. Do not leave git running behind us.
             Stop();
-            await Task.WhenAny(exit, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false);
+            await Task.WhenAny(exit, Task.Delay(StopTimeout)).ConfigureAwait(false);
             await DrainAsync(pumps.ContinueWith(_ => { }, TaskScheduler.Default), output, error).ConfigureAwait(false);
             Record(command, startedAt, stopwatch.Elapsed, GitCallOutcome.Cancelled, null, output.Head, error.Head);
             if (cancellationToken.IsCancellationRequested)
@@ -184,6 +202,13 @@ public sealed class GitRunner : IGitRunner
             return;
         }
 
+        Abandon(pumps, output, error);
+        _log.Debug("A process started by git kept its output open after git exited; its output is no longer read.");
+    }
+
+    /// <summary>Stops collecting output and leaves the pumps to end on their own, whenever the pipes close.</summary>
+    private static void Abandon(Task pumps, OutputCollector output, OutputCollector error)
+    {
         output.Close();
         error.Close();
         _ = pumps.ContinueWith(
@@ -191,12 +216,12 @@ public sealed class GitRunner : IGitRunner
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted,
             TaskScheduler.Default);
-        _log.Debug("A process started by git kept its output open after git exited; its output is no longer read.");
     }
 
     /// <summary>
     /// Stops git and everything it started (ssh, remote helpers, hooks), which would otherwise
-    /// keep running and keep the output pipes open.
+    /// keep running and keep the output pipes open. Never throws: it runs inside a cancellation
+    /// callback, where an exception would land on whoever cancelled.
     /// </summary>
     private static void Kill(Process process, WindowsJob? job)
     {
@@ -212,7 +237,22 @@ public sealed class GitRunner : IGitRunner
                 process.Kill(entireProcessTree: true);
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException or AggregateException)
+        catch (Exception)
+        {
+            // Already gone, or the tree could not be walked. The plain kill below still applies.
+        }
+
+        try
+        {
+            // The tree kill is not all-or-nothing. On macOS and Linux it first suspends each
+            // process and then lists its children; if listing fails, git is left suspended:
+            // alive, holding its pipes, never exiting. A plain kill ends it in every state.
+            if (!process.HasExited)
+            {
+                process.Kill();
+            }
+        }
+        catch (Exception)
         {
             // Already gone.
         }

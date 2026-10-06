@@ -5,7 +5,7 @@
 
        Windows-only and opt-in: this project is NOT in VisualCommit.slnx, so "dotnet build" and
        "dotnet test" at the repo root never touch it. It is run on its own, with the real-window
-       command in the Commands section of CLAUDE.md. It takes over the mouse for about a minute and
+       command in the Commands section of CLAUDE.md. It takes over the mouse for about half a minute and
        needs an unlocked desktop. -->
 
   <PropertyGroup>
