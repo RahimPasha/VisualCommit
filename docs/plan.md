@@ -4,43 +4,39 @@ Scope and feature numbers (C1, O1, T1, Q1, R1 ...) are defined in [requirements.
 
 ## Architecture
 
-- **One process, all C#.** An Avalonia desktop app using MVVM (CommunityToolkit.Mvvm). The UI calls
-  the git layer directly; there is no web server or API layer in between.
-- **Git engine: the real `git` executable.** A process runner starts git, streams its output and
-  parses the machine-readable formats (`log` with a custom format, `status --porcelain=v2`,
-  `blame --porcelain`, unified diffs). Hunk and line staging build a patch and apply it to the index.
-- **Operation queue per repo.** One writing operation at a time, with progress, cancellation and a
-  record in the activity log (T4).
-- **Safety net.** Before a destructive operation the app stores a backup reference under
-  `refs/tracery/backup/`. Undo/redo (O2) restores from these and from the reflog.
-- **Prompts.** Git's credential, passphrase and rebase-editor prompts are redirected to small
-  helper hooks that talk to the app, so they appear as in-app dialogs.
-- **Editors.** Diff, blame and conflict views are built on AvaloniaEdit with TextMate grammars for
-  syntax highlighting.
-- **Hosting.** One provider interface with GitHub, Azure DevOps and GitLab implementations.
-  Tokens live in the OS keychain.
-- **Storage.** Settings and session state as JSON in the per-user app-data folder. Logs are local files.
-- **Tests.** xUnit. Git-layer tests run real git against temporary repos. UI tests use Avalonia's
-  headless mode and capture screenshots.
-- **CI.** GitHub Actions builds and tests on Windows, macOS and Linux on every push.
-- **Packaging.** Velopack for installers and auto-update on all three platforms.
-
-## Solution layout
-
-| Project | Contents |
-|---|---|
-| `Tracery.Core` | Domain models and interfaces; no UI, no process calls |
-| `Tracery.Git` | Git runner, output parsers, operation queue, repo watcher |
-| `Tracery.Hosting` | GitHub, Azure DevOps and GitLab clients; token store |
-| `Tracery.App` | Avalonia views, view models, theme, custom controls (graph, diff, resolver) |
-| `Tracery.Git.Tests` | Integration tests against temporary repos |
-| `Tracery.App.Tests` | View-model tests and headless UI tests |
-| `Tracery.VisualTests` | Scenario repos, scripted walk-throughs and screenshot capture for the visual test gate |
+The design and solution layout are in [architecture.md](architecture.md); the reasons behind the
+main choices are in [decisions.md](decisions.md).
 
 ## Workflow
 
+The project is built one phase per session. A new session remembers nothing from earlier ones, so
+everything it needs is in the repo. [CLAUDE.md](../CLAUDE.md) is loaded automatically and holds
+the start-of-session steps, the rules and the phase-closing steps. It points to these files:
+
+| File | Purpose | Updated |
+|---|---|---|
+| [status.md](status.md) | Which phase is current and exactly where work stopped | In every commit that completes a step |
+| [architecture.md](architecture.md) | How the app is built, as it actually stands | End of each phase |
+| [decisions.md](decisions.md) | Decisions and their reasons, so they are not reopened | When a decision is made |
+| `handoffs/phase-N.md` | What phase N built and what the next phase must know | End of each phase |
+| `test-reports/phase-N.md` | Visual test gate results | End of each phase |
+
+How context passes from one phase to the next:
+
+- **Within a phase.** The phase's deliverables are copied into `status.md` as a checklist and
+  ticked commit by commit. If a session ends early, a new one resumes from the first unticked item.
+- **Between phases.** The closing steps update `architecture.md`, move anything undelivered into
+  the phase of this plan that now owns it, and write a handoff from
+  [handoffs/TEMPLATE.md](handoffs/TEMPLATE.md): what was built, the exact build and test commands,
+  the patterns to follow, known issues, and what the next phase should do first.
+- **Checked, not assumed.** Before a phase closes, a fresh agent with no conversation context
+  reads only the repo and explains how it would build, test and start the next phase. Gaps it
+  hits are fixed in the docs.
+
+Branches and commits:
+
 - Each phase is built on its own branch (`phase/0-foundation`, `phase/1-graph`, ...) in small commits.
-- A phase branch is merged into the main branch after it passes the visual test gate and the owner accepts it.
+- A phase branch is merged into `master` after it passes the visual test gate and the owner accepts it.
 - Nothing is pushed to a remote until the owner asks.
 
 ## Visual test gate
@@ -48,24 +44,35 @@ Scope and feature numbers (C1, O1, T1, Q1, R1 ...) are defined in [requirements.
 No phase is finished until it passes this gate. Automated unit and integration tests are required
 too, but they do not replace it.
 
-1. **Scenario repos.** Scripts build small repos with known content for each check (for example,
+1. **Expectations first.** At the start of the phase, before the UI is built, every visual check
+   listed under the phase is written into `docs/test-reports/phase-N.md` (from
+   [test-reports/TEMPLATE.md](test-reports/TEMPLATE.md)) with concrete steps and a concrete
+   expected result: what is on screen and, where relevant, the git state. Expectations come from
+   `requirements.md` and this plan, not from what the finished app happens to show. Checks can be
+   added later; changing an expected result afterwards needs a reason in the report.
+2. **Scenario repos.** Scripts build small repos with known content for each check (for example,
    two branches set up to conflict), so every run starts from the same state.
-2. **Scripted walk-through.** Each check drives the full app UI with simulated mouse and keyboard
-   input (click, right-click, double-click, drag, typing) against a scenario repo and saves a
-   screenshot after every step. This runs without taking over the desktop, so it is repeatable
-   and also runs in CI on all three platforms.
-3. **Real-window pass.** The built app is launched on Windows and its key flows are repeated in
-   the real window with real input, with screenshots of the actual window. This catches what the
-   scripted run cannot: window chrome, display scaling, native dialogs, start-up. It needs the
-   desktop unlocked and uses the real mouse for a few minutes.
-4. **Inspection.** Every screenshot is looked at and compared with the expected result written in
-   the phase's checklist: layout, text, colours and state. A check passes only when the
-   screenshot shows the expected result and the repo's real git state matches it.
-5. **Fix and re-run.** Failures are fixed, then the phase's checks and all earlier phases' checks
+3. **Scripted walk-through.** `Tracery.VisualTests` drives the full app UI in Avalonia's headless
+   mode, with real rendering and simulated mouse and keyboard input (click, right-click,
+   double-click, drag, typing), against a scenario repo, and saves a screenshot after every step.
+   This runs without taking over the desktop, so it is repeatable and also runs in CI. Standard
+   window sizes are 1100×700 and 1920×1080; a check names the theme it uses.
+4. **Real-window pass.** `Tracery.VisualTests` launches the built app on Windows and repeats the
+   key flows in the real window through Windows UI Automation (FlaUI), with real mouse and
+   keyboard input and screenshots of the actual window. The harness lives in the repo, so it does
+   not depend on what tools a session happens to have. This catches what the scripted run cannot:
+   window frame, display scaling, native dialogs, start-up. It needs the desktop unlocked and
+   uses the real mouse for a few minutes. A real-window screenshot "matches" when it shows the
+   same layout, text and state as the scripted screenshot of the same step; the window frame and
+   small font-rendering differences are expected.
+5. **Inspection.** Every screenshot is opened and compared with the expected result in the
+   report: layout, text, colours and state. A check passes only when the screenshot shows the
+   expected result and the repo's real git state matches it.
+6. **Fix and re-run.** Failures are fixed, then the phase's checks and all earlier phases' checks
    are run again.
-6. **Report.** `docs/test-reports/phase-N.md` lists every check, its expected result, the outcome
-   and the screenshot file. Screenshots stay local under `artifacts/visual/phase-N/` (git-ignored
-   to keep the repo small). The report ends with a short checklist for testing by hand on macOS.
+7. **Report.** `docs/test-reports/phase-N.md` records the outcome and screenshot file for every
+   check. Screenshots stay local under `artifacts/visual/phase-N/` (git-ignored to keep the repo
+   small). The report ends with a short checklist for testing by hand on macOS.
 
 ## Phases
 
@@ -74,20 +81,22 @@ Sizes are relative: S, M, L.
 ### Phase 0 — Foundation (S)
 
 Delivers:
-- Solution, projects, `.editorconfig`, `.gitignore`, README, central package versions.
-- App shell: main window, repo tab strip, left / centre / right panes as placeholders, dark and light theme tokens.
+- Solution, projects, `.editorconfig`, `.gitignore`, `.gitattributes`, README, central package versions.
+- App shell: main window, repo tab strip, left / centre / right panes as placeholders, dark and light themes with a theme switch.
 - Git runner: locate git, check its version, run asynchronously, cancel, stream output, record each call.
-- Settings store and local log file.
+- Settings store (the chosen theme survives a restart) and local log file.
 - Test harness: temporary-repo builder and headless UI tests.
 - Visual test harness: scripted walk-through with screenshots, and the real-window pass, both proven to work on this machine.
-- CI build and test on all three platforms.
+- CI workflow that builds and tests on all three platforms. It can only run once the owner pushes the repo.
+- The Commands section of `CLAUDE.md` filled in with the real build, run and test commands.
 
 Visual checks:
-- The shell in dark and light themes, at a small and a large window size.
-- A simulated click changes the UI, and the screenshot shows the change.
-- A real-window screenshot matches the scripted one.
+- The shell in dark and light themes, at both standard window sizes.
+- Clicking the theme switch changes the theme, and the screenshot shows it.
+- After a restart the app opens in the theme chosen before.
+- A real-window screenshot matches the scripted one for the same step.
 
-Done when: the app launches to an empty shell on Windows, CI is green on all three platforms, the runner tests pass and the visual gate passes.
+Done when: the app launches to an empty shell on Windows, all tests pass locally, the visual gate passes, and the CI workflow is in the repo. CI is reported as unverified until the owner's first push.
 
 ### Phase 1 — Repos and commit graph, read-only (L)
 
@@ -251,7 +260,8 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 |---|---|---|
 | 1 | Development and the real-window pass happen on Windows. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
 | 2 | The diff viewer and conflict resolver are custom-built; they are the largest UI effort in the project. | Phases 2 and 4 |
-| 3 | The real-window pass depends on driving a desktop window from the development tooling. Phase 0 proves it; if it turns out unreliable, the fallback is agreed with the owner before phase 1. | Phase 0 |
+| 3 | The real-window pass depends on driving the app's window through Windows UI Automation from the in-repo harness. Phase 0 proves it. If it turns out unreliable, stop, record it under "Waiting on the owner" in `status.md`, and agree a fallback with the owner before phase 1. | Phase 0 |
+| 8 | CI runs only after the owner pushes the repo to GitHub. Until then macOS and Linux have no coverage at all, and CI is reported as unverified. | Best soon after phase 0 |
 | 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
