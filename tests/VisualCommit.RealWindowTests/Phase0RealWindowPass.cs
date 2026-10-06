@@ -70,6 +70,11 @@ public class Phase0RealWindowPass
 
                 app.ClickWithMouse(app.Find("ThemeSwitch"));
 
+                using (var frame = app.CaptureWindow())
+                {
+                    frame.Save(Phase, "B-after-theme-click-light-with-frame");
+                }
+
                 using (var afterClick = app.CaptureClient())
                 {
                     afterClick.Save(Phase, "B-after-theme-click-light");

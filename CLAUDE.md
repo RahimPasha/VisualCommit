@@ -91,8 +91,40 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 
 ## Commands
 
-Nothing is built yet. Phase 0 fills this in: build, run, unit tests, scripted visual walk-through,
-real-window pass.
+Run them from the repo root. Each one was run on Windows when it was added here; CI runs the
+build and the default tests on Windows, macOS and Linux.
+
+| Purpose | Command |
+|---|---|
+| Build | `dotnet build` |
+| Run the app | `dotnet run --project src/VisualCommit.App` |
+| Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
+| One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
+| Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
+| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` |
+| Real-window pass | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
+| CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |
+| Screenshots a CI run took on each platform | `gh run download <run id> -D <folder>` |
+
+What to know about them:
+
+- Tests run on Microsoft Testing Platform (set in `global.json`), so a project is passed with
+  `--project`. `dotnet test <path>` does not work.
+- The default tests take about 25 seconds. They use real git and a temporary folder for every
+  repo and data folder; they never open a window or touch the user's settings.
+- The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
+- The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
+  app on the desktop and moves the real mouse for about 30 seconds: tell the owner before starting
+  it, and run it only as part of the gate. It needs an unlocked desktop and the scripted
+  screenshots, so run `dotnet test` first. Its screenshots, the pictures of the differences and
+  `run.txt` (scaling, sizes, how much each screenshot differs from the scripted one) land under
+  `artifacts/visual/phase-N/real-window/`.
+- To run the app without touching the real settings, set the environment variable
+  `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
+  folder (`%APPDATA%\VisualCommit` on Windows).
+- If a test run hangs, find the test with the test project's own executable:
+  `tests\<project>\bin\Debug\net10.0\<project>.exe -diagnostics -longRunning 10`.
+- A push that changes only docs does not start a CI run.
 
 Prerequisites on the development machine: .NET 10 SDK, Git 2.30 or newer, and the GitHub CLI
 (`gh`) signed in, for reading CI results.

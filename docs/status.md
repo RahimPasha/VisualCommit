@@ -46,8 +46,8 @@ Delivers (from `plan.md`), split into steps:
 - [x] 14. Headless UI tests for the shell (`VisualCommit.App.Tests`)
 - [x] 15. Scripted walk-through with screenshots (`VisualCommit.VisualTests`)
 - [x] 16. Real-window pass harness (`VisualCommit.RealWindowTests`), proven on this machine
-- [ ] 17. README
-- [ ] 18. Commands section of `CLAUDE.md` filled in
+- [x] 17. README
+- [x] 18. Commands section of `CLAUDE.md` filled in
 
 Visual checks (details in the test report):
 
@@ -70,9 +70,8 @@ Closing steps (from `CLAUDE.md`):
 
 ### Next step
 
-Steps 17 and 18: write the README and fill in the Commands section of `CLAUDE.md`; record the
-decisions made this phase in `decisions.md` and add `THIRD-PARTY-NOTICES.md`. Then the closing steps,
-starting with the visual test gate (C1).
+Closing step C1: run the visual test gate on the current commit (`dotnet test`, then the real-window
+pass), inspect every screenshot and fill in `docs/test-reports/phase-0.md`.
 
 ### Notes for whoever resumes
 

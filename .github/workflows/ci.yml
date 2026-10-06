@@ -55,6 +55,12 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build
 
+      # The real-window pass is outside the solution and never runs here. Building it keeps it
+      # from going stale unnoticed.
+      - name: Build the real-window pass
+        if: runner.os == 'Windows'
+        run: dotnet build tests/VisualCommit.RealWindowTests --configuration Release
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v7
