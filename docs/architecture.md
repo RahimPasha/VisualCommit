@@ -27,7 +27,8 @@ it are not built yet, and "As built" says which are. The reasons behind the main
   tests never touch the user's real settings.
 - **Tests.** xUnit. Git-layer tests run real git against temporary repos. UI tests use Avalonia's
   headless mode and capture screenshots.
-- **CI.** GitHub Actions builds and tests on Windows, macOS and Linux on every push.
+- **CI.** GitHub Actions builds and tests on Windows, macOS and Linux on every push that changes
+  more than docs.
 - **Packaging.** Velopack for installers and auto-update on all three platforms.
 
 ## Solution layout
@@ -41,11 +42,11 @@ in the phase that first needs it. Package versions are pinned centrally in
 |---|---|---|
 | `src/VisualCommit.Core` | Domain models and interfaces (git calls, settings, logging, data-folder paths); no UI, no process calls | Built |
 | `src/VisualCommit.Git` | Git runner, git locator, call log. Later: output parsers, operation queue, repo watcher | Built |
-| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls; settings store and log file | Built |
+| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls; settings store and log file. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
 | `src/VisualCommit.Hosting` | GitHub, Azure DevOps and GitLab clients; token store | Phase 7 |
 | `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, helpers that drive the app in headless mode. Not a test project | Built |
 | `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos | Built |
-| `tests/VisualCommit.App.Tests` | Settings, log and view-model tests, and headless UI tests of behaviour | Built |
+| `tests/VisualCommit.App.Tests` | Settings, log, data-folder and view-model tests, and headless UI tests of behaviour | Built |
 | `tests/VisualCommit.VisualTests` | Scripted walk-throughs in headless mode with screenshots, for the visual test gate. Part of the default test run and CI | Built |
 | `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI). Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25) | Built |
 
@@ -78,6 +79,10 @@ Program.Main                      src/VisualCommit.App/Program.cs
   Headless tests have none: they call `AppSession.Start` themselves with a temporary data folder.
 - `AppSession.Initialization` is the task of the start-up work that runs after the window is
   created (finding git). Tests await it before they look at the window.
+- The git runner does not exist when `AppSession.Start` runs: it is in
+  `MainWindowViewModel.Git.Runner` once `Initialization` has completed, and only when git was
+  found. A service that needs git cannot take an `IGitRunner` in its constructor yet; phase 1
+  decides how services get it (for example, the pending detection as a task).
 - `Program.Main` logs unhandled exceptions to the same log file.
 
 ### From a git command to the screen
@@ -107,7 +112,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `GitLocator`, `GitSearchContext`, `GitDetection`, `GitVersion` | Finding git and checking its version |
 | `WindowsJob` | Internal: a Windows job object, used to stop git together with everything it started |
 
-Rules the runner follows (see D30 and D31):
+Rules the runner follows (see D30, D31 and D36):
 
 - Every call gets `LC_ALL` and `LANG` set to `en_US.UTF-8`, so git's messages are English and
   parseable, and `GIT_TERMINAL_PROMPT=0`, so git fails rather than waits for a terminal. Input and
@@ -151,7 +156,7 @@ own view model in the phase that gives it real content.
 |---|---|---|---|---|
 | Repo tabs | `RepoTabsView` | 36 high | `RepoTabs` | Placeholder: a "No repository" tab and a disabled add button (`AddRepoButton`) |
 | Toolbar | `ToolbarView` | 52 high | `Toolbar` | Buttons `UndoButton` ... `SearchButton` are disabled placeholders. `ThemeSwitch` works |
-| Left panel | `LeftPanelView` | 260 wide; 180 to 520 | `LeftPanel` | Placeholder: filter box (`LeftPanelFilter`) and five empty section headers |
+| Left panel | `LeftPanelView` | 260 wide; 180 to 520 | `LeftPanel` | Placeholder: filter box (`FilterBox`) and five empty section headers |
 | Commit graph | `CommitGraphView` | The rest; at least 320 | `CommitGraph` | Placeholder: column headers and an empty state |
 | Right panel | `RightPanelView` | 400 wide; 280 to 720 | `RightPanel` | Placeholder: "Commit details" and an empty state |
 | Status bar | `StatusBarView` | 26 high | `StatusBar` | `GitStatus` is real. `CurrentBranch`, `OperationStatus` and `ActivityLogToggle` are placeholders |
@@ -205,9 +210,12 @@ Phase 1 adds the lane colours of the commit graph to this table.
 - View models derive from `ObservableObject` and use the toolkit's `[ObservableProperty]` on
   partial properties and `[RelayCommand]`. They take their services through the constructor and do
   not touch Avalonia types, so they are tested without a UI.
-- XAML uses compiled bindings (`x:DataType` on every view).
-- Anything a test or the real-window pass needs to find has an
-  `AutomationProperties.AutomationId`; anything a user can act on has an accessible name.
+- XAML uses compiled bindings: a view that binds declares its `x:DataType`.
+- Anything the real-window pass needs to find has an `AutomationProperties.AutomationId`, because
+  UI Automation can find nothing else; anything a user can act on has an accessible name. The
+  headless tests find the six regions by automation id (`ShellDriver.FindByAutomationId`) and
+  parts inside a view by their `Name` (`ShellDriver.Find<T>`). A control that both passes need
+  gets the same text for both, as `FilterBox` and `ThemeSwitch` have.
 - Async code in the Core and Git projects uses `ConfigureAwait(false)`; view models do not, so
   they continue on the UI thread.
 - Services that can fail on the user's machine (settings, log) log the failure and carry on; they
@@ -220,24 +228,30 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | Helper | Where | What it is for |
 |---|---|---|
 | `TempDirectory` | `tests/VisualCommit.Testing` | A folder under the system temp folder, deleted on dispose |
-| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit. The same steps give the same commit SHAs on every platform |
+| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit. The same steps give the same commit SHAs on every platform. It has helpers for commits, branches, tags and merges; anything else goes through `GitAsync`, or `GitWithInputAsync` for commands that read a stream, such as `fast-import` |
 | `Scenarios` | same | The scenario repos: named, known repos that tests and visual checks start from. So far `LinearAsync` |
-| `HeadlessTestApp` | `tests/VisualCommit.Testing/Headless` | Builds the real `App` for headless mode with Skia rendering. Each UI test assembly names it in `AssemblyInfo.cs` |
-| `ShellDriver` | same | Starts an `AppSession` on a data folder, shows its window at a size, and drives it with simulated mouse input at window positions; `Capture()` returns a `Screenshot` |
+| `HeadlessTestApp` | `tests/VisualCommit.Testing/Headless` | Builds the real `App` for headless mode with Skia rendering. Each UI test assembly names it in `AssemblyInfo.cs`. It also cuts the app under test off from the machine: the default data folder and git's system and user configuration point at empty temporary files, through environment variables that the app's git calls inherit |
+| `ShellDriver` | same | Starts an `AppSession` on a data folder, shows its window at a size, and drives it with simulated input at window positions: click, right-click, double-click, drag, typing and single keys. `Capture()` returns a `Screenshot`. It cannot yet scroll with the wheel or start the app with a repository open |
 | `Screenshot` | same | A captured frame: save as PNG, read pixel colours |
 | `LayoutAudit` | same | `FindClippedText` lists every visible text that is not shown in full |
 | `FreshApplication` | same | Runs part of a test with a new Avalonia application object: how a scripted check crosses a restart (D32) |
-| `HangWatchdogAttribute` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process, so a hang fails quickly and names its test |
+| `HangWatchdogAttribute` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process, so a hang fails quickly and names its test. The environment variable `VISUALCOMMIT_TEST_HANG_SECONDS` changes the limit |
 
-- `VisualCommit.VisualTests` has a folder per phase. `PhaseNChecks` holds one test per numbered
-  check of the phase's test report; each saves its screenshots as
+- `VisualCommit.VisualTests` has a folder per phase. `PhaseNChecks` holds a test for every
+  numbered check of the phase's test report (checks that differ only in window size share one
+  test with two cases); each saves its screenshots as
   `artifacts/visual/phase-N/scripted/<check><step>-<what>.png` and asserts the expected result.
-  `Phase0/ShellExpectations.cs` is the expected shell in code, with its numbers and colours copied
-  from the report, not from the app.
-- `VisualCommit.RealWindowTests`: `RealApp` starts the built app, finds elements through UI
-  Automation, clicks with the real mouse and captures the window from the screen. `Screens`
-  compares a capture with the scripted screenshot of the same step and saves a picture of the
-  differing pixels. The pass writes `run.txt` with the display scaling and the differences.
+  The first screenshot of a run empties the phase's folder, so no picture is left from an
+  earlier run. `Phase0/ShellExpectations.cs` is the expected shell in code, with its numbers and
+  colours copied from the report, not from the app.
+- `VisualCommit.RealWindowTests`: `RealApp` starts the built app with the same isolation as the
+  headless tests, finds elements through UI Automation, clicks with the real mouse and captures
+  the window from the screen. `RealWindowRun` is one run of a pass: it empties the phase's
+  folder, compares each capture with the scripted screenshot of the same step
+  (`AssertMatchesScripted`, at most 3% of pixels may differ), saves a picture of the differing
+  pixels, and writes `run.txt` with the display scaling and the differences. The project does
+  not reference `VisualCommit.Testing`, so it has no scenario repos yet, and `RealApp` has no
+  right-click, double-click or typing yet.
 
 ### CI
 

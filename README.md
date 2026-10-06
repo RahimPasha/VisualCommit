@@ -24,7 +24,8 @@ a headless window; it saves screenshots under `artifacts/visual/`. It does not o
 does not touch your settings. All commands, including the Windows-only real-window test pass, are
 listed in [CLAUDE.md](CLAUDE.md#commands).
 
-Windows is developed and tested first. macOS and Linux are built and tested by CI on every push.
+Windows is developed and tested first. macOS and Linux are built and tested by CI on every push
+that changes more than documentation.
 
 ## How the repository is laid out
 

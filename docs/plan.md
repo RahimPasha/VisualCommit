@@ -73,15 +73,23 @@ too, but they do not replace it.
    scaling; the report records the scaling. A real-window screenshot "matches" when it shows the
    same layout, text and state as the scripted screenshot of the same step; the window frame and
    small font-rendering differences are expected. The pass also measures this: it fails when more
-   than 3% of a screenshot's pixels differ from the scripted one (D33).
+   than 3% of a screenshot's pixels differ from the scripted one (D33). Which checks it repeats
+   is decided when the phase's checks are written, and marked in the report: at least one
+   screenshot of every new screen, and everything the scripted run cannot prove, such as native
+   dialogs, the window's own size and position, and a restart of the real process.
 5. **Inspection.** Every screenshot is opened and compared with the expected result in the
    report: layout, text, colours and state. A check passes only when the screenshot shows the
    expected result and the repo's real git state matches it.
 6. **Fix and re-run.** Failures are fixed, then the phase's checks and all earlier phases' checks
-   are run again.
+   are run again. Earlier phases' checks stay in the default test run for this reason. When a
+   later phase changes on purpose what an earlier check shows (a placeholder becomes real
+   content), that check's test is updated in the same commit, and the change and its reason go
+   under "Changes to expected results" in the report of the phase that made it.
 7. **Report.** `docs/test-reports/phase-N.md` records the outcome and screenshot file for every
    check. Screenshots stay local under `artifacts/visual/phase-N/` (git-ignored to keep the repo
-   small). The report ends with a short checklist for testing by hand on macOS.
+   small). The report also names the CI run of the gate's commit and which of the screenshots CI
+   took on macOS and Linux were looked at, and ends with a short checklist for testing by hand
+   on macOS.
 
 ## Phases
 
@@ -274,7 +282,7 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 |---|---|---|
 | 1 | Development and the real-window pass happen on Windows. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
 | 2 | The diff viewer and conflict resolver are custom-built; they are the largest UI effort in the project. | Phases 2 and 4 |
-| 3 | Settled in phase 0: the real-window pass works. The in-repo harness finds the app through Windows UI Automation, clicks with the real mouse and captures the window, in about 30 seconds. Still true: it needs an unlocked desktop, and the development screen (1500×952 logical pixels at 200%) is too small for its 1920×1080 size, so that size is only ever proven by the scripted walk-through unless a larger screen is used. | Each phase's gate |
+| 3 | Settled in phase 0: the real-window pass works. The in-repo harness finds the app through Windows UI Automation, clicks with the real mouse and captures the window, in about 30 seconds. Still true: it needs an unlocked desktop, and the development screen (a work area of 1500×952 logical pixels at 200% scaling) is too small for its 1920×1080 size, so that size is only ever proven by the scripted walk-through unless a larger screen is used. | Each phase's gate |
 | 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
