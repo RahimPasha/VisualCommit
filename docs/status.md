@@ -24,7 +24,7 @@ is under "Waiting on the owner"), Awaiting acceptance (whole gate passed, not ye
 
 ## Current phase
 
-Phase 0 â€” Foundation, on branch `phase/0-foundation`. Started 2026-10-06.
+Phase 0 — Foundation, on branch `phase/0-foundation`. Started 2026-10-06.
 
 ### Progress
 
@@ -51,16 +51,16 @@ Delivers (from `plan.md`), split into steps:
 
 Visual checks (details in the test report):
 
-- [ ] V1â€“V4. Shell in dark and light at 1100Ã—700 and 1920Ã—1080
-- [ ] V5. Clicking the theme switch changes the theme
-- [ ] V6. The chosen theme survives a restart
-- [ ] V7. Dragging a panel edge resizes the panel
-- [ ] V8. Real-window screenshots match the scripted ones
+- [x] V1–V4. Shell in dark and light at 1100×700 and 1920×1080
+- [x] V5. Clicking the theme switch changes the theme
+- [x] V6. The chosen theme survives a restart
+- [x] V7. Dragging a panel edge resizes the panel
+- [x] V8. Real-window screenshots match the scripted ones
 
 Closing steps (from `CLAUDE.md`):
 
-- [ ] C1. Run the visual test gate and complete the test report; every screenshot inspected
-- [ ] C2. Update `architecture.md` to what is built (including the colour tokens)
+- [x] C1. Run the visual test gate and complete the test report; every screenshot inspected
+- [x] C2. Update `architecture.md` to what is built (including the colour tokens)
 - [ ] C3. Update `plan.md`: move undelivered items, update risks
 - [ ] C4. Write `docs/handoffs/phase-0.md`
 - [ ] C5. Cold-read check with a fresh agent; fix the gaps it finds
@@ -70,31 +70,29 @@ Closing steps (from `CLAUDE.md`):
 
 ### Next step
 
-Closing step C1: run the visual test gate on the current commit (`dotnet test`, then the real-window
-pass), inspect every screenshot and fill in `docs/test-reports/phase-0.md`.
+Find the intermittent hang of the tests on macOS in CI (see Notes): read the next CI runs; the hang
+watchdog now names the stuck test. Then closing steps C3 (`plan.md`), C4 (handoff) and C5
+(cold-read check). The "Other platforms" section of the test report still has a placeholder to
+fill in from the screenshots CI uploads.
 
 ### Notes for whoever resumes
 
-- Environment found at the start of the phase: .NET SDK 10.0.303, Git 2.36.0.windows.1, `gh` signed
-  in as RahimPasha. Latest stable packages on NuGet: Avalonia 12.1.3, CommunityToolkit.Mvvm 8.4.2,
-  xunit.v3 4.0.1, FlaUI 5.0.0. `Avalonia.Headless.XUnit` 12.1.3 is built against xunit.v3 3.2.2.
-- The development screen is 3000Ã—2000 at 200% scaling, so 1500Ã—1000 logical pixels. A 1920Ã—1080
-  window does not fit; the real-window pass can only use 1100Ã—700 on this machine.
-- The code for steps 5 to 9 is written (src/VisualCommit.Git, src/VisualCommit.App/Services,
-  	ests/VisualCommit.Testing) but has no tests of its own yet; the steps stay unticked until it has.
-- Tests run on Microsoft Testing Platform (global.json), so a single project is run with
-  dotnet test --project <path>. xunit.v3 is pinned to 3.2.2: Avalonia.Headless.XUnit 12.1.3 fails
-  to discover tests with xunit.v3 4.x.
-- A test that needs a second app instance must go through FreshApplication.RunAsync`n  (	ests/VisualCommit.Testing/Headless). Awaiting HeadlessUnitTestSession.Dispatch directly hangs
-  the next test.
-- The real-window pass is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release`. It
-  needs the scripted screenshots, so run `dotnet test` at the repo root first. It takes about 30
-  seconds and moves the real mouse.
-- CI was green on all three platforms for commit 66f08a4 (run 37435533667). Pushes that change
-  only docs do not start a CI run.
-- The GitHub repo is private. The `gh` token has the scopes `repo`, `gist` and `read:org` but not
-  `workflow`; git itself pushes through Git Credential Manager. If pushing the CI workflow file is
-  refused, the owner has to grant the `workflow` scope.
+- Environment: .NET SDK 10.0.303, Git 2.36.0.windows.1, `gh` signed in as RahimPasha. Packages:
+  Avalonia 12.1.3, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24), FlaUI 5.0.0.
+- The development screen is 3000×2000 at 200% scaling, so 1500×1000 logical pixels. A 1920×1080
+  window does not fit; the real-window pass can only use 1100×700 on this machine.
+- The gate ran on commit `cfa3193` and passed. The test report is filled in except "Other platforms".
+- CI run 37436976773 (commit `9fd6555`) hung in the test step on macOS for over 7 minutes and was
+  cancelled by the next push; its log could not be fetched. The runs before and after it passed on
+  macOS in about 12 seconds. The cause is not known yet. `HangWatchdogAttribute`
+  (`tests/VisualCommit.Testing`) was added to get the name of the stuck test the next time.
+- A test that needs a second app instance must go through `FreshApplication.RunAsync`
+  (`tests/VisualCommit.Testing/Headless`). Awaiting `HeadlessUnitTestSession.Dispatch` directly
+  hangs the next test.
+- Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled the
+  dashes and backticks in this file once already.
+- The GitHub repo is private, so CI minutes are limited and macOS minutes count ten times. Pushes
+  that change only docs do not start a CI run.
 
 ## Waiting on the owner
 

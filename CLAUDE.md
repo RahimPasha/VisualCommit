@@ -122,7 +122,8 @@ What to know about them:
 - To run the app without touching the real settings, set the environment variable
   `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
   folder (`%APPDATA%\VisualCommit` on Windows).
-- If a test run hangs, find the test with the test project's own executable:
+- A test run that hangs stops itself after 3 minutes and prints `HANG WATCHDOG` with the names of
+  the tests that were running. To look closer, run the test project's own executable:
   `tests\<project>\bin\Debug\net10.0\<project>.exe -diagnostics -longRunning 10`.
 - A push that changes only docs does not start a CI run.
 
