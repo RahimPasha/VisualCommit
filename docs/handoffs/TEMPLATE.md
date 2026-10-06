@@ -15,7 +15,7 @@ leave out anything `architecture.md` already says.
 - Branch and last commit. Merged into `master` or awaiting acceptance.
 - Unit and integration tests: how many, all passing or which fail.
 - Visual test gate: passed or not, link to the report, any check that could not run.
-- CI: verified green on which platforms, or unverified because the repo is not pushed.
+- CI: the result of the last run on GitHub for each platform, with the run link, or unverified and why.
 
 ## Environment
 

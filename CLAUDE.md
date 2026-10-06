@@ -1,4 +1,4 @@
-# Tracery
+# VisualCommit
 
 A cross-platform desktop Git client in the spirit of GitKraken. Avalonia UI, .NET 10, all C#,
 driving the real `git` executable. Open source (MIT).
@@ -9,9 +9,10 @@ session needs goes into the files below, not just into the conversation.
 
 ## Start of every session
 
-1. Find the right branch. Run `git status` and `git branch --list "phase/*" --no-merged master`.
-   If an unmerged phase branch exists, check it out: its `docs/status.md` is the current one,
-   and the copy on `master` is out of date.
+1. Find the right branch. Run `git fetch origin`, `git status` and
+   `git branch -a --list "*phase/*" --no-merged master`. If an unmerged phase branch exists,
+   check it out: its `docs/status.md` is the current one, and the copy on `master` is out of
+   date. If the local branch is behind `origin`, fast-forward it before doing anything else.
 2. Read `docs/status.md`: which phase is current and where work stopped.
 3. Read `docs/plan.md`: the Workflow, Visual test gate and Risks sections, and the section for the current phase.
 4. Read `docs/architecture.md`, `docs/decisions.md`, and the parts of `docs/requirements.md` the phase covers.
@@ -41,14 +42,18 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | `git merge --no-ff` the phase branch into `master`, set the phase to "Done" in `docs/status.md`, commit |
+| "Phase N accepted" | `git merge --no-ff` the phase branch into `master`, set the phase to "Done" in `docs/status.md`, commit, push `master` |
 
 ## Rules
 
 - Work only on the phase the owner asked for. Do not start the next phase unasked.
 - Build each phase on its own branch (names are in `docs/status.md`). Merge into `master` only
-  after the owner accepts the phase. Never push; the owner does that.
+  after the owner accepts the phase.
 - Changes to planning docs made outside a phase are committed directly on `master`.
+- Push to `origin` (github.com/RahimPasha/VisualCommit) after committing: the phase branch during
+  a phase, `master` after a merge or a planning-doc change. The owner has authorised this. Never
+  force-push or rewrite pushed history. Ask before changing anything else on GitHub, such as
+  settings, visibility or releases.
 - Commit at every working state. In each commit keep "Next step" in `docs/status.md` accurate and
   tick the items that are complete. Before stopping for any reason, commit and fill in the Notes
   section, so a new session can resume from that commit.
@@ -62,7 +67,9 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
   and every one inspected. Passing unit tests is not enough. If part of the gate could not run, say so.
 - Expected results for visual checks are written before the UI exists. Changing one afterwards
   needs a reason recorded in the test report.
-- CI runs only after the owner pushes the repo. Until then, report CI as unverified, never as green.
+- CI runs on GitHub when a branch is pushed. After pushing, read the result with `gh run list`
+  and `gh run view`, and report what it actually says. If the result cannot be read, report CI
+  as unverified, never as green.
 - Record every decision that changes the plan, scope or architecture in `docs/decisions.md`, with
   its reason. Do not reopen a recorded decision without the owner.
 - Add each command to the Commands section below the first time it works.
@@ -87,7 +94,8 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 Nothing is built yet. Phase 0 fills this in: build, run, unit tests, scripted visual walk-through,
 real-window pass.
 
-Prerequisites on the development machine: .NET 10 SDK, Git 2.30 or newer.
+Prerequisites on the development machine: .NET 10 SDK, Git 2.30 or newer, and the GitHub CLI
+(`gh`) signed in, for reading CI results.
 
 ## Docs map
 

@@ -1,4 +1,4 @@
-# Tracery — Phased Plan
+# VisualCommit — Phased Plan
 
 Scope and feature numbers (C1, O1, T1, Q1, R1 ...) are defined in [requirements.md](requirements.md).
 
@@ -38,7 +38,8 @@ Branches and commits:
 
 - Each phase is built on its own branch in small commits. Branch names are listed in `status.md`.
 - A phase branch is merged into `master` after it passes the visual test gate and the owner accepts it.
-- Nothing is pushed to a remote until the owner asks.
+- Commits are pushed to `origin` on GitHub (github.com/RahimPasha/VisualCommit): the phase branch
+  during a phase, `master` after a merge. No force-pushes.
 
 ## Visual test gate
 
@@ -53,14 +54,14 @@ too, but they do not replace it.
    added later; changing an expected result afterwards needs a reason in the report.
 2. **Scenario repos.** Scripts build small repos with known content for each check (for example,
    two branches set up to conflict), so every run starts from the same state.
-3. **Scripted walk-through.** `Tracery.VisualTests` drives the full app UI in Avalonia's headless
+3. **Scripted walk-through.** `VisualCommit.VisualTests` drives the full app UI in Avalonia's headless
    mode, with real rendering and simulated mouse and keyboard input (click, right-click,
    double-click, drag, typing), against a scenario repo, and saves a screenshot after every step.
    This runs without taking over the desktop, so it is repeatable and also runs in CI. Standard
    window sizes are 1100×700 and 1920×1080 in logical (scaled) pixels; a check names the theme it
    uses. A "restart" in a scripted check means closing the app and starting a new instance on the
    same temporary data folder.
-4. **Real-window pass.** `Tracery.RealWindowTests` launches the built app on Windows and repeats
+4. **Real-window pass.** `VisualCommit.RealWindowTests` launches the built app on Windows and repeats
    the key flows in the real window through Windows UI Automation (FlaUI), with real mouse and
    keyboard input and screenshots of the actual window. It is Windows-only and opt-in: it has its
    own command, is never part of the default `dotnet test` run or CI, and the owner is told
@@ -93,7 +94,7 @@ Delivers:
 - Settings store (the chosen theme survives a restart) and local log file.
 - Test harness: temporary-repo builder and headless UI tests.
 - Visual test harness: scripted walk-through with screenshots, and the real-window pass, both proven to work on this machine.
-- CI workflow that builds and tests on all three platforms. It can only run once the owner pushes the repo.
+- CI workflow that builds and tests on all three platforms, run on GitHub by pushing the phase branch.
 - The Commands section of `CLAUDE.md` filled in with the real build, run and test commands.
 
 Visual checks:
@@ -102,7 +103,7 @@ Visual checks:
 - After a restart the app opens in the theme chosen before.
 - A real-window screenshot matches the scripted one for the same step.
 
-Done when: the app launches to an empty shell on Windows, all tests pass locally, the visual gate passes, and the CI workflow is in the repo. CI is reported as unverified until the owner's first push.
+Done when: the app launches to an empty shell on Windows, all tests pass locally, the visual gate passes, and CI is green on all three platforms.
 
 ### Phase 1 — Repos and commit graph, read-only (L)
 
@@ -266,9 +267,7 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 |---|---|---|
 | 1 | Development and the real-window pass happen on Windows. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
 | 2 | The diff viewer and conflict resolver are custom-built; they are the largest UI effort in the project. | Phases 2 and 4 |
-| 3 | The real-window pass depends on driving the app's window through Windows UI Automation from the in-repo harness. Phase 0 proves it. If it turns out unreliable, stop, record it under "Waiting on the owner" in `status.md`, and agree a fallback with the owner before phase 1. | Phase 0 |
-| 8 | CI runs only after the owner pushes the repo to GitHub. Until then macOS and Linux have no coverage at all, and CI is reported as unverified. | Best soon after phase 0 |
-| 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
+| 3 | The real-window pass depends on driving the app's window through Windows UI Automation from the in-repo harness. Phase 0 proves it. If it turns out unreliable, stop, record it under "Waiting on the owner" in `status.md`, and agree a fallback with the owner before phase 1. | Phase 0 || 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
 | 7 | A built-in terminal (O13) is harder in Avalonia than in web technology. | Backlog |

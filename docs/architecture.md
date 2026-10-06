@@ -1,4 +1,4 @@
-# Tracery — Architecture
+# VisualCommit — Architecture
 
 **Nothing is built yet.** This file currently describes the intended design. From Phase 0 on it
 describes what is actually built, and it is updated at the end of every phase. Where the code and
@@ -15,7 +15,7 @@ this file disagree, fix this file. The reasons behind the main choices are in
 - **Operation queue per repo.** One writing operation at a time, with progress, cancellation and a
   record in the activity log (T4).
 - **Safety net.** Before a destructive operation the app stores a backup reference under
-  `refs/tracery/backup/`. Undo/redo (O2) restores from these and from the reflog.
+  `refs/visualcommit/backup/`. Undo/redo (O2) restores from these and from the reflog.
 - **Prompts.** Git's credential, passphrase and rebase-editor prompts are redirected to small
   helper hooks that talk to the app, so they appear as in-app dialogs.
 - **Editors.** Diff, blame and conflict views are built on AvaloniaEdit with TextMate grammars for
@@ -23,7 +23,7 @@ this file disagree, fix this file. The reasons behind the main choices are in
 - **Hosting.** One provider interface with GitHub, Azure DevOps and GitLab implementations.
   Tokens live in the OS keychain.
 - **Storage.** Settings and session state as JSON in the per-user app-data folder. Logs are local files.
-  The data folder can be overridden (`TRACERY_DATA_DIR`). Every test uses a temporary one, so
+  The data folder can be overridden (`VISUALCOMMIT_DATA_DIR`). Every test uses a temporary one, so
   tests never touch the user's real settings.
 - **Tests.** xUnit. Git-layer tests run real git against temporary repos. UI tests use Avalonia's
   headless mode and capture screenshots.
@@ -32,22 +32,22 @@ this file disagree, fix this file. The reasons behind the main choices are in
 
 ## Solution layout
 
-The solution file (`Tracery.slnx`), `Directory.Build.props` and `Directory.Packages.props` sit at the repo root.
+The solution file (`VisualCommit.slnx`), `Directory.Build.props` and `Directory.Packages.props` sit at the repo root.
 App projects go under `src/`, test projects under `tests/`. A project is created in the phase
-that first needs it, so `Tracery.Hosting` arrives in Phase 7. Packages use the latest stable
+that first needs it, so `VisualCommit.Hosting` arrives in Phase 7. Packages use the latest stable
 release at the time Phase 0 runs, pinned centrally; the handoff records the versions.
 
 | Project | Contents |
 |---|---|
-| `src/Tracery.Core` | Domain models and interfaces (including settings and logging); no UI, no process calls |
-| `src/Tracery.Git` | Git runner, output parsers, operation queue, repo watcher |
-| `src/Tracery.Hosting` | GitHub, Azure DevOps and GitLab clients; token store |
-| `src/Tracery.App` | Avalonia views, view models, theme, custom controls (graph, diff, resolver); settings store and logging set-up |
-| `tests/Tracery.Testing` | Shared test helpers: the temporary-repo builder and the scenario repos |
-| `tests/Tracery.Git.Tests` | Integration tests against temporary repos |
-| `tests/Tracery.App.Tests` | View-model tests and headless UI tests |
-| `tests/Tracery.VisualTests` | Scripted walk-throughs in headless mode with screenshot capture, for the visual test gate. Part of the default test run and CI |
-| `tests/Tracery.RealWindowTests` | The real-window pass (FlaUI). Windows-only and opt-in: excluded from the default test run and CI, because it takes over the mouse |
+| `src/VisualCommit.Core` | Domain models and interfaces (including settings and logging); no UI, no process calls |
+| `src/VisualCommit.Git` | Git runner, output parsers, operation queue, repo watcher |
+| `src/VisualCommit.Hosting` | GitHub, Azure DevOps and GitLab clients; token store |
+| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (graph, diff, resolver); settings store and logging set-up |
+| `tests/VisualCommit.Testing` | Shared test helpers: the temporary-repo builder and the scenario repos |
+| `tests/VisualCommit.Git.Tests` | Integration tests against temporary repos |
+| `tests/VisualCommit.App.Tests` | View-model tests and headless UI tests |
+| `tests/VisualCommit.VisualTests` | Scripted walk-throughs in headless mode with screenshot capture, for the visual test gate. Part of the default test run and CI |
+| `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI). Windows-only and opt-in: excluded from the default test run and CI, because it takes over the mouse |
 
 ## As built
 

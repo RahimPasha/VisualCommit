@@ -1,6 +1,9 @@
 # Status
 
-Last updated: 2026-10-05
+Last updated: 2026-10-06
+
+Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git. The local folder is still
+named "Visual Git"; that has no effect on the build.
 
 ## Phases
 
@@ -42,6 +45,4 @@ Nothing yet. Use this for work in flight: what is half-done, what was tried and 
 
 ## Waiting on the owner
 
-- The copyright line in `LICENSE` reads "Tracery contributors". Change it if the owner wants their own name there.
-- The "Main window layout" table in `requirements.md` was proposed during planning and has not been reviewed by the owner. Phase 0 builds the shell to it.
-- CI can only run after the repo is pushed to GitHub. Until then macOS and Linux builds are untested. Pushing soon after phase 0 is recommended.
+- The copyright line in `LICENSE` reads "VisualCommit contributors". Change it if the owner wants their own name there.

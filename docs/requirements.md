@@ -1,4 +1,4 @@
-# Tracery — Requirements
+# VisualCommit — Requirements
 
 The phased delivery plan is in [plan.md](plan.md).
 
@@ -12,7 +12,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 
 | Topic | Decision |
 |---|---|
-| Name | Tracery (the branching line-work of Gothic windows; also "trace") |
+| Name | VisualCommit |
 | Licence | MIT, open source |
 | Platforms | Windows, macOS, Linux. Windows is developed and tested first; macOS is tested by hand later |
 | Audience | Public release in the future |
@@ -50,7 +50,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | Diff view | Replaces the commit graph while a file is open | The file's diff, with a close button that returns to the graph |
 | Status bar | Bottom edge | Current branch, progress of the running operation, activity-log toggle |
 
-Dark is the default theme. Colours, icons and styling are Tracery's own, not GitKraken's.
+Dark is the default theme. Colours, icons and styling are VisualCommit's own, not GitKraken's.
 
 ## Interaction model
 
