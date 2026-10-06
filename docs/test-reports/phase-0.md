@@ -91,7 +91,20 @@ from the scripted one and inspection agrees (D33).
 
 ## Other platforms
 
-OTHER_PLATFORMS_PLACEHOLDER
+CI run [37437294860](https://github.com/RahimPasha/VisualCommit/actions/runs/37437294860) built
+and tested the gate's commit, `cfa3193`, on `windows-latest`, `macos-latest` and `ubuntu-latest`.
+All 111 tests passed on each. That includes the seven scripted checks with their assertions on
+layout, text, colours and cut-off text, and the pinned commit SHAs of the scenario repos, which
+are therefore the same on all three platforms.
+
+The run uploaded each platform's 14 scripted screenshots. Two of them were opened and inspected:
+check 1 (dark, 1100×700) from macOS and check 3 (light, 1100×700) from Linux. Both show the same
+layout, text and colours as on Windows. Letters are drawn slightly differently by each platform's
+font renderer, and the status bar shows that runner's own Git (2.55.0). The other CI screenshots
+were checked by the automated assertions only.
+
+One earlier CI run, for commit `9fd6555`, hung in the test step on macOS and left no log. The runs
+before and after it passed there in about 12 seconds. It is an open issue; see the phase's handoff.
 
 ## macOS checklist for the owner
 
