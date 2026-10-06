@@ -45,17 +45,17 @@ C2 and so on, which are requirement numbers.
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-Last run: [37530129931](https://github.com/RahimPasha/VisualCommit/actions/runs/37530129931) on
-`master`, for commit `b1d2ed0`, the change that made the project usable from cloud sessions
-(D39). All five jobs succeeded: `windows-latest`, `macos-latest`, `ubuntu-latest`, and the two
-"bare ubuntu container" jobs, which ran for the first time. In both, `scripts/setup-linux.sh`
-prepared the empty container in under half a minute, its second run changed nothing, the build
-had no warnings and all 118 tests passed: once with .NET SDK 10.0.112 from Ubuntu's package
-servers and once with 10.0.401 from Microsoft's installer.
+Last run: [37532921887](https://github.com/RahimPasha/VisualCommit/actions/runs/37532921887) on
+`master`, for commit `fd5099a`. All five jobs succeeded: `windows-latest`, `macos-latest`,
+`ubuntu-latest`, and the two "bare ubuntu container" jobs. In both of those,
+`scripts/setup-linux.sh` prepared the empty container in under half a minute, its second run
+changed nothing (the job now fails if it does), the build had no warnings and all 118 tests
+passed: once with .NET SDK 10.0.112 from Ubuntu's package servers and once with 10.0.401 from
+Microsoft's installer. Commits after it changed only docs.
 
-CI_RUN_PLACEHOLDER: the commit after it makes the container jobs fail when the script's second
-run does anything, and lets the script find a .NET it put into the home folder earlier. It
-starts another run, whose result is recorded here once it has been read.
+The run before it, [37530129931](https://github.com/RahimPasha/VisualCommit/actions/runs/37530129931)
+for commit `b1d2ed0`, was the first with the container jobs and the first after the change
+that made the project usable from cloud sessions (D39); it succeeded in all five jobs too.
 
 The CI runs made before 2026-10-06's rewrite of the history (D40) were deleted, so the run
 numbers that the phase 0 report and handoff mention no longer open. What they showed is as
