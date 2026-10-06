@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             x:Class="VisualCommit.App.Views.Shell.RepoTabsView"
+             AutomationProperties.AutomationId="RepoTabs">
+
+  <!-- Placeholder until phase 1: one tab that stands for "nothing open" and the add button. -->
+  <Border Background="{DynamicResource VcChromeBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="0,0,0,1">
+    <StackPanel Orientation="Horizontal">
+
+      <Border Name="PlaceholderTab"
+              Background="{DynamicResource VcWindowBackgroundBrush}"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="0,0,1,0"
+              MinWidth="150">
+        <Grid RowDefinitions="2,*">
+          <Border Name="TabAccentLine" Grid.Row="0" Background="{DynamicResource VcAccentBrush}" />
+          <TextBlock Grid.Row="1" Text="No repository" Margin="14,0,18,0" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+
+      <Button Name="AddRepoButton"
+              Theme="{StaticResource VcFlatButton}"
+              Width="34" Margin="2,3"
+              IsEnabled="False"
+              ToolTip.Tip="Open, clone or init a repository"
+              AutomationProperties.AutomationId="AddRepoButton"
+              AutomationProperties.Name="Add repository">
+        <c:Icon Data="{StaticResource IconPlus}" />
+      </Button>
+
+    </StackPanel>
+  </Border>
+</UserControl>

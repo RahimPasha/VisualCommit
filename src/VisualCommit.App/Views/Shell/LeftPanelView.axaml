@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             x:Class="VisualCommit.App.Views.Shell.LeftPanelView"
+             AutomationProperties.AutomationId="LeftPanel">
+
+  <!-- Placeholder until phase 1: the filter box and the five section headers, all empty. -->
+  <Border Background="{DynamicResource VcPanelBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="0,0,1,0">
+    <DockPanel>
+
+      <TextBox Name="FilterBox"
+               DockPanel.Dock="Top"
+               Margin="8,8,8,6"
+               PlaceholderText="Filter"
+               AutomationProperties.AutomationId="LeftPanelFilter" />
+
+      <StackPanel Name="Sections">
+        <StackPanel.Styles>
+          <Style Selector="Grid.section">
+            <Setter Property="Height" Value="30" />
+          </Style>
+          <Style Selector="Grid.section > c|Icon">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Margin" Value="10,0,6,0" />
+            <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+          </Style>
+          <Style Selector="Grid.section > TextBlock.count">
+            <Setter Property="Margin" Value="8,0,12,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+          </Style>
+        </StackPanel.Styles>
+
+        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Data="{StaticResource IconChevronRight}" />
+          <TextBlock Grid.Column="1" Classes="heading" Text="Local branches" />
+          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
+        </Grid>
+        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Data="{StaticResource IconChevronRight}" />
+          <TextBlock Grid.Column="1" Classes="heading" Text="Remotes" />
+          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
+        </Grid>
+        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Data="{StaticResource IconChevronRight}" />
+          <TextBlock Grid.Column="1" Classes="heading" Text="Pull requests" />
+          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
+        </Grid>
+        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Data="{StaticResource IconChevronRight}" />
+          <TextBlock Grid.Column="1" Classes="heading" Text="Tags" />
+          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
+        </Grid>
+        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Data="{StaticResource IconChevronRight}" />
+          <TextBlock Grid.Column="1" Classes="heading" Text="Stashes" />
+          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
+        </Grid>
+      </StackPanel>
+
+    </DockPanel>
+  </Border>
+</UserControl>

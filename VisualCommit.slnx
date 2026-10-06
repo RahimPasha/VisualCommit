@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/VisualCommit.App/VisualCommit.App.csproj" />
+    <Project Path="src/VisualCommit.Core/VisualCommit.Core.csproj" />
+    <Project Path="src/VisualCommit.Git/VisualCommit.Git.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <!-- VisualCommit.RealWindowTests is left out on purpose: it takes over the mouse and is
+         Windows-only, so it must never run as part of "dotnet test" at the repo root. -->
+    <Project Path="tests/VisualCommit.App.Tests/VisualCommit.App.Tests.csproj" />
+    <Project Path="tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj" />
+    <Project Path="tests/VisualCommit.Testing/VisualCommit.Testing.csproj" />
+    <Project Path="tests/VisualCommit.VisualTests/VisualCommit.VisualTests.csproj" />
+  </Folder>
+</Solution>

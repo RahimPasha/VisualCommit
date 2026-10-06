@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VisualCommit.App.ViewModels"
+        xmlns:shell="using:VisualCommit.App.Views.Shell"
+        x:Class="VisualCommit.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="VisualCommit"
+        Width="1280" Height="800"
+        MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource VcWindowBackgroundBrush}"
+        Foreground="{DynamicResource VcTextPrimaryBrush}"
+        FontSize="12.5">
+
+  <!-- The layout follows "Main window layout" in docs/requirements.md:
+       repo tabs, toolbar, left panel | commit graph | right panel, status bar. -->
+  <Grid RowDefinitions="36,52,*,26">
+
+    <shell:RepoTabsView Grid.Row="0" />
+    <shell:ToolbarView Grid.Row="1" />
+
+    <Grid Name="MainArea" Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="260" MinWidth="180" MaxWidth="520" />
+        <ColumnDefinition Width="*" MinWidth="240" />
+        <ColumnDefinition Width="400" MinWidth="280" MaxWidth="720" />
+      </Grid.ColumnDefinitions>
+
+      <shell:LeftPanelView Grid.Column="0" />
+      <shell:CommitGraphView Grid.Column="1" />
+      <shell:RightPanelView Grid.Column="2" />
+
+      <!-- The splitters lie over the panel edges: a 7-wide grab area centred on the 1-wide
+           border line that each panel draws itself. -->
+      <GridSplitter Name="LeftSplitter"
+                    Grid.Column="0"
+                    Width="7" Margin="0,0,-3,0"
+                    HorizontalAlignment="Right"
+                    ResizeBehavior="CurrentAndNext"
+                    ResizeDirection="Columns"
+                    Background="Transparent"
+                    ZIndex="1"
+                    AutomationProperties.AutomationId="LeftSplitter" />
+      <GridSplitter Name="RightSplitter"
+                    Grid.Column="2"
+                    Width="7" Margin="-3,0,0,0"
+                    HorizontalAlignment="Left"
+                    ResizeBehavior="PreviousAndCurrent"
+                    ResizeDirection="Columns"
+                    Background="Transparent"
+                    ZIndex="1"
+                    AutomationProperties.AutomationId="RightSplitter" />
+    </Grid>
+
+    <shell:StatusBarView Grid.Row="3" />
+
+  </Grid>
+</Window>

@@ -1,0 +1,80 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- The colour tokens of the two themes. Views use the brushes through DynamicResource, never
+       hard-coded colours, so that switching the theme recolours everything. The table in
+       docs/architecture.md lists these tokens; keep the two in step. -->
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="VcWindowBackgroundBrush" Color="#14161B" />
+      <SolidColorBrush x:Key="VcPanelBackgroundBrush" Color="#1A1D24" />
+      <SolidColorBrush x:Key="VcChromeBackgroundBrush" Color="#20242C" />
+      <SolidColorBrush x:Key="VcControlBackgroundBrush" Color="#272C36" />
+      <SolidColorBrush x:Key="VcHoverBackgroundBrush" Color="#2F3542" />
+      <SolidColorBrush x:Key="VcBorderBrush" Color="#323845" />
+      <SolidColorBrush x:Key="VcTextPrimaryBrush" Color="#E4E7EC" />
+      <SolidColorBrush x:Key="VcTextSecondaryBrush" Color="#9BA3B0" />
+      <SolidColorBrush x:Key="VcTextDisabledBrush" Color="#5F6775" />
+      <SolidColorBrush x:Key="VcAccentBrush" Color="#7C8CFF" />
+      <SolidColorBrush x:Key="VcAccentTextBrush" Color="#10121A" />
+      <SolidColorBrush x:Key="VcSuccessBrush" Color="#3FB97F" />
+      <SolidColorBrush x:Key="VcWarningBrush" Color="#E0A23B" />
+      <SolidColorBrush x:Key="VcDangerBrush" Color="#E5606B" />
+      <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
+      <SolidColorBrush x:Key="TextControlBackground" Color="#272C36" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C36" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#272C36" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#323845" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#5F6775" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#7C8CFF" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#E4E7EC" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#E4E7EC" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#E4E7EC" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#9BA3B0" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#9BA3B0" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#9BA3B0" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="VcWindowBackgroundBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="VcPanelBackgroundBrush" Color="#F5F6F8" />
+      <SolidColorBrush x:Key="VcChromeBackgroundBrush" Color="#EBEDF1" />
+      <SolidColorBrush x:Key="VcControlBackgroundBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="VcHoverBackgroundBrush" Color="#DEE2E9" />
+      <SolidColorBrush x:Key="VcBorderBrush" Color="#D2D6DE" />
+      <SolidColorBrush x:Key="VcTextPrimaryBrush" Color="#1B1F27" />
+      <SolidColorBrush x:Key="VcTextSecondaryBrush" Color="#5C6572" />
+      <SolidColorBrush x:Key="VcTextDisabledBrush" Color="#A1A8B3" />
+      <SolidColorBrush x:Key="VcAccentBrush" Color="#4353D8" />
+      <SolidColorBrush x:Key="VcAccentTextBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="VcSuccessBrush" Color="#1E8E5A" />
+      <SolidColorBrush x:Key="VcWarningBrush" Color="#B7791F" />
+      <SolidColorBrush x:Key="VcDangerBrush" Color="#C93A46" />
+      <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
+      <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#D2D6DE" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#A1A8B3" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#4353D8" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#1B1F27" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#1B1F27" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#1B1F27" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#5C6572" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#5C6572" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#5C6572" />
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+
+  <!-- Sizes shared by both themes. -->
+  <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+  <x:Double x:Key="TextControlThemeMinHeight">28</x:Double>
+  <Thickness x:Key="TextControlThemePadding">8,5,6,5</Thickness>
+  <x:Double x:Key="VcFontSizeSmall">11</x:Double>
+  <x:Double x:Key="VcFontSizeNormal">12.5</x:Double>
+  <x:Double x:Key="VcFontSizeLarge">16</x:Double>
+
+</ResourceDictionary>

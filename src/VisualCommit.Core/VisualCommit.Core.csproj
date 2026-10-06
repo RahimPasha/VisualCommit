@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Domain models and interfaces. No UI and no process calls. -->
+
+</Project>

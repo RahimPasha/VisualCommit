@@ -31,7 +31,7 @@ Phase 0 â€” Foundation, on branch `phase/0-foundation`. Started 2026-10-06.
 Delivers (from `plan.md`), split into steps:
 
 - [x] 1. Visual-check expectations written to `docs/test-reports/phase-0.md` (before any UI exists)
-- [ ] 2. Repo files: `.gitignore`, `.gitattributes`, `.editorconfig`
+- [x] 2. Repo files: `.gitignore`, `.gitattributes`, `.editorconfig`
 - [ ] 3. Solution: `VisualCommit.slnx`, `Directory.Build.props`, `Directory.Packages.props`, all projects created and building
 - [ ] 4. CI workflow for Windows, macOS and Linux; first run read back from GitHub
 - [ ] 5. Git runner: locate git and check its version, with tests
@@ -39,12 +39,12 @@ Delivers (from `plan.md`), split into steps:
 - [ ] 7. Data folder (`VISUALCOMMIT_DATA_DIR`) and JSON settings store, with tests
 - [ ] 8. Local log file, with tests
 - [ ] 9. Test harness: temporary-repo builder and a first scenario repo, with tests
-- [ ] 10. Theme colour tokens for dark and light
-- [ ] 11. App shell: main window with all regions and placeholder content
-- [ ] 12. Theme switch in the toolbar; the chosen theme is saved and restored
-- [ ] 13. Start-up: git detected and shown in the status bar; start-up written to the log
+- [x] 10. Theme colour tokens for dark and light
+- [x] 11. App shell: main window with all regions and placeholder content
+- [x] 12. Theme switch in the toolbar; the chosen theme is saved and restored
+- [x] 13. Start-up: git detected and shown in the status bar; start-up written to the log
 - [ ] 14. Headless UI tests for the shell (`VisualCommit.App.Tests`)
-- [ ] 15. Scripted walk-through with screenshots (`VisualCommit.VisualTests`)
+- [x] 15. Scripted walk-through with screenshots (`VisualCommit.VisualTests`)
 - [ ] 16. Real-window pass harness (`VisualCommit.RealWindowTests`), proven on this machine
 - [ ] 17. README
 - [ ] 18. Commands section of `CLAUDE.md` filled in
@@ -70,7 +70,9 @@ Closing steps (from `CLAUDE.md`):
 
 ### Next step
 
-Step 2: add `.gitignore`, `.gitattributes` and `.editorconfig`, then step 3: create the solution and projects.
+Steps 5 to 9: write the tests for the git runner, settings store, log file and temporary-repo builder
+(	ests/VisualCommit.Git.Tests, 	ests/VisualCommit.App.Tests). The code they test already exists.
+Then step 4 (CI workflow) and step 16 (real-window pass).
 
 ### Notes for whoever resumes
 
@@ -79,6 +81,13 @@ Step 2: add `.gitignore`, `.gitattributes` and `.editorconfig`, then step 3: cre
   xunit.v3 4.0.1, FlaUI 5.0.0. `Avalonia.Headless.XUnit` 12.1.3 is built against xunit.v3 3.2.2.
 - The development screen is 3000Ã—2000 at 200% scaling, so 1500Ã—1000 logical pixels. A 1920Ã—1080
   window does not fit; the real-window pass can only use 1100Ã—700 on this machine.
+- The code for steps 5 to 9 is written (src/VisualCommit.Git, src/VisualCommit.App/Services,
+  	ests/VisualCommit.Testing) but has no tests of its own yet; the steps stay unticked until it has.
+- Tests run on Microsoft Testing Platform (global.json), so a single project is run with
+  dotnet test --project <path>. xunit.v3 is pinned to 3.2.2: Avalonia.Headless.XUnit 12.1.3 fails
+  to discover tests with xunit.v3 4.x.
+- A test that needs a second app instance must go through FreshApplication.RunAsync`n  (	ests/VisualCommit.Testing/Headless). Awaiting HeadlessUnitTestSession.Dispatch directly hangs
+  the next test.
 - The GitHub repo is private. The `gh` token has the scopes `repo`, `gist` and `read:org` but not
   `workflow`; git itself pushes through Git Credential Manager. If pushing the CI workflow file is
   refused, the owner has to grant the `workflow` scope.

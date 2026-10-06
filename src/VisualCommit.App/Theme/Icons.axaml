@@ -1,0 +1,24 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Icon outlines on a 24 by 24 grid, drawn as strokes by the Icon control.
+       The shapes come from Lucide (https://lucide.dev, ISC licence; see THIRD-PARTY-NOTICES.md),
+       rewritten as single path strings with every number separated. -->
+
+  <StreamGeometry x:Key="IconUndo">M9 14 L4 9 l5 -5 M4 9 h10.5 a5.5 5.5 0 0 1 5.5 5.5 a5.5 5.5 0 0 1 -5.5 5.5 H11</StreamGeometry>
+  <StreamGeometry x:Key="IconRedo">M15 14 l5 -5 l-5 -5 M20 9 H9.5 A5.5 5.5 0 0 0 4 14.5 A5.5 5.5 0 0 0 9.5 20 H13</StreamGeometry>
+  <StreamGeometry x:Key="IconFetch">M3 12 a9 9 0 0 1 9 -9 a9.75 9.75 0 0 1 6.74 2.74 L21 8 M21 3 v5 h-5 M21 12 a9 9 0 0 1 -9 9 a9.75 9.75 0 0 1 -6.74 -2.74 L3 16 M8 16 H3 v5</StreamGeometry>
+  <StreamGeometry x:Key="IconPull">M12 17 V3 M6 11 l6 6 l6 -6 M19 21 H5</StreamGeometry>
+  <StreamGeometry x:Key="IconPush">M18 9 l-6 -6 l-6 6 M12 3 v14 M5 21 h14</StreamGeometry>
+  <StreamGeometry x:Key="IconBranch">M15 6 a9 9 0 0 0 -9 9 V3 M15 6 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 M3 18 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0</StreamGeometry>
+  <StreamGeometry x:Key="IconStash">M3 3 h18 a1 1 0 0 1 1 1 v3 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 V4 a1 1 0 0 1 1 -1 z M4 8 v11 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V8 M10 12 h4</StreamGeometry>
+  <StreamGeometry x:Key="IconPop">M3 3 h18 a1 1 0 0 1 1 1 v3 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 V4 a1 1 0 0 1 1 -1 z M4 8 v11 a2 2 0 0 0 2 2 h2 M20 8 v11 a2 2 0 0 1 -2 2 h-2 M9 15 l3 -3 l3 3 M12 12 v9</StreamGeometry>
+  <StreamGeometry x:Key="IconSearch">M21 21 l-4.34 -4.34 M3 11 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0</StreamGeometry>
+  <StreamGeometry x:Key="IconSun">M8 12 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M12 2 v2 M12 20 v2 M4.93 4.93 l1.41 1.41 M17.66 17.66 l1.41 1.41 M2 12 h2 M20 12 h2 M6.34 17.66 l-1.41 1.41 M19.07 4.93 l-1.41 1.41</StreamGeometry>
+  <StreamGeometry x:Key="IconMoon">M20.985 12.486 a9 9 0 1 1 -9.473 -9.472 c0.405 -0.022 0.617 0.46 0.402 0.803 a6 6 0 0 0 8.268 8.268 c0.344 -0.215 0.825 -0.004 0.803 0.401</StreamGeometry>
+  <StreamGeometry x:Key="IconPlus">M5 12 h14 M12 5 v14</StreamGeometry>
+  <StreamGeometry x:Key="IconActivityLog">M15 12 h-5 M15 8 h-5 M19 17 V5 a2 2 0 0 0 -2 -2 H4 M8 21 h12 a2 2 0 0 0 2 -2 v-1 a1 1 0 0 0 -1 -1 H11 a1 1 0 0 0 -1 1 v1 a2 2 0 1 1 -4 0 V5 a2 2 0 1 0 -4 0 v2 a1 1 0 0 0 1 1 h3</StreamGeometry>
+  <StreamGeometry x:Key="IconChevronRight">M9 18 l6 -6 l-6 -6</StreamGeometry>
+  <StreamGeometry x:Key="IconClose">M18 6 L6 18 M6 6 l12 12</StreamGeometry>
+
+</ResourceDictionary>
