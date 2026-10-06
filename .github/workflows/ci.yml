@@ -52,11 +52,94 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
-      # The step has a time limit of its own: if the tests hang, the job goes on, fails and keeps
-      # its log. GitHub had no log for jobs that hung until the whole job was cancelled.
+      # TEMPORARY, macOS only: the Test step has hung in some runs in a way that also stopped the
+      # runner from enforcing time limits and from keeping a log. A watcher started here runs
+      # beside the following steps. When a test process is still there after 80 seconds it
+      # writes the process list and the thread stacks to hang-dumps/, wakes anything that was
+      # suspended and ends the stuck processes, so that the job can go on and upload the dumps.
+      # The test run is repeated a few times to make a hang likely. Remove all of it once the
+      # cause is known (see docs/status.md).
+      - name: Start the process watcher (temporary)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          dotnet tool install --global dotnet-stack > /dev/null 2>&1 || true
+          mkdir -p hang-dumps seen
+          cat > watcher.sh <<'EOF'
+          #!/bin/bash
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          pattern='dotnet test|bin/Release/net10.0/VisualCommit\.|sleep 20|sleep 60'
+          while true; do
+            sleep 5
+            now=$(date +%s)
+            ps -axo pid=,ppid=,pgid=,state=,etime=,command= | grep -E "$pattern" | grep -v -E 'grep|watcher' > current.txt || true
+            while read -r pid rest; do
+              [ -f "seen/$pid" ] || echo "$now" > "seen/$pid"
+              first=$(cat "seen/$pid")
+              if [ $((now - first)) -ge 80 ]; then
+                dump="hang-dumps/dump-$now.txt"
+                {
+                  echo "Process $pid has been there for $((now - first)) seconds: $rest"
+                  echo "--- all processes: pid ppid pgid state etime command (state T means suspended)"
+                  ps -axo pid,ppid,pgid,state,etime,command
+                } > "$dump" 2>&1
+                for host in $(pgrep -f 'bin/Release/net10.0/VisualCommit\.' || true); do
+                  echo "--- thread stacks of test program $host" >> "$dump"
+                  ( dotnet-stack report -p "$host" >> "$dump" 2>&1 ) &
+                  stacks=$!
+                  ( sleep 30; kill -9 "$stacks" 2>/dev/null ) &
+                  wait "$stacks" 2>/dev/null || true
+                done
+                echo "--- rescue: waking suspended processes, ending the stuck ones" >> "$dump"
+                ps -axo pid=,state= | awk '$2 ~ /^T/ {print $1}' | while read -r suspended; do
+                  echo "woke $suspended: $(ps -o command= -p "$suspended" | cut -c1-150)" >> "$dump"
+                  kill -CONT "$suspended" 2>/dev/null || true
+                done
+                pkill -9 -f 'bin/Release/net10.0/VisualCommit\.' || true
+                pkill -9 -f 'dotnet test' || true
+                pkill -9 -f 'sleep 20|sleep 60' || true
+                rm -rf seen
+                mkdir -p seen
+                break
+              fi
+            done < current.txt
+          done
+          EOF
+          chmod +x watcher.sh
+          nohup ./watcher.sh > watcher.log 2>&1 < /dev/null &
+
+      - name: Test, repeat 1 (temporary)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: dotnet test --configuration Release --no-build
+      - name: Test, repeat 2 (temporary)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: dotnet test --configuration Release --no-build
+      - name: Test, repeat 3 (temporary)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: dotnet test --configuration Release --no-build
+      - name: Test, repeat 4 (temporary)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: dotnet test --configuration Release --no-build
+      - name: Test, repeat 5 (temporary)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: dotnet test --configuration Release --no-build
+
+      # The step has a time limit of its own, so that a hang cannot use up the job's whole time.
       - name: Test
+        if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: dotnet test --configuration Release --no-build
+
+      - name: Upload the watcher's dumps (temporary)
+        if: ${{ always() && runner.os == 'macOS' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: hang-dumps
+          path: |
+            hang-dumps/
+            watcher.log
+          if-no-files-found: warn
+          retention-days: 7
 
       # The real-window pass is outside the solution and never runs here. Building it keeps it
       # from going stale unnoticed.
