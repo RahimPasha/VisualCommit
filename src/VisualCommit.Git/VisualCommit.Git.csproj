@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Everything that starts the git executable or reads its output. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\VisualCommit.Core\VisualCommit.Core.csproj" />
+  </ItemGroup>
+
+</Project>

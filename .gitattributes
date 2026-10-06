@@ -1,0 +1,10 @@
+# Text files are stored with LF in the repository and checked out with the platform's line endings.
+* text=auto
+
+*.cs    text diff=csharp
+*.axaml text
+*.sh    text eol=lf
+
+*.png binary
+*.ico binary
+*.ttf binary

@@ -60,26 +60,36 @@ too, but they do not replace it.
    This runs without taking over the desktop, so it is repeatable and also runs in CI. Standard
    window sizes are 1100×700 and 1920×1080 in logical (scaled) pixels; a check names the theme it
    uses. A "restart" in a scripted check means closing the app and starting a new instance on the
-   same temporary data folder.
+   same temporary data folder; the new instance gets a new application object in the same test
+   process (D32).
 4. **Real-window pass.** `VisualCommit.RealWindowTests` launches the built app on Windows and repeats
    the key flows in the real window through Windows UI Automation (FlaUI), with real mouse and
    keyboard input and screenshots of the actual window. It is Windows-only and opt-in: it has its
    own command, is never part of the default `dotnet test` run or CI, and the owner is told
    before it starts. The harness lives in the repo, so it does not depend on what tools a session
    happens to have. This catches what the scripted run cannot: window frame, display scaling,
-   native dialogs, start-up. It needs the desktop unlocked and uses the real mouse for a few
-   minutes. It uses the 1100×700 size, plus 1920×1080 when that fits the screen at its display
+   native dialogs, start-up. It needs the desktop unlocked and uses the real mouse while it runs:
+   half a minute for phase 0's pass, longer as phases add checks. It uses the 1100×700 size, plus 1920×1080 when that fits the screen at its display
    scaling; the report records the scaling. A real-window screenshot "matches" when it shows the
    same layout, text and state as the scripted screenshot of the same step; the window frame and
-   small font-rendering differences are expected.
+   small font-rendering differences are expected. The pass also measures this: it fails when more
+   than 3% of a screenshot's pixels differ from the scripted one (D33). Which checks it repeats
+   is decided when the phase's checks are written, and marked in the report: at least one
+   screenshot of every new screen, and everything the scripted run cannot prove, such as native
+   dialogs, the window's own size and position, and a restart of the real process.
 5. **Inspection.** Every screenshot is opened and compared with the expected result in the
    report: layout, text, colours and state. A check passes only when the screenshot shows the
    expected result and the repo's real git state matches it.
 6. **Fix and re-run.** Failures are fixed, then the phase's checks and all earlier phases' checks
-   are run again.
+   are run again. Earlier phases' checks stay in the default test run for this reason. When a
+   later phase changes on purpose what an earlier check shows (a placeholder becomes real
+   content), that check's test is updated in the same commit, and the change and its reason go
+   under "Changes to expected results" in the report of the phase that made it.
 7. **Report.** `docs/test-reports/phase-N.md` records the outcome and screenshot file for every
    check. Screenshots stay local under `artifacts/visual/phase-N/` (git-ignored to keep the repo
-   small). The report ends with a short checklist for testing by hand on macOS.
+   small). The report also names the CI run of the gate's commit and which of the screenshots CI
+   took on macOS and Linux were looked at, and ends with a short checklist for testing by hand
+   on macOS.
 
 ## Phases
 
@@ -105,6 +115,9 @@ Visual checks:
 
 Done when: the app launches to an empty shell on Windows, all tests pass locally, the visual gate passes, and CI is green on all three platforms.
 
+Outcome: delivered in full. What was built and proven is in [handoffs/phase-0.md](handoffs/phase-0.md);
+two follow-ups it found are now listed under phase 1.
+
 ### Phase 1 — Repos and commit graph, read-only (L)
 
 Covers C1, C2, C3, Q1, Q4.
@@ -115,6 +128,8 @@ Delivers:
 - Left panel: branches (as folders), remotes, tags, stashes; ahead/behind counts; filter box.
 - Commit details panel: message, author, changed-file list (tree or flat).
 - File watcher that refreshes on outside changes.
+- From phase 0: the window's size and position and the widths of the two side panels are saved and restored with the tabs. Today they reset on every start.
+- From phase 0: when the window is too narrow for the side panels at their current widths, the panels give way. Today a panel widened in a large window is cut off after the window is made small.
 
 Visual checks:
 - The graph of a scenario repo with branches, merges, tags and a stash: lanes, colours and labels match the known history.
@@ -267,7 +282,10 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 |---|---|---|
 | 1 | Development and the real-window pass happen on Windows. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
 | 2 | The diff viewer and conflict resolver are custom-built; they are the largest UI effort in the project. | Phases 2 and 4 |
-| 3 | The real-window pass depends on driving the app's window through Windows UI Automation from the in-repo harness. Phase 0 proves it. If it turns out unreliable, stop, record it under "Waiting on the owner" in `status.md`, and agree a fallback with the owner before phase 1. | Phase 0 || 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
+| 3 | Settled in phase 0: the real-window pass works. The in-repo harness finds the app through Windows UI Automation, clicks with the real mouse and captures the window, in about 30 seconds. Still true: it needs an unlocked desktop, and the development screen (a work area of 1500×952 logical pixels at 200% scaling) is too small for its 1920×1080 size, so that size is only ever proven by the scripted walk-through unless a larger screen is used. | Each phase's gate |
+| 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
 | 7 | A built-in terminal (O13) is harder in Avalonia than in web technology. | Backlog |
+| 8 | The GitHub repo is private, so CI runs on a monthly allowance of minutes, and macOS minutes count ten times and Windows minutes twice. A run of all three platforms costs roughly 15 to 20 of them. Making the repo public removes the limit; that is the owner's call. | When the allowance runs low; at the latest phase 8 |
+| 9 | The tests are pinned to xunit.v3 3.2.2 because Avalonia's headless test package does not work with xunit.v3 4.x (D24). Check for a newer Avalonia.Headless.XUnit when Avalonia is updated. | Whenever packages are updated |

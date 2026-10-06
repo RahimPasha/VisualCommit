@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The real-window pass of the visual test gate (docs/plan.md). It starts the built app on
+       the real Windows desktop and drives it with the real mouse through UI Automation (FlaUI).
+
+       Windows-only and opt-in: this project is NOT in VisualCommit.slnx, so "dotnet build" and
+       "dotnet test" at the repo root never touch it. It is run on its own, with the real-window
+       command in the Commands section of CLAUDE.md. It takes over the mouse for about half a minute and
+       needs an unlocked desktop. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FlaUI.UIA3" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Builds the app first, in the same configuration. The tests start its executable; they
+         do not load its code. -->
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
+    <AssemblyMetadata Include="AppExecutable" Value="$(RepoRoot)src\VisualCommit.App\bin\$(Configuration)\net10.0\VisualCommit.exe" />
+  </ItemGroup>
+
+</Project>

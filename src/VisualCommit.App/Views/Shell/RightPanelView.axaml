@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="VisualCommit.App.Views.Shell.RightPanelView"
+             AutomationProperties.AutomationId="RightPanel">
+
+  <!-- Placeholder until phase 1 (commit details) and phase 2 (stage-and-commit panel). -->
+  <Border Background="{DynamicResource VcPanelBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="1,0,0,0">
+    <Grid RowDefinitions="36,*">
+
+      <Border Grid.Row="0"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="0,0,0,1">
+        <TextBlock Text="Commit details" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+      </Border>
+
+      <TextBlock Grid.Row="1"
+                 Classes="secondary"
+                 Text="Select a commit to see its details."
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 Margin="24,0"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+    </Grid>
+  </Border>
+</UserControl>

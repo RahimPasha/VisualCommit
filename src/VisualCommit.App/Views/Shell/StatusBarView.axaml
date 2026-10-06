@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
+             x:Class="VisualCommit.App.Views.Shell.StatusBarView"
+             x:DataType="vm:MainWindowViewModel"
+             AutomationProperties.AutomationId="StatusBar">
+
+  <!-- The branch, the progress text and the activity-log toggle are placeholders until the
+       phases that build them. The git version is real: it comes from the git runner. -->
+  <Border Background="{DynamicResource VcChromeBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="0,1,0,0">
+    <DockPanel>
+
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <TextBlock Name="GitStatus"
+                   Classes="secondary"
+                   Text="{Binding GitStatusText}"
+                   FontSize="11.5" Margin="12,0" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="GitStatus" />
+        <Button Name="ActivityLogToggle"
+                Theme="{StaticResource VcFlatButton}"
+                IsEnabled="False"
+                CornerRadius="0"
+                ToolTip.Tip="Show every git command the app has run"
+                AutomationProperties.AutomationId="ActivityLogToggle">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <c:Icon Data="{StaticResource IconActivityLog}" Width="13" Height="13" />
+            <TextBlock Text="Activity log" FontSize="11.5" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal">
+        <c:Icon Data="{StaticResource IconBranch}" Width="13" Height="13" Margin="10,0,5,0"
+                Foreground="{DynamicResource VcTextSecondaryBrush}" />
+        <TextBlock Name="CurrentBranch" Text="No repository" FontSize="11.5" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="CurrentBranch" />
+        <TextBlock Name="OperationStatus" Classes="secondary" Text="Ready" FontSize="11.5"
+                   Margin="16,0,0,0" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="OperationStatus" />
+      </StackPanel>
+
+    </DockPanel>
+  </Border>
+</UserControl>

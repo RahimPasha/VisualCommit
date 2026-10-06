@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
+             x:Class="VisualCommit.App.Views.Shell.ToolbarView"
+             x:DataType="vm:MainWindowViewModel"
+             AutomationProperties.AutomationId="Toolbar">
+
+  <!-- Every button except Theme is a placeholder until the phase that builds its action. -->
+  <Border Background="{DynamicResource VcChromeBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="0,0,0,1"
+          Padding="6,0">
+    <DockPanel>
+
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <c:ToolbarButton Label="Search" IconData="{StaticResource IconSearch}" IsEnabled="False"
+                         AutomationProperties.AutomationId="SearchButton" />
+        <c:ToolbarButton Name="ThemeSwitch" Label="Theme"
+                         Classes.light="{Binding !IsDarkTheme}"
+                         Command="{Binding ToggleThemeCommand}"
+                         ToolTip.Tip="{Binding ThemeSwitchToolTip}"
+                         AutomationProperties.AutomationId="ThemeSwitch" />
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal">
+        <c:ToolbarButton Label="Undo" IconData="{StaticResource IconUndo}" IsEnabled="False"
+                         AutomationProperties.AutomationId="UndoButton" />
+        <c:ToolbarButton Label="Redo" IconData="{StaticResource IconRedo}" IsEnabled="False"
+                         AutomationProperties.AutomationId="RedoButton" />
+        <Border Classes="toolbarSeparator" />
+        <c:ToolbarButton Label="Fetch" IconData="{StaticResource IconFetch}" IsEnabled="False"
+                         AutomationProperties.AutomationId="FetchButton" />
+        <c:ToolbarButton Label="Pull" IconData="{StaticResource IconPull}" IsEnabled="False"
+                         AutomationProperties.AutomationId="PullButton" />
+        <c:ToolbarButton Label="Push" IconData="{StaticResource IconPush}" IsEnabled="False"
+                         AutomationProperties.AutomationId="PushButton" />
+        <Border Classes="toolbarSeparator" />
+        <c:ToolbarButton Label="Branch" IconData="{StaticResource IconBranch}" IsEnabled="False"
+                         AutomationProperties.AutomationId="BranchButton" />
+        <c:ToolbarButton Label="Stash" IconData="{StaticResource IconStash}" IsEnabled="False"
+                         AutomationProperties.AutomationId="StashButton" />
+        <c:ToolbarButton Label="Pop" IconData="{StaticResource IconPop}" IsEnabled="False"
+                         AutomationProperties.AutomationId="PopButton" />
+      </StackPanel>
+
+    </DockPanel>
+  </Border>
+
+  <!-- The Theme button shows the theme it switches to: a sun in the dark theme, a moon in the light theme. -->
+  <UserControl.Styles>
+    <Style Selector="c|ToolbarButton#ThemeSwitch">
+      <Setter Property="IconData" Value="{StaticResource IconSun}" />
+    </Style>
+    <Style Selector="c|ToolbarButton#ThemeSwitch.light">
+      <Setter Property="IconData" Value="{StaticResource IconMoon}" />
+    </Style>
+  </UserControl.Styles>
+</UserControl>

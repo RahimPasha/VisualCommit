@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-throughs of the visual test gate (docs/plan.md). They drive the whole app
+       in Avalonia's headless mode and save a screenshot after every step under artifacts/visual/. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shared test helpers: the temporary-repo builder, the scenario repos and the helpers that
+       drive the app in Avalonia's headless mode. Not a test project itself. -->
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="xunit.v3.extensibility.core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+  </ItemGroup>
+
+</Project>
