@@ -200,8 +200,9 @@ Phase 1's checks need more than phase 0 built. Plan this work before writing the
   the tests in a loop, repeated test steps to make the freeze likely, and removing suspects one
   at a time. What did not: time limits on steps and jobs (the frozen runner ignored them), the
   hang watchdog and a side process meant to rescue the job (both froze with it). See D37.
-- **A hung or frozen job costs CI minutes fast.** GitHub ends it only 5 minutes after the job's
-  own time limit, and macOS minutes count ten times. Keep `timeout-minutes` low in `ci.yml`.
+- **A hung or frozen job is expensive.** GitHub ends it only 5 minutes after the job's own time
+  limit, and it blocks the next run of the branch until then. While the repo was private it also
+  used up the month's CI minutes. Keep `timeout-minutes` low in `ci.yml`.
 - **Do not edit docs with PowerShell text replacement.** Windows PowerShell 5.1 read a file as
   ANSI and wrote it back as UTF-8, which garbled every dash and multiplication sign in
   `status.md`, and its backtick escapes ate the code formatting. Use the file-editing tools.
@@ -260,16 +261,18 @@ Risks to watch:
   or public repositories.
 - The file watcher will see git's own writes. Decide early how the app tells its own operations
   from outside changes.
-- CI minutes (risk 8 in `plan.md`): every push of code starts a run on three platforms. Commit
-  as often as the rules ask, but push small code commits together when they follow each other
-  within minutes.
+- Every push of code starts a CI run on three platforms. The repo is public now, so runs cost
+  no allowance, but a newer push still cancels the run before it: when several small code
+  commits follow each other within minutes, push them together, so that each run finishes and
+  can be read.
 
 ## Waiting on the owner
 
-- Accept phase 0, or say what to change.
-- The copyright line in `LICENSE` reads "VisualCommit contributors". Change it if you want your
-  own name there.
-- The repo is private, so CI uses a monthly allowance of minutes and macOS counts ten times
-  (risk 8 in `plan.md`). Making the repo public removes the limit.
-- When you have a Mac at hand: the eight-step checklist at the end of
-  [test-reports/phase-0.md](../test-reports/phase-0.md).
+The owner answered on 2026-10-06, after this handoff was written:
+
+- Phase 0 is accepted and merged into `master`.
+- The copyright line in `LICENSE` stays "VisualCommit contributors".
+- The repo is public now, so CI minutes are no longer limited (D38).
+- Still open: the eight-step Mac checklist at the end of
+  [test-reports/phase-0.md](../test-reports/phase-0.md). The owner will look at it later; it does
+  not block phase 1.

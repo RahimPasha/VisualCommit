@@ -287,5 +287,5 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
 | 7 | A built-in terminal (O13) is harder in Avalonia than in web technology. | Backlog |
-| 8 | The GitHub repo is private, so CI runs on a monthly allowance of minutes, and macOS minutes count ten times and Windows minutes twice. A run of all three platforms costs roughly 15 to 20 of them. Making the repo public removes the limit; that is the owner's call. | When the allowance runs low; at the latest phase 8 |
+| 8 | Settled on 2026-10-06: the owner made the GitHub repo public, so CI no longer runs on a monthly allowance of minutes (D38). While it was private, phase 0 used the allowance up. Still true: a job that hangs wastes time, so `ci.yml` keeps its time limits low. | Settled |
 | 9 | The tests are pinned to xunit.v3 3.2.2 because Avalonia's headless test package does not work with xunit.v3 4.x (D24). Check for a newer Avalonia.Headless.XUnit when Avalonia is updated. | Whenever packages are updated |
