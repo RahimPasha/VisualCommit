@@ -39,13 +39,16 @@ public class TempRepoTests
         var first = await repo.CommitFileAsync("a.txt", "a\n", "First");
         var second = await repo.CommitFileAsync("b.txt", "b\n", "Second");
 
-        var log = (await repo.GitAsync("log", "--format=%H|%an|%ae|%cn|%aI|%s")).StandardOutput
+        // Times as seconds since 1970 and the zone separately: how git prints an ISO date in
+        // UTC ("+00:00" or "Z") depends on its version.
+        var log = (await repo.GitAsync("log", "--date=format:%z", "--format=%H|%an|%ae|%cn|%at|%ct|%ad|%s")).StandardOutput
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
+        var noon = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
         Assert.Equal(
             [
-                $"{second}|Test Author|author@example.com|Test Author|2026-01-01T12:01:00+00:00|Second",
-                $"{first}|Test Author|author@example.com|Test Author|2026-01-01T12:00:00+00:00|First",
+                $"{second}|Test Author|author@example.com|Test Author|{noon + 60}|{noon + 60}|+0000|Second",
+                $"{first}|Test Author|author@example.com|Test Author|{noon}|{noon}|+0000|First",
             ],
             log);
     }
