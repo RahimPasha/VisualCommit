@@ -37,7 +37,8 @@ watchdog for test runs, and accessible names on the toolbar buttons.
   been merged into `master`.
 - Tests: 117 in the default run (65 git, 45 app, 7 scripted visual checks), all passing, in about
   25 seconds. One more in the real-window pass, passing.
-- Visual test gate: passed. It ran on commit `cfa3193` and again on `45f3e85` after later fixes.
+- Visual test gate: passed. It ran on commit `cfa3193`, and again on `45f3e85` and `b907071`
+  after later fixes, with the same pictures each time.
   Report: [test-reports/phase-0.md](../test-reports/phase-0.md). One part could not run: the real
   window at 1920×1080 does not fit the development screen.
 - CI: the last run of the branch and its result on each platform are in `status.md`. Read
@@ -156,12 +157,13 @@ Phase 1's checks need more than phase 0 built. Plan this work before writing the
 | "Matches" for real-window screenshots has a number: at most 3% of pixels differ | D33 |
 | CI skips pushes that change only docs | D34 |
 | Test runs have a hang watchdog | D35 |
+| On macOS and Linux a cancelled git call stops git itself, not what git started | D37 |
 
 ## Known issues
 
 | Issue | How much it matters | Where |
 |---|---|---|
-| Two CI runs hung in the test step on macOS (runs 37436976773 and 37438530778, commits `9fd6555` and `f6560c6`), while the macOS runs before, between and after them took about 12 seconds. GitHub kept no log of the hung jobs, so the stuck test was never seen. The likely cause: a process-tree kill that failed half-way and left git suspended, for which the git runner then waited for ever. The runner was hardened against exactly that (D36), but the cause is not proven. Since the change `dotnet test` has run 14 times in a row on macOS without a hang, 12 of them in a temporary loop that is removed again | Medium: watch the macOS job in the first CI runs of phase 1. If it hangs again, the Test step now stops after 5 minutes and keeps its log, and the hang watchdog prints the tests that were running | `GitRunner.Kill`, `HangWatchdogAttribute`, `.github/workflows/ci.yml` |
+| The test step froze the whole CI job on macOS in 4 of 9 runs (among them runs 37436976773, 37438530778, 37442079641 and 37443703094). The runner stopped enforcing time limits and kept no log, and a watcher process started beside the tests froze too, so nothing could be read from a frozen job. The freezes stopped when the git runner stopped using .NET's process-tree kill on macOS and Linux (D37): 12 test steps in a row then ran clean. How the tree kill froze the job was not established; it suspends processes while it walks the process list. The freeze never happened when the tests wrote to a file instead of the step's output, in 42 runs | Medium. Watch the macOS job in the first CI runs of phase 1; `status.md` lists the runs since the fix. Do not bring `Process.Kill(entireProcessTree: true)` back on macOS or Linux, in the app or in tests. On those platforms a helper that git started can outlive a cancelled call briefly; phase 3 should check cancel of a network operation on a Mac | `GitRunner.Kill`, `.github/workflows/ci.yml` |
 | The real window at 1920×1080 is unproven: the development screen is too small | Low: the scripted walk-through covers the size, and the pass takes that screenshot by itself on a larger screen | `Phase0RealWindowPass` |
 | The window's size and position and the panel widths are not saved | Low; moved to phase 1 | `MainWindow.axaml` |
 | A panel widened in a large window is cut off when the window is then made small | Low; moved to phase 1 | `MainWindow.axaml`, the `MainArea` grid |
@@ -193,9 +195,13 @@ Phase 1's checks need more than phase 0 built. Plan this work before writing the
   automation id and read by its name; that is why `ToolbarButton` exposes its label as its name.
 - **Git prints dates differently by version** (`+00:00` or `Z`). Compare times as numbers
   (`%at`), not as ISO text.
-- **GitHub had no log for the two jobs that hung and were cancelled as a whole.** Give a step
-  that can hang a `timeout-minutes` of its own, as the Test step now has, so that the job goes
-  on, fails normally and keeps its log.
+- **.NET's process-tree kill froze macOS CI jobs.** Four jobs froze completely and left no log;
+  finding the cause took most of the phase's CI time. What worked: a temporary CI step that ran
+  the tests in a loop, repeated test steps to make the freeze likely, and removing suspects one
+  at a time. What did not: time limits on steps and jobs (the frozen runner ignored them), the
+  hang watchdog and a side process meant to rescue the job (both froze with it). See D37.
+- **A hung or frozen job costs CI minutes fast.** GitHub ends it only 5 minutes after the job's
+  own time limit, and macOS minutes count ten times. Keep `timeout-minutes` low in `ci.yml`.
 - **Do not edit docs with PowerShell text replacement.** Windows PowerShell 5.1 read a file as
   ANSI and wrote it back as UTF-8, which garbled every dash and multiplication sign in
   `status.md`, and its backtick escapes ate the code formatting. Use the file-editing tools.

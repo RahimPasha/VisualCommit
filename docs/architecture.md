@@ -110,9 +110,9 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `GitResult` | Exit code, standard output, standard error, duration |
 | `GitCallRecord`, `IGitCallLog` / `GitCallLog` | The record of every call (command, folder, outcome, exit code, timing, the first 16 KB of each output stream). The activity log (T4, phase 5) will show these |
 | `GitLocator`, `GitSearchContext`, `GitDetection`, `GitVersion` | Finding git and checking its version |
-| `WindowsJob` | Internal: a Windows job object, used to stop git together with everything it started |
+| `WindowsJob` | Internal: a Windows job object, used on Windows to stop git together with everything it started |
 
-Rules the runner follows (see D30, D31 and D36):
+Rules the runner follows (see D30, D31, D36 and D37):
 
 - Every call gets `LC_ALL` and `LANG` set to `en_US.UTF-8`, so git's messages are English and
   parseable, and `GIT_TERMINAL_PROMPT=0`, so git fails rather than waits for a terminal. Input and
@@ -122,9 +122,11 @@ Rules the runner follows (see D30, D31 and D36):
   in the result. `OnErrorLine` also treats a carriage return as the end of a line, because that
   is how git writes progress. Handlers run on thread-pool threads: a view model must move to the
   UI thread itself.
-- Cancelling the token stops git and all its child processes, records the call as `Cancelled` and
-  throws `OperationCanceledException`. Stopping never throws, and a cancelled call returns within
-  10 seconds even if git could not be stopped.
+- Cancelling the token stops git, records the call as `Cancelled` and throws
+  `OperationCanceledException`. On Windows everything git started is stopped with it, through a
+  job object. On macOS and Linux only git itself is killed (D37); what it started ends when its
+  pipes to git break. Stopping never throws, and a cancelled call returns within 10 seconds even
+  if git could not be stopped.
 - Once git has exited, output is read for at most 2 more seconds. A process that git left behind
   (a hook's background job) cannot hold a call up.
 

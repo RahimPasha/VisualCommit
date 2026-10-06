@@ -15,7 +15,7 @@ test is built. The result columns are filled in when the gate runs.
 | Real-window pass | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release`: passed in 22 seconds. Screenshots, difference pictures and `run.txt` in `artifacts/visual/phase-0/real-window/`, at 200% (a 1100×700 window is 2200×1400 pixels) |
 | Inspection | All 22 pictures were opened and compared with the expected results: 14 scripted, 5 real-window, 3 difference pictures. Files with the same content are listed together under "Screenshots" |
 | Other platforms | CI ran the scripted walk-through on macOS and Linux as well; see "Other platforms" below |
-| Re-run after later fixes | The app's code changed after `cfa3193`: stopping git was hardened, the filter box's automation id was renamed and unused font-size tokens were removed. Both passes were run again on `45f3e85`: 117 tests passed (6 were added), and the real-window pass passed with the same differences. Every picture is byte-for-byte the same as the one inspected before, except `06c-restarted-first-frame`, which was opened again; see check 6 |
+| Re-run after later fixes | The app's code changed after `cfa3193`: stopping git was hardened, the filter box's automation id was renamed and unused font-size tokens were removed. Both passes were run again on `45f3e85`: 117 tests passed (6 were added), and the real-window pass passed with the same differences. Every picture is byte-for-byte the same as the one inspected before, except `06c-restarted-first-frame`, which was opened again; see check 6. After one more change to how git is stopped on macOS and Linux (D37), both passes were run a third time, on `b907071`, with the same results and byte-for-byte the same pictures as the second run |
 
 ## What the shell must show
 
@@ -107,10 +107,10 @@ were checked by the automated assertions only.
 CI run [37441056204](https://github.com/RahimPasha/VisualCommit/actions/runs/37441056204) did the
 same for `45f3e85`, the commit of the re-run: all 117 tests passed on each platform.
 
-Two other CI runs, for commits `9fd6555` and `f6560c6`, hung in the test step on macOS and left no
-log; the macOS runs before, between and after them passed in about 12 seconds. After stopping git
-was hardened (D36), the default tests ran 14 times in a row on macOS without a hang. The cause is
-likely but not proven; see "Known issues" in the phase's handoff.
+Not every CI run was clean. On macOS the test step froze the whole job in 4 of 9 runs, leaving no
+log. The freezes stopped once the git runner no longer used .NET's process-tree kill on macOS and
+Linux (D37). The CI runs since that change are listed in `docs/status.md`; "Known issues" in the
+phase's handoff has the details.
 
 ## macOS checklist for the owner
 
