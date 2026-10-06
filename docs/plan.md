@@ -19,12 +19,13 @@ the start-of-session steps, the rules and the phase-closing steps. It points to 
 | [architecture.md](architecture.md) | How the app is built, as it actually stands | End of each phase |
 | [decisions.md](decisions.md) | Decisions and their reasons, so they are not reopened | When a decision is made |
 | `handoffs/phase-N.md` | What phase N built and what the next phase must know | End of each phase |
-| `test-reports/phase-N.md` | Visual test gate results | End of each phase |
+| `test-reports/phase-N.md` | Visual checks: expected results, then outcomes | Start of each phase (expectations) and end (outcomes) |
 
 How context passes from one phase to the next:
 
 - **Within a phase.** The phase's deliverables are copied into `status.md` as a checklist and
-  ticked commit by commit. If a session ends early, a new one resumes from the first unticked item.
+  ticked commit by commit, and "Next step" there is kept accurate in every commit. If a session
+  ends early, a new one resumes from "Next step".
 - **Between phases.** The closing steps update `architecture.md`, move anything undelivered into
   the phase of this plan that now owns it, and write a handoff from
   [handoffs/TEMPLATE.md](handoffs/TEMPLATE.md): what was built, the exact build and test commands,
@@ -35,7 +36,7 @@ How context passes from one phase to the next:
 
 Branches and commits:
 
-- Each phase is built on its own branch (`phase/0-foundation`, `phase/1-graph`, ...) in small commits.
+- Each phase is built on its own branch in small commits. Branch names are listed in `status.md`.
 - A phase branch is merged into `master` after it passes the visual test gate and the owner accepts it.
 - Nothing is pushed to a remote until the owner asks.
 
@@ -56,13 +57,18 @@ too, but they do not replace it.
    mode, with real rendering and simulated mouse and keyboard input (click, right-click,
    double-click, drag, typing), against a scenario repo, and saves a screenshot after every step.
    This runs without taking over the desktop, so it is repeatable and also runs in CI. Standard
-   window sizes are 1100×700 and 1920×1080; a check names the theme it uses.
-4. **Real-window pass.** `Tracery.VisualTests` launches the built app on Windows and repeats the
-   key flows in the real window through Windows UI Automation (FlaUI), with real mouse and
-   keyboard input and screenshots of the actual window. The harness lives in the repo, so it does
-   not depend on what tools a session happens to have. This catches what the scripted run cannot:
-   window frame, display scaling, native dialogs, start-up. It needs the desktop unlocked and
-   uses the real mouse for a few minutes. A real-window screenshot "matches" when it shows the
+   window sizes are 1100×700 and 1920×1080 in logical (scaled) pixels; a check names the theme it
+   uses. A "restart" in a scripted check means closing the app and starting a new instance on the
+   same temporary data folder.
+4. **Real-window pass.** `Tracery.RealWindowTests` launches the built app on Windows and repeats
+   the key flows in the real window through Windows UI Automation (FlaUI), with real mouse and
+   keyboard input and screenshots of the actual window. It is Windows-only and opt-in: it has its
+   own command, is never part of the default `dotnet test` run or CI, and the owner is told
+   before it starts. The harness lives in the repo, so it does not depend on what tools a session
+   happens to have. This catches what the scripted run cannot: window frame, display scaling,
+   native dialogs, start-up. It needs the desktop unlocked and uses the real mouse for a few
+   minutes. It uses the 1100×700 size, plus 1920×1080 when that fits the screen at its display
+   scaling; the report records the scaling. A real-window screenshot "matches" when it shows the
    same layout, text and state as the scripted screenshot of the same step; the window frame and
    small font-rendering differences are expected.
 5. **Inspection.** Every screenshot is opened and compared with the expected result in the
@@ -82,7 +88,7 @@ Sizes are relative: S, M, L.
 
 Delivers:
 - Solution, projects, `.editorconfig`, `.gitignore`, `.gitattributes`, README, central package versions.
-- App shell: main window, repo tab strip, left / centre / right panes as placeholders, dark and light themes with a theme switch.
+- App shell: the main window laid out as in "Main window layout" in `requirements.md`, with placeholder content in each region; dark and light themes with a theme switch. The theme's colour tokens are recorded in `architecture.md`.
 - Git runner: locate git, check its version, run asynchronously, cancel, stream output, record each call.
 - Settings store (the chosen theme survives a restart) and local log file.
 - Test harness: temporary-repo builder and headless UI tests.

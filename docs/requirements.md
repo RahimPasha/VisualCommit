@@ -38,6 +38,20 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | C10 | Conflict resolution | Conflicted-file list; built-in three-pane resolver (pick ours, theirs or both per hunk, edit the result); take a whole file from one side; continue or abort |
 | C11 | Remote sign-in | HTTPS through Git Credential Manager; SSH keys; prompts shown as in-app dialogs |
 
+## Main window layout
+
+| Region | Position | Contents |
+|---|---|---|
+| Repo tabs | Top edge | One tab per open repo, plus a button to open, clone or init another |
+| Toolbar | Under the tabs | Undo, redo, fetch, pull, push, branch, stash, pop, search, theme switch |
+| Left panel | Left, resizable, about 260 wide | Sections for local branches, remotes, pull requests, tags, stashes; filter box on top |
+| Commit graph | Centre, takes the remaining width | Columns: branch and tag labels, graph, message, author, date, SHA. The working-changes row sits on top |
+| Right panel | Right, resizable, about 400 wide | Commit details for the selected commit, or the stage-and-commit panel when the working-changes row is selected |
+| Diff view | Replaces the commit graph while a file is open | The file's diff, with a close button that returns to the graph |
+| Status bar | Bottom edge | Current branch, progress of the running operation, activity-log toggle |
+
+Dark is the default theme. Colours, icons and styling are Tracery's own, not GitKraken's.
+
 ## Interaction model
 
 | Gesture | Result |

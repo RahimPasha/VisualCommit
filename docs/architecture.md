@@ -23,6 +23,8 @@ this file disagree, fix this file. The reasons behind the main choices are in
 - **Hosting.** One provider interface with GitHub, Azure DevOps and GitLab implementations.
   Tokens live in the OS keychain.
 - **Storage.** Settings and session state as JSON in the per-user app-data folder. Logs are local files.
+  The data folder can be overridden (`TRACERY_DATA_DIR`). Every test uses a temporary one, so
+  tests never touch the user's real settings.
 - **Tests.** xUnit. Git-layer tests run real git against temporary repos. UI tests use Avalonia's
   headless mode and capture screenshots.
 - **CI.** GitHub Actions builds and tests on Windows, macOS and Linux on every push.
@@ -30,7 +32,7 @@ this file disagree, fix this file. The reasons behind the main choices are in
 
 ## Solution layout
 
-The solution file, `Directory.Build.props` and `Directory.Packages.props` sit at the repo root.
+The solution file (`Tracery.slnx`), `Directory.Build.props` and `Directory.Packages.props` sit at the repo root.
 App projects go under `src/`, test projects under `tests/`. A project is created in the phase
 that first needs it, so `Tracery.Hosting` arrives in Phase 7. Packages use the latest stable
 release at the time Phase 0 runs, pinned centrally; the handoff records the versions.
@@ -44,7 +46,8 @@ release at the time Phase 0 runs, pinned centrally; the handoff records the vers
 | `tests/Tracery.Testing` | Shared test helpers: the temporary-repo builder and the scenario repos |
 | `tests/Tracery.Git.Tests` | Integration tests against temporary repos |
 | `tests/Tracery.App.Tests` | View-model tests and headless UI tests |
-| `tests/Tracery.VisualTests` | Scripted walk-throughs, the real-window pass and screenshot capture for the visual test gate |
+| `tests/Tracery.VisualTests` | Scripted walk-throughs in headless mode with screenshot capture, for the visual test gate. Part of the default test run and CI |
+| `tests/Tracery.RealWindowTests` | The real-window pass (FlaUI). Windows-only and opt-in: excluded from the default test run and CI, because it takes over the mouse |
 
 ## As built
 

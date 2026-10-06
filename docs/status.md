@@ -6,17 +6,18 @@ Last updated: 2026-10-05
 
 | Phase | State | Branch | Handoff | Test report |
 |---|---|---|---|---|
-| 0. Foundation | Not started | | | |
-| 1. Repos and commit graph | Not started | | | |
-| 2. Diff and commit workflow | Not started | | | |
-| 3. Branch, remote, stash and tag operations | Not started | | | |
-| 4. Rebase and conflict resolution | Not started | | | |
-| 5. History, traceability and undo | Not started | | | |
-| 6. Multi-repo and productivity | Not started | | | |
-| 7. Hosting | Not started | | | |
-| 8. Public release | Not started | | | |
+| 0. Foundation | Not started | `phase/0-foundation` | | |
+| 1. Repos and commit graph | Not started | `phase/1-graph` | | |
+| 2. Diff and commit workflow | Not started | `phase/2-diff-commit` | | |
+| 3. Branch, remote, stash and tag operations | Not started | `phase/3-operations` | | |
+| 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
+| 5. History, traceability and undo | Not started | `phase/5-history` | | |
+| 6. Multi-repo and productivity | Not started | `phase/6-multi-repo` | | |
+| 7. Hosting | Not started | `phase/7-hosting` | | |
+| 8. Public release | Not started | `phase/8-release` | | |
 
-States: Not started, In progress, Awaiting acceptance (gate passed, not yet merged), Done (merged).
+States: Not started, In progress, Blocked (cannot continue or close without the owner; the reason
+is under "Waiting on the owner"), Awaiting acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
@@ -42,4 +43,5 @@ Nothing yet. Use this for work in flight: what is half-done, what was tried and 
 ## Waiting on the owner
 
 - The copyright line in `LICENSE` reads "Tracery contributors". Change it if the owner wants their own name there.
+- The "Main window layout" table in `requirements.md` was proposed during planning and has not been reviewed by the owner. Phase 0 builds the shell to it.
 - CI can only run after the repo is pushed to GitHub. Until then macOS and Linux builds are untested. Pushing soon after phase 0 is recommended.
