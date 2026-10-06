@@ -37,8 +37,9 @@ start a session:
 - **Leave the network access on "Trusted".**
 
 The session prepares its own machine: `CLAUDE.md` tells it to run `bash scripts/setup-linux.sh`,
-which installs the .NET 10 SDK and the few system libraries the tests need. Expect a few
-minutes on each new machine.
+which installs the .NET 10 SDK and the few system libraries the tests need. In CI's empty
+container that takes about half a minute; how long it takes in a cloud session has not been
+measured.
 
 Optional, to save that time: a cloud environment can have a set-up script of its own. It runs
 by itself when a session's machine is made, before Claude starts, and its result is kept for
@@ -123,5 +124,10 @@ needed, on the branch it is working on:
   refused.
 - Which author name and e-mail git uses for commits there, and whether the session can set
   them.
+- That `gh run download` can fetch the screenshots a CI run took. GitHub serves them from
+  `*.blob.core.windows.net`, which is not on the default list of allowed servers, so expect it
+  to be refused. The session then says so in the report, and the Windows session looks at CI's
+  macOS and Linux pictures. To let a cloud session do it, set the network access to "Custom",
+  keep the default list and add `*.blob.core.windows.net`.
 - How long the set-up takes there, and whether the optional environment script above works as
   written.

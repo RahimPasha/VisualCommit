@@ -44,8 +44,8 @@ unfinished until a Windows session has run it.
 
 ## Other platforms
 
-The CI run of the gate's commit and its result on each platform, and which of the screenshots CI
-took on macOS and Linux were opened.
+The CI run of the gate's commit and its result in each job (the three platforms and the two
+bare Ubuntu containers), and which of the screenshots CI took on macOS and Linux were opened.
 
 ## macOS checklist for the owner
 

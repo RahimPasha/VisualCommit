@@ -277,6 +277,9 @@ downloads from.
 
 ### Package versions
 
-.NET SDK 10.0 (`global.json` accepts any 10.0 feature band). Avalonia 12.1.3 (with
+.NET SDK 10.0. `global.json` accepts any 10.0 feature band, and its `version` has to stay in
+the first band (10.0.1xx): Ubuntu's packages, which a cloud session and one of the two
+container jobs build with, never leave that band (10.0.112 in October 2026), while the Windows
+machine and the other CI jobs use newer ones (10.0.303 and 10.0.401 then). Avalonia 12.1.3 (with
 Avalonia.Desktop, Themes.Fluent, Fonts.Inter, Skia, Headless, Headless.XUnit),
 CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2, FlaUI.UIA3 5.0.0.

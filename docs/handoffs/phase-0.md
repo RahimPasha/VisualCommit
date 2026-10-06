@@ -35,8 +35,9 @@ watchdog for test runs, and accessible names on the toolbar buttons.
 
 - Branch `phase/0-foundation`. `status.md` says whether the owner has accepted it and it has
   been merged into `master`.
-- Tests: 117 in the default run (65 git, 45 app, 7 scripted visual checks), all passing, in about
-  25 seconds. One more in the real-window pass, passing.
+- Tests: 118 in the default run (66 git, 45 app, 7 scripted visual checks), all passing, in about
+  25 seconds: 117 when the phase closed, and one added by the change for cloud sessions (D39).
+  One more in the real-window pass, passing when the phase closed.
 - Visual test gate: passed. It ran on commit `c002610`, and again on `6e873d4` and `0784112`
   after later fixes, with the same pictures each time.
   Report: [test-reports/phase-0.md](../test-reports/phase-0.md). One part could not run: the real
@@ -67,8 +68,7 @@ dotnet test --project tests/VisualCommit.Git.Tests
 dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"
 ```
 
-Tests run on Microsoft Testing Platform: a project is passed with `--project`, and
-`dotnet test <path>` does not work.
+Tests run on Microsoft Testing Platform: a project is passed with `--project`.
 
 ## Running the visual gate
 

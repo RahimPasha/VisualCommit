@@ -36,8 +36,8 @@ checks that nothing but docs changed after it.
 
 Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
 "Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for the CI result that each phase's "Done when" asks for. Each
-item is ticked in the commit that completes it. Number the steps plainly; do not label them C1,
+steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit, which closing
+step 6 and the test report record. Each item is ticked in the commit that completes it. Number the steps plainly; do not label them C1,
 C2 and so on, which are requirement numbers.
 
 ### CI
@@ -45,9 +45,17 @@ C2 and so on, which are requirement numbers.
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-CI_RUN_PLACEHOLDER: the commit that made the project usable from cloud sessions (D39) changes
-code and the workflow and adds `scripts/setup-linux.sh`, so it starts a run, the first with the
-two "bare ubuntu container" jobs. Its result is recorded here once it has been read.
+Last run: [37530129931](https://github.com/RahimPasha/VisualCommit/actions/runs/37530129931) on
+`master`, for commit `b1d2ed0`, the change that made the project usable from cloud sessions
+(D39). All five jobs succeeded: `windows-latest`, `macos-latest`, `ubuntu-latest`, and the two
+"bare ubuntu container" jobs, which ran for the first time. In both, `scripts/setup-linux.sh`
+prepared the empty container in under half a minute, its second run changed nothing, the build
+had no warnings and all 118 tests passed: once with .NET SDK 10.0.112 from Ubuntu's package
+servers and once with 10.0.401 from Microsoft's installer.
+
+CI_RUN_PLACEHOLDER: the commit after it makes the container jobs fail when the script's second
+run does anything, and lets the script find a .NET it put into the home folder earlier. It
+starts another run, whose result is recorded here once it has been read.
 
 The CI runs made before 2026-10-06's rewrite of the history (D40) were deleted, so the run
 numbers that the phase 0 report and handoff mention no longer open. What they showed is as
@@ -71,6 +79,12 @@ every commit.
 ### Notes for whoever resumes
 
 - Nothing is in flight. `master` holds everything; the working tree was clean when phase 0 closed.
+- The change for cloud sessions (`b1d2ed0`) touched code after phase 0's gate:
+  `AppPaths.DefaultDataDirectory` no longer creates the folder it names, and `RealApp.Launch`
+  clears the git variables it inherits. CI built and tested it in every job and compiled the
+  real-window project, but the real-window pass itself last ran on `0784112`. Its next run on
+  the Windows machine is the first proof of that change in a real window; if phase 0's check 8
+  fails there, look at this change first.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
@@ -89,6 +103,12 @@ every commit.
 
 - When you have a Mac at hand: the eight-step checklist at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner said this will be looked at later.
+- The commits from before the rewrite of the history (D40) are still on GitHub, although no
+  branch leads to them. Checked on 2026-10-06: each still opens by its ID without signing in and
+  shows the address the rewrite removed, and the repository's public activity list names those
+  IDs. Only GitHub can remove them: through a request to GitHub Support to clear the
+  unreachable commits and cached views, or by deleting the repository and creating it again
+  from the current history. The owner decides which; a session may do neither unasked.
 
 Settled on 2026-10-06: the copyright line in `LICENSE` stays "VisualCommit contributors", and
 the repository was made public, which lifts the limit on CI minutes.

@@ -111,9 +111,16 @@ jobs:
       - name: Set up the container with the repo's script
         run: bash scripts/setup-linux.sh
 
-      # A second run has to find everything in place and change nothing.
+      # A second run has to find everything in place and change nothing. The script says what
+      # it does, so the step fails if the second run refreshed, installed or generated anything.
       - name: Run the script again
-        run: bash scripts/setup-linux.sh
+        run: |
+          bash scripts/setup-linux.sh > /tmp/second-run.txt 2>&1 || { cat /tmp/second-run.txt; exit 1; }
+          cat /tmp/second-run.txt
+          if grep -E 'setup-linux: (refreshing|installing|generating)' /tmp/second-run.txt; then
+            echo "The second run did again what the first run had done."
+            exit 1
+          fi
 
       - name: Show tool versions
         run: |

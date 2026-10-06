@@ -124,6 +124,19 @@ has_sdk() {
   grep -q "^${SDK_MAJOR}\." <<<"$(dotnet --list-sdks 2>/dev/null || true)"
 }
 
+# A .NET in the home folder is not on the PATH of a new shell by itself.
+use_dotnet_in_home_folder() {
+  export DOTNET_ROOT="$1"
+  export PATH="$1:$PATH"
+  say "$1 is not on the PATH of other shells. Add these to your shell profile:"
+  say "  export DOTNET_ROOT=$1"
+  say "  export PATH=$1:\$PATH"
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    # Inside a Claude Code SessionStart hook this file carries variables into the session.
+    printf 'export DOTNET_ROOT=%q\nexport PATH=%q:"$PATH"\n' "$1" "$1" >> "$CLAUDE_ENV_FILE"
+  fi
+}
+
 # Microsoft's installer, for systems whose package servers do not carry the SDK. It downloads
 # from builds.dotnet.microsoft.com.
 install_sdk_with_microsofts_installer() {
@@ -157,17 +170,17 @@ install_sdk_with_microsofts_installer() {
       say "note: /etc/dotnet/install_location names another .NET. If test programs cannot find .NET $SDK_MAJOR, run: export DOTNET_ROOT=$install_dir"
     fi
   else
-    export DOTNET_ROOT="$install_dir"
-    export PATH="$install_dir:$PATH"
-    say "not root, so nothing was put on the PATH for other shells. Add these to your shell profile:"
-    say "  export DOTNET_ROOT=$install_dir"
-    say "  export PATH=$install_dir:\$PATH"
-    if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-      # Inside a Claude Code SessionStart hook this file carries variables into the session.
-      printf 'export DOTNET_ROOT=%q\nexport PATH=%q:"$PATH"\n' "$install_dir" "$install_dir" >> "$CLAUDE_ENV_FILE"
-    fi
+    use_dotnet_in_home_folder "$install_dir"
   fi
 }
+
+# An SDK that an earlier run put into the home folder is on the PATH of a new shell only after
+# the shell profile was changed. Look there too, so that a second run downloads nothing.
+home_dotnet="${HOME:-}/.dotnet"
+if ! has_sdk && [ -x "$home_dotnet/dotnet" ] \
+  && grep -q "^${SDK_MAJOR}\." <<<"$("$home_dotnet/dotnet" --list-sdks 2>/dev/null || true)"; then
+  use_dotnet_in_home_folder "$home_dotnet"
+fi
 
 if has_sdk; then
   say ".NET SDK $(dotnet --version) is already installed."

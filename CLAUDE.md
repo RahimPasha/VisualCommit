@@ -25,16 +25,28 @@ machine".
      local branch of that name, without `origin/` in front (`git checkout phase/1-graph`), and
      if it is behind `origin`, fast-forward it (`git merge --ff-only origin/<branch>`). Its
      `docs/status.md` is the current one; the copy on `master` is out of date.
-   - If it lists nothing, no phase is under way and the current `docs/status.md` is the one on
-     `origin/master`: check out `master` and fast-forward it (`git merge --ff-only
-     origin/master`), also when `git status` showed another branch.
+   - If it lists nothing, run `git branch --no-merged origin/master` too. A local branch other
+     than `master` that it lists holds commits that were never pushed, such as a phase branch
+     whose first push did not happen: check it out, push it (`git push -u origin <branch>`)
+     and treat it as a listed branch. If that lists nothing either, no phase is under way and
+     the current `docs/status.md` is the one on `origin/master`: check out `master` and
+     fast-forward it (`git merge --ff-only origin/master`), also when `git status` showed
+     another branch.
    - If the branch you end up on has commits that `origin` lacks, push them before anything
      else. If each side has commits the other lacks, stop and ask the owner: do not merge,
      rebase or force-push.
-   - A listed branch named `docs/...` is no phase: it holds a change made outside a phase that
-     a cloud session could not push to `master` (see "`master`" under "Sessions away from the
-     Windows machine"). If it lists more than one other branch, or one that no `docs/status.md`
-     names, and the `docs/status.md` files do not make clear which is current, ask the owner.
+   - A listed branch named `docs/...` is no phase and is never the branch to work on: it holds
+     a change made outside a phase that a cloud session could not push to `master`. On the
+     Windows machine, bring it into `master` first (`git checkout master`,
+     `git merge --ff-only origin/master`, `git merge --ff-only origin/docs/<short-name>`,
+     `git push origin master`); any other session leaves it alone. Either way, go on as if it
+     were not listed.
+   - A listed branch that is contained in another listed one
+     (`git merge-base --is-ancestor origin/<older> origin/<newer>` succeeds) is an earlier
+     stage of the same phase, left behind when a cloud session had to continue on a branch of
+     its own: go by the newer one. If more than one branch is still left after that, or the
+     one left is named in no `docs/status.md`, and the `docs/status.md` files do not make clear
+     which is current, ask the owner.
 2. Read `docs/status.md`: which phase is current and where work stopped.
 3. Read `docs/plan.md`: the Workflow, Visual test gate and Risks sections, and the section for the current phase.
 4. Read `docs/architecture.md`, `docs/decisions.md`, and the parts of `docs/requirements.md` the phase covers.
@@ -68,7 +80,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | Only when `docs/status.md` on the phase's branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (`git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` the branch that `docs/status.md` names for the phase, set the phase to "Done" in `docs/status.md`, commit, push `master`. In any other case, change nothing, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md`, commit, push `master`. In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -106,7 +118,9 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 - A phase that is "Awaiting acceptance" has passed the gate on its "Gate commit". A session that
   then changes anything other than docs on it sets the state back in the same commit: to "In
   progress" on the Windows machine, where the gate is then run again, and to "Blocked" anywhere
-  else.
+  else. The same commit unticks the gate and the closing steps in the Progress checklist and
+  rewrites "Next step" (both passes of the gate again on one commit on the Windows machine,
+  then closing step 6 with the new "Gate commit") and, when "Blocked", "Waiting on the owner".
 - Expected results for visual checks are written before the UI exists. Changing one afterwards
   needs a reason recorded in the test report.
 - CI runs on GitHub when a branch is pushed. After pushing, read the result with `gh run list`
@@ -152,11 +166,16 @@ nothing and say that the next step needs a session there, unless the owner asks 
 the phase. Otherwise:
 
 - **Set-up.** Run `bash scripts/setup-linux.sh` when `dotnet --version` does not print 10.x, then
-  `dotnet build` and `dotnet test`. The machine can be replaced while a session sits idle. If
-  `dotnet` is gone, that has happened: the new machine holds a fresh clone, possibly on another
-  branch, and whatever was not pushed is lost. Run the script again and repeat step 1 of "Start
-  of every session" before changing anything. The identity rule above applies to every such
-  clone.
+  `dotnet build` and `dotnet test`.
+- **A replaced machine.** The machine can be replaced while a session sits idle, and nothing
+  says so: the conversation goes on, but the new machine holds a fresh clone, possibly on
+  another branch, without the identity that was set in the old clone, and whatever was not
+  pushed is lost. A missing `dotnet` is a sign of it, but not a sure one, because the owner's
+  environment script may have installed it already. So before the first change of every turn,
+  run `git status -sb`, `git log -1 --oneline` and `git var GIT_AUTHOR_IDENT`. If the branch or
+  the last commit is not the one you left, or the identity is not the owner's, the machine was
+  replaced: run the script again if `dotnet` is missing, repeat step 1 of "Start of every
+  session", and apply the identity rule above before the next commit.
 - **Failures that show only here** are sorted first. If the machine lacks something (a tool, a
   library, a locale, access to a server), fix `scripts/setup-linux.sh` or report it. If the code
   or a test depends on something machines are free to differ in (git's configuration or
@@ -179,9 +198,11 @@ the phase. Otherwise:
   refused, say so and open no pull request. A "Phase N accepted" merge is then left to a session
   on the Windows machine; nothing is lost, because the phase's branch is on `origin`. Any other
   commit would be lost with the machine, so push it to a branch of its own
-  (`git push origin master:docs/<short-name>`) and name that branch in your reply. A session on
-  the Windows machine brings it into `master` (`git merge --ff-only origin/docs/<short-name>`,
-  then push).
+  (`git push origin master:docs/<short-name>`) and name that branch in your reply; step 1 of
+  "Start of every session" tells a session on the Windows machine how to bring it into
+  `master`. If that push is refused too, because the session may push its own branch alone,
+  push the commit to that branch instead (`git push origin master:<the session's own branch>`)
+  and say in your reply that this branch holds a change for `master` and no phase.
 - **What cannot run.** The app itself (`dotnet run` needs a desktop) and the real-window pass
   (its project does not even build on Linux). Look at the app through the scripted walk-through's
   screenshots. CI's Windows job is the only check of this work on Windows, and it also compiles
@@ -193,17 +214,21 @@ the phase. Otherwise:
   and times measured here (such as Q1's two seconds) are indications only.
 - **Closing.** Do what does not depend on Windows: closing steps 2, 3 and 4, and in the report
   your scripted run under "Run", marked as a cloud session, the Scripted column, screenshots and
-  notes of every check, "Found by the gate" and "Other platforms". In the Progress checklist
-  leave every item that still needs Windows unticked and write "needs Windows" after it. Then
+  notes of every check, "Found by the gate" and "Other platforms". If `gh run download` is
+  refused (CI's pictures come from a storage server outside the default network list), write
+  that under "Other platforms" and leave CI's macOS and Linux pictures to the Windows session.
+  In the Progress checklist leave every item that still needs Windows unticked and write "needs
+  Windows" after it; mark harness code that was written but could not run "written, not run"
+  there. Then
   set the phase to "Blocked" and write under "Waiting on the owner": the real-window pass needs
   the Windows machine; start a session there and say "Continue". Under "Next step" write what
   that session has to do:
   1. set the phase to "In progress";
   2. run `dotnet test` and the real-window pass on one commit, fix what fails and run both
-     again (the real-window code has only been compiled until then), and inspect every picture
-     of both passes;
+     again, and inspect every picture of both passes. The real-window code, with the harness
+     items that `docs/status.md` marks "written, not run", has only been compiled until then;
   3. judge the phase's "Done when" items that are judged on the Windows machine, named one by
-     one, and run the harness items the handoff marks "written, not run";
+     one; if that changes anything other than docs, do step 2 again on the new commit;
   4. finish the report with its own results, and bring the handoff, `docs/architecture.md` and
      `docs/plan.md` up to date with what the Windows run changed and measured;
   5. closing steps 5 to 7. The cold-read check is left to that session on purpose: it reads the
@@ -211,7 +236,9 @@ the phase. Otherwise:
 
 What the owner sets up for cloud sessions, and what has not been tried in one yet, is in
 `docs/cloud-sessions.md`. The first cloud session checks that list and corrects the page, and the
-script if needed, on the branch it is working on.
+script if needed, on the phase's branch. If the script needs a correction before that branch
+exists (step 6 runs on `master`), keep the change uncommitted until the branch is created in
+step 2 of "start a phase" and commit it there; `master` gets it with the phase.
 
 ## Commands
 
@@ -236,8 +263,11 @@ twice more in a bare Ubuntu container that it sets up with that script.
 
 What to know about them:
 
-- Tests run on Microsoft Testing Platform (set in `global.json`), so a project is passed with
-  `--project`. `dotnet test <path>` does not work.
+- Tests run on Microsoft Testing Platform (set in `global.json`). Pass a project with
+  `--project`, as every command here does; `dotnet test <path>` is not relied on.
+- `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
+  (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
+  while the Windows machine and most CI jobs use newer ones.
 - The default tests take about 25 seconds. They use real git and a temporary folder for every
   repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
