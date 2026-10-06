@@ -6,7 +6,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="VisualCommit"
         Width="1280" Height="800"
-        MinWidth="900" MinHeight="560"
+        MinWidth="1000" MinHeight="560"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource VcWindowBackgroundBrush}"
         Foreground="{DynamicResource VcTextPrimaryBrush}"
@@ -22,7 +22,7 @@
     <Grid Name="MainArea" Grid.Row="2">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="260" MinWidth="180" MaxWidth="520" />
-        <ColumnDefinition Width="*" MinWidth="240" />
+        <ColumnDefinition Width="*" MinWidth="320" />
         <ColumnDefinition Width="400" MinWidth="280" MaxWidth="720" />
       </Grid.ColumnDefinitions>
 

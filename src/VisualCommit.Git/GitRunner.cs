@@ -12,6 +12,13 @@ namespace VisualCommit.Git;
 /// </summary>
 public sealed class GitRunner : IGitRunner
 {
+    /// <summary>
+    /// How long to keep reading output after git itself has exited. Everything git wrote is
+    /// readable at once; only a process that git left behind (a hook's background job, a daemon)
+    /// can keep the pipes open longer, and its output is not waited for.
+    /// </summary>
+    private static readonly TimeSpan PipeDrainTimeout = TimeSpan.FromSeconds(2);
+
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
@@ -57,26 +64,41 @@ public sealed class GitRunner : IGitRunner
             throw new GitException(command.DisplayText, null, ex.Message, ex);
         }
 
+        using var job = OperatingSystem.IsWindows() ? WindowsJob.TryAttach(process) : null;
+        void Stop() => Kill(process, job);
+
         var output = new OutputCollector(command.OnOutputLine, keepAll: command.OnOutputLine is null, splitOnCarriageReturn: false);
         var error = new OutputCollector(command.OnErrorLine, keepAll: true, splitOnCarriageReturn: true);
+        var outputPump = output.PumpAsync(process.StandardOutput);
+        var errorPump = error.PumpAsync(process.StandardError);
+        var pumps = Task.WhenAll(outputPump, errorPump);
+        var exit = process.WaitForExitAsync(CancellationToken.None);
 
-        // Killing the process ends both pumps, so cancellation needs nothing else.
-        using var killOnCancel = cancellationToken.Register(() => Kill(process));
-        var pumps = Task.WhenAll(output.PumpAsync(process.StandardOutput), error.PumpAsync(process.StandardError));
+        // Stopping git ends the wait below, so cancellation needs nothing else.
+        using var stopOnCancel = cancellationToken.Register(Stop);
 
         try
         {
             await WriteInputAsync(process, command.StandardInput).ConfigureAwait(false);
-            await pumps.ConfigureAwait(false);
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+
+            // Wait for git to exit. A pump that fails before that means an output handler
+            // threw: awaiting it rethrows the exception at once, without waiting for git.
+            var pending = new List<Task> { exit, outputPump, errorPump };
+            while (!exit.IsCompleted)
+            {
+                var finished = await Task.WhenAny(pending).ConfigureAwait(false);
+                await finished.ConfigureAwait(false);
+                pending.Remove(finished);
+            }
+
+            await DrainAsync(pumps, output, error).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            // An output handler threw, or a pipe broke. Do not leave git running behind us, and
-            // let both pumps finish before the process is disposed.
-            Kill(process);
-            await pumps.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default)
-                .ConfigureAwait(false);
+            // An output handler threw, or a pipe broke. Do not leave git running behind us.
+            Stop();
+            await Task.WhenAny(exit, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false);
+            await DrainAsync(pumps.ContinueWith(_ => { }, TaskScheduler.Default), output, error).ConfigureAwait(false);
             Record(command, startedAt, stopwatch.Elapsed, GitCallOutcome.Cancelled, null, output.Head, error.Head);
             if (cancellationToken.IsCancellationRequested)
             {
@@ -150,18 +172,47 @@ public sealed class GitRunner : IGitRunner
         }
     }
 
-    private static void Kill(Process process)
+    /// <summary>
+    /// Waits for the output pumps once git has exited, but only for <see cref="PipeDrainTimeout"/>.
+    /// After that the pumps are left to end on their own and what they read later is dropped.
+    /// </summary>
+    private async Task DrainAsync(Task pumps, OutputCollector output, OutputCollector error)
+    {
+        if (await Task.WhenAny(pumps, Task.Delay(PipeDrainTimeout)).ConfigureAwait(false) == pumps)
+        {
+            await pumps.ConfigureAwait(false);
+            return;
+        }
+
+        output.Close();
+        error.Close();
+        _ = pumps.ContinueWith(
+            task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
+        _log.Debug("A process started by git kept its output open after git exited; its output is no longer read.");
+    }
+
+    /// <summary>
+    /// Stops git and everything it started (ssh, remote helpers, hooks), which would otherwise
+    /// keep running and keep the output pipes open.
+    /// </summary>
+    private static void Kill(Process process, WindowsJob? job)
     {
         try
         {
+            if (OperatingSystem.IsWindows())
+            {
+                job?.Terminate();
+            }
+
             if (!process.HasExited)
             {
-                // The whole tree: git starts helpers (ssh, remote helpers, hooks) that would
-                // otherwise keep running and keep the output pipes open.
                 process.Kill(entireProcessTree: true);
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException)
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException or AggregateException)
         {
             // Already gone.
         }
@@ -209,15 +260,44 @@ public sealed class GitRunner : IGitRunner
     /// </summary>
     private sealed class OutputCollector(Action<string>? onLine, bool keepAll, bool splitOnCarriageReturn)
     {
+        private readonly Lock _gate = new();
         private readonly StringBuilder? _all = keepAll ? new StringBuilder() : null;
         private readonly StringBuilder _head = new();
         private readonly StringBuilder _line = new();
         private bool _headCutOff;
         private bool _lastWasCarriageReturn;
+        private bool _closed;
 
-        public string All => _all?.ToString() ?? string.Empty;
+        public string All
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _all?.ToString() ?? string.Empty;
+                }
+            }
+        }
 
-        public string Head => _headCutOff ? _head.ToString() + GitCallRecord.TruncationMarker : _head.ToString();
+        public string Head
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _headCutOff ? _head.ToString() + GitCallRecord.TruncationMarker : _head.ToString();
+                }
+            }
+        }
+
+        /// <summary>Stops collecting. A pump that is still reading discards what arrives from now on.</summary>
+        public void Close()
+        {
+            lock (_gate)
+            {
+                _closed = true;
+            }
+        }
 
         public async Task PumpAsync(StreamReader reader)
         {
@@ -225,18 +305,36 @@ public sealed class GitRunner : IGitRunner
             int read;
             while ((read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
             {
-                var chunk = buffer.AsSpan(0, read);
-                _all?.Append(chunk);
-                AppendToHead(chunk);
+                if (!Collect(buffer.AsSpan(0, read)))
+                {
+                    return;
+                }
+
                 if (onLine is not null)
                 {
-                    SplitLines(chunk);
+                    SplitLines(buffer.AsSpan(0, read));
                 }
             }
 
             if (onLine is not null && _line.Length > 0)
             {
                 EmitLine();
+            }
+        }
+
+        /// <summary>Keeps a chunk of output. Returns false once the collector is closed.</summary>
+        private bool Collect(ReadOnlySpan<char> chunk)
+        {
+            lock (_gate)
+            {
+                if (_closed)
+                {
+                    return false;
+                }
+
+                _all?.Append(chunk);
+                AppendToHead(chunk);
+                return true;
             }
         }
 

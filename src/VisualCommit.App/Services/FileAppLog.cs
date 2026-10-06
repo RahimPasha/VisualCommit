@@ -6,8 +6,9 @@ namespace VisualCommit.App.Services;
 
 /// <summary>
 /// Writes the log to a local file, one file per day: <c>visualcommit-yyyyMMdd.log</c> in the
-/// log folder. Each entry opens, appends and closes the file, so several instances of the app
-/// can share it and nothing is lost when the app stops abruptly.
+/// log folder. Each entry opens the file for itself alone, appends and closes it, so several
+/// logs and several instances of the app can share a file without overwriting each other, and
+/// nothing is lost when the app stops abruptly.
 /// </summary>
 public sealed class FileAppLog : IAppLog
 {
@@ -18,7 +19,12 @@ public sealed class FileAppLog : IAppLog
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
-    private readonly Lock _gate = new();
+    /// <summary>How often a write is retried while another process has the file open.</summary>
+    private const int WriteAttempts = 40;
+
+    /// <summary>One lock for all logs of this process: they may share a file.</summary>
+    private static readonly Lock Gate = new();
+
     private readonly string _directory;
     private readonly TimeProvider _clock;
 
@@ -55,18 +61,34 @@ public sealed class FileAppLog : IAppLog
 
         entry.AppendLine();
 
-        try
+        var bytes = Utf8NoBom.GetBytes(entry.ToString());
+        var file = FileFor(now);
+
+        lock (Gate)
         {
-            lock (_gate)
+            for (var attempt = 1; attempt <= WriteAttempts; attempt++)
             {
-                Directory.CreateDirectory(_directory);
-                using var stream = new FileStream(FileFor(now), FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                stream.Write(Utf8NoBom.GetBytes(entry.ToString()));
+                try
+                {
+                    Directory.CreateDirectory(_directory);
+
+                    // No other writer while this one appends: two writers that both seek to the
+                    // end would overwrite each other. Readers are still let in.
+                    using var stream = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.Read);
+                    stream.Write(bytes);
+                    return;
+                }
+                catch (IOException) when (attempt < WriteAttempts && Directory.Exists(_directory))
+                {
+                    // Another instance of the app is writing its own entry. Try again shortly.
+                    Thread.Sleep(5);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // A log that cannot be written must not take the app down with it.
+                    return;
+                }
             }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A log that cannot be written must not take the app down with it.
         }
     }
 
