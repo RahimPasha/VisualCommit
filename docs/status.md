@@ -24,13 +24,13 @@ is under "Waiting on the owner"), Awaiting acceptance (whole gate passed, not ye
 
 ## Current phase
 
-Phase 0 — Foundation, on branch `phase/0-foundation`. Started 2026-10-06.
+Phase 0 â€” Foundation, on branch `phase/0-foundation`. Started 2026-10-06.
 
 ### Progress
 
 Delivers (from `plan.md`), split into steps:
 
-- [ ] 1. Visual-check expectations written to `docs/test-reports/phase-0.md` (before any UI exists)
+- [x] 1. Visual-check expectations written to `docs/test-reports/phase-0.md` (before any UI exists)
 - [ ] 2. Repo files: `.gitignore`, `.gitattributes`, `.editorconfig`
 - [ ] 3. Solution: `VisualCommit.slnx`, `Directory.Build.props`, `Directory.Packages.props`, all projects created and building
 - [ ] 4. CI workflow for Windows, macOS and Linux; first run read back from GitHub
@@ -51,7 +51,7 @@ Delivers (from `plan.md`), split into steps:
 
 Visual checks (details in the test report):
 
-- [ ] V1–V4. Shell in dark and light at 1100×700 and 1920×1080
+- [ ] V1â€“V4. Shell in dark and light at 1100Ã—700 and 1920Ã—1080
 - [ ] V5. Clicking the theme switch changes the theme
 - [ ] V6. The chosen theme survives a restart
 - [ ] V7. Dragging a panel edge resizes the panel
@@ -70,15 +70,15 @@ Closing steps (from `CLAUDE.md`):
 
 ### Next step
 
-Step 1: write the visual-check expectations into `docs/test-reports/phase-0.md` and commit them.
+Step 2: add `.gitignore`, `.gitattributes` and `.editorconfig`, then step 3: create the solution and projects.
 
 ### Notes for whoever resumes
 
 - Environment found at the start of the phase: .NET SDK 10.0.303, Git 2.36.0.windows.1, `gh` signed
   in as RahimPasha. Latest stable packages on NuGet: Avalonia 12.1.3, CommunityToolkit.Mvvm 8.4.2,
   xunit.v3 4.0.1, FlaUI 5.0.0. `Avalonia.Headless.XUnit` 12.1.3 is built against xunit.v3 3.2.2.
-- The development screen is 3000×2000 at 200% scaling, so 1500×1000 logical pixels. A 1920×1080
-  window does not fit; the real-window pass can only use 1100×700 on this machine.
+- The development screen is 3000Ã—2000 at 200% scaling, so 1500Ã—1000 logical pixels. A 1920Ã—1080
+  window does not fit; the real-window pass can only use 1100Ã—700 on this machine.
 - The GitHub repo is private. The `gh` token has the scopes `repo`, `gist` and `read:org` but not
   `workflow`; git itself pushes through Git Credential Manager. If pushing the CI workflow file is
   refused, the owner has to grant the `workflow` scope.
