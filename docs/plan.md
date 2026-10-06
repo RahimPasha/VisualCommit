@@ -9,8 +9,9 @@ main choices are in [decisions.md](decisions.md).
 
 ## Workflow
 
-The project is built one phase per session. A new session remembers nothing from earlier ones, so
-everything it needs is in the repo. [CLAUDE.md](../CLAUDE.md) is loaded automatically and holds
+The project is built in phases, normally one phase per session; a phase built in a cloud session
+needs a second session on the Windows machine to close it (D39). A new session remembers nothing
+from earlier ones, so everything it needs is in the repo. [CLAUDE.md](../CLAUDE.md) is loaded automatically and holds
 the start-of-session steps, the rules and the phase-closing steps. It points to these files:
 
 | File | Purpose | Updated |
@@ -76,7 +77,11 @@ too, but they do not replace it.
    than 3% of a screenshot's pixels differ from the scripted one (D33). Which checks it repeats
    is decided when the phase's checks are written, and marked in the report: at least one
    screenshot of every new screen, and everything the scripted run cannot prove, such as native
-   dialogs, the window's own size and position, and a restart of the real process.
+   dialogs, the window's own size and position, and a restart of the real process. A session
+   that is not on the Windows machine cannot run this pass and puts nothing in its place: a
+   virtual display on Linux is not a real window. It writes the test code for the pass, leaves
+   the results as "Not run: needs Windows", and hands the phase to a Windows session (see
+   "Sessions away from the Windows machine" in `CLAUDE.md`).
 5. **Inspection.** Every screenshot is opened and compared with the expected result in the
    report: layout, text, colours and state. A check passes only when the screenshot shows the
    expected result and the repo's real git state matches it.
@@ -89,7 +94,9 @@ too, but they do not replace it.
    check. Screenshots stay local under `artifacts/visual/phase-N/` (git-ignored to keep the repo
    small). The report also names the CI run of the gate's commit and which of the screenshots CI
    took on macOS and Linux were looked at, and ends with a short checklist for testing by hand
-   on macOS.
+   on macOS. The session that runs the real-window pass runs `dotnet test` on the same commit
+   first and inspects the pictures of both passes itself: pictures a cloud session inspected
+   were drawn on Linux and are gone with its machine.
 
 ## Phases
 
@@ -139,7 +146,7 @@ Visual checks:
 - Clone progress; three repo tabs; tabs restored after a restart.
 - A commit made in a terminal appears in the graph.
 
-Done when: a 100k-commit repo shows its first graph within about 2 seconds and scrolls smoothly, and the visual gate passes.
+Done when: a 100k-commit repo shows its first graph within about 2 seconds and scrolls smoothly, and the visual gate passes. The two seconds and the smoothness are judged on the Windows development machine; a time measured in a cloud session or on a CI runner is recorded as an indication, with the machine named.
 
 ### Phase 2 — Diff and commit workflow (L)
 
@@ -280,7 +287,7 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 
 | # | Item | Needed by |
 |---|---|---|
-| 1 | Development and the real-window pass happen on Windows. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
+| 1 | The real-window pass happens only on the Windows machine; development can also happen in a Linux cloud session (D39), which then leaves that pass to a Windows session. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
 | 2 | The diff viewer and conflict resolver are custom-built; they are the largest UI effort in the project. | Phases 2 and 4 |
 | 3 | Settled in phase 0: the real-window pass works. The in-repo harness finds the app through Windows UI Automation, clicks with the real mouse and captures the window, in about 30 seconds. Still true: it needs an unlocked desktop, and the development screen (a work area of 1500×952 logical pixels at 200% scaling) is too small for its 1920×1080 size, so that size is only ever proven by the scripted walk-through unless a larger screen is used. | Each phase's gate |
 | 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |

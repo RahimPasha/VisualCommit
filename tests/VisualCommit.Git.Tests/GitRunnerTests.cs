@@ -63,10 +63,10 @@ public class GitRunnerTests
         var runner = new GitRunner(GitPath);
 
         var result = await runner.RunAsync(
-            new GitCommand("rev-parse", "--is-inside-work-tree") { WorkingDirectory = repo.Path },
+            new GitCommand("rev-parse", "--is-inside-work-tree") { WorkingDirectory = repo.Path, Environment = repo.Environment },
             TestCancelled);
         var outside = await runner.RunAsync(
-            new GitCommand("rev-parse", "--is-inside-work-tree") { WorkingDirectory = Path.GetPathRoot(repo.Path) },
+            new GitCommand("rev-parse", "--is-inside-work-tree") { WorkingDirectory = Path.GetPathRoot(repo.Path), Environment = repo.Environment },
             TestCancelled);
 
         Assert.Equal("true", result.StandardOutput.Trim());
@@ -270,8 +270,8 @@ public class GitRunnerTests
         var runner = new GitRunner(GitPath, calls, log);
         var before = DateTimeOffset.Now;
 
-        await runner.RunAsync(new GitCommand("status", "--porcelain") { WorkingDirectory = repo.Path }, TestCancelled);
-        await runner.RunAsync(new GitCommand("rev-parse", "--verify", "no such ref") { WorkingDirectory = repo.Path }, TestCancelled);
+        await runner.RunAsync(new GitCommand("status", "--porcelain") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
+        await runner.RunAsync(new GitCommand("rev-parse", "--verify", "no such ref") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
 
         var records = calls.Snapshot();
         Assert.Equal(2, records.Count);
@@ -303,7 +303,7 @@ public class GitRunnerTests
         var calls = new GitCallLog();
         var runner = new GitRunner(GitPath, calls);
 
-        var result = await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path }, TestCancelled);
+        var result = await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
 
         Assert.Equal(content, result.StandardOutput);
         var recorded = Assert.Single(calls.Snapshot()).StandardOutput;

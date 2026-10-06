@@ -35,7 +35,7 @@ public sealed class TempRepo : IDisposable
         var home = root.Combine("home");
         Directory.CreateDirectory(home);
         File.WriteAllText(System.IO.Path.Combine(home, ".gitconfig"), string.Empty);
-        Environment = new Dictionary<string, string?>
+        var environment = new Dictionary<string, string?>
         {
             // No system or user configuration: no aliases, hooks, signing or line-ending
             // settings from the machine. GIT_CONFIG_GLOBAL needs Git 2.32; HOME covers 2.30 and 2.31.
@@ -48,6 +48,16 @@ public sealed class TempRepo : IDisposable
             ["GIT_COMMITTER_NAME"] = AuthorName,
             ["GIT_COMMITTER_EMAIL"] = AuthorEmail,
         };
+
+        // Nor anything the surrounding process passes to git through its environment: extra
+        // configuration, or another repository to work on. A null value removes the variable
+        // for the call.
+        foreach (var variable in GitIsolation.InheritedVariables)
+        {
+            environment[variable] = null;
+        }
+
+        Environment = environment;
     }
 
     /// <summary>The working tree of the repository.</summary>

@@ -37,7 +37,7 @@ watchdog for test runs, and accessible names on the toolbar buttons.
   been merged into `master`.
 - Tests: 117 in the default run (65 git, 45 app, 7 scripted visual checks), all passing, in about
   25 seconds. One more in the real-window pass, passing.
-- Visual test gate: passed. It ran on commit `cfa3193`, and again on `45f3e85` and `b907071`
+- Visual test gate: passed. It ran on commit `c002610`, and again on `6e873d4` and `0784112`
   after later fixes, with the same pictures each time.
   Report: [test-reports/phase-0.md](../test-reports/phase-0.md). One part could not run: the real
   window at 1920×1080 does not fit the development screen.
@@ -81,8 +81,11 @@ Tests run on Microsoft Testing Platform: a project is passed with `--project`, a
    `artifacts/visual/phase-N/real-window/`. It needs an unlocked desktop, and the scripted
    screenshots from step 1.
 3. Open every picture and compare it with the expected result in the report. Files that are
-   byte-for-byte the same need opening once: group them with `Get-FileHash`. The same holds for
-   a re-run after a fix: a picture whose hash did not change does not need opening again.
+   byte-for-byte the same need opening once: group them with `Get-FileHash` (`sha256sum` on
+   Linux). The same holds for a re-run after a fix on the same machine: a picture whose hash did
+   not change does not need opening again. Hashes are compared only between runs on the same
+   machine: a picture that another session inspected on another machine counts as not inspected,
+   whatever its hash.
 4. `gh run download <run id> -D <folder>` fetches the scripted screenshots CI took on macOS and
    Linux. Open at least one per platform.
 
@@ -145,6 +148,10 @@ Phase 1's checks need more than phase 0 built. Plan this work before writing the
 | Scenario repos in the real-window pass. Its project does not reference `VisualCommit.Testing` | `VisualCommit.RealWindowTests.csproj` |
 | Helpers for stashes, remotes and clones in the repo builder; they go through `TempRepo.GitAsync` until someone adds them | `TempRepo` |
 
+A session that is not on Windows can write the real-window items but cannot build or run them.
+It checks that the step "Build the real-window pass" of CI's Windows job succeeded, marks the
+items "written, not run" in `docs/status.md`, and leaves running them to the Windows session.
+
 ## Deviations from the plan
 
 | What | Decision |
@@ -163,7 +170,7 @@ Phase 1's checks need more than phase 0 built. Plan this work before writing the
 
 | Issue | How much it matters | Where |
 |---|---|---|
-| The test step froze the whole CI job on macOS in 4 of 9 runs (among them runs 37436976773, 37438530778, 37442079641 and 37443703094). The runner stopped enforcing time limits and kept no log, and a watcher process started beside the tests froze too, so nothing could be read from a frozen job. The freezes stopped when the git runner stopped using .NET's process-tree kill on macOS and Linux (D37): 12 test steps in a row then ran clean. How the tree kill froze the job was not established; it suspends processes while it walks the process list. The freeze never happened when the tests wrote to a file instead of the step's output, in 42 runs | Medium. Watch the macOS job in the first CI runs of phase 1; `status.md` lists the runs since the fix. Do not bring `Process.Kill(entireProcessTree: true)` back on macOS or Linux, in the app or in tests. On those platforms a helper that git started can outlive a cancelled call briefly; phase 3 should check cancel of a network operation on a Mac | `GitRunner.Kill`, `.github/workflows/ci.yml` |
+| The test step froze the whole CI job on macOS in 4 of 9 runs. (Those runs, like all runs from before 2026-10-06's history rewrite, were deleted later; see D40.) The runner stopped enforcing time limits and kept no log, and a watcher process started beside the tests froze too, so nothing could be read from a frozen job. The freezes stopped when the git runner stopped using .NET's process-tree kill on macOS and Linux (D37): 12 test steps in a row then ran clean. How the tree kill froze the job was not established; it suspends processes while it walks the process list. The freeze never happened when the tests wrote to a file instead of the step's output, in 42 runs | Medium. Watch the macOS job in the first CI runs of phase 1; `status.md` lists the runs since the fix. Do not bring `Process.Kill(entireProcessTree: true)` back on macOS or Linux, in the app or in tests. On those platforms a helper that git started can outlive a cancelled call briefly; phase 3 should check cancel of a network operation on a Mac | `GitRunner.Kill`, `.github/workflows/ci.yml` |
 | The real window at 1920×1080 is unproven: the development screen is too small | Low: the scripted walk-through covers the size, and the pass takes that screenshot by itself on a larger screen | `Phase0RealWindowPass` |
 | The window's size and position and the panel widths are not saved | Low; moved to phase 1 | `MainWindow.axaml` |
 | A panel widened in a large window is cut off when the window is then made small | Low; moved to phase 1 | `MainWindow.axaml`, the `MainArea` grid |
@@ -206,8 +213,8 @@ Phase 1's checks need more than phase 0 built. Plan this work before writing the
 - **Do not edit docs with PowerShell text replacement.** Windows PowerShell 5.1 read a file as
   ANSI and wrote it back as UTF-8, which garbled every dash and multiplication sign in
   `status.md`, and its backtick escapes ate the code formatting. Use the file-editing tools.
-- **`dotnet test` output through a pipe hides hangs.** With `| Select-Object -Last N` nothing is
-  printed until the run ends. When a run seems stuck, start the test executable directly with
+- **`dotnet test` output through a pipe hides hangs.** With `| Select-Object -Last N` (or
+  `| tail`) nothing is printed until the run ends. When a run seems stuck, start the test executable directly with
   `-diagnostics -longRunning 10`.
 
 ## For the next phase
@@ -238,8 +245,8 @@ taste, and record the decisions:
 - Which placeholders become real in phase 1. The plan gives phase 1 the left panel, the graph,
   the commit details and the tabs. The status bar's branch name follows naturally. The toolbar
   buttons, "Ready" and the activity-log toggle belong to phases 3 and 5.
-- How "first graph within about 2 seconds" and "scrolls smoothly" are measured, and on what
-  machine.
+- How "first graph within about 2 seconds" and "scrolls smoothly" are measured. The machine is
+  settled: the Windows development machine (phase 1's "Done when" in `plan.md`).
 - Whether the 100k-commit check runs in the default tests and in CI. It must stay well under the
   watchdog's 3 minutes or raise the limit (`VISUALCOMMIT_TEST_HANG_SECONDS`), and the default
   run is 25 seconds today. Building the repo once and keeping it between runs, or giving the
@@ -261,7 +268,8 @@ Risks to watch:
   or public repositories.
 - The file watcher will see git's own writes. Decide early how the app tells its own operations
   from outside changes.
-- Every push of code starts a CI run on three platforms. The repo is public now, so runs cost
+- Every push of code starts a CI run: three platforms, and since the change that made cloud
+  sessions possible (D39) two bare Ubuntu containers. The repo is public now, so runs cost
   no allowance, but a newer push still cancels the run before it: when several small code
   commits follow each other within minutes, push them together, so that each run finishes and
   can be read.
@@ -271,8 +279,14 @@ Risks to watch:
 The owner answered on 2026-10-06, after this handoff was written:
 
 - Phase 0 is accepted and merged into `master`.
+- Phase 1 may be built in a cloud session instead of on the Windows machine (D39). What that
+  changes is in `CLAUDE.md`, "Sessions away from the Windows machine", and in
+  [cloud-sessions.md](../cloud-sessions.md).
 - The copyright line in `LICENSE` stays "VisualCommit contributors".
 - The repo is public now, so CI minutes are no longer limited (D38).
+- Commits carry the owner's personal address. The history was rewritten once to put it on the
+  existing commits, so every commit ID changed; this handoff quotes the new IDs. The CI runs
+  from before the rewrite were deleted (D40).
 - Still open: the eight-step Mac checklist at the end of
   [test-reports/phase-0.md](../test-reports/phase-0.md). The owner will look at it later; it does
   not block phase 1.

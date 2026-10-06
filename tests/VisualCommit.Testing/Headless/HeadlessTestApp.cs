@@ -46,5 +46,12 @@ public static class HeadlessTestApp
         Environment.SetEnvironmentVariable(AppPaths.DataDirectoryVariable, Path.Combine(folder, "data"));
         Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
         Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", emptyGitConfig);
+
+        // Nor anything the machine passes to git through the environment: extra configuration,
+        // or another repository to work on.
+        foreach (var variable in GitIsolation.InheritedVariables)
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
     }
 }

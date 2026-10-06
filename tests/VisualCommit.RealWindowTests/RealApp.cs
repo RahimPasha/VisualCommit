@@ -95,6 +95,21 @@ public sealed class RealApp : IDisposable
 
         startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         startInfo.Environment["GIT_CONFIG_GLOBAL"] = emptyGitConfig;
+
+        // The same list as GitIsolation.InheritedVariables in VisualCommit.Testing, which this
+        // project does not reference: what a surrounding process can hand git through its
+        // environment. Keep the two in step.
+        foreach (var variable in new[]
+        {
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+            "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
+            "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX",
+            "GIT_INTERNAL_SUPER_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR", "GIT_NAMESPACE",
+            "GIT_TEMPLATE_DIR", "GIT_DEFAULT_HASH",
+        })
+        {
+            startInfo.Environment.Remove(variable);
+        }
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
         process.OutputDataReceived += (_, _) => { };
         process.ErrorDataReceived += (_, _) => { };

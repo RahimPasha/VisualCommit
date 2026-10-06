@@ -183,9 +183,11 @@ public class ShellTests
             new GitCommand("config", "--list", "--show-scope") { WorkingDirectory = data.Path },
             TestContext.Current.CancellationToken);
 
-        // Outside a repository only system and user settings could show up, and both are cut off.
+        // Outside a repository only system and user settings could show up, or settings handed
+        // over in the environment (scope "command"). All three are cut off.
         Assert.DoesNotContain("system\t", result.StandardOutput);
         Assert.DoesNotContain("global\t", result.StandardOutput);
+        Assert.DoesNotContain("command\t", result.StandardOutput);
     }
 
     // The three tests below prove the kinds of input the scripted walk-throughs of later phases

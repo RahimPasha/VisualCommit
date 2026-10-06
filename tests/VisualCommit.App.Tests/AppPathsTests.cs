@@ -21,8 +21,11 @@ public class AppPathsTests
         var folder = AppPaths.DefaultDataDirectory();
 
         Assert.True(Path.IsPathRooted(folder));
-        Assert.Equal("VisualCommit", Path.GetFileName(folder));
-        Assert.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), folder);
+        Assert.Equal(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify),
+                "VisualCommit"),
+            folder);
     }
 
     [Fact]

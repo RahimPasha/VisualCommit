@@ -263,6 +263,18 @@ more than docs. On Windows it also builds, but does not run, the real-window pas
 uploads `artifacts/visual/` as `visual-<os>`, so the scripted screenshots of all three platforms
 can be downloaded and looked at.
 
+Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`
+container, run `scripts/setup-linux.sh` in it twice (the second run has to find everything in
+place) and then build and test. The script installs the .NET 10 SDK and the system libraries
+the tests need (ICU, fontconfig with a font, git, a locale). It takes the SDK from the system's
+own package servers when they carry it, as Ubuntu 24.04's do, and from Microsoft's installer
+otherwise; one job runs each way (`SETUP_LINUX_SDK_SOURCE=installer` forces the second). The
+script is what a Linux cloud session runs to prepare its machine (D39), and these jobs keep it
+proven. What they cannot show is whether the downloads get through a cloud session's network
+allowlist: a CI runner's network is open. The first way exists for that reason, because the
+default allowlist names Ubuntu's package servers but not the server Microsoft's installer
+downloads from.
+
 ### Package versions
 
 .NET SDK 10.0 (`global.json` accepts any 10.0 feature band). Avalonia 12.1.3 (with

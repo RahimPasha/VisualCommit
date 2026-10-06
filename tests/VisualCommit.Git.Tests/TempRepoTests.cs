@@ -33,6 +33,41 @@ public class TempRepoTests
     }
 
     [Fact]
+    public async Task The_repo_ignores_what_the_surrounding_process_passes_to_git_through_the_environment()
+    {
+        // Configuration handed over in the environment, as a git hook or a hosting tool may do.
+        // The key is one nothing uses, so tests running at the same time are not disturbed.
+        var variables = new Dictionary<string, string>
+        {
+            ["GIT_CONFIG_COUNT"] = "1",
+            ["GIT_CONFIG_KEY_0"] = "visualcommit.fromtheenvironment",
+            ["GIT_CONFIG_VALUE_0"] = "yes",
+        };
+        var before = variables.Keys.ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        try
+        {
+            foreach (var (name, value) in variables)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+
+            using var repo = await TempRepo.CreateAsync();
+            var listed = (await repo.GitAsync("config", "--list", "--show-scope")).StandardOutput;
+
+            Assert.DoesNotContain("visualcommit.fromtheenvironment", listed);
+            Assert.DoesNotContain("command\t", listed);
+            Assert.All(GitIsolation.InheritedVariables, name => Assert.Null(repo.Environment[name]));
+        }
+        finally
+        {
+            foreach (var (name, value) in before)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Commits_carry_the_fixed_author_and_a_clock_that_advances_a_minute_each()
     {
         using var repo = await TempRepo.CreateAsync();

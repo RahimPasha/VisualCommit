@@ -1,8 +1,9 @@
 name: CI
 
-# Builds and runs the default tests on Windows, macOS and Linux. The default tests include the
-# scripted visual walk-through; its screenshots are uploaded so each platform's rendering can be
-# looked at. The real-window pass is Windows-only, takes over the mouse and never runs here.
+# Builds and runs the default tests on Windows, macOS and Linux, and twice more in a bare Ubuntu
+# container that the repo's own set-up script prepares. The default tests include the scripted
+# visual walk-through; its screenshots are uploaded so each platform's rendering can be looked
+# at. The real-window pass is Windows-only, takes over the mouse and never runs here.
 
 on:
   push:
@@ -36,6 +37,7 @@ jobs:
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
+      AVALONIA_TELEMETRY_OPTOUT: 1
 
     steps:
       - uses: actions/checkout@v7
@@ -68,6 +70,68 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: visual-${{ matrix.os }}
+          path: artifacts/visual/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # A bare Ubuntu container, set up only by the repo's own script, once for each way the script
+  # has of getting the .NET SDK. A Claude Code cloud session starts from Ubuntu 24.04 as root
+  # without a .NET SDK; this container has even less software. What these jobs prove: the
+  # script installs everything the build and the tests need, and the code builds and passes
+  # with the SDK that Ubuntu's package servers carry. What they cannot prove: that the downloads
+  # get through a cloud session's network allowlist, because a runner's network is open.
+  # docs/cloud-sessions.md lists that as not tried.
+  bare-linux-container:
+    name: bare ubuntu container, SDK from ${{ matrix.sdk.from }}
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk:
+          - from: ubuntu packages
+            source: ''
+            id: ubuntu-packages
+          - from: microsoft installer
+            source: installer
+            id: microsoft-installer
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      AVALONIA_TELEMETRY_OPTOUT: 1
+      SETUP_LINUX_SDK_SOURCE: ${{ matrix.sdk.source }}
+
+    steps:
+      # The container has no git yet, so this downloads the files without a .git folder.
+      # Nothing in the build or the tests needs the repo's own history.
+      - uses: actions/checkout@v7
+
+      - name: Set up the container with the repo's script
+        run: bash scripts/setup-linux.sh
+
+      # A second run has to find everything in place and change nothing.
+      - name: Run the script again
+        run: bash scripts/setup-linux.sh
+
+      - name: Show tool versions
+        run: |
+          dotnet --version
+          git --version
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Test
+        timeout-minutes: 5
+        run: dotnet test --configuration Release --no-build
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-bare-ubuntu-container-${{ matrix.sdk.id }}
           path: artifacts/visual/
           if-no-files-found: warn
           retention-days: 14

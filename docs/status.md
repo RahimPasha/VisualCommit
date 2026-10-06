@@ -19,13 +19,18 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 7. Hosting | Not started | `phase/7-hosting` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
-States: Not started, In progress, Blocked (cannot continue or close without the owner; the reason
-is under "Waiting on the owner"), Awaiting acceptance (whole gate passed, not yet merged), Done (merged).
+States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
+a session on the Windows machine; the reason is under "Waiting on the owner"), Awaiting
+acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
 None in progress. Phase 0 was accepted by the owner on 2026-10-06 and merged into `master`
-(merge commit `2e55748`). The next phase to start is phase 1.
+(merge commit `b5f4723`). The next phase to start is phase 1.
+
+Gate commit: none, because no phase is awaiting acceptance. When a phase is set to "Awaiting
+acceptance", this line names the commit that both passes of the gate ran on; "Phase N accepted"
+checks that nothing but docs changed after it.
 
 ### Progress
 
@@ -37,17 +42,23 @@ C2 and so on, which are requirement numbers.
 
 ### CI
 
-Recorded here at the end of each phase and after each merge: the last CI run, its commit and its
-result on each platform.
+Recorded here at the end of each phase, after each merge and after each change made on `master`
+outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-The last run on the phase 0 branch was [37446300297](https://github.com/RahimPasha/VisualCommit/actions/runs/37446300297)
-for commit `2806273`: success on Windows, macOS and Linux. The run for the merge on `master` is
-added below once it has been read.
+CI_RUN_PLACEHOLDER: the commit that made the project usable from cloud sessions (D39) changes
+code and the workflow and adds `scripts/setup-linux.sh`, so it starts a run, the first with the
+two "bare ubuntu container" jobs. Its result is recorded here once it has been read.
+
+The CI runs made before 2026-10-06's rewrite of the history (D40) were deleted, so the run
+numbers that the phase 0 report and handoff mention no longer open. What they showed is as
+written there: the last run on the phase 0 branch, for the commit that is now `8f19cf5`, and the
+run for the merge on `master`, for the commit that is now `c033b58`, both succeeded on Windows,
+macOS and Linux.
 
 Earlier in phase 0 the test step froze the whole job on macOS in 4 of 9 runs. The freezes
-stopped with commit `b907071` (decision D37), and the test step ran 13 times on macOS without a
-freeze after it. If a macOS job ever sits in its Test step for minutes again, read "Known
-issues" in the phase 0 handoff first.
+stopped with the commit that is now `0784112` (decision D37), and the test step ran 14 times on
+macOS without a freeze after it, up to the merge. If a macOS job ever sits in its Test step for
+minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
@@ -60,14 +71,19 @@ every commit.
 ### Notes for whoever resumes
 
 - Nothing is in flight. `master` holds everything; the working tree was clean when phase 0 closed.
-- Development machine: Windows 11, .NET SDK 10.0.303, Git 2.36.0.windows.1, `gh` signed in as
-  RahimPasha. Its screen is 3000×2000 at 200% scaling: 1500×1000 logical pixels, of which
-  1500×952 is the work area. A 1920×1080 window does not fit, so the real-window pass can only
-  use 1100×700 there.
+- The next phase can be started on the Windows machine or in a cloud session; see
+  [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
+  page lists what the first one should check.
+- On the Windows development machine only: Windows 11, .NET SDK 10.0.303, Git 2.36.0.windows.1,
+  `gh` signed in as RahimPasha. Its screen is 3000×2000 at 200% scaling: 1500×1000 logical
+  pixels, of which 1500×952 is the work area. A 1920×1080 window does not fit, so the
+  real-window pass can only use 1100×700 there.
 - Packages: Avalonia 12.1.3, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
   FlaUI 5.0.0.
 - Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled
   the dashes and backticks in this file once.
+- When a cloud session has worked on a phase, say so here. If it had to use a branch of its own,
+  that name stands in the Branch column of the Phases table in place of the phase's.
 
 ## Waiting on the owner
 

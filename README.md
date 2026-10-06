@@ -11,7 +11,9 @@ repository yet. [docs/status.md](docs/status.md) says which phase is being built
 
 ## Build and run
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Git 2.30 or newer.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Git 2.30 or newer. On an
+Ubuntu or Debian machine that lacks them, `bash scripts/setup-linux.sh` installs them together
+with the system libraries the tests use.
 
 ```
 dotnet build

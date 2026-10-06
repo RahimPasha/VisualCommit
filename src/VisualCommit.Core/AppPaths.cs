@@ -28,11 +28,12 @@ public sealed record AppPaths(string DataDirectory)
     /// <summary>
     /// %APPDATA%\VisualCommit on Windows, ~/Library/Application Support/VisualCommit on macOS,
     /// $XDG_CONFIG_HOME/VisualCommit (usually ~/.config/VisualCommit) on Linux.
+    /// Only names the folder; whoever writes to it creates it.
     /// </summary>
     public static string DefaultDataDirectory() =>
         Path.Combine(
             Environment.GetFolderPath(
                 Environment.SpecialFolder.ApplicationData,
-                Environment.SpecialFolderOption.Create),
+                Environment.SpecialFolderOption.DoNotVerify),
             "VisualCommit");
 }

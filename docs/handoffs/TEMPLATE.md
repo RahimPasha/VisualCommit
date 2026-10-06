@@ -19,8 +19,9 @@ leave out anything `architecture.md` already says.
 
 ## Environment
 
-.NET SDK version, Avalonia and other key package versions, Git version, Windows version, and the
-display scaling the screenshots were taken at.
+.NET SDK version, Avalonia and other key package versions, Git version, the operating system and
+version of each machine that worked on the phase (say so if one was a cloud session), and the
+display scaling the real-window screenshots were taken at.
 
 ## Build, run and test
 

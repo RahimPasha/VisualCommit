@@ -8,14 +8,14 @@ test is built. The result columns are filled in when the gate runs.
 | | |
 |---|---|
 | Date | 2026-10-06 |
-| App commit | `cfa3193` on `phase/0-foundation`, clean working tree |
+| App commit | `c002610` on `phase/0-foundation`, clean working tree |
 | Machine | Windows 11 Pro 10.0.26300, Git 2.36.0.windows.1, .NET SDK 10.0.303 |
 | Display | 3000×2000 pixels at 200% scaling: a work area of 1500×952 logical pixels |
 | Scripted walk-through | `dotnet test`: 111 tests passed, 7 of them the checks below. Screenshots in `artifacts/visual/phase-0/scripted/` at a scaling of 1 |
 | Real-window pass | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release`: passed in 22 seconds. Screenshots, difference pictures and `run.txt` in `artifacts/visual/phase-0/real-window/`, at 200% (a 1100×700 window is 2200×1400 pixels) |
 | Inspection | All 22 pictures were opened and compared with the expected results: 14 scripted, 5 real-window, 3 difference pictures. Files with the same content are listed together under "Screenshots" |
 | Other platforms | CI ran the scripted walk-through on macOS and Linux as well; see "Other platforms" below |
-| Re-run after later fixes | The app's code changed after `cfa3193`: stopping git was hardened, the filter box's automation id was renamed and unused font-size tokens were removed. Both passes were run again on `45f3e85`: 117 tests passed (6 were added), and the real-window pass passed with the same differences. Every picture is byte-for-byte the same as the one inspected before, except `06c-restarted-first-frame`, which was opened again; see check 6. After one more change to how git is stopped on macOS and Linux (D37), both passes were run a third time, on `b907071`, with the same results and byte-for-byte the same pictures as the second run |
+| Re-run after later fixes | The app's code changed after `c002610`: stopping git was hardened, the filter box's automation id was renamed and unused font-size tokens were removed. Both passes were run again on `6e873d4`: 117 tests passed (6 were added), and the real-window pass passed with the same differences. Every picture is byte-for-byte the same as the one inspected before, except `06c-restarted-first-frame`, which was opened again; see check 6. After one more change to how git is stopped on macOS and Linux (D37), both passes were run a third time, on `0784112`, with the same results and byte-for-byte the same pictures as the second run |
 
 ## What the shell must show
 
@@ -64,7 +64,7 @@ Result values: Pass, Fail, Not run (with the reason in Notes).
 
 ## Changes to expected results
 
-None. The expected results are as first committed in `c2f1f63`, before the UI existed.
+None. The expected results are as first committed in `3365e83`, before the UI existed.
 
 Two things about how the checks are run, decided after that commit and recorded in
 `decisions.md`: a restart in the scripted walk-through is a new Avalonia application object in the
@@ -74,10 +74,10 @@ from the scripted one and inspection agrees (D33).
 ## Found by the gate
 
 - The first real-window run failed check 8: the toolbar buttons had no name for UI Automation, so
-  a screen reader would not have read them either. They now expose their label. Fixed in `9fd6555`.
+  a screen reader would not have read them either. They now expose their label. Fixed in `24083f4`.
 - Two bugs were found earlier in the phase by the automated tests, not by the gate: cancelling a
   git call left child processes running on Windows, and two log writers could overwrite each
-  other's entries. Both are fixed (`f828377`).
+  other's entries. Both are fixed (`dd96064`).
 
 ## Could not run
 
@@ -92,8 +92,12 @@ from the scripted one and inspection agrees (D33).
 
 ## Other platforms
 
-CI run [37437294860](https://github.com/RahimPasha/VisualCommit/actions/runs/37437294860) built
-and tested the gate's commit, `cfa3193`, on `windows-latest`, `macos-latest` and `ubuntu-latest`.
+The commit IDs in this report are the ones the commits have since the history was rewritten on
+2026-10-06 to change the author address (D40). The CI runs named below were deleted in that
+change, so they can no longer be opened; what they showed was read at the time and is as written.
+
+CI run 37437294860 built
+and tested the gate's commit, `c002610`, on `windows-latest`, `macos-latest` and `ubuntu-latest`.
 All 111 tests passed on each. That includes the seven scripted checks with their assertions on
 layout, text, colours and cut-off text, and the pinned commit SHAs of the scenario repos, which
 are therefore the same on all three platforms.
@@ -104,13 +108,13 @@ layout, text and colours as on Windows. Letters are drawn slightly differently b
 font renderer, and the status bar shows that runner's own Git (2.55.0). The other CI screenshots
 were checked by the automated assertions only.
 
-CI run [37441056204](https://github.com/RahimPasha/VisualCommit/actions/runs/37441056204) did the
-same for `45f3e85`, the commit of the re-run: all 117 tests passed on each platform.
+CI run 37441056204 did the
+same for `6e873d4`, the commit of the re-run: all 117 tests passed on each platform.
 
 Not every CI run was clean. On macOS the test step froze the whole job in 4 of 9 runs, leaving no
 log. The freezes stopped once the git runner no longer used .NET's process-tree kill on macOS and
-Linux (D37). The CI runs since that change are listed in `docs/status.md`; "Known issues" in the
-phase's handoff has the details.
+Linux (D37); `docs/status.md` says how often the step ran clean after that, and "Known issues" in
+the phase's handoff has the details.
 
 ## macOS checklist for the owner
 
