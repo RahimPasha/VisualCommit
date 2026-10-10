@@ -308,6 +308,39 @@ public sealed class RealApp : IDisposable
         }
     }
 
+    /// <summary>
+    /// Waits for the platform's folder dialog the app opened with <paramref name="title"/>,
+    /// writes <paramref name="folder"/> into its folder box and confirms it: what a user does in
+    /// the dialog that Open and Init show (D42). Windows' folder dialog has the folder box with
+    /// automation id 1152 and its confirm button with automation id 1.
+    /// </summary>
+    public void ChooseFolderInDialog(string title, string folder, TimeSpan timeout)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        Window? dialog = null;
+        WaitFor(
+            () =>
+            {
+                dialog = Window.ModalWindows.FirstOrDefault(window => window.Title == title)
+                    ?? _automation.GetDesktop()
+                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                        .Select(element => element.AsWindow())
+                        .FirstOrDefault(window => window.Title == title);
+                return dialog is not null;
+            },
+            $"the folder dialog \"{title}\"",
+            timeout);
+
+        var box = dialog!.FindFirstDescendant(condition => condition.ByAutomationId("1152"))?.AsTextBox()
+            ?? throw new InvalidOperationException("The folder dialog has no folder box (automation id 1152).");
+        box.Text = folder;
+        var confirm = dialog.FindFirstDescendant(condition => condition.ByAutomationId("1").And(condition.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton()
+            ?? throw new InvalidOperationException("The folder dialog has no confirm button (automation id 1).");
+        confirm.Invoke();
+        WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the folder dialog to close", timeout);
+        WaitUntilIdle();
+    }
+
     /// <summary>The names of all text elements in the window.</summary>
     public IReadOnlyList<string> Texts() =>
         Window.FindAllDescendants(condition => condition.ByControlType(FlaUI.Core.Definitions.ControlType.Text))
