@@ -21,14 +21,21 @@ Everything in the plan's "Delivers" list was delivered.
 | File watcher that refreshes on outside changes | Visual check 18 (also in the real window); `RepositoryWatcherTests`, `RepositoryViewModelTests` |
 | Window size and position and panel widths saved and restored with the tabs | Visual check 16 (also in the real window); `WindowPlacementTests`, `JsonSessionStoreTests` |
 | Panels give way in a narrow window | Visual check 17; `PanelLayoutTests`, `WindowPlacementTests` |
-| Q1: first graph within about 2 seconds, smooth scrolling | Visual check 9, judged in the real-window pass on the Windows machine (D50); see the report for the numbers |
+| Q1: first graph within about 2 seconds, smooth scrolling | Visual check 9, judged in the real-window pass on the Windows machine (D50): first rows after 1002 ms; after the load, 459 frames with a 95th percentile of 1.1 ms and a longest of 8.3 ms |
 
 Not delivered: nothing. Found and moved: ssh's own prompts (host key, key passphrase) are not
 yet turned off or shown in the app; phase 3 owns in-app prompts (see "Known issues").
 
 ## State of the repo
 
-GATE-STATE
+The visual test gate passed on `5673c3f`, the gate's commit: `dotnet test` (379 tests) and the
+real-window pass (6 tests, phases 0 and 1) on the same commit, every picture of both inspected.
+The report is [test-reports/phase-1.md](../test-reports/phase-1.md); CI run
+[38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182) built and
+tested that commit in all five jobs, each with 379 tests passed. The commits after it change
+only docs. The phase is "Awaiting acceptance" on `phase/1-graph`; nothing is merged into
+`master` yet. Only the real window at 1920×1080 could not run, as the plan allows on this
+screen.
 
 ## Environment
 
@@ -53,7 +60,7 @@ dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Chec
 dotnet test --project tests/VisualCommit.RealWindowTests -c Release
 ```
 
-The default run now takes about 1.5 to 2 minutes on the development machine, most of it in the
+The default run now takes about 2 to 2.5 minutes on the development machine, most of it in the
 visual checks that load or clone the 100k-commit repo and in building the graph scenario once
 per test process. The first run on a machine also builds the 100k-commit repo (about 5 to 25
 seconds, depending on load) into `%TEMP%/VisualCommit.Tests/shared/`, where later runs reuse it.
@@ -64,13 +71,20 @@ As in phase 0's handoff, with phase 1's pass added:
 
 1. `dotnet test` at the repo root. The scripted walk-through of both phases writes
    `artifacts/visual/phase-0/scripted/` and `artifacts/visual/phase-1/scripted/`.
-2. Tell the owner, then `dotnet test --project tests/VisualCommit.RealWindowTests -c Release`.
+2. Let the machine rest for a few minutes: Q1 is timed, and this laptop is slower while it is
+   hot from step 1 (see the report's "Run"). Then tell the owner and run
+   `dotnet test --project tests/VisualCommit.RealWindowTests -c Release`, without `--no-build`:
+   the solution leaves this project out, so only this command rebuilds it.
    It runs phase 0's and phase 1's passes one after the other (never in parallel). It opens the
    app many times, uses the real mouse, wheel and keyboard, the native folder dialog, and real
    process restarts; it needs an unlocked desktop and the scripted screenshots from step 1.
    Phase 1's pictures and `run.txt` (with the Q1 numbers) land in
    `artifacts/visual/phase-1/real-window/`.
-3. Open every picture and compare it with the report. Byte-identical files are opened once.
+3. Open every picture and compare it with the report. Byte-identical files are opened once; the
+   real-window captures are byte-for-byte the same from run to run when nothing changed, so a
+   checksum list from the last inspected run shows which ones are new. Do not rely on the
+   comparison alone: it passes a hover background or a small tooltip (see the report's
+   "Found by the gate").
 
 ## What changed in the code
 
@@ -130,13 +144,19 @@ Rules worth keeping:
 | Watcher on the git folder only | D52 |
 | Which placeholders became real | D53 |
 | The runner keeps reading output while it still comes | D56 |
+| Q1's frame statistics count the frames after the load | D57 |
+| The real-window comparison allows a one-pixel shift | D58 (owner's choice) |
+| No part of a git call runs on the caller's thread | D59 |
 
 ## Known issues
 
 | Issue | How much it matters | Where |
 |---|---|---|
 | ssh's own prompts are not turned off: a clone over ssh from a host not yet in `known_hosts`, or with a key that has a passphrase, can wait for an answer on the terminal the app was started from (macOS and Linux, started from a terminal). Cancel stops it | Low now; phase 3 adds in-app credential and passphrase prompts (C11) and should handle this with them | `GitRepository.Clone.cs`, `GitRunner` |
-| Check 13 has to catch the clone between 1% and 99%; a clone of the 100k repo takes about 2 seconds here. A much faster machine could make it flaky | Low; watch CI | `Phase1Checks.Check_13_clone_with_progress` |
+| Check 13 has to catch the clone between 1% and 99%; it now takes the capture again until the drawn progress shows such a percentage, which fails only if no stage ever shows one while the clone runs (about 2 seconds here) | Low; watch CI | `Phase1Checks.Check_13_clone_with_progress` |
+| After a ref is clicked in the left panel and the graph selection then moves (End, Home, another row), the ref keeps its selection background | Low; phase 3 works on the left panel and should keep the two in step | `LeftPanelViewModel`, `RepositoryViewModel.Select` |
+| A long folder in the welcome page's error wraps at awkward places ("C:" alone on a line, a name split) | Cosmetic; nothing is cut off | `WelcomeView` (`WelcomeError`) |
+| Q1 has about a second to spare on the development laptop, but that laptop is slower when hot (1.5 to 1.9 seconds right after the test run), and most of the time is git's own: `git log --date-order` reads the whole history first when there is no commit-graph file | Watch it when the graph changes; a much larger repo would need a different first page | `RepositoryViewModel.StartAsync`, `GitRepository.Commits.cs` |
 | Graph rows are not exposed to UI Automation (screen readers follow the details panel) | Planned for phase 8 (R7, D49) | `CommitGraphControl` |
 | The 100k-commit repo stays in `%TEMP%/VisualCommit.Tests/shared/` (about 15 MB) between runs | Intended (D51); delete the folder to rebuild it, or change `LargeHistory.Version` when the generator changes | `LargeHistory` |
 | The window has Avalonia's default icon | Cosmetic; phase 8 | |
@@ -155,6 +175,15 @@ Rules worth keeping:
 - **macOS temp paths**: git reports `/private/var/...`; see "Rules worth keeping".
 - **Every git call costs about 100 ms on Windows**, much more under load: build big test repos
   with one `git fast-import`, and build a scenario once per process and copy it.
+- **Blocking work on the UI thread.** Started from the UI thread, a git call held it for 300 ms
+  while the window drew its first frame, and Q1 failed (D59). Keep anything that can wait off
+  the UI thread; the runner now does so for every git call.
+- **Q1 on a hot laptop.** The same build measured 1.0 to 1.9 seconds depending on how hot the
+  processor was. Compare builds by running them alternately, never one batch after another.
+- **A stale real-window build.** `--no-build` after a root build ran an old build of the pass
+  (its project is not in the solution). An inspecting agent caught it from the file dates.
+- **Tooltips in real-window captures.** Leave the real mouse on a button and its tooltip is in
+  the picture: move it to an empty spot (the pass uses (130, 687)) before capturing.
 
 ## For the next phase
 
@@ -183,4 +212,7 @@ Risks to watch:
 
 ## Waiting on the owner
 
-WAITING
+- Accept phase 1, or say what to change: "Phase 1 accepted" merges `phase/1-graph` into
+  `master`.
+- When you have a Mac at hand: the nine-step checklist at the end of the
+  [phase 1 test report](../test-reports/phase-1.md), and phase 0's, still open.

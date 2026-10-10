@@ -271,8 +271,10 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 25 seconds. They use real git and a temporary folder for every
-  repo and data folder; they never open a window or touch the user's settings.
+- The default tests take about 2 to 2.5 minutes on the Windows machine, most of it in phase 1's
+  checks that load and clone a 100k-commit repo (built once into
+  `%TEMP%/VisualCommit.Tests/shared/` and reused). They use real git and a temporary folder for
+  every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
   app on the desktop and moves the real mouse for about 3 minutes (phases 0 and 1): tell the

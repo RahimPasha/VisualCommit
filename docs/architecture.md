@@ -250,6 +250,12 @@ level it also logs when the repository was opened, when the refs were read and w
 commits came from git, measured from the same start. The real-window pass reads these lines from
 the log.
 
+On the Windows development machine the gate measured the 100k repo's first rows after 1002 ms.
+Most of that is git's own work: without a commit-graph file, `git log --date-order` reads the
+whole history before it prints its first commit (0.6 to 0.9 seconds there); opening and the refs
+take about 0.2 seconds each, side by side with it. The machine's speed varies with its
+temperature, so the pass is started after a rest (see phase 1's test report).
+
 ### Settings, session, log and data folder
 
 - `AppPaths` (Core) names everything in the data folder: `settings.json`, `session.json` and

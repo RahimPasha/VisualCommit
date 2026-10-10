@@ -101,12 +101,12 @@ Visual checks:
 
 Closing:
 
-- [ ] 27. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+- [x] 27. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed.
-- [ ] 28. CI run of the gate's commit read, every job.
-- [ ] 29. `architecture.md` describes what is built.
-- [ ] 30. `plan.md`: anything not delivered moved, risks updated.
-- [ ] 31. Handoff `docs/handoffs/phase-1.md`.
+- [x] 28. CI run of the gate's commit read, every job.
+- [x] 29. `architecture.md` describes what is built.
+- [x] 30. `plan.md`: anything not delivered moved, risks updated.
+- [x] 31. Handoff `docs/handoffs/phase-1.md`.
 - [ ] 32. Cold-read check by a fresh agent; gaps fixed.
 - [ ] 33. `status.md`: links, CI, gate commit, waiting on the owner, state.
 - [ ] 34. Owner told what passed, what did not, and what needs a decision.
@@ -137,18 +137,15 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 27, the visual test gate: run `dotnet test` and then the real-window pass on the same
-commit (the one after this), and inspect every picture of both passes. A first run of the
-real-window pass on `e5c8da7` failed three comparisons on letter edges only; the comparison now
-allows a one-pixel shift (D58, the owner's choice) and the mouse is moved away before the 100k
-End and Home screenshots. The run on `a19b5a3` failed Q1 alone (first rows after 2962 ms): git
-calls started from the UI thread held it while the window drew its first frame, which D59
-removes. This laptop slows down when hot, and the pass starts right after the 2-minute
-`dotnet test`, so let the machine rest a few minutes between the two and say so in the report.
-Both passes then passed on `ecacc2c` (Q1 1009 ms), but the inspection of their pictures found
-three faults, fixed in the commit after it: the clone form hid "No repository open" (against
-D42), scripted 13b could catch the progress at 100%, and the real-window 03b caught the Tree
-button's tooltip. The report's "Run" section still names `ecacc2c`; update it with the new run.
+Step 32, the cold-read check: a fresh agent (Opus 5.5) with no conversation context reads only
+the repo, assumes phase 1 has been accepted and merged, and says how to build, run and test the
+app and how it would begin phase 2; fix every gap it hits in the docs and commit. Then step 33.
+
+The gate passed on `5673c3f` (the "Gate commit"): `dotnet test` (379 tests) and the real-window
+pass (6 tests, Q1 1002 ms) on that commit, every picture inspected; see the
+[report](test-reports/phase-1.md) and the [handoff](handoffs/phase-1.md). CI run
+[38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182) for that
+commit succeeded in all five jobs. The commits after it change only docs.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
