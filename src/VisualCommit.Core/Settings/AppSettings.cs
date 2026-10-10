@@ -17,6 +17,16 @@ public enum FileListMode
     Tree,
 }
 
+/// <summary>How the diff view shows a file's changes (D61). Inline is the default.</summary>
+public enum DiffMode
+{
+    /// <summary>One column, the removed lines of a change above the added ones.</summary>
+    Inline,
+
+    /// <summary>The old file on the left, the new one on the right.</summary>
+    SideBySide,
+}
+
 /// <summary>
 /// The user's settings, stored as JSON in the data folder. Immutable: change it through
 /// <see cref="ISettingsStore.Update"/>. Every property needs a default, so that a settings file
@@ -27,4 +37,6 @@ public sealed record AppSettings
     public AppTheme Theme { get; init; } = AppTheme.Dark;
 
     public FileListMode FileList { get; init; } = FileListMode.Flat;
+
+    public DiffMode DiffMode { get; init; } = DiffMode.Inline;
 }

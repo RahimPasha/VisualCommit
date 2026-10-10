@@ -34,6 +34,14 @@
       <SolidColorBrush x:Key="VcLane5Brush" Color="#B07CE8" />
       <SolidColorBrush x:Key="VcLane6Brush" Color="#D97EB6" />
       <SolidColorBrush x:Key="VcLane7Brush" Color="#8FB84A" />
+      <!-- Diff view (phase 2): rows, changed words, hunk headers, fillers; the dialog's backdrop. -->
+      <SolidColorBrush x:Key="VcDiffAddedBrush" Color="#1A2E24" />
+      <SolidColorBrush x:Key="VcDiffAddedWordBrush" Color="#2B5A3F" />
+      <SolidColorBrush x:Key="VcDiffRemovedBrush" Color="#331D23" />
+      <SolidColorBrush x:Key="VcDiffRemovedWordBrush" Color="#6A2D37" />
+      <SolidColorBrush x:Key="VcDiffHunkBrush" Color="#1C2130" />
+      <SolidColorBrush x:Key="VcDiffFillerBrush" Color="#181A20" />
+      <SolidColorBrush x:Key="VcBackdropBrush" Color="#99000000" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#272C36" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C36" />
@@ -76,6 +84,14 @@
       <SolidColorBrush x:Key="VcLane5Brush" Color="#8048C7" />
       <SolidColorBrush x:Key="VcLane6Brush" Color="#B54A8C" />
       <SolidColorBrush x:Key="VcLane7Brush" Color="#5F8A1E" />
+      <!-- Diff view (phase 2): rows, changed words, hunk headers, fillers; the dialog's backdrop. -->
+      <SolidColorBrush x:Key="VcDiffAddedBrush" Color="#E6F6EC" />
+      <SolidColorBrush x:Key="VcDiffAddedWordBrush" Color="#B4E5C6" />
+      <SolidColorBrush x:Key="VcDiffRemovedBrush" Color="#FBE9EB" />
+      <SolidColorBrush x:Key="VcDiffRemovedWordBrush" Color="#F3BAC1" />
+      <SolidColorBrush x:Key="VcDiffHunkBrush" Color="#EEF0FB" />
+      <SolidColorBrush x:Key="VcDiffFillerBrush" Color="#F3F4F6" />
+      <SolidColorBrush x:Key="VcBackdropBrush" Color="#66000000" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
@@ -92,6 +108,9 @@
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>
+
+  <!-- The typeface of code in the diff view, shipped with the app (D64). -->
+  <FontFamily x:Key="VcCodeFontFamily">avares://VisualCommit/Assets/Fonts#JetBrains Mono NL</FontFamily>
 
   <!-- Sizes shared by both themes. -->
   <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
