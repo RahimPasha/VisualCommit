@@ -148,6 +148,7 @@ public class Phase1RealWindowPass(Phase1Run fixture) : IClassFixture<Phase1Run>
         // Steps 5 and 6: End and Home in the graph.
         app.ClickAt(500, RowY(2));
         app.PressKey(VirtualKeyShort.END);
+        app.MoveMouseTo(130, 687);
         using (var end = app.CaptureClient())
         {
             Run.Save(end, "08d-large-end");
@@ -155,6 +156,7 @@ public class Phase1RealWindowPass(Phase1Run fixture) : IClassFixture<Phase1Run>
         }
 
         app.PressKey(VirtualKeyShort.HOME);
+        app.MoveMouseTo(130, 687);
         using (var home = app.CaptureClient())
         {
             Run.Save(home, "08e-large-home");

@@ -72,32 +72,32 @@ App:
 
 - [x] 12. Session store (`session.json`): open tabs, active tab, recent repos, window placement,
   panel widths. Tests.
-- [ ] 13. Repo tabs: one view model per tab, tab strip with close buttons, "+" for a new tab,
+- [x] 13. Repo tabs: one view model per tab, tab strip with close buttons, "+" for a new tab,
   switching, tabs restored on restart.
-- [ ] 14. Welcome page in the graph area of an empty tab: Open (folder picker), Init, Clone form
+- [x] 14. Welcome page in the graph area of an empty tab: Open (folder picker), Init, Clone form
   with progress and cancel, recent list.
-- [ ] 15. Commit graph control: custom-drawn and virtualised; lanes, nodes, ref labels, message,
+- [x] 15. Commit graph control: custom-drawn and virtualised; lanes, nodes, ref labels, message,
   author, date and SHA columns; selection by click and keys; wheel and scroll bar.
-- [ ] 16. Lane colours as theme tokens, in `Tokens.axaml` and `architecture.md`.
-- [ ] 17. Left panel: branches as folders, remotes, tags, stashes, counts, ahead/behind, filter
+- [x] 16. Lane colours as theme tokens, in `Tokens.axaml` and `architecture.md`.
+- [x] 17. Left panel: branches as folders, remotes, tags, stashes, counts, ahead/behind, filter
   box; clicking a ref selects its commit.
-- [ ] 18. Commit details panel: message, author, date, SHA, parents, changed files flat or as a
+- [x] 18. Commit details panel: message, author, date, SHA, parents, changed files flat or as a
   tree, with the choice remembered.
-- [ ] 19. Status bar shows the current branch.
-- [ ] 20. File watcher wired to each open repo: refs and graph refresh on outside changes and
+- [x] 19. Status bar shows the current branch.
+- [x] 20. File watcher wired to each open repo: refs and graph refresh on outside changes and
   keep the selection.
-- [ ] 21. Window size and position and panel widths saved and restored.
-- [ ] 22. Panels give way when the window is too narrow, and take their widths back when it grows.
-- [ ] 23. The app records the time to the first graph frame and the graph's frame times (how Q1
+- [x] 21. Window size and position and panel widths saved and restored.
+- [x] 22. Panels give way when the window is too narrow, and take their widths back when it grows.
+- [x] 23. The app records the time to the first graph frame and the graph's frame times (how Q1
   is measured).
-- [ ] 24. Phase 0's checks updated for what phase 1 changed on purpose, recorded under "Changes
+- [x] 24. Phase 0's checks updated for what phase 1 changed on purpose, recorded under "Changes
   to expected results" in the phase 1 report.
 
 Visual checks:
 
-- [ ] 25. Scripted walk-through: one test per check in `Phase1Checks`, screenshots under
+- [x] 25. Scripted walk-through: one test per check in `Phase1Checks`, screenshots under
   `artifacts/visual/phase-1/scripted/`.
-- [ ] 26. Real-window pass for the checks marked for it (`Phase1RealWindowPass`).
+- [x] 26. Real-window pass for the checks marked for it (`Phase1RealWindowPass`).
 
 Closing:
 
@@ -137,11 +137,11 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Merge `wip/p1-graph-control` (the graph control and the repository graph view, steps 15 and
-16) and `wip/p1-panels` (the left panel and the commit details, steps 17 and 18), which are being
-built in parallel worktrees from `02f908f`, then run the app's whole default test run. Until they
-are merged, phase 0's visual checks fail on purpose: they expect the new left panel (`RefList`).
-After that: step 19 onwards, then the scripted checks (step 25).
+Step 27, the visual test gate: run `dotnet test` and then the real-window pass on the same
+commit (the one after this), and inspect every picture of both passes. A first run of the
+real-window pass on `e5c8da7` failed three comparisons on letter edges only; the comparison now
+allows a one-pixel shift (D58, the owner's choice) and the mouse is moved away before the 100k
+End and Home screenshots.
 
 This always names the single next thing to do and is kept accurate in every commit.
 

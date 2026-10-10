@@ -396,7 +396,7 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   keyboard input, chooses a folder in the native folder dialog (`ChooseFolderInDialog`), moves
   and sizes the window, reads the app's log, and captures the window from the screen.
   `RealWindowRun` is one run of a pass: it empties the phase's folder, compares each capture with
-  the scripted screenshot of the same step (at most 3% of pixels may differ, D33), saves a
+  the scripted screenshot of the same step (at most 3% of pixels may differ, a pixel counting only when nothing within a pixel of it matches: D33, D58), saves a
   picture of the differing pixels, and writes `run.txt`. The project references
   `VisualCommit.Testing`, so it uses the same scenario repos. Its tests never run in parallel
   (they share the desktop and the mouse).
