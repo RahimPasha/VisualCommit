@@ -255,6 +255,47 @@
       <Setter Property="Foreground" Value="#FFFFFF" />
     </ControlTheme>
 
+    <!-- A check box 20 high: a box of 14 with rounded corners, the accent with a check mark when ticked. -->
+    <ControlTheme x:Key="VcCheckBox" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid ColumnDefinitions="Auto,*" Background="{TemplateBinding Background}">
+            <Border Name="Box"
+                    Width="14" Height="14"
+                    CornerRadius="3"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource VcBorderBrush}"
+                    Background="{DynamicResource VcControlBackgroundBrush}"
+                    VerticalAlignment="Center">
+              <c:Icon Name="Check" Data="{DynamicResource IconCheck}" Width="10" Height="10"
+                      Foreground="{DynamicResource VcAccentTextBrush}" IsVisible="False" />
+            </Border>
+            <ContentPresenter Grid.Column="1"
+                              Margin="8,0,0,0"
+                              Content="{TemplateBinding Content}"
+                              VerticalAlignment="Center" />
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Box">
+        <Setter Property="BorderBrush" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ Border#Box">
+        <Setter Property="Background" Value="{DynamicResource VcAccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcAccentBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ c|Icon#Check">
+        <Setter Property="IsVisible" Value="True" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+    </ControlTheme>
+
   </Styles.Resources>
 
   <!-- Thin separator between toolbar groups. -->

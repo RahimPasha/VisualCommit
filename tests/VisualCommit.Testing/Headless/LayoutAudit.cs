@@ -22,7 +22,15 @@ public static class LayoutAudit
     /// text is in the tooltip of the text or of an element around it (phase 1: long names and
     /// paths end in "…" and show in full on hover).
     /// </summary>
-    public static IReadOnlyList<string> FindClippedText(TopLevel window, bool allowShortenedWithToolTip)
+    public static IReadOnlyList<string> FindClippedText(TopLevel window, bool allowShortenedWithToolTip) =>
+        FindClippedText(window, allowShortenedWithToolTip, allowScrolledOutOfView: false);
+
+    /// <summary>
+    /// As <see cref="FindClippedText(TopLevel, bool)"/>; with <paramref name="allowScrolledOutOfView"/>,
+    /// a text cut only by the viewport of a scrolling list is let through: a list with more rows
+    /// than room shows part of a row at its edge on purpose (phase 2's stage lists).
+    /// </summary>
+    public static IReadOnlyList<string> FindClippedText(TopLevel window, bool allowShortenedWithToolTip, bool allowScrolledOutOfView)
     {
         var problems = new List<string>();
         var windowArea = new Rect(window.ClientSize);
@@ -62,6 +70,11 @@ public static class LayoutAudit
             var visible = area.Intersect(windowArea);
             foreach (var ancestor in text.GetVisualAncestors().OfType<Control>().Where(a => a.ClipToBounds))
             {
+                if (allowScrolledOutOfView && ancestor is Avalonia.Controls.Presenters.ScrollContentPresenter or ScrollViewer or ItemsControl)
+                {
+                    continue;
+                }
+
                 visible = visible.Intersect(AreaInWindow(ancestor, window));
             }
 

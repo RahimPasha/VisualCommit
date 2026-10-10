@@ -84,10 +84,6 @@
     <Style Selector="TextBlock#SummaryCounter.over">
       <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
     </Style>
-    <Style Selector="CheckBox#AmendCheckBox">
-      <Setter Property="MinHeight" Value="20" />
-      <Setter Property="Height" Value="20" />
-    </Style>
   </UserControl.Styles>
 
   <Border Background="{DynamicResource VcPanelBackgroundBrush}"
@@ -408,6 +404,7 @@
                    AutomationProperties.AutomationId="CommitDescription"
                    AutomationProperties.Name="Description" />
           <CheckBox Name="AmendCheckBox"
+                    Theme="{StaticResource VcCheckBox}"
                     Content="Amend previous commit"
                     IsChecked="{Binding IsAmend}"
                     IsEnabled="{Binding CanAmend}"
