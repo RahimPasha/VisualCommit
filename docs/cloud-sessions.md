@@ -34,7 +34,7 @@ again on 2026-10-09 (D41): if you had chosen it in claude.ai/code before that da
 again, and if the Claude GitHub app is installed for selected repositories only, add the
 repository to it again. Two things are worth doing each time you start a session:
 
-- **Choose Fable 5.1 as the session's model.** The model setting of the Windows machine does not
+- **Choose Opus 5.5 as the session's model.** The model setting of the Windows machine does not
   travel with the repo. `CLAUDE.md` tells a session on another model to say so and ask you once.
 - **Leave the network access on "Trusted".**
 

@@ -130,11 +130,14 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
   its reason. Do not reopen a recorded decision without the owner.
 - Add each command to the Commands section below the first time it works.
 - Feature and requirement numbers (C4, O1, T2, Q1, R3 ...) are defined in `docs/requirements.md`.
-- The owner wants every agent on this project on Fable 5.1: the main session and each sub-agent,
-  including the one for the cold-read check. Name that model on every sub-agent you start
-  instead of relying on the default, because a built-in agent type can default to another one.
-  If your own session runs on another model, say so in your first reply and ask the owner once
-  whether to switch or carry on.
+- The owner wants the agents on this project on Opus 5.5: the main session and each sub-agent,
+  including the one for the cold-read check, review and verification agents, and any agent that
+  writes or changes code or docs. The one exception is a sub-agent whose task is simple and
+  mechanical, such as cropping, resizing or comparing images, or listing files: it runs on
+  Sonnet 5.5. Name the model on every sub-agent you start (`opus` or `sonnet`) instead of
+  relying on the default, because a built-in agent type can default to another one. If your own
+  session runs on another model than Opus 5.5, say so in your first reply and ask the owner once
+  whether to switch or carry on. Fable 5.1, which this rule named until 2026-10-09, is no longer used.
 
 ## Closing a phase
 
