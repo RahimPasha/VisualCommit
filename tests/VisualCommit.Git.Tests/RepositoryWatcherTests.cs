@@ -71,8 +71,10 @@ public class RepositoryWatcherTests
     [Fact]
     public async Task A_burst_of_changes_raises_changed_once()
     {
+        // A quiet period longer than any pause a busy test machine puts between the writes, so
+        // the burst stays one burst whatever the load (a full parallel run once split it in two).
         using var folder = new TempDirectory("watch");
-        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet);
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: TimeSpan.FromSeconds(1));
         var changed = new Counter(watcher);
         watcher.Start();
 
@@ -82,7 +84,7 @@ public class RepositoryWatcherTests
         }
 
         Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
-        await Task.Delay(Settle, TestCancelled);
+        await Task.Delay(TimeSpan.FromSeconds(2), TestCancelled);
         Assert.Equal(1, changed.Count);
     }
 

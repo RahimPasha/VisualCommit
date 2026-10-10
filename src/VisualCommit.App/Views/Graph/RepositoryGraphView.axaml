@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
+             x:Class="VisualCommit.App.Views.Graph.RepositoryGraphView"
+             x:DataType="vm:RepositoryViewModel">
+
+  <!-- The graph of an open repository: column headers, then the custom-drawn rows (D49).
+       Placeholder until the graph control is built. -->
+  <Grid RowDefinitions="28,*">
+    <Border Name="ColumnHeaders"
+            Grid.Row="0"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1" />
+    <TextBlock Grid.Row="1" Classes="secondary"
+               Text="{Binding Graph.Count, StringFormat='{}{0} commits'}"
+               HorizontalAlignment="Center" VerticalAlignment="Center" />
+  </Grid>
+</UserControl>

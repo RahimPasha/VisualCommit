@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
+             x:Class="VisualCommit.App.Views.Shell.WelcomeView"
+             x:DataType="vm:WelcomeViewModel">
+
+  <!-- The welcome page of a tab without a repository (D42): Open, Clone and Init with the recent
+       repositories, or the clone form with its progress. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <Panel Margin="24" MaxWidth="440" VerticalAlignment="Center">
+
+      <!-- Buttons and recent repositories. -->
+      <StackPanel Name="WelcomeButtons" Spacing="8" IsVisible="{Binding ShowsButtons}">
+        <TextBlock Text="No repository open"
+                   FontSize="16" FontWeight="SemiBold"
+                   HorizontalAlignment="Center" />
+        <TextBlock Classes="secondary"
+                   Text="Open, clone or init a repository to see its history."
+                   TextWrapping="Wrap" TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
+          <Button Name="OpenRepoButton" Theme="{StaticResource VcActionButton}"
+                  Command="{Binding OpenCommand}"
+                  ToolTip.Tip="Open a repository on this computer"
+                  AutomationProperties.AutomationId="OpenRepoButton"
+                  AutomationProperties.Name="Open">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconFolderOpen}" Width="15" Height="15" />
+              <TextBlock Text="Open" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="CloneRepoButton" Theme="{StaticResource VcActionButton}"
+                  Command="{Binding OpenCloneFormCommand}"
+                  ToolTip.Tip="Clone a repository from a URL"
+                  AutomationProperties.AutomationId="CloneRepoButton"
+                  AutomationProperties.Name="Clone">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconDownload}" Width="15" Height="15" />
+              <TextBlock Text="Clone" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="InitRepoButton" Theme="{StaticResource VcActionButton}"
+                  Command="{Binding InitCommand}"
+                  ToolTip.Tip="Create a new repository in a folder"
+                  AutomationProperties.AutomationId="InitRepoButton"
+                  AutomationProperties.Name="Init">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconFolderPlus}" Width="15" Height="15" />
+              <TextBlock Text="Init" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <TextBlock Name="WelcomeError"
+                   Classes="error"
+                   Text="{Binding ErrorText}"
+                   IsVisible="{Binding HasError}"
+                   TextWrapping="Wrap" TextAlignment="Center"
+                   AutomationProperties.AutomationId="WelcomeError" />
+
+        <TextBlock Classes="heading" Text="Recent repositories" Margin="0,16,0,0" />
+        <TextBlock Classes="secondary"
+                   Text="No recent repositories"
+                   IsVisible="{Binding !HasRecent}" />
+        <ItemsControl Name="RecentList" ItemsSource="{Binding Recent}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RecentRepositoryItem">
+              <Button Theme="{StaticResource VcFlatButton}"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                      Padding="8,5"
+                      Command="{Binding $parent[ItemsControl].((vm:WelcomeViewModel)DataContext).OpenRecentCommand}"
+                      CommandParameter="{Binding}"
+                      ToolTip.Tip="{Binding Path}"
+                      AutomationProperties.AutomationId="RecentRepository"
+                      AutomationProperties.Name="{Binding Name}">
+                <DockPanel>
+                  <TextBlock Text="{Binding Name}"
+                             Foreground="{DynamicResource VcTextPrimaryBrush}"
+                             Margin="0,0,12,0" VerticalAlignment="Center" />
+                  <TextBlock Classes="secondary"
+                             Text="{Binding Path}"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                </DockPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- Clone form. -->
+      <StackPanel Name="CloneForm" Spacing="6" IsVisible="{Binding IsCloneFormOpen}">
+        <TextBlock Text="Clone a repository" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+        <TextBlock Classes="secondary" Text="Repository URL" />
+        <TextBox Name="CloneUrlBox"
+                 Text="{Binding CloneUrl}"
+                 IsEnabled="{Binding CanEditClone}"
+                 AutomationProperties.AutomationId="CloneUrlBox"
+                 AutomationProperties.Name="Repository URL" />
+
+        <TextBlock Classes="secondary" Text="Parent folder" />
+        <DockPanel>
+          <Button Name="CloneBrowseButton"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcActionButton}"
+                  Margin="6,0,0,0" Padding="10,4"
+                  Command="{Binding BrowseCloneParentCommand}"
+                  IsEnabled="{Binding CanEditClone}"
+                  AutomationProperties.AutomationId="CloneBrowseButton"
+                  AutomationProperties.Name="Browse">
+            <TextBlock Text="Browse" />
+          </Button>
+          <TextBox Name="CloneParentBox"
+                   Text="{Binding CloneParent}"
+                   IsEnabled="{Binding CanEditClone}"
+                   AutomationProperties.AutomationId="CloneParentBox"
+                   AutomationProperties.Name="Parent folder" />
+        </DockPanel>
+
+        <TextBlock Classes="secondary" Text="Folder name" />
+        <TextBox Name="CloneNameBox"
+                 Text="{Binding CloneName}"
+                 IsEnabled="{Binding CanEditClone}"
+                 AutomationProperties.AutomationId="CloneNameBox"
+                 AutomationProperties.Name="Folder name" />
+
+        <StackPanel Spacing="4" Margin="0,6,0,0" IsVisible="{Binding IsCloning}">
+          <ProgressBar Name="CloneProgress"
+                       Minimum="0" Maximum="100"
+                       Value="{Binding CloneProgressValue}"
+                       Height="6" MinHeight="6"
+                       AutomationProperties.AutomationId="CloneProgress" />
+          <TextBlock Name="CloneProgressText"
+                     Classes="secondary"
+                     Text="{Binding CloneProgressText}"
+                     AutomationProperties.AutomationId="CloneProgressText" />
+        </StackPanel>
+
+        <TextBlock Name="CloneError"
+                   Classes="error"
+                   Text="{Binding ErrorText}"
+                   IsVisible="{Binding HasError}"
+                   TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="CloneError" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+          <Button Name="CloneStartButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Command="{Binding StartCloneCommand}"
+                  AutomationProperties.AutomationId="CloneStartButton"
+                  AutomationProperties.Name="Clone">
+            <TextBlock Text="Clone" />
+          </Button>
+          <Button Name="CloneCancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Command="{Binding CancelCloneCommand}"
+                  IsVisible="{Binding IsCloning}"
+                  AutomationProperties.AutomationId="CloneCancelButton"
+                  AutomationProperties.Name="Cancel">
+            <TextBlock Text="Cancel" />
+          </Button>
+          <Button Name="CloneCloseButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Command="{Binding CloseCloneFormCommand}"
+                  IsVisible="{Binding CanEditClone}"
+                  AutomationProperties.AutomationId="CloneCloseButton"
+                  AutomationProperties.Name="Cancel">
+            <TextBlock Text="Cancel" />
+          </Button>
+        </StackPanel>
+      </StackPanel>
+
+    </Panel>
+  </ScrollViewer>
+</UserControl>

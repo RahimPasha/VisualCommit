@@ -1,30 +1,72 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
              x:Class="VisualCommit.App.Views.Shell.RepoTabsView"
+             x:DataType="vm:MainWindowViewModel"
              AutomationProperties.AutomationId="RepoTabs">
 
-  <!-- Placeholder until phase 1: one tab that stands for "nothing open" and the add button. -->
+  <!-- One tab per open repository, or "New tab" for a tab without one (D42), then the add button.
+       The active tab has the accent line along its top and the graph area's background. -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,0,0,1">
     <StackPanel Orientation="Horizontal">
 
-      <Border Name="PlaceholderTab"
-              Background="{DynamicResource VcWindowBackgroundBrush}"
-              BorderBrush="{DynamicResource VcBorderBrush}"
-              BorderThickness="0,0,1,0"
-              MinWidth="150">
-        <Grid RowDefinitions="2,*">
-          <Border Name="TabAccentLine" Grid.Row="0" Background="{DynamicResource VcAccentBrush}" />
-          <TextBlock Grid.Row="1" Text="No repository" Margin="14,0,18,0" VerticalAlignment="Center" />
-        </Grid>
-      </Border>
+      <ItemsControl Name="TabList" ItemsSource="{Binding Tabs}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:RepoTabViewModel">
+            <Border Name="RepoTab"
+                    Classes="repoTab"
+                    Classes.active="{Binding IsActive}"
+                    MinWidth="120" MaxWidth="220"
+                    BorderBrush="{DynamicResource VcBorderBrush}"
+                    BorderThickness="0,0,1,0">
+              <Grid RowDefinitions="2,*" ColumnDefinitions="*,Auto">
+                <Border Name="TabAccentLine" Grid.Row="0" Grid.ColumnSpan="2"
+                        Background="{DynamicResource VcAccentBrush}"
+                        IsVisible="{Binding IsActive}" />
+                <Button Name="TabButton"
+                        Grid.Row="1" Grid.Column="0"
+                        Theme="{StaticResource VcTabButton}"
+                        Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ActivateTabCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding Title}"
+                        AutomationProperties.AutomationId="RepoTab"
+                        AutomationProperties.Name="{Binding Title}">
+                  <TextBlock Name="TabTitle"
+                             Text="{Binding Title}"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                </Button>
+                <Button Name="CloseTabButton"
+                        Grid.Row="1" Grid.Column="1"
+                        Theme="{StaticResource VcFlatButton}"
+                        Width="22" Height="22" Padding="0" Margin="0,0,6,0"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding CanClose}"
+                        Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="Close this tab"
+                        AutomationProperties.AutomationId="CloseTabButton"
+                        AutomationProperties.Name="Close tab">
+                  <c:Icon Data="{StaticResource IconClose}" Width="12" Height="12" />
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
 
       <Button Name="AddRepoButton"
               Theme="{StaticResource VcFlatButton}"
               Width="34" Margin="2,3"
-              IsEnabled="False"
+              Command="{Binding NewTabCommand}"
               ToolTip.Tip="Open, clone or init a repository"
               AutomationProperties.AutomationId="AddRepoButton"
               AutomationProperties.Name="Add repository">
@@ -33,4 +75,16 @@
 
     </StackPanel>
   </Border>
+
+  <UserControl.Styles>
+    <Style Selector="Border.repoTab">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.repoTab.active">
+      <Setter Property="Background" Value="{DynamicResource VcWindowBackgroundBrush}" />
+    </Style>
+    <Style Selector="Border.repoTab:not(.active) TextBlock#TabTitle">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+  </UserControl.Styles>
 </UserControl>

@@ -31,13 +31,17 @@ public sealed class ShellDriver : IDisposable
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
 
-    private ShellDriver(AppSession session)
+    private ShellDriver(AppSession session, FakeFolderPicker folders)
     {
         Session = session;
+        Folders = folders;
     }
 
     /// <summary>The app instance under test.</summary>
     public AppSession Session { get; }
+
+    /// <summary>The app's folder dialog: queue the folder the next Open, Init or Browse "chooses" (D42).</summary>
+    public FakeFolderPicker Folders { get; }
 
     public MainWindow Window => Session.MainWindow;
 
@@ -51,7 +55,8 @@ public sealed class ShellDriver : IDisposable
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
-        var session = AppSession.Start(new AppPaths(dataDirectory), application);
+        var folders = new FakeFolderPicker();
+        var session = AppSession.Start(new AppPaths(dataDirectory), application, folders);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -64,7 +69,7 @@ public sealed class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session);
+        var driver = new ShellDriver(session, folders);
         driver.Settle();
         return driver;
     }

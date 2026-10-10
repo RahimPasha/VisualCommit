@@ -8,6 +8,9 @@ internal sealed class RecordingLog : IAppLog
 {
     public ConcurrentQueue<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = new();
 
+    /// <summary>The messages written so far, in order.</summary>
+    public IReadOnlyList<string> Messages => Entries.Select(entry => entry.Message).ToList();
+
     public void Write(LogLevel level, string message, Exception? exception = null) =>
         Entries.Enqueue((level, message, exception));
 }

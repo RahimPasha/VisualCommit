@@ -7,6 +7,7 @@ using VisualCommit.App.Views;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Git;
 
@@ -28,6 +29,7 @@ public sealed class AppSession : IDisposable
         AppPaths paths,
         IAppLog log,
         ISettingsStore settings,
+        ISessionStore session,
         IGitCallLog gitCalls,
         MainWindowViewModel shell,
         MainWindow mainWindow)
@@ -35,6 +37,7 @@ public sealed class AppSession : IDisposable
         Paths = paths;
         Log = log;
         Settings = settings;
+        SessionState = session;
         GitCalls = gitCalls;
         Shell = shell;
         MainWindow = mainWindow;
@@ -47,6 +50,9 @@ public sealed class AppSession : IDisposable
     public IAppLog Log { get; }
 
     public ISettingsStore Settings { get; }
+
+    /// <summary>The open tabs, recent repositories, window placement and panel widths (D46).</summary>
+    public ISessionStore SessionState { get; }
 
     /// <summary>Every git call this session made.</summary>
     public IGitCallLog GitCalls { get; }
@@ -61,10 +67,12 @@ public sealed class AppSession : IDisposable
     public Task Initialization { get; }
 
     /// <summary>
-    /// Starts the app on <paramref name="paths"/>: loads the settings, applies the saved theme
-    /// and creates the main window. Must be called on the UI thread.
+    /// Starts the app on <paramref name="paths"/>: loads the settings and the session, applies
+    /// the saved theme and creates the main window with the tabs of the last session. Must be
+    /// called on the UI thread. <paramref name="folderPicker"/> replaces the platform's folder
+    /// dialog; the scripted walk-through passes a fake (D42).
     /// </summary>
-    public static AppSession Start(AppPaths paths, Application application)
+    public static AppSession Start(AppPaths paths, Application application, IFolderPicker? folderPicker = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
@@ -81,15 +89,45 @@ public sealed class AppSession : IDisposable
         var themes = new ThemeService(application);
         themes.Apply(settings.Current.Theme);
 
+        var session = new JsonSessionStore(paths.SessionFile, log);
         var gitCalls = new GitCallLog();
-        var shell = new MainWindowViewModel(
-            settings,
-            themes,
-            cancellationToken => GitLocator.DetectAsync(gitCalls, log, cancellationToken),
-            log);
-        var mainWindow = new MainWindow { DataContext = shell };
 
-        return new AppSession(paths, log, settings, gitCalls, shell, mainWindow);
+        // Git is looked for once the window exists (MainWindowViewModel.InitializeAsync); the
+        // services that need it wait for that search through GitAccess (D45).
+        var gitFound = new TaskCompletionSource<GitDetection>(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task<GitDetection> DetectGitAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                var detection = await GitLocator.DetectAsync(gitCalls, log, cancellationToken);
+                gitFound.TrySetResult(detection);
+                return detection;
+            }
+            catch (OperationCanceledException)
+            {
+                gitFound.TrySetCanceled(cancellationToken);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                gitFound.TrySetException(ex);
+                throw;
+            }
+        }
+
+        MainWindow? mainWindow = null;
+        var tabServices = new TabServices(
+            new GitRepositoryProvider(new GitAccess(gitFound.Task), log),
+            folderPicker ?? new StorageFolderPicker(() => mainWindow),
+            settings,
+            session,
+            DateDisplay.Resolve(),
+            log);
+        var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session);
+        mainWindow = new MainWindow { DataContext = shell };
+        mainWindow.UseSession(session);
+
+        return new AppSession(paths, log, settings, session, gitCalls, shell, mainWindow);
     }
 
     public static string AppVersion =>
@@ -111,6 +149,9 @@ public sealed class AppSession : IDisposable
         {
             MainWindow.Close();
         }
+
+        // Stops every tab's work and logs each graph's frame times (D50).
+        Shell.CloseAll();
 
         Log.Info("VisualCommit closed.");
     }

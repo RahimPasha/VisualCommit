@@ -13,8 +13,11 @@ namespace VisualCommit.VisualTests.Phase0;
 
 /// <summary>
 /// The expected shell, as written in "What the shell must show" in
-/// docs/test-reports/phase-0.md. The numbers and colours here are copied from that report, not
-/// from the app's theme files, so the two are checked against each other.
+/// docs/test-reports/phase-0.md, with the changes phase 1 made on purpose to a tab without a
+/// repository (docs/test-reports/phase-1.md, "Changes to expected results"): the tab is "New
+/// tab", "+" is enabled and the graph area shows the welcome page. The numbers and colours here
+/// are copied from those reports, not from the app's theme files, so the two are checked
+/// against each other.
 /// </summary>
 public static class ShellExpectations
 {
@@ -31,8 +34,12 @@ public static class ShellExpectations
     public static readonly string[] LeftPanelSections =
         ["Local branches", "Remotes", "Pull requests", "Tags", "Stashes"];
 
-    public static readonly string[] GraphColumns =
-        ["Branch / Tag", "Graph", "Message", "Author", "Date", "SHA"];
+    /// <summary>The welcome page of a tab without a repository, in reading order (phase 1, D42).</summary>
+    public static readonly string[] WelcomeTexts =
+    [
+        "No repository open", "Open, clone or init a repository to see its history.",
+        "Open", "Clone", "Init", "Recent repositories", "No recent repositories",
+    ];
 
     /// <summary>The colours of one theme, from the report's colour table.</summary>
     public sealed record Palette(Color Chrome, Color Panel, Color Graph, Color Text, Color Accent);
@@ -74,10 +81,12 @@ public static class ShellExpectations
         var right = AssertRegion(app, "RightPanel", new Rect(width - rightPanelWidth, mainTop, rightPanelWidth, mainHeight));
         var status = AssertRegion(app, "StatusBar", new Rect(0, height - StatusBarHeight, width, StatusBarHeight));
 
-        // Repo tabs: the placeholder tab with its accent line, then the add button.
-        Assert.Contains("No repository", TextsIn(tabs));
+        // Repo tabs: one "New tab" with its accent line and no close button, then the add button, enabled.
+        Assert.Equal(["New tab"], TextsIn(tabs));
         var addButton = app.Find<Button>("AddRepoButton");
-        Assert.True(app.BoundsOf(addButton).X > app.BoundsOf(app.Find<Border>("PlaceholderTab")).Right - 1);
+        Assert.True(addButton.IsEffectivelyEnabled);
+        Assert.True(app.BoundsOf(addButton).X > app.BoundsOf(app.Find<Border>("RepoTab")).Right - 1);
+        Assert.False(app.Find<Button>("CloseTabButton").IsEffectivelyVisible);
 
         // Toolbar: the buttons in order, and only Theme enabled.
         var buttons = toolbar.GetVisualDescendants().OfType<ToolbarButton>()
@@ -97,12 +106,10 @@ public static class ShellExpectations
         Assert.Equal("Filter", filter.PlaceholderText);
         var sectionTexts = TextsIn(left).Where(text => text != "Filter").ToList();
         Assert.Equal(LeftPanelSections.SelectMany(section => new[] { section, "0" }), sectionTexts);
-        Assert.True(app.BoundsOf(filter).Bottom <= app.BoundsOf(app.Find<StackPanel>("Sections")).Y + 1);
+        Assert.True(app.BoundsOf(filter).Bottom <= app.BoundsOf(app.FindByAutomationId("RefList")).Y + 1);
 
-        // Commit graph: column headers in order, then the empty state.
-        Assert.Equal(
-            [.. GraphColumns, "No repository open", "Open, clone or init a repository to see its history."],
-            TextsIn(graph));
+        // Commit graph: the welcome page, without column headers.
+        Assert.Equal(WelcomeTexts, TextsIn(graph));
 
         // Right panel.
         Assert.Equal(["Commit details", "Select a commit to see its details."], TextsIn(right));
@@ -124,11 +131,9 @@ public static class ShellExpectations
         AssertColour(palette.Chrome, screenshot, new Point(toolbarGap, TabStripHeight + (ToolbarHeight / 2)), "toolbar");
         var statusGap = (app.BoundsOf(app.Find<TextBlock>("OperationStatus")).Right + app.BoundsOf(app.Find<TextBlock>("GitStatus")).X) / 2;
         AssertColour(palette.Chrome, screenshot, new Point(statusGap, height - (StatusBarHeight / 2)), "status bar");
-        var headers = app.BoundsOf(app.Find<Border>("ColumnHeaders"));
-        AssertColour(palette.Chrome, screenshot, new Point(headers.X + 4, headers.Center.Y), "graph column headers");
         AssertColour(palette.Panel, screenshot, new Point(leftPanelWidth / 2, height - StatusBarHeight - 40), "left panel");
         AssertColour(palette.Panel, screenshot, new Point(width - (rightPanelWidth / 2), height - StatusBarHeight - 40), "right panel");
-        AssertColour(palette.Graph, screenshot, new Point(leftPanelWidth + (graphWidth / 2), headers.Bottom + 30), "commit graph");
+        AssertColour(palette.Graph, screenshot, GraphSamplePoint(leftPanelWidth, mainTop), "commit graph");
         var accentLine = app.BoundsOf(app.Find<Border>("TabAccentLine"));
         AssertColour(palette.Accent, screenshot, accentLine.Center, "accent line on the tab");
 
@@ -138,6 +143,13 @@ public static class ShellExpectations
             ContainsColour(screenshot, app.BoundsOf(title), palette.Text),
             $"The text \"No repository open\" is not drawn in the main text colour {palette.Text}.");
     }
+
+    /// <summary>
+    /// An empty spot of the graph area: near its top-left corner, which the welcome page, centred
+    /// in the area, leaves free (phase 1's report, "Changes to expected results").
+    /// </summary>
+    public static Point GraphSamplePoint(double leftPanelWidth, double mainTop = TabStripHeight + ToolbarHeight) =>
+        new(leftPanelWidth + 10, mainTop + 20);
 
     /// <summary>Asserts where a region is and returns it.</summary>
     public static Control AssertRegion(ShellDriver app, string automationId, Rect expected)

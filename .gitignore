@@ -21,3 +21,6 @@ TestResults/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Git worktrees that Claude Code creates for parallel agents.
+.claude/worktrees/

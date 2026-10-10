@@ -121,7 +121,7 @@ public class Phase0Checks
                 var firstFrame = app.Capture();
                 firstFrame.Save(Phase, "06c-restarted-first-frame");
                 Assert.Equal(ThemeVariant.Light, app.Window.ActualThemeVariant);
-                Assert.Equal(ShellExpectations.Light.Graph, firstFrame.PixelAt(new Point(480, 400)));
+                Assert.Equal(ShellExpectations.Light.Graph, firstFrame.PixelAt(ShellExpectations.GraphSamplePoint(ShellExpectations.LeftPanelWidth)));
                 Assert.Equal(ShellExpectations.Light.Panel, firstFrame.PixelAt(new Point(130, 600)));
                 Assert.Equal(ShellExpectations.Light.Chrome, firstFrame.PixelAt(new Point(1070, 18)));
 
