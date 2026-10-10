@@ -51,7 +51,7 @@ Start:
 - [ ] 4. Harness: `ShellDriver` starts the app with repos open (session state written by the
   test), scrolls with the wheel and waits for a condition; `RealApp` gets right-click,
   double-click, typing, the wheel and scenario repos.
-- [ ] 5. Phase 1's visual checks written into `docs/test-reports/phase-1.md`, each marked for
+- [x] 5. Phase 1's visual checks written into `docs/test-reports/phase-1.md`, each marked for
   the real-window pass, and committed before the UI they test.
 
 Git layer:
@@ -137,11 +137,10 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5: write phase 1's visual checks into `docs/test-reports/phase-1.md`, in terms of the graph
-scenario (`Scenarios.GraphAsync`) and the 100k-commit repo (`LargeHistory`), and commit them
-before any UI is built. Steps 4, 6 to 11 (harness, git layer, lane layout) are being built in
-parallel worktrees on branches `wip/p1-harness`, `wip/p1-git-layer` and `wip/p1-lane-layout`,
-to be merged into `phase/1-graph` when they are done.
+Merge the three parallel branches (`wip/p1-git-layer`, `wip/p1-lane-layout`, `wip/p1-harness`)
+into `phase/1-graph` when they are done, check them, and tick steps 4 and 6 to 11. Then build
+the app's part (steps 12 to 24) against the expected results in
+`docs/test-reports/phase-1.md`, committed before the UI.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
