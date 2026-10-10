@@ -64,10 +64,14 @@ public sealed class JsonSessionStore : ISessionStore
             var json = File.ReadAllText(_filePath);
             var state = JsonSerializer.Deserialize(json, SessionJsonContext.Default.SessionState) ?? new SessionState();
 
-            // Lists that a hand-edited file left out or set to null are read as empty.
+            // Lists that a hand-edited file left out or set to null are read as empty, and a tab
+            // with a blank folder as an empty tab.
             return state with
             {
-                Tabs = state.Tabs?.Where(tab => tab is not null).ToList() ?? [],
+                Tabs = state.Tabs?
+                    .Where(tab => tab is not null)
+                    .Select(tab => string.IsNullOrWhiteSpace(tab.RepositoryPath) ? new TabState(null) : tab)
+                    .ToList() ?? [],
                 Recent = state.Recent?.Where(recent => recent is not null && !string.IsNullOrWhiteSpace(recent.Path)).ToList() ?? [],
             };
         }

@@ -16,6 +16,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     private readonly RepoTabViewModel _tab;
     private readonly TabServices _services;
     private CancellationTokenSource? _clone;
+    private Task? _cloneTask;
     private bool _nameTyped;
     private bool _settingName;
 
@@ -69,6 +70,9 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// <summary>The stage and percentage as git reports them, such as "Receiving objects 45%".</summary>
     [ObservableProperty]
     public partial string CloneProgressText { get; private set; } = string.Empty;
+
+    /// <summary>The clone that is running, or null: the app waits for it to clean up when it closes.</summary>
+    public Task? RunningClone => _cloneTask is { IsCompleted: false } running ? running : null;
 
     /// <summary>Shows a failure under the buttons.</summary>
     public void ShowError(string message) => ErrorText = message;
@@ -176,7 +180,9 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 
         try
         {
-            var repository = await _services.Repositories.CloneAsync(url, System.IO.Path.Combine(parent, name), progress, _clone.Token);
+            var cloning = _services.Repositories.CloneAsync(url, System.IO.Path.Combine(parent, name), progress, _clone.Token);
+            _cloneTask = cloning;
+            var repository = await cloning;
             IsCloning = false;
             IsCloneFormOpen = false;
             await _tab.ShowAsync(repository);

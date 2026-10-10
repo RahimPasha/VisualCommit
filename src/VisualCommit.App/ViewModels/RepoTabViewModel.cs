@@ -69,6 +69,16 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// <summary>The folder of a tab restored from the session that has not been opened yet, or null.</summary>
     public string? PendingPath { get; private set; }
 
+    /// <summary>
+    /// The folder of a tab restored from the session that could not be opened (a drive not
+    /// mounted yet, git missing), or null. The session keeps it, so the tab comes back on the next
+    /// start, until the user opens something else in the tab or closes it.
+    /// </summary>
+    public string? FailedPath { get; private set; }
+
+    /// <summary>The folder the session keeps for this tab, or null for an empty tab.</summary>
+    public string? SavedPath => RepositoryPath ?? PendingPath ?? FailedPath;
+
     /// <summary>Raised after a repository was opened, initialised or cloned in this tab.</summary>
     public event EventHandler? RepositoryOpened;
 
@@ -95,9 +105,16 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         var previousTitle = Title;
         IsOpening = true;
         Title = FolderName(path);
+        var restoring = PendingPath is not null;
         try
         {
             var repository = await _services.Repositories.OpenAsync(path);
+            if (_disposed)
+            {
+                // The tab was closed while the repository was being opened.
+                return false;
+            }
+
             PendingPath = null;
             IsOpening = false;
             await ShowAsync(repository, sinceOpening, remember);
@@ -105,6 +122,16 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            if (_disposed)
+            {
+                return false;
+            }
+
+            if (restoring)
+            {
+                FailedPath = path;
+            }
+
             PendingPath = null;
             IsOpening = false;
             Title = Repository is null ? EmptyTitle : previousTitle;
@@ -122,8 +149,13 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     public async Task ShowAsync(IGitRepository repository, Stopwatch? sinceOpening = null, bool remember = true)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_disposed)
+        {
+            // Closed while the repository was being opened, initialised or cloned.
+            return;
+        }
 
+        FailedPath = null;
         var previous = Repository;
         var opened = new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening);
         opened.PropertyChanged += OnRepositoryPropertyChanged;

@@ -11,7 +11,8 @@ public partial class MainWindow : Window
     private double _preferredRight = PanelLayout.RightDefault;
     private PixelPoint? _normalPosition;
     private Size? _normalSize;
-    private bool _dragging;
+    private bool _wasMaximized;
+    private GridSplitter? _dragged;
 
     public MainWindow()
     {
@@ -20,12 +21,21 @@ public partial class MainWindow : Window
         MainArea.SizeChanged += (_, _) => FitPanels();
         foreach (var splitter in new[] { LeftSplitter, RightSplitter })
         {
-            splitter.DragStarted += (_, _) => _dragging = true;
-            splitter.DragCompleted += (_, _) => PanelDragged();
+            splitter.DragStarted += (_, _) => _dragged = splitter;
+            splitter.DragCompleted += (_, _) => PanelDragged(splitter);
         }
 
         PositionChanged += (_, _) => RememberNormalPlacement();
         SizeChanged += (_, _) => RememberNormalPlacement();
+        PropertyChanged += (_, e) =>
+        {
+            // Minimised keeps what the window was before, so that closing it from the taskbar
+            // restores it the way it was shown.
+            if (e.Property == WindowStateProperty && WindowState != WindowState.Minimized)
+            {
+                _wasMaximized = WindowState == WindowState.Maximized;
+            }
+        };
     }
 
     /// <summary>The widths the side panels are drawn at now, for tests and the session.</summary>
@@ -49,16 +59,21 @@ public partial class MainWindow : Window
         {
             Width = Math.Max(placement.Width, MinWidth);
             Height = Math.Max(placement.Height, MinHeight);
+            _normalSize = new Size(Width, Height);
             var position = new PixelPoint(placement.X, placement.Y);
             if (IsOnAScreen(position))
             {
                 WindowStartupLocation = WindowStartupLocation.Manual;
                 Position = position;
+                _normalPosition = position;
             }
 
+            // A window restored maximised keeps the normal size and position it had, so that
+            // they are saved again even if it is never shown un-maximised this time.
             if (placement.IsMaximized)
             {
                 WindowState = WindowState.Maximized;
+                _wasMaximized = true;
             }
         }
 
@@ -74,12 +89,25 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PanelDragged()
+    /// <summary>
+    /// The user let go of a panel's edge: that panel's width as it is now becomes its preferred
+    /// width. The other panel keeps its preference, even if it is drawn narrower at the moment
+    /// because the window is too small for both (a click on an edge without moving it changes
+    /// nothing).
+    /// </summary>
+    private void PanelDragged(GridSplitter splitter)
     {
-        _dragging = false;
+        _dragged = null;
         var columns = MainArea.ColumnDefinitions;
-        _preferredLeft = columns[0].ActualWidth;
-        _preferredRight = columns[2].ActualWidth;
+        var (fittedLeft, fittedRight) = PanelLayout.Fit(MainArea.Bounds.Width, _preferredLeft, _preferredRight);
+        if (splitter == LeftSplitter && Math.Abs(columns[0].ActualWidth - fittedLeft) > 0.5)
+        {
+            _preferredLeft = columns[0].ActualWidth;
+        }
+        else if (splitter == RightSplitter && Math.Abs(columns[2].ActualWidth - fittedRight) > 0.5)
+        {
+            _preferredRight = columns[2].ActualWidth;
+        }
 
         // The splitter may have given the graph's column a fixed width; it must stay the one that
         // takes the rest.
@@ -92,7 +120,7 @@ public partial class MainWindow : Window
     private void FitPanels()
     {
         var available = MainArea.Bounds.Width;
-        if (_dragging || available <= 0)
+        if (_dragged is not null || available <= 0)
         {
             return;
         }
@@ -129,7 +157,7 @@ public partial class MainWindow : Window
         RememberNormalPlacement();
         var position = _normalPosition ?? Position;
         var size = _normalSize ?? ClientSize;
-        var placement = new WindowPlacement(position.X, position.Y, size.Width, size.Height, WindowState == WindowState.Maximized);
+        var placement = new WindowPlacement(position.X, position.Y, size.Width, size.Height, _wasMaximized);
         _session.Update(state => state with { Window = placement });
     }
 

@@ -75,6 +75,18 @@ public class JsonSessionStoreTests
     }
 
     [Fact]
+    public void A_tab_with_a_blank_folder_is_read_as_an_empty_tab()
+    {
+        using var data = new TempDirectory("data");
+        var file = Path.Combine(data.Path, "session.json");
+        File.WriteAllText(file, """{ "tabs": [ { "repositoryPath": "" }, { "repositoryPath": "   " }, { "repositoryPath": "/repos/x" } ] }""");
+
+        var store = new JsonSessionStore(file);
+
+        Assert.Equal([null, null, "/repos/x"], store.Current.Tabs.Select(tab => tab.RepositoryPath));
+    }
+
+    [Fact]
     public void Lists_left_out_of_a_hand_edited_file_are_read_as_empty()
     {
         using var data = new TempDirectory("data");

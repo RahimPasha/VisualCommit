@@ -32,6 +32,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     private Task? _refreshing;
     private bool _refreshAgain;
     private bool _restoringSelection;
+    private bool _started;
+    private bool _changedWhileStarting;
     private bool _disposed;
 
     /// <param name="repository">The repository.</param>
@@ -112,6 +114,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         var cancellationToken = _lifetime.Token;
         try
         {
+            // Watching starts first: a change made while the history loads (a commit in a
+            // terminal, an editor's fetch) is caught and shown once the load is done.
+            _watcher = Repository.CreateWatcher();
+            _watcher.Changed += (_, _) => OnUiThread(RequestRefresh);
+            _watcher.Start();
+
             var refs = await Repository.ReadRefsAsync(cancellationToken);
             ApplyRefs(refs);
             var data = new CommitGraphData(refs);
@@ -119,9 +127,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
             await LoadAsync(data, cancellationToken);
             OnPropertyChanged(nameof(HasNoCommits));
 
-            _watcher = Repository.CreateWatcher();
-            _watcher.Changed += (_, _) => OnUiThread(RequestRefresh);
-            _watcher.Start();
+            _started = true;
+            if (_changedWhileStarting)
+            {
+                await RefreshAsync();
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -359,10 +369,18 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
 
     private void RequestRefresh()
     {
-        if (!_disposed)
+        if (_disposed)
         {
-            _ = RefreshAsync();
+            return;
         }
+
+        if (!_started)
+        {
+            _changedWhileStarting = true;
+            return;
+        }
+
+        _ = RefreshAsync();
     }
 
     private void OnUiThread(Action action)

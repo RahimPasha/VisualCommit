@@ -256,6 +256,16 @@ public partial class Phase1Checks
                 app.Capture().Save(Phase, "15b-third-tab");
                 Assert.Same(shell.Tabs[2], shell.ActiveTab);
                 Assert.Equal(LargeHistory.CommitCount, shell.ActiveTab.Repository!.Graph.Count);
+
+                // The regions show the third tab's repository: its own left panel (2 branches and
+                // the tag "middle", where the linear scenario has 1 branch and no tag), details
+                // and status bar.
+                Assert.Same(shell.Tabs[2].LeftPanel, app.FindByAutomationId("LeftPanel").DataContext);
+                Assert.Same(shell.Tabs[2].Details, app.FindByAutomationId("RightPanel").DataContext);
+                var left = ShellExpectations.TextsIn(app.FindByAutomationId("LeftPanel"));
+                Assert.Equal("2", left[left.IndexOf("Local branches") + 1]);
+                Assert.Equal("1", left[left.IndexOf("Tags") + 1]);
+                Assert.Contains(LargeHistory.MiddleTag, left);
                 Assert.Equal("main", app.Find<TextBlock>("CurrentBranch").Text);
 
                 app.Click(TabButtons(app)[0]);

@@ -56,7 +56,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         for (var i = 0; i < saved.Tabs.Count; i++)
         {
-            if (saved.Tabs[i].RepositoryPath is { } path)
+            if (saved.Tabs[i].RepositoryPath is { } path && !string.IsNullOrWhiteSpace(path))
             {
                 Tabs[i].ShowPending(path);
             }
@@ -122,6 +122,9 @@ public partial class MainWindowViewModel : ObservableObject
             .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
             .ToList();
         await Task.WhenAll(opening);
+
+        // A restored tab that could not be opened is a "New tab" now; a lone one has no close button.
+        UpdateCanClose();
     }
 
     [RelayCommand]
@@ -180,12 +183,29 @@ public partial class MainWindowViewModel : ObservableObject
         SaveTabs();
     }
 
-    /// <summary>Stops the work of every tab. The session keeps the tabs for the next start.</summary>
+    /// <summary>
+    /// Stops the work of every tab. The session keeps the tabs for the next start. A clone that
+    /// is still running is cancelled, and its half-written folder removed, before this returns
+    /// (at most a few seconds), since the process may end right after.
+    /// </summary>
     public void CloseAll()
     {
+        var clones = Tabs.Select(tab => tab.Welcome.RunningClone).OfType<Task>().ToArray();
         foreach (var tab in Tabs)
         {
             tab.Dispose();
+        }
+
+        if (clones.Length > 0)
+        {
+            try
+            {
+                Task.WaitAll(clones, TimeSpan.FromSeconds(5));
+            }
+            catch (AggregateException)
+            {
+                // Cancelled or failed: the clone removed its folder either way.
+            }
         }
     }
 
@@ -227,7 +247,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void SaveTabs()
     {
-        var tabs = Tabs.Select(tab => new TabState(tab.RepositoryPath ?? tab.PendingPath)).ToList();
+        var tabs = Tabs.Select(tab => new TabState(tab.SavedPath)).ToList();
         var active = Math.Max(0, Tabs.IndexOf(ActiveTab));
         _session.Update(state => state with { Tabs = tabs, ActiveTab = active });
     }

@@ -74,6 +74,43 @@ public class RepoTabsTests
     }
 
     [Fact]
+    public async Task A_restored_tab_that_cannot_be_opened_keeps_its_folder_in_the_session()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "not-mounted", "repo");
+        var session = new MemorySession(new SessionState { Tabs = [new TabState(missing), new TabState(null)] });
+        var viewModel = Create(session);
+
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+        viewModel.NewTabCommand.Execute(null);
+
+        Assert.Equal("New tab", viewModel.Tabs[0].Title);
+        Assert.True(viewModel.Tabs[0].Welcome.HasError);
+        Assert.Equal([missing, null, null], session.Current.Tabs.Select(tab => tab.RepositoryPath));
+    }
+
+    [Fact]
+    public async Task A_lone_restored_tab_that_cannot_be_opened_has_no_close_button()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "not-mounted", "repo");
+        var viewModel = Create(new MemorySession(new SessionState { Tabs = [new TabState(missing)] }));
+        Assert.True(viewModel.Tabs[0].CanClose);
+
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("New tab", viewModel.Tabs[0].Title);
+        Assert.False(viewModel.Tabs[0].CanClose);
+    }
+
+    [Fact]
+    public void A_tab_with_a_blank_folder_in_the_session_is_an_empty_tab()
+    {
+        var viewModel = Create(new MemorySession(new SessionState { Tabs = [new TabState("   "), new TabState("")] }));
+
+        Assert.All(viewModel.Tabs, tab => Assert.Equal("New tab", tab.Title));
+        Assert.All(viewModel.Tabs, tab => Assert.True(tab.ShowsWelcome));
+    }
+
+    [Fact]
     public void An_active_tab_out_of_range_falls_back_to_the_first()
     {
         var viewModel = Create(new MemorySession(new SessionState { Tabs = [new TabState(null), new TabState(null)], ActiveTab = 7 }));
