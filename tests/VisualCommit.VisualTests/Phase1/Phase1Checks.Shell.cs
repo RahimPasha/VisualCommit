@@ -105,12 +105,16 @@ public partial class Phase1Checks
 
         app.Click(app.Find<Button>("AddRepoButton"));
         app.Capture().Save(Phase, "11c-recent-in-new-tab");
+
+        // The app keeps the folder as git reports it: on macOS the temp folder's /var is a link
+        // to /private/var, and git names the real folder.
+        var topLevel = await TopLevelAsync(linear.Path);
         var recent = ShellExpectations.TextsIn(app.FindByAutomationId("CommitGraph"));
-        Assert.Equal(["linear", linear.Path], recent[6..8]);
+        Assert.Equal(["linear", topLevel], recent[6..8]);
 
         var session = new JsonSessionStore(Path.Combine(data.Path, "session.json")).Current;
-        Assert.Equal([linear.Path, null], session.Tabs.Select(saved => saved.RepositoryPath));
-        Assert.Equal(linear.Path, Assert.Single(session.Recent).Path);
+        Assert.Equal([topLevel, null], session.Tabs.Select(saved => saved.RepositoryPath));
+        Assert.Equal(topLevel, Assert.Single(session.Recent).Path);
     }
 
     [AvaloniaFact]
@@ -423,6 +427,10 @@ public partial class Phase1Checks
         var command = new GitCommand(arguments) { WorkingDirectory = folder };
         return (await runner.RunAsync(command, TestContext.Current.CancellationToken)).EnsureSuccess(command).StandardOutput.Trim();
     }
+
+    /// <summary>The working tree's folder as git reports it, with the platform's separators.</summary>
+    private static async Task<string> TopLevelAsync(string folder) =>
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(await GitInAsync(folder, "rev-parse", "--show-toplevel")));
 
     /// <summary>The "fatal:" line that <c>git clone</c> prints for <paramref name="url"/>, as a terminal would show it.</summary>
     private static async Task<string> GitCloneErrorAsync(string url)
