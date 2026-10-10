@@ -54,7 +54,7 @@ Start:
 - [x] 4. Scenario repos with known working-tree changes (modified, added, deleted, renamed,
   binary, an image, a very large file; staged and unstaged; one with `core.autocrlf`), pinned in
   `ScenarioTests`.
-- [ ] 5. Phase 2's visual checks written into `docs/test-reports/phase-2.md`, each marked for
+- [x] 5. Phase 2's visual checks written into `docs/test-reports/phase-2.md`, each marked for
   the real-window pass, reviewed, and committed before the UI they test.
 
 Git layer:
@@ -136,11 +136,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5, the rest of it: the 21 checks are written and committed in
-`docs/test-reports/phase-2.md`; an independent agent (Opus 5.5, no conversation context) reviews
-them for gaps, contradictions and expectations that do not follow from the scenario; fix what it
-finds in the next commit and list the changes under "Changes to expected results", as phase 1
-did. No UI is built before that.
+Step 12, the working-changes row: `RepositoryViewModel` reads the status beside the refs (and
+again on each watcher event and after each write), `CommitGraphData`/`CommitGraphControl` draw
+the row above row 0 as the report's "The working-changes row" says, with `IsWorkingRowSelected`
+beside `SelectedIndex` (which keeps meaning a commit's row). Then steps 13 to 19 build the stage
+panel, the dialog, the diff view, highlighting, hunk and line actions and the image, binary and
+large-file views, against `docs/test-reports/phase-2.md` (25 checks, reviewed).
 
 ### Notes for whoever resumes
 

@@ -195,6 +195,18 @@ public class DiffParserTests
     }
 
     [Fact]
+    public void Word_highlights_of_the_renamed_python_line()
+    {
+        const string removed = "\"\"\"Small helpers for the calculator.\"\"\"";
+        const string added = "\"\"\"Helpers shared by the calculator.\"\"\"";
+
+        var (inRemoved, inAdded) = WordDiff.Compare(removed, added);
+
+        Assert.Equal(["Small", "helpers", "for"], inRemoved.Select(range => removed.Substring(range.Start, range.Length)));
+        Assert.Equal(["Helpers", "shared", "by"], inAdded.Select(range => added.Substring(range.Start, range.Length)));
+    }
+
+    [Fact]
     public void Lines_that_share_no_word_have_no_highlights()
     {
         Assert.Equal((0, 0), Count(WordDiff.Compare("{", "}")));
