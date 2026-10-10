@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Diff;
 
 namespace VisualCommit.App.Views.Diff;
@@ -17,6 +19,14 @@ public partial class DiffView : UserControl
     public DiffView()
     {
         InitializeComponent();
+        DiffText.HunkActionRequested += (_, e) => _ = _viewModel?.RunHunkActionAsync(e.Hunk, e.Action);
+        DiffText.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == DiffTextView.SelectedChangesProperty && _viewModel is not null)
+            {
+                _viewModel.SelectedChanges = DiffText.SelectedChanges;
+            }
+        };
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -24,20 +34,32 @@ public partial class DiffView : UserControl
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.SelectionResetRequested -= OnSelectionResetRequested;
         }
 
         _viewModel = DataContext as DiffViewModel;
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.SelectionResetRequested += OnSelectionResetRequested;
+
+            // A diff that opens takes the keyboard focus, so that Ctrl+End and the like work at once.
+            Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
         }
 
         ShowImages();
         base.OnDataContextChanged(e);
     }
 
+    private void OnSelectionResetRequested(object? sender, EventArgs e) => DiffText.ClearSelection();
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(DiffViewModel.Body) && _viewModel?.ShowsText == true)
+        {
+            Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
+        }
+
         if (e.PropertyName is nameof(DiffViewModel.BeforeImage) or nameof(DiffViewModel.AfterImage) or nameof(DiffViewModel.Body))
         {
             ShowImages();

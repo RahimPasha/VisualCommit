@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:d="using:VisualCommit.App.Controls.Diff"
              xmlns:vm="using:VisualCommit.App.ViewModels.Diff"
              x:Class="VisualCommit.App.Views.Diff.DiffView"
              x:DataType="vm:DiffViewModel"
@@ -165,8 +166,15 @@
     <!-- Body. -->
     <Panel Grid.Row="2">
 
-      <!-- The text: the diff text control, placed by the code-behind. -->
-      <Panel Name="DiffTextHost" IsVisible="{Binding ShowsText}" />
+      <!-- The text, inline or side by side (D61, D64). -->
+      <Panel Name="DiffTextHost" IsVisible="{Binding ShowsText}">
+        <d:DiffTextView Name="DiffText"
+                        FilePath="{Binding Target.Path}"
+                        Mode="{Binding Mode}"
+                        Highlighting="{Binding Highlighting}"
+                        HunkActions="{Binding HunkActions}"
+                        Diff="{Binding TextDiff}" />
+      </Panel>
 
       <StackPanel Classes="message" IsVisible="{Binding ShowsVeryLarge}" VerticalAlignment="Center" Spacing="8" Margin="24,0">
         <TextBlock Classes="title" Text="Very large diff" />

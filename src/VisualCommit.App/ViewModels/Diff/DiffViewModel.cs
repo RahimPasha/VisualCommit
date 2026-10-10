@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
@@ -103,7 +104,7 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     /// <summary>The file and the versions compared.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusLetter), nameof(FileName), nameof(Folder), nameof(HasFolder), nameof(OriginText), nameof(HasOrigin), nameof(PathText), nameof(IsAdded), nameof(IsModified), nameof(IsDeleted), nameof(IsRenamed))]
+    [NotifyPropertyChangedFor(nameof(StatusLetter), nameof(FileName), nameof(Folder), nameof(HasFolder), nameof(OriginText), nameof(HasOrigin), nameof(PathText), nameof(IsAdded), nameof(IsModified), nameof(IsDeleted), nameof(IsRenamed), nameof(HunkActions))]
     public partial DiffTarget Target { get; private set; }
 
     /// <summary>"Unstaged", "Staged" or the commit's short id.</summary>
@@ -148,6 +149,14 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     public bool IsStaged => Target.Side == DiffSide.Staged;
 
+    /// <summary>Which buttons the hunk headers show: stage and discard on an unstaged diff, unstage on a staged one.</summary>
+    public HunkActions HunkActions => Target.Side switch
+    {
+        DiffSide.Unstaged => HunkActions.StageAndDiscard,
+        DiffSide.Staged => HunkActions.Unstage,
+        _ => HunkActions.None,
+    };
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsInline), nameof(IsSideBySide))]
     public partial DiffMode Mode { get; private set; }
@@ -158,10 +167,14 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     /// <summary>The diff read last; null until then.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextDiff))]
     public partial FileDiff? Diff { get; private set; }
 
+    /// <summary>The diff the text control draws: only while the body is text, so a very large diff is not laid out before "Show diff".</summary>
+    public FileDiff? TextDiff => Body == DiffBody.Text ? Diff : null;
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(ShowsVeryLarge), nameof(ShowsBinary), nameof(ShowsImage), nameof(ShowsEmpty), nameof(ShowsConflict), nameof(ShowsError), nameof(ShowsModeToggle))]
+    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(ShowsVeryLarge), nameof(ShowsBinary), nameof(ShowsImage), nameof(ShowsEmpty), nameof(ShowsConflict), nameof(ShowsError), nameof(ShowsModeToggle), nameof(TextDiff), nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage))]
     public partial DiffBody Body { get; private set; } = DiffBody.Loading;
 
     public bool ShowsText => Body == DiffBody.Text;
@@ -342,6 +355,14 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private Task DiscardLines() => ApplyLinesAsync(SelectedChanges, LineAction.Discard, wholeHunk: false);
+
+    /// <summary>A hunk header's button, as the text control reports it.</summary>
+    public Task RunHunkActionAsync(int hunk, HunkAction action) => RunHunkActionAsync(hunk, action switch
+    {
+        HunkAction.Stage => LineAction.Stage,
+        HunkAction.Unstage => LineAction.Unstage,
+        _ => LineAction.Discard,
+    });
 
     /// <summary>A hunk header's button: the hunk's changed lines, all of them.</summary>
     public Task RunHunkActionAsync(int hunk, LineAction action)
