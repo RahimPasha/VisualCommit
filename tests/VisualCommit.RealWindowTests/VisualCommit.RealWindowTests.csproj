@@ -25,6 +25,10 @@
                       ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true"
                       UndefineProperties="TargetFramework" />
+
+    <!-- The shared test helpers: scenario repos (TempRepo, Scenarios), the git isolation and
+         the session file that opens repositories when the app starts (D46). -->
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
