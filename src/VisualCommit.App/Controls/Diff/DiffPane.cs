@@ -151,7 +151,6 @@ internal sealed class DiffPane
         Side = side;
         Rows = rows;
         Selection = null;
-        Gutter.UpdateColumns();
 
         var document = new TextDocument(DocumentText(rows));
         document.UndoStack.SizeLimit = 0;
@@ -166,18 +165,17 @@ internal sealed class DiffPane
         }
 
         HeadersPending = rows.Any(row => row.Kind == DiffRowKind.HunkHeader);
-        Headers.Rebuild();
         Redraw();
     }
 
-    /// <summary>Draws everything again: the colours, the gutter and the headers.</summary>
+    /// <summary>Draws everything again: the colours, the gutter (measured again for the code font) and the headers.</summary>
     public void Redraw()
     {
         Editor.Background = Palette.Background;
         Editor.Foreground = Palette.TextPrimary;
         Editor.FontFamily = Palette.CodeFont;
         TextView.Redraw();
-        Gutter.InvalidateVisual();
+        Gutter.UpdateColumns();
         Headers.Rebuild();
     }
 

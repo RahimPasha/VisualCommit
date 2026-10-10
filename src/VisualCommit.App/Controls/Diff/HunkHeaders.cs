@@ -80,25 +80,19 @@ internal sealed class HunkHeaderLayer : Panel
             }
         }
 
-        var changed = false;
         foreach (var row in _bars.Keys.Where(row => !inView.Contains(row)).ToList())
         {
             Children.Remove(_bars[row]);
             _bars.Remove(row);
-            changed = true;
         }
 
-        foreach (var row in inView.Where(row => !_bars.ContainsKey(row)))
+        // Children are kept in row order, which is hunk order. A bar that stays is not moved, so
+        // a button being clicked while the view scrolls keeps its press.
+        foreach (var row in inView.Where(row => !_bars.ContainsKey(row)).Order())
         {
-            _bars[row] = new HunkHeaderBar(_pane, row);
-            changed = true;
-        }
-
-        if (changed)
-        {
-            // Rows grow with their hunk, so row order is hunk order.
-            Children.Clear();
-            Children.AddRange(_bars.Values);
+            var bar = new HunkHeaderBar(_pane, row);
+            _bars[row] = bar;
+            Children.Insert(_bars.Keys.Count(key => key < row), bar);
         }
 
         InvalidateArrange();

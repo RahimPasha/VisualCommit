@@ -328,12 +328,6 @@ public sealed class DiffTextView : UserControl
         OnThemeChanged();
     }
 
-    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        _tokenizing?.Cancel();
-        base.OnDetachedFromVisualTree(e);
-    }
-
     /// <summary>
     /// Applies the property changes since the last build: new rows and documents for a new diff or
     /// mode, new tokens and word highlights for a new diff, path or highlighting, new header bars
@@ -442,21 +436,28 @@ public sealed class DiffTextView : UserControl
 
         var cancellation = new CancellationTokenSource();
         _tokenizing = cancellation;
-        _ = Task.Run(() => TokenizeOrNothing(diff, path, cancellation.Token), cancellation.Token)
-            .ContinueWith(
-                task =>
+        _ = Task.Run(
+            () =>
+            {
+                var syntax = TokenizeOrNothing(diff, path, cancellation.Token);
+                Dispatcher.UIThread.Post(() =>
                 {
-                    if (task.IsCompletedSuccessfully && task.Result is { } syntax && ReferenceEquals(_tokenizing, cancellation))
+                    // Only the latest request counts: a newer diff, path or setting cancelled this one.
+                    if (ReferenceEquals(_tokenizing, cancellation))
                     {
                         _tokenizing = null;
-                        Syntax = syntax;
-                        _left.Redraw();
-                        _right.Redraw();
+                        if (syntax is not null)
+                        {
+                            Syntax = syntax;
+                            _left.Redraw();
+                            _right.Redraw();
+                        }
                     }
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.None,
-                TaskScheduler.FromCurrentSynchronizationContext());
+
+                    cancellation.Dispose();
+                });
+            },
+            CancellationToken.None);
     }
 
     /// <summary>

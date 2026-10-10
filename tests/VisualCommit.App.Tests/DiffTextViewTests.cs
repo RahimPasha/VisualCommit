@@ -431,6 +431,49 @@ public class DiffTextViewTests
     }
 
     [AvaloniaFact]
+    public void Scrolling_sideways_moves_the_text_but_not_the_gutter_or_the_hunk_header()
+    {
+        var diff = LongLines();
+        var view = new DiffTextView { Diff = diff, FilePath = "notes.txt", HunkActions = HunkActions.StageAndDiscard };
+        using var host = DiffHost.Show(view, InlineWidth, InlineHeight, ThemeVariant.Dark);
+        host.Capture();
+        var removed = new DiffLineRef(0, 1);
+        var textBefore = view.TextRangeBounds(removed, 0, 1)!.Value.X;
+        var numberBefore = view.LineNumberPoint(removed)!.Value;
+        var buttonBefore = Edges(host, view, Buttons(view)[1]);
+        var headerBefore = Edges(host, view, HeaderText(view, "@@ -1,3 +1,3 @@"));
+
+        host.Window.MouseWheel(host.ToWindow(view, new Point(200, 100)), new Vector(-5, 0));
+        host.Capture();
+
+        var textAfter = view.TextRangeBounds(removed, 0, 1)?.X;
+        Assert.True(textAfter < textBefore - 20, $"The text did not scroll sideways: from {textBefore} to {textAfter}.");
+        Assert.Equal(numberBefore, view.LineNumberPoint(removed));
+        Assert.Equal(buttonBefore, Edges(host, view, Buttons(view)[1]));
+        Assert.Equal(headerBefore, Edges(host, view, HeaderText(view, "@@ -1,3 +1,3 @@")));
+    }
+
+    [AvaloniaFact]
+    public void Side_by_side_both_halves_scroll_sideways_together()
+    {
+        var view = new DiffTextView { Diff = LongLines(), FilePath = "notes.txt", Mode = DiffMode.SideBySide };
+        using var host = DiffHost.Show(view, SideWidth, SideHeight, ThemeVariant.Dark);
+        host.Capture();
+        var removed = new DiffLineRef(0, 1);
+        var added = new DiffLineRef(0, 2);
+        var leftBefore = view.TextRangeBounds(removed, 0, 1)!.Value.X;
+        var rightBefore = view.TextRangeBounds(added, 0, 1)!.Value.X;
+
+        host.Window.MouseWheel(host.ToWindow(view, new Point(200, 100)), new Vector(-5, 0));
+        host.Capture();
+
+        var leftMoved = leftBefore - view.TextRangeBounds(removed, 0, 1)!.Value.X;
+        var rightMoved = rightBefore - view.TextRangeBounds(added, 0, 1)!.Value.X;
+        Assert.True(leftMoved > 20, $"The left half moved {leftMoved}.");
+        Assert.Equal(leftMoved, rightMoved, 0.5);
+    }
+
+    [AvaloniaFact]
     public async Task Ctrl_End_scrolls_to_the_end_of_the_large_diff_shown_without_highlighting()
     {
         var diffs = await DiffScenario.DiffsAsync();
@@ -660,6 +703,22 @@ public class DiffTextViewTests
         var diffs = await DiffScenario.DiffsAsync();
         return new DiffTextView { Diff = diffs.Calculator, FilePath = "src/Calculator.cs", HunkActions = HunkActions.StageAndDiscard, Mode = mode };
     }
+
+    /// <summary>A diff whose changed lines are far wider than the view.</summary>
+    private static FileDiff LongLines() => DiffScenario.Parse(
+        "@@ -1,3 +1,3 @@",
+        " first",
+        "-old " + new string('x', 150),
+        "+new " + new string('y', 150),
+        " last");
+
+    /// <summary>A hunk header's text block, found by the start of its text.</summary>
+    private static TextBlock HeaderText(DiffTextView view, string start) =>
+        view.GetVisualDescendants().OfType<TextBlock>().First(block => block.Text?.StartsWith(start, StringComparison.Ordinal) == true);
+
+    /// <summary>Where a control is, in the view's coordinates.</summary>
+    private static Rect Edges(DiffHost host, DiffTextView view, Control control) =>
+        new Rect(host.ToWindow(control, default), control.Bounds.Size).Translate(-(Vector)host.ToWindow(view, default));
 
     /// <summary>The hunk buttons in the order of the visual tree.</summary>
     private static List<Button> Buttons(DiffTextView view) =>
