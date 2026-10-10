@@ -104,11 +104,17 @@ every commit.
 - When you have a Mac at hand: the eight-step checklist at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner said this will be looked at later.
 - The commits from before the rewrite of the history (D40) are still on GitHub, although no
-  branch leads to them. Checked on 2026-10-06: each still opens by its ID without signing in and
-  shows the address the rewrite removed, and the repository's public activity list names those
-  IDs. Only GitHub can remove them: through a request to GitHub Support to clear the
-  unreachable commits and cached views, or by deleting the repository and creating it again
-  from the current history. The owner decides which; a session may do neither unasked.
+  branch leads to them: each still opens by its ID without signing in and shows the address the
+  rewrite removed. On 2026-10-09 the owner chose to delete the repository and create it again
+  from the current history (D41). Waiting for: the `gh` token's `delete_repo` scope, which the
+  owner grants by running `gh auth refresh -h github.com -s delete_repo` in a terminal and
+  approving in the browser (`gh auth status` then lists `delete_repo`). Then a session on the
+  Windows machine: checks that `git ls-remote --heads origin` shows exactly the local `master`
+  and `phase/0-foundation`; runs `gh repo delete RahimPasha/VisualCommit --yes` and
+  `gh repo create RahimPasha/VisualCommit --public`; pushes both branches; checks that
+  `https://github.com/RahimPasha/VisualCommit/commit/776a0b4` no longer opens; reads the new CI
+  run and records it in the CI section above; and adds to `docs/cloud-sessions.md` that a
+  repository already connected in claude.ai/code has to be chosen again there.
 
 Settled on 2026-10-06: the copyright line in `LICENSE` stays "VisualCommit contributors", and
 the repository was made public, which lifts the limit on CI minutes.
