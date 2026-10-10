@@ -110,6 +110,46 @@ public class CloneTests(CloneTests.Source source) : IClassFixture<CloneTests.Sou
     }
 
     [Fact]
+    public async Task Credentials_in_the_url_appear_in_no_message_record_or_log()
+    {
+        using var target = new TempDirectory("clone");
+        var calls = new GitCallLog();
+        var log = new ListLog();
+
+        // Nothing listens on port 1, so git fails at once, after it has used the URL.
+        var exception = await Assert.ThrowsAsync<GitException>(
+            () => GitRepository.CloneAsync(
+                NewRunner(calls, log),
+                "http://user:secret@127.0.0.1:1/x.git",
+                target.Combine("copy"),
+                null,
+                TestCancelled,
+                log));
+
+        Assert.Contains("127.0.0.1", exception.Message);
+        Assert.DoesNotContain("secret", exception.Message);
+        Assert.DoesNotContain("secret", exception.CommandText);
+        var call = Assert.Single(calls.Snapshot());
+        Assert.Contains("http://***@127.0.0.1:1/x.git", call.CommandText);
+        Assert.DoesNotContain("secret", call.CommandText + call.StandardOutput + call.StandardError);
+        Assert.NotEmpty(log.Entries);
+        Assert.All(log.Entries, entry => Assert.DoesNotContain("secret", entry.Message));
+    }
+
+    [Theory]
+    [InlineData(
+        "Cloning into 'copy'...\nremote: Repository not found.\nfatal: repository 'https://host/team1%20repo/' not found\n",
+        "remote: Repository not found.\nfatal: repository 'https://host/team1%20repo/' not found")]
+    [InlineData(
+        "Cloning into 'copy'...\nremote: Counting objects: 100% (5/5), done.\nReceiving objects:  40% (2/5), 1.20 MiB | 2.00 MiB/s\rReceiving objects:  60% (3/5)\rerror: 1234 bytes of body are still expected (50% of the pack)\nfatal: early EOF\n",
+        "error: 1234 bytes of body are still expected (50% of the pack)\nfatal: early EOF")]
+    [InlineData(
+        "Cloning into 'copy'...\nremote: Compressing objects:  50% (1/2)\u001b[K\nResolving deltas: 100% (3/3), done.\nUpdating files:  33% (1/3)\rwarning: Clone succeeded, but checkout failed.\n",
+        "warning: Clone succeeded, but checkout failed.")]
+    public void The_error_text_of_a_failed_clone_leaves_out_only_gits_progress_lines(string standardError, string expected) =>
+        Assert.Equal(expected, GitRepository.CloneErrorText(standardError));
+
+    [Fact]
     public async Task A_cancelled_clone_removes_what_it_created()
     {
         using var target = new TempDirectory("clone");

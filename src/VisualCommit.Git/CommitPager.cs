@@ -4,13 +4,14 @@ namespace VisualCommit.Git;
 
 /// <summary>
 /// Collects the commits <c>git log</c> streams into pages for
-/// <see cref="IGitRepository.LoadCommitsAsync"/>, and merges the stashes in on the way (D47).
+/// <see cref="IGitRepository.LoadCommitsAsync"/>, and merges the stashes in on the way (D47, D54).
 /// <para>
 /// The first page is handed over as soon as it holds <see cref="FirstPageSize"/> commits, so
 /// that the graph can draw while the rest loads; later pages hold <see cref="PageSize"/>. A
-/// stash goes in just before the first commit that is not newer than the stash, or before the
+/// stash goes in just before the first commit that is older than the stash, or before the
 /// commit it was made on, whichever comes first: either way it lies above its base, as every
-/// commit in <c>--date-order</c> lies above its parents.
+/// commit in <c>--date-order</c> lies above its parents. A commit of the same second as the
+/// stash stays above it.
 /// </para>
 /// <para>
 /// Pages are handed over on the thread that adds the commit that fills them, under a lock, so
@@ -50,7 +51,7 @@ internal sealed class CommitPager
             for (var i = 0; i < _pendingStashes.Count;)
             {
                 var stash = _pendingStashes[i];
-                if (stash.Date >= commit.CommitDate || stash.BaseSha == commit.Sha)
+                if (stash.Date > commit.CommitDate || stash.BaseSha == commit.Sha)
                 {
                     _pendingStashes.RemoveAt(i);
                     Append(ToCommit(stash));

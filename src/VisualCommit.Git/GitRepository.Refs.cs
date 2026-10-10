@@ -216,24 +216,22 @@ public sealed partial class GitRepository
         {
             // The message comes last, so a separator inside it cannot shift the other fields.
             var fields = lines[index].Split('\x1f', StashFieldCount);
-            if (fields.Length != StashFieldCount
-                || !GitDates.TryParse(fields[4], out var authorDate)
-                || !GitDates.TryParse(fields[5], out var date))
+            if (fields.Length != StashFieldCount || !TryParseIds(fields[0], fields[1], out var sha, out var parents))
             {
                 _log.Warning($"Skipped a line of git stash list that could not be read: {lines[index]}");
                 continue;
             }
 
-            var parents = fields[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // A date git could not print is read as the epoch, as in the log (GitDates.ParseOrEpoch).
             stashes.Add(new StashEntry(
                 index,
-                fields[0],
-                parents.Length > 0 ? parents[0] : string.Empty,
+                sha,
+                parents.Count > 0 ? parents[0] : string.Empty,
                 fields[6],
                 fields[2],
                 fields[3],
-                authorDate,
-                date));
+                GitDates.ParseOrEpoch(fields[4]),
+                GitDates.ParseOrEpoch(fields[5])));
         }
 
         return stashes;

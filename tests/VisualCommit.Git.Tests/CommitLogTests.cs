@@ -199,6 +199,101 @@ public class CommitLogTests(CommitLogTests.LongHistory longHistory) : IClassFixt
     }
 
     [Fact]
+    public async Task A_page_handler_that_takes_its_time_still_gets_every_commit()
+    {
+        // The second page fills while git still has 10 commits to print. Git prints them and
+        // exits while the handler holds that page for longer than a process left behind is
+        // waited for; the last 10 commits must still arrive.
+        const int Count = 2110;
+        using var repo = await TempRepo.CreateAsync();
+        await ImportAsync(repo, HistoryStream.Line(Count));
+        var repository = await OpenAsync(repo);
+        var refs = await repository.ReadRefsAsync(TestCancelled);
+        var pages = new List<IReadOnlyList<CommitInfo>>();
+
+        await repository.LoadCommitsAsync(
+            refs,
+            page =>
+            {
+                pages.Add(page);
+                if (page.Count == CommitPager.PageSize)
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(3));
+                }
+            },
+            TestCancelled);
+
+        Assert.Equal([CommitPager.FirstPageSize, CommitPager.PageSize, 10], pages.Select(page => page.Count));
+        var commits = pages.SelectMany(page => page).ToList();
+        Assert.Equal(Count, commits.Select(commit => commit.Sha).Distinct().Count());
+        Assert.Equal("Commit 1", commits[^1].Subject);
+    }
+
+    [Fact]
+    public async Task A_stash_comes_after_a_commit_of_the_same_second_on_another_branch()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        var history = new HistoryStream();
+        var firstMark = history.Commit("refs/heads/main", "First", file: "a.txt", content: "a\n");
+        history.Commit("refs/heads/main", "Second", file: "a.txt", content: "b\n");
+        history.Commit("refs/heads/other", "Other", from: firstMark, file: "o.txt", content: "o\n");
+        await ImportAsync(repo, history);
+
+        // Stashed on Second at 12:02:00, the very second Other was committed. The stash goes
+        // before the first commit that is older than it (D54): after Other, before Second.
+        await repo.GitAsync("checkout", "--quiet", "--force", "main");
+        repo.WriteFile("a.txt", "work on second\n");
+        await StashAsync(repo, "Same second", new DateTimeOffset(2026, 1, 1, 12, 2, 0, TimeSpan.Zero));
+
+        var (_, pages) = await LoadAsync(repo);
+
+        var commits = Assert.Single(pages);
+        Assert.Equal(
+            ["Other", "Same second", "Second", "First"],
+            commits.Select(commit => commit.Kind == CommitKind.Stash ? commit.Subject.Split(": ", 2)[1] : commit.Subject));
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 12, 2, 0, TimeSpan.Zero), commits[0].CommitDate);
+        Assert.Equal(commits[0].CommitDate, commits[1].CommitDate);
+    }
+
+    [Fact]
+    public async Task A_commit_whose_dates_git_cannot_print_appears_with_the_epoch_date_and_its_details_load()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        var history = new HistoryStream();
+        var firstMark = history.Commit("refs/heads/main", "First", file: "a.txt", content: "a\n");
+        var first = (await ImportAsync(repo, history))[firstMark];
+        var tree = (await repo.GitAsync("rev-parse", first + "^{tree}")).StandardOutput.Trim();
+
+        // Idents without a time zone, as broken tools have written them. Git stores such a
+        // commit only with --literally and cannot print its dates; it shows them as 1970.
+        var broken = (await repo.GitWithInputAsync(
+            $"tree {tree}\nparent {first}\nauthor Broken Clock <broken@example.com> 1767268800\ncommitter Broken Clock <broken@example.com> 1767268800\n\nBroken dates\n",
+            "hash-object", "-t", "commit", "--literally", "-w", "--stdin")).StandardOutput.Trim();
+        var third = (await repo.GitAsync("commit-tree", tree, "-p", broken, "-m", "Third")).StandardOutput.Trim();
+        await repo.GitAsync("update-ref", "refs/heads/main", third);
+
+        var (_, pages) = await LoadAsync(repo);
+
+        var commits = Assert.Single(pages);
+        Assert.Equal([third, broken, first], commits.Select(commit => commit.Sha));
+        var shown = commits[1];
+        Assert.Equal([first], shown.Parents);
+        Assert.Equal("Broken Clock", shown.AuthorName);
+        Assert.Equal("Broken dates", shown.Subject);
+        Assert.Equal(DateTimeOffset.UnixEpoch, shown.AuthorDate);
+        Assert.Equal(DateTimeOffset.UnixEpoch, shown.CommitDate);
+
+        var details = await (await OpenAsync(repo)).ReadCommitDetailsAsync(broken, TestCancelled);
+        Assert.Equal(broken, details.Sha);
+        Assert.Equal([first], details.Parents);
+        Assert.Equal("broken@example.com", details.CommitterEmail);
+        Assert.Equal(DateTimeOffset.UnixEpoch, details.AuthorDate);
+        Assert.Equal(DateTimeOffset.UnixEpoch, details.CommitDate);
+        Assert.Equal("Broken dates", details.Subject);
+        Assert.Empty(details.Files);
+    }
+
+    [Fact]
     public async Task An_unborn_head_beside_other_branches_still_shows_their_history()
     {
         using var repo = await TempRepo.CreateAsync();

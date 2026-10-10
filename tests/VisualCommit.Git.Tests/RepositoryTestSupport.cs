@@ -21,7 +21,7 @@ internal static class RepositoryTestSupport
     /// A runner as the app makes it. Its calls inherit the test process's environment, which the
     /// module initializer has cut off from the machine's git configuration.
     /// </summary>
-    public static GitRunner NewRunner() => new(GitPath);
+    public static GitRunner NewRunner(IGitCallLog? calls = null, IAppLog? log = null) => new(GitPath, calls, log);
 
     public static Task<GitRepository> OpenAsync(TempRepo repo) => GitRepository.OpenAsync(NewRunner(), repo.Path, TestCancelled);
 

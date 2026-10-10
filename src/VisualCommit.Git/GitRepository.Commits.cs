@@ -1,3 +1,4 @@
+using System.Buffers;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -25,6 +26,9 @@ public sealed partial class GitRepository
     /// UTF-8 text whatever <c>i18n.logOutputEncoding</c> says.
     /// </summary>
     private static readonly string[] PlainLogOptions = ["--no-show-signature", "--no-color", "--encoding=UTF-8"];
+
+    /// <summary>The characters of a commit id as git prints it.</summary>
+    private static readonly SearchValues<char> HexDigits = SearchValues.Create("0123456789abcdef");
 
     public async Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
     {
@@ -108,25 +112,21 @@ public sealed partial class GitRepository
 
         var output = await ReadOutputAsync(cancellationToken, ["log", "-1", "--format=" + DetailsFormat, .. PlainLogOptions, sha, "--"]).ConfigureAwait(false);
         var fields = output.Split('\0', DetailsFieldCount);
-        if (fields.Length != DetailsFieldCount
-            || !GitDates.TryParse(fields[4], out var authorDate)
-            || !GitDates.TryParse(fields[7], out var commitDate))
+        if (fields.Length != DetailsFieldCount || !TryParseIds(fields[0], fields[1], out var fullSha, out var parents))
         {
             throw new GitException($"git log -1 {sha}", 0, $"Unexpected output: {output.Trim()}");
         }
 
-        var fullSha = fields[0];
-        var parents = fields[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var files = await ReadChangedFilesAsync(fullSha, parents, cancellationToken).ConfigureAwait(false);
         return new CommitDetails(
             fullSha,
             parents,
             fields[2],
             fields[3],
-            authorDate,
+            GitDates.ParseOrEpoch(fields[4]),
             fields[5],
             fields[6],
-            commitDate,
+            GitDates.ParseOrEpoch(fields[7]),
             fields[8],
             fields[9].TrimEnd(),
             files);
@@ -138,10 +138,10 @@ public sealed partial class GitRepository
     /// <c>diff-tree</c> on a merge shows nothing. <c>-M</c> asks for renames whatever
     /// <c>diff.renames</c> says, and <c>-z</c> prints paths as they are.
     /// </summary>
-    private async Task<IReadOnlyList<ChangedFile>> ReadChangedFilesAsync(string sha, string[] parents, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ChangedFile>> ReadChangedFilesAsync(string sha, IReadOnlyList<string> parents, CancellationToken cancellationToken)
     {
         List<string> arguments = ["diff-tree", "-r", "-z", "--name-status", "-M", "--no-ext-diff", "--no-color", "--no-commit-id"];
-        switch (parents.Length)
+        switch (parents.Count)
         {
             case 0:
                 arguments.AddRange(["--root", sha]);
@@ -210,21 +210,54 @@ public sealed partial class GitRepository
         return files;
     }
 
-    /// <summary>Reads one line of <see cref="LogFormat"/>.</summary>
+    /// <summary>
+    /// Reads one line of <see cref="LogFormat"/>. Only a line whose commit id or parents cannot be
+    /// read is refused; a date git could not print is read as the epoch (<see cref="GitDates.ParseOrEpoch"/>).
+    /// </summary>
     private static bool TryParseLogLine(string line, Func<string, string> pooled, out CommitInfo commit)
     {
         commit = null!;
         var fields = line.Split('\x1f', LogFieldCount);
-        if (fields.Length != LogFieldCount
-            || fields[0].Length == 0
-            || !GitDates.TryParse(fields[4], out var authorDate)
-            || !GitDates.TryParse(fields[5], out var commitDate))
+        if (fields.Length != LogFieldCount || !TryParseIds(fields[0], fields[1], out var sha, out var parents))
         {
             return false;
         }
 
-        IReadOnlyList<string> parents = fields[1].Length == 0 ? [] : fields[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        commit = new CommitInfo(fields[0], parents, pooled(fields[2]), pooled(fields[3]), authorDate, commitDate, fields[6]);
+        commit = new CommitInfo(
+            sha,
+            parents,
+            pooled(fields[2]),
+            pooled(fields[3]),
+            GitDates.ParseOrEpoch(fields[4]),
+            GitDates.ParseOrEpoch(fields[5]),
+            fields[6]);
         return true;
     }
+
+    /// <summary>
+    /// Reads a commit id (<c>%H</c>) and its parents (<c>%P</c>, separated by spaces). Each must be
+    /// a full object id of the same length as the commit's: 40 hex digits, or 64 in a SHA-256 repository.
+    /// </summary>
+    private static bool TryParseIds(string shaField, string parentsField, out string sha, out IReadOnlyList<string> parents)
+    {
+        sha = shaField;
+        parents = parentsField.Length == 0 ? [] : parentsField.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (!IsObjectId(sha))
+        {
+            return false;
+        }
+
+        foreach (var parent in parents)
+        {
+            if (parent.Length != sha.Length || !IsObjectId(parent))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsObjectId(string text) =>
+        text.Length is 40 or 64 && !text.AsSpan().ContainsAnyExcept(HexDigits);
 }

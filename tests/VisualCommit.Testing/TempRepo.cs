@@ -47,6 +47,9 @@ public sealed class TempRepo : IDisposable
             ["GIT_AUTHOR_EMAIL"] = AuthorEmail,
             ["GIT_COMMITTER_NAME"] = AuthorName,
             ["GIT_COMMITTER_EMAIL"] = AuthorEmail,
+
+            // No search for a repository above the tests' own folder.
+            [GitIsolation.CeilingVariable] = GitIsolation.CeilingDirectory,
         };
 
         // Nor anything the surrounding process passes to git through its environment: extra
