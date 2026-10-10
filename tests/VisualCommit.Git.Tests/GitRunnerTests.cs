@@ -188,6 +188,31 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task Output_handlers_never_run_on_the_callers_thread()
+    {
+        var runner = new GitRunner(GitPath);
+        var handlerThreads = new ConcurrentQueue<(Thread Thread, bool IsBackground)>();
+        void Record(string line) => handlerThreads.Enqueue((Thread.CurrentThread, Thread.CurrentThread.IsBackground));
+        var command = Script("echo out; echo err >&2", onOutputLine: Record, onErrorLine: Record);
+
+        // A thread of its own stands for the UI thread: the thread pool never runs work on it, so
+        // a handler can only run there if the call ran it before returning (D59).
+        var started = new TaskCompletionSource<Task<GitResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var caller = new Thread(() => started.SetResult(runner.RunAsync(command, TestCancelled)));
+        caller.Start();
+
+        var result = await await started.Task;
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(2, handlerThreads.Count);
+        Assert.All(handlerThreads, handler =>
+        {
+            Assert.NotSame(caller, handler.Thread);
+            Assert.True(handler.IsBackground);
+        });
+    }
+
+    [Fact]
     public async Task Cancelling_stops_git_and_returns_quickly()
     {
         var calls = new GitCallLog();

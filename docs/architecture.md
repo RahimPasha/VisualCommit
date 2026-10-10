@@ -156,7 +156,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `RepositoryWatcher` | `IRepositoryWatcher` (D52): `FileSystemWatcher`s on the git folder and the common folder, changes under `objects/` and to `*.lock` files ignored, 300 ms of quiet before `Changed`, at most 2 s while changes keep coming |
 | `WindowsJob` | Internal: a Windows job object, used on Windows to stop git together with everything it started |
 
-Rules the runner follows (see D30, D31, D36, D37 and D56):
+Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
 
 - Every call gets `LC_ALL` and `LANG` set to `en_US.UTF-8`, so git's messages are English and
   parseable, and `GIT_TERMINAL_PROMPT=0`, so git fails rather than waits for a terminal. Input and
@@ -166,8 +166,10 @@ Rules the runner follows (see D30, D31, D36, D37 and D56):
 - Standard input is always closed, after writing `GitCommand.StandardInput` if there is one.
 - With `OnOutputLine` set, standard output is delivered line by line as it arrives and not kept
   in the result. `OnErrorLine` also treats a carriage return as the end of a line, because that
-  is how git writes progress. Handlers run on thread-pool threads: a view model must move to the
+  is how git writes progress. Handlers run on background threads: a view model must move to the
   UI thread itself.
+- No part of a call runs on the caller's thread: `RunAsync` queues it on the thread pool, and
+  each output stream is read on a thread of its own, which also runs its handler (D59).
 - Cancelling the token stops git, records the call as `Cancelled` and throws
   `OperationCanceledException`. On Windows everything git started is stopped with it, through a
   job object. On macOS and Linux only git itself is killed (D37); what it started ends when its

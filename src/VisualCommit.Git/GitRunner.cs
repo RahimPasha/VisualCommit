@@ -50,7 +50,15 @@ public sealed class GitRunner : IGitRunner
 
     public string ExecutablePath { get; }
 
-    public async Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// The caller's thread only queues the call; all of it runs on the thread pool (D59). Run from
+    /// the UI thread, the start of a process held that thread for 300 ms while the window drew its
+    /// first frame, which delayed the history of a repository opened at start-up by as much.
+    /// </remarks>
+    public Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default) =>
+        Task.Run(() => RunHereAsync(command, cancellationToken), CancellationToken.None);
+
+    private async Task<GitResult> RunHereAsync(GitCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         cancellationToken.ThrowIfCancellationRequested();
@@ -74,11 +82,8 @@ public sealed class GitRunner : IGitRunner
 
         var output = new OutputCollector(command.OnOutputLine, keepAll: command.OnOutputLine is null, splitOnCarriageReturn: false);
         var error = new OutputCollector(command.OnErrorLine, keepAll: true, splitOnCarriageReturn: true);
-        // The pumps start on the thread pool. Started here, a pump whose first read finds output
-        // already waiting would call the line handler on the caller's thread before RunAsync
-        // returned: the UI thread, or a test's own thread that then waits for the handler.
-        var outputPump = Task.Run(() => output.PumpAsync(process.StandardOutput));
-        var errorPump = Task.Run(() => error.PumpAsync(process.StandardError));
+        var outputPump = StartPump(output, process.StandardOutput);
+        var errorPump = StartPump(error, process.StandardError);
         var pumps = Task.WhenAll(outputPump, errorPump);
         var exit = process.WaitForExitAsync(CancellationToken.None);
 
@@ -179,6 +184,19 @@ public sealed class GitRunner : IGitRunner
 
         return startInfo;
     }
+
+    /// <summary>
+    /// Reads one of git's output streams on a thread of its own, which also runs its line handler
+    /// (D59). On Windows the pipes are synchronous, so a pending read holds a thread for as long as
+    /// git is silent: on the thread pool, the reads of the calls that opening a repository starts
+    /// together would use up its threads and hold up the history's first page.
+    /// </summary>
+    private static Task StartPump(OutputCollector collector, StreamReader reader) =>
+        Task.Factory.StartNew(
+            () => collector.Pump(reader),
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
 
     private static async Task WriteInputAsync(Process process, string? input)
     {
@@ -407,11 +425,11 @@ public sealed class GitRunner : IGitRunner
             }
         }
 
-        public async Task PumpAsync(StreamReader reader)
+        public void Pump(StreamReader reader)
         {
             var buffer = new char[8192];
             int read;
-            while ((read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
+            while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
             {
                 MarkProgress();
                 if (!Collect(buffer.AsSpan(0, read)))

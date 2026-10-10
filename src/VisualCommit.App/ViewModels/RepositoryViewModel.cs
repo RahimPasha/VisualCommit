@@ -322,7 +322,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
                     _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: first commits from git after {_sinceOpening.ElapsedMilliseconds} ms"));
                 }
 
-                // On a thread-pool thread: lay the page out here, add it on the UI thread.
+                // On a background thread: lay the page out here, add it on the UI thread.
                 var rows = new GraphRow[page.Count];
                 for (var i = 0; i < page.Count; i++)
                 {

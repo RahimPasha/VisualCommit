@@ -26,16 +26,16 @@ public sealed class GitCommand
         new Dictionary<string, string?>();
 
     /// <summary>
-    /// Called for every line git writes to standard output, as it arrives, on a thread-pool
-    /// thread. When set, <see cref="GitResult.StandardOutput"/> stays empty, so that large
+    /// Called for every line git writes to standard output, as it arrives, on a background
+    /// thread, never the caller's. When set, <see cref="GitResult.StandardOutput"/> stays empty, so that large
     /// output is not held in memory twice. A call that is not cancelled returns only after the
     /// handler has returned for the last line, however long it takes.
     /// </summary>
     public Action<string>? OnOutputLine { get; init; }
 
     /// <summary>
-    /// Called for every line git writes to standard error, as it arrives, on a thread-pool
-    /// thread. Progress updates that git ends with a carriage return each count as a line.
+    /// Called for every line git writes to standard error, as it arrives, on a background
+    /// thread, never the caller's. Progress updates that git ends with a carriage return each count as a line.
     /// </summary>
     public Action<string>? OnErrorLine { get; init; }
 

@@ -101,7 +101,7 @@ public class CommitLogTests(CommitLogTests.LongHistory longHistory) : IClassFixt
             longHistory.Refs,
             page =>
             {
-                threads.Add(Thread.CurrentThread.IsThreadPoolThread);
+                threads.Add(Thread.CurrentThread.IsBackground);
                 pages.Add(page);
             },
             TestCancelled);

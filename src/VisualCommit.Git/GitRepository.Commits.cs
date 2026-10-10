@@ -46,7 +46,7 @@ public sealed partial class GitRepository
         if (refs.IsCompletedSuccessfully && refs.Result.Refs.Count == 0 && refs.Result.Head.IsUnborn)
         {
             // Stashes alone are possible in theory (every branch deleted after stashing). They
-            // are handed over on a thread-pool thread, as the contract promises.
+            // are handed over on a background thread, as the contract promises.
             await Task.Run(new CommitPager(refs.Result.Stashes, onPage).Finish, cancellationToken).ConfigureAwait(false);
             return;
         }

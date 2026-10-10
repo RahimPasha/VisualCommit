@@ -141,7 +141,10 @@ Step 27, the visual test gate: run `dotnet test` and then the real-window pass o
 commit (the one after this), and inspect every picture of both passes. A first run of the
 real-window pass on `e5c8da7` failed three comparisons on letter edges only; the comparison now
 allows a one-pixel shift (D58, the owner's choice) and the mouse is moved away before the 100k
-End and Home screenshots.
+End and Home screenshots. The run on `a19b5a3` failed Q1 alone (first rows after 2962 ms): git
+calls started from the UI thread held it while the window drew its first frame, which D59
+removes. This laptop slows down when hot, and the pass starts right after the 2-minute
+`dotnet test`, so let the machine rest a few minutes between the two and say so in the report.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
