@@ -42,8 +42,13 @@ public readonly record struct SyntaxRun(int Start, int Length, SyntaxStyle Style
 /// </remarks>
 public static class DiffHighlighter
 {
-    /// <summary>The time a single line may take to tokenize; the rest of a line that takes longer is left plain.</summary>
-    public static readonly TimeSpan LineTimeLimit = TimeSpan.FromMilliseconds(50);
+    /// <summary>
+    /// The time a single line may take to tokenize; the rest of a line that takes longer is left
+    /// plain. A safety net against a pattern that runs away, not a budget: a grammar's first line
+    /// also compiles its regular expressions, which on a busy machine took more than 50 ms and left
+    /// that line plain.
+    /// </summary>
+    public static readonly TimeSpan LineTimeLimit = TimeSpan.FromSeconds(1);
 
     /// <summary>Lines longer than this are not tokenized: they show in the main text colour.</summary>
     public const int MaxLineLength = 5_000;
