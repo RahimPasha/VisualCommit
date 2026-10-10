@@ -49,7 +49,13 @@ outside a phase that starts a run: the last CI run, its commit and its result in
 The last run on `phase/1-graph` was
 [38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182), for the
 gate's commit `5673c3f`: all five jobs succeeded, each with 379 tests passed. The commits after
-it changed only docs. The run for the merge on `master` is added below once it has been read.
+it changed only docs.
+
+The run for the merge on `master`:
+[38077727040](https://github.com/RahimPasha/VisualCommit/actions/runs/38077727040), for
+`eb626ba` (the merge commit `b5eb1ed` and the commit that set phase 1 to "Done"). All five jobs
+succeeded, each with 379 tests passed: `windows-latest`, `macos-latest`, `ubuntu-latest`, and
+the two "bare ubuntu container" jobs.
 
 Before phase 1, the last run on `master` was
 [38026062572](https://github.com/RahimPasha/VisualCommit/actions/runs/38026062572), for `edb811e`,
