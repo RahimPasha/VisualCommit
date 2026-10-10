@@ -14,7 +14,15 @@ public static class LayoutAudit
     /// laid out wider or taller than the space it got, shortened with an ellipsis, or partly
     /// outside the window or a clipping parent. Empty means all text is fully shown.
     /// </summary>
-    public static IReadOnlyList<string> FindClippedText(TopLevel window)
+    public static IReadOnlyList<string> FindClippedText(TopLevel window) => FindClippedText(window, allowShortenedWithToolTip: false);
+
+    /// <summary>
+    /// As <see cref="FindClippedText(TopLevel)"/>; with <paramref name="allowShortenedWithToolTip"/>,
+    /// a text that is meant to be shortened is let through: one with text trimming whose whole
+    /// text is in the tooltip of the text or of an element around it (phase 1: long names and
+    /// paths end in "…" and show in full on hover).
+    /// </summary>
+    public static IReadOnlyList<string> FindClippedText(TopLevel window, bool allowShortenedWithToolTip)
     {
         var problems = new List<string>();
         var windowArea = new Rect(window.ClientSize);
@@ -22,6 +30,11 @@ public static class LayoutAudit
         foreach (var text in window.GetVisualDescendants().OfType<TextBlock>())
         {
             if (!text.IsEffectivelyVisible || string.IsNullOrEmpty(text.Text))
+            {
+                continue;
+            }
+
+            if (allowShortenedWithToolTip && text.TextTrimming != Avalonia.Media.TextTrimming.None && HasToolTipWithText(text))
             {
                 continue;
             }
@@ -59,6 +72,21 @@ public static class LayoutAudit
         }
 
         return problems;
+    }
+
+    /// <summary>Whether the text, or one of the three elements around it, has the whole text as its tooltip.</summary>
+    private static bool HasToolTipWithText(TextBlock text)
+    {
+        Visual? element = text;
+        for (var level = 0; level < 4 && element is not null; level++, element = element.GetVisualParent())
+        {
+            if (element is Control control && ToolTip.GetTip(control) is string tip && tip.Contains(text.Text!, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Rect AreaInWindow(Visual visual, TopLevel window)
