@@ -33,6 +33,7 @@ public partial class Phase2Checks
 
         await ClickRowButtonAsync(app, "UnstagedFileList", "src/Calculator.cs", "RowDiscardButton");
         await WaitForDialogAsync(app);
+        app.MoveMouse(new Point(130, 700 - 13));
         var dialog = app.Capture();
         dialog.Save(Phase, "17a-discard-dialog");
         AssertDialog(app, dialog, "Discard the changes to Calculator.cs?");
@@ -101,6 +102,7 @@ public partial class Phase2Checks
 
         app.Click(app.Find<Button>("DiscardAllButton"));
         await WaitForDialogAsync(app);
+        app.MoveMouse(new Point(130, 700 - 13));
         var dialog = app.Capture();
         dialog.Save(Phase, "18a-discard-all-dialog");
         AssertDialog(app, dialog, "Discard the changes to 7 files?");

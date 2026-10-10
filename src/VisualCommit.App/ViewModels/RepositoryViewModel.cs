@@ -621,6 +621,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     {
         var had = HasWorkingChanges;
         Status = status;
+
+        // The real-window pass, which cannot see the graph's rows, waits for this line.
+        _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: working tree: {status.Staged.Count} staged, {status.Unstaged.Count} unstaged"));
         if (had != status.HasChanges && ScrollOffset > 0)
         {
             ScrollOffset = Math.Max(0, ScrollOffset + (status.HasChanges ? GraphRowHeight : -GraphRowHeight));
