@@ -405,7 +405,6 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         if (Diff is { } diff)
         {
             Diff = null;
-            diff.SelectionResetRequested -= OnDiffSelectionReset;
             diff.Dispose();
         }
 
@@ -698,21 +697,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     private void ShowDiff(DiffTarget target, string sideLabel)
     {
-        if (Diff is { } old)
-        {
-            old.SelectionResetRequested -= OnDiffSelectionReset;
-            old.Dispose();
-        }
-
+        Diff?.Dispose();
         var diff = new DiffViewModel(this, target, sideLabel, _settings, _log);
-        diff.SelectionResetRequested += OnDiffSelectionReset;
         Diff = diff;
         _ = diff.LoadAsync();
-    }
-
-    private void OnDiffSelectionReset(object? sender, EventArgs e)
-    {
-        // The view clears the text's selection itself; nothing else to do here.
     }
 
     private async Task<bool> ConfirmDiscardAsync(string question) =>

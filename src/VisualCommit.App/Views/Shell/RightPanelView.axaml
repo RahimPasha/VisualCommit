@@ -277,39 +277,39 @@
                         ToolTip.Tip="{Binding ToolTip}"
                         AutomationProperties.AutomationId="ChangedFile"
                         AutomationProperties.Name="{Binding Name}">
-                <DockPanel Margin="0,0,12,0">
-                  <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
-                  <TextBlock DockPanel.Dock="Left"
-                             Name="FileStatus"
-                             Classes="status"
-                             Classes.added="{Binding IsAdded}"
-                             Classes.modified="{Binding IsModified}"
-                             Classes.deleted="{Binding IsDeleted}"
-                             Classes.renamed="{Binding IsRenamedOrCopied}"
-                             Width="16" Margin="0,0,6,0"
-                             TextAlignment="Center"
-                             Text="{Binding StatusLetter}" />
-                  <TextBlock DockPanel.Dock="Left"
-                             Name="FileName"
-                             Text="{Binding Name}"
-                             TextTrimming="CharacterEllipsis"
-                             VerticalAlignment="Center" />
-                  <TextBlock DockPanel.Dock="Left"
-                             Name="FileLocation"
-                             Classes="secondary"
-                             Text="{Binding Folder}"
-                             IsVisible="{Binding HasFolder}"
-                             Margin="8,0,0,0"
-                             TextTrimming="CharacterEllipsis"
-                             VerticalAlignment="Center" />
-                  <TextBlock Name="FileOrigin"
-                             Classes="secondary"
-                             Text="{Binding OriginText}"
-                             IsVisible="{Binding HasOrigin}"
-                             Margin="8,0,0,0"
-                             TextTrimming="CharacterEllipsis"
-                             VerticalAlignment="Center" />
-                </DockPanel>
+                  <DockPanel Margin="0,0,12,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Name="FileStatus"
+                               Classes="status"
+                               Classes.added="{Binding IsAdded}"
+                               Classes.modified="{Binding IsModified}"
+                               Classes.deleted="{Binding IsDeleted}"
+                               Classes.renamed="{Binding IsRenamedOrCopied}"
+                               Width="16" Margin="0,0,6,0"
+                               TextAlignment="Center"
+                               Text="{Binding StatusLetter}" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Name="FileName"
+                               Text="{Binding Name}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Name="FileLocation"
+                               Classes="secondary"
+                               Text="{Binding Folder}"
+                               IsVisible="{Binding HasFolder}"
+                               Margin="8,0,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <TextBlock Name="FileOrigin"
+                               Classes="secondary"
+                               Text="{Binding OriginText}"
+                               IsVisible="{Binding HasOrigin}"
+                               Margin="8,0,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                  </DockPanel>
                 </Button>
 
               </Panel>
