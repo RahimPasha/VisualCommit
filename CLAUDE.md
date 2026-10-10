@@ -130,14 +130,18 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
   its reason. Do not reopen a recorded decision without the owner.
 - Add each command to the Commands section below the first time it works.
 - Feature and requirement numbers (C4, O1, T2, Q1, R3 ...) are defined in `docs/requirements.md`.
-- The owner wants the agents on this project on Opus 5.5: the main session and each sub-agent,
-  including the one for the cold-read check, review and verification agents, and any agent that
-  writes or changes code or docs. The one exception is a sub-agent whose task is simple and
-  mechanical, such as cropping, resizing or comparing images, or listing files: it runs on
-  Sonnet 5.5. Name the model on every sub-agent you start (`opus` or `sonnet`) instead of
-  relying on the default, because a built-in agent type can default to another one. If your own
-  session runs on another model than Opus 5.5, say so in your first reply and ask the owner once
-  whether to switch or carry on. Fable 5.1, which this rule named until 2026-10-09, is no longer used.
+- Models (the owner, 2026-10-10): Sonnet 5.5 wherever it does the job as well as Opus 5.5, for
+  the main session and for sub-agents alike; Opus 5.5 where the work needs judgment. Opus 5.5:
+  building a phase (designing, writing or changing code or docs), reviews and verification,
+  inspecting the gate's pictures, and the cold-read check. Sonnet 5.5: tasks that are simple,
+  mechanical or fully specified, such as cropping, resizing or comparing images, listing or
+  searching files, running commands and reporting their output, or a small edit described
+  exactly. Name the model on every sub-agent you start (`opus` or `sonnet`) instead of relying
+  on the default, because a built-in agent type can default to another one. A session cannot
+  change its own model; the owner does that with `/model`. If your session runs on a model that
+  does not fit the work ahead (Sonnet 5.5 for building a phase, say), say so in your first reply
+  and ask the owner once whether to switch or carry on; when a long stretch of work that Sonnet
+  5.5 does as well lies ahead, you may suggest switching. Fable 5.1 is no longer used.
 
 ## Closing a phase
 

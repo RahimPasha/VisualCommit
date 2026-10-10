@@ -34,8 +34,10 @@ again on 2026-10-09 (D41): if you had chosen it in claude.ai/code before that da
 again, and if the Claude GitHub app is installed for selected repositories only, add the
 repository to it again. Two things are worth doing each time you start a session:
 
-- **Choose Opus 5.5 as the session's model.** The model setting of the Windows machine does not
-  travel with the repo. `CLAUDE.md` tells a session on another model to say so and ask you once.
+- **Choose Opus 5.5 as the session's model** when it is to build a phase, and Sonnet 5.5 for
+  simple, mechanical work (the rule is in `CLAUDE.md`). The model setting of the Windows machine
+  does not travel with the repo. `CLAUDE.md` tells a session whose model does not fit the work
+  to say so and ask you once.
 - **Leave the network access on "Trusted".**
 
 The session prepares its own machine: `CLAUDE.md` tells it to run `bash scripts/setup-linux.sh`,
