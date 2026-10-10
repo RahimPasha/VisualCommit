@@ -23,8 +23,10 @@ Everything in the plan's "Delivers" list was delivered.
 | Panels give way in a narrow window | Visual check 17; `PanelLayoutTests`, `WindowPlacementTests` |
 | Q1: first graph within about 2 seconds, smooth scrolling | Visual check 9, judged in the real-window pass on the Windows machine (D50): first rows after 1002 ms; after the load, 459 frames with a 95th percentile of 1.1 ms and a longest of 8.3 ms |
 
-Not delivered: nothing. Found and moved: ssh's own prompts (host key, key passphrase) are not
-yet turned off or shown in the app; phase 3 owns in-app prompts (see "Known issues").
+Not delivered: nothing. Found and moved, as `plan.md` lists them: to phase 3, ssh's own prompts
+(host key, key passphrase), which are not yet turned off or shown in the app, and a left-panel
+selection that does not follow the graph's; to phase 6's theme polish, the awkward wrapping of a
+long folder in the welcome page's error (see "Known issues").
 
 ## State of the repo
 
@@ -80,9 +82,12 @@ As in phase 0's handoff, with phase 1's pass added:
    process restarts; it needs an unlocked desktop and the scripted screenshots from step 1.
    Phase 1's pictures and `run.txt` (with the Q1 numbers) land in
    `artifacts/visual/phase-1/real-window/`.
-3. Open every picture and compare it with the report. Byte-identical files are opened once; the
-   real-window captures are byte-for-byte the same from run to run when nothing changed, so a
-   checksum list from the last inspected run shows which ones are new. Do not rely on the
+3. Open every picture and compare it with the report. Byte-identical files are opened once.
+   Both passes draw the same pictures byte for byte from run to run when nothing changed, except
+   those that show a temporary folder or the clone's percentage (scripted `11a`, `13b`, `14a`,
+   `14b`, real-window `11a`). `docs/test-reports/phase-1-pictures.sha256` lists every picture
+   phase 1's gate inspected: `sha256sum -c docs/test-reports/phase-1-pictures.sha256` after the
+   passes shows which phase 0 and 1 pictures are new and must be opened. Do not rely on the
    comparison alone: it passes a hover background or a small tooltip (see the report's
    "Found by the gate").
 
@@ -94,7 +99,7 @@ The main entry points the next phase will touch:
 |---|---|
 | Add a read of the repository (status, a diff) | `IGitRepository` (Core) and `GitRepository` (Git, split by area: `.Refs.cs`, `.Commits.cs`, `.Clone.cs`); reads run with `GIT_OPTIONAL_LOCKS=0` (`ReadOutputAsync` in `GitRepository.cs`) |
 | Show something for the open repository | `RepositoryViewModel` owns everything of one repository; its `Graph`, `LeftPanel` and `Details` are what the regions bind to |
-| React to outside changes | `RepositoryViewModel.RefreshAsync` (D52). Phase 2's working-tree changes need the watcher to watch the working tree too: `RepositoryWatcher` takes the folders it watches |
+| React to outside changes | `RepositoryViewModel.RefreshAsync` (D52). Phase 2's working-tree changes need the watcher to watch the working tree too. Today `RepositoryWatcher` takes the git folder and the common folder and works out what to watch itself, with the `objects/` and `*.lock` filters built in (`IsRelevant`): watching the working tree needs a change to its constructor and its filters |
 | Put a row at the top of the graph (phase 2's working-changes row) | `CommitGraphData` (what the control draws), `CommitGraphControl` (drawing and input), `GraphLayout` (lanes) |
 | Replace the right panel for the working-changes row | `RepoTabViewModel.Details` and `Views/Shell/RightPanelView` |
 | A new setting or session value | `AppSettings` (preferences) or `SessionState` (state), each with a default |
@@ -126,6 +131,17 @@ Rules worth keeping:
 - Every git call the app makes in tests is cut off from the machine by the module initializers
   (`GitIsolation`), including `GIT_CEILING_DIRECTORIES` so discovery never leaves the tests' own
   folder.
+
+## What the test harnesses cannot do yet
+
+Phase 2 is the first phase in which the app writes to a repository. These gaps matter for it:
+
+| Gap | Why it matters | Where to start |
+|---|---|---|
+| A commit made by the app under test has no identity and no fixed date | The tests cut git off from the machine's configuration (`GitIsolation`), and `TempRepo` sets the author, committer and dates only for its own git calls, through environment variables. A commit made by the app would have no `user.name` and `user.email` (git may refuse it), and the clock's time would change its SHA and date in every run, so a check of "commit, then the graph" could not have fixed expected values. Give scenario repos a local identity in their config, and give the app's git calls fixed dates in the tests (for the headless app through the test process's environment, for the real window through `RealApp.Launch`) | `TempRepo`, `GitIsolation`, `RealApp.Launch` |
+| `TempRepo` writes text files only | Phase 2's checks need a binary file, an image and a very large file | `TempRepo.WriteFile` |
+| Line endings are never tested as the owner's app meets them | Git for Windows sets `core.autocrlf=true` in its system configuration, which the tests leave out (`GIT_CONFIG_NOSYSTEM`). Staging a hunk or a line by applying a patch is where CRLF goes wrong | A scenario with `core.autocrlf` set in the repo's own config |
+| The tests need Git 2.32 or newer | Leaving out the user's configuration (`GIT_CONFIG_GLOBAL`) needs 2.32; on 2.30 or 2.31 the tests would read the developer's `~/.gitconfig`. The app itself needs 2.30 | `GitIsolation` |
 
 ## Deviations from the plan
 
@@ -194,19 +210,46 @@ for the two passes.
 
 Do first:
 
-1. Read the Known issues above and check the latest CI runs.
-2. Decide how the working-changes row sits on top of the graph (a pseudo-row in
-   `CommitGraphData` before row 0, with its own drawing) and how the watcher watches the working
-   tree (D52 left it to phase 2), including what to ignore (build output, `node_modules`, ignored
-   files) so a build does not refresh the app constantly.
+1. Read the Known issues and "What the test harnesses cannot do yet" above, and check the latest
+   CI runs.
+2. Settle the open points below. Record each as a decision; ask the owner the ones that are a
+   matter of taste, as D42 to D44 were asked.
 3. Build a scenario repo with known working-tree changes (modified, added, deleted, renamed,
    binary, an image, a very large file) and pin it before writing the checks.
 4. Write phase 2's checks into `docs/test-reports/phase-2.md` and commit them before the UI.
 
+Open points for phase 2:
+
+- **The working-changes row.** How it sits on top of the graph (a pseudo-row in
+  `CommitGraphData` before row 0, with its own drawing), and whether it shows when the working
+  tree is clean. If it always shows, every graph check of phase 1 moves down a row and must be
+  listed under "Changes to expected results".
+- **The watcher and the app's own writes.** How the watcher watches the working tree (D52 left
+  it to phase 2) and what it ignores (build output, `node_modules`, ignored files). D52 has
+  writes pause the watcher from phase 3, with the operation queue, but phase 2's stage, discard
+  and commit write first: decide how they keep the watcher from refreshing in a loop, and tell
+  the owner, since it brings part of D52 forward.
+- **The diff viewer's technology.** D1 and `architecture.md` name AvaloniaEdit with TextMate
+  grammars. Check that a release works with Avalonia 12.1.3 (nuget.org lists
+  Avalonia.AvaloniaEdit and AvaloniaEdit.TextMate 12.0.0) and what the grammars' licences ask
+  for in `THIRD-PARTY-NOTICES.md` before adding them to `Directory.Packages.props`. The graph
+  control's approach (draw only what is in view, cache laid-out text, measure frames) is the
+  pattern for the diff's performance whichever control draws it.
+- **No editor may open.** The runner sets `GIT_TERMINAL_PROMPT=0` but no `GIT_EDITOR`: a commit
+  or amend without `-m`, `-F` or `--no-edit` would start an editor and wait until cancelled.
+  Pass the message explicitly, and consider `GIT_EDITOR` in `GitRunner`'s environment.
+- **Questions of behaviour to settle before the checks:** the default diff mode (side by side or
+  inline); whether discard asks for confirmation (Q3 says destructive actions do) and how a
+  discard is restored in phase 2, before phase 5's undo; how the snapshot keeps untracked files
+  (`git stash create` leaves them out); the size from which a file counts as very large; how
+  stage and discard by file are offered before phase 3 brings context menus (`requirements.md`
+  puts them on a file's right-click); whether a file in a commit's details opens the diff too;
+  whether the stage lists share the Flat/Tree setting of D44.
+
 Risks to watch:
 
-- Phase 2's diff viewer is the largest UI piece so far (risk 2 in `plan.md`). The graph control's
-  approach (draw only what is in view, cache laid-out text, measure frame times) applies.
+- Phase 2's diff viewer is the largest UI piece so far (risk 2 in `plan.md`); see the open
+  point on its technology above.
 - Writing operations start in phase 2 (stage, commit): the watcher must not refresh the app in a
   loop on its own writes (D52: pause it during a write and refresh once after).
 

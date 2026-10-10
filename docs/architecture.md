@@ -59,8 +59,8 @@ for every project.
 Phase 0 built the foundation: an empty shell, the git runner, settings, the log and both test
 harnesses. Phase 1 added repositories in tabs: open, init and clone on a welcome page, the commit
 graph of the whole history, the left panel of refs, the commit details, the session that restores
-tabs and the window, and a watcher that follows outside changes. There are still no writing git
-operations in the UI (phase 3).
+tabs and the window, and a watcher that follows outside changes. The app does not write to a
+repository yet: staging and committing come in phase 2, the other operations in phase 3.
 
 ### Start-up and composition
 
@@ -238,7 +238,9 @@ comes during the first load is remembered and refreshed once the load is done. `
 reads the refs; when their fingerprint is unchanged only the left panel and status bar are
 updated; otherwise the whole history is loaded into a new `CommitGraphData`, which replaces the
 old one when it is complete, with the selected commit selected again. Refreshes that come while
-one runs make it run once more. Writing operations (phase 3) will pause the watcher.
+one runs make it run once more. D52 has writing operations pause the watcher from phase 3, with
+the operation queue; phase 2's stage, discard and commit write first, so phase 2 has to decide
+how its writes keep the watcher from refreshing in a loop.
 
 ### Q1 measurements (D50)
 

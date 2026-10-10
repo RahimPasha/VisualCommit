@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -10,7 +10,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | Phase | State | Branch | Handoff | Test report |
 |---|---|---|---|---|
 | 0. Foundation | Done | `phase/0-foundation` | [phase-0](handoffs/phase-0.md) | [phase-0](test-reports/phase-0.md) |
-| 1. Repos and commit graph | In progress | `phase/1-graph` | | [phase-1](test-reports/phase-1.md) (expected results) |
+| 1. Repos and commit graph | Awaiting acceptance | `phase/1-graph` | [phase-1](handoffs/phase-1.md) | [phase-1](test-reports/phase-1.md) |
 | 2. Diff and commit workflow | Not started | `phase/2-diff-commit` | | |
 | 3. Branch, remote, stash and tag operations | Not started | `phase/3-operations` | | |
 | 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
@@ -25,13 +25,15 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 1, Repos and commit graph, is in progress on `phase/1-graph`. It was started on
-2026-10-09 on the Windows machine, from `master` at `6d39f1f`. Phase 0 was accepted on
-2026-10-06 and merged into `master` (merge commit `b5f4723`).
+Phase 1, Repos and commit graph, on `phase/1-graph`. It was started on 2026-10-09 on the Windows
+machine, from `master` at `6d39f1f`, and closed on 2026-10-10. It passed the whole visual test
+gate and waits for the owner's acceptance; it is not merged into `master` yet. Phase 0 was
+accepted on 2026-10-06 and merged into `master` (merge commit `b5f4723`).
 
-Gate commit: none yet. When the phase is set to "Awaiting acceptance", this line names the
-commit that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs
-changed after it.
+Gate commit: `5673c3f`. Both passes of the gate ran on it: `dotnet test` (379 tests passed) and
+the real-window pass (6 tests passed; Q1: first rows of the 100k-commit repo after 1002 ms), and
+every picture of both was inspected. Everything committed after it changes only docs, which
+"Phase 1 accepted" checks.
 
 ### Progress
 
@@ -107,19 +109,29 @@ Closing:
 - [x] 29. `architecture.md` describes what is built.
 - [x] 30. `plan.md`: anything not delivered moved, risks updated.
 - [x] 31. Handoff `docs/handoffs/phase-1.md`.
-- [ ] 32. Cold-read check by a fresh agent; gaps fixed.
-- [ ] 33. `status.md`: links, CI, gate commit, waiting on the owner, state.
-- [ ] 34. Owner told what passed, what did not, and what needs a decision.
+- [x] 32. Cold-read check by a fresh agent; gaps fixed.
+- [x] 33. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [x] 34. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-Last run: [38026062572](https://github.com/RahimPasha/VisualCommit/actions/runs/38026062572) on
-`master`, for commit `edb811e`, the first run in the re-created repository (D41). All five jobs
-succeeded: `windows-latest`, `macos-latest`, `ubuntu-latest`, and the two "bare ubuntu
-container" jobs. Commits after it changed only docs.
+Last run on `phase/1-graph`: [38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182),
+for the gate's commit `5673c3f`. All five jobs succeeded, each with 379 tests passed:
+`windows-latest`, `macos-latest`, `ubuntu-latest`, and the two "bare ubuntu container" jobs.
+Commits after it change only docs, so they start no run. Five earlier runs of the branch failed
+while the phase was being built, each fixed by the commits after it: on `9bc12d1` the scripted
+checks on every platform, because git 2.55 refused a remote name that overlaps another (`team`
+and `team/fork`) as a scenario set it up; on `3f518c3` and `5c8c8d0` scripted checks on every
+platform (phase 0's checks before they expected the welcome page, and check 12); on `e5c8da7`
+and `ae74797` one runner test on one Linux job, where a line handler ran on the test's own
+thread (fixed in `a19b5a3`, then D59). Every run from `a19b5a3` on succeeded in all five jobs.
+
+Last run on `master`: [38026062572](https://github.com/RahimPasha/VisualCommit/actions/runs/38026062572),
+for commit `edb811e`, the first run in the re-created repository (D41). All five jobs succeeded.
+Commits on `master` after it changed only docs.
 
 The runs before 2026-10-09 went with the deleted repository, so the run numbers that older
 commits and the phase 0 report and handoff mention no longer open. What they showed is as
@@ -137,60 +149,48 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 32, the cold-read check: a fresh agent (Opus 5.5) with no conversation context reads only
-the repo, assumes phase 1 has been accepted and merged, and says how to build, run and test the
-app and how it would begin phase 2; fix every gap it hits in the docs and commit. Then step 33.
-
-The gate passed on `5673c3f` (the "Gate commit"): `dotnet test` (379 tests) and the real-window
-pass (6 tests, Q1 1002 ms) on that commit, every picture inspected; see the
-[report](test-reports/phase-1.md) and the [handoff](handoffs/phase-1.md). CI run
-[38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182) for that
-commit succeeded in all five jobs. The commits after it change only docs.
+Wait for the owner. "Phase 1 accepted" merges `phase/1-graph` into `master` as `CLAUDE.md`
+describes, then the phase is set to "Done" and this file is reset for phase 2. After that, wait
+for "Start phase 2"; its first steps are in the [phase 1 handoff](handoffs/phase-1.md) under
+"For the next phase".
 
 This always names the single next thing to do and is kept accurate in every commit.
 
 ### Notes for whoever resumes
 
-- How phase 1 is being built: the main session writes the contracts, the shell and the
-  integration; independent parts are built by sub-agents in git worktrees under
-  `.claude/worktrees/` (git-ignored), each on a `wip/p1-*` branch that is merged with
-  `--no-ff` into `phase/1-graph`. Merged so far: `wip/p1-lane-layout`, `wip/p1-harness`,
-  `wip/p1-git-layer`. A worktree is not necessarily created from the phase branch; the agents
-  create their branch from `phase/1-graph` first.
-- Built and tested in the main session so far: the session store, the tab, welcome and
-  repository view models, the tab strip, welcome page and graph-area switch, window placement and
-  panel widths (`MainWindow.UseSession`, `PanelLayout`), `GitAccess`, the repository provider
-  and the fake folder dialog of the headless harness (`ShellDriver.Folders`).
-- Measured on the Windows machine on 2026-10-09, for a 100k-commit repo made with
-  `git fast-import`: building it takes about 5 seconds when the commits share one tree (23
-  seconds when every commit writes a file). `git log --date-order` over all refs prints its
-  first 200 commits after 1.1 seconds and all 100,000 after 2 seconds; with a commit-graph file
-  (`git commit-graph write --reachable`) the first 200 come after 0.08 seconds. Without
-  `--date-order` the first lines come at once, but then a parent can come before a child.
-- The change for cloud sessions (`b1d2ed0`) touched code after phase 0's gate:
-  `AppPaths.DefaultDataDirectory` no longer creates the folder it names, and `RealApp.Launch`
-  clears the git variables it inherits. CI built and tested it in every job, and on 2026-10-06
-  the owner had the real-window pass run on `2730b57` (same code) on the Windows machine: it
-  passed, with each of its three pictures within 0.65% of the scripted one, and the pictures
-  were inspected. So phase 0's checks hold with that change.
+- Nothing is in flight: the working tree was clean when phase 1 closed, and everything is pushed.
+- Phase 1 was built partly by sub-agents in git worktrees under `.claude/worktrees/`
+  (git-ignored), each on a `wip/p1-*` branch merged with `--no-ff` into `phase/1-graph`; the
+  handoff's "Things that cost time" says what to watch for. All of them are merged. One worktree,
+  `.claude/worktrees/agent-a60aa26c7fe44ae22` on `wip/p1-git-fixes`, is still locked by the
+  process of an earlier session; once no session uses it, `git worktree remove --force --force`
+  it and delete the local branches `wip/p1-git-fixes` and `worktree-agent-a60aa26c7fe44ae22`
+  (`git branch -d`; both are merged). None of these branches is on `origin`.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
-- On the Windows development machine only: Windows 11, .NET SDK 10.0.303, Git 2.36.0.windows.1,
-  `gh` signed in as RahimPasha. Its screen is 3000×2000 at 200% scaling: 1500×1000 logical
-  pixels, of which 1500×952 is the work area. A 1920×1080 window does not fit, so the
-  real-window pass can only use 1100×700 there.
+- On the Windows development machine only: Windows 11 on an Intel Core i7-8650U laptop, .NET SDK
+  10.0.303, Git 2.36.0.windows.1, `gh` signed in as RahimPasha. Its screen is 3000×2000 at 200%
+  scaling: 1500×1000 logical pixels, of which 1500×952 is the work area. A 1920×1080 window does
+  not fit, so the real-window pass can only use 1100×700 there. The laptop is slower when hot:
+  let it rest a few minutes between `dotnet test` and the real-window pass, which times Q1.
 - Packages: Avalonia 12.1.3, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
   FlaUI 5.0.0.
 - Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled
-  the dashes and backticks in this file once.
+  the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
+  apostrophes fails; write such a script to a file first.
 - When a cloud session has worked on a phase, say so here. If it had to use a branch of its own,
   that name stands in the Branch column of the Phases table in place of the phase's.
 
 ## Waiting on the owner
 
-- When you have a Mac at hand: the eight-step checklist at the end of the
+- Phase 1: accept it ("Phase 1 accepted"), or say what to change. What passed and what was found
+  is in the [phase 1 test report](test-reports/phase-1.md) and the
+  [handoff](handoffs/phase-1.md).
+- When you have a Mac at hand: the nine-step checklist at the end of the
+  [phase 1 test report](test-reports/phase-1.md) and the eight-step one at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner said this will be looked at later.
+
 Settled on 2026-10-06: the copyright line in `LICENSE` stays "VisualCommit contributors", and
 the repository was made public, which lifts the limit on CI minutes.
 

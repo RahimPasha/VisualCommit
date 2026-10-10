@@ -80,7 +80,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md`, commit, push `master`. In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md`, commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 0's acceptance (`c033b58`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built; the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -256,6 +256,7 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` |
 | Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
@@ -276,6 +277,10 @@ What to know about them:
   `%TEMP%/VisualCommit.Tests/shared/` and reused). They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
+  Every run that takes screenshots, `dotnet test` at the root included, empties that folder
+  first and writes it again. `docs/test-reports/phase-N-pictures.sha256` lists the pictures that
+  phase N's gate inspected; `sha256sum -c` on it shows which pictures of a later run are the same
+  files.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
   app on the desktop and moves the real mouse for about 3 minutes (phases 0 and 1): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
@@ -300,7 +305,8 @@ What to know about them:
 - In Windows PowerShell write `curl.exe` for the two `curl` commands: plain `curl` is a
   different command there.
 
-Prerequisites on any machine: .NET 10 SDK, Git 2.30 or newer, and a way to read CI results: the
+Prerequisites on any machine: .NET 10 SDK, Git 2.30 or newer (the app's minimum; the tests need
+2.32 or newer, which can leave out the user's git configuration), and a way to read CI results: the
 GitHub CLI (`gh`), signed in, or `curl`. `scripts/setup-linux.sh` installs what a Linux machine
 lacks.
 
