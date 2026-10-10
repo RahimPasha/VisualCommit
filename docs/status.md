@@ -49,9 +49,9 @@ Start:
   are offered before phase 3's context menus, how the watcher sees the working tree and keeps
   out of the app's own writes (owner told), no editor for git, how a discard's snapshot keeps
   untracked files, in-app dialogs.
-- [ ] 3. Harness: `TempRepo` writes bytes (a binary file, an image) and makes a PNG; scenario
+- [x] 3. Harness: `TempRepo` writes bytes (a binary file, an image) and makes a PNG; scenario
   repos get a local identity; the app's commits get fixed dates in both harnesses.
-- [ ] 4. Scenario repos with known working-tree changes (modified, added, deleted, renamed,
+- [x] 4. Scenario repos with known working-tree changes (modified, added, deleted, renamed,
   binary, an image, a very large file; staged and unstaged; one with `core.autocrlf`), pinned in
   `ScenarioTests`.
 - [ ] 5. Phase 2's visual checks written into `docs/test-reports/phase-2.md`, each marked for
@@ -136,10 +136,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3, the harness: `TempRepo` writes bytes and makes a PNG (stored deflate blocks, so the
-bytes never depend on a zlib version); scenario repos get `user.name` and `user.email` in their
-own config; `GitIsolation` and `RealApp.Launch` set `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`
-to 2026-01-02 09:00 UTC (D72).
+Step 5: write phase 2's visual checks into `docs/test-reports/phase-2.md` from the template,
+on the changes scenario (`Scenarios.ChangesAsync`) and the CRLF scenario (`Scenarios.CrlfAsync`)
+that `ScenarioTests` pins; have them reviewed by an independent agent; commit them before any
+of the UI they test.
 
 ### Notes for whoever resumes
 

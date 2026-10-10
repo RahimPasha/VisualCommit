@@ -184,6 +184,13 @@ public sealed class RealApp : IDisposable
         // Dates in UTC, as in the scripted walk-through, whatever this machine's time zone (D43).
         startInfo.Environment[DateDisplay.TimeZoneVariable] = "UTC";
 
+        // The app's own commits get fixed dates, so that their SHAs are those of the scripted
+        // walk-through (D72).
+        foreach (var (variable, value) in GitIsolation.AppCommitDates)
+        {
+            startInfo.Environment[variable] = value;
+        }
+
         // Nothing a surrounding process can hand git through its environment, as for the
         // scripted walk-through's app.
         foreach (var variable in GitIsolation.InheritedVariables)

@@ -173,6 +173,112 @@ public class ScenarioTests
         Assert.Equal(LargeHistory.DateOf(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), (await Git("log", "-1", "--format=%at", "--max-parents=0", "main")).Trim());
     }
 
+    [Fact]
+    public async Task Changes_has_two_commits_with_the_same_ids_on_every_run()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+
+        Assert.Equal(
+            ["06faadc Add calculator", "28fb900 Initial commit"],
+            Lines(await repo.GitAsync("log", "--format=%h %s")));
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+        Assert.Equal(TempRepo.AuthorName, (await repo.GitAsync("config", "user.name")).StandardOutput.Trim());
+        Assert.Equal(TempRepo.AuthorEmail, (await repo.GitAsync("config", "user.email")).StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task Changes_has_its_staged_unstaged_and_untracked_files()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+
+        // Each entry: the two status letters (index, working tree) and the path; a rename adds where it came from.
+        var entries = (await repo.GitAsync("status", "--porcelain=v2", "-z", "--untracked-files=all")).StandardOutput
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        var summary = new List<string>();
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var fields = entries[i].Split(' ');
+            summary.Add(fields[0] switch
+            {
+                "1" => $"{fields[1]} {fields[8]}",
+                "2" => $"{fields[1]} {fields[9]} {fields[8]} from {entries[++i]}",
+                _ => $"{fields[0]} {fields[1]}",
+            });
+        }
+
+        Assert.Equal(
+            [
+                "MM README.md",
+                ".M assets/logo.png",
+                "A. config/settings.json",
+                ".M data/blob.bin",
+                ".M data/large.txt",
+                ".D docs/old-notes.txt",
+                ".M src/Calculator.cs",
+                "R. src/helpers.py R82 from src/util.py",
+                "? docs/guide.md",
+            ],
+            summary);
+    }
+
+    [Fact]
+    public async Task Changes_has_its_files_in_the_index_and_the_working_tree()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+
+        Assert.Equal(Scenarios.ChangesFiles.ReadmeStaged, (await repo.GitAsync("show", ":README.md")).StandardOutput);
+        Assert.Equal(Scenarios.ChangesFiles.HelpersStaged, (await repo.GitAsync("show", ":src/helpers.py")).StandardOutput);
+        Assert.Equal(Scenarios.ChangesFiles.ReadmeWorking, File.ReadAllText(Path.Combine(repo.Path, "README.md")));
+        Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(Path.Combine(repo.Path, "src", "Calculator.cs")));
+        Assert.False(File.Exists(Path.Combine(repo.Path, "docs", "old-notes.txt")));
+        Assert.Equal(Scenarios.ChangesFiles.LogoWorking, File.ReadAllBytes(Path.Combine(repo.Path, "assets", "logo.png")));
+        Assert.Equal(320, File.ReadAllBytes(Path.Combine(repo.Path, "data", "blob.bin")).Length);
+
+        // The blob ids, so that the images and the binary file are the same bytes everywhere.
+        Assert.Equal(
+            [
+                "4dc143d README.md",
+                "464956d assets/logo.png",
+                "c45876a config/settings.json",
+                "c866266 data/blob.bin",
+                "a6aa488 data/large.txt",
+                "637d51e docs/old-notes.txt",
+                "504fe1f src/Calculator.cs",
+                "de3d70d src/helpers.py",
+            ],
+            Lines(await repo.GitAsync("ls-files", "--stage", "--abbrev")).Select(line => line.Split(' ', '\t') is var parts ? $"{parts[1]} {parts[3]}" : line));
+        Assert.Equal("2861e78", (await repo.GitAsync("hash-object", "assets/logo.png")).StandardOutput.Trim()[..7]);
+        Assert.Equal("187cd58", (await repo.GitAsync("hash-object", "data/blob.bin")).StandardOutput.Trim()[..7]);
+    }
+
+    [Fact]
+    public async Task Changes_calculator_has_two_hunks_and_large_txt_a_diff_of_60000_lines()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+
+        var hunks = Lines(await repo.GitAsync("diff", "--no-color", "--no-ext-diff", "--", "src/Calculator.cs"))
+            .Where(line => line.StartsWith("@@", StringComparison.Ordinal));
+        Assert.Equal(
+            ["@@ -12,7 +12,7 @@ public sealed class Calculator", "@@ -29,4 +29,8 @@ public sealed class Calculator"],
+            hunks);
+        Assert.Equal("30000\t30000\tdata/large.txt", (await repo.GitAsync("diff", "--numstat", "--", "data/large.txt")).StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task Crlf_keeps_lf_in_the_index_and_crlf_in_the_working_tree()
+    {
+        using var repo = await Scenarios.CrlfAsync();
+
+        Assert.Equal("5b1f13c Add notes", Lines(await repo.GitAsync("log", "--format=%h %s")).Single());
+        Assert.Equal("true", (await repo.GitAsync("config", "core.autocrlf")).StandardOutput.Trim());
+        Assert.Equal(Scenarios.CrlfNotes(changed: false, lineEnding: "\n"), (await repo.GitAsync("show", ":notes.txt")).StandardOutput);
+        Assert.Equal(Scenarios.CrlfNotes(changed: true, lineEnding: "\r\n"), File.ReadAllText(Path.Combine(repo.Path, "notes.txt")));
+
+        var hunks = Lines(await repo.GitAsync("diff", "--no-color", "--no-ext-diff"))
+            .Where(line => line.StartsWith("@@", StringComparison.Ordinal));
+        Assert.Equal(["@@ -1,5 +1,5 @@", "@@ -15,6 +15,6 @@ Note 14"], hunks);
+    }
+
     private static string[] Lines(GitResult result) => Lines(result.StandardOutput);
 
     private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
