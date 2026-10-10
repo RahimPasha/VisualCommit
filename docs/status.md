@@ -42,7 +42,7 @@ requirement numbers.
 Start:
 
 - [x] 1. Phase branch created, phase set to "In progress", this checklist.
-- [ ] 2. Open points from the phase 1 handoff decided and recorded in `decisions.md`: the
+- [x] 2. Open points from the phase 1 handoff decided and recorded in `decisions.md`: the
   working-changes row, the default diff mode, how a discard is confirmed and restored, how a
   diff opens (asked of the owner); the diff viewer's technology after trying AvaloniaEdit 12.0.0
   on Avalonia 12.1.3, the font for code, when a file counts as very large, how stage and discard
@@ -136,16 +136,19 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 2: record the owner's four answers (given on 2026-10-10: the working-changes row only when
-there are changes; inline as the default diff mode; a confirmation, then a restore bar after a
-discard; a single click opens a file's diff) and the technical decisions in `decisions.md`,
-after trying AvaloniaEdit 12.0.0 on Avalonia 12.1.3 in the headless harness.
+Step 3, the harness: `TempRepo` writes bytes and makes a PNG (stored deflate blocks, so the
+bytes never depend on a zlib version); scenario repos get `user.name` and `user.email` in their
+own config; `GitIsolation` and `RealApp.Launch` set `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`
+to 2026-01-02 09:00 UTC (D72).
 
 ### Notes for whoever resumes
 
 - The default tests passed (379) on `master` at `aead41b` before the phase started.
-- The owner answered the four questions of taste on 2026-10-10, each with the recommended option;
-  step 2 records them.
+- The owner answered the four questions of taste on 2026-10-10, each with the recommended option
+  (D60 to D63). The technical decisions are D64 to D72. AvaloniaEdit 12.0.0 was tried in a
+  throwaway headless program outside the repo: it drew an editor with TextMate colours and
+  JetBrains Mono on Avalonia 12.1.3. The plain JetBrains Mono draws `=>` as an arrow, hence the
+  NL cut (D64).
 - Phase 1 was built partly by sub-agents in git worktrees under `.claude/worktrees/`
   (git-ignored); the phase 1 handoff's "Things that cost time" says what to watch for. One
   worktree, `.claude/worktrees/agent-a60aa26c7fe44ae22` on `wip/p1-git-fixes`, is still there:
