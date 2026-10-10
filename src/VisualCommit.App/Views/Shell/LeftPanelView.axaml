@@ -1,10 +1,66 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
              x:Class="VisualCommit.App.Views.Shell.LeftPanelView"
+             x:DataType="vm:LeftPanelViewModel"
              AutomationProperties.AutomationId="LeftPanel">
 
-  <!-- Placeholder until phase 1: the filter box and the five section headers, all empty. -->
+  <!-- The left panel of the active tab: the filter box, then one virtualised list of section
+       headers, remotes, folders and refs, as "Left panel, with a repository open" in
+       docs/test-reports/phase-1.md describes it. A tab without a repository shows phase 0's
+       five closed sections with the count 0. -->
+  <UserControl.Resources>
+    <!-- A whole row that reacts to a click: a section header, remote, folder or ref. -->
+    <ControlTheme x:Key="RefRowButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+      </Style>
+      <!-- After the pointer style, so that the selected ref keeps its background under the mouse. -->
+      <Style Selector="^.selected">
+        <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+      </Style>
+    </ControlTheme>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="c|Icon.chevron">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="c|Icon.aheadBehind">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.count">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.refName.head">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <Border Background="{DynamicResource VcPanelBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,0,1,0">
@@ -14,52 +70,89 @@
                DockPanel.Dock="Top"
                Margin="8,8,8,6"
                PlaceholderText="Filter"
-               AutomationProperties.AutomationId="FilterBox" />
+               Text="{Binding FilterText, Mode=TwoWay}"
+               AutomationProperties.AutomationId="FilterBox"
+               AutomationProperties.Name="Filter" />
 
-      <StackPanel Name="Sections">
-        <StackPanel.Styles>
-          <Style Selector="Grid.section">
-            <Setter Property="Height" Value="30" />
-          </Style>
-          <Style Selector="Grid.section > c|Icon">
-            <Setter Property="Width" Value="12" />
-            <Setter Property="Height" Value="12" />
-            <Setter Property="Margin" Value="10,0,6,0" />
-            <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
-          </Style>
-          <Style Selector="Grid.section > TextBlock.count">
-            <Setter Property="Margin" Value="8,0,12,0" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-          </Style>
-        </StackPanel.Styles>
+      <ItemsControl Name="RefList"
+                    ItemsSource="{Binding Rows}"
+                    AutomationProperties.AutomationId="RefList"
+                    AutomationProperties.Name="Branches, remotes, tags and stashes">
+        <ItemsControl.Template>
+          <ControlTemplate>
+            <ScrollViewer Name="PART_ScrollViewer"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+              <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+            </ScrollViewer>
+          </ControlTemplate>
+        </ItemsControl.Template>
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.DataTemplates>
 
-        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
-          <c:Icon Data="{StaticResource IconChevronRight}" />
-          <TextBlock Grid.Column="1" Classes="heading" Text="Local branches" />
-          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
-        </Grid>
-        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
-          <c:Icon Data="{StaticResource IconChevronRight}" />
-          <TextBlock Grid.Column="1" Classes="heading" Text="Remotes" />
-          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
-        </Grid>
-        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
-          <c:Icon Data="{StaticResource IconChevronRight}" />
-          <TextBlock Grid.Column="1" Classes="heading" Text="Pull requests" />
-          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
-        </Grid>
-        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
-          <c:Icon Data="{StaticResource IconChevronRight}" />
-          <TextBlock Grid.Column="1" Classes="heading" Text="Tags" />
-          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
-        </Grid>
-        <Grid Classes="section" ColumnDefinitions="Auto,*,Auto">
-          <c:Icon Data="{StaticResource IconChevronRight}" />
-          <TextBlock Grid.Column="1" Classes="heading" Text="Stashes" />
-          <TextBlock Grid.Column="2" Classes="secondary count" Text="0" />
-        </Grid>
-      </StackPanel>
+          <!-- Section header, 30 high: chevron, title, and the count at the right. -->
+          <DataTemplate DataType="vm:RefSectionRow" x:DataType="vm:RefSectionRow">
+            <Button Theme="{StaticResource RefRowButton}"
+                    Height="30"
+                    Command="{Binding ActivateCommand}"
+                    AutomationProperties.AutomationId="Section"
+                    AutomationProperties.Name="{Binding Text}">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Panel Width="12" Height="12" Margin="10,0,6,0" VerticalAlignment="Center">
+                  <c:Icon Classes="chevron" Data="{StaticResource IconChevronDown}" IsVisible="{Binding IsOpen}" />
+                  <c:Icon Classes="chevron" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsOpen}" />
+                </Panel>
+                <TextBlock Grid.Column="1" Classes="heading" Text="{Binding Text}" />
+                <TextBlock Grid.Column="2" Classes="secondary count" Margin="8,0,12,0" Text="{Binding CountText}" />
+              </Grid>
+            </Button>
+          </DataTemplate>
+
+          <!-- Remote, folder, branch, tag or stash, 26 high, indented 14 per level. -->
+          <DataTemplate DataType="vm:RefItemRow" x:DataType="vm:RefItemRow">
+            <Button Theme="{StaticResource RefRowButton}"
+                    Height="26"
+                    Classes.selected="{Binding IsSelected}"
+                    Command="{Binding ActivateCommand}"
+                    AutomationProperties.AutomationId="RefItem"
+                    AutomationProperties.Name="{Binding Text}">
+              <DockPanel Margin="0,0,12,0">
+                <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                <Panel DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center">
+                  <c:Icon Classes="chevron" Data="{StaticResource IconChevronDown}" IsVisible="{Binding ShowsOpenChevron}" />
+                  <c:Icon Classes="chevron" Data="{StaticResource IconChevronRight}" IsVisible="{Binding ShowsClosedChevron}" />
+                </Panel>
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            Margin="8,0,0,0"
+                            IsVisible="{Binding ShowsAheadBehind}">
+                  <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding ShowsAhead}">
+                    <c:Icon Classes="aheadBehind" Data="{StaticResource IconArrowUp}" />
+                    <TextBlock Name="AheadCount" Classes="secondary count" Text="{Binding AheadText}" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding ShowsBehind}">
+                    <c:Icon Classes="aheadBehind" Data="{StaticResource IconArrowDown}" />
+                    <TextBlock Name="BehindCount" Classes="secondary count" Text="{Binding BehindText}" />
+                  </StackPanel>
+                </StackPanel>
+                <TextBlock Name="RefName"
+                           Classes="refName"
+                           Classes.head="{Binding IsHead}"
+                           Text="{Binding Text}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding ToolTip}"
+                           VerticalAlignment="Center" />
+              </DockPanel>
+            </Button>
+          </DataTemplate>
+
+        </ItemsControl.DataTemplates>
+      </ItemsControl>
 
     </DockPanel>
   </Border>
