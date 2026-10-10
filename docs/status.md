@@ -74,11 +74,11 @@ Git layer:
 
 App:
 
-- [ ] 12. Working-changes row at the top of the graph when there are changes: drawing,
+- [x] 12. Working-changes row at the top of the graph when there are changes: drawing,
   selection, keys. Tests.
-- [ ] 13. Stage-and-commit panel in the right panel: unstaged and staged lists (flat or tree),
+- [x] 13. Stage-and-commit panel in the right panel: unstaged and staged lists (flat or tree),
   stage, unstage and discard by file and all, summary and description editor, amend, commit.
-- [ ] 14. Confirmation dialog in the window; the restore bar after a discard.
+- [x] 14. Confirmation dialog in the window; the restore bar after a discard.
 - [ ] 15. Diff view in place of the graph: header with the file and its actions, close; opened
   from the stage lists and from a commit's files.
 - [ ] 16. Diff text, inline and side by side: line numbers, added and removed backgrounds, the
@@ -136,12 +136,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 12, the working-changes row: `RepositoryViewModel` reads the status beside the refs (and
-again on each watcher event and after each write), `CommitGraphData`/`CommitGraphControl` draw
-the row above row 0 as the report's "The working-changes row" says, with `IsWorkingRowSelected`
-beside `SelectedIndex` (which keeps meaning a commit's row). Then steps 13 to 19 build the stage
-panel, the dialog, the diff view, highlighting, hunk and line actions and the image, binary and
-large-file views, against `docs/test-reports/phase-2.md` (25 checks, reviewed).
+Merge the diff text control from the sub-agent's branch `wip/p2-diff-text` (a worktree under
+`.claude/worktrees/`, not pushed) with `--no-ff`, then wire it into `Views/Diff/DiffView`
+(`DiffTextHost`): `Diff`, `Mode`, `FilePath`, `Highlighting`, `HunkActions` (from the view
+model's side), `SelectedChanges` into `DiffViewModel.SelectedChanges`, `HunkActionRequested`
+into `DiffViewModel.RunHunkActionAsync`, `SelectionResetRequested` to `ClearSelection()`, and
+`FocusBody()` when a diff opens. Then steps 15 to 19 and the remaining checks (3 to 8, 10 to
+13, 19 to 21).
 
 ### Notes for whoever resumes
 
