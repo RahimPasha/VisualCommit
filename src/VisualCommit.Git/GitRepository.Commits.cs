@@ -1,0 +1,230 @@
+using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
+
+namespace VisualCommit.Git;
+
+public sealed partial class GitRepository
+{
+    /// <summary>
+    /// What <c>git log</c> prints for each commit of the graph, separated by the unit separator
+    /// (<c>%x1f</c>). The subject comes last, so a separator inside it cannot shift the other
+    /// fields. <c>%aN</c> and <c>%aE</c> apply <c>.mailmap</c>, as <c>git log</c> itself does.
+    /// </summary>
+    private const string LogFormat = "%H%x1f%P%x1f%aN%x1f%aE%x1f%aI%x1f%cI%x1f%s";
+
+    private const int LogFieldCount = 7;
+
+    /// <summary>What <c>git log -1</c> prints for the details of one commit, separated by NUL, which no commit message can contain.</summary>
+    private const string DetailsFormat = "%H%x00%P%x00%aN%x00%aE%x00%aI%x00%cN%x00%cE%x00%cI%x00%s%x00%b";
+
+    private const int DetailsFieldCount = 10;
+
+    /// <summary>
+    /// Options of every <c>git log</c> call that keep the user's configuration out of the output:
+    /// no signature check (<c>log.showSignature</c>), no colours (<c>color.ui=always</c>) and
+    /// UTF-8 text whatever <c>i18n.logOutputEncoding</c> says.
+    /// </summary>
+    private static readonly string[] PlainLogOptions = ["--no-show-signature", "--no-color", "--encoding=UTF-8"];
+
+    public async Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(refs);
+        ArgumentNullException.ThrowIfNull(onPage);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var pager = new CommitPager(refs.Stashes, onPage);
+
+        // Without a ref and with an unborn HEAD there is no commit to show, and nothing to ask git.
+        if (refs.Refs.Count == 0 && refs.Head.IsUnborn)
+        {
+            // Stashes alone are possible in theory (every branch deleted after stashing). They
+            // are handed over on a thread-pool thread, as the contract promises.
+            await Task.Run(pager.Finish, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var arguments = new List<string> { "log", "--date-order", "--format=" + LogFormat };
+        arguments.AddRange(PlainLogOptions);
+        arguments.AddRange(["--branches", "--remotes", "--tags"]);
+        if (!refs.Head.IsUnborn)
+        {
+            // An unborn HEAD names no commit, and git log would fail on it.
+            arguments.Add("HEAD");
+        }
+
+        arguments.Add("--");
+
+        // Names and addresses repeat across commits; one string each keeps a large history small.
+        var strings = new Dictionary<string, string>(StringComparer.Ordinal);
+        Func<string, string> pooled = text =>
+        {
+            if (!strings.TryGetValue(text, out var kept))
+            {
+                strings.Add(text, text);
+                kept = text;
+            }
+
+            return kept;
+        };
+
+        var skipped = 0;
+        var command = new GitCommand([.. arguments])
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = ReadEnvironment,
+            OnOutputLine = line =>
+            {
+                // A cancelled load must not hand over another page, even from output git
+                // printed before it was stopped.
+                cancellationToken.ThrowIfCancellationRequested();
+                if (TryParseLogLine(line, pooled, out var commit))
+                {
+                    pager.Add(commit);
+                }
+                else if (line.Length > 0)
+                {
+                    skipped++;
+                }
+            },
+        };
+
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        result.EnsureSuccess(command);
+        if (skipped > 0)
+        {
+            _log.Warning($"git log printed {skipped} line(s) that could not be read in {WorkingDirectory}; those commits are missing from the graph.");
+        }
+
+        pager.Finish();
+    }
+
+    public async Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        if (sha.StartsWith('-'))
+        {
+            throw new ArgumentException("A commit id cannot start with '-'.", nameof(sha));
+        }
+
+        var output = await ReadOutputAsync(cancellationToken, ["log", "-1", "--format=" + DetailsFormat, .. PlainLogOptions, sha, "--"]).ConfigureAwait(false);
+        var fields = output.Split('\0', DetailsFieldCount);
+        if (fields.Length != DetailsFieldCount
+            || !GitDates.TryParse(fields[4], out var authorDate)
+            || !GitDates.TryParse(fields[7], out var commitDate))
+        {
+            throw new GitException($"git log -1 {sha}", 0, $"Unexpected output: {output.Trim()}");
+        }
+
+        var fullSha = fields[0];
+        var parents = fields[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var files = await ReadChangedFilesAsync(fullSha, parents, cancellationToken).ConfigureAwait(false);
+        return new CommitDetails(
+            fullSha,
+            parents,
+            fields[2],
+            fields[3],
+            authorDate,
+            fields[5],
+            fields[6],
+            commitDate,
+            fields[8],
+            fields[9].TrimEnd(),
+            files);
+    }
+
+    /// <summary>
+    /// Reads the files a commit changed, compared with its first parent, or with an empty tree for
+    /// a root commit. A merge and a stash are compared with their first parent too: plain
+    /// <c>diff-tree</c> on a merge shows nothing. <c>-M</c> asks for renames whatever
+    /// <c>diff.renames</c> says, and <c>-z</c> prints paths as they are.
+    /// </summary>
+    private async Task<IReadOnlyList<ChangedFile>> ReadChangedFilesAsync(string sha, string[] parents, CancellationToken cancellationToken)
+    {
+        List<string> arguments = ["diff-tree", "-r", "-z", "--name-status", "-M", "--no-ext-diff", "--no-color", "--no-commit-id"];
+        switch (parents.Length)
+        {
+            case 0:
+                arguments.AddRange(["--root", sha]);
+                break;
+            case 1:
+                arguments.Add(sha);
+                break;
+            default:
+                arguments.AddRange([parents[0], sha]);
+                break;
+        }
+
+        return ParseNameStatus(await ReadOutputAsync(cancellationToken, [.. arguments]).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Reads <c>--name-status -z</c> output: a status (<c>M</c>, or <c>R100</c> with a
+    /// similarity score), then the path, or the old and the new path for a rename or a copy,
+    /// each ended by NUL.
+    /// </summary>
+    internal static List<ChangedFile> ParseNameStatus(string output)
+    {
+        var files = new List<ChangedFile>();
+        var tokens = output.Split('\0');
+        var i = 0;
+        while (i < tokens.Length)
+        {
+            var status = tokens[i++].Trim('\n', '\r');
+            if (status.Length == 0)
+            {
+                continue;
+            }
+
+            var kind = status[0] switch
+            {
+                'A' => FileChangeKind.Added,
+                'M' => FileChangeKind.Modified,
+                'D' => FileChangeKind.Deleted,
+                'R' => FileChangeKind.Renamed,
+                'C' => FileChangeKind.Copied,
+                'T' => FileChangeKind.TypeChanged,
+                _ => FileChangeKind.Unknown,
+            };
+
+            if (kind is FileChangeKind.Renamed or FileChangeKind.Copied)
+            {
+                if (i + 1 >= tokens.Length)
+                {
+                    break;
+                }
+
+                var oldPath = tokens[i++];
+                files.Add(new ChangedFile(tokens[i++], kind, oldPath));
+            }
+            else
+            {
+                if (i >= tokens.Length)
+                {
+                    break;
+                }
+
+                files.Add(new ChangedFile(tokens[i++], kind));
+            }
+        }
+
+        return files;
+    }
+
+    /// <summary>Reads one line of <see cref="LogFormat"/>.</summary>
+    private static bool TryParseLogLine(string line, Func<string, string> pooled, out CommitInfo commit)
+    {
+        commit = null!;
+        var fields = line.Split('\x1f', LogFieldCount);
+        if (fields.Length != LogFieldCount
+            || fields[0].Length == 0
+            || !GitDates.TryParse(fields[4], out var authorDate)
+            || !GitDates.TryParse(fields[5], out var commitDate))
+        {
+            return false;
+        }
+
+        IReadOnlyList<string> parents = fields[1].Length == 0 ? [] : fields[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        commit = new CommitInfo(fields[0], parents, pooled(fields[2]), pooled(fields[3]), authorDate, commitDate, fields[6]);
+        return true;
+    }
+}
