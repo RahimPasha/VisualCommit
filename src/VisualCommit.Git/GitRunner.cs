@@ -74,8 +74,11 @@ public sealed class GitRunner : IGitRunner
 
         var output = new OutputCollector(command.OnOutputLine, keepAll: command.OnOutputLine is null, splitOnCarriageReturn: false);
         var error = new OutputCollector(command.OnErrorLine, keepAll: true, splitOnCarriageReturn: true);
-        var outputPump = output.PumpAsync(process.StandardOutput);
-        var errorPump = error.PumpAsync(process.StandardError);
+        // The pumps start on the thread pool. Started here, a pump whose first read finds output
+        // already waiting would call the line handler on the caller's thread before RunAsync
+        // returned: the UI thread, or a test's own thread that then waits for the handler.
+        var outputPump = Task.Run(() => output.PumpAsync(process.StandardOutput));
+        var errorPump = Task.Run(() => error.PumpAsync(process.StandardError));
         var pumps = Task.WhenAll(outputPump, errorPump);
         var exit = process.WaitForExitAsync(CancellationToken.None);
 
