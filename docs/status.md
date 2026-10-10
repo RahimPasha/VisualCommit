@@ -45,7 +45,7 @@ Start:
   clone and init screens, date format, file list, how a repo tab is modelled, where session
   state is kept, how services get the git runner, how Q1 is measured, whether the 100k check
   runs by default, how the watcher tells the app's own work from outside changes.
-- [ ] 3. Scenario repos: the graph scenario (branches with folders, merges, tags, a stash, a
+- [x] 3. Scenario repos: the graph scenario (branches with folders, merges, tags, a stash, a
   local remote with ahead and behind counts) and the 100k-commit repo; `TempRepo` helpers for
   stashes, remotes and clones; SHAs pinned in `ScenarioTests`.
 - [ ] 4. Harness: `ShellDriver` starts the app with repos open (session state written by the
@@ -137,8 +137,11 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: build the graph scenario repo and the 100k-commit repo in `tests/VisualCommit.Testing`
-and pin their SHAs in `ScenarioTests`. The decisions of step 2 are D42 to D53.
+Step 5: write phase 1's visual checks into `docs/test-reports/phase-1.md`, in terms of the graph
+scenario (`Scenarios.GraphAsync`) and the 100k-commit repo (`LargeHistory`), and commit them
+before any UI is built. Steps 4, 6 to 11 (harness, git layer, lane layout) are being built in
+parallel worktrees on branches `wip/p1-harness`, `wip/p1-git-layer` and `wip/p1-lane-layout`,
+to be merged into `phase/1-graph` when they are done.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
