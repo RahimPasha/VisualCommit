@@ -96,6 +96,9 @@ public sealed class RealApp : IDisposable
         startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         startInfo.Environment["GIT_CONFIG_GLOBAL"] = emptyGitConfig;
 
+        // Dates in UTC, as in the scripted walk-through, whatever this machine's time zone (D43).
+        startInfo.Environment["VISUALCOMMIT_TIME_ZONE"] = "UTC";
+
         // The same list as GitIsolation.InheritedVariables in VisualCommit.Testing, which this
         // project does not reference: what a surrounding process can hand git through its
         // environment. Keep the two in step.

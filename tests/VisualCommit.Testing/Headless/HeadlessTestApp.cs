@@ -28,30 +28,16 @@ public static class HeadlessTestApp
     /// <list type="bullet">
     /// <item>The data folder. Tests give every app session its own temporary one; this is the
     /// safety net for code that asks for the default folder anyway.</item>
-    /// <item>Git's system and user configuration, so that git calls made by the app behave the
-    /// same on every machine, as <see cref="TempRepo"/> ensures for its own calls. The user
-    /// configuration needs Git 2.32 or newer to be left out.</item>
+    /// <item>Git's system and user configuration and the machine's time zone, so that git calls
+    /// made by the app and the dates it shows are the same on every machine
+    /// (<see cref="GitIsolation.IsolateThisProcess"/>).</item>
     /// </list>
     /// </summary>
     public static void IsolateFromTheMachine()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "isolation");
-        var emptyGitConfig = Path.Combine(folder, "gitconfig");
-        Directory.CreateDirectory(Path.Combine(folder, "data"));
-        if (!File.Exists(emptyGitConfig))
-        {
-            File.WriteAllText(emptyGitConfig, string.Empty);
-        }
-
-        Environment.SetEnvironmentVariable(AppPaths.DataDirectoryVariable, Path.Combine(folder, "data"));
-        Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
-        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", emptyGitConfig);
-
-        // Nor anything the machine passes to git through the environment: extra configuration,
-        // or another repository to work on.
-        foreach (var variable in GitIsolation.InheritedVariables)
-        {
-            Environment.SetEnvironmentVariable(variable, null);
-        }
+        var data = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "isolation", "data");
+        Directory.CreateDirectory(data);
+        Environment.SetEnvironmentVariable(AppPaths.DataDirectoryVariable, data);
+        GitIsolation.IsolateThisProcess();
     }
 }

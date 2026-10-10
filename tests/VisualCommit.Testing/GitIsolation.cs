@@ -9,6 +9,34 @@ namespace VisualCommit.Testing;
 public static class GitIsolation
 {
     /// <summary>
+    /// Cuts every git process this test process starts off from the machine, through the test
+    /// process's own environment, which git inherits: no system or user configuration (the user
+    /// configuration needs Git 2.32 or newer to be left out), none of
+    /// <see cref="InheritedVariables"/>, and dates shown in UTC by the app under test (D43). For
+    /// the git calls of code under test that does not take <see cref="TempRepo.Environment"/>,
+    /// such as the app's own repository reading.
+    /// </summary>
+    public static void IsolateThisProcess()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "isolation");
+        var emptyGitConfig = Path.Combine(folder, "gitconfig");
+        Directory.CreateDirectory(folder);
+        if (!File.Exists(emptyGitConfig))
+        {
+            File.WriteAllText(emptyGitConfig, string.Empty);
+        }
+
+        Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
+        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", emptyGitConfig);
+        Environment.SetEnvironmentVariable(Core.DateDisplay.TimeZoneVariable, "UTC");
+
+        foreach (var variable in InheritedVariables)
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
+    /// <summary>
     /// Environment variables through which a surrounding process (a git hook, a rebase, a
     /// hosting tool) can give git extra configuration or point it at another repository. These
     /// are the ones git itself lists with <c>git rev-parse --local-env-vars</c>, plus three that
