@@ -86,10 +86,11 @@ As in phase 0's handoff, with phase 1's pass added:
    Both passes draw the same pictures byte for byte from run to run when nothing changed, except
    those that show a temporary folder or the clone's percentage (scripted `11a`, `13b`, `14a`,
    `14b`, real-window `11a`). `docs/test-reports/phase-1-pictures.sha256` lists every picture
-   phase 1's gate inspected: `sha256sum -c docs/test-reports/phase-1-pictures.sha256` after the
-   passes shows which phase 0 and 1 pictures are new and must be opened. Do not rely on the
-   comparison alone: it passes a hover background or a small tooltip (see the report's
-   "Found by the gate").
+   phase 1's gate inspected: after the passes, in Git Bash at the repo root,
+   `tr -d '\r' < docs/test-reports/phase-1-pictures.sha256 | sha256sum -c` shows which phase 0
+   and 1 pictures are new and must be opened (see CLAUDE.md's Commands for why the `tr`). Do not
+   rely on the comparison alone: it passes a hover background or a small tooltip (see the
+   report's "Found by the gate").
 
 ## What changed in the code
 

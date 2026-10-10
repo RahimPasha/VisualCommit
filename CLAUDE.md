@@ -279,8 +279,10 @@ What to know about them:
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
   Every run that takes screenshots, `dotnet test` at the root included, empties that folder
   first and writes it again. `docs/test-reports/phase-N-pictures.sha256` lists the pictures that
-  phase N's gate inspected; `sha256sum -c` on it shows which pictures of a later run are the same
-  files.
+  phase N's gate inspected; in Git Bash at the repo root,
+  `tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | sha256sum -c` shows which pictures of
+  a later run are the same files (the `tr` removes the line endings a Windows checkout adds,
+  which `sha256sum` would take as part of each name).
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
   app on the desktop and moves the real mouse for about 3 minutes (phases 0 and 1): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
