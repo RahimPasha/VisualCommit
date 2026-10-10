@@ -13,9 +13,11 @@ namespace VisualCommit.Git;
 public sealed class GitRunner : IGitRunner
 {
     /// <summary>
-    /// How long to keep reading output after git itself has exited. Everything git wrote is
-    /// readable at once; only a process that git left behind (a hook's background job, a daemon)
-    /// can keep the pipes open longer, and its output is not waited for.
+    /// How long, once git itself has exited, the output pumps may go without progress before they
+    /// are given up. Progress is a chunk of output read or a line handler still at work: a slow
+    /// handler, or a pump that is still working through what git wrote, is waited for. Only a
+    /// process that git left behind (a hook's background job, a daemon) and that keeps the pipes
+    /// open without writing is given up, this long after the last progress.
     /// </summary>
     private static readonly TimeSpan PipeDrainTimeout = TimeSpan.FromSeconds(2);
 
@@ -103,7 +105,7 @@ public sealed class GitRunner : IGitRunner
 
             if (exit.IsCompleted)
             {
-                await DrainAsync(pumps, output, error).ConfigureAwait(false);
+                await DrainAsync(outputPump, errorPump, output, error, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -116,7 +118,9 @@ public sealed class GitRunner : IGitRunner
             // An output handler threw, or a pipe broke. Do not leave git running behind us.
             Stop();
             await Task.WhenAny(exit, Task.Delay(StopTimeout)).ConfigureAwait(false);
-            await DrainAsync(pumps.ContinueWith(_ => { }, TaskScheduler.Default), output, error).ConfigureAwait(false);
+
+            // Only the record still needs the output, so it is not waited for beyond the fixed time.
+            await DrainAsync(Settled(outputPump), Settled(errorPump), output, error, new CancellationToken(canceled: true)).ConfigureAwait(false);
             Record(command, startedAt, stopwatch.Elapsed, GitCallOutcome.Cancelled, null, output.Head, error.Head);
             if (cancellationToken.IsCancellationRequested)
             {
@@ -191,20 +195,69 @@ public sealed class GitRunner : IGitRunner
     }
 
     /// <summary>
-    /// Waits for the output pumps once git has exited, but only for <see cref="PipeDrainTimeout"/>.
-    /// After that the pumps are left to end on their own and what they read later is dropped.
+    /// Waits for the output pumps once git has exited, for as long as they make progress: a chunk
+    /// was read, or a line handler is at work. When <see cref="PipeDrainTimeout"/> has passed
+    /// since git exited and since the last progress, the pumps are left to end on their own and
+    /// what they read later is dropped: only a process git left behind holds the pipes open that
+    /// long without writing.
+    /// <para>
+    /// Once <paramref name="cancellationToken"/> is cancelled, the call's output is no longer
+    /// wanted: progress no longer counts, and the pumps are given up when
+    /// <see cref="PipeDrainTimeout"/> has passed since git exited, so that a cancelled call
+    /// returns soon whatever its handlers do (D36). A pump that fails ends the wait with its
+    /// exception.
+    /// </para>
     /// </summary>
-    private async Task DrainAsync(Task pumps, OutputCollector output, OutputCollector error)
+    private async Task DrainAsync(Task outputPump, Task errorPump, OutputCollector output, OutputCollector error, CancellationToken cancellationToken)
     {
-        if (await Task.WhenAny(pumps, Task.Delay(PipeDrainTimeout)).ConfigureAwait(false) == pumps)
+        var pumps = Task.WhenAll(outputPump, errorPump);
+        var exitedAt = Stopwatch.GetTimestamp();
+        while (true)
         {
-            await pumps.ConfigureAwait(false);
-            return;
+            // A handler that threw while the other pipe is still held open must not be lost.
+            foreach (var pump in new[] { outputPump, errorPump })
+            {
+                if (pump.IsFaulted)
+                {
+                    await pump.ConfigureAwait(false);
+                }
+            }
+
+            var followProgress = !cancellationToken.IsCancellationRequested;
+            TimeSpan wait;
+            if (followProgress && (output.IsHandlingLine || error.IsHandlingLine))
+            {
+                wait = PipeDrainTimeout;
+            }
+            else
+            {
+                var lastProgress = followProgress
+                    ? Math.Max(exitedAt, Math.Max(output.LastProgress, error.LastProgress))
+                    : exitedAt;
+                wait = PipeDrainTimeout - Stopwatch.GetElapsedTime(lastProgress);
+            }
+
+            if (wait <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            // Cancelling ends the wait at once, to be looked at again without following progress.
+            var delay = followProgress ? Task.Delay(wait, cancellationToken) : Task.Delay(wait, CancellationToken.None);
+            if (await Task.WhenAny(pumps, delay).ConfigureAwait(false) == pumps)
+            {
+                await pumps.ConfigureAwait(false);
+                return;
+            }
         }
 
         Abandon(pumps, output, error);
         _log.Debug("A process started by git kept its output open after git exited; its output is no longer read.");
     }
+
+    /// <summary>A task that completes when <paramref name="task"/> does, but never fails.</summary>
+    private static Task Settled(Task task) =>
+        task.ContinueWith(completed => _ = completed.Exception, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
 
     /// <summary>Stops collecting output and leaves the pumps to end on their own, whenever the pipes close.</summary>
     private static void Abandon(Task pumps, OutputCollector output, OutputCollector error)
@@ -310,7 +363,15 @@ public sealed class GitRunner : IGitRunner
         private readonly StringBuilder _line = new();
         private bool _headCutOff;
         private bool _lastWasCarriageReturn;
-        private bool _closed;
+        private volatile bool _closed;
+        private volatile bool _handlingLine;
+        private long _lastProgress = Stopwatch.GetTimestamp();
+
+        /// <summary>When a chunk was last read or a line handler last returned, as a <see cref="Stopwatch"/> timestamp.</summary>
+        public long LastProgress => Interlocked.Read(ref _lastProgress);
+
+        /// <summary>Whether the line handler is running now.</summary>
+        public bool IsHandlingLine => _handlingLine;
 
         public string All
         {
@@ -349,6 +410,7 @@ public sealed class GitRunner : IGitRunner
             int read;
             while ((read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
             {
+                MarkProgress();
                 if (!Collect(buffer.AsSpan(0, read)))
                 {
                     return;
@@ -429,7 +491,25 @@ public sealed class GitRunner : IGitRunner
 
             var line = _line.ToString();
             _line.Clear();
-            onLine!(line);
+
+            // Once the call has given up on this output, its handler gets no more of it.
+            if (_closed)
+            {
+                return;
+            }
+
+            _handlingLine = true;
+            try
+            {
+                onLine!(line);
+            }
+            finally
+            {
+                MarkProgress();
+                _handlingLine = false;
+            }
         }
+
+        private void MarkProgress() => Interlocked.Exchange(ref _lastProgress, Stopwatch.GetTimestamp());
     }
 }

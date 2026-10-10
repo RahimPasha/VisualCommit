@@ -37,4 +37,13 @@ internal static class GitDates
         value = default;
         return false;
     }
+
+    /// <summary>
+    /// Reads a date as <see cref="TryParse"/> does, or gives the Unix epoch (1970-01-01 UTC) for
+    /// one that cannot be read. Git cannot print the date of an ident without a time zone, which
+    /// broken tools have written into commits: it leaves the field empty or prints the placeholder
+    /// itself, and shows such a date as 1970 in its own log. The commit must still appear.
+    /// </summary>
+    public static DateTimeOffset ParseOrEpoch(string text) =>
+        TryParse(text, out var value) ? value : DateTimeOffset.UnixEpoch;
 }

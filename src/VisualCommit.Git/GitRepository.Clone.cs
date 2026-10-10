@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -70,14 +71,16 @@ public sealed partial class GitRepository
             var result = await runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
             if (!result.Succeeded)
             {
-                throw new GitException(command.DisplayText, result.ExitCode, CloneErrorText(result.StandardError));
+                // Git shows URLs without their credentials; the error text is cleaned all the same,
+                // because the app shows it.
+                throw new GitException(command.DisplayText, result.ExitCode, GitCommand.HideCredentials(CloneErrorText(result.StandardError)));
             }
 
             return await OpenAsync(runner, target, cancellationToken, log).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            log.Info($"Cloning {url} into {target} did not complete ({ex.GetType().Name}); removing what it wrote.");
+            log.Info($"Cloning {GitCommand.HideCredentials(url)} into {target} did not complete ({ex.GetType().Name}); removing what it wrote.");
             await RemoveCloneAsync(target, keepFolder: existed, log).ConfigureAwait(false);
             throw;
         }
@@ -85,17 +88,26 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// Git's error output without its progress lines, which a failure in the middle of a clone
-    /// leaves in front of the message that matters.
+    /// leaves in front of the message that matters. Only lines of git's progress shape are left
+    /// out (see <see cref="ProgressLinePattern"/>), so a message that merely holds a percent sign
+    /// after a digit, such as a URL with <c>%20</c> in it, is kept.
     /// </summary>
-    private static string CloneErrorText(string standardError)
+    internal static string CloneErrorText(string standardError)
     {
         var lines = standardError
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => !line.StartsWith("Cloning into", StringComparison.Ordinal)
-                && CloneProgressParser.Parse(line) is not { Percent: not null });
+            .Where(line => !line.StartsWith("Cloning into ", StringComparison.Ordinal) && !ProgressLinePattern().IsMatch(line));
         var text = string.Join('\n', lines);
         return text.Length > 0 ? text : standardError;
     }
+
+    /// <summary>
+    /// A progress line of git or of the other side: an optional <c>remote: </c>, a stage made of
+    /// words, a colon, spaces and a percentage, as in <c>Receiving objects:  45% (9/20), 1.20 MiB</c>
+    /// or <c>remote: Counting objects: 100% (5/5), done.</c>
+    /// </summary>
+    [GeneratedRegex(@"^(?:remote: )?[A-Za-z][A-Za-z ]*: +[0-9]{1,3}%")]
+    private static partial Regex ProgressLinePattern();
 
     /// <summary>
     /// Removes what a failed or cancelled clone wrote. Git marks its object files read-only, and

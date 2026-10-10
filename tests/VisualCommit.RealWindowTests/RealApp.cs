@@ -168,7 +168,7 @@ public sealed class RealApp : IDisposable
 
         // The app's git calls must not depend on this machine's git configuration, as in the
         // scripted walk-through (HeadlessTestApp.IsolateFromTheMachine).
-        var emptyGitConfig = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "isolation", "gitconfig");
+        var emptyGitConfig = Path.Combine(GitIsolation.CeilingDirectory, "isolation", "gitconfig");
         Directory.CreateDirectory(Path.GetDirectoryName(emptyGitConfig)!);
         if (!File.Exists(emptyGitConfig))
         {
@@ -177,6 +177,9 @@ public sealed class RealApp : IDisposable
 
         startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         startInfo.Environment["GIT_CONFIG_GLOBAL"] = emptyGitConfig;
+
+        // Nor does git search for a repository above the tests' own folder.
+        startInfo.Environment[GitIsolation.CeilingVariable] = GitIsolation.CeilingDirectory;
 
         // Dates in UTC, as in the scripted walk-through, whatever this machine's time zone (D43).
         startInfo.Environment[DateDisplay.TimeZoneVariable] = "UTC";

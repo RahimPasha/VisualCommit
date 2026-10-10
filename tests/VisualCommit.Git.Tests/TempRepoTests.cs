@@ -1,3 +1,4 @@
+using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using Xunit;
 
@@ -30,6 +31,43 @@ public class TempRepoTests
 
         // Only the repo's own settings: nothing from the system or the user's global file.
         Assert.Equal(["local"], origins);
+    }
+
+    [Fact]
+    public async Task Git_never_searches_for_a_repository_above_the_tests_own_folder()
+    {
+        // A repository somewhere above the temp folder (a home folder kept in git) must not be
+        // found from a test folder that is no repository.
+        var ceiling = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests");
+        using var repo = await TempRepo.CreateAsync();
+
+        Assert.Equal(ceiling, GitIsolation.CeilingDirectory);
+        Assert.Equal(ceiling, repo.Environment["GIT_CEILING_DIRECTORIES"]);
+        Assert.Equal(ceiling, Environment.GetEnvironmentVariable("GIT_CEILING_DIRECTORIES"));
+    }
+
+    [Fact]
+    public async Task A_ceiling_written_as_the_temp_folder_gives_it_stops_gits_search()
+    {
+        // The ceiling is written as Path.GetTempPath() gives it, which can lead through a
+        // symbolic link (macOS's /var) or use a short name (C:\Users\RUNNER~1 on CI's Windows).
+        // Git must still recognise it: from a folder inside the repo, with the repo's own folder
+        // as the ceiling, git does not look there.
+        using var repo = await TempRepo.CreateAsync();
+        var inside = Path.Combine(repo.Path, "inside");
+        Directory.CreateDirectory(inside);
+        var environment = new Dictionary<string, string?>(repo.Environment) { ["GIT_CEILING_DIRECTORIES"] = repo.Path };
+
+        var found = await repo.Runner.RunAsync(
+            new GitCommand("rev-parse", "--git-dir") { WorkingDirectory = inside, Environment = repo.Environment },
+            TestContext.Current.CancellationToken);
+        var stopped = await repo.Runner.RunAsync(
+            new GitCommand("rev-parse", "--git-dir") { WorkingDirectory = inside, Environment = environment },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(found.Succeeded);
+        Assert.False(stopped.Succeeded);
+        Assert.Contains("not a git repository", stopped.StandardError);
     }
 
     [Fact]
