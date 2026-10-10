@@ -28,8 +28,9 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-Some Lucide icons derive from the Feather project. Of the icons used here, these do: chevron-right,
-moon, plus, search and x.
+Some Lucide icons derive from the Feather project. Of the icons used here, these do: arrow-down,
+arrow-up, check, chevron-down, chevron-right, cloud, download, folder, list, moon, plus, search,
+tag and x.
 
 ```
 The MIT License (MIT)
