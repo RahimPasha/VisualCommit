@@ -79,21 +79,21 @@ App:
 - [x] 13. Stage-and-commit panel in the right panel: unstaged and staged lists (flat or tree),
   stage, unstage and discard by file and all, summary and description editor, amend, commit.
 - [x] 14. Confirmation dialog in the window; the restore bar after a discard.
-- [ ] 15. Diff view in place of the graph: header with the file and its actions, close; opened
+- [x] 15. Diff view in place of the graph: header with the file and its actions, close; opened
   from the stage lists and from a commit's files.
-- [ ] 16. Diff text, inline and side by side: line numbers, added and removed backgrounds, the
+- [x] 16. Diff text, inline and side by side: line numbers, added and removed backgrounds, the
   font for code, theme colours; the mode remembered.
-- [ ] 17. Syntax highlighting and word-level highlights.
-- [ ] 18. Stage, unstage and discard a hunk or chosen lines from the diff view.
-- [ ] 19. Image diff; binary and very large files.
-- [ ] 20. Phase 1's checks updated for anything phase 2 changes on purpose, recorded under
+- [x] 17. Syntax highlighting and word-level highlights.
+- [x] 18. Stage, unstage and discard a hunk or chosen lines from the diff view.
+- [x] 19. Image diff; binary and very large files.
+- [x] 20. Phase 1's checks updated for anything phase 2 changes on purpose, recorded under
   "Changes to expected results" in the phase 2 report.
 
 Visual checks:
 
-- [ ] 21. Scripted walk-through: one test per check in `Phase2Checks`, screenshots under
+- [x] 21. Scripted walk-through: one test per check in `Phase2Checks`, screenshots under
   `artifacts/visual/phase-2/scripted/`.
-- [ ] 22. Real-window pass for the checks marked for it (`Phase2RealWindowPass`).
+- [ ] 22. Real-window pass for the checks marked for it (`Phase2RealWindowPass`): written for checks 1, 3, 5, 10, 14, 17, 20 and 21, not run yet.
 
 Closing:
 
@@ -136,13 +136,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Merge the diff text control from the sub-agent's branch `wip/p2-diff-text` (a worktree under
-`.claude/worktrees/`, not pushed) with `--no-ff`, then wire it into `Views/Diff/DiffView`
-(`DiffTextHost`): `Diff`, `Mode`, `FilePath`, `Highlighting`, `HunkActions` (from the view
-model's side), `SelectedChanges` into `DiffViewModel.SelectedChanges`, `HunkActionRequested`
-into `DiffViewModel.RunHunkActionAsync`, `SelectionResetRequested` to `ClearSelection()`, and
-`FocusBody()` when a diff opens. Then steps 15 to 19 and the remaining checks (3 to 8, 10 to
-13, 19 to 21).
+An independent review of phase 2's code (git layer, patches, view models, watcher, diff
+control), then fix what it finds; then the visual test gate (step 23): `dotnet test`, then,
+after telling the owner, the real-window pass of phases 0, 1 and 2 on the same commit, and every
+picture of both inspected.
 
 ### Notes for whoever resumes
 

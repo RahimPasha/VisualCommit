@@ -169,6 +169,152 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         Assert.Equal(0, app.Close());
     }
 
+    [Fact]
+    public async Task Check_3_diff_inline_and_side_by_side()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var data = Run.NewDataDirectory();
+        using var app = LaunchWithTabs(data, repo.Path, 1400, 900);
+        WaitForStatus(app, data, "changes", staged: 3, unstaged: 7);
+        ClickWorkingRow(app, rowsLeft: 260, graphWidth: 740);
+        WaitForStagePanel(app, unstaged: 7, staged: 3);
+
+        ClickFileRow(app, "UnstagedFileList", "src/Calculator.cs");
+        WaitForHunkButtons(app, "StageHunkButton", 2);
+        app.MoveMouseTo(RestX, 887);
+        using (var inline = app.CaptureClient())
+        {
+            Run.Save(inline, "03a-calculator-inline");
+            Run.AssertMatchesScripted(inline, "03a-calculator-inline", "03a-calculator-inline");
+        }
+
+        app.ClickWithMouse(app.Find("SideBySideDiffButton"));
+        app.WaitFor(() => app.FindAll("DiffTextRight").Count == 1, "the side-by-side halves", LoadTimeout);
+        WaitForHunkButtons(app, "StageHunkButton", 2);
+        app.MoveMouseTo(RestX, 887);
+        using (var sideBySide = app.CaptureClient())
+        {
+            Run.Save(sideBySide, "03b-calculator-side-by-side");
+            Run.AssertMatchesScripted(sideBySide, "03b-calculator-side-by-side", "03b-calculator-side-by-side");
+        }
+
+        Assert.Equal(0, app.Close());
+    }
+
+    [Fact]
+    public async Task Check_5_image_diff()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var data = Run.NewDataDirectory();
+        using var app = LaunchWithTabs(data, repo.Path);
+        WaitForStatus(app, data, "changes", staged: 3, unstaged: 7);
+        ClickWorkingRow(app);
+        WaitForStagePanel(app, unstaged: 7, staged: 3);
+
+        ClickFileRow(app, "UnstagedFileList", "assets/logo.png");
+        app.WaitFor(() => app.FindAll("AfterCaption").Any(text => text.Name.Contains("pixels", StringComparison.Ordinal)), "the images' captions", LoadTimeout);
+        app.MoveMouseTo(RestX, 687);
+        using (var image = app.CaptureClient())
+        {
+            Run.Save(image, "05-image-diff");
+            Run.AssertMatchesScripted(image, "05-image-diff", "05-image-diff");
+        }
+
+        Assert.Equal(0, app.Close());
+    }
+
+    [Fact]
+    public async Task Check_10_stage_one_hunk_with_the_real_mouse()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var data = Run.NewDataDirectory();
+        using var app = LaunchWithTabs(data, repo.Path, 1400, 900);
+        WaitForStatus(app, data, "changes", staged: 3, unstaged: 7);
+        ClickWorkingRow(app, rowsLeft: 260, graphWidth: 740);
+        WaitForStagePanel(app, unstaged: 7, staged: 3);
+        ClickFileRow(app, "UnstagedFileList", "src/Calculator.cs");
+        WaitForHunkButtons(app, "StageHunkButton", 2);
+
+        app.ClickWithMouse(app.FindAll("StageHunkButton")[0]);
+        WaitForStagePanel(app, unstaged: 7, staged: 4);
+        WaitForHunkButtons(app, "StageHunkButton", 1);
+        app.MoveMouseTo(RestX, 887);
+        using (var staged = app.CaptureClient())
+        {
+            Run.Save(staged, "10a-hunk-staged");
+            Run.AssertMatchesScripted(staged, "10a-hunk-staged", "10a-hunk-staged");
+        }
+
+        ClickFileRow(app, "StagedFileList", "src/Calculator.cs");
+        WaitForHunkButtons(app, "UnstageHunkButton", 1);
+        app.MoveMouseTo(RestX, 887);
+        using (var stagedDiff = app.CaptureClient())
+        {
+            Run.Save(stagedDiff, "10b-staged-diff");
+            Run.AssertMatchesScripted(stagedDiff, "10b-staged-diff", "10b-staged-diff");
+        }
+
+        Assert.Equal(0, app.Close());
+        Assert.Contains(
+            "@@ -12,7 +12,7 @@ public sealed class Calculator",
+            (await repo.GitAsync("diff", "--cached", "--", "src/Calculator.cs")).StandardOutput.Split('\n'));
+    }
+
+    [Fact]
+    public async Task Check_21_the_diff_mode_survives_a_real_restart()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var data = Run.NewDataDirectory();
+        using (var app = LaunchWithTabs(data, repo.Path, 1400, 900))
+        {
+            WaitForStatus(app, data, "changes", staged: 3, unstaged: 7);
+            ClickWorkingRow(app, rowsLeft: 260, graphWidth: 740);
+            WaitForStagePanel(app, unstaged: 7, staged: 3);
+            ClickFileRow(app, "UnstagedFileList", "README.md");
+            WaitForHunkButtons(app, "StageHunkButton", 1);
+            app.ClickWithMouse(app.Find("SideBySideDiffButton"));
+            app.WaitFor(() => app.FindAll("DiffTextRight").Count == 1, "the side-by-side halves", LoadTimeout);
+            Assert.Equal(0, app.Close());
+        }
+
+        using (var app = RealApp.Launch(data))
+        {
+            app.SetClientSize(1400, 900);
+            WaitForStatus(app, data, "changes", staged: 3, unstaged: 7);
+            ClickWorkingRow(app, rowsLeft: 260, graphWidth: 740);
+            WaitForStagePanel(app, unstaged: 7, staged: 3);
+            ClickFileRow(app, "UnstagedFileList", "README.md");
+            app.WaitFor(() => app.FindAll("DiffTextRight").Count == 1, "the side-by-side halves after the restart", LoadTimeout);
+            WaitForHunkButtons(app, "StageHunkButton", 1);
+            app.MoveMouseTo(RestX, 887);
+            using var restarted = app.CaptureClient();
+            Run.Save(restarted, "21-side-by-side-after-restart");
+            Run.AssertMatchesScripted(restarted, "21-side-by-side-after-restart", "21-side-by-side-after-restart");
+            Assert.Equal(0, app.Close());
+        }
+    }
+
+    /// <summary>Clicks a file's row in one stage list, found inside that list (a file can be in both).</summary>
+    private static void ClickFileRow(RealApp app, string list, string path)
+    {
+        AutomationElement? row = null;
+        app.WaitFor(
+            () => (row = app.Find(list).FindAllDescendants(condition => condition.ByAutomationId("StageFileRow")).FirstOrDefault(candidate => candidate.Name == path)) is not null,
+            $"the row of {path} in {list}",
+            LoadTimeout);
+        app.ClickWithMouse(row!);
+    }
+
+    /// <summary>
+    /// Waits until the diff shows this many of a hunk button, then a moment more: the text control
+    /// settles the heights of its header rows a layout pass after its lines.
+    /// </summary>
+    private static void WaitForHunkButtons(RealApp app, string automationId, int count)
+    {
+        app.WaitFor(() => app.FindAll(automationId).Count == count, $"{count} {automationId}", LoadTimeout);
+        Thread.Sleep(500);
+    }
+
     /// <summary>Starts the app with one tab on <paramref name="repository"/>, in a window of the given size.</summary>
     private static RealApp LaunchWithTabs(string data, string repository, int width = 1100, int height = 700)
     {
@@ -182,7 +328,8 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
     /// at its position, in the Message column's free part (the graph scenarios here have one lane,
     /// so the Message column starts 130 + 48 into the graph area, which starts at 260).
     /// </summary>
-    private static void ClickWorkingRow(RealApp app) => app.ClickAt(260 + 130 + 48 + 60, RowsTop + (RowHeight / 2));
+    private static void ClickWorkingRow(RealApp app, float rowsLeft = 260, float graphWidth = 440) =>
+        app.ClickAt(rowsLeft + Math.Min(130 + 48 + 60, graphWidth / 2), RowsTop + (RowHeight / 2));
 
     private static void WaitForStagePanel(RealApp app, int unstaged, int staged) =>
         app.WaitFor(
