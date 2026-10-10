@@ -580,6 +580,25 @@ public class DiffTextViewTests
     }
 
     [AvaloniaFact]
+    public async Task Lines_that_end_in_CRLF_show_nothing_after_their_text()
+    {
+        var diffs = await DiffScenario.DiffsAsync();
+        var view = new DiffTextView { Diff = diffs.CrlfNotes, FilePath = "notes.txt", HunkActions = HunkActions.StageAndDiscard };
+        using var host = DiffHost.Show(view, InlineWidth, InlineHeight, ThemeVariant.Dark);
+        host.Capture();
+
+        Assert.Equal(["@@ -1,5 +1,5 @@", "@@ -15,6 +15,6 @@ Note 14"], view.Rows.Where(row => row.Kind == DiffRowKind.HunkHeader).Select(row => row.HeaderText));
+        Assert.All(view.Rows.Where(row => row.Left is not null), row => Assert.DoesNotContain('\r', row.Left!.Text));
+
+        // "Note 2, changed": every character is drawn, and nothing after the last.
+        var changed = new DiffLineRef(0, 2);
+        Assert.Equal("Note 2, changed", diffs.CrlfNotes.Hunks[0].Lines[2].Text);
+        Assert.NotNull(view.ForegroundAt(changed, "Note 2, changed".Length - 1));
+        Assert.Null(view.ForegroundAt(changed, "Note 2, changed".Length));
+        Assert.Equal("Note 2, changed".Length * 7.2, view.TextRangeBounds(changed, 0, "Note 2, changed".Length)!.Value.Width, 1.0);
+    }
+
+    [AvaloniaFact]
     public async Task No_diff_shows_no_rows()
     {
         var view = await CalculatorAsync();
