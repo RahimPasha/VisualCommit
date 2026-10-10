@@ -76,6 +76,65 @@
       </Style>
     </ControlTheme>
 
+    <!-- The body of a repo tab: its title, left-aligned, filling the tab. The tab's own Border
+         draws the background, so the button only shows the pointer over it. -->
+    <ControlTheme x:Key="VcTabButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Padding" Value="14,0,8,0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+
+    <!-- A button with an icon and a label in a row, for the welcome page and forms. -->
+    <ControlTheme x:Key="VcActionButton" TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource VcControlBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+      </Style>
+      <Style Selector="^:pressed">
+        <Setter Property="Background" Value="{DynamicResource VcPanelBackgroundBrush}" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+    </ControlTheme>
+
   </Styles.Resources>
 
   <!-- Thin separator between toolbar groups. -->
@@ -88,6 +147,11 @@
   <!-- Secondary text: hints, counts, empty-state explanations. -->
   <Style Selector="TextBlock.secondary">
     <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+  </Style>
+
+  <!-- An error message: why something the user asked for failed. -->
+  <Style Selector="TextBlock.error">
+    <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
   </Style>
 
   <!-- Small heading text: column headers and section headers. -->

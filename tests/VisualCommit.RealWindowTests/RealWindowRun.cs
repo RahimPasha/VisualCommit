@@ -15,8 +15,9 @@ public sealed class RealWindowRun : IDisposable
 {
     /// <summary>
     /// The most a real-window screenshot may differ from the scripted one, as a share of all
-    /// pixels (decision D33). Text is drawn at the display's scaling in the real window, so the
-    /// edges of letters differ; a wrong theme, a missing region or a shifted layout differ far more.
+    /// pixels (decisions D33 and D58: a pixel differs when nothing within a pixel of it matches).
+    /// Text is drawn at the display's scaling in the real window, so the edges of letters land a
+    /// pixel off; a wrong theme, a missing region or a shifted layout differ far more.
     /// </summary>
     public const double MaxDifference = 0.03;
 
@@ -77,8 +78,8 @@ public sealed class RealWindowRun : IDisposable
             File.Exists(scripted),
             $"The scripted screenshot {scripted} is missing. Run the scripted walk-through first: dotnet test (at the repo root).");
 
-        var difference = capture.DifferenceFrom(scripted, Path.Combine(Folder, name + "-difference.png"));
-        Note(string.Create(CultureInfo.InvariantCulture, $"{name} against scripted {scriptedName}: {difference:P2} of pixels differ"));
+        var (difference, inPlace) = capture.DifferenceFrom(scripted, Path.Combine(Folder, name + "-difference.png"));
+        Note(string.Create(CultureInfo.InvariantCulture, $"{name} against scripted {scriptedName}: {difference:P2} of pixels differ ({inPlace:P2} compared in place only)"));
         Assert.True(
             difference <= MaxDifference,
             string.Create(CultureInfo.InvariantCulture, $"{name} differs from the scripted screenshot {scriptedName} in {difference:P2} of its pixels; at most {MaxDifference:P0} is allowed. See {name}-difference.png."));

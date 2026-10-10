@@ -41,12 +41,17 @@ public static class Screens
 
     /// <summary>
     /// Compares a real-window capture with a scripted screenshot. The capture is first scaled to
-    /// the scripted screenshot's size, which undoes the display scaling. Returns the share of
-    /// pixels (0 to 1) whose colour differs by more than <paramref name="tolerance"/> in any
-    /// channel, and saves a picture of where they are: the scripted screenshot faded, with the
-    /// differing pixels in magenta.
+    /// the scripted screenshot's size, which undoes the display scaling. A pixel of the scripted
+    /// screenshot counts as different when no pixel of the scaled capture at the same place or
+    /// next to it (1 pixel in any direction) has its colour, within <paramref name="tolerance"/>
+    /// in every channel (D58): the edges of letters, drawn at another scaling, land a pixel off,
+    /// while a wrong colour, a missing region or a moved layout does not match anywhere near.
+    /// Returns the share of different pixels (0 to 1) by that rule, and by the plain rule of D33
+    /// that compares the same place only, and saves a picture of where they are: the scripted
+    /// screenshot faded, the different pixels in magenta and those that only the plain rule counts
+    /// in pale pink.
     /// </summary>
-    public static double DifferenceFrom(this Bitmap capture, string scriptedFile, string differencePicture, int tolerance = 48)
+    public static (double Different, double DifferentInPlace) DifferenceFrom(this Bitmap capture, string scriptedFile, string differencePicture, int tolerance = 48)
     {
         using var scripted = new Bitmap(scriptedFile);
         using var scaled = new Bitmap(scripted.Width, scripted.Height, PixelFormat.Format32bppArgb);
@@ -60,17 +65,45 @@ public static class Screens
         var expected = Pixels(scripted);
         var actual = Pixels(scaled);
         var picture = new byte[expected.Length];
+        var width = scripted.Width;
+        var height = scripted.Height;
         var differing = 0;
+        var differingInPlace = 0;
+
+        bool Matches(int i, int j) =>
+            Math.Abs(expected[i] - actual[j]) <= tolerance
+            && Math.Abs(expected[i + 1] - actual[j + 1]) <= tolerance
+            && Math.Abs(expected[i + 2] - actual[j + 2]) <= tolerance;
 
         for (var i = 0; i < expected.Length; i += 4)
         {
-            var differs = Math.Abs(expected[i] - actual[i]) > tolerance
-                || Math.Abs(expected[i + 1] - actual[i + 1]) > tolerance
-                || Math.Abs(expected[i + 2] - actual[i + 2]) > tolerance;
-            if (differs)
+            var inPlace = Matches(i, i);
+            var nearby = inPlace;
+            var x = (i / 4) % width;
+            var y = (i / 4) / width;
+            for (var dy = -1; dy <= 1 && !nearby; dy++)
+            {
+                for (var dx = -1; dx <= 1 && !nearby; dx++)
+                {
+                    var nx = x + dx;
+                    var ny = y + dy;
+                    nearby = nx >= 0 && ny >= 0 && nx < width && ny < height && Matches(i, ((ny * width) + nx) * 4);
+                }
+            }
+
+            if (!inPlace)
+            {
+                differingInPlace++;
+            }
+
+            if (!nearby)
             {
                 differing++;
                 (picture[i], picture[i + 1], picture[i + 2], picture[i + 3]) = (255, 0, 255, 255);
+            }
+            else if (!inPlace)
+            {
+                (picture[i], picture[i + 1], picture[i + 2], picture[i + 3]) = (230, 190, 255, 255);
             }
             else
             {
@@ -89,7 +122,8 @@ public static class Screens
         Directory.CreateDirectory(Path.GetDirectoryName(differencePicture)!);
         output.Save(differencePicture, ImageFormat.Png);
 
-        return differing / (expected.Length / 4.0);
+        var total = expected.Length / 4.0;
+        return (differing / total, differingInPlace / total);
     }
 
     /// <summary>The pixels of a bitmap as blue, green, red, alpha bytes, row by row without padding.</summary>

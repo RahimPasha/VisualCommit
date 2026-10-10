@@ -188,6 +188,31 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task Output_handlers_never_run_on_the_callers_thread()
+    {
+        var runner = new GitRunner(GitPath);
+        var handlerThreads = new ConcurrentQueue<(Thread Thread, bool IsBackground)>();
+        void Record(string line) => handlerThreads.Enqueue((Thread.CurrentThread, Thread.CurrentThread.IsBackground));
+        var command = Script("echo out; echo err >&2", onOutputLine: Record, onErrorLine: Record);
+
+        // A thread of its own stands for the UI thread: the thread pool never runs work on it, so
+        // a handler can only run there if the call ran it before returning (D59).
+        var started = new TaskCompletionSource<Task<GitResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var caller = new Thread(() => started.SetResult(runner.RunAsync(command, TestCancelled)));
+        caller.Start();
+
+        var result = await await started.Task;
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(2, handlerThreads.Count);
+        Assert.All(handlerThreads, handler =>
+        {
+            Assert.NotSame(caller, handler.Thread);
+            Assert.True(handler.IsBackground);
+        });
+    }
+
+    [Fact]
     public async Task Cancelling_stops_git_and_returns_quickly()
     {
         var calls = new GitCallLog();
@@ -227,6 +252,98 @@ public class GitRunnerTests
         Assert.True(result.Succeeded);
         Assert.Equal("done", result.StandardOutput.Trim());
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(12), $"The call took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
+    public async Task A_slow_output_handler_near_the_end_still_gets_every_line()
+    {
+        // Git prints its last lines and exits while the handler is still busy with an earlier
+        // one, for longer than a process left behind is waited for. A busy handler is progress,
+        // so the call waits for it and delivers the rest before it returns.
+        const int Count = 2000;
+        var runner = new GitRunner(GitPath);
+        var lines = new ConcurrentQueue<string>();
+
+        var result = await runner.RunAsync(
+            Script(
+                $"i=1; while [ $i -le {Count} ]; do echo \"line $i\"; i=$((i+1)); done",
+                onOutputLine: line =>
+                {
+                    lines.Enqueue(line);
+                    if (line == $"line {Count - 10}")
+                    {
+                        Thread.Sleep(TimeSpan.FromSeconds(3));
+                    }
+                }),
+            TestCancelled);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(Enumerable.Range(1, Count).Select(i => $"line {i}"), lines);
+    }
+
+    [Fact]
+    public async Task Cancelling_while_a_handler_holds_the_call_after_git_exited_returns_quickly()
+    {
+        var runner = new GitRunner(GitPath);
+        using var release = new ManualResetEventSlim();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+        var inHandler = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var run = runner.RunAsync(
+                Script(
+                    "echo only",
+                    onOutputLine: _ =>
+                    {
+                        inHandler.TrySetResult();
+                        release.Wait(TimeSpan.FromSeconds(60));
+                    }),
+                cancellation.Token);
+            await inHandler.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+            // Git is long gone by now; the busy handler still holds the call.
+            await Task.Delay(TimeSpan.FromSeconds(3), TestCancelled);
+            Assert.False(run.IsCompleted, "A handler that is still at work must hold the call.");
+
+            var stopwatch = Stopwatch.StartNew();
+            await cancellation.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"Cancelling took {stopwatch.Elapsed}.");
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Theory]
+    [InlineData("https://user:ghp_secret123@github.com/team/repo.git", "https://***@github.com/team/repo.git")]
+    [InlineData("https://ghp_secret123@dev.azure.com/org/project/_git/repo", "https://***@dev.azure.com/org/project/_git/repo")]
+    [InlineData("http://user:p@ss@127.0.0.1:8080/x.git", "http://***@127.0.0.1:8080/x.git")]
+    [InlineData("ssh://user:secret@host:22/x.git", "ssh://***@host:22/x.git")]
+    [InlineData("remote.origin.url=https://user:secret@host/x.git", "remote.origin.url=https://***@host/x.git")]
+    [InlineData("https://a:secret@one/x https://b:secret@two/y", "\"https://***@one/x https://***@two/y\"")]
+    public void The_display_text_hides_the_credentials_of_a_url_and_git_still_gets_them(string argument, string shown)
+    {
+        var command = new GitCommand("clone", "--", argument, "copy");
+
+        Assert.Equal($"git clone -- {shown} copy", command.DisplayText);
+        Assert.DoesNotContain("secret", command.DisplayText);
+        Assert.Equal(argument, command.Arguments[2]);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/team/repo.git")]
+    [InlineData("git@github.com:team/repo.git")]
+    [InlineData("https://host/people/user@example.com/repo.git")]
+    [InlineData("https://host/x.git?user=a@b")]
+    [InlineData("file:///C:/repos/x")]
+    [InlineData("--format=%an <%ae>")]
+    public void Arguments_without_credentials_are_shown_as_given(string argument)
+    {
+        var command = new GitCommand("clone", argument);
+
+        Assert.Equal("git clone " + (argument.Contains(' ') ? $"\"{argument}\"" : argument), command.DisplayText);
     }
 
     [Fact]

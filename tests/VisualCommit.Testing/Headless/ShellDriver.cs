@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -5,25 +7,41 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App;
+using VisualCommit.App.Services;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
+using VisualCommit.Core.Session;
 
 namespace VisualCommit.Testing.Headless;
 
 /// <summary>
 /// Runs the whole app in headless mode for a test and drives it the way a user would: with mouse
 /// moves, presses and releases at window positions. One driver is one running instance of the
-/// app; disposing it closes the app. Use it on the UI thread, inside an <c>[AvaloniaFact]</c>.
+/// app; disposing it closes the app. Use it on the UI thread, inside an <c>[AvaloniaFact]</c>
+/// or <see cref="FreshApplication.RunAsync{T}"/>.
 /// </summary>
 public sealed class ShellDriver : IDisposable
 {
-    private ShellDriver(AppSession session)
+    /// <summary>How long <see cref="WaitForAsync"/> waits when the test names no time.</summary>
+    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The pause between two looks at a condition in <see cref="WaitForAsync"/>: short enough that
+    /// a wait ends soon after the condition comes true, long enough not to keep a core busy.
+    /// </summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
+
+    private ShellDriver(AppSession session, FakeFolderPicker folders)
     {
         Session = session;
+        Folders = folders;
     }
 
     /// <summary>The app instance under test.</summary>
     public AppSession Session { get; }
+
+    /// <summary>The app's folder dialog: queue the folder the next Open, Init or Browse "chooses" (D42).</summary>
+    public FakeFolderPicker Folders { get; }
 
     public MainWindow Window => Session.MainWindow;
 
@@ -37,7 +55,8 @@ public sealed class ShellDriver : IDisposable
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
-        var session = AppSession.Start(new AppPaths(dataDirectory), application);
+        var folders = new FakeFolderPicker();
+        var session = AppSession.Start(new AppPaths(dataDirectory), application, folders);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -50,16 +69,82 @@ public sealed class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session);
+        var driver = new ShellDriver(session, folders);
         driver.Settle();
         return driver;
     }
+
+    /// <summary>
+    /// Starts the app as <see cref="Start"/> does, after writing a session file that has these
+    /// tabs open: the way a test starts the app with repositories open (D46). Each entry is the
+    /// working tree of the repository in that tab, or null for an empty tab.
+    /// </summary>
+    public static ShellDriver StartWithTabs(
+        string dataDirectory,
+        IReadOnlyList<string?> tabs,
+        int activeTab = 0,
+        int? width = 1100,
+        int? height = 700)
+    {
+        ArgumentNullException.ThrowIfNull(tabs);
+        WriteSession(
+            dataDirectory,
+            new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
+        return Start(dataDirectory, width, height);
+    }
+
+    /// <summary>
+    /// Writes the session file of a data folder before the app starts on it, for a test that
+    /// needs more than open tabs: the recent list, the window's placement, the panel widths.
+    /// </summary>
+    public static void WriteSession(string dataDirectory, SessionState state) =>
+        JsonSessionStore.Write(new AppPaths(dataDirectory).SessionFile, state);
 
     /// <summary>Waits for the app's start-up work (finding git) and for the layout to settle.</summary>
     public async Task WaitUntilReadyAsync()
     {
         await Session.Initialization;
         Settle();
+    }
+
+    /// <summary>
+    /// Waits until <paramref name="condition"/> is true, for work that ends later than the step
+    /// that started it, such as loading a repository on the thread pool. Between looks it lets
+    /// the UI thread run what was posted to it and then yields for a moment, so that work on
+    /// other threads can finish and post back. The condition is read on the UI thread.
+    /// It does not render: a condition about what is drawn needs <see cref="Capture"/>.
+    /// </summary>
+    /// <param name="condition">What to wait for. Read once per look.</param>
+    /// <param name="what">What is awaited, in words, for the message when it does not come.</param>
+    /// <param name="timeout">How long to wait; <see cref="DefaultWaitTimeout"/> when null.</param>
+    /// <exception cref="TimeoutException">The condition was still false when the time was up.</exception>
+    public async Task WaitForAsync(Func<bool> condition, string what, TimeSpan? timeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        Dispatcher.UIThread.VerifyAccess();
+
+        var limit = timeout ?? DefaultWaitTimeout;
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            Settle();
+            if (condition())
+            {
+                return;
+            }
+
+            if (clock.Elapsed >= limit)
+            {
+                throw new TimeoutException(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"Timed out after {limit.TotalSeconds:0.###} s waiting for {what}."));
+            }
+
+            // No ConfigureAwait(false): the next look must run on the UI thread, which an
+            // [AvaloniaFact] keeps running while the test awaits.
+            await Task.Delay(PollInterval);
+        }
     }
 
     /// <summary>Lets the UI thread finish everything it has queued: bindings, layout, rendering requests.</summary>
@@ -83,6 +168,16 @@ public sealed class ShellDriver : IDisposable
         var topLeft = visual.TranslatePoint(default, Window)
             ?? throw new InvalidOperationException("The control is not in the window.");
         return new Rect(topLeft, visual.Bounds.Size);
+    }
+
+    /// <summary>Moves the mouse to the centre of a control without pressing a button: a hover.</summary>
+    public void MoveMouse(Visual visual) => MoveMouse(BoundsOf(visual).Center);
+
+    /// <summary>Moves the mouse to a window position without pressing a button: a hover.</summary>
+    public void MoveMouse(Point position)
+    {
+        Window.MouseMove(position);
+        Settle();
     }
 
     /// <summary>Moves the mouse to the centre of a control and clicks the left button.</summary>
@@ -153,6 +248,18 @@ public sealed class ShellDriver : IDisposable
         }
 
         Window.MouseUp(to, MouseButton.Left);
+        Settle();
+    }
+
+    /// <summary>
+    /// Moves the mouse to a window position and turns the wheel, as a real wheel would:
+    /// a positive <paramref name="deltaY"/> scrolls up (away from the user), a negative one down,
+    /// and one notch is 1.0. The control under the mouse gets one wheel event with this delta.
+    /// </summary>
+    public void Wheel(Point position, double deltaY)
+    {
+        Window.MouseMove(position);
+        Window.MouseWheel(position, new Vector(0, deltaY));
         Settle();
     }
 

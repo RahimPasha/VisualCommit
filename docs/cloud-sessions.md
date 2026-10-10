@@ -69,8 +69,8 @@ reach.
 
 ## How to use it
 
-Start a session on the repo and say what you would say on Windows: "Start phase 1", or
-"Continue" for a phase that is under way.
+Start a session on the repo and say what you would say on Windows: "Start phase 2" (or whichever
+phase is next), or "Continue" for a phase that is under way.
 
 | It can | It cannot |
 |---|---|

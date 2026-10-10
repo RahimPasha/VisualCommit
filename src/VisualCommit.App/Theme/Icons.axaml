@@ -21,4 +21,17 @@
   <StreamGeometry x:Key="IconChevronRight">M9 18 l6 -6 l-6 -6</StreamGeometry>
   <StreamGeometry x:Key="IconClose">M18 6 L6 18 M6 6 l12 12</StreamGeometry>
 
+  <StreamGeometry x:Key="IconChevronDown">M6 9 l6 6 l6 -6</StreamGeometry>
+  <StreamGeometry x:Key="IconCheck">M20 6 L9 17 l-5 -5</StreamGeometry>
+  <StreamGeometry x:Key="IconArrowUp">M5 12 l7 -7 l7 7 M12 19 V5</StreamGeometry>
+  <StreamGeometry x:Key="IconArrowDown">M12 5 v14 M19 12 l-7 7 l-7 -7</StreamGeometry>
+  <StreamGeometry x:Key="IconTag">M12.586 2.586 A2 2 0 0 0 11.172 2 H4 a2 2 0 0 0 -2 2 v7.172 a2 2 0 0 0 0.586 1.414 l8.704 8.704 a2.426 2.426 0 0 0 3.42 0 l6.58 -6.58 a2.426 2.426 0 0 0 0 -3.42 z M7 7.5 a0.5 0.5 0 1 0 1 0 a0.5 0.5 0 1 0 -1 0</StreamGeometry>
+  <StreamGeometry x:Key="IconFolder">M20 20 a2 2 0 0 0 2 -2 V8 a2 2 0 0 0 -2 -2 h-7.9 a2 2 0 0 1 -1.69 -0.9 L9.6 3.9 A2 2 0 0 0 7.93 3 H4 a2 2 0 0 0 -2 2 v13 a2 2 0 0 0 2 2 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconFolderOpen">M6 14 l1.5 -2.9 A2 2 0 0 1 9.24 10 H20 a2 2 0 0 1 1.94 2.5 l-1.54 6 a2 2 0 0 1 -1.95 1.5 H4 a2 2 0 0 1 -2 -2 V5 a2 2 0 0 1 2 -2 h3.9 a2 2 0 0 1 1.69 0.9 l0.81 1.2 a2 2 0 0 0 1.67 0.9 H18 a2 2 0 0 1 2 2 v2</StreamGeometry>
+  <StreamGeometry x:Key="IconFolderPlus">M12 10 v6 M9 13 h6 M20 20 a2 2 0 0 0 2 -2 V8 a2 2 0 0 0 -2 -2 h-7.9 a2 2 0 0 1 -1.69 -0.9 L9.6 3.9 A2 2 0 0 0 7.93 3 H4 a2 2 0 0 0 -2 2 v13 a2 2 0 0 0 2 2 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconDownload">M12 15 V3 M21 15 v4 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 v-4 M7 10 l5 5 l5 -5</StreamGeometry>
+  <StreamGeometry x:Key="IconCloud">M17.5 19 H9 a7 7 0 1 1 6.71 -9 h1.79 a4.5 4.5 0 1 1 0 9 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconList">M3 12 h0.01 M3 18 h0.01 M3 6 h0.01 M8 12 h13 M8 18 h13 M8 6 h13</StreamGeometry>
+  <StreamGeometry x:Key="IconListTree">M21 12 h-8 M21 6 H8 M21 18 h-8 M3 6 v4 c0 1.1 0.9 2 2 2 h3 M3 10 v6 c0 1.1 0.9 2 2 2 h3</StreamGeometry>
+
 </ResourceDictionary>

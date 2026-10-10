@@ -1,49 +1,20 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
+             xmlns:graph="using:VisualCommit.App.Views.Graph"
+             xmlns:shell="using:VisualCommit.App.Views.Shell"
              x:Class="VisualCommit.App.Views.Shell.CommitGraphView"
+             x:DataType="vm:RepoTabViewModel"
              AutomationProperties.AutomationId="CommitGraph">
 
-  <!-- Placeholder until phase 1: the column headers and an empty state. The minimum widths keep
-       every header readable down to the narrowest the graph can get. -->
-  <Grid RowDefinitions="28,*" Background="{DynamicResource VcWindowBackgroundBrush}">
-
-    <Border Name="ColumnHeaders"
-            Grid.Row="0"
-            Background="{DynamicResource VcChromeBackgroundBrush}"
-            BorderBrush="{DynamicResource VcBorderBrush}"
-            BorderThickness="0,0,0,1">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="1.6*" MinWidth="79" />
-          <ColumnDefinition Width="1.2*" MinWidth="45" />
-          <ColumnDefinition Width="4*" MinWidth="61" />
-          <ColumnDefinition Width="1.6*" MinWidth="49" />
-          <ColumnDefinition Width="1.3*" MinWidth="37" />
-          <ColumnDefinition Width="*" MinWidth="37" />
-        </Grid.ColumnDefinitions>
-        <Grid.Styles>
-          <Style Selector="TextBlock.heading">
-            <Setter Property="Margin" Value="8,0,0,0" />
-          </Style>
-        </Grid.Styles>
-        <TextBlock Grid.Column="0" Classes="heading" Text="Branch / Tag" />
-        <TextBlock Grid.Column="1" Classes="heading" Text="Graph" />
-        <TextBlock Grid.Column="2" Classes="heading" Text="Message" />
-        <TextBlock Grid.Column="3" Classes="heading" Text="Author" />
-        <TextBlock Grid.Column="4" Classes="heading" Text="Date" />
-        <TextBlock Grid.Column="5" Classes="heading" Text="SHA" />
-      </Grid>
-    </Border>
-
-    <StackPanel Name="EmptyState" Grid.Row="1" VerticalAlignment="Center" Margin="24,0" Spacing="8">
-      <TextBlock Text="No repository open"
-                 FontSize="16" FontWeight="SemiBold"
-                 HorizontalAlignment="Center" />
-      <TextBlock Classes="secondary"
-                 Text="Open, clone or init a repository to see its history."
-                 TextWrapping="Wrap" TextAlignment="Center"
-                 HorizontalAlignment="Center" />
-    </StackPanel>
-
-  </Grid>
+  <!-- The graph area of the active tab: the welcome page when it has no repository (D42), the
+       repository's graph when it has one, and nothing while a restored tab is still opening. -->
+  <Panel Background="{DynamicResource VcWindowBackgroundBrush}">
+    <Panel IsVisible="{Binding ShowsWelcome}">
+      <shell:WelcomeView DataContext="{Binding Welcome}" />
+    </Panel>
+    <Panel IsVisible="{Binding HasRepository}">
+      <graph:RepositoryGraphView DataContext="{Binding Repository}" />
+    </Panel>
+  </Panel>
 </UserControl>

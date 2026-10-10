@@ -22,6 +22,18 @@
       <SolidColorBrush x:Key="VcSuccessBrush" Color="#3FB97F" />
       <SolidColorBrush x:Key="VcWarningBrush" Color="#E0A23B" />
       <SolidColorBrush x:Key="VcDangerBrush" Color="#E5606B" />
+      <!-- Commit graph: rows, labels and the lane palette (D48). -->
+      <SolidColorBrush x:Key="VcSelectionBrush" Color="#2A3150" />
+      <SolidColorBrush x:Key="VcRowHoverBrush" Color="#1C1F27" />
+      <SolidColorBrush x:Key="VcLabelTextBrush" Color="#10121A" />
+      <SolidColorBrush x:Key="VcLane0Brush" Color="#7C8CFF" />
+      <SolidColorBrush x:Key="VcLane1Brush" Color="#3FB97F" />
+      <SolidColorBrush x:Key="VcLane2Brush" Color="#E0A23B" />
+      <SolidColorBrush x:Key="VcLane3Brush" Color="#E5606B" />
+      <SolidColorBrush x:Key="VcLane4Brush" Color="#4FB3D9" />
+      <SolidColorBrush x:Key="VcLane5Brush" Color="#B07CE8" />
+      <SolidColorBrush x:Key="VcLane6Brush" Color="#D97EB6" />
+      <SolidColorBrush x:Key="VcLane7Brush" Color="#8FB84A" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#272C36" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C36" />
@@ -52,6 +64,18 @@
       <SolidColorBrush x:Key="VcSuccessBrush" Color="#1E8E5A" />
       <SolidColorBrush x:Key="VcWarningBrush" Color="#B7791F" />
       <SolidColorBrush x:Key="VcDangerBrush" Color="#C93A46" />
+      <!-- Commit graph: rows, labels and the lane palette (D48). -->
+      <SolidColorBrush x:Key="VcSelectionBrush" Color="#DDE1FA" />
+      <SolidColorBrush x:Key="VcRowHoverBrush" Color="#F3F4F7" />
+      <SolidColorBrush x:Key="VcLabelTextBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="VcLane0Brush" Color="#4353D8" />
+      <SolidColorBrush x:Key="VcLane1Brush" Color="#1E8E5A" />
+      <SolidColorBrush x:Key="VcLane2Brush" Color="#B7791F" />
+      <SolidColorBrush x:Key="VcLane3Brush" Color="#C93A46" />
+      <SolidColorBrush x:Key="VcLane4Brush" Color="#1F86B0" />
+      <SolidColorBrush x:Key="VcLane5Brush" Color="#8048C7" />
+      <SolidColorBrush x:Key="VcLane6Brush" Color="#B54A8C" />
+      <SolidColorBrush x:Key="VcLane7Brush" Color="#5F8A1E" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />

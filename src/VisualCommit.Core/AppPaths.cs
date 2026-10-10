@@ -11,6 +11,9 @@ public sealed record AppPaths(string DataDirectory)
 
     public string SettingsFile => Path.Combine(DataDirectory, "settings.json");
 
+    /// <summary>The open tabs, recent repositories, window and panel sizes (D46).</summary>
+    public string SessionFile => Path.Combine(DataDirectory, "session.json");
+
     public string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     /// <summary>

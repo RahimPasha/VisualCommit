@@ -4,9 +4,13 @@ A cross-platform desktop Git client: a visual commit graph, staging, branching, 
 conflict resolution with clicks, right-clicks, double-clicks and drag-and-drop. It drives the real
 `git` executable, so it behaves exactly like the command line. No account, no login, no telemetry.
 
-VisualCommit is in early development. Today it opens to an empty shell: the main window with its
-regions laid out, a dark and a light theme, and Git detection. Nothing can be done with a
-repository yet. [docs/status.md](docs/status.md) says which phase is being built and
+VisualCommit is in early development, and today it only reads. It opens, initialises and clones
+repositories in tabs that come back after a restart, and draws a repository's commit graph with
+its branches, tags and stashes; 100,000 commits load in a few seconds and the first rows show
+after about one. A left panel lists branches, remotes, tags and stashes with ahead/behind counts
+and a filter, a details panel shows a commit's message and changed files, and changes made in a
+terminal appear by themselves. Staging, committing and every other git operation come in later
+phases. [docs/status.md](docs/status.md) says which phase is being built and
 [docs/plan.md](docs/plan.md) what each phase adds.
 
 ## Build and run
@@ -23,7 +27,9 @@ dotnet test
 
 `dotnet test` runs the unit and integration tests and a scripted walk-through of the whole app in
 a headless window; it saves screenshots under `artifacts/visual/`. It does not open a window and
-does not touch your settings. All commands, including the Windows-only real-window test pass, are
+does not touch your settings. It takes a few minutes, and the first run builds a 100,000-commit
+test repository in the temporary folder, which later runs reuse. The tests need Git 2.32 or
+newer. All commands, including the Windows-only real-window test pass, are
 listed in [CLAUDE.md](CLAUDE.md#commands).
 
 Windows is developed and tested first. macOS and Linux are built and tested by CI on every push

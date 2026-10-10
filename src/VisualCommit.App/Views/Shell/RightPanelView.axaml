@@ -1,9 +1,127 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
              x:Class="VisualCommit.App.Views.Shell.RightPanelView"
+             x:DataType="vm:CommitDetailsViewModel"
              AutomationProperties.AutomationId="RightPanel">
 
-  <!-- Placeholder until phase 1 (commit details) and phase 2 (stage-and-commit panel). -->
+  <!-- The right panel of the active tab: the details of the selected commit, as "Commit details"
+       in docs/test-reports/phase-1.md describes them, or phase 0's placeholder when nothing is
+       selected. Phase 2 adds the stage-and-commit panel. -->
+  <UserControl.Resources>
+    <!-- A parent's short id: text in the accent colour that selects that commit. -->
+    <ControlTheme x:Key="ParentLinkButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,12,0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+
+    <!-- Flat and Tree: small buttons, the one in use with the selection background. -->
+    <ControlTheme x:Key="FileListToggle" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
+      <Style Selector="^.selected">
+        <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
+    </ControlTheme>
+
+    <!-- A folder row of the file tree: the whole row opens and closes it. -->
+    <ControlTheme x:Key="FileFolderButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+      </Style>
+    </ControlTheme>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="Margin" Value="0,0,12,6" />
+    </Style>
+    <!-- :is(), so that it applies to the SelectableTextBlocks too. -->
+    <Style Selector=":is(TextBlock).value">
+      <Setter Property="Margin" Value="0,0,0,6" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Button.parentLink:pointerover TextBlock">
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.status.added">
+      <Setter Property="Foreground" Value="{DynamicResource VcSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.modified">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.deleted">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <Style Selector="c|Icon.chevron">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <Border Background="{DynamicResource VcPanelBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="1,0,0,0">
@@ -16,12 +134,234 @@
       </Border>
 
       <TextBlock Grid.Row="1"
+                 Name="DetailsPlaceholder"
                  Classes="secondary"
                  Text="Select a commit to see its details."
                  TextWrapping="Wrap" TextAlignment="Center"
                  Margin="24,0"
-                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 IsVisible="{Binding ShowsPlaceholder}"
+                 AutomationProperties.AutomationId="DetailsPlaceholder" />
 
+      <TextBlock Grid.Row="1"
+                 Name="DetailsError"
+                 Classes="error"
+                 Text="{Binding ErrorText}"
+                 TextWrapping="Wrap"
+                 Margin="12,10"
+                 VerticalAlignment="Top"
+                 IsVisible="{Binding HasError}"
+                 AutomationProperties.AutomationId="DetailsError" />
+
+      <Grid Grid.Row="1" Name="DetailsContent" RowDefinitions="Auto,Auto,*" IsVisible="{Binding HasCommit}">
+
+        <!-- Subject to parents. Scrolls when it is tall; the code-behind limits its height, so
+             that the file list below always keeps part of the panel. -->
+        <ScrollViewer Grid.Row="0"
+                      Name="DetailsHeaderScroller"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="12,10,12,4" Spacing="6">
+            <SelectableTextBlock Name="DetailsSubject"
+                                 Text="{Binding Subject}"
+                                 FontSize="14" FontWeight="SemiBold"
+                                 TextWrapping="Wrap"
+                                 AutomationProperties.AutomationId="DetailsSubject" />
+            <SelectableTextBlock Name="DetailsBody"
+                                 Text="{Binding Body}"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding HasBody}"
+                                 AutomationProperties.AutomationId="DetailsBody" />
+
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,6,0,0">
+              <TextBlock Grid.Row="0" Classes="label" Text="Author" />
+              <SelectableTextBlock Grid.Row="0" Grid.Column="1" Name="DetailsAuthor" Classes="value"
+                                   Text="{Binding AuthorText}"
+                                   AutomationProperties.AutomationId="DetailsAuthor" />
+
+              <TextBlock Grid.Row="1" Classes="label" Text="Date" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Name="DetailsDate" Classes="value"
+                         Text="{Binding DateText}"
+                         AutomationProperties.AutomationId="DetailsDate" />
+
+              <TextBlock Grid.Row="2" Classes="label" Text="Committer" IsVisible="{Binding HasCommitter}" />
+              <SelectableTextBlock Grid.Row="2" Grid.Column="1" Name="DetailsCommitter" Classes="value"
+                                   Text="{Binding CommitterText}"
+                                   IsVisible="{Binding HasCommitter}"
+                                   AutomationProperties.AutomationId="DetailsCommitter" />
+
+              <TextBlock Grid.Row="3" Classes="label" Text="Commit date" IsVisible="{Binding HasCommitDate}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Name="DetailsCommitDate" Classes="value"
+                         Text="{Binding CommitDateText}"
+                         IsVisible="{Binding HasCommitDate}"
+                         AutomationProperties.AutomationId="DetailsCommitDate" />
+
+              <TextBlock Grid.Row="4" Classes="label" Text="SHA" />
+              <SelectableTextBlock Grid.Row="4" Grid.Column="1" Name="DetailsSha" Classes="value"
+                                   Text="{Binding Sha}"
+                                   AutomationProperties.AutomationId="DetailsSha" />
+
+              <TextBlock Grid.Row="5" Classes="label" Text="Parents" IsVisible="{Binding HasParents}" />
+              <ItemsControl Grid.Row="5" Grid.Column="1" Name="ParentLinks"
+                            Margin="0,0,0,6"
+                            ItemsSource="{Binding Parents}"
+                            IsVisible="{Binding HasParents}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ParentLink">
+                    <Button Theme="{StaticResource ParentLinkButton}"
+                            Classes="parentLink"
+                            Command="{Binding ActivateCommand}"
+                            ToolTip.Tip="{Binding Sha}"
+                            AutomationProperties.AutomationId="ParentLink"
+                            AutomationProperties.Name="{Binding ShortSha}">
+                      <TextBlock Text="{Binding ShortSha}" />
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Grid.Row="6" Classes="label" Text="Stash" IsVisible="{Binding IsStash}" />
+              <TextBlock Grid.Row="6" Grid.Column="1" Name="DetailsStash" Classes="value"
+                         Text="{Binding StashName}"
+                         IsVisible="{Binding IsStash}"
+                         AutomationProperties.AutomationId="DetailsStash" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- "Changed files (N)" with the Flat and Tree buttons. -->
+        <Border Grid.Row="1"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,0,8,0"
+                Height="34">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+              <Button Name="FlatFilesButton"
+                      Theme="{StaticResource FileListToggle}"
+                      Classes.selected="{Binding IsFlat}"
+                      Command="{Binding ShowFlatCommand}"
+                      ToolTip.Tip="List the files with their folders"
+                      AutomationProperties.AutomationId="FlatFilesButton"
+                      AutomationProperties.Name="Flat">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <c:Icon Data="{StaticResource IconList}" Width="13" Height="13" VerticalAlignment="Center" />
+                  <TextBlock Text="Flat" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Name="TreeFilesButton"
+                      Theme="{StaticResource FileListToggle}"
+                      Classes.selected="{Binding IsTree}"
+                      Command="{Binding ShowTreeCommand}"
+                      ToolTip.Tip="Show the files in a tree of folders"
+                      AutomationProperties.AutomationId="TreeFilesButton"
+                      AutomationProperties.Name="Tree">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <c:Icon Data="{StaticResource IconListTree}" Width="13" Height="13" VerticalAlignment="Center" />
+                  <TextBlock Text="Tree" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+            <TextBlock Name="ChangedFilesTitle"
+                       Classes="heading"
+                       Text="{Binding ChangedFilesTitle}"
+                       AutomationProperties.AutomationId="ChangedFilesTitle" />
+          </DockPanel>
+        </Border>
+
+        <!-- The changed files: rows 24 high, flat or as a tree. -->
+        <ItemsControl Grid.Row="2"
+                      Name="FileList"
+                      ItemsSource="{Binding Files}"
+                      AutomationProperties.AutomationId="FileList"
+                      AutomationProperties.Name="Changed files">
+          <ItemsControl.Template>
+            <ControlTemplate>
+              <ScrollViewer Name="PART_ScrollViewer"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChangedFileRow">
+              <Panel Height="24">
+
+                <!-- A folder of the tree: chevron and name; a click opens or closes it. -->
+                <Button Theme="{StaticResource FileFolderButton}"
+                        IsVisible="{Binding IsFolder}"
+                        Command="{Binding ToggleCommand}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="FileTreeFolder"
+                        AutomationProperties.Name="{Binding Name}">
+                  <DockPanel Margin="0,0,12,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <Panel DockPanel.Dock="Left" Width="16" Margin="0,0,6,0">
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronDown}" IsVisible="{Binding IsOpen}" />
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsOpen}" />
+                    </Panel>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+                <!-- A file: status letter, name, folder (flat list only), where a rename came from. -->
+                <DockPanel IsVisible="{Binding IsFile}"
+                           Background="Transparent"
+                           Margin="0,0,12,0"
+                           ToolTip.Tip="{Binding ToolTip}"
+                           AutomationProperties.AutomationId="ChangedFile"
+                           AutomationProperties.Name="{Binding Name}"
+                           AutomationProperties.AccessibilityView="Control">
+                  <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                  <TextBlock DockPanel.Dock="Left"
+                             Name="FileStatus"
+                             Classes="status"
+                             Classes.added="{Binding IsAdded}"
+                             Classes.modified="{Binding IsModified}"
+                             Classes.deleted="{Binding IsDeleted}"
+                             Classes.renamed="{Binding IsRenamedOrCopied}"
+                             Width="16" Margin="0,0,6,0"
+                             TextAlignment="Center"
+                             Text="{Binding StatusLetter}" />
+                  <TextBlock DockPanel.Dock="Left"
+                             Name="FileName"
+                             Text="{Binding Name}"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                  <TextBlock DockPanel.Dock="Left"
+                             Name="FileLocation"
+                             Classes="secondary"
+                             Text="{Binding Folder}"
+                             IsVisible="{Binding HasFolder}"
+                             Margin="8,0,0,0"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                  <TextBlock Name="FileOrigin"
+                             Classes="secondary"
+                             Text="{Binding OriginText}"
+                             IsVisible="{Binding HasOrigin}"
+                             Margin="8,0,0,0"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                </DockPanel>
+
+              </Panel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+      </Grid>
     </Grid>
   </Border>
 </UserControl>

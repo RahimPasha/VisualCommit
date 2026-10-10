@@ -26,9 +26,10 @@
         <ColumnDefinition Width="400" MinWidth="280" MaxWidth="720" />
       </Grid.ColumnDefinitions>
 
-      <shell:LeftPanelView Grid.Column="0" />
-      <shell:CommitGraphView Grid.Column="1" />
-      <shell:RightPanelView Grid.Column="2" />
+      <!-- The three regions show the active tab (D45). -->
+      <shell:LeftPanelView Grid.Column="0" DataContext="{Binding ActiveTab.LeftPanel}" />
+      <shell:CommitGraphView Grid.Column="1" DataContext="{Binding ActiveTab}" />
+      <shell:RightPanelView Grid.Column="2" DataContext="{Binding ActiveTab.Details}" />
 
       <!-- The splitters lie over the panel edges: a 7-wide grab area centred on the 1-wide
            border line that each panel draws itself. -->

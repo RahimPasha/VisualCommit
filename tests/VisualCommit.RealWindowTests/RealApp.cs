@@ -4,21 +4,40 @@ using System.Reflection;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Capturing;
 using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
+using VisualCommit.App.Services;
+using VisualCommit.Core;
+using VisualCommit.Core.Session;
+using VisualCommit.Testing;
 
 namespace VisualCommit.RealWindowTests;
 
 /// <summary>
 /// One run of the built app in a real window on the Windows desktop. It is found and inspected
-/// through UI Automation, clicked with the real mouse, and captured from the screen.
+/// through UI Automation, driven with the real mouse and keyboard, and captured from the screen.
 /// All positions taken or returned by this class are in logical pixels of the window's client
 /// area, the same units as the scripted walk-through, unless a name says "screen".
+/// Every method that gives input waits afterwards until the app has handled it and painted.
 /// </summary>
 public sealed class RealApp : IDisposable
 {
     private static readonly string Executable =
         typeof(RealApp).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .First(attribute => attribute.Key == "AppExecutable").Value!;
+
+    /// <summary>
+    /// The pause between two notches of <see cref="ScrollWheel"/>. A real wheel turned briskly
+    /// sends a notch every few tens of milliseconds; sending them all at once would let the app
+    /// fold them into one scroll and draw a single frame.
+    /// </summary>
+    private static readonly TimeSpan WheelNotchInterval = TimeSpan.FromMilliseconds(30);
+
+    /// <summary>The pause between two steps of <see cref="DragWithMouse"/>, so the app sees a movement and not a jump.</summary>
+    private static readonly TimeSpan DragStepInterval = TimeSpan.FromMilliseconds(20);
+
+    /// <summary>How often <see cref="WaitFor"/> looks at its condition.</summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly Process _process;
     private readonly UIA3Automation _automation;
@@ -64,6 +83,69 @@ public sealed class RealApp : IDisposable
         }
     }
 
+    /// <summary>
+    /// The whole window with its frame, in screen pixels, as Windows reports it (GetWindowRect).
+    /// On Windows 10 and 11 that includes the invisible border the window is resized by, so it
+    /// is a few pixels larger than what is drawn. For a check that the window comes back where
+    /// and as large as it was: compare it before closing and after starting again.
+    /// </summary>
+    public Rectangle ScreenBounds
+    {
+        get
+        {
+            NativeMethods.GetWindowRect(Handle, out var window);
+            return new Rectangle(window.Left, window.Top, window.Width, window.Height);
+        }
+    }
+
+    /// <summary>Whether the window is maximised.</summary>
+    public bool IsMaximized => NativeMethods.IsZoomed(Handle);
+
+    /// <summary>Whether the app is still running.</summary>
+    public bool HasExited => _process.HasExited;
+
+    /// <summary>
+    /// Starts the built app on a data folder after writing its session file, so that the app
+    /// starts with what <paramref name="session"/> holds: open tabs, recent repositories, the
+    /// window's placement and the panel widths (D46). This is how a check opens repositories.
+    /// </summary>
+    public static RealApp Launch(string dataDirectory, SessionState session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        JsonSessionStore.Write(new AppPaths(dataDirectory).SessionFile, session);
+        return Launch(dataDirectory);
+    }
+
+    /// <summary>
+    /// The app's log files in a data folder, oldest first: <c>logs/visualcommit-yyyyMMdd.log</c>,
+    /// one per day. A run's data folder is new, so they hold that run's log and nothing older.
+    /// </summary>
+    public static IReadOnlyList<string> LogFiles(string dataDirectory)
+    {
+        var folder = new AppPaths(dataDirectory).LogDirectory;
+        return Directory.Exists(folder)
+            ? Directory.GetFiles(folder, FileAppLog.FilePrefix + "*.log").Order(StringComparer.Ordinal).ToList()
+            : [];
+    }
+
+    /// <summary>
+    /// The text of the app's log in a data folder, all files in order: what a check reads to
+    /// find the measurements the app logs (D50). It can be read while the app is still writing.
+    /// </summary>
+    public static string ReadLog(string dataDirectory)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var file in LogFiles(dataDirectory))
+        {
+            // The app keeps no file open between entries, and lets others read while it appends.
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            text.Append(reader.ReadToEnd());
+        }
+
+        return text.ToString();
+    }
+
     /// <summary>Starts the built app on a data folder and waits for its main window.</summary>
     public static RealApp Launch(string dataDirectory)
     {
@@ -82,11 +164,11 @@ public sealed class RealApp : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        startInfo.Environment["VISUALCOMMIT_DATA_DIR"] = dataDirectory;
+        startInfo.Environment[AppPaths.DataDirectoryVariable] = dataDirectory;
 
         // The app's git calls must not depend on this machine's git configuration, as in the
         // scripted walk-through (HeadlessTestApp.IsolateFromTheMachine).
-        var emptyGitConfig = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "isolation", "gitconfig");
+        var emptyGitConfig = Path.Combine(GitIsolation.CeilingDirectory, "isolation", "gitconfig");
         Directory.CreateDirectory(Path.GetDirectoryName(emptyGitConfig)!);
         if (!File.Exists(emptyGitConfig))
         {
@@ -96,20 +178,19 @@ public sealed class RealApp : IDisposable
         startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         startInfo.Environment["GIT_CONFIG_GLOBAL"] = emptyGitConfig;
 
-        // The same list as GitIsolation.InheritedVariables in VisualCommit.Testing, which this
-        // project does not reference: what a surrounding process can hand git through its
-        // environment. Keep the two in step.
-        foreach (var variable in new[]
-        {
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
-            "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
-            "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX",
-            "GIT_INTERNAL_SUPER_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR", "GIT_NAMESPACE",
-            "GIT_TEMPLATE_DIR", "GIT_DEFAULT_HASH",
-        })
+        // Nor does git search for a repository above the tests' own folder.
+        startInfo.Environment[GitIsolation.CeilingVariable] = GitIsolation.CeilingDirectory;
+
+        // Dates in UTC, as in the scripted walk-through, whatever this machine's time zone (D43).
+        startInfo.Environment[DateDisplay.TimeZoneVariable] = "UTC";
+
+        // Nothing a surrounding process can hand git through its environment, as for the
+        // scripted walk-through's app.
+        foreach (var variable in GitIsolation.InheritedVariables)
         {
             startInfo.Environment.Remove(variable);
         }
+
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
         process.OutputDataReceived += (_, _) => { };
         process.ErrorDataReceived += (_, _) => { };
@@ -176,10 +257,92 @@ public sealed class RealApp : IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves the window so that its top-left corner is at this screen position, keeping its
+    /// size. The position is the one <see cref="ScreenBounds"/> reports.
+    /// </summary>
+    public void Move(int screenX, int screenY)
+    {
+        NativeMethods.SetWindowPos(
+            Handle, IntPtr.Zero, screenX, screenY, 0, 0,
+            NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder);
+        WaitUntilIdle();
+    }
+
     /// <summary>Finds an element by its automation id. Throws when it is not in the window.</summary>
     public AutomationElement Find(string automationId) =>
         Window.FindFirstDescendant(condition => condition.ByAutomationId(automationId))
         ?? throw new InvalidOperationException($"No element with the automation id '{automationId}' is in the window.");
+
+    /// <summary>Finds every element with this automation id, in the order UI Automation lists them. Empty when there is none.</summary>
+    public IReadOnlyList<AutomationElement> FindAll(string automationId) =>
+        Window.FindAllDescendants(condition => condition.ByAutomationId(automationId));
+
+    /// <summary>
+    /// Waits until <paramref name="condition"/> is true, looking every 100 ms: for work that the
+    /// app finishes after the input that started it, such as loading a repository.
+    /// </summary>
+    /// <param name="condition">What to wait for; it may ask UI Automation or read the log.</param>
+    /// <param name="what">What is awaited, in words, for the message when it does not come.</param>
+    /// <param name="timeout">How long to wait.</param>
+    /// <exception cref="TimeoutException">The condition was still false when the time was up.</exception>
+    /// <exception cref="InvalidOperationException">The app exited while the test waited.</exception>
+    public void WaitFor(Func<bool> condition, string what, TimeSpan timeout)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+
+        var clock = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (_process.HasExited)
+            {
+                throw new InvalidOperationException($"The app exited with code {_process.ExitCode} while waiting for {what}.");
+            }
+
+            if (clock.Elapsed >= timeout)
+            {
+                throw new TimeoutException(string.Create(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    $"Timed out after {timeout.TotalSeconds:0.###} s waiting for {what}."));
+            }
+
+            Thread.Sleep(PollInterval);
+        }
+    }
+
+    /// <summary>
+    /// Waits for the platform's folder dialog the app opened with <paramref name="title"/>,
+    /// writes <paramref name="folder"/> into its folder box and confirms it: what a user does in
+    /// the dialog that Open and Init show (D42). Windows' folder dialog has the folder box with
+    /// automation id 1152 and its confirm button with automation id 1.
+    /// </summary>
+    public void ChooseFolderInDialog(string title, string folder, TimeSpan timeout)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        Window? dialog = null;
+        WaitFor(
+            () =>
+            {
+                dialog = Window.ModalWindows.FirstOrDefault(window => window.Title == title)
+                    ?? _automation.GetDesktop()
+                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                        .Select(element => element.AsWindow())
+                        .FirstOrDefault(window => window.Title == title);
+                return dialog is not null;
+            },
+            $"the folder dialog \"{title}\"",
+            timeout);
+
+        var box = dialog!.FindFirstDescendant(condition => condition.ByAutomationId("1152"))?.AsTextBox()
+            ?? throw new InvalidOperationException("The folder dialog has no folder box (automation id 1152).");
+        box.Text = folder;
+        var confirm = dialog.FindFirstDescendant(condition => condition.ByAutomationId("1").And(condition.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton()
+            ?? throw new InvalidOperationException("The folder dialog has no confirm button (automation id 1).");
+        confirm.Invoke();
+        WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the folder dialog to close", timeout);
+        WaitUntilIdle();
+    }
 
     /// <summary>The names of all text elements in the window.</summary>
     public IReadOnlyList<string> Texts() =>
@@ -203,16 +366,139 @@ public sealed class RealApp : IDisposable
     /// <summary>Moves the real mouse to the centre of an element and clicks the left button.</summary>
     public void ClickWithMouse(AutomationElement element)
     {
-        var bounds = element.BoundingRectangle;
-        Mouse.Click(new Point(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2)));
+        Mouse.Click(CentreOnScreen(element));
+        WaitUntilIdle();
+    }
+
+    /// <summary>Moves the real mouse to the centre of an element and clicks the right button.</summary>
+    public void RightClickWithMouse(AutomationElement element)
+    {
+        Mouse.RightClick(CentreOnScreen(element));
+        WaitUntilIdle();
+    }
+
+    /// <summary>Moves the real mouse to the centre of an element and double-clicks the left button.</summary>
+    public void DoubleClickWithMouse(AutomationElement element)
+    {
+        Mouse.DoubleClick(CentreOnScreen(element));
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Moves the real mouse to a point of the client area and clicks the left button: for what
+    /// UI Automation cannot find on its own, such as a row of the commit graph (D49).
+    /// </summary>
+    public void ClickAt(float x, float y)
+    {
+        Mouse.Click(OnScreen(x, y));
+        WaitUntilIdle();
+    }
+
+    /// <summary>Moves the real mouse to a point of the client area and double-clicks the left button.</summary>
+    public void DoubleClickAt(float x, float y)
+    {
+        Mouse.DoubleClick(OnScreen(x, y));
+        WaitUntilIdle();
+    }
+
+    /// <summary>Moves the real mouse to a point of the client area and clicks the right button.</summary>
+    public void RightClickAt(float x, float y)
+    {
+        Mouse.RightClick(OnScreen(x, y));
         WaitUntilIdle();
     }
 
     /// <summary>Moves the real mouse to a point of the client area where nothing reacts to it.</summary>
     public void MoveMouseTo(float x, float y)
     {
-        var origin = ClientOriginOnScreen();
-        Mouse.MoveTo(new Point(origin.X + (int)(x * Scaling), origin.Y + (int)(y * Scaling)));
+        Mouse.MoveTo(OnScreen(x, y));
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Presses the left button at one point of the client area, moves to another in
+    /// <paramref name="steps"/> steps and releases it there: a drag, such as of a splitter.
+    /// The button is released even when a move fails, so it is never left held down.
+    /// </summary>
+    public void DragWithMouse(float fromX, float fromY, float toX, float toY, int steps = 6)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(steps, 1);
+        var from = OnScreen(fromX, fromY);
+        var to = OnScreen(toX, toY);
+
+        Mouse.MoveTo(from);
+        Mouse.Down(MouseButton.Left);
+        try
+        {
+            for (var step = 1; step <= steps; step++)
+            {
+                Thread.Sleep(DragStepInterval);
+                Mouse.MoveTo(new Point(
+                    from.X + ((to.X - from.X) * step / steps),
+                    from.Y + ((to.Y - from.Y) * step / steps)));
+            }
+        }
+        finally
+        {
+            Mouse.Up(MouseButton.Left);
+        }
+
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Moves the real mouse to a point of the client area and turns the wheel by
+    /// <paramref name="notches"/>: positive scrolls up, negative down, as FlaUI's
+    /// <see cref="Mouse.Scroll"/>. Each notch is its own wheel event, a moment after the last,
+    /// as from a real wheel.
+    /// </summary>
+    public void ScrollWheel(float x, float y, int notches)
+    {
+        Mouse.MoveTo(OnScreen(x, y));
+        var direction = Math.Sign(notches);
+        for (var notch = 0; notch < Math.Abs(notches); notch++)
+        {
+            if (notch > 0)
+            {
+                Thread.Sleep(WheelNotchInterval);
+            }
+
+            Mouse.Scroll(direction);
+        }
+
+        WaitUntilIdle();
+    }
+
+    /// <summary>Types text into whatever has the keyboard focus, character by character, as the keyboard would.</summary>
+    public void TypeText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        Keyboard.Type(text);
+        WaitUntilIdle();
+    }
+
+    /// <summary>Presses and releases one key, such as <see cref="VirtualKeyShort.DOWN"/> or <see cref="VirtualKeyShort.RETURN"/>.</summary>
+    public void PressKey(VirtualKeyShort key)
+    {
+        Keyboard.Type(key);
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Presses a combination: the last key is pressed and released while the ones before it
+    /// are held, for example <c>PressKeys(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_F)</c>
+    /// for Ctrl+F. The held keys are released even when the press fails.
+    /// </summary>
+    public void PressKeys(params VirtualKeyShort[] keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentOutOfRangeException.ThrowIfLessThan(keys.Length, 1);
+
+        using (Keyboard.Pressing(keys[..^1]))
+        {
+            Keyboard.Type(keys[^1]);
+        }
+
         WaitUntilIdle();
     }
 
@@ -293,6 +579,20 @@ public sealed class RealApp : IDisposable
         var origin = default(NativeMethods.Point);
         NativeMethods.ClientToScreen(Handle, ref origin);
         return new Point(origin.X, origin.Y);
+    }
+
+    /// <summary>The screen pixel of a client-area point given in logical pixels.</summary>
+    private Point OnScreen(float x, float y)
+    {
+        var origin = ClientOriginOnScreen();
+        return new Point(origin.X + (int)(x * Scaling), origin.Y + (int)(y * Scaling));
+    }
+
+    /// <summary>The screen pixel at the centre of an element.</summary>
+    private static Point CentreOnScreen(AutomationElement element)
+    {
+        var bounds = element.BoundingRectangle;
+        return new Point(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2));
     }
 
     private (int Width, int Height) FrameSize()

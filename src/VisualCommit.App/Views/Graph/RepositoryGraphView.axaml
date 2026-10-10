@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels"
+             x:Class="VisualCommit.App.Views.Graph.RepositoryGraphView"
+             x:DataType="vm:RepositoryViewModel">
+
+  <!-- The graph of an open repository (D49): column headers, then the custom-drawn rows. The
+       headers take their widths from the rows' column layout (code-behind), so the two line up
+       and hide the same columns when the area is narrow. -->
+  <Grid RowDefinitions="28,*">
+
+    <Border Name="ColumnHeaders"
+            Grid.Row="0"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1">
+      <Grid Name="HeaderColumns" ColumnDefinitions="130,48,120,140,120,72">
+        <Grid.Styles>
+          <Style Selector="TextBlock.heading">
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+          </Style>
+        </Grid.Styles>
+        <TextBlock Name="HeaderRefs" Grid.Column="0" Classes="heading" Text="Branch / Tag" />
+        <TextBlock Name="HeaderGraph" Grid.Column="1" Classes="heading" Text="Graph" />
+        <TextBlock Name="HeaderMessage" Grid.Column="2" Classes="heading" Text="Message" />
+        <TextBlock Name="HeaderAuthor" Grid.Column="3" Classes="heading" Text="Author" />
+        <TextBlock Name="HeaderDate" Grid.Column="4" Classes="heading" Text="Date" />
+        <TextBlock Name="HeaderSha" Grid.Column="5" Classes="heading" Text="SHA" />
+      </Grid>
+    </Border>
+
+    <!-- Data is bound before the scroll offset, so that a new tab's offset is clamped to that
+         tab's history and not to the one shown before. -->
+    <c:CommitGraphControl Name="GraphRows"
+                          Grid.Row="1"
+                          Data="{Binding Graph}"
+                          Dates="{Binding Dates}"
+                          SelectedIndex="{Binding SelectedIndex}"
+                          ScrollOffset="{Binding ScrollOffset}"
+                          AutomationProperties.AutomationId="GraphRows"
+                          AutomationProperties.Name="Commit graph" />
+
+    <!-- Lies over the right edge of the rows and takes no width from the columns. The
+         code-behind keeps it in step with the rows' scroll offset and extent. -->
+    <ScrollBar Name="GraphScrollBar"
+               Grid.Row="1"
+               Orientation="Vertical"
+               HorizontalAlignment="Right"
+               Minimum="0"
+               SmallChange="26"
+               IsVisible="False"
+               AutomationProperties.AutomationId="GraphScrollBar" />
+
+    <StackPanel Name="NoCommits"
+                Grid.Row="1"
+                IsVisible="{Binding HasNoCommits}"
+                VerticalAlignment="Center"
+                Margin="24,0"
+                Spacing="8">
+      <TextBlock Name="NoCommitsTitle"
+                 Text="No commits yet"
+                 FontSize="16" FontWeight="SemiBold"
+                 HorizontalAlignment="Center" />
+      <TextBlock Name="NoCommitsText"
+                 Classes="secondary"
+                 Text="Make the first commit in this repository to see it here."
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <TextBlock Name="GraphError"
+               Grid.Row="1"
+               Classes="error"
+               Text="{Binding ErrorText}"
+               IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"
+               TextWrapping="Wrap" TextAlignment="Center"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               Margin="24,0" />
+  </Grid>
+</UserControl>

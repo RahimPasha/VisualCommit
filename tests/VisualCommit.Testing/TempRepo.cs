@@ -47,6 +47,9 @@ public sealed class TempRepo : IDisposable
             ["GIT_AUTHOR_EMAIL"] = AuthorEmail,
             ["GIT_COMMITTER_NAME"] = AuthorName,
             ["GIT_COMMITTER_EMAIL"] = AuthorEmail,
+
+            // No search for a repository above the tests' own folder.
+            [GitIsolation.CeilingVariable] = GitIsolation.CeilingDirectory,
         };
 
         // Nor anything the surrounding process passes to git through its environment: extra
@@ -150,8 +153,48 @@ public sealed class TempRepo : IDisposable
 
     public Task CheckoutAsync(string name) => GitAsync("checkout", "--quiet", name);
 
+    /// <summary>Detaches HEAD at <paramref name="target"/>.</summary>
+    public Task DetachAsync(string target = "HEAD") => GitAsync("checkout", "--quiet", "--detach", target);
+
     /// <summary>Creates a lightweight tag at <paramref name="target"/>.</summary>
     public Task TagAsync(string name, string target = "HEAD") => GitAsync("tag", name, target);
+
+    /// <summary>Creates an annotated tag at <paramref name="target"/>. Its tagger date is the clock's current time.</summary>
+    public Task AnnotatedTagAsync(string name, string message, string target = "HEAD") =>
+        GitAsync("tag", "--annotate", "--message", message, name, target);
+
+    /// <summary>
+    /// Stashes the changes in the working tree with <paramref name="message"/> (git records it as
+    /// "On &lt;branch&gt;: &lt;message&gt;"). Returns the stash commit's SHA.
+    /// </summary>
+    public async Task<string> StashAsync(string message)
+    {
+        await GitAsync("stash", "push", "--quiet", "--message", message);
+        _clock = _clock.AddMinutes(1);
+        return (await GitAsync("rev-parse", "refs/stash")).StandardOutput.Trim();
+    }
+
+    /// <summary>
+    /// Creates an empty bare repository next to this one's working tree (not inside it) and adds
+    /// it as the remote <paramref name="name"/>. Returns the bare repository's folder. Push to it
+    /// with <see cref="PushAsync"/>.
+    /// </summary>
+    public async Task<string> AddBareRemoteAsync(string name = "origin")
+    {
+        var barePath = _root.Combine(name + ".git");
+        Directory.CreateDirectory(barePath);
+        var command = new GitCommand("init", "--quiet", "--bare") { WorkingDirectory = barePath, Environment = Environment };
+        (await Runner.RunAsync(command)).EnsureSuccess(command);
+        await GitAsync("remote", "add", name, barePath);
+        return barePath;
+    }
+
+    /// <summary>Pushes <paramref name="refspecs"/> to <paramref name="remote"/>; with <paramref name="setUpstream"/>, each pushed branch tracks the remote branch.</summary>
+    public Task PushAsync(string remote, bool setUpstream, params string[] refspecs) =>
+        GitAsync([.. new[] { "push", "--quiet" }, .. setUpstream ? new[] { "--set-upstream" } : [], remote, .. refspecs]);
+
+    /// <summary>A folder next to this repository's working tree, inside the same temporary folder, for clones and other repos a test needs.</summary>
+    public string SiblingPath(string name) => _root.Combine(name);
 
     /// <summary>Merges <paramref name="branch"/> into the current branch with a merge commit. Returns the merge commit's SHA.</summary>
     public async Task<string> MergeAsync(string branch, string? message = null)
@@ -159,6 +202,54 @@ public sealed class TempRepo : IDisposable
         await GitAsync("merge", "--quiet", "--no-ff", "--message", message ?? $"Merge branch '{branch}'", branch);
         _clock = _clock.AddMinutes(1);
         return await HeadAsync();
+    }
+
+    /// <summary>
+    /// Makes an independent copy of this repository and everything next to it (bare remotes,
+    /// clones) in a new temporary folder, with remote URLs that pointed into the old folder
+    /// pointed at the copy. The copy's clock carries on from this one's. Copying a built
+    /// scenario is much faster than building it again, because building runs git dozens of times.
+    /// </summary>
+    public async Task<TempRepo> CopyAsync()
+    {
+        var root = new TempDirectory(System.IO.Path.GetFileName(Path));
+        try
+        {
+            CopyDirectory(_root.Path, root.Path);
+            var copy = new TempRepo(root, root.Combine(System.IO.Path.GetFileName(Path))) { _clock = _clock };
+
+            var remotes = (await copy.GitAsync("remote")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var remote in remotes)
+            {
+                var url = (await copy.GitAsync("remote", "get-url", remote)).StandardOutput.Trim();
+                var full = System.IO.Path.GetFullPath(url);
+                if (full.StartsWith(_root.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    await copy.GitAsync("remote", "set-url", remote, root.Path + full[_root.Path.Length..]);
+                }
+            }
+
+            return copy;
+        }
+        catch
+        {
+            root.Dispose();
+            throw;
+        }
+    }
+
+    private static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(to, System.IO.Path.GetRelativePath(from, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            File.Copy(file, System.IO.Path.Combine(to, System.IO.Path.GetRelativePath(from, file)));
+        }
     }
 
     /// <summary>The SHA of the current commit.</summary>

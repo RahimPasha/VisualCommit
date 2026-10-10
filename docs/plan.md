@@ -148,6 +148,8 @@ Visual checks:
 
 Done when: a 100k-commit repo shows its first graph within about 2 seconds and scrolls smoothly, and the visual gate passes. The two seconds and the smoothness are judged on the Windows development machine; a time measured in a cloud session or on a CI runner is recorded as an indication, with the machine named.
 
+Outcome: delivered in full, and the gate passed on `5673c3f`. Q1 measured 1002 ms to the first rows of the 100k repo, and the frames after the load had a 95th percentile of 1.1 ms. What was built and proven is in [handoffs/phase-1.md](handoffs/phase-1.md), the gate in [test-reports/phase-1.md](test-reports/phase-1.md). Two follow-ups it found are now listed under phase 3, and a cosmetic one under phase 6.
+
 ### Phase 2 — Diff and commit workflow (L)
 
 Covers C4, C5.
@@ -178,6 +180,8 @@ Delivers:
 - Context menus on every object, double-click actions, drag a branch onto a branch, multi-select commits.
 - Operation queue with progress, cancel, and error messages that include git's own output.
 - Credential and SSH passphrase prompts as in-app dialogs.
+- From phase 1: ssh's own prompts (an unknown host key, a key's passphrase) are answered in the app or turned off. Today a clone over ssh can wait for an answer on the terminal the app was started from, until it is cancelled.
+- From phase 1: the left panel's selection follows the graph's. Today a clicked ref keeps its selection background after the graph selection moves on.
 - Backup references before destructive operations.
 - Basic conflict state: a banner with abort, and conflicted files flagged. The full resolver comes in phase 4.
 
@@ -236,6 +240,7 @@ Delivers:
 - Workspaces (repo groups) and a dashboard showing each repo's branch, ahead/behind and uncommitted changes, with bulk fetch and pull.
 - Command palette and keyboard shortcuts.
 - Settings screen (identity, pull mode, auto-fetch interval, external tools) and theme polish.
+- From phase 1: a long folder in the welcome page's error wraps at awkward places ("C:" alone on a line, a name split). Nothing is cut off.
 
 Visual checks:
 - The dashboard with ten repos in mixed states; bulk fetch progress.
@@ -289,10 +294,12 @@ O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 |---|---|---|
 | 1 | The real-window pass happens only on the Windows machine; development can also happen in a Linux cloud session (D39), which then leaves that pass to a Windows session. macOS and Linux are covered by CI builds and the scripted walk-through until the owner tests on a Mac by hand. | Mac testing: when the owner chooses; at the latest phase 8 |
 | 2 | The diff viewer and conflict resolver are custom-built; they are the largest UI effort in the project. | Phases 2 and 4 |
-| 3 | Settled in phase 0: the real-window pass works. The in-repo harness finds the app through Windows UI Automation, clicks with the real mouse and captures the window, in about 30 seconds. Still true: it needs an unlocked desktop, and the development screen (a work area of 1500×952 logical pixels at 200% scaling) is too small for its 1920×1080 size, so that size is only ever proven by the scripted walk-through unless a larger screen is used. | Each phase's gate |
+| 3 | Settled in phase 0: the real-window pass works. The in-repo harness finds the app through Windows UI Automation, clicks with the real mouse and captures the window; phases 0 and 1 together take about 3 minutes. Its comparison passes small differences such as a hover background or a tooltip (phase 1's report), so only the inspection of the pictures catches them. Still true: it needs an unlocked desktop, and the development screen (a work area of 1500×952 logical pixels at 200% scaling) is too small for its 1920×1080 size, so that size is only ever proven by the scripted walk-through unless a larger screen is used. | Each phase's gate |
 | 4 | Hosting checks need a test account or token for each of GitHub, Azure DevOps and GitLab. | Phase 7 |
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
 | 7 | A built-in terminal (O13) is harder in Avalonia than in web technology. | Backlog |
 | 8 | Settled on 2026-10-06: the owner made the GitHub repo public, so CI no longer runs on a monthly allowance of minutes (D38). While it was private, phase 0 used the allowance up. Still true: a job that hangs wastes time, so `ci.yml` keeps its time limits low. | Settled |
 | 9 | The tests are pinned to xunit.v3 3.2.2 because Avalonia's headless test package does not work with xunit.v3 4.x (D24). Check for a newer Avalonia.Headless.XUnit when Avalonia is updated. | Whenever packages are updated |
+| 10 | Q1 has about a second to spare on the development laptop (1002 ms at phase 1's gate), but the laptop is slower when hot, and most of the time is `git log --date-order`, which reads the whole history before its first commit when the repository has no commit-graph file. A much larger repository, or a slower machine, could need another way to the first page. | Whenever the graph or its loading changes |
+| 11 | GitHub moves the `ubuntu-latest` CI runner to Ubuntu 26 from 2026-10-19 (an annotation on every run). The Linux job and the set-up script may need attention then. | The first CI run after 2026-10-19 |
