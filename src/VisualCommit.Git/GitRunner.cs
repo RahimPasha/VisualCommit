@@ -29,12 +29,15 @@ public sealed class GitRunner : IGitRunner
     /// <summary>
     /// Applied to every call. English messages keep git's output parseable and the same on every
     /// machine; with prompts off, git fails instead of waiting on a terminal that is not there.
+    /// The editor is git's shell's no-op command, so a command that wants an editor goes on
+    /// without one instead of opening the user's editor out of sight (D68).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string?> DefaultEnvironment = new Dictionary<string, string?>
     {
         ["LC_ALL"] = "en_US.UTF-8",
         ["LANG"] = "en_US.UTF-8",
         ["GIT_TERMINAL_PROMPT"] = "0",
+        ["GIT_EDITOR"] = ":",
     };
 
     private readonly IGitCallLog? _callLog;
@@ -160,8 +163,10 @@ public sealed class GitRunner : IGitRunner
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardInputEncoding = Utf8NoBom,
-            StandardOutputEncoding = Utf8NoBom,
+            StandardInputEncoding = command.Encoding ?? Utf8NoBom,
+            StandardOutputEncoding = command.Encoding ?? Utf8NoBom,
+
+            // Git's messages are text whatever the command's content is.
             StandardErrorEncoding = Utf8NoBom,
         };
 

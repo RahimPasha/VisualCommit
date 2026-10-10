@@ -59,15 +59,15 @@ Start:
 
 Git layer:
 
-- [ ] 6. Working-tree status (`git status --porcelain=v2`): staged, unstaged, untracked,
+- [x] 6. Working-tree status (`git status --porcelain=v2`): staged, unstaged, untracked,
   renamed and conflicted files. Tests.
-- [ ] 7. Diffs: a file's unstaged, staged and untracked changes and a commit's change to a file;
+- [x] 7. Diffs: a file's unstaged, staged and untracked changes and a commit's change to a file;
   the unified-diff parser; binary files, images and file sizes. Tests.
-- [ ] 8. Patches for a hunk or chosen lines, to stage, unstage and discard, applied with
+- [x] 8. Patches for a hunk or chosen lines, to stage, unstage and discard, applied with
   `git apply`. Tests, including a repository with `core.autocrlf`.
-- [ ] 9. Stage, unstage and discard whole files; commit and amend with the message passed
+- [x] 9. Stage, unstage and discard whole files; commit and amend with the message passed
   explicitly and no editor. Tests.
-- [ ] 10. A snapshot before every discard, untracked files included, kept under
+- [x] 10. A snapshot before every discard, untracked files included, kept under
   `refs/visualcommit/backup/`, and restoring it. Tests.
 - [ ] 11. The watcher sees the working tree (not `.git`, not ignored files), and the app's own
   writes do not set it off. Tests.

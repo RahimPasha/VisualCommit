@@ -52,9 +52,67 @@ public interface IGitRepository
     /// <summary>Reads the full message, the author and committer and the changed files of one commit or stash.</summary>
     Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default);
 
-    /// <summary>Creates a watcher for this repository's git folder (D52). It does nothing until started.</summary>
+    /// <summary>Reads the staged, unstaged and untracked files (<c>git status --porcelain=v2</c>).</summary>
+    Task<WorkingTreeStatus> ReadStatusAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one file's diff, byte for byte (D66). A file without changes on that side gives <see cref="Diff.FileDiff.Empty"/>.</summary>
+    Task<Diff.FileDiff> ReadDiffAsync(Diff.DiffTarget target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads one version of a file whole, or null when it does not exist there or is larger than
+    /// <paramref name="maxBytes"/> (its size is then in <see cref="ReadFileSizeAsync"/>).
+    /// </summary>
+    Task<byte[]?> ReadFileAsync(Diff.FileVersion version, long maxBytes, CancellationToken cancellationToken = default);
+
+    /// <summary>The size in bytes of one version of a file, or null when it does not exist there.</summary>
+    Task<long?> ReadFileSizeAsync(Diff.FileVersion version, CancellationToken cancellationToken = default);
+
+    /// <summary>Stages these files whole: changes, new files and deletions (<c>git add --all</c>).</summary>
+    Task StageAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+
+    /// <summary>Unstages these files whole: their index entries go back to HEAD's (or away, before the first commit).</summary>
+    Task UnstageAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies a patch made by <see cref="Diff.PatchBuilder"/>: to the index (<paramref name="toIndex"/>)
+    /// or to the working tree, forward or in reverse (D66).
+    /// </summary>
+    /// <exception cref="GitException">Git refused the patch; the message is git's own.</exception>
+    Task ApplyPatchAsync(string patch, bool toIndex, Diff.PatchDirection direction, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves the working-tree versions of <paramref name="paths"/> (untracked ones included, a
+    /// deleted one as deleted) in a snapshot commit kept under <c>refs/visualcommit/backup/</c>
+    /// (D67), before they are discarded.
+    /// </summary>
+    Task<DiscardSnapshot> SaveSnapshotAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Discards the unstaged changes of these files whole: tracked files get their index version
+    /// back, untracked files are deleted. Take a snapshot first (<see cref="SaveSnapshotAsync"/>).
+    /// </summary>
+    Task DiscardAsync(IReadOnlyList<string> paths, IReadOnlySet<string> untracked, CancellationToken cancellationToken = default);
+
+    /// <summary>Puts the files of a snapshot back into the working tree as they were when it was taken (D67).</summary>
+    Task RestoreSnapshotAsync(DiscardSnapshot snapshot, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Commits what is staged with <paramref name="message"/>, or with <paramref name="amend"/>
+    /// replaces HEAD's commit (D68). Returns the new commit's id.
+    /// </summary>
+    /// <exception cref="GitException">Git refused, for example a hook or a missing identity; the message is git's own.</exception>
+    Task<string> CommitAsync(string message, bool amend, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a watcher for this repository's git folder and working tree (D52, D71). It does nothing until started.</summary>
     IRepositoryWatcher CreateWatcher();
 }
+
+/// <summary>A snapshot taken before a discard (D67).</summary>
+/// <param name="Ref">The ref that keeps it, under <c>refs/visualcommit/backup/</c>.</param>
+/// <param name="Commit">The snapshot commit's id.</param>
+/// <param name="Paths">The files it was taken for.</param>
+/// <param name="Present">Those of <paramref name="Paths"/> that existed in the working tree; the others were deleted there.</param>
+public sealed record DiscardSnapshot(string Ref, string Commit, IReadOnlyList<string> Paths, IReadOnlySet<string> Present);
 
 /// <summary>Opens, initialises and clones repositories. The app's implementation waits for git to be found first.</summary>
 public interface IRepositoryProvider

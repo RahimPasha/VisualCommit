@@ -994,20 +994,20 @@ public class CommitGraphControlTests
     /// quick, and the same on every machine. It holds a line of commits, or the commits and refs
     /// of graph data read once from a real repository.
     /// </summary>
-    private sealed class FakeRepository(IReadOnlyList<CommitInfo> commits, RepoRefs refs) : IGitRepository
+    private sealed class FakeRepository(IReadOnlyList<CommitInfo> commits, RepoRefs refs) : FakeRepositoryBase
     {
         public IReadOnlyList<CommitInfo> Commits => commits;
 
         /// <summary>When set, reading the refs fails with it, as git failing would.</summary>
         public Exception? Failure { get; set; }
 
-        public string WorkingDirectory => Path.Combine(Path.GetTempPath(), "fake");
+        public override string WorkingDirectory => Path.Combine(Path.GetTempPath(), "fake");
 
-        public string GitDirectory => Path.Combine(WorkingDirectory, ".git");
+        public override string GitDirectory => Path.Combine(WorkingDirectory, ".git");
 
-        public string CommonDirectory => GitDirectory;
+        public override string CommonDirectory => GitDirectory;
 
-        public string Name => "fake";
+        public override string Name => "fake";
 
         /// <summary><paramref name="count"/> commits in a line, with <c>main</c> (HEAD) on the newest.</summary>
         public static FakeRepository Linear(int count)
@@ -1022,10 +1022,10 @@ public class CommitGraphControlTests
         public static FakeRepository From(CommitGraphData data) =>
             new(Enumerable.Range(0, data.Count).Select(data.CommitAt).ToList(), data.Refs);
 
-        public Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) =>
+        public override Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult(refs) : Task.FromException<RepoRefs>(Failure);
 
-        public Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+        public override Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
         {
             for (var start = 0; start < commits.Count; start += 100)
             {
@@ -1035,7 +1035,7 @@ public class CommitGraphControlTests
             return Task.CompletedTask;
         }
 
-        public Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default)
+        public override Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default)
         {
             var commit = Commits.First(candidate => candidate.Sha == sha);
             return Task.FromResult(new CommitDetails(
@@ -1052,7 +1052,7 @@ public class CommitGraphControlTests
                 []));
         }
 
-        public IRepositoryWatcher CreateWatcher() => new QuietWatcher();
+        public override IRepositoryWatcher CreateWatcher() => new QuietWatcher();
 
         private sealed class QuietWatcher : IRepositoryWatcher
         {
