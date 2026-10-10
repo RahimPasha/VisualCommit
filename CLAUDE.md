@@ -275,11 +275,13 @@ What to know about them:
   repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 30 seconds: tell the owner before starting
-  it, and run it only as part of the gate. It needs an unlocked desktop and the scripted
-  screenshots, so run `dotnet test` first. Its screenshots, the pictures of the differences and
-  `run.txt` (scaling, sizes, how much each screenshot differs from the scripted one) land under
-  `artifacts/visual/phase-N/real-window/`.
+  app on the desktop and moves the real mouse for about 3 minutes (phases 0 and 1): tell the
+  owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
+  and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
+  pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
+  `dotnet build` at the root does not rebuild it, and a stale build of the pass would run. Its
+  screenshots, the pictures of the differences and `run.txt` (scaling, sizes, how much each
+  screenshot differs from the scripted one) land under `artifacts/visual/phase-N/real-window/`.
 - To run the app without touching the real settings, set the environment variable
   `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
   folder: `%APPDATA%\VisualCommit` on Windows, `~/.config/VisualCommit` on Linux,
