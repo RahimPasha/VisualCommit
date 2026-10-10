@@ -58,6 +58,11 @@ public class RepositoryWatcherTests
         await repository.LoadCommitsAsync(refs, _ => { }, TestCancelled);
         await repository.ReadCommitDetailsAsync(refs.Head.Sha!, TestCancelled);
         await repository.ReadCommitDetailsAsync(refs.Stashes[0].Sha, TestCancelled);
+        File.SetLastWriteTimeUtc(Path.Combine(repo.Path, "a.txt"), DateTime.UtcNow.AddMinutes(-5));
+        await Task.Delay(Settle, TestCancelled);
+        changed.Reset();
+        await repository.ReadStatusAsync(TestCancelled);
+        await repository.ReadDiffAsync(new Core.Diff.DiffTarget(Core.Diff.DiffSide.Unstaged, "a.txt", Core.Git.FileChangeKind.Modified), TestCancelled);
 
         // Git writes objects and lock files on the way to a change; the change itself follows.
         File.WriteAllText(Path.Combine(repository.CommonDirectory, "objects", "visualcommit-test"), "x");
@@ -65,7 +70,7 @@ public class RepositoryWatcherTests
         File.Delete(Path.Combine(repository.GitDirectory, "refs", "heads", "main.lock"));
 
         await Task.Delay(Settle, TestCancelled);
-        Assert.Equal(0, changed.Count);
+        Assert.True(changed.Count == 0, $"Changed was raised {changed.Count} times, the last for the git folder: {changed.Last?.GitFolder}, the working tree: {changed.Last?.WorkingTree}.");
     }
 
     [Fact]
@@ -149,6 +154,88 @@ public class RepositoryWatcherTests
     }
 
     [Fact]
+    public async Task A_file_edited_in_the_working_tree_raises_a_working_tree_change()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        var repository = await OpenAsync(repo);
+        using var watcher = (RepositoryWatcher)repository.CreateWatcher();
+        var changed = new Counter(watcher);
+        watcher.Start();
+
+        repo.WriteFile("notes.txt", "A note\n");
+
+        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+        Assert.True(changed.Last!.WorkingTree);
+        Assert.False(changed.Last.GitFolder);
+    }
+
+    [Fact]
+    public async Task A_commit_made_outside_the_app_is_a_git_folder_change()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        var repository = await OpenAsync(repo);
+        using var watcher = (RepositoryWatcher)repository.CreateWatcher();
+        var changed = new Counter(watcher);
+        watcher.Start();
+
+        await repo.GitAsync("commit", "--quiet", "--allow-empty", "--message", "Empty");
+
+        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+        Assert.True(changed.Last!.GitFolder);
+    }
+
+    [Fact]
+    public async Task Changes_to_ignored_files_alone_raise_nothing()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        File.AppendAllText(Path.Combine(repo.Path, ".git", "info", "exclude"), "build/\n");
+        var repository = await OpenAsync(repo);
+        using var watcher = (RepositoryWatcher)repository.CreateWatcher();
+        var changed = new Counter(watcher);
+        watcher.Start();
+        await Task.Delay(Settle, TestCancelled);
+        changed.Reset();
+
+        repo.WriteFile("build/out.txt", "output\n").WriteFile("build/deeper/more.txt", "more\n");
+        await Task.Delay(Settle + Settle, TestCancelled);
+        Assert.Equal(0, changed.Count);
+
+        repo.WriteFile("notes.txt", "A note\n");
+        Assert.True(await changed.WaitForAsync(1, Timeout), "A change to a file that is not ignored was not reported.");
+    }
+
+    [Fact]
+    public async Task Changes_while_paused_are_not_reported()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        var repository = await OpenAsync(repo);
+        using var watcher = (RepositoryWatcher)repository.CreateWatcher();
+        var changed = new Counter(watcher);
+        watcher.Start();
+
+        using (watcher.Pause())
+        {
+            repo.WriteFile("written-by-the-app.txt", "x\n");
+            await repo.GitAsync("add", "written-by-the-app.txt");
+            await Task.Delay(Settle, TestCancelled);
+        }
+
+        await Task.Delay(Settle, TestCancelled);
+        changed.Reset();
+        repo.WriteFile("later.txt", "y\n");
+        Assert.True(await changed.WaitForAsync(1, Timeout), "A change after the pause was not reported.");
+    }
+
+    [Theory]
+    [InlineData(".git", true)]
+    [InlineData(".git/index", true)]
+    [InlineData(@".git\refs\heads\main", true)]
+    [InlineData(".gitignore", false)]
+    [InlineData("src/.git-like.txt", false)]
+    public void Leaves_the_working_trees_git_folder_to_the_git_folder_watcher(string relativePath, bool inGitFolder) =>
+        Assert.Equal(inGitFolder, RepositoryWatcher.IsInGitFolder(relativePath));
+
+    [Fact]
     public void A_folder_that_cannot_be_watched_is_logged_and_does_not_throw()
     {
         using var folder = new TempDirectory("watch");
@@ -181,14 +268,18 @@ public class RepositoryWatcherTests
         private int _count;
 
         public Counter(RepositoryWatcher watcher) =>
-            watcher.Changed += (_, _) =>
+            watcher.Changed += (_, e) =>
             {
                 OnThreadPool = Thread.CurrentThread.IsThreadPoolThread;
+                Last = e;
                 Interlocked.Increment(ref _count);
                 _raised.Release();
             };
 
         public int Count => Volatile.Read(ref _count);
+
+        /// <summary>The arguments of the last Changed event.</summary>
+        public Core.Git.RepositoryChangedEventArgs? Last { get; private set; }
 
         public bool OnThreadPool { get; private set; }
 

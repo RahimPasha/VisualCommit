@@ -140,17 +140,34 @@ public interface IRepositoryProvider
 /// <param name="Text">The whole line as git printed it, without a leading <c>remote: </c>.</param>
 public sealed record CloneProgress(string Stage, int? Percent, string Text);
 
-/// <summary>Watches a repository for changes made outside the app (D52).</summary>
+/// <summary>Watches a repository for changes made outside the app (D52, D71).</summary>
 public interface IRepositoryWatcher : IDisposable
 {
     /// <summary>
     /// Raised on a thread-pool thread after something the views show may have changed: once per
-    /// burst of changes, after the burst has been quiet for the debounce time.
+    /// burst of changes, after the burst has been quiet for the debounce time. The arguments say
+    /// where: the git folder (refs, HEAD, the index, the stash) or the working tree.
     /// </summary>
-    event EventHandler? Changed;
+    event EventHandler<RepositoryChangedEventArgs>? Changed;
 
     /// <summary>Starts watching.</summary>
     void Start();
+
+    /// <summary>
+    /// Stops reporting changes until the returned object is disposed, while the app writes to the
+    /// repository; the app refreshes once when its write ends (D71).
+    /// </summary>
+    IDisposable Pause();
+}
+
+/// <summary>Where a burst of changes happened.</summary>
+public sealed class RepositoryChangedEventArgs(bool gitFolder, bool workingTree) : EventArgs
+{
+    /// <summary>In the git folder: refs, HEAD, the index or the stash may have changed.</summary>
+    public bool GitFolder { get; } = gitFolder;
+
+    /// <summary>In the working tree: files may have changed.</summary>
+    public bool WorkingTree { get; } = workingTree;
 }
 
 /// <summary>The folder is not inside a git working tree.</summary>

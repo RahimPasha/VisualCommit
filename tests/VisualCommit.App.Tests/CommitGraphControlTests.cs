@@ -1056,7 +1056,7 @@ public class CommitGraphControlTests
 
         private sealed class QuietWatcher : IRepositoryWatcher
         {
-            public event EventHandler? Changed
+            public event EventHandler<RepositoryChangedEventArgs>? Changed
             {
                 add { }
                 remove { }
@@ -1065,6 +1065,8 @@ public class CommitGraphControlTests
             public void Start()
             {
             }
+
+            public IDisposable Pause() => this;
 
             public void Dispose()
             {

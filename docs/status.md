@@ -69,7 +69,7 @@ Git layer:
   explicitly and no editor. Tests.
 - [x] 10. A snapshot before every discard, untracked files included, kept under
   `refs/visualcommit/backup/`, and restoring it. Tests.
-- [ ] 11. The watcher sees the working tree (not `.git`, not ignored files), and the app's own
+- [x] 11. The watcher sees the working tree (not `.git`, not ignored files), and the app's own
   writes do not set it off. Tests.
 
 App:

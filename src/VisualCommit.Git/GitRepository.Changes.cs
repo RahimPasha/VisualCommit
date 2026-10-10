@@ -149,7 +149,9 @@ public sealed partial class GitRepository
                 break;
 
             case DiffSide.Unstaged:
-                arguments.Add("diff");
+                // The plumbing command: "git diff" refreshes the index and writes it, even with
+                // GIT_OPTIONAL_LOCKS=0 (Git 2.36), and a read must never write (D47).
+                arguments.AddRange(["diff-files", "-p"]);
                 arguments.AddRange(PlainDiffOptions);
                 arguments.AddRange(["--", target.Path]);
                 break;

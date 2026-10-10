@@ -134,7 +134,30 @@ public sealed partial class GitRepository : IGitRepository
         return await OpenAsync(runner, folder, cancellationToken, log).ConfigureAwait(false);
     }
 
-    public IRepositoryWatcher CreateWatcher() => new RepositoryWatcher(GitDirectory, CommonDirectory, _log);
+    public IRepositoryWatcher CreateWatcher() =>
+        new RepositoryWatcher(GitDirectory, CommonDirectory, _log, workingDirectory: WorkingDirectory, allIgnored: AllIgnoredAsync);
+
+    /// <summary>
+    /// Whether git ignores every one of <paramref name="paths"/> (relative to the working tree):
+    /// <c>git check-ignore</c> prints those it ignores, and exits with 1 when it ignores none.
+    /// </summary>
+    internal async Task<bool> AllIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        var command = new GitCommand("check-ignore", "--stdin", "-z")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = ReadEnvironment,
+            StandardInput = string.Concat(paths.Select(path => path + "\0")),
+        };
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode == 1)
+        {
+            return false;
+        }
+
+        var ignored = result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        return paths.All(ignored.Contains);
+    }
 
     /// <summary>
     /// <c>--git-common-dir</c> prints a path relative to the folder git ran in, and before Git 2.31
