@@ -145,6 +145,10 @@ End and Home screenshots. The run on `a19b5a3` failed Q1 alone (first rows after
 calls started from the UI thread held it while the window drew its first frame, which D59
 removes. This laptop slows down when hot, and the pass starts right after the 2-minute
 `dotnet test`, so let the machine rest a few minutes between the two and say so in the report.
+Both passes then passed on `ecacc2c` (Q1 1009 ms), but the inspection of their pictures found
+three faults, fixed in the commit after it: the clone form hid "No repository open" (against
+D42), scripted 13b could catch the progress at 100%, and the real-window 03b caught the Tree
+button's tooltip. The report's "Run" section still names `ecacc2c`; update it with the new run.
 
 This always names the single next thing to do and is kept accurate in every commit.
 

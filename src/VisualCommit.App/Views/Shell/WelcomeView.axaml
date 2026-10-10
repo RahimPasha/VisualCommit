@@ -5,22 +5,21 @@
              x:Class="VisualCommit.App.Views.Shell.WelcomeView"
              x:DataType="vm:WelcomeViewModel">
 
-  <!-- The welcome page of a tab without a repository (D42): Open, Clone and Init with the recent
-       repositories, or the clone form with its progress. -->
+  <!-- The welcome page of a tab without a repository (D42): under phase 0's "No repository open",
+       Open, Clone and Init with the recent repositories, or the clone form with its progress. -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-    <Panel Margin="24" MaxWidth="440" VerticalAlignment="Center">
+    <StackPanel Margin="24" MaxWidth="440" VerticalAlignment="Center" Spacing="8">
+      <TextBlock Text="No repository open"
+                 FontSize="16" FontWeight="SemiBold"
+                 HorizontalAlignment="Center" />
+      <TextBlock Classes="secondary"
+                 Text="Open, clone or init a repository to see its history."
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 HorizontalAlignment="Center" />
 
       <!-- Buttons and recent repositories. -->
-      <StackPanel Name="WelcomeButtons" Spacing="8" IsVisible="{Binding ShowsButtons}">
-        <TextBlock Text="No repository open"
-                   FontSize="16" FontWeight="SemiBold"
-                   HorizontalAlignment="Center" />
-        <TextBlock Classes="secondary"
-                   Text="Open, clone or init a repository to see its history."
-                   TextWrapping="Wrap" TextAlignment="Center"
-                   HorizontalAlignment="Center" />
-
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
+      <StackPanel Name="WelcomeButtons" Spacing="8" Margin="0,8,0,0" IsVisible="{Binding ShowsButtons}">
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
           <Button Name="OpenRepoButton" Theme="{StaticResource VcActionButton}"
                   Command="{Binding OpenCommand}"
                   ToolTip.Tip="Open a repository on this computer"
@@ -90,9 +89,9 @@
         </ItemsControl>
       </StackPanel>
 
-      <!-- Clone form. -->
-      <StackPanel Name="CloneForm" Spacing="6" IsVisible="{Binding IsCloneFormOpen}">
-        <TextBlock Text="Clone a repository" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,6" />
+      <!-- Clone form, in place of the buttons and the recent repositories. -->
+      <StackPanel Name="CloneForm" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsCloneFormOpen}">
+        <TextBlock Classes="heading" Text="Clone a repository" />
 
         <TextBlock Classes="secondary" Text="Repository URL" />
         <TextBox Name="CloneUrlBox"
@@ -173,6 +172,6 @@
         </StackPanel>
       </StackPanel>
 
-    </Panel>
+    </StackPanel>
   </ScrollViewer>
 </UserControl>

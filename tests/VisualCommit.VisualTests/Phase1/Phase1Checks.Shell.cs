@@ -167,6 +167,12 @@ public partial class Phase1Checks
         Assert.True(welcome.IsCloneFormOpen);
         Assert.Equal(string.Empty, app.Find<TextBox>("CloneUrlBox").Text);
 
+        // The form takes the place of the buttons and the recent list, under phase 0's text.
+        Assert.False(app.Find<StackPanel>("WelcomeButtons").IsEffectivelyVisible);
+        Assert.Contains(
+            Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(app.Window).OfType<TextBlock>(),
+            text => text.Text == "No repository open" && text.IsEffectivelyVisible);
+
         app.Type(new Uri(source).AbsoluteUri);
         app.Click(app.Find<TextBox>("CloneParentBox"));
         app.Type(parent.Path);
@@ -176,12 +182,34 @@ public partial class Phase1Checks
         Assert.Equal("cloned", welcome.CloneName);
 
         app.Click(app.Find<Button>("CloneStartButton"));
+
+        // A capture first lets the UI thread apply the progress that arrived meanwhile, so the
+        // picture can show a later stage than the one waited for (100% once). What was drawn is
+        // read back after each capture, and the capture is taken again until it shows 1 to 99%.
+        var bar = app.Find<ProgressBar>("CloneProgress");
+        var stage = app.Find<TextBlock>("CloneProgressText");
+        Screenshot? during = null;
         await app.WaitForAsync(
-            () => welcome.IsCloning && welcome.CloneProgressValue is >= 1 and <= 99,
-            "the clone to report a percentage between 1 and 99",
+            () =>
+            {
+                if (!(welcome.IsCloning && welcome.CloneProgressValue is >= 1 and <= 99))
+                {
+                    return false;
+                }
+
+                var capture = app.Capture();
+                var shown = int.TryParse(stage.Text?.Split(' ')[^1].TrimEnd('%'), out var percent) ? percent : -1;
+                if (welcome.IsCloning && bar.Value is >= 1 and <= 99 && shown is >= 1 and <= 99)
+                {
+                    during = capture;
+                    return true;
+                }
+
+                return false;
+            },
+            "a screenshot of the clone showing a percentage between 1 and 99",
             CloneTimeout);
-        var during = app.Capture();
-        during.Save(Phase, "13b-clone-in-progress");
+        during!.Save(Phase, "13b-clone-in-progress");
         Assert.False(app.Find<TextBox>("CloneUrlBox").IsEffectivelyEnabled);
         Assert.True(app.Find<Button>("CloneCancelButton").IsEffectivelyVisible);
         Assert.Matches(@"^[A-Z][a-z]+( [a-z]+)* \d{1,3}%$", app.Find<TextBlock>("CloneProgressText").Text);

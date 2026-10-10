@@ -5,7 +5,17 @@ test is built. The result columns are filled in when the gate runs.
 
 ## Run
 
-Filled in when the gate runs.
+| | |
+|---|---|
+| Date | 2026-10-10 |
+| App commit | `ecacc2c` on `phase/1-graph`, clean working tree |
+| Machine | Windows 11 Pro 10.0.26300 on an Intel Core i7-8650U laptop (4 cores, 8 threads, on mains power, Balanced power plan), Git 2.36.0.windows.1, .NET SDK 10.0.303 |
+| Display | 3000×2000 pixels at 200% scaling: a work area of 1500×952 logical pixels |
+| Scripted walk-through | `dotnet test`: 379 tests passed, 25 of them the checks of phases 1 and 0 (18 for phase 1: checks 1 and 2 are one test with two cases). Screenshots in `artifacts/visual/phase-1/scripted/` at a scaling of 1: 43 files, 38 different ones |
+| Real-window pass | Built with `dotnet build -c Release`, then `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --no-build`, started 3 minutes after `dotnet test` had finished: 6 tests passed in 2 minutes 59 seconds (5 for phase 1, 1 for phase 0). Screenshots, difference pictures and `run.txt` in `artifacts/visual/phase-1/real-window/` (30 files) and `artifacts/visual/phase-0/real-window/` (8 files), at 200% |
+| Why the pause | This laptop's processor slows down when it is hot. Right after the 2-minute `dotnet test`, the same build drew the 100k repo's first rows after 1.5 to 1.9 seconds, against 1.1 to 1.5 seconds after a rest (D59). The pause makes Q1 measure the app, not a heat-soaked processor; the numbers right after the test run are given here so that nothing is hidden |
+| Inspection | Every picture of both passes was opened and compared with the expected results: the 38 different scripted pictures of phase 1 and 9 of phase 0, 30 real-window files of phase 1 and 8 of phase 0. Files with the same content are listed together under "Screenshots". The inspection was split by checks among six reviewing agents (Opus 5.5), each told to open every picture of its checks; the main session looked again at every picture an agent raised a doubt about and at the Q1 pictures |
+| Earlier runs of the gate | Four runs of the real-window pass, see "Found by the gate": on `e5c8da7` (3 comparisons failed on letter edges), `ae74797` (passed; the scripted pictures then showed two faults, fixed in `128bebb`), `a19b5a3` (Q1 failed: 2962 ms) and `ecacc2c` (passed) |
 
 ## Scenario repos
 
@@ -252,16 +262,79 @@ unchanged.
 
 ## Found by the gate
 
-Filled in when the gate runs.
+The gate's passes and the inspection of their pictures found these, each fixed before the run on
+the gate's commit:
+
+- **Letter edges a pixel off (first real-window pass, `e5c8da7`).** Three real-window pictures
+  differed from the scripted ones in 3.14 to 3.52% of their pixels counted in place, over the
+  limit of 3%. The difference pictures showed letter edges only, drawn a pixel off at 200%
+  scaling, on screens full of text. The owner chose to let the comparison allow a one-pixel shift
+  (D58); counted that way, every picture now differs in 0.18 to 1.45%.
+- **A tooltip in the 100k Home screenshot.** The mouse was left over a cut message, and its
+  tooltip showed in the real-window capture of check 8 step 6. The pass now moves the mouse to an
+  empty spot before the End and Home captures.
+- **"No commits yet" before the history was read (check 12's scripted picture).** A repository
+  that was still reading its refs showed "No commits yet" for a moment, and the scripted
+  screenshot caught it. `HasNoCommits` now holds only once the history has been read; a test
+  checks it before and after.
+- **Check 8's middle, End and Home screenshots taken before the details had loaded.** The details
+  panel was still empty in the scripted pictures. The walk-through now waits for the selected
+  commit's details before each of those captures.
+- **Handlers run on the test's own thread (CI, Linux).** A runner test timed out on CI: an output
+  pump that found git's output already waiting ran the line handler on the caller's thread
+  before the call returned. Pumps no longer run on the caller's thread (`a19b5a3`, then D59).
+- **Q1 failed in the third real-window pass (`a19b5a3`): first rows after 2962 ms.** Measured
+  with timing lines in the runner: the repository restored at start-up is opened with a
+  `git rev-parse` that exits after 70 to 90 ms, but the call, started from the UI thread, gave
+  that thread back only about 300 ms later, after the window had drawn its first frame. With
+  every git call queued on the thread pool and git's output read on threads of their own (D59),
+  opening takes about 175 ms instead of 410, and the first rows came after 1009 ms in the pass on
+  the gate's commit. That run also showed how much this laptop's speed depends on its
+  temperature; see "Run".
 
 ## Could not run
 
-Filled in when the gate runs.
+- **Real window at 1920×1080.** The development screen's work area is 1500×952 logical pixels at
+  200% scaling, so a 1920×1080 window does not fit. Checks 2 and 17 are scripted only (as
+  planned), check 16 uses a 1400×900 real window as its steps say, and phase 0's screenshot D is
+  skipped by the pass, as `run.txt` notes. The plan asks for this size only when it fits the
+  screen, so this does not fail the gate.
+- **Real windows on macOS and Linux.** The real-window pass is Windows-only by design (D7, D19).
+  See "Other platforms" for what CI shows and the macOS checklist for what the owner can try.
+- **The scripted walk-through's own Q1 numbers** are written to the test's diagnostic output,
+  which the default test run does not print; check 9 judges the real window only, as planned.
 
 ## Other platforms
 
-Filled in when the gate runs.
+CI run [38069571801](https://github.com/RahimPasha/VisualCommit/actions/runs/38069571801) built
+and tested the gate's commit, `ecacc2c`, in all five jobs: `windows-latest`, `macos-latest`,
+`ubuntu-latest` and the two "bare ubuntu container" jobs. Each job passed all 379 tests,
+including the 25 scripted checks with their assertions on layout, text, colours, cut-off text,
+lanes and the pinned commit ids of the scenario repos, which are therefore the same on every
+platform. The 100k-commit repo was built and read on each.
+
+Each job uploaded its 57 scripted screenshots. Two were opened and inspected: check 1 from macOS
+and check 3 (`03a-details-flat`) from Linux. Both show the same layout, text, lanes, labels and
+colours as on Windows; the status bar shows the runner's own Git (2.55.0), and letters are drawn
+slightly differently by each platform's font renderer. The other CI screenshots were checked by
+the automated assertions only.
 
 ## macOS checklist for the owner
 
-Filled in when the gate runs.
+Needs the .NET 10 SDK and Git. In the repo folder run `dotnet run --project src/VisualCommit.App`.
+
+1. The window opens with one tab, "New tab", and the welcome page: "Open", "Clone", "Init" and
+   "Recent repositories".
+2. Click "Open": the macOS folder dialog opens. Choose a git repository: the tab takes its name,
+   and its graph, branches and tags appear; the status bar shows the current branch.
+3. Scroll the graph with the trackpad and with a mouse wheel: rows move smoothly, and every row
+   has its node, lines, message and date.
+4. Click a commit: the details panel shows its message, author, date, SHA, parents and changed
+   files. Click "Tree", quit with Cmd+Q, start again: the file list is still a tree.
+5. Click "+", then "Clone", and clone a repository from an https URL: the progress bar and the
+   stage text move, then the history shows.
+6. Click "+", then "Init", and choose a new empty folder: "No commits yet".
+7. In Terminal, make a commit in an open repository: the graph shows it within a few seconds.
+8. Resize the window and drag the panel edges, quit with Cmd+Q and start again: the same tabs,
+   the same window size and position and the same panel widths.
+9. Hover over a message that ends in "…": a tooltip shows the whole message.

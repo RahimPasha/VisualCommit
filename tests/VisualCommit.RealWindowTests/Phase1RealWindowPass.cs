@@ -74,6 +74,9 @@ public class Phase1RealWindowPass(Phase1Run fixture) : IClassFixture<Phase1Run>
             }
 
             app.ClickWithMouse(app.Find("TreeFilesButton"));
+
+            // Away from the button, whose tooltip would otherwise be in the picture.
+            app.MoveMouseTo(130, 687);
             using (var tree = app.CaptureClient())
             {
                 Run.Save(tree, "03b-details-tree");
@@ -196,6 +199,7 @@ public class Phase1RealWindowPass(Phase1Run fixture) : IClassFixture<Phase1Run>
         app.ClickWithMouse(app.Find("OpenRepoButton"));
         app.ChooseFolderInDialog("Open a repository", plain.Path, LoadTimeout);
         app.WaitFor(() => app.Texts().Contains($"{plain.Path} is not a git repository."), "the error for a plain folder", LoadTimeout);
+        app.MoveMouseTo(130, 687);
         using (var error = app.CaptureClient())
         {
             Run.Save(error, "11a-not-a-repository");
