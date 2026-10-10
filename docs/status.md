@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-06
+Last updated: 2026-10-09
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -10,7 +10,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | Phase | State | Branch | Handoff | Test report |
 |---|---|---|---|---|
 | 0. Foundation | Done | `phase/0-foundation` | [phase-0](handoffs/phase-0.md) | [phase-0](test-reports/phase-0.md) |
-| 1. Repos and commit graph | Not started | `phase/1-graph` | | |
+| 1. Repos and commit graph | In progress | `phase/1-graph` | | [phase-1](test-reports/phase-1.md) (expected results) |
 | 2. Diff and commit workflow | Not started | `phase/2-diff-commit` | | |
 | 3. Branch, remote, stash and tag operations | Not started | `phase/3-operations` | | |
 | 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
@@ -25,20 +25,91 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 0 was accepted by the owner on 2026-10-06 and merged into `master`
-(merge commit `b5f4723`). The next phase to start is phase 1.
+Phase 1, Repos and commit graph, is in progress on `phase/1-graph`. It was started on
+2026-10-09 on the Windows machine, from `master` at `6d39f1f`. Phase 0 was accepted on
+2026-10-06 and merged into `master` (merge commit `b5f4723`).
 
-Gate commit: none, because no phase is awaiting acceptance. When a phase is set to "Awaiting
-acceptance", this line names the commit that both passes of the gate ran on; "Phase N accepted"
-checks that nothing but docs changed after it.
+Gate commit: none yet. When the phase is set to "Awaiting acceptance", this line names the
+commit that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs
+changed after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit, which closing
-step 6 and the test report record. Each item is ticked in the commit that completes it. Number the steps plainly; do not label them C1,
-C2 and so on, which are requirement numbers.
+Each item is ticked in the commit that completes it. The numbers are plain step numbers, not
+requirement numbers.
+
+Start:
+
+- [x] 1. Phase branch created, phase set to "In progress", this checklist.
+- [ ] 2. Open points from the phase 0 handoff decided and recorded in `decisions.md`: the open,
+  clone and init screens, date format, file list, how a repo tab is modelled, where session
+  state is kept, how services get the git runner, how Q1 is measured, whether the 100k check
+  runs by default, how the watcher tells the app's own work from outside changes.
+- [ ] 3. Scenario repos: the graph scenario (branches with folders, merges, tags, a stash, a
+  local remote with ahead and behind counts) and the 100k-commit repo; `TempRepo` helpers for
+  stashes, remotes and clones; SHAs pinned in `ScenarioTests`.
+- [ ] 4. Harness: `ShellDriver` starts the app with repos open (session state written by the
+  test), scrolls with the wheel and waits for a condition; `RealApp` gets right-click,
+  double-click, typing, the wheel and scenario repos.
+- [ ] 5. Phase 1's visual checks written into `docs/test-reports/phase-1.md`, each marked for
+  the real-window pass, and committed before the UI they test.
+
+Git layer:
+
+- [ ] 6. Reading a repository: open (top-level folder, git folder), init, refs with upstream
+  and ahead/behind, HEAD, stashes. Tests against the scenario repos.
+- [ ] 7. Commit log streamed in pages from one `git log --date-order`, with stashes merged in.
+  Tests, including the 100k repo.
+- [ ] 8. Lane layout: incremental, rows with their line segments and colours. Tests on the graph
+  scenario and on made-up histories.
+- [ ] 9. Commit details: message, author, committer, parents, changed files with status and
+  renames, for root, normal and merge commits. Tests.
+- [ ] 10. Clone with progress and cancel. Tests against a local repo.
+- [ ] 11. Repo watcher: changes in the git folder, debounced into one refresh; the app's own
+  reads do not trigger it. Tests.
+
+App:
+
+- [ ] 12. Session store (`session.json`): open tabs, active tab, recent repos, window placement,
+  panel widths. Tests.
+- [ ] 13. Repo tabs: one view model per tab, tab strip with close buttons, "+" for a new tab,
+  switching, tabs restored on restart.
+- [ ] 14. Welcome page in the graph area of an empty tab: Open (folder picker), Init, Clone form
+  with progress and cancel, recent list.
+- [ ] 15. Commit graph control: custom-drawn and virtualised; lanes, nodes, ref labels, message,
+  author, date and SHA columns; selection by click and keys; wheel and scroll bar.
+- [ ] 16. Lane colours as theme tokens, in `Tokens.axaml` and `architecture.md`.
+- [ ] 17. Left panel: branches as folders, remotes, tags, stashes, counts, ahead/behind, filter
+  box; clicking a ref selects its commit.
+- [ ] 18. Commit details panel: message, author, date, SHA, parents, changed files flat or as a
+  tree, with the choice remembered.
+- [ ] 19. Status bar shows the current branch.
+- [ ] 20. File watcher wired to each open repo: refs and graph refresh on outside changes and
+  keep the selection.
+- [ ] 21. Window size and position and panel widths saved and restored.
+- [ ] 22. Panels give way when the window is too narrow, and take their widths back when it grows.
+- [ ] 23. The app records the time to the first graph frame and the graph's frame times (how Q1
+  is measured).
+- [ ] 24. Phase 0's checks updated for what phase 1 changed on purpose, recorded under "Changes
+  to expected results" in the phase 1 report.
+
+Visual checks:
+
+- [ ] 25. Scripted walk-through: one test per check in `Phase1Checks`, screenshots under
+  `artifacts/visual/phase-1/scripted/`.
+- [ ] 26. Real-window pass for the checks marked for it (`Phase1RealWindowPass`).
+
+Closing:
+
+- [ ] 27. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed.
+- [ ] 28. CI run of the gate's commit read, every job.
+- [ ] 29. `architecture.md` describes what is built.
+- [ ] 30. `plan.md`: anything not delivered moved, risks updated.
+- [ ] 31. Handoff `docs/handoffs/phase-1.md`.
+- [ ] 32. Cold-read check by a fresh agent; gaps fixed.
+- [ ] 33. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [ ] 34. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -66,15 +137,20 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 1". Its first steps are in the phase 0 handoff under
-"For the next phase".
+Step 2: record the decisions on the open points in `decisions.md`. The owner chose on
+2026-10-09: open, clone and init on a welcome page in the graph area of an empty tab (the side
+panels stay), absolute dates in the Date column, and a flat changed-file list to start with.
 
-Once a phase is running, this always names the single next thing to do and is kept accurate in
-every commit.
+This always names the single next thing to do and is kept accurate in every commit.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean when phase 0 closed.
+- Measured on the Windows machine on 2026-10-09, for a 100k-commit repo made with
+  `git fast-import`: building it takes about 5 seconds when the commits share one tree (23
+  seconds when every commit writes a file). `git log --date-order` over all refs prints its
+  first 200 commits after 1.1 seconds and all 100,000 after 2 seconds; with a commit-graph file
+  (`git commit-graph write --reachable`) the first 200 come after 0.08 seconds. Without
+  `--date-order` the first lines come at once, but then a parent can come before a child.
 - The change for cloud sessions (`b1d2ed0`) touched code after phase 0's gate:
   `AppPaths.DefaultDataDirectory` no longer creates the folder it names, and `RealApp.Launch`
   clears the git variables it inherits. CI built and tested it in every job, and on 2026-10-06
