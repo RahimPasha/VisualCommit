@@ -148,6 +148,27 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         Assert.Equal(before, File.ReadAllBytes(file));
     }
 
+    [Fact]
+    public async Task Check_20_a_file_written_outside_the_real_app_appears()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        var data = Run.NewDataDirectory();
+        using var app = LaunchWithTabs(data, repo.Path);
+        WaitForLog(app, data, "linear: loaded 3 commits");
+        WaitForStatus(app, data, "linear", staged: 0, unstaged: 0);
+
+        repo.WriteFile("notes.txt", "A note\n");
+        WaitForStatus(app, data, "linear", staged: 0, unstaged: 1);
+        app.MoveMouseTo(RestX, 687);
+        using (var appeared = app.CaptureClient())
+        {
+            Run.Save(appeared, "20b-row-appeared");
+            Run.AssertMatchesScripted(appeared, "20b-row-appeared", "20b-row-appeared");
+        }
+
+        Assert.Equal(0, app.Close());
+    }
+
     /// <summary>Starts the app with one tab on <paramref name="repository"/>, in a window of the given size.</summary>
     private static RealApp LaunchWithTabs(string data, string repository, int width = 1100, int height = 700)
     {
