@@ -11,7 +11,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 |---|---|---|---|---|
 | 0. Foundation | Done | `phase/0-foundation` | [phase-0](handoffs/phase-0.md) | [phase-0](test-reports/phase-0.md) |
 | 1. Repos and commit graph | Done | `phase/1-graph` | [phase-1](handoffs/phase-1.md) | [phase-1](test-reports/phase-1.md) |
-| 2. Diff and commit workflow | Not started | `phase/2-diff-commit` | | |
+| 2. Diff and commit workflow | In progress | `phase/2-diff-commit` | | [phase-2](test-reports/phase-2.md) (expected results only) |
 | 3. Branch, remote, stash and tag operations | Not started | `phase/3-operations` | | |
 | 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
 | 5. History, traceability and undo | Not started | `phase/5-history` | | |
@@ -25,21 +25,87 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 1 was accepted by the owner on 2026-10-10 and merged into `master`
-(merge commit `b5eb1ed`); its gate ran on `5673c3f`. Phase 0 was accepted on 2026-10-06 (merge
-commit `b5f4723`). The next phase to start is phase 2.
+Phase 2, Diff and commit workflow, is in progress on `phase/2-diff-commit`. It was started on
+2026-10-10 on the Windows machine, from `master` at `cec9c0c`. Phase 1 was accepted on
+2026-10-10 and merged into `master` (merge commit `b5eb1ed`); phase 0 on 2026-10-06 (merge
+commit `b5f4723`).
 
-Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
-that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
-after it.
+Gate commit: none yet. When the phase is set to "Awaiting acceptance", this line names the
+commit that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs
+changed after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for the CI result that each phase's "Done when" asks for. Each
-item is ticked in the commit that completes it. Number the steps plainly; do not label them C1,
-C2 and so on, which are requirement numbers.
+Each item is ticked in the commit that completes it. The numbers are plain step numbers, not
+requirement numbers.
+
+Start:
+
+- [x] 1. Phase branch created, phase set to "In progress", this checklist.
+- [ ] 2. Open points from the phase 1 handoff decided and recorded in `decisions.md`: the
+  working-changes row, the default diff mode, how a discard is confirmed and restored, how a
+  diff opens (asked of the owner); the diff viewer's technology after trying AvaloniaEdit 12.0.0
+  on Avalonia 12.1.3, the font for code, when a file counts as very large, how stage and discard
+  are offered before phase 3's context menus, how the watcher sees the working tree and keeps
+  out of the app's own writes (owner told), no editor for git, how a discard's snapshot keeps
+  untracked files, in-app dialogs.
+- [ ] 3. Harness: `TempRepo` writes bytes (a binary file, an image) and makes a PNG; scenario
+  repos get a local identity; the app's commits get fixed dates in both harnesses.
+- [ ] 4. Scenario repos with known working-tree changes (modified, added, deleted, renamed,
+  binary, an image, a very large file; staged and unstaged; one with `core.autocrlf`), pinned in
+  `ScenarioTests`.
+- [ ] 5. Phase 2's visual checks written into `docs/test-reports/phase-2.md`, each marked for
+  the real-window pass, reviewed, and committed before the UI they test.
+
+Git layer:
+
+- [ ] 6. Working-tree status (`git status --porcelain=v2`): staged, unstaged, untracked,
+  renamed and conflicted files. Tests.
+- [ ] 7. Diffs: a file's unstaged, staged and untracked changes and a commit's change to a file;
+  the unified-diff parser; binary files, images and file sizes. Tests.
+- [ ] 8. Patches for a hunk or chosen lines, to stage, unstage and discard, applied with
+  `git apply`. Tests, including a repository with `core.autocrlf`.
+- [ ] 9. Stage, unstage and discard whole files; commit and amend with the message passed
+  explicitly and no editor. Tests.
+- [ ] 10. A snapshot before every discard, untracked files included, kept under
+  `refs/visualcommit/backup/`, and restoring it. Tests.
+- [ ] 11. The watcher sees the working tree (not `.git`, not ignored files), and the app's own
+  writes do not set it off. Tests.
+
+App:
+
+- [ ] 12. Working-changes row at the top of the graph when there are changes: drawing,
+  selection, keys. Tests.
+- [ ] 13. Stage-and-commit panel in the right panel: unstaged and staged lists (flat or tree),
+  stage, unstage and discard by file and all, summary and description editor, amend, commit.
+- [ ] 14. Confirmation dialog in the window; the restore bar after a discard.
+- [ ] 15. Diff view in place of the graph: header with the file and its actions, close; opened
+  from the stage lists and from a commit's files.
+- [ ] 16. Diff text, inline and side by side: line numbers, added and removed backgrounds, the
+  font for code, theme colours; the mode remembered.
+- [ ] 17. Syntax highlighting and word-level highlights.
+- [ ] 18. Stage, unstage and discard a hunk or chosen lines from the diff view.
+- [ ] 19. Image diff; binary and very large files.
+- [ ] 20. Phase 1's checks updated for anything phase 2 changes on purpose, recorded under
+  "Changes to expected results" in the phase 2 report.
+
+Visual checks:
+
+- [ ] 21. Scripted walk-through: one test per check in `Phase2Checks`, screenshots under
+  `artifacts/visual/phase-2/scripted/`.
+- [ ] 22. Real-window pass for the checks marked for it (`Phase2RealWindowPass`).
+
+Closing:
+
+- [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed.
+- [ ] 24. CI run of the gate's commit read, every job.
+- [ ] 25. `architecture.md` describes what is built.
+- [ ] 26. `plan.md`: anything not delivered moved, risks updated.
+- [ ] 27. Handoff `docs/handoffs/phase-2.md`.
+- [ ] 28. Cold-read check by a fresh agent; gaps fixed.
+- [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [ ] 30. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -70,27 +136,24 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 2". Its first steps, and the open points to settle before
-its checks are written, are in the [phase 1 handoff](handoffs/phase-1.md) under "For the next
-phase".
-
-Once a phase is running, this always names the single next thing to do and is kept accurate in
-every commit.
+Step 2: record the owner's four answers (given on 2026-10-10: the working-changes row only when
+there are changes; inline as the default diff mode; a confirmation, then a restore bar after a
+discard; a single click opens a file's diff) and the technical decisions in `decisions.md`,
+after trying AvaloniaEdit 12.0.0 on Avalonia 12.1.3 in the headless harness.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean when phase 1 was
-  merged.
+- The default tests passed (379) on `master` at `aead41b` before the phase started.
+- The owner answered the four questions of taste on 2026-10-10, each with the recommended option;
+  step 2 records them.
 - Phase 1 was built partly by sub-agents in git worktrees under `.claude/worktrees/`
-  (git-ignored), each on a `wip/p1-*` branch merged with `--no-ff` into `phase/1-graph`; the
-  handoff's "Things that cost time" says what to watch for. All of them are merged. One worktree,
-  `.claude/worktrees/agent-a60aa26c7fe44ae22` on `wip/p1-git-fixes`, is still locked by the
-  process of an earlier session; once no session uses it, `git worktree remove --force --force`
-  it and delete the local branches `wip/p1-git-fixes` and `worktree-agent-a60aa26c7fe44ae22`
-  (`git branch -d`; both are merged). None of these branches is on `origin`.
-- The next phase can be started on the Windows machine or in a cloud session; see
-  [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
-  page lists what the first one should check.
+  (git-ignored); the phase 1 handoff's "Things that cost time" says what to watch for. One
+  worktree, `.claude/worktrees/agent-a60aa26c7fe44ae22` on `wip/p1-git-fixes`, is still there:
+  this session's permission system refused `git worktree remove --force --force` on it. The owner
+  can remove it and the merged local branches `wip/p1-git-fixes` and
+  `worktree-agent-a60aa26c7fe44ae22` (`git branch -d`). None of them is on `origin`.
+- No cloud session has worked on the repo yet; [cloud-sessions.md](cloud-sessions.md) lists what
+  the first one should check.
 - On the Windows development machine only: Windows 11 on an Intel Core i7-8650U laptop, .NET SDK
   10.0.303, Git 2.36.0.windows.1, `gh` signed in as RahimPasha. Its screen is 3000×2000 at 200%
   scaling: 1500×1000 logical pixels, of which 1500×952 is the work area. A 1920×1080 window does
