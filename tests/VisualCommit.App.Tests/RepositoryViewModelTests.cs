@@ -34,6 +34,22 @@ public class RepositoryViewModelTests
     }
 
     [Fact]
+    public async Task Nothing_is_said_about_commits_before_the_history_is_read()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
+        using var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+
+        // Until StartAsync has read the refs, the graph is the empty placeholder, which must not
+        // read as "No commits yet".
+        Assert.False(viewModel.HasNoCommits);
+
+        await viewModel.StartAsync();
+        Assert.False(viewModel.HasNoCommits);
+        Assert.Equal(3, viewModel.Graph.Count);
+    }
+
+    [Fact]
     public async Task A_repository_without_commits_says_so()
     {
         using var data = new TempDirectory("fresh");

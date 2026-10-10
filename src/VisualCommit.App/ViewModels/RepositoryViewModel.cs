@@ -99,8 +99,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string? ErrorText { get; private set; }
 
-    /// <summary>The history is loaded and has no commits: the graph area says "No commits yet".</summary>
-    public bool HasNoCommits => Graph.IsComplete && Graph.Count == 0 && ErrorText is null;
+    /// <summary>
+    /// The history is loaded and has no commits: the graph area says "No commits yet". Not while
+    /// the refs are still being read: the empty graph shown until then is no history yet.
+    /// </summary>
+    public bool HasNoCommits =>
+        !ReferenceEquals(Graph, CommitGraphData.Empty) && Graph.IsComplete && Graph.Count == 0 && ErrorText is null;
 
     /// <summary>Raised when a row should be scrolled into the middle of the view: after a ref or a parent was activated.</summary>
     public event EventHandler<int>? RevealRequested;

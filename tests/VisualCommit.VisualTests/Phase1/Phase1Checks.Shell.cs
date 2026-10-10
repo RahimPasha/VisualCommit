@@ -131,7 +131,9 @@ public partial class Phase1Checks
 
         app.Folders.Answer(fresh);
         app.Click(app.Find<Button>("InitRepoButton"));
-        await app.WaitForAsync(() => tab.Repository?.HasNoCommits == true, "the new repository to show that it has no commits");
+        await app.WaitForAsync(
+            () => tab.Repository?.HasNoCommits == true && !string.IsNullOrEmpty(app.Find<TextBlock>("CurrentBranch").Text),
+            "the new repository to show that it has no commits, and its branch");
         app.Capture().Save(Phase, "12-initialised");
 
         Assert.True(Directory.Exists(Path.Combine(fresh, ".git")));

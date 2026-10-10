@@ -259,6 +259,7 @@ public partial class Phase1Checks
         AssertLargeRows(app, wheel);
 
         app.Click(RefItem(app, LargeHistory.MiddleTag));
+        await WaitForDetailsAsync(app, LargeHistory.SubjectOf(50_000));
         var middle = app.Capture();
         middle.Save(Phase, "08c-large-middle");
         Assert.Equal(50_000, graph.SelectedIndex);
@@ -272,6 +273,7 @@ public partial class Phase1Checks
         // The mouse goes to an empty spot, as in the real-window pass, where a tooltip over a
         // message cut short would otherwise cover part of the picture.
         app.MoveMouse(new Point(130, 687));
+        await WaitForDetailsAsync(app, LargeHistory.SubjectOf(1));
         var end = app.Capture();
         end.Save(Phase, "08d-large-end");
         Assert.Equal(LargeHistory.CommitCount - 1, graph.SelectedIndex);
@@ -282,6 +284,7 @@ public partial class Phase1Checks
 
         app.PressKey(Key.Home);
         app.MoveMouse(new Point(130, 687));
+        await WaitForDetailsAsync(app, LargeHistory.SubjectOf(LargeHistory.CommitCount));
         var home = app.Capture();
         home.Save(Phase, "08e-large-home");
         Assert.Equal(0, graph.SelectedIndex);
