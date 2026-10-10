@@ -48,7 +48,7 @@ Start:
 - [x] 3. Scenario repos: the graph scenario (branches with folders, merges, tags, a stash, a
   local remote with ahead and behind counts) and the 100k-commit repo; `TempRepo` helpers for
   stashes, remotes and clones; SHAs pinned in `ScenarioTests`.
-- [ ] 4. Harness: `ShellDriver` starts the app with repos open (session state written by the
+- [x] 4. Harness: `ShellDriver` starts the app with repos open (session state written by the
   test), scrolls with the wheel and waits for a condition; `RealApp` gets right-click,
   double-click, typing, the wheel and scenario repos.
 - [x] 5. Phase 1's visual checks written into `docs/test-reports/phase-1.md`, each marked for
@@ -56,21 +56,21 @@ Start:
 
 Git layer:
 
-- [ ] 6. Reading a repository: open (top-level folder, git folder), init, refs with upstream
+- [x] 6. Reading a repository: open (top-level folder, git folder), init, refs with upstream
   and ahead/behind, HEAD, stashes. Tests against the scenario repos.
-- [ ] 7. Commit log streamed in pages from one `git log --date-order`, with stashes merged in.
+- [x] 7. Commit log streamed in pages from one `git log --date-order`, with stashes merged in.
   Tests, including the 100k repo.
-- [ ] 8. Lane layout: incremental, rows with their line segments and colours. Tests on the graph
+- [x] 8. Lane layout: incremental, rows with their line segments and colours. Tests on the graph
   scenario and on made-up histories.
-- [ ] 9. Commit details: message, author, committer, parents, changed files with status and
+- [x] 9. Commit details: message, author, committer, parents, changed files with status and
   renames, for root, normal and merge commits. Tests.
-- [ ] 10. Clone with progress and cancel. Tests against a local repo.
-- [ ] 11. Repo watcher: changes in the git folder, debounced into one refresh; the app's own
+- [x] 10. Clone with progress and cancel. Tests against a local repo.
+- [x] 11. Repo watcher: changes in the git folder, debounced into one refresh; the app's own
   reads do not trigger it. Tests.
 
 App:
 
-- [ ] 12. Session store (`session.json`): open tabs, active tab, recent repos, window placement,
+- [x] 12. Session store (`session.json`): open tabs, active tab, recent repos, window placement,
   panel widths. Tests.
 - [ ] 13. Repo tabs: one view model per tab, tab strip with close buttons, "+" for a new tab,
   switching, tabs restored on restart.
@@ -137,15 +137,26 @@ minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Merge the three parallel branches (`wip/p1-git-layer`, `wip/p1-lane-layout`, `wip/p1-harness`)
-into `phase/1-graph` when they are done, check them, and tick steps 4 and 6 to 11. Then build
-the app's part (steps 12 to 24) against the expected results in
-`docs/test-reports/phase-1.md`, committed before the UI.
+Merge `wip/p1-graph-control` (the graph control and the repository graph view, steps 15 and
+16) and `wip/p1-panels` (the left panel and the commit details, steps 17 and 18), which are being
+built in parallel worktrees from `02f908f`, then run the app's whole default test run. Until they
+are merged, phase 0's visual checks fail on purpose: they expect the new left panel (`RefList`).
+After that: step 19 onwards, then the scripted checks (step 25).
 
 This always names the single next thing to do and is kept accurate in every commit.
 
 ### Notes for whoever resumes
 
+- How phase 1 is being built: the main session writes the contracts, the shell and the
+  integration; independent parts are built by sub-agents in git worktrees under
+  `.claude/worktrees/` (git-ignored), each on a `wip/p1-*` branch that is merged with
+  `--no-ff` into `phase/1-graph`. Merged so far: `wip/p1-lane-layout`, `wip/p1-harness`,
+  `wip/p1-git-layer`. A worktree is not necessarily created from the phase branch; the agents
+  create their branch from `phase/1-graph` first.
+- Built and tested in the main session so far: the session store, the tab, welcome and
+  repository view models, the tab strip, welcome page and graph-area switch, window placement and
+  panel widths (`MainWindow.UseSession`, `PanelLayout`), `GitAccess`, the repository provider
+  and the fake folder dialog of the headless harness (`ShellDriver.Folders`).
 - Measured on the Windows machine on 2026-10-09, for a 100k-commit repo made with
   `git fast-import`: building it takes about 5 seconds when the commits share one tree (23
   seconds when every commit writes a file). `git log --date-order` over all refs prints its
