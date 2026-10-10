@@ -29,8 +29,10 @@ repo yet.** What is proven is listed under "What is proven and what is not".
 
 ## What you set up
 
-Connect GitHub in claude.ai/code and choose this repo. Two things are worth doing each time you
-start a session:
+Connect GitHub in claude.ai/code and choose this repo. The repository was deleted and created
+again on 2026-10-09 (D41): if you had chosen it in claude.ai/code before that day, choose it
+again, and if the Claude GitHub app is installed for selected repositories only, add the
+repository to it again. Two things are worth doing each time you start a session:
 
 - **Choose Fable 5.1 as the session's model.** The model setting of the Windows machine does not
   travel with the repo. `CLAUDE.md` tells a session on another model to say so and ask you once.

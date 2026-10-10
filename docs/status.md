@@ -45,23 +45,19 @@ C2 and so on, which are requirement numbers.
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-Last run: [37532921887](https://github.com/RahimPasha/VisualCommit/actions/runs/37532921887) on
-`master`, for commit `fd5099a`. All five jobs succeeded: `windows-latest`, `macos-latest`,
-`ubuntu-latest`, and the two "bare ubuntu container" jobs. In both of those,
+Last run: [38026062572](https://github.com/RahimPasha/VisualCommit/actions/runs/38026062572) on
+`master`, for commit `edb811e`, the first run in the re-created repository (D41). All five jobs
+succeeded: `windows-latest`, `macos-latest`, `ubuntu-latest`, and the two "bare ubuntu
+container" jobs. Commits after it changed only docs.
+
+The runs before 2026-10-09 went with the deleted repository, so the run numbers that older
+commits and the phase 0 report and handoff mention no longer open. What they showed is as
+written there and in this file's history: every run from the phase 0 merge onwards succeeded on
+Windows, macOS and Linux, and the two runs before the re-creation, for `b1d2ed0` and
+`fd5099a`, succeeded in all five jobs; in both "bare ubuntu container" jobs
 `scripts/setup-linux.sh` prepared the empty container in under half a minute, its second run
-changed nothing (the job now fails if it does), the build had no warnings and all 118 tests
-passed: once with .NET SDK 10.0.112 from Ubuntu's package servers and once with 10.0.401 from
-Microsoft's installer. Commits after it changed only docs.
-
-The run before it, [37530129931](https://github.com/RahimPasha/VisualCommit/actions/runs/37530129931)
-for commit `b1d2ed0`, was the first with the container jobs and the first after the change
-that made the project usable from cloud sessions (D39); it succeeded in all five jobs too.
-
-The CI runs made before 2026-10-06's rewrite of the history (D40) were deleted, so the run
-numbers that the phase 0 report and handoff mention no longer open. What they showed is as
-written there: the last run on the phase 0 branch, for the commit that is now `8f19cf5`, and the
-run for the merge on `master`, for the commit that is now `c033b58`, both succeeded on Windows,
-macOS and Linux.
+changed nothing, the build had no warnings and all 118 tests passed (with .NET SDK 10.0.112
+from Ubuntu's package servers and 10.0.401 from Microsoft's installer).
 
 Earlier in phase 0 the test step froze the whole job on macOS in 4 of 9 runs. The freezes
 stopped with the commit that is now `0784112` (decision D37), and the test step ran 14 times on
@@ -103,18 +99,11 @@ every commit.
 
 - When you have a Mac at hand: the eight-step checklist at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner said this will be looked at later.
-- The commits from before the rewrite of the history (D40) are still on GitHub, although no
-  branch leads to them: each still opens by its ID without signing in and shows the address the
-  rewrite removed. On 2026-10-09 the owner chose to delete the repository and create it again
-  from the current history (D41). Waiting for: the `gh` token's `delete_repo` scope, which the
-  owner grants by running `gh auth refresh -h github.com -s delete_repo` in a terminal and
-  approving in the browser (`gh auth status` then lists `delete_repo`). Then a session on the
-  Windows machine: checks that `git ls-remote --heads origin` shows exactly the local `master`
-  and `phase/0-foundation`; runs `gh repo delete RahimPasha/VisualCommit --yes` and
-  `gh repo create RahimPasha/VisualCommit --public`; pushes both branches; checks that
-  `https://github.com/RahimPasha/VisualCommit/commit/776a0b4` no longer opens; reads the new CI
-  run and records it in the CI section above; and adds to `docs/cloud-sessions.md` that a
-  repository already connected in claude.ai/code has to be chosen again there.
-
 Settled on 2026-10-06: the copyright line in `LICENSE` stays "VisualCommit contributors", and
 the repository was made public, which lifts the limit on CI minutes.
+
+Settled on 2026-10-09 (D41): the owner deleted the GitHub repository and a session created it
+again, empty and public, and pushed `master` and `phase/0-foundation` unchanged. The commits from
+before the rewrite of the history (D40), which GitHub had kept serving by their IDs, now answer
+"not found"; every commit on GitHub carries the owner's personal address. The session's
+permission system refuses to delete a repository, so a deletion is always the owner's to do.
