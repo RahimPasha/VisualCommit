@@ -136,10 +136,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5: write phase 2's visual checks into `docs/test-reports/phase-2.md` from the template,
-on the changes scenario (`Scenarios.ChangesAsync`) and the CRLF scenario (`Scenarios.CrlfAsync`)
-that `ScenarioTests` pins; have them reviewed by an independent agent; commit them before any
-of the UI they test.
+Step 5, the rest of it: the 21 checks are written and committed in
+`docs/test-reports/phase-2.md`; an independent agent (Opus 5.5, no conversation context) reviews
+them for gaps, contradictions and expectations that do not follow from the scenario; fix what it
+finds in the next commit and list the changes under "Changes to expected results", as phase 1
+did. No UI is built before that.
 
 ### Notes for whoever resumes
 
