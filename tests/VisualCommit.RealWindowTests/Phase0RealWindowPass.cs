@@ -113,15 +113,22 @@ public class Phase0RealWindowPass
         var scaling = app.Scaling;
 
         var texts = app.Texts();
+        // As phase 1 changed the empty shell on purpose (its report, "Changes to expected
+        // results"): the graph area shows the welcome page, without column headers. Texts inside
+        // buttons ("Open", "Clone", "Init", the tab's "New tab") are not text elements to UI
+        // Automation; the buttons are checked by name instead.
         string[] expectedTexts =
         [
             "No repository", "Local branches", "Remotes", "Pull requests", "Tags", "Stashes",
-            "Branch / Tag", "Graph", "Message", "Author", "Date", "SHA",
             "No repository open", "Open, clone or init a repository to see its history.",
+            "Recent repositories", "No recent repositories",
             "Commit details", "Select a commit to see its details.", "Ready", "Activity log",
         ];
         Assert.All(expectedTexts, text => Assert.Contains(text, texts));
         Assert.Contains(texts, text => text.StartsWith("Git ", StringComparison.Ordinal) && char.IsDigit(text[4]));
+        Assert.DoesNotContain("Branch / Tag", texts);
+        Assert.Equal(["Open", "Clone", "Init"], new[] { "OpenRepoButton", "CloneRepoButton", "InitRepoButton" }.Select(id => app.Find(id).Name));
+        Assert.Equal("New tab", Assert.Single(app.FindAll("RepoTab")).Name);
 
         // Toolbar: every button is there under its label, in order, and only Theme is enabled.
         string[] labels = ["Undo", "Redo", "Fetch", "Pull", "Push", "Branch", "Stash", "Pop", "Search", "Theme"];
