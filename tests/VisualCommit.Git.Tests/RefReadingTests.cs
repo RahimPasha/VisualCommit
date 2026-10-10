@@ -35,7 +35,12 @@ public class RefReadingTests
         await repo.GitAsync("clone", "--quiet", "--bare", "--single-branch", "--branch", "main", "--no-tags", repo.Path, originPath);
         await repo.GitAsync("remote", "add", "origin", originPath);
         await repo.GitAsync("remote", "add", "team/fork", originPath);
-        await repo.GitAsync("remote", "add", "team", originPath);
+
+        // Newer git refuses "remote add" for a name that another remote's name starts with
+        // ("superset of existing remote"); repositories set up before that rule, or by hand,
+        // still have such pairs. Configure it directly, as such a repository has it.
+        await repo.GitAsync("config", "remote.team.url", originPath);
+        await repo.GitAsync("config", "remote.team.fetch", "+refs/heads/*:refs/remotes/team/*");
         await repo.GitAsync("fetch", "--quiet", "--multiple", "origin", "team/fork");
         await repo.GitAsync("remote", "set-head", "origin", "main");
         await repo.GitAsync("branch", "--quiet", "--set-upstream-to=origin/main", "main");
