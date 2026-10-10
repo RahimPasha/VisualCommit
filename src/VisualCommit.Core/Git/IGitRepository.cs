@@ -26,7 +26,8 @@ public interface IGitRepository
     /// <summary>
     /// Streams the history the graph shows: every commit reachable from a branch, a remote branch,
     /// a tag or HEAD, in <c>git log --date-order</c> order, with the stashes of
-    /// <paramref name="refs"/> merged in, each just above the commit it was made on (D47).
+    /// <paramref name="refs"/> merged in by date: each before the first commit older than it, and
+    /// in any case before the commit it was made on (D47, D54).
     /// <paramref name="onPage"/> receives consecutive pages on a thread-pool thread, never two at
     /// once: the first page holds at most 100 commits and is delivered as soon as it is read,
     /// later pages at most 2,000. Returns when the last page has been delivered. A repository
