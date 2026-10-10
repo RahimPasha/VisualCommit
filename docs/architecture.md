@@ -15,11 +15,12 @@ it are not built yet, and "As built" says which are. The reasons behind the main
 - **Operation queue per repo.** One writing operation at a time, with progress, cancellation and a
   record in the activity log (T4).
 - **Safety net.** Before a destructive operation the app stores a backup reference under
-  `refs/visualcommit/backup/`. Undo/redo (O2) restores from these and from the reflog.
+  `refs/visualcommit/backup/`: since phase 2, a snapshot commit before every discard (D67).
+  Undo/redo (O2) restores from these and from the reflog.
 - **Prompts.** Git's credential, passphrase and rebase-editor prompts are redirected to small
   helper hooks that talk to the app, so they appear as in-app dialogs.
-- **Editors.** Diff, blame and conflict views are built on AvaloniaEdit with TextMate grammars for
-  syntax highlighting.
+- **Editors.** Diff, blame and conflict views are built on AvaloniaEdit, with TextMate grammars
+  (TextMateSharp, called by the app's own code) for syntax highlighting (D64).
 - **Hosting.** One provider interface with GitHub, Azure DevOps and GitLab implementations.
   Tokens live in the OS keychain.
 - **Storage.** Settings and session state as JSON in the per-user app-data folder. Logs are local files.
@@ -40,9 +41,9 @@ in the phase that first needs it. Package versions are pinned centrally in
 
 | Project | Contents | State |
 |---|---|---|
-| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); no UI, no process calls | Built |
-| `src/VisualCommit.Git` | Git runner, git locator, call log; reading a repository (`GitRepository`), cloning, the repository watcher. Later: the operation queue | Built |
-| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph); settings and session stores, log file, folder dialog. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
+| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; no UI, no process calls | Built |
+| `src/VisualCommit.Git` | Git runner, git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit), cloning, the repository watcher. Later: the operation queue | Built |
+| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text), the code font; settings and session stores, log file, folder dialog. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
 | `src/VisualCommit.Hosting` | GitHub, Azure DevOps and GitLab clients; token store | Phase 7 |
 | `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, helpers that drive the app in headless mode. Not a test project | Built |
 | `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos | Built |
@@ -54,13 +55,17 @@ All projects target `net10.0`, except `VisualCommit.RealWindowTests` (`net10.0-w
 `Directory.Build.props` turns on nullable reference types, implicit usings and warnings as errors
 for every project.
 
-## As built (after phase 1)
+## As built (after phase 2)
 
 Phase 0 built the foundation: an empty shell, the git runner, settings, the log and both test
 harnesses. Phase 1 added repositories in tabs: open, init and clone on a welcome page, the commit
 graph of the whole history, the left panel of refs, the commit details, the session that restores
-tabs and the window, and a watcher that follows outside changes. The app does not write to a
-repository yet: staging and committing come in phase 2, the other operations in phase 3.
+tabs and the window, and a watcher that follows outside changes. Phase 2 added the working tree:
+the working-changes row in the graph, the stage panel with commit and amend, the diff view
+(inline and side by side, syntax and word-level highlights, images, binary and very large
+files), staging, unstaging and discarding by file, hunk and line, a snapshot before every
+discard with a way to restore it, and a confirmation dialog. It is the first phase in which the
+app writes to a repository; the other operations (branches, remotes, stash, tags) come in phase 3.
 
 ### Start-up and composition
 
@@ -75,7 +80,8 @@ Program.Main                        src/VisualCommit.App/Program.cs
             ├─ GitCallLog           the record of every git call
             ├─ GitAccess            the pending search for git (D45)
             ├─ TabServices          what every tab uses: GitRepositoryProvider, the folder
-            │                       dialog, settings, DateDisplay, the log, RecentRepositories
+            │                       dialog, settings, DateDisplay, the log, RecentRepositories,
+            │                       the dialog host (DialogHostViewModel, D69)
             ├─ MainWindowViewModel  the tabs, restored from the session
             └─ MainWindow           created, given the session (UseSession), not shown
 ```
@@ -100,18 +106,21 @@ Program.Main                        src/VisualCommit.App/Program.cs
 
 | Type | Role |
 |---|---|
-| `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0 |
-| `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details` and `BranchText` are the repository's, or empty ones. A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it |
+| `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0; `Dialogs`, the window's dialog layer |
+| `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details`, `Changes` (the stage panel), `ShowsWorkingChanges` and `BranchText` are the repository's, or empty ones. A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it |
 | `WelcomeViewModel` | The welcome page (D42): Open and Init through `IFolderPicker`, the clone form with its progress (`CloneProgress` from git's stderr) and Cancel, the shared recent list |
-| `RepositoryViewModel` | One open repository: its `Graph` (`CommitGraphData`), `SelectedIndex`, `ScrollOffset` (kept per tab), `LeftPanel`, `Details`, `BranchText`, the watcher and the refresh, and the Q1 measurements. Disposing it cancels all its work |
+| `RepositoryViewModel` | One open repository: its `Graph` (`CommitGraphData`), `SelectedIndex`, `IsWorkingRowSelected`, `ScrollOffset` (kept per tab), `LeftPanel`, `Details`, `Status` (`WorkingTreeStatus`) with `HasWorkingChanges`, `Changes` (the stage panel), the open `Diff`, `BranchText`, the watcher and the refreshes, every write to the repository, and the Q1 measurements. Disposing it cancels all its work |
 | `RecentRepositories` | The recent list, newest first, at most 10, kept in the session |
 | `GitRepositoryProvider` | `IRepositoryProvider` with real git: `OpenAsync`, `InitAsync`, `CloneAsync` through `GitRepository` |
 
 The window's regions show the active tab: `MainWindow.axaml` binds the left region to
-`ActiveTab.LeftPanel`, the graph region (`CommitGraphView`) to `ActiveTab` and the right region
-to `ActiveTab.Details`; the status bar's branch to `ActiveTab.BranchText`. `CommitGraphView`
-shows `WelcomeView` for a tab without a repository, `RepositoryGraphView` for one with a
-repository, and nothing while a restored tab is still opening.
+`ActiveTab.LeftPanel`, the graph region (`CommitGraphView`) to `ActiveTab`, and the right region
+to `ActiveTab.Details` (`RightPanelView`) or, while the working-changes row is selected,
+`ActiveTab.Changes` (`WorkingChangesView`); the status bar's branch to `ActiveTab.BranchText`.
+`CommitGraphView` shows `WelcomeView` for a tab without a repository, `RepositoryGraphView` for
+one with a repository (or `DiffView` in its place while a diff is open), and nothing while a
+restored tab is still opening. Over everything lies the dialog layer (`ConfirmationView`), shown
+while `Dialogs.Current` is set.
 
 ### From a repository to the screen
 
@@ -120,7 +129,9 @@ repository, and nothing while a restored tab is still opening.
    the git folder and the common git folder, or `NotARepositoryException`.
 2. `RepositoryViewModel.StartAsync` starts the watcher, then reads the refs
    (`ReadRefsAsync`: `for-each-ref`, `remote`, `stash list`, `symbolic-ref`, `rev-parse HEAD`, in
-   parallel) and shows them in the left panel and the status bar.
+   parallel) and shows them in the left panel and the status bar. The working-tree status
+   (`ReadStatusAsync`) is read beside them and shown once the refs are; it decides the
+   working-changes row.
 3. At the same time `LoadCommitsAsync(Task<RepoRefs>, ...)` runs one `git log --date-order`
    (D47), which does not need the refs (it names `HEAD` with `--ignore-missing`, for an unborn
    HEAD). `CommitPager` parses each line as git prints it, waits for the refs before the first
@@ -130,7 +141,8 @@ repository, and nothing while a restored tab is still opening.
    which raises `Changed`.
 5. `CommitGraphControl` draws the rows in view. The first frame with rows tells the view model,
    which logs the time since step 1 (D50).
-6. Selecting a row loads `ReadCommitDetailsAsync` into the details panel.
+6. Selecting a row loads `ReadCommitDetailsAsync` into the details panel; selecting the
+   working-changes row shows the stage panel instead.
 
 View models post to the UI thread through the `SynchronizationContext` they were created on, not
 through Avalonia's dispatcher, so that they stay testable without a UI; without a context (plain
@@ -142,27 +154,40 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 
 | Type | Role |
 |---|---|
-| `GitCommand` | One call: arguments (passed one by one, no shell quoting), working directory, optional standard input, extra environment variables, optional line handlers for streamed output. `DisplayText`, used in logs and errors, hides the credentials of a URL |
+| `GitCommand` | One call: arguments (passed one by one, no shell quoting), working directory, optional standard input, extra environment variables, optional line handlers for streamed output, and the `Encoding` of standard input and output (UTF-8, or `GitCommand.Latin1` for byte-exact content, D66). `DisplayText`, used in logs and errors, hides the credentials of a URL |
 | `IGitRunner` / `GitRunner` | Runs a command without blocking. A non-zero exit code is returned in the `GitResult`, not thrown; `GitResult.EnsureSuccess` turns it into a `GitException` that carries git's own error text |
 | `GitResult` | Exit code, standard output, standard error, duration |
 | `GitCallRecord`, `IGitCallLog` / `GitCallLog` | The record of every call (command, folder, outcome, exit code, timing, the first 16 KB of each output stream). The activity log (T4, phase 5) will show these |
 | `GitLocator`, `GitSearchContext`, `GitDetection`, `GitVersion` | Finding git and checking its version |
-| `IGitRepository` / `GitRepository` | One open repository: `ReadRefsAsync`, `LoadCommitsAsync`, `ReadCommitDetailsAsync`, `CreateWatcher`; static `OpenAsync`, `InitAsync`, `CloneAsync`. Split over `GitRepository.cs`, `.Refs.cs`, `.Commits.cs`, `.Clone.cs` |
+| `IGitRepository` / `GitRepository` | One open repository. Reads: `ReadRefsAsync`, `LoadCommitsAsync`, `ReadCommitDetailsAsync`, `ReadStatusAsync`, `ReadDiffAsync`, `ReadFileAsync`, `ReadFileSizeAsync`. Writes: `StageAsync`, `UnstageAsync`, `ApplyPatchAsync`, `SaveSnapshotAsync`, `DiscardAsync`, `RestoreSnapshotAsync`, `CommitAsync`. `CreateWatcher`; static `OpenAsync`, `InitAsync`, `CloneAsync`. Split over `GitRepository.cs`, `.Refs.cs`, `.Commits.cs`, `.Clone.cs`, `.Changes.cs` (status, diffs, file versions) and `.Writes.cs` |
+| `WorkingTreeStatus` | The staged files (HEAD → index), the unstaged ones (index → working tree, untracked as added, conflicted as `FileChangeKind.Conflicted`) and which are untracked, each list in byte order of the paths; from `git status --porcelain=v2 -z --untracked-files=all --renames` |
+| `DiffTarget`, `DiffSide`, `FileVersion` | Which diff to read: a file's unstaged, staged or commit change, with its kind, old path, whether it is untracked, the commit and its first parent; and where its versions before and after are (working tree, index, a commit) |
+| `FileDiff`, `DiffHunk`, `DiffLine`, `DiffParser` (Core, `Diff/`) | One file's diff as git prints it, parsed from Latin-1 text: git's header lines, the hunks with their ranges, and lines that keep their bytes (`Raw`) beside the text shown (`Text`, decoded as UTF-8, or Latin-1 when the file is not valid UTF-8). `IsBinary`, `IsNewFile`, `IsDeletedFile`, the modes, and `IsVeryLarge` (D65) |
+| `PatchBuilder` (Core) | The patch for chosen added and removed lines (a whole hunk is all of its lines), forward to stage, in reverse to unstage or discard (D66). Unchosen changes stay as they are on the side the patch is applied to; hunks without a chosen line are left out and the ranges after them moved. Git's header lines are kept, except that a rename's, or a creation or deletion applied only in part, becomes the header of a change to the file at its path |
+| `WordDiff` (Core) | The words of a removed line and its paired added line that differ: a longest common sequence of words, ties matched early in the added line |
+| `DiscardSnapshot` | A snapshot taken before a discard (D67): its ref under `refs/visualcommit/backup/discard-<UTC time>`, its commit, the paths, and which of them existed |
 | `RepoRefs`, `GitRef`, `HeadState`, `StashEntry` | What the refs are at one moment. `RepoRefs.Fingerprint` changes when HEAD, a ref's target or the stashes change (D52) |
 | `CommitInfo`, `CommitKind` | A row of the graph: a commit or a stash (one parent: the commit it was made on) |
 | `CommitDetails`, `ChangedFile`, `FileChangeKind` | What the details panel shows; files compared with the first parent, renames detected |
 | `CommitPager` | Internal: turns `git log` lines into pages and merges the stashes in. A date git cannot print (an ident without a time zone) is read as 1970-01-01 UTC, as git does, so such a commit is not lost |
 | `CloneProgressParser`, `CloneProgress` | Git's clone progress lines as stage and percentage |
-| `RepositoryWatcher` | `IRepositoryWatcher` (D52): `FileSystemWatcher`s on the git folder and the common folder, changes under `objects/` and to `*.lock` files ignored, 300 ms of quiet before `Changed`, at most 2 s while changes keep coming |
+| `RepositoryWatcher` | `IRepositoryWatcher` (D52, D71): `FileSystemWatcher`s on the git folder, the common folder and the working tree. In the git folders, changes under `objects/` and to `*.lock` files are ignored; in the working tree, changes under `.git` are left to the others, and a burst whose paths `git check-ignore` calls all ignored is dropped. 300 ms of quiet before `Changed`, at most 2 s while changes keep coming; `RepositoryChangedEventArgs` says whether the git folder or the working tree changed. `Pause()` stops it reporting while the app writes |
 | `WindowsJob` | Internal: a Windows job object, used on Windows to stop git together with everything it started |
 
 Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
 
 - Every call gets `LC_ALL` and `LANG` set to `en_US.UTF-8`, so git's messages are English and
-  parseable, and `GIT_TERMINAL_PROMPT=0`, so git fails rather than waits for a terminal. Input and
-  output are UTF-8.
+  parseable, `GIT_TERMINAL_PROMPT=0`, so git fails rather than waits for a terminal, and
+  `GIT_EDITOR=:`, so a command that wants an editor goes on without one (D68). Input and output
+  are UTF-8, unless the command asks for Latin-1 (`GitCommand.Encoding`, D66): diffs, patches and
+  blobs then travel byte for byte. Standard error is always UTF-8.
 - Calls that only read also get `GIT_OPTIONAL_LOCKS=0` (from `GitRepository`), so a read never
-  rewrites the index and cannot set off the app's own watcher (D47).
+  rewrites the index and cannot set off the app's own watcher (D47). `git diff` refreshes and
+  writes the index even so (Git 2.36), so a file's unstaged diff is read with the plumbing
+  `git diff-files -p`; a staged one with `git diff --cached`, an untracked one with
+  `git diff --no-index -- /dev/null <path>`. Every diff passes `--no-color --no-ext-diff
+  --no-textconv --src-prefix=a/ --dst-prefix=b/ --unified=3`, so the user's configuration cannot
+  change what is parsed and applied.
 - Standard input is always closed, after writing `GitCommand.StandardInput` if there is one.
 - With `OnOutputLine` set, standard output is delivered line by line as it arrives and not kept
   in the result. `OnErrorLine` also treats a carriage return as the end of a line, because that
@@ -215,6 +240,16 @@ out in well under a second.
 - UI Automation sees the graph as one element (`GraphRows`, "Commit graph"); rows are not
   exposed yet (D49).
 - `RowsDrawn` and `FrameDrawn` (the time `Render` took) feed the Q1 measurements.
+- **The working-changes row (D60).** With `ShowsWorkingRow` (bound to the view model's
+  `HasWorkingChanges`) the control draws one more row above the first commit and counts rows as
+  drawn ("display rows"): the working-changes row is display row 0 and commit `i` is display
+  row `i + 1`. `SelectedIndex`, `RowBounds`, `Reveal` and `ScrollIntoView` keep counting commits,
+  so phase 1's code and tests are unchanged; `WorkingRowBounds` gives the row's place and
+  `IsWorkingRowSelected` (two-way) its selection. The row draws a ring in the lane and colour of
+  HEAD's commit, "Working changes" in the secondary colour, and a dashed line (dashes and gaps of
+  3) from the ring to HEAD's node, drawn before the rows' own lines and nodes so that they lie
+  over it. When the row comes or goes while the graph is scrolled away from the top, the view
+  model moves `ScrollOffset` by a row so that the rows in view stay put.
 
 ### Left panel and commit details
 
@@ -229,18 +264,92 @@ out in well under a second.
   newer selection cancels an older load) into `Views/Shell/RightPanelView`: subject, body,
   author, date, committer and commit date when they differ, the id, parents as links
   (`ParentActivated`; a stash lists only its base), the stash's name, and the changed files flat
-  or as a tree (`AppSettings.FileList`, D44).
+  or as a tree (`AppSettings.FileList`, D44). The file rows are built by `ChangedFileList`,
+  which the stage panel shares. A click on a file raises `FileActivated`: the repository opens
+  that file's diff for the commit (against its first parent), and the row keeps the selection
+  background while the diff is open (`SelectedFilePath`).
+
+### Working changes and writes (C4, D62, D67 to D71)
+
+- `ViewModels/Panels/WorkingChangesViewModel` is the stage panel (`Views/Shell/WorkingChangesView`):
+  the unstaged and staged lists (two `ChangedFileList`s, flat or tree as D44 and D70 say), their
+  titles, the summary and description with the counter of what is left of 72, the amend box
+  (which fills empty boxes with HEAD's message), the commit button's label and state, git's
+  message after a failed write (`ErrorText`, shown as `CommitError`), and the restore bar. It
+  only shows what `Update(status)` gives it; every action goes to its `IWorkingChangesHost`.
+- `RepositoryViewModel` is that host, and the diff view's (`IDiffHost`). Every write runs through
+  `WriteAsync`: the watcher is paused while git writes (D71), then the status is read again (and
+  for a commit the refs and history too), and git's message, if any, goes to the stage panel.
+  Writes: stage and unstage whole files (a rename unstages both its paths), apply a patch made by
+  `PatchBuilder` for a hunk or chosen lines, discard (after `IDialogService.ConfirmAsync` and
+  `SaveSnapshotAsync`; an untracked file's chosen lines are written back without them, as git
+  cannot patch it), restore the last snapshot, and commit or amend (`git commit --file=-
+  --cleanup=whitespace [--amend]`, D68). After a commit that leaves the tree clean, the new
+  commit is selected.
+- `RefreshStatusAsync` reads the status (folded like `RefreshAsync`: a call during a run makes it
+  run once more), shows it, logs `<name>: working tree: <N> staged, <N> unstaged` at Debug level
+  (the real-window pass waits for it), and reads the open diff again; a working-tree diff whose
+  file has left its list closes.
+- Snapshots (D67): `GitRepository.SaveSnapshotAsync` copies the index to a temporary file, adds
+  the files with `GIT_INDEX_FILE` pointing at it, writes its tree, commits it with HEAD as parent
+  under a fixed identity ("VisualCommit"), and keeps it as `refs/visualcommit/backup/discard-<UTC
+  time>` (an empty old value to `update-ref`, so two never share a ref). `RestoreSnapshotAsync`
+  runs `git restore --source=<snapshot> --worktree` for the files that existed and deletes the
+  others. Discard runs `git restore --worktree` for tracked files and deletes untracked ones,
+  with the folders they leave empty.
+- Dialogs (D69): `ViewModels/Dialogs/DialogHostViewModel` holds at most one
+  `ConfirmationViewModel`; `Views/Dialogs/ConfirmationView` covers the window with
+  `VcBackdropBrush` and shows the card, with the Cancel button focused. `MainWindow` handles Esc:
+  it cancels an open dialog first, and otherwise closes the active tab's diff unless a text box
+  has the focus.
+
+### Diff view (C5, D61, D63 to D65)
+
+- `ViewModels/Diff/DiffViewModel`: one open diff. Its `Target` (`DiffTarget`), the header's texts,
+  `Mode` (the `DiffMode` setting), and `Body`: `Text`, `VeryLarge` (until "Show diff", which
+  turns `Highlighting` off), `Binary` (sizes), `Image` (both versions' bytes, read whole up to
+  20 MB), `Empty`, `Conflict` or `Error`. It builds the actions on the file, a hunk or the
+  selected lines (`SelectedChanges`, which the view keeps up to date) and hands them to the host.
+  `LoadAsync(target)` reads it again for the file as the status now lists it; a newer load wins.
+- `Views/Diff/DiffView`: the header (status letter, name, folder, origin, what is compared,
+  `CloseDiffButton`), the toolbar (`InlineDiffButton`, `SideBySideDiffButton`, the file's or
+  the lines' buttons) and the bodies. Images are decoded in its code-behind, which writes their
+  captions. It hosts the text control with `TextDiff` (the diff only while the body is text) and
+  gives it the keyboard focus when a diff opens.
+- `Controls/Diff/DiffTextView`, on AvaloniaEdit (D64): one pane inline, two side by side (a
+  `*,1,*` grid, the halves scrolling together). `DiffLayout.Build(diff, mode)` turns the diff into
+  display rows (`DiffDisplayRow`: a hunk header, a line with a cell per side, or a no-newline
+  marker; a side with fewer lines in a change gets filler cells). Each pane is a `TextEditor`
+  (read-only, no caret, `LineHeightFactor` 1, so a row is 15.84 high in JetBrains Mono NL at
+  12) whose document has one line per display row; a margin draws the gutter (numbers and
+  sign, which do not scroll sideways), a background renderer the row colours, the selection and
+  the word highlights, and a colorizer the syntax colours. Hunk headers: an element generator
+  makes the header line an empty object 26 high, and a layer above the text holds one bar per
+  header in view with its text and real buttons (`StageHunkButton`, `DiscardHunkButton`,
+  `UnstageHunkButton`); the layer is also a logical child, so the buttons get their templates.
+  Selection is the view's own: a click on a number selects a row, Shift extends it, a text drag
+  counts the rows it touches; `SelectedChanges` holds their added and removed lines. AvaloniaEdit's
+  search panel is removed (it took Esc even while closed).
+- `DiffHighlighter`/`DiffSyntax`: TextMateSharp's registry, grammars and the Dark+ and Light+
+  themes are loaded once per process; each side of a diff is tokenized on its own, in order, and
+  a token's style is the first matching rule's colour and font style (D64). Diffs of up to 1,000
+  lines are tokenized before they are drawn, larger ones in the background. A line may take at
+  most a second (a safety net), and lines over 5,000 characters stay plain.
+  `DiffWordHighlights` pairs the lines of each change and asks `WordDiff`.
+- The test hooks the scripted walk-through uses: `DiffTextView.Rows`, `RowBounds`,
+  `LineNumberPoint`, `TextRangeBounds`, `ForegroundAt` and `FontWeightAt`.
 
 ### Watching and refreshing (D52)
 
 `RepositoryViewModel` starts a `RepositoryWatcher` before it first reads the refs. A change that
-comes during the first load is remembered and refreshed once the load is done. `RefreshAsync`
-reads the refs; when their fingerprint is unchanged only the left panel and status bar are
-updated; otherwise the whole history is loaded into a new `CommitGraphData`, which replaces the
-old one when it is complete, with the selected commit selected again. Refreshes that come while
-one runs make it run once more. D52 has writing operations pause the watcher from phase 3, with
-the operation queue; phase 2's stage, discard and commit write first, so phase 2 has to decide
-how its writes keep the watcher from refreshing in a loop.
+comes during the first load is remembered and refreshed once the load is done. A change in a git
+folder runs `RefreshAsync`; one in the working tree alone runs `RefreshStatusAsync` (D71).
+`RefreshAsync` reads the refs; when their fingerprint is unchanged only the left panel and status
+bar are updated; otherwise the whole history is loaded into a new `CommitGraphData`, which
+replaces the old one when it is complete, with the selected commit selected again. It then reads
+the status. Refreshes that come while one runs make it run once more. The app's own writes pause
+the watcher and refresh once when they end (D71, brought forward from phase 3); its reads never
+write (D47), so nothing refreshes in a loop.
 
 ### Q1 measurements (D50)
 
@@ -264,7 +373,8 @@ temperature, so the pass is started after a rest (see phase 1's test report).
   `logs/`. `AppPaths.Resolve()` uses `VISUALCOMMIT_DATA_DIR` when it is set, otherwise the
   per-user folder (`%APPDATA%\VisualCommit`, `~/Library/Application Support/VisualCommit`,
   `~/.config/VisualCommit`).
-- `AppSettings` (Core) is an immutable record of preferences: `Theme` and `FileList` (D44). Every
+- `AppSettings` (Core) is an immutable record of preferences: `Theme`, `FileList` (D44) and
+  `DiffMode` (D61). Every
   property needs a default, so that older files still load. `ISettingsStore.Update(settings =>
   settings with { ... })` changes and saves it.
 - `SessionState` (Core) is what changes as the app is used (D46): `Tabs` and `ActiveTab`,
@@ -293,8 +403,8 @@ region is a `UserControl` in `Views/Shell`.
 | Repo tabs | `RepoTabsView` | 36 high | `RepoTabs` | Real: one tab per repository (`RepoTab` buttons named by title, `CloseTabButton`), and "+" (`AddRepoButton`) for a new tab |
 | Toolbar | `ToolbarView` | 52 high | `Toolbar` | Buttons `UndoButton` ... `SearchButton` are disabled placeholders (phases 3 and 5). `ThemeSwitch` works |
 | Left panel | `LeftPanelView` | 260 wide by default; 180 to 520 | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`); "Pull requests" stays empty until phase 7 |
-| Commit graph | `CommitGraphView` | The rest; at least 320 | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form) or `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`) |
-| Right panel | `RightPanelView` | 400 wide by default; 280 to 720 | `RightPanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList`) or the placeholder |
+| Commit graph | `CommitGraphView` | The rest; at least 320 | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form), `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`), or in its place `DiffView` (`DiffView`, `DiffText`, see "Diff view") |
+| Right panel | `RightPanelView` or `WorkingChangesView` | 400 wide by default; 280 to 720 | `RightPanel` or `StagePanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList` with `ChangedFile` rows) or the placeholder; while the working-changes row is selected, the stage panel (`UnstagedFileList` and `StagedFileList` with `StageFileRow` rows and their `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`; `CommitSummary`, `CommitDescription`, `AmendCheckBox`, `CommitButton`, `RestoreBar`) |
 | Status bar | `StatusBarView` | 26 high | `StatusBar` | `CurrentBranch` and `GitStatus` are real. `OperationStatus` and `ActivityLogToggle` are placeholders |
 
 - The window opens at 1280×800, or at the size and place the session saved, and cannot be made
@@ -305,7 +415,8 @@ region is a `UserControl` in `Views/Shell`.
   the session. `PanelLayout.Fit` gives the drawn widths: when the window is too narrow for both
   preferred widths and the graph's 320, both panels give way in proportion to their room above
   their minimums, and take their preferred widths back when it grows.
-- The diff view that replaces the graph does not exist yet (phase 2).
+- The diff view replaces the graph while a file's diff is open (D63); the dialog layer lies over
+  the whole window while a confirmation is open (D69).
 
 Custom controls, in `Controls/`:
 
@@ -316,7 +427,10 @@ Custom controls, in `Controls/`:
   `Theme/Controls.axaml`; its label is also its name for screen readers and UI Automation.
 - `CommitGraphControl`: see "Commit graph".
 
-Control themes in `Theme/Controls.axaml`: `VcFlatButton`, `VcTabButton`, `VcActionButton`, and
+Control themes in `Theme/Controls.axaml`: `VcFlatButton`, `VcTabButton`, `VcActionButton`,
+`FileListToggle` (small text buttons: Flat and Tree, the stage panel's and diff view's actions;
+class `selected`), `FileFolderButton` (a file or folder row), `VcIconButton` (22 by 22),
+`VcPrimaryButton` (the commit button), `VcDangerButton`, `VcCheckBox` (20 high), and
 the text classes `heading`, `secondary` and `error`.
 
 ### Theme
@@ -329,7 +443,9 @@ the text classes `heading`, `secondary` and `error`.
   graph control looks them up for its theme variant and redraws when the variant changes.
 - The Fluent theme is the base for standard controls, with its accent set to ours. Its text-box
   colours are replaced by `TextControl...` keys in `Tokens.axaml`.
-- The typeface is Inter, shipped with Avalonia, on every platform (D28).
+- The typeface is Inter, shipped with Avalonia, on every platform (D28). Code in the diff view
+  is JetBrains Mono NL (OFL), shipped with the app in `Assets/Fonts` and named by the resource
+  `VcCodeFontFamily` (D64).
 
 | Token (brush key) | Dark | Light | Used for |
 |---|---|---|---|
@@ -350,6 +466,13 @@ the text classes `heading`, `secondary` and `error`.
 | `VcSelectionBrush` | `#2A3150` | `#DDE1FA` | The selected graph row and left-panel item |
 | `VcRowHoverBrush` | `#1C1F27` | `#F3F4F7` | The graph row under the pointer |
 | `VcLabelTextBrush` | `#10121A` | `#FFFFFF` | Text on a filled branch label |
+| `VcDiffAddedBrush` | `#1A2E24` | `#E6F6EC` | An added line of a diff, gutter included |
+| `VcDiffAddedWordBrush` | `#2B5A3F` | `#B4E5C6` | The changed words of an added line |
+| `VcDiffRemovedBrush` | `#331D23` | `#FBE9EB` | A removed line of a diff, gutter included |
+| `VcDiffRemovedWordBrush` | `#6A2D37` | `#F3BAC1` | The changed words of a removed line |
+| `VcDiffHunkBrush` | `#1C2130` | `#EEF0FB` | A hunk's header row |
+| `VcDiffFillerBrush` | `#181A20` | `#F3F4F6` | Side by side: the empty side of a row |
+| `VcBackdropBrush` | `#99000000` | `#66000000` | The dimmed window behind a dialog |
 | `VcLane0Brush` ... `VcLane7Brush` | `#7C8CFF` `#3FB97F` `#E0A23B` `#E5606B` `#4FB3D9` `#B07CE8` `#D97EB6` `#8FB84A` | `#4353D8` `#1E8E5A` `#B7791F` `#C93A46` `#1F86B0` `#8048C7` `#B54A8C` `#5F8A1E` | Lane colours 0 to 7 (D48) |
 
 ### Conventions
@@ -378,26 +501,31 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | Helper | Where | What it is for |
 |---|---|---|
 | `TempDirectory` | `tests/VisualCommit.Testing` | A folder under the system temp folder, deleted on dispose |
-| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere. Helpers for commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy; anything else goes through `GitAsync` or `GitWithInputAsync` |
-| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0) and `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), built once per test process and copied for each test |
+| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy; anything else goes through `GitAsync` or `GitWithInputAsync` |
+| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) and `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration), built once per test process and copied for each test |
+| `TestImages` | same | Small PNGs whose bytes depend only on their pixels (stored deflate blocks), for scenario repos |
+| `FakeRepositoryBase` | same | The start of a fake `IGitRepository` for view-model tests: a clean working tree, and every write refused |
 | `LargeHistory` | same | The 100k-commit repo (D51), built once per machine with `git fast-import` under `%TEMP%/VisualCommit.Tests/shared/` and shared read-only; what each row shows follows from its number |
 | `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC. The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly |
 | `HeadlessTestApp` | `tests/VisualCommit.Testing/Headless` | Builds the real `App` for headless mode with Skia rendering. Each UI test assembly names it in `AssemblyInfo.cs` |
 | `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot` |
 | `FakeFolderPicker` | same | Answers the app's folder dialogs with folders the test queued (D42) |
 | `Screenshot` | same | A captured frame: save as PNG, read pixel colours |
-| `LayoutAudit` | same | `FindClippedText` lists every visible text that is not shown in full; with `allowShortenedWithToolTip` it lets through text cut with "…" on purpose whose whole text is in a tooltip |
+| `LayoutAudit` | same | `FindClippedText` lists every visible text that is not shown in full; with `allowShortenedWithToolTip` it lets through text cut with "…" on purpose whose whole text is in a tooltip, and with `allowScrolledOutOfView` text cut only by a scrolling list's edge |
 | `FreshApplication` | same | Runs part of a test with a new Avalonia application object: how a scripted check crosses a restart (D32) |
 | `HangWatchdogAttribute` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process. `VISUALCOMMIT_TEST_HANG_SECONDS` changes the limit |
 
 - `VisualCommit.VisualTests` has a folder per phase. `PhaseNChecks` holds a test for every
   numbered check of the phase's test report (phase 1's are split over `Phase1Checks.Shell.cs` and
-  `Phase1Checks.Graph.cs`); each saves its screenshots as
+  `Phase1Checks.Graph.cs`, phase 2's over `Phase2Checks.*.cs` by subject); each saves its screenshots as
   `artifacts/visual/phase-N/scripted/<check><step>-<what>.png` and asserts the expected result.
   The first screenshot of a run empties the phase's folder. Expected values are copied from the
-  report into the tests (`Phase0/ShellExpectations.cs`, `Phase1/Phase1Expectations.cs`), not
-  read from the app. Phase 0's checks expect the empty shell as phase 1 changed it (the welcome
-  page, "New tab").
+  report into the tests (`Phase0/ShellExpectations.cs`, `Phase1/Phase1Expectations.cs`,
+  `Phase2/Phase2Expectations.cs`), not read from the app. Phase 0's checks expect the empty shell
+  as phase 1 changed it (the welcome page, "New tab").
+- `GitIsolation` also sets `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` to 2026-01-02 09:00 UTC for
+  the app under test, and `RealApp.Launch` hands it the same (D72): a commit the app makes gets
+  the same id in both passes and on every machine.
 - Small text is anti-aliased so that no pixel need have its exact colour; checks read the brush a
   small text is drawn with, and sample colours of shapes and large text only.
 - `VisualCommit.RealWindowTests`: `RealApp` starts the built app with the same isolation as the
@@ -441,3 +569,6 @@ container jobs build with, never leave that band (10.0.112 in October 2026), whi
 machine and the other CI jobs use newer ones (10.0.303 and 10.0.401 then). Avalonia 12.1.3 (with
 Avalonia.Desktop, Themes.Fluent, Fonts.Inter, Skia, Headless, Headless.XUnit),
 CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2, FlaUI.UIA3 5.0.0. Phase 1 added no packages.
+Phase 2 added Avalonia.AvaloniaEdit 12.0.0 (built against Avalonia 12.0.0, used with 12.1.3),
+TextMateSharp 2.0.4 and TextMateSharp.Grammars 2.0.4 (with Onigwrap, which ships Oniguruma for
+every platform CI runs on), and the font JetBrains Mono NL 2.304 as a file in the repo.
