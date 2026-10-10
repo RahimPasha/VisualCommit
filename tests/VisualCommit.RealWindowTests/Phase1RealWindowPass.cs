@@ -63,7 +63,10 @@ public class Phase1RealWindowPass(Phase1Run fixture) : IClassFixture<Phase1Run>
         {
             WaitForLog(app, data, "graph: loaded 13 commits");
             app.ClickAt(500, RowY(2));
-            app.WaitFor(() => app.FindAll("ChangedFile").Count == 5, "the five changed files of \"Add settings page\"", LoadTimeout);
+            app.WaitFor(
+                () => app.FindAll("ChangedFilesTitle").Any(title => title.Name == "Changed files (5)") && app.FindAll("ChangedFile").Count == 5,
+                "the five changed files of \"Add settings page\"",
+                LoadTimeout);
             using (var flat = app.CaptureClient())
             {
                 Run.Save(flat, "03a-details-flat");

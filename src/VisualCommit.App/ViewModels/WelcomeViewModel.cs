@@ -195,7 +195,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         {
             if (ex is not GitException)
             {
-                _services.Log.Error($"Cloning {url} failed.", ex);
+                _services.Log.Error($"Cloning {GitCommand.HideCredentials(url)} failed.", ex);
             }
 
             ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;

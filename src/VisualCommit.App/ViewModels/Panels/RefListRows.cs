@@ -71,6 +71,12 @@ public abstract class RefListRow : ObservableObject
 
     /// <summary>What a click on the row does: open or close it, or select the commit a ref points to.</summary>
     public IRelayCommand ActivateCommand { get; }
+
+    /// <summary>
+    /// Whether <paramref name="other"/>, a row of a later rebuild, shows exactly what this row
+    /// shows, so the list can keep this row instead of drawing it again.
+    /// </summary>
+    public abstract bool ShowsSameAs(RefListRow other);
 }
 
 /// <summary>A section header: a chevron, the title and the number of items that match the filter.</summary>
@@ -96,6 +102,11 @@ public sealed class RefSectionRow : RefListRow
     /// phase 7, and for every section of a panel without a repository.
     /// </summary>
     public bool CanToggle { get; }
+
+    public override bool ShowsSameAs(RefListRow other) =>
+        other is RefSectionRow section
+        && section.Key == Key && section.Text == Text && section.IsOpen == IsOpen
+        && section.Count == Count && section.CanToggle == CanToggle;
 }
 
 /// <summary>A remote, a folder, a branch, a tag or a stash under a section header.</summary>
@@ -166,4 +177,11 @@ public sealed partial class RefItemRow : RefListRow
     /// <summary>The ref the user clicked last: drawn with the selection background.</summary>
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
+
+    public override bool ShowsSameAs(RefListRow other) =>
+        other is RefItemRow item
+        && item.Key == Key && item.Kind == Kind && item.Text == Text && item.ToolTip == ToolTip
+        && item.Depth == Depth && item.IsOpen == IsOpen && item.TargetSha == TargetSha
+        && item.IsHead == IsHead && item.Ahead == Ahead && item.Behind == Behind
+        && item.IsSelected == IsSelected;
 }

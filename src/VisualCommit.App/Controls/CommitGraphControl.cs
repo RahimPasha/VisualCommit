@@ -6,6 +6,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.Views.Graph;
 using VisualCommit.Core;
@@ -80,6 +81,13 @@ public sealed partial class CommitGraphControl : Control
     private int _hoveredRow = -1;
     private Point? _pointer;
     private int _pendingReveal = -1;
+
+    /// <summary>
+    /// A row revealed while the history was still loading whose centring the rows loaded so far
+    /// did not allow (it was near their end): revealed again as rows arrive, until it can be
+    /// centred, the history is complete, or the user scrolls.
+    /// </summary>
+    private int _revealWhileLoading = -1;
 
     static CommitGraphControl()
     {
@@ -227,7 +235,9 @@ public sealed partial class CommitGraphControl : Control
         }
 
         _pendingReveal = -1;
-        ScrollTo((index * RowHeight) + (RowHeight / 2) - (ViewportHeight / 2));
+        var target = (index * RowHeight) + (RowHeight / 2) - (ViewportHeight / 2);
+        _revealWhileLoading = target > MaxScrollOffset && Data is { IsComplete: false } ? index : -1;
+        ScrollTo(target);
     }
 
     /// <summary>Scrolls as little as possible to show row <paramref name="index"/> whole: how a selection made with the keyboard stays in view.</summary>
@@ -284,9 +294,13 @@ public sealed partial class CommitGraphControl : Control
                 SubscribeToData(Data);
             }
 
+            _revealWhileLoading = -1;
             ClearRowCache();
             UpdateExtent(Bounds.Size);
             InvalidateVisual();
+
+            // The row under the mouse now shows another commit, maybe with other labels.
+            UpdateHover();
         }
         else if (change.Property == ScrollOffsetProperty)
         {
@@ -309,6 +323,7 @@ public sealed partial class CommitGraphControl : Control
         }
 
         Focus(NavigationMethod.Pointer);
+        _revealWhileLoading = -1;
         var index = RowAt(point.Position.Y);
         if (index >= 0)
         {
@@ -336,6 +351,7 @@ public sealed partial class CommitGraphControl : Control
     {
         base.OnPointerWheelChanged(e);
         _pointer = e.GetPosition(this);
+        _revealWhileLoading = -1;
         ScrollTo(ScrollOffset - (e.Delta.Y * RowsPerWheelNotch * RowHeight));
         e.Handled = true;
     }
@@ -343,6 +359,7 @@ public sealed partial class CommitGraphControl : Control
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        _revealWhileLoading = -1;
         var count = RowCount;
         if (count == 0 || e.KeyModifiers != KeyModifiers.None)
         {
@@ -453,6 +470,12 @@ public sealed partial class CommitGraphControl : Control
 
         UpdateExtent(Bounds.Size);
         InvalidateVisual();
+        if (_revealWhileLoading >= 0)
+        {
+            Reveal(_revealWhileLoading);
+        }
+
+        UpdateHover();
     }
 
     private void OnThemeChanged()
@@ -472,7 +495,36 @@ public sealed partial class CommitGraphControl : Control
             InvalidateVisual();
         }
 
-        ToolTip.SetTip(this, LabelsTipAt(row));
+        ToolTip.SetTip(this, LabelsTipAt(row) ?? CellTipAt(row));
+    }
+
+    /// <summary>
+    /// The tooltip over a message or an author cut short with "…": the whole text, as everything
+    /// shortened in the app shows it. Null over any other cell, and over text shown whole.
+    /// </summary>
+    private string? CellTipAt(int row)
+    {
+        var data = Data;
+        if (row < 0 || data is null || _pointer is not { } pointer)
+        {
+            return null;
+        }
+
+        var visual = GetRowVisual(data, row);
+        var commit = data.CommitAt(row);
+        if (Columns.Message.IsVisible && pointer.X >= Columns.Message.X && pointer.X < Columns.Message.Right && IsCut(visual.Message))
+        {
+            return commit.Subject;
+        }
+
+        if (Columns.Author.IsVisible && pointer.X >= Columns.Author.X && pointer.X < Columns.Author.Right && IsCut(visual.Author))
+        {
+            return commit.AuthorName;
+        }
+
+        return null;
+
+        static bool IsCut(TextLayout? layout) => layout is { TextLines.Count: > 0 } && layout.TextLines[0].HasCollapsed;
     }
 
     /// <summary>The tooltip over a row's labels: every label in full, one per line. Null when the mouse is not over labels.</summary>

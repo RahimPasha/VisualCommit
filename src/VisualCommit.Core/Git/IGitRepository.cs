@@ -35,6 +35,20 @@ public interface IGitRepository
     /// </summary>
     Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// As <see cref="LoadCommitsAsync(RepoRefs, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>,
+    /// while the refs are still being read: <c>git log</c> starts at once, and no page is handed
+    /// over before <paramref name="refs"/> has completed, because the stashes are merged in from
+    /// it. Opening a repository reads the refs and the history side by side this way, which
+    /// brings the first graph forward by the time the refs take (Q1). If reading the refs fails,
+    /// so does this. The default implementation simply waits for the refs first.
+    /// </summary>
+    async Task LoadCommitsAsync(Task<RepoRefs> refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(refs);
+        await LoadCommitsAsync(await refs.ConfigureAwait(false), onPage, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Reads the full message, the author and committer and the changed files of one commit or stash.</summary>
     Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default);
 

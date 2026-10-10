@@ -206,7 +206,7 @@ public partial class LeftPanelViewModel : ObservableObject
             }
         }
 
-        Rows.ReplaceAll(rows);
+        Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
     }
 
     /// <summary>Adds a section header and returns whether the section is open.</summary>

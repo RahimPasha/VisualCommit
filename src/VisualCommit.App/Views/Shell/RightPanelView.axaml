@@ -319,7 +319,10 @@
                 <DockPanel IsVisible="{Binding IsFile}"
                            Background="Transparent"
                            Margin="0,0,12,0"
-                           ToolTip.Tip="{Binding ToolTip}">
+                           ToolTip.Tip="{Binding ToolTip}"
+                           AutomationProperties.AutomationId="ChangedFile"
+                           AutomationProperties.Name="{Binding Name}"
+                           AutomationProperties.AccessibilityView="Control">
                   <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
                   <TextBlock DockPanel.Dock="Left"
                              Name="FileStatus"

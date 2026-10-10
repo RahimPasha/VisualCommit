@@ -30,33 +30,38 @@ public sealed partial class GitRepository
     /// <summary>The characters of a commit id as git prints it.</summary>
     private static readonly SearchValues<char> HexDigits = SearchValues.Create("0123456789abcdef");
 
-    public async Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+    public Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(refs);
+        return LoadCommitsAsync(Task.FromResult(refs), onPage, cancellationToken);
+    }
+
+    public async Task LoadCommitsAsync(Task<RepoRefs> refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(refs);
         ArgumentNullException.ThrowIfNull(onPage);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var pager = new CommitPager(refs.Stashes, onPage);
-
-        // Without a ref and with an unborn HEAD there is no commit to show, and nothing to ask git.
-        if (refs.Refs.Count == 0 && refs.Head.IsUnborn)
+        // Refs already known, none of them, and an unborn HEAD: no commit to show, nothing to ask git.
+        if (refs.IsCompletedSuccessfully && refs.Result.Refs.Count == 0 && refs.Result.Head.IsUnborn)
         {
             // Stashes alone are possible in theory (every branch deleted after stashing). They
             // are handed over on a thread-pool thread, as the contract promises.
-            await Task.Run(pager.Finish, cancellationToken).ConfigureAwait(false);
+            await Task.Run(new CommitPager(refs.Result.Stashes, onPage).Finish, cancellationToken).ConfigureAwait(false);
             return;
         }
 
+        // git log does not depend on the refs, so it starts before they are known. HEAD is always
+        // named, with --ignore-missing, which skips it when it is unborn: a detached HEAD's
+        // commits are reachable from nothing else.
         var arguments = new List<string> { "log", "--date-order", "--format=" + LogFormat };
         arguments.AddRange(PlainLogOptions);
-        arguments.AddRange(["--branches", "--remotes", "--tags"]);
-        if (!refs.Head.IsUnborn)
-        {
-            // An unborn HEAD names no commit, and git log would fail on it.
-            arguments.Add("HEAD");
-        }
+        arguments.AddRange(["--branches", "--remotes", "--tags", "--ignore-missing", "HEAD", "--"]);
 
-        arguments.Add("--");
+        // The pager needs the stashes, so it is made when the first commit arrives, waiting for the
+        // refs if they are still being read; git keeps writing into the pipe meanwhile.
+        CommitPager? pager = null;
+        CommitPager Pager() => pager ??= new CommitPager(refs.GetAwaiter().GetResult().Stashes, onPage);
 
         // Names and addresses repeat across commits; one string each keeps a large history small.
         var strings = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -83,7 +88,7 @@ public sealed partial class GitRepository
                 cancellationToken.ThrowIfCancellationRequested();
                 if (TryParseLogLine(line, pooled, out var commit))
                 {
-                    pager.Add(commit);
+                    Pager().Add(commit);
                 }
                 else if (line.Length > 0)
                 {
@@ -99,6 +104,9 @@ public sealed partial class GitRepository
             _log.Warning($"git log printed {skipped} line(s) that could not be read in {WorkingDirectory}; those commits are missing from the graph.");
         }
 
+        // A history without commits never made the pager; a failure to read the refs surfaces here.
+        var known = await refs.ConfigureAwait(false);
+        pager ??= new CommitPager(known.Stashes, onPage);
         pager.Finish();
     }
 

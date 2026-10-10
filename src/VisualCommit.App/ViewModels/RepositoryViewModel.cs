@@ -23,6 +23,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     private readonly IAppLog _log;
     private readonly Stopwatch _sinceOpening;
     private readonly List<double> _frameTimes = [];
+    private readonly List<double> _loadingFrameTimes = [];
     private IRepositoryWatcher? _watcher;
     private string? _selectedSha;
     private string? _pendingSelection;
@@ -120,11 +121,29 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
             _watcher.Changed += (_, _) => OnUiThread(RequestRefresh);
             _watcher.Start();
 
-            var refs = await Repository.ReadRefsAsync(cancellationToken);
+            // The refs and the history are read side by side: git log does not need the refs,
+            // and starting it at once brings the first graph forward by the time they take (Q1).
+            _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: opened after {_sinceOpening.ElapsedMilliseconds} ms"));
+            var reading = Repository.ReadRefsAsync(cancellationToken);
+            var data = new Lazy<CommitGraphData>(() => new CommitGraphData(reading.Result), LazyThreadSafetyMode.ExecutionAndPublication);
+            var loading = LoadAsync(reading, data, cancellationToken);
+
+            RepoRefs refs;
+            try
+            {
+                refs = await reading;
+            }
+            catch
+            {
+                // The load fails with the same error; it is observed here so it is not reported twice.
+                _ = loading.ContinueWith(failed => _ = failed.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                throw;
+            }
+
+            _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: refs read after {_sinceOpening.ElapsedMilliseconds} ms"));
             ApplyRefs(refs);
-            var data = new CommitGraphData(refs);
-            Graph = data;
-            await LoadAsync(data, cancellationToken);
+            Graph = data.Value;
+            await loading;
             OnPropertyChanged(nameof(HasNoCommits));
 
             _started = true;
@@ -188,7 +207,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
                 }
 
                 var data = new CommitGraphData(refs);
-                await LoadAsync(data, cancellationToken);
+                await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), cancellationToken);
                 ApplyRefs(refs);
                 SwapGraph(data);
             }
@@ -241,8 +260,14 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         _log.Info(string.Create(CultureInfo.InvariantCulture, $"{Name}: first graph rows drawn after {_sinceOpening.ElapsedMilliseconds} ms"));
     }
 
-    /// <summary>The graph control drew a frame in <paramref name="duration"/>: kept for the statistics logged when the tab closes (D50).</summary>
-    public void OnFrameDrawn(TimeSpan duration) => _frameTimes.Add(duration.TotalMilliseconds);
+    /// <summary>
+    /// The graph control drew a frame in <paramref name="duration"/>: kept for the statistics
+    /// logged when the tab closes (D50). D50 judges smoothness over scrolling, so frames drawn
+    /// once the history has loaded are counted apart from those drawn while it loads (the first
+    /// frame, and one per arriving page, while the loader also keeps the machine busy).
+    /// </summary>
+    public void OnFrameDrawn(TimeSpan duration) =>
+        (Graph.IsComplete ? _frameTimes : _loadingFrameTimes).Add(duration.TotalMilliseconds);
 
     public void Dispose()
     {
@@ -274,14 +299,25 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task LoadAsync(CommitGraphData data, CancellationToken cancellationToken)
+    /// <summary>
+    /// Loads the history into <paramref name="data"/>, which is made from <paramref name="refs"/>
+    /// once they are known. Git starts at once; no page arrives before the refs (the contract of
+    /// <see cref="IGitRepository.LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>).
+    /// </summary>
+    private async Task LoadAsync(Task<RepoRefs> refs, Lazy<CommitGraphData> lazyData, CancellationToken cancellationToken)
     {
         var layout = new GraphLayout();
         var stopwatch = Stopwatch.StartNew();
         await Repository.LoadCommitsAsync(
-            data.Refs,
+            refs,
             page =>
             {
+                var data = lazyData.Value;
+                if (layout.RowCount == 0)
+                {
+                    _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: first commits from git after {_sinceOpening.ElapsedMilliseconds} ms"));
+                }
+
                 // On a thread-pool thread: lay the page out here, add it on the UI thread.
                 var rows = new GraphRow[page.Count];
                 for (var i = 0; i < page.Count; i++)
@@ -301,6 +337,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
             cancellationToken);
 
         // The pages were posted in order; completing through the same queue keeps it last.
+        var data = lazyData.Value;
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         OnUiThread(() =>
         {
@@ -350,6 +387,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
             _selectedSha = null;
             _ = Details.ShowAsync(null, null, _lifetime.Token);
         }
+        else if (selected is not null && data.Refs.Stashes.FirstOrDefault(entry => entry.Sha == selected) is { } stash)
+        {
+            // A selected stash keeps its commit when stashes are pushed or dropped, but not its
+            // name: stash@{0} becomes stash@{1}. Show it again under its new name.
+            _ = Details.ShowAsync(selected, stash, _lifetime.Token);
+        }
     }
 
     private void ApplyPendingSelection(CommitGraphData data)
@@ -397,15 +440,21 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
 
     private void LogFrameStatistics()
     {
-        if (_frameTimes.Count == 0)
-        {
-            return;
-        }
+        Log("graph frames while loading", _loadingFrameTimes);
+        Log("graph frames", _frameTimes);
 
-        var sorted = _frameTimes.Order().ToList();
-        var p95 = sorted[(int)Math.Ceiling(sorted.Count * 0.95) - 1];
-        _log.Info(string.Create(
-            CultureInfo.InvariantCulture,
-            $"{Name}: graph frames: {sorted.Count} drawn, 95th percentile {p95:F1} ms, longest {sorted[^1]:F1} ms"));
+        void Log(string what, List<double> times)
+        {
+            if (times.Count == 0)
+            {
+                return;
+            }
+
+            var sorted = times.Order().ToList();
+            var p95 = sorted[(int)Math.Ceiling(sorted.Count * 0.95) - 1];
+            _log.Info(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{Name}: {what}: {sorted.Count} drawn, 95th percentile {p95:F1} ms, longest {sorted[^1]:F1} ms"));
+        }
     }
 }
