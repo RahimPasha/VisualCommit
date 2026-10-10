@@ -236,6 +236,8 @@
         <ControlTemplate>
           <ContentPresenter Name="PART_ContentPresenter"
                             Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{TemplateBinding CornerRadius}"
                             Padding="{TemplateBinding Padding}"
                             Content="{TemplateBinding Content}"
@@ -243,9 +245,12 @@
                             VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
         </ControlTemplate>
       </Setter>
+      <!-- Disabled: the control background, with a border so that it shows on a light panel too. -->
       <Style Selector="^:disabled">
         <Setter Property="Background" Value="{DynamicResource VcControlBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
       </Style>
     </ControlTheme>
 

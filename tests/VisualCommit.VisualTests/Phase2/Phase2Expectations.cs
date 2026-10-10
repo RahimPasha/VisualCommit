@@ -33,6 +33,12 @@ public static class Phase2Expectations
         "R helpers.py src renamed from src/util.py",
     ];
 
+    /// <summary>Check 14's commit: what plain git makes from the same index, message, identity and date ("Scenario repos").</summary>
+    public const string FirstCommit = "f976a24c1cb298e1c293542624fb96fe0b2d81c5";
+
+    /// <summary>Check 15's amend of <see cref="FirstCommit"/>.</summary>
+    public const string AmendedCommit = "f9add9d8b5d8ae985965e5a4215dd46b0d0a0517";
+
     public const double PanelHeaderHeight = 36;
     public const double SectionHeaderHeight = 34;
     public const double CommitAreaHeight = 212;
