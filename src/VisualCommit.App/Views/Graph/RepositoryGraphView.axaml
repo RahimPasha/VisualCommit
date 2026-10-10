@@ -36,6 +36,8 @@
     <c:CommitGraphControl Name="GraphRows"
                           Grid.Row="1"
                           Data="{Binding Graph}"
+                          ShowsWorkingRow="{Binding HasWorkingChanges}"
+                          IsWorkingRowSelected="{Binding IsWorkingRowSelected}"
                           Dates="{Binding Dates}"
                           SelectedIndex="{Binding SelectedIndex}"
                           ScrollOffset="{Binding ScrollOffset}"

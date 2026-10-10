@@ -55,6 +55,12 @@ public sealed partial class CommitGraphControl
 
     private const string Ellipsis = "…";
 
+    /// <summary>What the working-changes row says in the Message column (D60).</summary>
+    public const string WorkingRowText = "Working changes";
+
+    /// <summary>The working-changes row's dashed line: dashes and gaps of 3 pixels, in units of the line's thickness.</summary>
+    private const double DashLength = 3;
+
     /// <summary>
     /// How many rows keep their laid-out text. A view shows at most about 40 rows; the rest of
     /// the cache makes scrolling back a little free. The bound keeps memory flat while scrolling
@@ -63,6 +69,7 @@ public sealed partial class CommitGraphControl
     private const int MaxCachedRows = 256;
 
     private readonly Dictionary<int, RowVisual> _rowCache = [];
+    private TextLayout? _workingRowLayout;
     private readonly Dictionary<string, TextLayout?> _authorCache = new(StringComparer.Ordinal);
     private Palette? _palette;
 
@@ -74,14 +81,17 @@ public sealed partial class CommitGraphControl
         context.FillRectangle(palette.Background, new Rect(size));
 
         var data = Data;
-        if (data is null || data.Count == 0 || size.Height <= 0 || size.Width <= 0)
+        var rowOffset = RowOffset;
+        if (data is null || data.Count + rowOffset == 0 || size.Height <= 0 || size.Width <= 0)
         {
             return;
         }
 
+        // Rows are counted as drawn: the working-changes row, when shown, is row 0 and every
+        // commit's row is one further down.
         var offset = DrawnOffset;
         var first = Math.Max(0, (int)Math.Floor(offset / RowHeight));
-        var last = Math.Min(data.Count - 1, (int)Math.Ceiling((offset + size.Height) / RowHeight) - 1);
+        var last = Math.Min(data.Count + rowOffset - 1, (int)Math.Ceiling((offset + size.Height) / RowHeight) - 1);
         if (last < first)
         {
             return;
@@ -90,52 +100,138 @@ public sealed partial class CommitGraphControl
         var columns = Columns;
         var selected = SelectedIndex;
 
-        for (var index = first; index <= last; index++)
+        for (var display = first; display <= last; display++)
         {
-            var background = RowBackground(index, selected, palette);
+            var background = RowBackground(display, selected, palette);
             if (!ReferenceEquals(background, palette.Background))
             {
-                context.FillRectangle(background, new Rect(0, RowTop(index, offset), size.Width, RowHeight));
+                context.FillRectangle(background, new Rect(0, RowTop(display, offset), size.Width, RowHeight));
             }
         }
 
         using (context.PushClip(new Rect(columns.Graph.X, 0, columns.Graph.Width, size.Height)))
         {
-            for (var index = first; index <= last; index++)
+            // Under everything else in the column: what it passes is drawn over it.
+            if (rowOffset > 0)
             {
-                DrawGraphCell(context, data, index, RowTop(index, offset), RowBackground(index, selected, palette), palette);
+                DrawWorkingRowLine(context, data, offset, size.Height, palette);
+            }
+
+            for (var display = first; display <= last; display++)
+            {
+                var top = RowTop(display, offset);
+                var background = RowBackground(display, selected, palette);
+                if (display < rowOffset)
+                {
+                    DrawWorkingRowNode(context, data, top, background, palette);
+                }
+                else
+                {
+                    DrawGraphCell(context, data, display - rowOffset, top, background, palette);
+                }
             }
         }
 
         using (context.PushClip(new Rect(columns.Refs.X, 0, columns.Refs.Width, size.Height)))
         {
-            for (var index = first; index <= last; index++)
+            for (var display = Math.Max(first, rowOffset); display <= last; display++)
             {
+                var index = display - rowOffset;
                 if (data.LabelsAt(index).Count > 0)
                 {
-                    DrawLabels(context, GetRowVisual(data, index), data.RowAt(index).NodeColor, RowTop(index, offset), palette);
+                    DrawLabels(context, GetRowVisual(data, index), data.RowAt(index).NodeColor, RowTop(display, offset), palette);
                 }
             }
         }
 
-        for (var index = first; index <= last; index++)
+        for (var display = first; display <= last; display++)
         {
-            DrawTextCells(context, GetRowVisual(data, index), RowTop(index, offset), columns);
+            if (display < rowOffset)
+            {
+                _workingRowLayout ??= CellLayout(WorkingRowText, CellTypeface, palette.TextSecondary, columns.Message);
+                DrawCell(context, _workingRowLayout, columns.Message.X, RowTop(display, offset));
+            }
+            else
+            {
+                DrawTextCells(context, GetRowVisual(data, display - rowOffset), RowTop(display, offset), columns);
+            }
         }
 
-        TrimRowCache(first, last);
+        TrimRowCache(first - rowOffset, last - rowOffset);
 
         var elapsed = Stopwatch.GetElapsedTime(started);
-        RowsDrawn?.Invoke(this, EventArgs.Empty);
+        if (data.Count > 0)
+        {
+            RowsDrawn?.Invoke(this, EventArgs.Empty);
+        }
+
         FrameDrawn?.Invoke(this, elapsed);
     }
 
-    private static double RowTop(int index, double offset) => (index * RowHeight) - offset;
+    private static double RowTop(int display, double offset) => (display * RowHeight) - offset;
 
-    private IBrush RowBackground(int index, int selected, Palette palette) =>
-        index == selected ? palette.Selection
-        : index == _hoveredRow ? palette.RowHover
-        : palette.Background;
+    /// <summary>A drawn row's background: the working-changes row is row 0 when shown.</summary>
+    private IBrush RowBackground(int display, int selected, Palette palette)
+    {
+        var isSelected = display < RowOffset ? IsWorkingRowSelected : display - RowOffset == selected;
+        return isSelected ? palette.Selection
+            : display == _hoveredRow ? palette.RowHover
+            : palette.Background;
+    }
+
+    /// <summary>The lane and colour the working-changes row takes: those of HEAD's commit, or lane 0 and colour 0 (D60). Also HEAD's row, or -1.</summary>
+    private static (int Lane, int Color, int HeadIndex) WorkingRowLane(CommitGraphData data)
+    {
+        var head = data.Refs.Head.Sha is { } sha ? data.IndexOf(sha) : -1;
+        if (head < 0)
+        {
+            return (0, 0, -1);
+        }
+
+        var row = data.RowAt(head);
+        return (row.NodeLane, Modulo(row.NodeColor), head);
+    }
+
+    /// <summary>The working-changes row's ring: 10 across and 2 wide, as a stash's, with the row's background inside.</summary>
+    private void DrawWorkingRowNode(DrawingContext context, CommitGraphData data, double top, IBrush rowBackground, Palette palette)
+    {
+        var (lane, color, _) = WorkingRowLane(data);
+        var radius = (NodeDiameter / 2) - (RingThickness / 2);
+        context.DrawEllipse(rowBackground, palette.RingPens[color], new Point(LaneCenterX(lane), top + (RowHeight / 2)), radius, radius);
+    }
+
+    /// <summary>
+    /// The dashed line from the working-changes row's ring down to HEAD's node, in HEAD's lane: a
+    /// dash of 3 from the ring's bottom, a gap of 3, and so on. Only the part in view is drawn,
+    /// with the pattern shifted so that it stays where it would be if all of it were.
+    /// </summary>
+    private void DrawWorkingRowLine(DrawingContext context, CommitGraphData data, double offset, double height, Palette palette)
+    {
+        var (lane, color, head) = WorkingRowLane(data);
+        if (head < 0)
+        {
+            return;
+        }
+
+        var x = LaneCenterX(lane);
+        var from = RowTop(0, offset) + (RowHeight / 2) + (NodeDiameter / 2);
+        var headCommit = data.CommitAt(head);
+        var headRadius = (headCommit.Parents.Count > 1 ? MergeNodeDiameter : NodeDiameter) / 2;
+        var to = RowTop(head + 1, offset) + (RowHeight / 2) - headRadius;
+
+        var start = Math.Max(from, -RowHeight);
+        var end = Math.Min(to, height + RowHeight);
+        if (end <= start)
+        {
+            return;
+        }
+
+        var period = 2 * DashLength;
+        var phase = (start - from) % period;
+        var dashes = new ImmutableDashStyle([DashLength / LineThickness, DashLength / LineThickness], phase / LineThickness);
+        var pen = new ImmutablePen(palette.Lanes[color], LineThickness, dashes, PenLineCap.Flat);
+        context.DrawLine(pen, new Point(x, start), new Point(x, end));
+    }
 
     /// <summary>The lines and the node of one row: lines first, so the node lies on top of them.</summary>
     private void DrawGraphCell(DrawingContext context, CommitGraphData data, int index, double top, IBrush rowBackground, Palette palette)
@@ -510,6 +606,7 @@ public sealed partial class CommitGraphControl
     /// <summary>Forgets every laid-out text: the theme's colours, the font, the column widths or the rows changed.</summary>
     private void ClearRowCache()
     {
+        _workingRowLayout = null;
         _rowCache.Clear();
         _authorCache.Clear();
     }
@@ -568,7 +665,7 @@ public sealed partial class CommitGraphControl
 
         public required IPen BorderPen { get; init; }
 
-        public required IBrush[] Lanes { get; init; }
+        public required IImmutableBrush[] Lanes { get; init; }
 
         /// <summary>Lines in each lane colour, 2 wide.</summary>
         public required IPen[] LanePens { get; init; }

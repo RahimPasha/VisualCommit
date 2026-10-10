@@ -41,7 +41,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>The repository open in this tab, or null for the welcome page.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRepository), nameof(ShowsWelcome), nameof(LeftPanel), nameof(Details), nameof(BranchText))]
+    [NotifyPropertyChangedFor(nameof(HasRepository), nameof(ShowsWelcome), nameof(LeftPanel), nameof(Details), nameof(BranchText), nameof(Changes), nameof(ShowsWorkingChanges))]
     public partial RepositoryViewModel? Repository { get; private set; }
 
     public bool HasRepository => Repository is not null;
@@ -59,6 +59,12 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     public LeftPanelViewModel LeftPanel => Repository?.LeftPanel ?? _emptyLeftPanel;
 
     public CommitDetailsViewModel Details => Repository?.Details ?? _emptyDetails;
+
+    /// <summary>The repository's stage panel, or null without a repository.</summary>
+    public WorkingChangesViewModel? Changes => Repository?.Changes;
+
+    /// <summary>The right panel shows the stage panel: the working-changes row is selected.</summary>
+    public bool ShowsWorkingChanges => Repository?.IsWorkingRowSelected == true;
 
     /// <summary>What the status bar shows for this tab.</summary>
     public string BranchText => Repository?.BranchText ?? "No repository";
@@ -157,7 +163,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
         FailedPath = null;
         var previous = Repository;
-        var opened = new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening);
+        var opened = new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening, _services.Dialogs);
         opened.PropertyChanged += OnRepositoryPropertyChanged;
         Repository = opened;
         Title = repository.Name;
@@ -200,6 +206,10 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         if (e.PropertyName == nameof(RepositoryViewModel.BranchText))
         {
             OnPropertyChanged(nameof(BranchText));
+        }
+        else if (e.PropertyName == nameof(RepositoryViewModel.IsWorkingRowSelected))
+        {
+            OnPropertyChanged(nameof(ShowsWorkingChanges));
         }
     }
 }

@@ -1,0 +1,432 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
+             x:Class="VisualCommit.App.Views.Shell.WorkingChangesView"
+             x:DataType="vm:WorkingChangesViewModel"
+             AutomationProperties.AutomationId="StagePanel">
+
+  <!-- The stage panel (C4), in the right panel while the working-changes row is selected: as
+       "The stage panel" in docs/test-reports/phase-2.md describes it. -->
+  <UserControl.Resources>
+    <!-- A file row's own button: the whole row, transparent; the row's panel draws hover and selection. -->
+    <ControlTheme x:Key="StageRowButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.status.added">
+      <Setter Property="Foreground" Value="{DynamicResource VcSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.modified">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.deleted">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <Style Selector="c|Icon.chevron">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+
+    <!-- A file row: the hover background while the mouse is over it, the selection background
+         while its diff is open; its buttons show in both cases (D70). -->
+    <Style Selector="Panel.stageRow">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Panel.stageRow:pointerover">
+      <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+    </Style>
+    <Style Selector="Panel.stageRow.selected">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+    <Style Selector="Panel.stageRow StackPanel.rowActions">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Panel.stageRow:pointerover StackPanel.rowActions">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Panel.stageRow.selected StackPanel.rowActions">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Panel.stageRow.folder StackPanel.rowActions">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="TextBlock#SummaryCounter.over">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="CheckBox#AmendCheckBox">
+      <Setter Property="MinHeight" Value="20" />
+      <Setter Property="Height" Value="20" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource VcPanelBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="1,0,0,0">
+    <Grid RowDefinitions="36,Auto,34,*,34,*,Auto">
+
+      <!-- Header: the title, and Flat or Tree for both lists (D70, D44). -->
+      <Border Grid.Row="0" BorderBrush="{DynamicResource VcBorderBrush}" BorderThickness="0,0,0,1">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" Margin="0,0,8,0" VerticalAlignment="Center">
+            <Button Name="StageFlatButton"
+                    Theme="{StaticResource FileListToggle}"
+                    Classes.selected="{Binding IsFlat}"
+                    Command="{Binding ShowFlatCommand}"
+                    ToolTip.Tip="List the files with their folders"
+                    AutomationProperties.AutomationId="StageFlatButton"
+                    AutomationProperties.Name="Flat">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <c:Icon Data="{StaticResource IconList}" Width="13" Height="13" VerticalAlignment="Center" />
+                <TextBlock Text="Flat" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Name="StageTreeButton"
+                    Theme="{StaticResource FileListToggle}"
+                    Classes.selected="{Binding IsTree}"
+                    Command="{Binding ShowTreeCommand}"
+                    ToolTip.Tip="Show the files in a tree of folders"
+                    AutomationProperties.AutomationId="StageTreeButton"
+                    AutomationProperties.Name="Tree">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <c:Icon Data="{StaticResource IconListTree}" Width="13" Height="13" VerticalAlignment="Center" />
+                <TextBlock Text="Tree" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+          <TextBlock Name="StagePanelTitle" Text="Working changes" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+        </DockPanel>
+      </Border>
+
+      <!-- The restore bar, after a discard (D62, D73). -->
+      <Border Grid.Row="1"
+              Name="RestoreBar"
+              Height="40"
+              IsVisible="{Binding HasRestore}"
+              Background="{DynamicResource VcControlBackgroundBrush}"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="0,0,0,1">
+        <DockPanel Margin="12,0,6,0">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Name="RestoreDiscardButton"
+                    Theme="{StaticResource FileListToggle}"
+                    Content="Restore"
+                    Command="{Binding RestoreCommand}"
+                    AutomationProperties.AutomationId="RestoreDiscardButton"
+                    AutomationProperties.Name="Restore" />
+            <Button Name="DismissRestoreButton"
+                    Theme="{StaticResource VcIconButton}"
+                    Command="{Binding DismissRestoreCommand}"
+                    ToolTip.Tip="Close"
+                    AutomationProperties.AutomationId="DismissRestoreButton">
+              <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+            </Button>
+          </StackPanel>
+          <TextBlock Name="RestoreBarText"
+                     Text="{Binding RestoreText}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding RestoreText}"
+                     VerticalAlignment="Center"
+                     AutomationProperties.AutomationId="RestoreBarText" />
+        </DockPanel>
+      </Border>
+
+      <!-- Unstaged files: header, then the list. -->
+      <DockPanel Grid.Row="2" Margin="12,0,8,0">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" IsVisible="{Binding HasUnstaged}">
+          <Button Name="StageAllButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Stage all"
+                  Command="{Binding StageAllCommand}"
+                  AutomationProperties.AutomationId="StageAllButton"
+                  AutomationProperties.Name="Stage all" />
+          <Button Name="DiscardAllButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Discard all"
+                  Command="{Binding DiscardAllCommand}"
+                  AutomationProperties.AutomationId="DiscardAllButton"
+                  AutomationProperties.Name="Discard all" />
+        </StackPanel>
+        <TextBlock Name="UnstagedTitle"
+                   Classes="heading"
+                   Text="{Binding UnstagedTitle}"
+                   AutomationProperties.AutomationId="UnstagedTitle" />
+      </DockPanel>
+
+      <Panel Grid.Row="3">
+        <TextBlock Name="NoUnstaged"
+                   Classes="secondary"
+                   Text="No unstaged changes"
+                   Margin="12,8,12,0"
+                   VerticalAlignment="Top"
+                   IsVisible="{Binding !HasUnstaged}" />
+        <ItemsControl Name="UnstagedFileList"
+                      ItemsSource="{Binding Unstaged.Rows}"
+                      AutomationProperties.AutomationId="UnstagedFileList"
+                      AutomationProperties.Name="Unstaged files">
+          <ItemsControl.Template>
+            <ControlTemplate>
+              <ScrollViewer Name="PART_ScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChangedFileRow">
+              <Panel Height="24" Classes="stageRow" Classes.selected="{Binding IsSelected}" Classes.folder="{Binding IsFolder}">
+
+                <Button Theme="{StaticResource FileFolderButton}"
+                        IsVisible="{Binding IsFolder}"
+                        Command="{Binding ToggleCommand}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="StageTreeFolder"
+                        AutomationProperties.Name="{Binding Name}">
+                  <DockPanel Margin="0,0,12,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <Panel DockPanel.Dock="Left" Width="16" Margin="0,0,6,0">
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronDown}" IsVisible="{Binding IsOpen}" />
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsOpen}" />
+                    </Panel>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+                <Button Theme="{StaticResource StageRowButton}"
+                        IsVisible="{Binding IsFile}"
+                        Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).ActivateUnstagedCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="StageFileRow"
+                        AutomationProperties.Name="{Binding Key}">
+                  <DockPanel Margin="0,0,60,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Classes="status"
+                               Classes.added="{Binding IsAdded}"
+                               Classes.modified="{Binding IsModified}"
+                               Classes.deleted="{Binding IsDeleted}"
+                               Classes.renamed="{Binding IsRenamedOrCopied}"
+                               Width="16" Margin="0,0,6,0"
+                               TextAlignment="Center"
+                               Text="{Binding StatusLetter}" />
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock DockPanel.Dock="Left" Classes="secondary" Text="{Binding Folder}" IsVisible="{Binding HasFolder}"
+                               Margin="8,0,0,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Classes="secondary" Text="{Binding OriginText}" IsVisible="{Binding HasOrigin}"
+                               Margin="8,0,0,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+                <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="2" Margin="0,0,6,0" HorizontalAlignment="Right">
+                  <Button Theme="{StaticResource VcIconButton}"
+                          Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).StageFileCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Stage"
+                          AutomationProperties.AutomationId="RowStageButton">
+                    <c:Icon Data="{StaticResource IconPlus}" Width="14" Height="14" />
+                  </Button>
+                  <Button Theme="{StaticResource VcIconButton}"
+                          Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).DiscardFileCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Discard"
+                          AutomationProperties.AutomationId="RowDiscardButton">
+                    <c:Icon Data="{StaticResource IconUndo}" Width="14" Height="14" />
+                  </Button>
+                </StackPanel>
+              </Panel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+
+      <!-- Staged files: header, then the list. -->
+      <Border Grid.Row="4" BorderBrush="{DynamicResource VcBorderBrush}" BorderThickness="0,1,0,0">
+        <DockPanel Margin="12,0,8,0">
+          <Button DockPanel.Dock="Right"
+                  Name="UnstageAllButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Unstage all"
+                  Command="{Binding UnstageAllCommand}"
+                  IsVisible="{Binding HasStaged}"
+                  AutomationProperties.AutomationId="UnstageAllButton"
+                  AutomationProperties.Name="Unstage all" />
+          <TextBlock Name="StagedTitle"
+                     Classes="heading"
+                     Text="{Binding StagedTitle}"
+                     AutomationProperties.AutomationId="StagedTitle" />
+        </DockPanel>
+      </Border>
+
+      <Panel Grid.Row="5">
+        <TextBlock Name="NoStaged"
+                   Classes="secondary"
+                   Text="No staged changes"
+                   Margin="12,8,12,0"
+                   VerticalAlignment="Top"
+                   IsVisible="{Binding !HasStaged}" />
+        <ItemsControl Name="StagedFileList"
+                      ItemsSource="{Binding Staged.Rows}"
+                      AutomationProperties.AutomationId="StagedFileList"
+                      AutomationProperties.Name="Staged files">
+          <ItemsControl.Template>
+            <ControlTemplate>
+              <ScrollViewer Name="PART_ScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChangedFileRow">
+              <Panel Height="24" Classes="stageRow" Classes.selected="{Binding IsSelected}" Classes.folder="{Binding IsFolder}">
+
+                <Button Theme="{StaticResource FileFolderButton}"
+                        IsVisible="{Binding IsFolder}"
+                        Command="{Binding ToggleCommand}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="StageTreeFolder"
+                        AutomationProperties.Name="{Binding Name}">
+                  <DockPanel Margin="0,0,12,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <Panel DockPanel.Dock="Left" Width="16" Margin="0,0,6,0">
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronDown}" IsVisible="{Binding IsOpen}" />
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsOpen}" />
+                    </Panel>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+                <Button Theme="{StaticResource StageRowButton}"
+                        IsVisible="{Binding IsFile}"
+                        Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).ActivateStagedCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="StageFileRow"
+                        AutomationProperties.Name="{Binding Key}">
+                  <DockPanel Margin="0,0,36,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Classes="status"
+                               Classes.added="{Binding IsAdded}"
+                               Classes.modified="{Binding IsModified}"
+                               Classes.deleted="{Binding IsDeleted}"
+                               Classes.renamed="{Binding IsRenamedOrCopied}"
+                               Width="16" Margin="0,0,6,0"
+                               TextAlignment="Center"
+                               Text="{Binding StatusLetter}" />
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock DockPanel.Dock="Left" Classes="secondary" Text="{Binding Folder}" IsVisible="{Binding HasFolder}"
+                               Margin="8,0,0,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Classes="secondary" Text="{Binding OriginText}" IsVisible="{Binding HasOrigin}"
+                               Margin="8,0,0,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+                <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="2" Margin="0,0,6,0" HorizontalAlignment="Right">
+                  <Button Theme="{StaticResource VcIconButton}"
+                          Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).UnstageFileCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Unstage"
+                          AutomationProperties.AutomationId="RowUnstageButton">
+                    <c:Icon Data="{StaticResource IconMinus}" Width="14" Height="14" />
+                  </Button>
+                </StackPanel>
+              </Panel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+
+      <!-- The commit message and the commit button (D68). -->
+      <Border Grid.Row="6" BorderBrush="{DynamicResource VcBorderBrush}" BorderThickness="0,1,0,0" Padding="12">
+        <StackPanel Spacing="8">
+          <Panel Height="32">
+            <TextBox Name="CommitSummary"
+                     Text="{Binding Summary}"
+                     PlaceholderText="Summary"
+                     Height="32"
+                     Padding="8,5,40,5"
+                     VerticalContentAlignment="Center"
+                     AutomationProperties.AutomationId="CommitSummary"
+                     AutomationProperties.Name="Summary" />
+            <TextBlock Name="SummaryCounter"
+                       Classes="secondary"
+                       Classes.over="{Binding IsSummaryOverLimit}"
+                       Text="{Binding SummaryCounter}"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0"
+                       IsHitTestVisible="False"
+                       AutomationProperties.AutomationId="SummaryCounter" />
+          </Panel>
+          <TextBox Name="CommitDescription"
+                   Text="{Binding Description}"
+                   PlaceholderText="Description"
+                   Height="80"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   VerticalContentAlignment="Top"
+                   AutomationProperties.AutomationId="CommitDescription"
+                   AutomationProperties.Name="Description" />
+          <CheckBox Name="AmendCheckBox"
+                    Content="Amend previous commit"
+                    IsChecked="{Binding IsAmend}"
+                    IsEnabled="{Binding CanAmend}"
+                    AutomationProperties.AutomationId="AmendCheckBox" />
+          <Button Name="CommitButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  HorizontalAlignment="Stretch"
+                  Content="{Binding CommitButtonText}"
+                  Command="{Binding CommitCommand}"
+                  AutomationProperties.AutomationId="CommitButton"
+                  AutomationProperties.Name="{Binding CommitButtonText}" />
+          <TextBlock Name="CommitError"
+                     Classes="error"
+                     Text="{Binding ErrorText}"
+                     IsVisible="{Binding HasError}"
+                     TextWrapping="Wrap"
+                     AutomationProperties.AutomationId="CommitError" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

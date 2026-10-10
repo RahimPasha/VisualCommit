@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -18,7 +19,8 @@ public sealed class TabServices
         ISessionStore session,
         DateDisplay dates,
         IAppLog? log = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        IDialogService? dialogs = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -31,6 +33,7 @@ public sealed class TabServices
         Dates = dates;
         Log = log ?? NullAppLog.Instance;
         Recent = new RecentRepositories(session, clock ?? TimeProvider.System);
+        Dialogs = dialogs ?? new DialogHostViewModel();
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -44,6 +47,9 @@ public sealed class TabServices
     public IAppLog Log { get; }
 
     public RecentRepositories Recent { get; }
+
+    /// <summary>The window's confirmations (D69).</summary>
+    public IDialogService Dialogs { get; }
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

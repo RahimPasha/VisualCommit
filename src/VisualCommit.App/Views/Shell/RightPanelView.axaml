@@ -8,7 +8,8 @@
 
   <!-- The right panel of the active tab: the details of the selected commit, as "Commit details"
        in docs/test-reports/phase-1.md describes them, or phase 0's placeholder when nothing is
-       selected. Phase 2 adds the stage-and-commit panel. -->
+       selected. The stage panel (WorkingChangesView) takes its place while the working-changes
+       row is selected. -->
   <UserControl.Resources>
     <!-- A parent's short id: text in the accent colour that selects that commit. -->
     <ControlTheme x:Key="ParentLinkButton" TargetType="Button">
@@ -28,60 +29,6 @@
       </Setter>
     </ControlTheme>
 
-    <!-- Flat and Tree: small buttons, the one in use with the selection background. -->
-    <ControlTheme x:Key="FileListToggle" TargetType="Button">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
-      <Setter Property="Height" Value="24" />
-      <Setter Property="Padding" Value="8,0" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
-      <Setter Property="Template">
-        <ControlTemplate>
-          <ContentPresenter Name="PART_ContentPresenter"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="{TemplateBinding CornerRadius}"
-                            Padding="{TemplateBinding Padding}"
-                            Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-        </ControlTemplate>
-      </Setter>
-      <Style Selector="^:pointerover">
-        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
-      </Style>
-      <Style Selector="^.selected">
-        <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
-      </Style>
-    </ControlTheme>
-
-    <!-- A folder row of the file tree: the whole row opens and closes it. -->
-    <ControlTheme x:Key="FileFolderButton" TargetType="Button">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="VerticalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="VerticalContentAlignment" Value="Stretch" />
-      <Setter Property="Template">
-        <ControlTemplate>
-          <ContentPresenter Name="PART_ContentPresenter"
-                            Background="{TemplateBinding Background}"
-                            Padding="{TemplateBinding Padding}"
-                            Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-        </ControlTemplate>
-      </Setter>
-      <Style Selector="^:pointerover">
-        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
-      </Style>
-    </ControlTheme>
   </UserControl.Resources>
 
   <UserControl.Styles>
@@ -114,6 +61,10 @@
     </Style>
     <Style Selector="TextBlock.status.renamed">
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <!-- The file whose diff is open. A style outranks the theme's hover background. -->
+    <Style Selector="Button.fileRow.selected">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
     </Style>
     <Style Selector="c|Icon.chevron">
       <Setter Property="Width" Value="12" />
@@ -315,14 +266,18 @@
                   </DockPanel>
                 </Button>
 
-                <!-- A file: status letter, name, folder (flat list only), where a rename came from. -->
-                <DockPanel IsVisible="{Binding IsFile}"
-                           Background="Transparent"
-                           Margin="0,0,12,0"
-                           ToolTip.Tip="{Binding ToolTip}"
-                           AutomationProperties.AutomationId="ChangedFile"
-                           AutomationProperties.Name="{Binding Name}"
-                           AutomationProperties.AccessibilityView="Control">
+                <!-- A file: status letter, name, folder (flat list only), where a rename came from.
+                     A click opens its diff in place of the graph (D63). -->
+                <Button Theme="{StaticResource FileFolderButton}"
+                        Classes="fileRow"
+                        Classes.selected="{Binding IsSelected}"
+                        IsVisible="{Binding IsFile}"
+                        Command="{Binding $parent[ItemsControl].((vm:CommitDetailsViewModel)DataContext).ActivateFileCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="ChangedFile"
+                        AutomationProperties.Name="{Binding Name}">
+                <DockPanel Margin="0,0,12,0">
                   <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
                   <TextBlock DockPanel.Dock="Left"
                              Name="FileStatus"
@@ -355,6 +310,7 @@
                              TextTrimming="CharacterEllipsis"
                              VerticalAlignment="Center" />
                 </DockPanel>
+                </Button>
 
               </Panel>
             </DataTemplate>

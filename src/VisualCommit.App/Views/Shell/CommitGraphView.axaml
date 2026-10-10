@@ -3,18 +3,26 @@
              xmlns:vm="using:VisualCommit.App.ViewModels"
              xmlns:graph="using:VisualCommit.App.Views.Graph"
              xmlns:shell="using:VisualCommit.App.Views.Shell"
+             xmlns:diff="using:VisualCommit.App.Views.Diff"
              x:Class="VisualCommit.App.Views.Shell.CommitGraphView"
              x:DataType="vm:RepoTabViewModel"
              AutomationProperties.AutomationId="CommitGraph">
 
   <!-- The graph area of the active tab: the welcome page when it has no repository (D42), the
-       repository's graph when it has one, and nothing while a restored tab is still opening. -->
+       repository's graph or a file's diff when it has one, and nothing while a restored tab is
+       still opening. -->
   <Panel Background="{DynamicResource VcWindowBackgroundBrush}">
     <Panel IsVisible="{Binding ShowsWelcome}">
       <shell:WelcomeView DataContext="{Binding Welcome}" />
     </Panel>
     <Panel IsVisible="{Binding HasRepository}">
-      <graph:RepositoryGraphView DataContext="{Binding Repository}" />
+      <!-- The graph, or the open diff in its place (D63). -->
+      <Panel IsVisible="{Binding !Repository.IsDiffOpen}">
+        <graph:RepositoryGraphView DataContext="{Binding Repository}" />
+      </Panel>
+      <Panel IsVisible="{Binding Repository.IsDiffOpen}">
+        <diff:DiffView DataContext="{Binding Repository.Diff}" />
+      </Panel>
     </Panel>
   </Panel>
 </UserControl>

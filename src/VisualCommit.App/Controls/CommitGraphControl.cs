@@ -55,6 +55,18 @@ public sealed partial class CommitGraphControl : Control
     public static readonly StyledProperty<double> ScrollOffsetProperty =
         AvaloniaProperty.Register<CommitGraphControl, double>(nameof(ScrollOffset), defaultBindingMode: BindingMode.TwoWay);
 
+    /// <summary>
+    /// Whether the working-changes row is drawn above the first commit (D60). It shifts every
+    /// commit down by one row; <see cref="SelectedIndex"/> and the methods that take a row still
+    /// count commits only.
+    /// </summary>
+    public static readonly StyledProperty<bool> ShowsWorkingRowProperty =
+        AvaloniaProperty.Register<CommitGraphControl, bool>(nameof(ShowsWorkingRow));
+
+    /// <summary>The working-changes row is the selected one; <see cref="SelectedIndex"/> is then -1. Binds two-way by default.</summary>
+    public static readonly StyledProperty<bool> IsWorkingRowSelectedProperty =
+        AvaloniaProperty.Register<CommitGraphControl, bool>(nameof(IsWorkingRowSelected), defaultBindingMode: BindingMode.TwoWay);
+
     public static readonly StyledProperty<DateDisplay?> DatesProperty =
         AvaloniaProperty.Register<CommitGraphControl, DateDisplay?>(nameof(Dates));
 
@@ -78,6 +90,7 @@ public sealed partial class CommitGraphControl : Control
     private double _maxScrollOffset;
     private double _viewportHeight;
     private GraphColumns _columns = GraphColumns.Empty;
+    /// <summary>The drawn row under the mouse (the working-changes row is row 0 when shown), or -1.</summary>
     private int _hoveredRow = -1;
     private Point? _pointer;
     private int _pendingReveal = -1;
@@ -93,7 +106,7 @@ public sealed partial class CommitGraphControl : Control
     {
         FocusableProperty.OverrideDefaultValue<CommitGraphControl>(true);
         ClipToBoundsProperty.OverrideDefaultValue<CommitGraphControl>(true);
-        AffectsRender<CommitGraphControl>(SelectedIndexProperty, ScrollOffsetProperty);
+        AffectsRender<CommitGraphControl>(SelectedIndexProperty, ScrollOffsetProperty, IsWorkingRowSelectedProperty);
     }
 
     public CommitGraphControl()
@@ -137,6 +150,20 @@ public sealed partial class CommitGraphControl : Control
         set => SetValue(ScrollOffsetProperty, value);
     }
 
+    /// <summary>Whether the working-changes row is drawn above the first commit (D60).</summary>
+    public bool ShowsWorkingRow
+    {
+        get => GetValue(ShowsWorkingRowProperty);
+        set => SetValue(ShowsWorkingRowProperty, value);
+    }
+
+    /// <summary>Whether the working-changes row is selected. A click or the arrow keys change it; it binds two-way by default.</summary>
+    public bool IsWorkingRowSelected
+    {
+        get => GetValue(IsWorkingRowSelectedProperty);
+        set => SetValue(IsWorkingRowSelectedProperty, value);
+    }
+
     /// <summary>How the Date column formats dates (D43).</summary>
     public DateDisplay? Dates
     {
@@ -171,11 +198,17 @@ public sealed partial class CommitGraphControl : Control
         private set => SetAndRaise(ColumnsProperty, ref _columns, value);
     }
 
-    /// <summary>The row at the top of the view, which may be cut by the view's top edge.</summary>
-    public int FirstVisibleRow => (int)Math.Floor(DrawnOffset / RowHeight);
+    /// <summary>The commit row at the top of the view, which may be cut by the view's top edge; -1 while the working-changes row is there.</summary>
+    public int FirstVisibleRow => (int)Math.Floor(DrawnOffset / RowHeight) - RowOffset;
 
     /// <summary>The number of rows the data holds.</summary>
     private int RowCount => Data?.Count ?? 0;
+
+    /// <summary>How many rows the working-changes row adds above the commits: 1 or 0.</summary>
+    private int RowOffset => ShowsWorkingRow ? 1 : 0;
+
+    /// <summary>The number of rows drawn: the commits and the working-changes row.</summary>
+    private int DisplayCount => RowCount + RowOffset;
 
     /// <summary>The scroll offset rows are drawn at: whole pixels, so text and the edges of rows stay sharp.</summary>
     private double DrawnOffset => Math.Round(ScrollOffset);
@@ -183,8 +216,13 @@ public sealed partial class CommitGraphControl : Control
     /// <summary>How many whole rows fit in the view: what Page Up and Page Down move by.</summary>
     private int RowsPerPage => Math.Max(1, (int)Math.Floor(ViewportHeight / RowHeight));
 
-    /// <summary>Where row <paramref name="index"/> is drawn, in the control's coordinates. It may lie outside the view.</summary>
-    public Rect RowBounds(int index) => new(0, (index * RowHeight) - DrawnOffset, Bounds.Width, RowHeight);
+    /// <summary>Where the commit of row <paramref name="index"/> is drawn, in the control's coordinates. It may lie outside the view.</summary>
+    public Rect RowBounds(int index) => DisplayRowBounds(index + RowOffset);
+
+    /// <summary>Where the working-changes row is drawn, in the control's coordinates, when it is shown.</summary>
+    public Rect WorkingRowBounds => DisplayRowBounds(0);
+
+    private Rect DisplayRowBounds(int display) => new(0, (display * RowHeight) - DrawnOffset, Bounds.Width, RowHeight);
 
     /// <summary>The x of lane <paramref name="lane"/>'s centre, in the control's coordinates.</summary>
     public double LaneCenterX(int lane) => Columns.LaneCenterX(lane);
@@ -235,7 +273,7 @@ public sealed partial class CommitGraphControl : Control
         }
 
         _pendingReveal = -1;
-        var target = (index * RowHeight) + (RowHeight / 2) - (ViewportHeight / 2);
+        var target = ((index + RowOffset) * RowHeight) + (RowHeight / 2) - (ViewportHeight / 2);
         _revealWhileLoading = target > MaxScrollOffset && Data is { IsComplete: false } ? index : -1;
         ScrollTo(target);
     }
@@ -248,7 +286,12 @@ public sealed partial class CommitGraphControl : Control
             return;
         }
 
-        var top = index * RowHeight;
+        ScrollDisplayRowIntoView(index + RowOffset);
+    }
+
+    private void ScrollDisplayRowIntoView(int display)
+    {
+        var top = display * RowHeight;
         var bottom = top + RowHeight;
         var offset = ScrollOffset;
         if (top < offset || ViewportHeight < RowHeight)
@@ -306,6 +349,12 @@ public sealed partial class CommitGraphControl : Control
         {
             UpdateHover();
         }
+        else if (change.Property == ShowsWorkingRowProperty)
+        {
+            UpdateExtent(Bounds.Size);
+            InvalidateVisual();
+            UpdateHover();
+        }
         else if (change.Property == DatesProperty || change.Property == FontFamilyProperty)
         {
             ClearRowCache();
@@ -324,10 +373,10 @@ public sealed partial class CommitGraphControl : Control
 
         Focus(NavigationMethod.Pointer);
         _revealWhileLoading = -1;
-        var index = RowAt(point.Position.Y);
-        if (index >= 0)
+        var display = DisplayRowAt(point.Position.Y);
+        if (display >= 0)
         {
-            SetCurrentValue(SelectedIndexProperty, index);
+            SelectDisplayRow(display);
         }
 
         e.Handled = true;
@@ -360,14 +409,16 @@ public sealed partial class CommitGraphControl : Control
     {
         base.OnKeyDown(e);
         _revealWhileLoading = -1;
-        var count = RowCount;
+        var count = DisplayCount;
         if (count == 0 || e.KeyModifiers != KeyModifiers.None)
         {
             return;
         }
 
-        var current = SelectedIndex;
-        var hasSelection = current >= 0 && current < count;
+        var current = ShowsWorkingRow && IsWorkingRowSelected ? 0
+            : SelectedIndex >= 0 && SelectedIndex < RowCount ? SelectedIndex + RowOffset
+            : -1;
+        var hasSelection = current >= 0;
         int target;
         switch (e.Key)
         {
@@ -394,20 +445,35 @@ public sealed partial class CommitGraphControl : Control
         }
 
         target = Math.Clamp(target, 0, count - 1);
-        SetCurrentValue(SelectedIndexProperty, target);
-        ScrollIntoView(target);
+        SelectDisplayRow(target);
+        ScrollDisplayRowIntoView(target);
         e.Handled = true;
+    }
+
+    /// <summary>Selects a drawn row: the working-changes row, or a commit's.</summary>
+    private void SelectDisplayRow(int display)
+    {
+        if (ShowsWorkingRow && display == 0)
+        {
+            SetCurrentValue(SelectedIndexProperty, -1);
+            SetCurrentValue(IsWorkingRowSelectedProperty, true);
+        }
+        else
+        {
+            SetCurrentValue(IsWorkingRowSelectedProperty, false);
+            SetCurrentValue(SelectedIndexProperty, display - RowOffset);
+        }
     }
 
     private double ClampOffset(double offset) => double.IsNaN(offset) ? 0 : Math.Clamp(offset, 0, MaxScrollOffset);
 
     private void ScrollTo(double offset) => SetCurrentValue(ScrollOffsetProperty, ClampOffset(offset));
 
-    /// <summary>The row at a height in the control, or -1 below the last row.</summary>
-    private int RowAt(double y)
+    /// <summary>The drawn row at a height in the control (the working-changes row is row 0 when shown), or -1 below the last row.</summary>
+    private int DisplayRowAt(double y)
     {
-        var index = (int)Math.Floor((y + DrawnOffset) / RowHeight);
-        return index >= 0 && index < RowCount ? index : -1;
+        var display = (int)Math.Floor((y + DrawnOffset) / RowHeight);
+        return display >= 0 && display < DisplayCount ? display : -1;
     }
 
     /// <summary>
@@ -419,7 +485,7 @@ public sealed partial class CommitGraphControl : Control
         var data = Data;
         var offset = ScrollOffset;
         ViewportHeight = size.Height;
-        MaxScrollOffset = Math.Max(0, (RowCount * RowHeight) - size.Height);
+        MaxScrollOffset = Math.Max(0, (DisplayCount * RowHeight) - size.Height);
         if (ScrollOffset != offset)
         {
             // The clamped offset moved with the extent: redraw and move the hover with it.
@@ -488,13 +554,14 @@ public sealed partial class CommitGraphControl : Control
     /// <summary>Follows the row under the mouse, for its hover background and the labels' tooltip.</summary>
     private void UpdateHover()
     {
-        var row = _pointer is { } pointer && pointer.X >= 0 && pointer.X < Bounds.Width ? RowAt(pointer.Y) : -1;
-        if (row != _hoveredRow)
+        var display = _pointer is { } pointer && pointer.X >= 0 && pointer.X < Bounds.Width ? DisplayRowAt(pointer.Y) : -1;
+        if (display != _hoveredRow)
         {
-            _hoveredRow = row;
+            _hoveredRow = display;
             InvalidateVisual();
         }
 
+        var row = display < 0 ? -1 : display - RowOffset;
         ToolTip.SetTip(this, LabelsTipAt(row) ?? CellTipAt(row));
     }
 

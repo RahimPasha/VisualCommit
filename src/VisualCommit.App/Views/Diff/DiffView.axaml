@@ -1,0 +1,227 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Diff"
+             x:Class="VisualCommit.App.Views.Diff.DiffView"
+             x:DataType="vm:DiffViewModel"
+             AutomationProperties.AutomationId="DiffView">
+
+  <!-- A file's diff in place of the graph (C5, D61, D63 to D65), as "The diff view" in
+       docs/test-reports/phase-2.md describes it: header, toolbar, body. -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.status.added">
+      <Setter Property="Foreground" Value="{DynamicResource VcSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.modified">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.deleted">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.message TextBlock.secondary">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="36,36,*" Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- Header: the file, what is compared, and the close button. -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1">
+      <DockPanel Margin="12,0,4,0">
+        <Button DockPanel.Dock="Right"
+                Name="CloseDiffButton"
+                Theme="{StaticResource VcIconButton}"
+                Width="28" Height="28" Padding="7"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="Close"
+                AutomationProperties.AutomationId="CloseDiffButton">
+          <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+        </Button>
+        <TextBlock DockPanel.Dock="Right"
+                   Name="DiffSideLabel"
+                   Classes="secondary"
+                   Text="{Binding SideLabel}"
+                   Margin="12,0,8,0"
+                   VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="DiffSideLabel" />
+        <DockPanel Background="Transparent" ToolTip.Tip="{Binding PathText}">
+          <TextBlock DockPanel.Dock="Left" Name="DiffStatus"
+                     Classes="status"
+                     Classes.added="{Binding IsAdded}"
+                     Classes.modified="{Binding IsModified}"
+                     Classes.deleted="{Binding IsDeleted}"
+                     Classes.renamed="{Binding IsRenamed}"
+                     Text="{Binding StatusLetter}"
+                     Margin="0,0,6,0" />
+          <TextBlock DockPanel.Dock="Left" Name="DiffFileName"
+                     Text="{Binding FileName}"
+                     FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis"
+                     VerticalAlignment="Center"
+                     AutomationProperties.AutomationId="DiffFileName" />
+          <TextBlock DockPanel.Dock="Left" Name="DiffFolder"
+                     Classes="secondary"
+                     Text="{Binding Folder}"
+                     IsVisible="{Binding HasFolder}"
+                     Margin="8,0,0,0"
+                     TextTrimming="CharacterEllipsis"
+                     VerticalAlignment="Center" />
+          <TextBlock Name="DiffOrigin"
+                     Classes="secondary"
+                     Text="{Binding OriginText}"
+                     IsVisible="{Binding HasOrigin}"
+                     Margin="8,0,0,0"
+                     TextTrimming="CharacterEllipsis"
+                     VerticalAlignment="Center" />
+        </DockPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Toolbar: the mode, and the actions on the file or on the selected lines. -->
+    <Border Grid.Row="1"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1">
+      <DockPanel Margin="8,0">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" IsVisible="{Binding ShowsModeToggle}">
+          <Button Name="InlineDiffButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Classes.selected="{Binding IsInline}"
+                  Content="Inline"
+                  Command="{Binding ShowInlineCommand}"
+                  AutomationProperties.AutomationId="InlineDiffButton"
+                  AutomationProperties.Name="Inline" />
+          <Button Name="SideBySideDiffButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Classes.selected="{Binding IsSideBySide}"
+                  Content="Side by side"
+                  Command="{Binding ShowSideBySideCommand}"
+                  AutomationProperties.AutomationId="SideBySideDiffButton"
+                  AutomationProperties.Name="Side by side" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <Button Name="StageLinesButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Stage lines"
+                  Command="{Binding StageLinesCommand}"
+                  IsVisible="{Binding ShowsLineStageDiscard}"
+                  AutomationProperties.AutomationId="StageLinesButton"
+                  AutomationProperties.Name="Stage lines" />
+          <Button Name="DiscardLinesButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Discard lines"
+                  Command="{Binding DiscardLinesCommand}"
+                  IsVisible="{Binding ShowsLineStageDiscard}"
+                  AutomationProperties.AutomationId="DiscardLinesButton"
+                  AutomationProperties.Name="Discard lines" />
+          <Button Name="UnstageLinesButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Unstage lines"
+                  Command="{Binding UnstageLinesCommand}"
+                  IsVisible="{Binding ShowsLineUnstage}"
+                  AutomationProperties.AutomationId="UnstageLinesButton"
+                  AutomationProperties.Name="Unstage lines" />
+          <Button Name="StageFileButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Stage file"
+                  Command="{Binding StageFileCommand}"
+                  IsVisible="{Binding ShowsFileStageDiscard}"
+                  AutomationProperties.AutomationId="StageFileButton"
+                  AutomationProperties.Name="Stage file" />
+          <Button Name="DiscardFileButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Discard file"
+                  Command="{Binding DiscardFileCommand}"
+                  IsVisible="{Binding ShowsFileStageDiscard}"
+                  AutomationProperties.AutomationId="DiscardFileButton"
+                  AutomationProperties.Name="Discard file" />
+          <Button Name="UnstageFileButton"
+                  Theme="{StaticResource FileListToggle}"
+                  Content="Unstage file"
+                  Command="{Binding UnstageFileCommand}"
+                  IsVisible="{Binding ShowsFileUnstage}"
+                  AutomationProperties.AutomationId="UnstageFileButton"
+                  AutomationProperties.Name="Unstage file" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Body. -->
+    <Panel Grid.Row="2">
+
+      <!-- The text: the diff text control, placed by the code-behind. -->
+      <Panel Name="DiffTextHost" IsVisible="{Binding ShowsText}" />
+
+      <StackPanel Classes="message" IsVisible="{Binding ShowsVeryLarge}" VerticalAlignment="Center" Spacing="8" Margin="24,0">
+        <TextBlock Classes="title" Text="Very large diff" />
+        <TextBlock Name="LargeDiffText" Classes="secondary" Text="{Binding LargeText}" TextWrapping="Wrap" TextAlignment="Center" />
+        <Button Name="ShowLargeDiffButton"
+                Theme="{StaticResource VcActionButton}"
+                HorizontalAlignment="Center"
+                Margin="0,4,0,0"
+                Content="Show diff"
+                Command="{Binding ShowLargeDiffCommand}"
+                AutomationProperties.AutomationId="ShowLargeDiffButton"
+                AutomationProperties.Name="Show diff" />
+      </StackPanel>
+
+      <StackPanel Classes="message" IsVisible="{Binding ShowsBinary}" VerticalAlignment="Center" Spacing="8" Margin="24,0">
+        <TextBlock Classes="title" Text="Binary file" />
+        <TextBlock Name="BinaryBefore" Classes="secondary" Text="{Binding BeforeSizeText}" IsVisible="{Binding HasBefore}" />
+        <TextBlock Name="BinaryAfter" Classes="secondary" Text="{Binding AfterSizeText}" IsVisible="{Binding HasAfter}" />
+      </StackPanel>
+
+      <Grid Name="ImageDiff" ColumnDefinitions="*,*" IsVisible="{Binding ShowsImage}">
+        <StackPanel Grid.Column="0" Margin="12" Spacing="8">
+          <TextBlock Classes="heading" Text="Before" HorizontalAlignment="Center" />
+          <Border Name="BeforeImageFrame" BorderBrush="{DynamicResource VcBorderBrush}" BorderThickness="1" HorizontalAlignment="Center">
+            <Image Name="BeforeImage" Stretch="Uniform" StretchDirection="DownOnly" />
+          </Border>
+          <TextBlock Name="BeforeCaption" Classes="secondary" HorizontalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Margin="12" Spacing="8">
+          <TextBlock Classes="heading" Text="After" HorizontalAlignment="Center" />
+          <Border Name="AfterImageFrame" BorderBrush="{DynamicResource VcBorderBrush}" BorderThickness="1" HorizontalAlignment="Center">
+            <Image Name="AfterImage" Stretch="Uniform" StretchDirection="DownOnly" />
+          </Border>
+          <TextBlock Name="AfterCaption" Classes="secondary" HorizontalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Name="NoContentChange"
+                 Classes="secondary"
+                 Text="No changes to the file's content."
+                 IsVisible="{Binding ShowsEmpty}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+      <StackPanel Classes="message" IsVisible="{Binding ShowsConflict}" VerticalAlignment="Center" Spacing="8" Margin="24,0">
+        <TextBlock Classes="title" Text="This file has a merge conflict" />
+        <TextBlock Classes="secondary" Text="Resolve it in an editor, then stage it." TextWrapping="Wrap" TextAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock Name="DiffError"
+                 Classes="error"
+                 Text="{Binding ErrorText}"
+                 IsVisible="{Binding ShowsError}"
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Margin="24,0" />
+    </Panel>
+  </Grid>
+</UserControl>

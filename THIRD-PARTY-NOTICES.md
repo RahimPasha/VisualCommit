@@ -31,7 +31,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
 Some Lucide icons derive from the Feather project. Of the icons used here, these do: arrow-down,
-arrow-up, check, chevron-down, chevron-right, cloud, download, folder, list, moon, plus, search,
+arrow-up, check, chevron-down, chevron-right, cloud, download, folder, list, minus, moon, plus, search,
 tag and x.
 
 ```
