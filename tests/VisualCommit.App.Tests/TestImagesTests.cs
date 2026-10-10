@@ -60,7 +60,9 @@ public class TestImagesTests
             handle.Free();
         }
 
-        // Skia decodes to BGRA.
-        return (buffer[2], buffer[1], buffer[0]);
+        // Skia decodes to the platform's preferred order: BGRA on Windows and Linux, RGBA on macOS.
+        return bitmap.Format == Avalonia.Platform.PixelFormats.Rgba8888
+            ? (buffer[0], buffer[1], buffer[2])
+            : (buffer[2], buffer[1], buffer[0]);
     }
 }
