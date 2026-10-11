@@ -68,7 +68,8 @@ public sealed partial class GitRepository
     /// <list type="bullet">
     /// <item><c>pull.ff = only</c> wins over a rebase setting: <c>git merge --ff-only &lt;head&gt;</c>.</item>
     /// <item>A rebase (<c>branch.&lt;b&gt;.rebase</c>, or when unset <c>pull.rebase</c>, is true,
-    /// <c>interactive</c>, <c>i</c>, <c>merges</c> or <c>m</c>): as git pull, a fast-forward when
+    /// <c>interactive</c>, <c>i</c> or <c>merges</c>; booleans are read by git's own rules, under
+    /// which Git 2.36 reads <c>m</c> as false): as git pull, a fast-forward when
     /// the branch has nothing of its own (<c>git merge --ff-only &lt;head&gt;</c>), otherwise
     /// <c>git rebase</c> without arguments, which rebases onto the configured upstream in
     /// fork-point mode, with <c>--rebase-merges</c> for <c>merges</c>; <c>interactive</c> runs
@@ -461,8 +462,10 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// <paramref name="value"/> of <paramref name="key"/> read as git reads a boolean, or null
-    /// when it is not one. The common words are read here; anything else (a number, a key
-    /// without a value) is asked of git, which knows its own rules.
+    /// when it is not one. The common words are read here; anything else is asked of git
+    /// (<c>git config --type=bool</c>), which knows its own rules: a key without a value is true,
+    /// a number is a boolean, and so is <c>m</c>, which Git 2.36 reads as the number 0 with the
+    /// unit "mega" before it would read it as <c>merges</c> (git pull then merges).
     /// </summary>
     private async Task<bool?> ReadPullBoolAsync(string key, string value, CancellationToken cancellationToken)
     {
@@ -472,8 +475,6 @@ public sealed partial class GitRepository
                 return true;
             case "false" or "no" or "off":
                 return false;
-            case "only" or "merges" or "m" or "interactive" or "i":
-                return null;
         }
 
         var result = await _runner.RunAsync(Read("config", "--type=bool", "--get", key), cancellationToken).ConfigureAwait(false);
