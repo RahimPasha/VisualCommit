@@ -366,7 +366,14 @@ public sealed partial class RepositoryOperations : IInProgressActions
             await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
             {
                 var head = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
-                var changes = mode == ResetMode.Hard ? await Git.SnapshotForHardResetAsync(commit) : null;
+                // Hard: the changes it discards; mixed: the index it replaces, when anything is
+                // staged, so that "this can be undone" holds for a staged version too.
+                var changes = mode switch
+                {
+                    ResetMode.Hard => await Git.SnapshotForHardResetAsync(commit),
+                    ResetMode.Mixed => await Git.SnapshotIndexAsync(),
+                    _ => null,
+                };
                 await SaveBackupAsync(new BackupRequest("reset", [new BackupEntry(null, head)]) { ChangesCommit = changes });
                 await Git.ResetAsync(commit, mode, NetworkOptions.From(context));
                 return OperationReport.Done(OperationTexts.ResetDone(current, commit, mode));

@@ -106,6 +106,27 @@ public partial class BackupRefTests
     }
 
     [Fact]
+    public async Task Names_that_differ_only_in_case_get_a_number_so_that_the_batch_can_be_written()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        repository.BackupClock = new FixedClock(FixedTime);
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        var alpha = await RevAsync(repo, "refs/heads/feature/alpha");
+
+        // A server can have Foo and foo; where refs are files the two loose refs would be one file.
+        var result = await repository.SaveBackupRefsAsync(
+            new BackupRequest("remote", [new BackupEntry("origin/Foo", mainWork), new BackupEntry("origin/foo", alpha), new BackupEntry("origin/FOO/x", mainWork)]),
+            TestCancelled);
+
+        const string Stem = "refs/visualcommit/backup/remote-20261011T101500123Z";
+        Assert.Equal([$"{Stem}/origin/Foo", $"{Stem}/origin/foo-2", $"{Stem}/origin/FOO-3/x"], result.Refs);
+        Assert.Equal(mainWork, await repo.RefTargetAsync($"{Stem}/origin/Foo"));
+        Assert.Equal(alpha, await repo.RefTargetAsync($"{Stem}/origin/foo-2"));
+        Assert.Equal(mainWork, await repo.RefTargetAsync($"{Stem}/origin/FOO-3/x"));
+    }
+
+    [Fact]
     public async Task A_batch_that_fails_for_another_reason_writes_nothing_and_throws_gits_text()
     {
         using var repo = await Scenarios.OperationsAsync();
@@ -241,6 +262,32 @@ public partial class BackupRefTests
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(repo.Path, ".git", "index")));
         Assert.Equal(["MM src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
         Assert.Empty(await repo.BackupRefsAsync()); // A snapshot gets its ref only in the operation's batch.
+    }
+
+    // ---- The mixed reset's snapshot of the index (2.11) ---------------------------------------------
+
+    [Fact]
+    public async Task A_mixed_reset_snapshot_keeps_a_staged_version_that_the_working_tree_no_longer_has()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var mainWork = await repo.HeadAsync();
+        var addCore = await RevAsync(repo, "refs/heads/main~1");
+        Assert.Null(await repository.SnapshotIndexAsync(TestCancelled)); // Nothing staged: nothing to keep.
+        repo.WriteFile("src/core.txt", "v2, staged\n");
+        await repo.GitAsync("add", "src/core.txt");
+        repo.WriteFile("src/core.txt", "v3, in the working tree\n");
+
+        var index = await repository.SnapshotIndexAsync(TestCancelled);
+        Assert.NotNull(index);
+        var backup = await repository.SaveBackupRefsAsync(new BackupRequest("reset", [new BackupEntry(null, mainWork)]) { ChangesCommit = index }, TestCancelled);
+        await repository.ResetAsync(addCore, ResetMode.Mixed, cancellationToken: TestCancelled);
+
+        // The new index is the target's; the staged version lives on in the -changes ref.
+        Assert.Equal(" M src/core.txt", Assert.Single(await GitLinesAsync(repo, "status", "--porcelain")));
+        Assert.Equal("v2, staged\n", await ShowFileAsync(repo, backup.Refs[1], "src/core.txt"));
+        Assert.Equal(mainWork, await GitTextAsync(repo, "log", "-1", "--format=%P", backup.Refs[1]));
+        Assert.Equal("VisualCommit: index before a mixed reset", await GitTextAsync(repo, "log", "-1", "--format=%s", backup.Refs[1]));
     }
 
     // ---- The abort's snapshot (2.15) ----------------------------------------------------------------

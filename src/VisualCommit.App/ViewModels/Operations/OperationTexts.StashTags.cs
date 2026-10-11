@@ -14,4 +14,13 @@ public static partial class OperationTexts
     /// </summary>
     public static OperationText CreateTagUnnamed { get; } =
         new("Create tag", "Creating the tag…", "Creating the tag failed", "Git could not create the tag.");
+
+    /// <summary>
+    /// The summary of "Applying the stash failed" when git applied the stash's tracked changes but
+    /// not its untracked files, because files of those names exist (2.25); a pop adds that the
+    /// stash is kept, as git keeps it.
+    /// </summary>
+    public static string StashUntrackedNotRestored(string stash, bool pop) =>
+        $"The tracked changes of {stash} were applied, but its untracked files were not: files of those names already exist."
+        + (pop ? " The stash is kept." : string.Empty);
 }

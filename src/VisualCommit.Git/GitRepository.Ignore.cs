@@ -15,6 +15,13 @@ public sealed partial class GitRepository
         }
 
         var path = Path.Combine(WorkingDirectory, ".gitignore");
+        if (new FileInfo(path).LinkTarget is { } linkTarget)
+        {
+            // A cloned repository can hold .gitignore as a link to any file (~/.bashrc, a hook);
+            // git checks such a link out, though it no longer reads it. Nothing is written through it.
+            throw new IOException($".gitignore is a symbolic link (to {linkTarget}); VisualCommit does not write through it.");
+        }
+
         var existing = File.Exists(path) ? await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false) : [];
 
         // The file's own line ending: a file written with CRLF gets CRLF lines.

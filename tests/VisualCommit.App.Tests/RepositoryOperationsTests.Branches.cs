@@ -827,6 +827,34 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
+    public async Task A_mixed_reset_saves_the_index_it_replaces_when_something_is_staged()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\n");
+        await repo.GitAsync("add", "src/core.txt");
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\nunstaged line\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var mainWork = await repo.HeadAsync();
+        var addCore = await app.ShaAsync("main~1");
+        app.Dialogs.Reset(ResetMode.Mixed);
+
+        await app.Operations.ResetAsync(addCore);
+
+        // The staged version is in neither the working tree nor the new index; the -changes ref
+        // keeps it, as a commit of the old index on HEAD.
+        Assert.Equal($"Reset main to {addCore[..7]} (mixed)", app.StatusText);
+        Assert.Equal([" M src/core.txt"], await PorcelainAsync(repo));
+        var backups = await repo.BackupRefsAsync();
+        Assert.Equal(2, backups.Count);
+        var head = Assert.Single(backups, backup => Regex.IsMatch(backup.Name, $"^refs/visualcommit/backup/reset-{BackupTime}$"));
+        var changes = Assert.Single(backups, backup => backup.Name == head.Name + "-changes");
+        Assert.Equal(mainWork, head.Sha);
+        Assert.Equal(mainWork, (await repo.GitAsync("log", "-1", "--format=%P", changes.Sha)).StandardOutput.Trim());
+        Assert.Equal("core\nmain work\nstaged line\n", await ShowAsync(repo, changes.Sha, "src/core.txt"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task On_a_detached_head_the_reset_moves_head()
     {
         using var repo = await Scenarios.EdgeCasesAsync();

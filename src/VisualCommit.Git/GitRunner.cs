@@ -29,7 +29,9 @@ public sealed class GitRunner : IGitRunner
 
     /// <summary>
     /// Applied to every call. English messages keep git's output parseable and the same on every
-    /// machine; with prompts off, git fails instead of waiting on a terminal that is not there.
+    /// machine: <c>LANGUAGE</c> too, which gettext puts before <c>LC_ALL</c> (a German desktop sets
+    /// <c>de_DE:de</c>); there is no English catalogue, so git keeps its own text. With prompts
+    /// off, git fails instead of waiting on a terminal that is not there.
     /// The editor is git's shell's no-op command, so a command that wants an editor goes on
     /// without one instead of opening the user's editor out of sight (D68); so is the editor of a
     /// rebase's list of commits, which a user's <c>sequence.editor</c> would otherwise open even
@@ -40,6 +42,7 @@ public sealed class GitRunner : IGitRunner
     {
         ["LC_ALL"] = "en_US.UTF-8",
         ["LANG"] = "en_US.UTF-8",
+        ["LANGUAGE"] = "en",
         ["GIT_TERMINAL_PROMPT"] = "0",
         ["GIT_EDITOR"] = ":",
         ["GIT_SEQUENCE_EDITOR"] = ":",
