@@ -152,7 +152,7 @@ public sealed partial class GitRepository
         string? indexCommit = null;
         if (!status.Unstaged.Any(file => file.Kind == FileChangeKind.Conflicted))
         {
-            indexCommit = await CommitIndexAsync(head, cancellationToken).ConfigureAwait(false);
+            indexCommit = await CommitIndexAsync(head, "VisualCommit: index before a hard reset", cancellationToken).ConfigureAwait(false);
         }
 
         var shortTarget = target.Length > 7 ? target[..7] : target;
@@ -282,6 +282,20 @@ public sealed partial class GitRepository
         }
     }
 
+    public async Task<string?> SnapshotIndexAsync(CancellationToken cancellationToken = default)
+    {
+        // A mixed reset keeps the working tree and replaces the index: a staged version that the
+        // working tree no longer has would be left to git's garbage collection. An index with a
+        // conflict has no tree; its files keep their markers in the working tree.
+        var head = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
+        if (head is null || await HasConflictsAsync(cancellationToken).ConfigureAwait(false) || await IndexEqualsHeadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return await CommitIndexAsync(head, "VisualCommit: index before a mixed reset", cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<string?> SnapshotTrackedChangesAsync(CancellationToken cancellationToken = default)
     {
         var status = await ReadPlainStatusAsync(cancellationToken).ConfigureAwait(false);
@@ -331,7 +345,7 @@ public sealed partial class GitRepository
     /// index. The tree is written from a copy of the index, so the real one is not touched. Null
     /// when there is no index file.
     /// </summary>
-    private async Task<string?> CommitIndexAsync(string? head, CancellationToken cancellationToken)
+    private async Task<string?> CommitIndexAsync(string? head, string subject, CancellationToken cancellationToken)
     {
         var real = Path.Combine(GitDirectory, "index");
         if (!File.Exists(real))
@@ -346,7 +360,7 @@ public sealed partial class GitRepository
             var environment = new Dictionary<string, string?>(SnapshotIdentity) { ["GIT_INDEX_FILE"] = copy };
             var tree = (await RunAsync(environment, null, cancellationToken, "write-tree").ConfigureAwait(false)).Trim();
             string[] arguments = head is null ? ["commit-tree", tree] : ["commit-tree", tree, "-p", head];
-            return (await RunAsync(SnapshotIdentity, "VisualCommit: index before a hard reset\n", cancellationToken, arguments).ConfigureAwait(false)).Trim();
+            return (await RunAsync(SnapshotIdentity, subject + "\n", cancellationToken, arguments).ConfigureAwait(false)).Trim();
         }
         finally
         {

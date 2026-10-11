@@ -90,6 +90,9 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<string?> SnapshotTrackedChangesAsync(CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public virtual Task<string?> SnapshotIndexAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     public virtual Task CheckoutBranchAsync(string branch, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 

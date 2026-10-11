@@ -156,13 +156,23 @@ public interface IGitRepository
     /// <summary>
     /// Before a hard reset to <paramref name="target"/>: a snapshot commit (D67's way, without a
     /// ref) of every staged or unstaged tracked file, every file staged as new and every file the
-    /// index does not track whose path <paramref name="target"/> tracks (<c>git ls-tree -r</c>;
-    /// ignored files too, which a hard reset overwrites just as silently), with
-    /// the real index's tree (<c>git write-tree</c>) as second parent when it has no conflicts.
-    /// Null when there is nothing to save (2.11). It goes into the reset's backup batch as
-    /// <see cref="BackupRequest.ChangesCommit"/>.
+    /// index does not track that the reset overwrites or deletes (ignored files too, which a hard
+    /// reset overwrites just as silently): one at a path <paramref name="target"/> tracks
+    /// (<c>git ls-tree -r</c>), every file in a folder where the target has a file, and a file
+    /// where the target has a folder. The real index's tree (<c>git write-tree</c>) is the second
+    /// parent when it has no conflicts. Null when there is nothing to save (2.11). It goes into
+    /// the reset's backup batch as <see cref="BackupRequest.ChangesCommit"/>.
     /// </summary>
+    /// <exception cref="IOException">A repository is nested in a folder the reset would delete.</exception>
     Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Before a mixed reset, which replaces the index: a commit of the real index's tree with HEAD
+    /// as its parent, or null when the index holds HEAD's tree or has a conflict (2.11). It keeps a
+    /// staged version that differs from the working tree's, and goes into the reset's backup batch
+    /// as <see cref="BackupRequest.ChangesCommit"/>.
+    /// </summary>
+    Task<string?> SnapshotIndexAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Before an abort: a snapshot commit (D67's way, without a ref) of every changed tracked
