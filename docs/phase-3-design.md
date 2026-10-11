@@ -1167,16 +1167,16 @@ dialog "Fetch origin — auth"; the log `auth: Fetch origin: Cancelled after <N>
   (section 0, checked on Windows). No quoting is added.
 - **The helper** (about 80 lines, no Avalonia):
   1. `VISUALCOMMIT_ASKPASS_DENY=1`, or no pipe or token → exit 1 at once, printing nothing.
-  2. Connect `NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.CurrentUserOnly)`
-     within 5 seconds, else exit 1.
+  2. Connect `NamedPipeClientStream(".", pipe, PipeDirection.InOut, …)` within 5 seconds, else
+     exit 1, and check that the pipe is the user's own (3.4), else exit 1.
   3. Send one UTF-8 line of JSON: `{"token":…,"operation":…,"prompt":<args[0]>,"sshPrompt":<SSH_ASKPASS_PROMPT or null>}`.
   4. Read one line `{"answer":<string or null>}`. Null, a closed pipe or a malformed line →
      exit 1. Otherwise write the answer and `\n` to standard output, exit 0 (for
      `SSH_ASKPASS_PROMPT=confirm` an answer means yes).
 - **The server** (`src/VisualCommit.Git/Prompts/AskPassBroker.cs`, implements Core's
   `IGitPromptBroker`, one per app session, created in `AppSession.Start`): a
-  `NamedPipeServerStream` loop (up to 4 instances, `PipeOptions.CurrentUserOnly |
-  Asynchronous`), one request per connection, lines up to 64 KiB, the token compared with
+  `NamedPipeServerStream` loop (up to 4 instances, asynchronous, for the user only: 3.4), one
+  request per connection, lines up to 64 KiB, the token compared with
   `CryptographicOperations.FixedTimeEquals`. `Begin(string title, string repositoryName,
   PromptMode mode, string? operationId = null)` returns a `PromptScope`, an abstract class in
   Core (`Id`, `Environment`, `UserCancelled`, `IsDisposed`, `Dispose`, a virtual `OnDisposed`);
@@ -1240,9 +1240,16 @@ an error (2.16). Answers are never logged, never put in a `GitCommand` and never
 
 ### 3.4 Security of the channel
 
-The pipe is created for the current user only (`CurrentUserOnly`: an ACL on Windows, the
-socket's owner check on macOS and Linux); the token, generated per app session and passed only
-in the environment of the git processes the app starts, must match; the operation id must
+The pipe is created for the current user only, and the helper talks only to a pipe of its own
+user: on macOS and Linux both ends use `PipeOptions.CurrentUserOnly` (the socket's user is
+checked); on Windows the pipe's ACL gives full control to the user of the app's access token
+alone and makes that user the owner, and the helper checks that owner against the user of its
+own token (`WindowsPipeUser`). `CurrentUserOnly` is not used on Windows because it compares the
+tokens' default owners, which differ in an elevated app (the Administrators group) and in the
+helper that Git for Windows' ssh, an MSYS2 program, starts (the MSYS2 runtime sets the user):
+there every ssh prompt failed unasked (found by CI's elevated Windows runner, run 38135815641).
+The token, generated per app session and passed only in the environment of the git processes
+the app starts, must match; the operation id must
 belong to an open scope, so a stale or forged request gets nothing; one request per
 connection, bounded in size. The trust boundary is the user account, as for GCM: another
 process of the same user that reads git's environment could ask, and would only get an answer

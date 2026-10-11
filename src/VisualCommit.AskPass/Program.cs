@@ -45,8 +45,15 @@ internal static class Program
             args.Length > 0 ? args[0] : string.Empty,
             Environment.GetEnvironmentVariable(AskPassProtocol.SshPromptVariable));
 
-        using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous);
+        // Only the user's own app may get the request, which carries the token: on Windows the
+        // pipe's owner is checked against the token's user, elsewhere .NET checks the socket's.
+        var options = OperatingSystem.IsWindows() ? PipeOptions.Asynchronous : PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous;
+        using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, options);
         await pipe.ConnectAsync((int)AskPassProtocol.ConnectTimeout.TotalMilliseconds).ConfigureAwait(false);
+        if (OperatingSystem.IsWindows() && !WindowsPipeUser.OwnsPipe(pipe))
+        {
+            return 1;
+        }
 
         await pipe.WriteAsync(AskPassProtocol.FormatRequest(request)).ConfigureAwait(false);
         await pipe.FlushAsync().ConfigureAwait(false);

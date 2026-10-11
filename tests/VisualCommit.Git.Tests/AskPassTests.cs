@@ -1,3 +1,5 @@
+using System.IO.Pipes;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 using VisualCommit.AskPass;
 using VisualCommit.Core.Git;
@@ -335,7 +337,10 @@ public class AskPassTests
     public async Task Ssh_keygen_asks_for_an_encrypted_keys_passphrase_through_the_helper()
     {
         // OpenSSH 8.4 and later use SSH_ASKPASS with SSH_ASKPASS_REQUIRE=force even without a
-        // display, and ssh-keygen -y reads the passphrase of an encrypted key (3.5).
+        // display, and ssh-keygen -y reads the passphrase of an encrypted key (3.5). On Windows
+        // this is Git for Windows' ssh-keygen, an MSYS2 program: the helper it starts runs with
+        // the user as its token's default owner, which an elevated test run (CI's) does not
+        // have (WindowsPipeUser).
         var keygen = FindSshKeygen();
         using var folder = new TempDirectory("ssh");
         var key = folder.Combine("id_test");
@@ -353,12 +358,17 @@ public class AskPassTests
 
         var shown = await RunProgramAsync(keygen, environment, "-y", "-f", key);
 
+        // The prompt first: when it does not reach the app, ssh-keygen only says that the
+        // passphrase was wrong (the empty one it uses when the helper gives none).
+        Assert.True(
+            handler.Prompts.Count == 1,
+            $"{handler.Prompts.Count} prompts reached the app; {keygen} exited with {shown.ExitCode}: {shown.Error}");
+        var prompt = handler.Prompts[0];
+        Assert.Equal(GitPromptKind.Passphrase, prompt.Kind);
+        Assert.StartsWith("Enter passphrase", prompt.Text, StringComparison.Ordinal);
         Assert.True(shown.ExitCode == 0, shown.Error);
         Assert.StartsWith("ssh-ed25519 ", shown.Output, StringComparison.Ordinal);
         Assert.Equal(File.ReadAllText(key + ".pub").Split(' ')[1], shown.Output.Split(' ')[1]);
-        var prompt = Assert.Single(handler.Prompts);
-        Assert.Equal(GitPromptKind.Passphrase, prompt.Kind);
-        Assert.StartsWith("Enter passphrase", prompt.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -406,6 +416,29 @@ public class AskPassTests
         }
 
         Assert.True(File.Exists(socket), $"No socket at {socket}.");
+    }
+
+    [Fact]
+    public async Task On_Windows_the_pipe_belongs_to_the_user_not_to_the_tokens_default_owner()
+    {
+        // In an elevated process (an app run as administrator, CI's runner) the token's default
+        // owner is the Administrators group, while a helper that an MSYS2 program such as Git
+        // for Windows' ssh starts has the user (WindowsPipeUser). Both share the user, so the
+        // pipe must belong to it; where process and user are the same, this proves less.
+        using var broker = new AskPassBroker(new RecordingPromptHandler());
+        if (!OperatingSystem.IsWindows())
+        {
+            // A Unix socket, whose user .NET checks itself.
+            Assert.NotNull(broker.SocketPath);
+            return;
+        }
+
+        using var client = new NamedPipeClientStream(".", broker.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await client.ConnectAsync(StepTimeout, RepositoryTestSupport.TestCancelled);
+
+        using var identity = WindowsIdentity.GetCurrent();
+        Assert.Equal(identity.User, client.GetAccessControl().GetOwner(typeof(SecurityIdentifier)));
+        Assert.True(WindowsPipeUser.OwnsPipe(client));
     }
 
     [Fact]

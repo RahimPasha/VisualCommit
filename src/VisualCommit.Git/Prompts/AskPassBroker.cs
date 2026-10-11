@@ -164,12 +164,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             NamedPipeServerStream? pipe = null;
             try
             {
-                pipe = new NamedPipeServerStream(
-                    PipeName,
-                    PipeDirection.InOut,
-                    MaxConnections,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                pipe = CreatePipe();
                 await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -197,6 +192,28 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             _ = ServeAsync(pipe);
         }
     }
+
+    /// <summary>
+    /// One instance of the pipe, which only the current user can open (3.4). On Windows it belongs
+    /// to the user of the app's access token, not to the token's default owner
+    /// (<see cref="WindowsPipeUser"/>); on macOS and Linux .NET checks the socket's user.
+    /// </summary>
+    private NamedPipeServerStream CreatePipe() => OperatingSystem.IsWindows()
+        ? NamedPipeServerStreamAcl.Create(
+            PipeName,
+            PipeDirection.InOut,
+            MaxConnections,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            inBufferSize: 0,
+            outBufferSize: 0,
+            WindowsPipeUser.ServerSecurity())
+        : new NamedPipeServerStream(
+            PipeName,
+            PipeDirection.InOut,
+            MaxConnections,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
     /// <summary>One connection: one request, one answer (3.1).</summary>
     private async Task ServeAsync(NamedPipeServerStream pipe)
