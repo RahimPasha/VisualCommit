@@ -196,10 +196,11 @@ public class OperationTextsTests
             (delete.Title, delete.Question, delete.Detail, delete.ConfirmText, delete.IsDestructive));
         Assert.Equal("Delete the branch feature/ff?", OperationTexts.ConfirmDeleteBranch("feature/ff", null).Question);
 
-        var force = OperationTexts.ConfirmForcePush("published", "origin");
+        var force = OperationTexts.ConfirmForcePush("published", "origin", "published");
         Assert.Equal("Force push published?", force.Title);
         Assert.Equal("Force push", force.ConfirmText);
         Assert.StartsWith("Replace published on origin with your published? Commits on origin that your branch does not have are dropped there.", force.Question, StringComparison.Ordinal);
+        Assert.StartsWith("Replace main on origin with your fix? ", OperationTexts.ConfirmForcePush("fix", "origin", "main").Question, StringComparison.Ordinal);
 
         var remote = OperationTexts.ConfirmDeleteRemoteTag("v1.2", "origin");
         Assert.Equal(("Delete v1.2 on origin?", "Delete the tag v1.2 on origin? Everyone who uses origin loses it.", "Delete on origin"), (remote.Title, remote.Question, remote.ConfirmText));

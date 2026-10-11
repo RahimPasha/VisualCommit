@@ -375,6 +375,12 @@ public static partial class OperationTexts
 
     public static string PullConflicts(int conflictedFiles) => $"Pull stopped: {FilesHaveConflicts(conflictedFiles)}";
 
+    /// <summary>
+    /// 2.18: the fetch found the upstream no more on its remote (deleted there), so nothing was
+    /// integrated; <paramref name="remoteBranch"/> is its name there: "feature no longer exists on origin".
+    /// </summary>
+    public static string PullUpstreamGone(string remoteBranch, string remote) => $"{remoteBranch} no longer exists on {remote}";
+
     /// <summary>"pull.rebase is set to preserve, which this app does not understand." (2.18).</summary>
     public static string PullSettingNotUnderstood(string setting, string value) =>
         $"{setting} is set to {value}, which this app does not understand.";
@@ -401,9 +407,14 @@ public static partial class OperationTexts
     public static string ForcePushStopped(string target, string branch) =>
         $"{target} has commits that your {branch} does not include. Pull or look at them before forcing.";
 
-    public static ConfirmationRequest ConfirmForcePush(string branch, string remote) => new(
+    /// <summary>
+    /// 2.20's question: <paramref name="remoteBranch"/> is the upstream's name on
+    /// <paramref name="remote"/>, the branch the push replaces, which can differ from
+    /// <paramref name="branch"/> ("Replace main on origin with your fix?").
+    /// </summary>
+    public static ConfirmationRequest ConfirmForcePush(string branch, string remote, string remoteBranch) => new(
         $"Force push {branch}?",
-        $"Replace {branch} on {remote} with your {branch}? Commits on {remote} that your branch does not have are dropped there. "
+        $"Replace {remoteBranch} on {remote} with your {branch}? Commits on {remote} that your branch does not have are dropped there. "
             + $"The push stops if {remote} has commits you have not integrated into your {branch}, even ones the last fetch brought.",
         BackupDetail,
         "Force push");
@@ -547,6 +558,22 @@ public static partial class OperationTexts
         new(label, $"Adding {line} to .gitignore…", "Ignoring the file failed", "The file .gitignore could not be written.");
 
     public static string Ignored(string line) => $"Added {line} to .gitignore";
+
+    /// <summary>2.30's refusal of a name that no .gitignore line can hold (a line break in it, as Linux and macOS allow).</summary>
+    public const string IgnoreNameNotWritable = "This file name cannot be written to .gitignore.";
+
+    // 2.32: open file.
+
+    /// <summary>
+    /// 2.32: "Open file" on a file that the system would run rather than show (a program, a
+    /// script, a shortcut, or a file with the executable bit): asked first, as a plain question.
+    /// </summary>
+    public static ConfirmationRequest ConfirmOpenRunnable(string fileName) => new(
+        $"Open {fileName}?",
+        "This file can run programs. Open it anyway?",
+        string.Empty,
+        "Open",
+        IsDestructive: false);
 
     /// <summary>1.8: the title of the dialog that lists the lock files a cancelled operation left.</summary>
     public static string Cancelled(string title) => $"{title} cancelled";

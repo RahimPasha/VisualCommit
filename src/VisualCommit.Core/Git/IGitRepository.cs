@@ -148,7 +148,7 @@ public interface IGitRepository
     /// <summary>The repository's worktrees and the branch each has checked out: <c>git worktree list --porcelain</c> (2.7).</summary>
     Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The configured remotes with their URLs: <c>git remote -v</c>, sorted by name (2.23). URLs are as configured: show them through <see cref="RemoteInfo.ShownUrl"/> (D103).</summary>
+    /// <summary>The configured remotes with their URLs: <c>git remote</c> and <c>remote.&lt;name&gt;.url</c> and <c>.pushurl</c>, sorted by name (2.23). URLs are as configured, before any <c>insteadOf</c> rule: show them through <see cref="RemoteInfo.ShownUrl"/> (D103).</summary>
     Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync(CancellationToken cancellationToken = default);
 
     // Backups (2.0, D83).

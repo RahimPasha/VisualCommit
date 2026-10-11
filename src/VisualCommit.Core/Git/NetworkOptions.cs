@@ -27,10 +27,16 @@ public sealed record NetworkOptions
     /// </summary>
     public IReadOnlyList<string> Configuration { get; init; } = [];
 
-    /// <summary>The options of a running operation: its prompt scope's variables and its progress.</summary>
+    /// <summary>
+    /// Whether the user has cancelled a prompt of the operation (<see cref="OperationContext.PromptCancelled"/>):
+    /// a call made of several git calls stops before the next one, which could ask again. Null: never.
+    /// </summary>
+    public Func<bool>? PromptCancelled { get; init; }
+
+    /// <summary>The options of a running operation: its prompt scope's variables, its progress and whether a prompt of it was cancelled.</summary>
     public static NetworkOptions From(OperationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return new NetworkOptions { Environment = context.Environment, Progress = context.Progress };
+        return new NetworkOptions { Environment = context.Environment, Progress = context.Progress, PromptCancelled = () => context.PromptCancelled };
     }
 }

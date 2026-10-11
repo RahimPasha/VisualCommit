@@ -178,12 +178,67 @@ public sealed class FileLauncher : IFileLauncher
     }
 
     /// <summary>
-    /// Starts <paramref name="command"/>. One without <see cref="LaunchCommand.FallBackOnFailure"/>
-    /// is left to run (Explorer's exit code says nothing); one with it is waited for and must exit with 0.
+    /// The absolute path of <paramref name="program"/> in the first folder of
+    /// <paramref name="searchPath"/> (a PATH value, folders split by <paramref name="separator"/>)
+    /// that holds it, or null. Only fully qualified folders are searched: an empty or relative
+    /// entry would name the current folder, which can be a cloned repository that holds a file of
+    /// that name. Started by its bare name, .NET would also look in the app's folder and the
+    /// current folder first, before PATH (on Linux and macOS).
+    /// </summary>
+    public static string? FindOnPath(string program, string? searchPath, char separator, Func<string, bool> fileExists)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(program);
+        ArgumentNullException.ThrowIfNull(fileExists);
+        foreach (var folder in (searchPath ?? string.Empty).Split(separator, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!Path.IsPathFullyQualified(folder))
+            {
+                continue;
+            }
+
+            var candidate = Path.Combine(folder, program);
+            if (fileExists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Where <paramref name="program"/> of a <see cref="LaunchCommand"/> is started from: Explorer
+    /// from the Windows folder, anything else from <see cref="FindOnPath"/>; null when it is not found.
+    /// </summary>
+    private static string? ResolveProgram(string program)
+    {
+        if (OperatingSystem.IsWindows() && string.Equals(program, "explorer.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), program);
+            if (File.Exists(explorer))
+            {
+                return explorer;
+            }
+        }
+
+        return FindOnPath(program, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, File.Exists);
+    }
+
+    /// <summary>
+    /// Starts <paramref name="command"/> from the absolute path of its program (<see cref="ResolveProgram"/>).
+    /// One without <see cref="LaunchCommand.FallBackOnFailure"/> is left to run (Explorer's exit
+    /// code says nothing); one with it is waited for and must exit with 0.
     /// </summary>
     private async Task<bool> TryRunAsync(LaunchCommand command, CancellationToken cancellationToken)
     {
+        if (ResolveProgram(command.FileName) is not { } program)
+        {
+            Log.Info($"Could not start {command.DisplayText}: {command.FileName} is not on the PATH.");
+            return false;
+        }
+
         var startInfo = command.ToStartInfo();
+        startInfo.FileName = program;
         try
         {
             using var process = Process.Start(startInfo);
@@ -291,7 +346,7 @@ public enum RevealPlatform
 }
 
 /// <summary>A program to start for <see cref="FileLauncher"/>.</summary>
-/// <param name="FileName">The program, found on the PATH.</param>
+/// <param name="FileName">The program's name, started from its absolute path on the PATH (<see cref="FileLauncher.FindOnPath"/>; Explorer from the Windows folder).</param>
 /// <param name="Arguments">Its arguments, each passed as one argument.</param>
 public sealed record LaunchCommand(string FileName, IReadOnlyList<string> Arguments)
 {

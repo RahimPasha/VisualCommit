@@ -476,7 +476,8 @@ public sealed class OperationQueue : IOperationQueue
                 entry.Cancellation?.Token ?? CancellationToken.None,
                 scope?.Environment,
                 new ProgressSink(this, entry),
-                () => EndCancelWindow(entry));
+                () => EndCancelWindow(entry),
+                () => scope is { UserCancelled: true });
 
             OperationReport report;
             using (GitOperationScope.Enter(entry.Id))

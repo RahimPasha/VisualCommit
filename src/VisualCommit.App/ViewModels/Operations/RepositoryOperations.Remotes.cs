@@ -150,6 +150,8 @@ public sealed partial class RepositoryOperations
             PullOutcome.Merged => OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name)),
             PullOutcome.Rebased => OperationReport.Done(OperationTexts.PulledRebased(branch.Name, upstream)),
             PullOutcome.Conflicts => OperationReport.Conflicts(OperationTexts.PullConflicts(await CountConflictedFilesAsync())),
+            PullOutcome.UpstreamGone => OperationReport.Done(OperationTexts.PullUpstreamGone(
+                ShortName(branch.UpstreamRemoteRef ?? branch.UpstreamRef!), branch.UpstreamRemote ?? LocalRemote)),
             _ => throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}."),
         };
     }
@@ -323,7 +325,7 @@ public sealed partial class RepositoryOperations
         var text = OperationTexts.ForcePush(branch.Name, upstream);
         var request = new PushRequest(remote, branch.Name, remoteRef) { ForceWithLease = true };
         return GuardAsync(text, () => ConfirmAndRunAsync(
-            OperationTexts.ConfirmForcePush(branch.Name, remote),
+            OperationTexts.ConfirmForcePush(branch.Name, remote, ShortName(remoteRef)),
             text,
             OperationKind.Network,
             RefreshScope.Refs,
@@ -522,7 +524,7 @@ public sealed partial class RepositoryOperations
     // The Remotes dialog's own actions (IRemoteActions, 2.23): git's refusal goes to the form's
     // RemoteError, not to an error dialog.
 
-    /// <summary>The configured remotes, in git's order (<c>git remote -v</c>), for the Remotes dialog.</summary>
+    /// <summary>The configured remotes, with their URLs as configured, sorted by name, for the Remotes dialog.</summary>
     public Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync() => Git.ReadRemotesAsync();
 
     /// <summary>Adds a remote and waits; with <paramref name="fetchNow"/> also queues its fetch ("Fetch &lt;name&gt;"), which it does not wait for. Null, or git's message for the form.</summary>

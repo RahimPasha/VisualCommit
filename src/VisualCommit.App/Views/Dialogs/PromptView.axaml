@@ -9,7 +9,8 @@
                   AutomationProperties.Name="{Binding Title}">
 
   <!-- "Git asks" (docs/phase-3-design.md 3.2, 4f; check 21b): a prompt of git or ssh that is no
-       sign-in, passphrase or host key, with one box, masked when the text asks for a secret. -->
+       sign-in, passphrase or host key, with one box, masked when the text asks for a secret; a
+       masked box gives UI Automation none of its text (SecretTextBox). -->
   <Panel Classes="dialogBackdrop">
     <Border Name="PromptCard" Classes="dialogCard">
       <StackPanel>
@@ -26,7 +27,7 @@
                    Classes="dialogText"
                    Text="{Binding Text}"
                    AutomationProperties.AutomationId="PromptText" />
-        <TextBox Name="PromptBox"
+        <c:SecretTextBox Name="PromptBox"
                  Classes="dialogBox"
                  Text="{Binding Answer}"
                  PasswordChar="{Binding PasswordChar}"

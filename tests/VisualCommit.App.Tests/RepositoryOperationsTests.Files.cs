@@ -225,7 +225,66 @@ public partial class RepositoryOperationsTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task Ignore_of_a_name_with_a_line_break_says_that_it_cannot_be_written()
+    {
+        // Linux and macOS allow a line break in a name; no .gitignore line can hold it.
+        using var repo = await IgnoreScenarioAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.IgnoreFileAsync("logs/a\nb.log");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Ignoring the file failed", "This file name cannot be written to .gitignore."), (error.Title, error.Summary));
+        Assert.Equal(("Ignore a\nb.log failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.Equal("*.tmp", File.ReadAllText(Path.Combine(repo.Path, ".gitignore")));
+        app.AssertScriptFollowed();
+    }
+
     // 2.32: open, show in folder, copy.
+
+    [Theory]
+    [InlineData("setup.cmd", null, true)]
+    [InlineData("SETUP.EXE", null, true)]
+    [InlineData("tools/install.ps1", null, true)]
+    [InlineData("docs/README.txt.lnk", null, true)]
+    [InlineData("site.url", null, true)]
+    [InlineData("run.command", null, true)]
+    [InlineData("build.sh", null, true)]
+    [InlineData("app.desktop", null, true)]
+    [InlineData("notes.txt", null, false)]
+    [InlineData("helpers.py", null, false)]
+    [InlineData("Makefile", null, false)]
+    [InlineData("build", UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, true)]
+    [InlineData("data.bin", UnixFileMode.UserRead | UnixFileMode.OtherExecute, true)]
+    [InlineData("notes.txt", UnixFileMode.UserRead | UnixFileMode.UserWrite, false)]
+    public void Programs_scripts_and_shortcuts_are_files_that_can_run_programs(string name, UnixFileMode? mode, bool runs) =>
+        Assert.Equal(runs, RepositoryOperations.CanRunPrograms(name, mode));
+
+    [Fact]
+    public async Task Open_file_on_a_file_that_can_run_programs_asks_first()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "setup.cmd"), "echo hello\r\n", TestContext.Current.CancellationToken);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm(yes: false).Confirm();
+        var setup = Path.Combine(app.Repository.Path, "setup.cmd");
+        var helpers = Path.Combine(app.Repository.Path, "src", "helpers.py");
+
+        await app.Operations.OpenFileAsync("setup.cmd");
+        Assert.Empty(app.Launcher.Opened);
+        await app.Operations.OpenFileAsync("setup.cmd");
+        await app.Operations.OpenFileAsync("src/helpers.py");
+
+        Assert.Equal([setup, helpers], app.Launcher.Opened);
+        Assert.Equal(2, app.Dialogs.Confirmations.Count);
+        var question = app.Dialogs.Confirmations[0];
+        Assert.Equal(
+            ("Open setup.cmd?", "This file can run programs. Open it anyway?", string.Empty, "Open", false),
+            (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
+        app.AssertScriptFollowed();
+    }
 
     [Fact]
     public async Task Open_file_and_show_in_folder_ask_the_launcher_for_the_working_trees_file()
@@ -267,8 +326,11 @@ public partial class RepositoryOperationsTests
         await app.Operations.CopyRefNameAsync("refs/remotes/origin/feature/alpha");
         await app.Operations.CopyRefNameAsync("refs/tags/v1.0");
 
+        // A backslash is part of a name where git gives one (Linux and macOS): kept as it is.
+        await app.Operations.CopyPathAsync("notes\\2024.txt");
+
         Assert.Equal(
-            [alphaTwo, $"{main}\n{alphaTwo}\n{alphaOne}", "src/core.txt", "feature/alpha", "origin/feature/alpha", "v1.0"],
+            [alphaTwo, $"{main}\n{alphaTwo}\n{alphaOne}", "src/core.txt", "feature/alpha", "origin/feature/alpha", "v1.0", "notes\\2024.txt"],
             app.Clipboard.Texts);
         Assert.Empty(app.Launcher.Requests);
         Assert.Empty(app.Dialogs.Shown);

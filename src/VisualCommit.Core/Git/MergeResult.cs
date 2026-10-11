@@ -83,6 +83,9 @@ public enum PullOutcome
 
     /// <summary>The merge or rebase stopped with conflicted files.</summary>
     Conflicts,
+
+    /// <summary>The fetch found no upstream branch on the remote (deleted there): nothing was integrated.</summary>
+    UpstreamGone,
 }
 
 /// <summary>How a pull's integration ended (2.18).</summary>

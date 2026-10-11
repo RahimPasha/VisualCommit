@@ -25,7 +25,9 @@ public sealed partial class GitRepository
     /// whose command and exit code are the first failed call's and whose standard error is every
     /// failed call's, in order, each followed by <c>error: Could not fetch &lt;remote&gt;</c>, as
     /// <c>git fetch --all</c> prints it (2.16). A repository without remotes fetches nothing.
-    /// Cancelling stops the running fetch and skips the rest.
+    /// Cancelling stops the running fetch and skips the rest; so does a prompt the user cancelled
+    /// (<see cref="NetworkOptions.PromptCancelled"/>), after which the fetch that asked fails and
+    /// this throws <see cref="OperationCanceledException"/> instead of asking for the next remote.
     /// </summary>
     public async Task FetchAsync(string? remote, NetworkOptions options, bool noAutoMaintenance = false, CancellationToken cancellationToken = default)
     {
@@ -47,6 +49,11 @@ public sealed partial class GitRepository
             if (!result.Succeeded)
             {
                 failures.Add((remotes[i], command, result));
+                if (options.PromptCancelled?.Invoke() == true)
+                {
+                    // The user cancelled a prompt: the fetch is cancelled, and the next remote would ask again (2.16).
+                    throw new OperationCanceledException($"A prompt of the fetch from {remotes[i]} was cancelled.");
+                }
             }
         }
 
@@ -85,7 +92,11 @@ public sealed partial class GitRepository
     /// removed in Git 2.34, or a typo) throws <see cref="GitException"/> with the sentence
     /// "&lt;key&gt; is set to &lt;value&gt;, which this app does not understand." as its standard
     /// error, before anything changes. Conflicts are returned, not thrown: git failed and the
-    /// index then has conflicted files (it had none before).
+    /// index then has conflicted files (it had none before). When the fetch marked nothing for
+    /// merge, because the upstream was deleted on its remote (<c>FETCH_HEAD</c> has only
+    /// <c>not-for-merge</c> lines, while the remote branch stays without a prune, D99), nothing runs
+    /// and <see cref="PullOutcome.UpstreamGone"/> is returned: git pull fails there with "no such
+    /// ref was fetched", and a merge of <c>FETCH_HEAD</c> would only say "Already up to date".
     /// </summary>
     public async Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -98,6 +109,13 @@ public sealed partial class GitRepository
         options ??= NetworkOptions.None;
         var ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
         var rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+        if (!branch.HasLocalUpstream && FetchMarkedNothingForMerge())
+        {
+            // The upstream was deleted on its remote: git merge FETCH_HEAD would say "Already up
+            // to date", and FETCH_HEAD names another branch, which a rebase would be checked against.
+            return new PullResult(PullOutcome.UpstreamGone, 0);
+        }
+
         var head = branch.HasLocalUpstream ? branch.UpstreamRef : "FETCH_HEAD";
         var before = await ReadPullHeadAsync(cancellationToken).ConfigureAwait(false);
         var conflictsBefore = await HasUnmergedEntriesAsync(cancellationToken).ConfigureAwait(false);
@@ -232,41 +250,48 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
-    /// The configured remotes: <c>git remote -v</c>, read without optional locks, sorted by name
-    /// (2.23). A push URL equal to the fetch URL is null. URLs are as git prints them, credentials
-    /// included; the call record hides them (D103), and <see cref="RemoteInfo.ShownUrl"/> is what
-    /// the app shows.
+    /// The configured remotes, read without optional locks, sorted by name (2.23): the names
+    /// <c>git remote</c> lists, and for each the first <c>remote.&lt;name&gt;.url</c> and
+    /// <c>remote.&lt;name&gt;.pushurl</c> as they are configured (<c>git config --get-regexp</c>),
+    /// not as <c>git remote -v</c> prints them after a <c>url.&lt;base&gt;.insteadOf</c> rule has
+    /// rewritten them: such a rule, often a global one, can put a token into the URL, which the
+    /// Change URL form would then show and write into the repository's own settings. A push URL
+    /// equal to the fetch URL is null. URLs keep the credentials configured in them; the call
+    /// record hides them (D103), and <see cref="RemoteInfo.ShownUrl"/> is what the app shows.
     /// </summary>
     public async Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync(CancellationToken cancellationToken = default)
     {
-        var output = await ReadOutputAsync(cancellationToken, "remote", "-v").ConfigureAwait(false);
+        var names = SplitLines(await ReadOutputAsync(cancellationToken, "remote").ConfigureAwait(false)).Distinct(StringComparer.Ordinal).ToList();
         var fetchUrls = new Dictionary<string, string>(StringComparer.Ordinal);
         var pushUrls = new Dictionary<string, string>(StringComparer.Ordinal);
-        var names = new List<string>();
-        foreach (var line in SplitLines(output))
+
+        // Section and key names are printed in lower case; the remote's name (the subsection)
+        // keeps its case and may contain dots. --null prints "<key>\n<value>\0" per entry, in the
+        // order git reads them. Exit 1: no such setting.
+        var command = Read("config", "--null", "--get-regexp", @"^remote\..*\.(url|pushurl)$");
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode != 1)
         {
-            // "<name>\t<url> (fetch)" and "<name>\t<url> (push)". A URL can hold spaces (a folder).
-            var tab = line.IndexOf('\t', StringComparison.Ordinal);
-            if (tab <= 0)
+            const string Prefix = "remote.";
+            foreach (var entry in result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
             {
-                _log.Warning($"Skipped a line of git remote -v that could not be read: {GitCommand.HideCredentials(line)}");
-                continue;
-            }
+                // A key without a value ("[remote "x"] url") has no line feed; git refuses it as a URL.
+                var newline = entry.IndexOf('\n', StringComparison.Ordinal);
+                var key = newline < 0 ? entry : entry[..newline];
+                var value = newline < 0 ? string.Empty : entry[(newline + 1)..];
+                if (!key.StartsWith(Prefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
-            var name = line[..tab];
-            var rest = line[(tab + 1)..];
-            if (!names.Contains(name))
-            {
-                names.Add(name);
-            }
-
-            if (RemoteArguments.TrimSuffix(rest, " (fetch)") is { } fetchUrl)
-            {
-                fetchUrls.TryAdd(name, fetchUrl);
-            }
-            else if (RemoteArguments.TrimSuffix(rest, " (push)") is { } pushUrl)
-            {
-                pushUrls.TryAdd(name, pushUrl);
+                if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".pushurl") is { Length: > 0 } pushName)
+                {
+                    pushUrls.TryAdd(pushName, value);
+                }
+                else if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".url") is { Length: > 0 } fetchName)
+                {
+                    fetchUrls.TryAdd(fetchName, value);
+                }
             }
         }
 
@@ -511,6 +536,23 @@ public sealed partial class GitRepository
         };
         var message = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput.TrimEnd();
         return message.Length > 0 ? message : null;
+    }
+
+    /// <summary>
+    /// Whether the fetch just run wrote a <c>FETCH_HEAD</c> whose every line is
+    /// <c>not-for-merge</c>: the upstream it would have marked for merge no longer exists on the
+    /// remote, where <c>git pull</c> fails with "no such ref was fetched". A line for merge has
+    /// an empty second field (<c>&lt;sha&gt;\t\tbranch 'main' of &lt;url&gt;</c>). False when there
+    /// is no <c>FETCH_HEAD</c>, and git's merge then says what is wrong.
+    /// </summary>
+    private bool FetchMarkedNothingForMerge()
+    {
+        if (ReadGitFile("FETCH_HEAD") is not { } fetchHead)
+        {
+            return false;
+        }
+
+        return !fetchHead.Split('\n').Any(line => line.Split('\t') is [{ Length: > 0 }, { Length: 0 }, ..]);
     }
 
     /// <summary>The commit HEAD points at, or null when its branch has no commit yet.</summary>

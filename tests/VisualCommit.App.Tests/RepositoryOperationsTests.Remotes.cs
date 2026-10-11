@@ -193,6 +193,26 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
+    public async Task A_cancel_at_a_prompt_ends_the_fetch_of_all_remotes_without_asking_for_the_next_remote()
+    {
+        // Two remotes on a host that asks for credentials; Cancel at the first dialog cancels the
+        // whole fetch (2.16), so no second dialog asks for the other remote.
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        var url = (await repo.GitAsync("remote", "get-url", "origin")).StandardOutput.Trim();
+        await repo.GitAsync("remote", "add", "mirror", url);
+        using var app = await OperationsHarness.OpenAsync(repo, host => new PromptDialogs(host));
+        app.Dialogs.Answer<CredentialsViewModel>(dialog => dialog.Cancel());
+
+        await app.Operations.FetchAllAsync();
+
+        Assert.IsType<CredentialsViewModel>(Assert.Single(app.Dialogs.Shown));
+        Assert.Equal(("Fetch cancelled", OperationStatusTone.Secondary, OperationOutcome.Cancelled), (app.StatusText, app.StatusTone, app.LastResult?.Outcome));
+        Assert.Single(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_fetch_over_ssh_shows_the_passphrase_host_key_and_prompt_dialogs_and_then_its_failure()
     {
         await using var server = await AuthRemoteServer.StartAsync();
@@ -298,6 +318,25 @@ public partial class RepositoryOperationsTests
 
         Assert.Equal("main is already up to date", app.StatusText);
         Assert.Equal(remote, await repo.HeadAsync());
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
+    [Fact]
+    public async Task Pull_of_a_branch_whose_upstream_was_deleted_on_the_remote_says_so_and_integrates_nothing()
+    {
+        // origin's published is deleted there (a merged pull request); origin/published stays here (D99).
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await repo.CheckoutAsync("published");
+        var head = await repo.CommitFileAsync("own.txt", "own\n", "Own work");
+        var deleted = await repo.GitAsync("--git-dir=" + repo.SiblingPath("origin.git"), "branch", "-D", "published");
+        Assert.True(deleted.Succeeded, deleted.StandardError);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.PullAsync();
+
+        Assert.Equal(("published no longer exists on origin", OperationOutcome.Succeeded), (app.StatusText, app.LastResult?.Outcome));
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git merge", StringComparison.Ordinal) || call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
         Assert.Empty(app.Dialogs.Shown);
     }
 
@@ -662,6 +701,30 @@ public partial class RepositoryOperationsTests
         var backups = await repo.BackupRefsAsync();
         Assert.Equal(2, backups.Count);
         Assert.Contains(backups, entry => entry.Sha == someoneElse && entry.Name.EndsWith("/origin/published", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Force_push_of_a_branch_whose_upstream_has_another_name_asks_to_replace_the_upstream()
+    {
+        // fix tracks origin/main: the push replaces main on origin, which the question must name.
+        using var repo = await Scenarios.RemoteSyncAsync();
+        var main = await RemoteHeadAsync(repo, "refs/heads/main");
+        await repo.GitAsync("branch", "--quiet", "--track", "fix", "origin/main");
+        await repo.CheckoutAsync("fix");
+        await repo.GitAsync("commit", "--quiet", "--amend", "-m", "Rewritten main work");
+        await repo.CheckoutAsync("main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm(yes: false);
+
+        await app.Operations.ForcePushAsync("refs/heads/fix");
+
+        var confirmation = Assert.Single(app.Dialogs.Confirmations);
+        Assert.Equal(
+            ("Force push fix?",
+                "Replace main on origin with your fix? Commits on origin that your branch does not have are dropped there. The push stops if origin has commits you have not integrated into your fix, even ones the last fetch brought."),
+            (confirmation.Title, confirmation.Question));
+        Assert.Equal(main, await RemoteHeadAsync(repo, "refs/heads/main"));
         app.AssertScriptFollowed();
     }
 

@@ -491,13 +491,37 @@ public class RemoteOperationTests
         Assert.Equal(["backup", "dash"], (await repository.ReadRemotesAsync(TestCancelled)).Select(remote => remote.Name));
 
         var records = calls.Snapshot();
-        Assert.Contains(records, record => record.CommandText == "git remote -v" && record.StandardOutput.Contains("https://***@127.0.0.1:1/x.git", StringComparison.Ordinal));
+        Assert.Contains(records, record => record.CommandText.StartsWith("git config --null --get-regexp", StringComparison.Ordinal) && record.StandardOutput.Contains("https://***@127.0.0.1:1/x.git", StringComparison.Ordinal));
         Assert.Contains(records, record => record.CommandText == "git remote add -- mirror https://***@127.0.0.1:1/x.git");
         foreach (var secret in new[] { Secret, OtherSecret })
         {
             Assert.All(records, record => Assert.DoesNotContain(secret, record.CommandText + record.StandardOutput + record.StandardError, StringComparison.Ordinal));
             Assert.All(log.Entries, entry => Assert.DoesNotContain(secret, entry.Message, StringComparison.Ordinal));
         }
+    }
+
+    [Fact]
+    public async Task Remotes_are_read_as_configured_not_as_an_insteadOf_rule_rewrites_them()
+    {
+        // A common way to hand git a token: a rule that rewrites every URL of a host. git remote -v
+        // prints the rewritten URL, token and all; the settings hold the plain one.
+        const string Secret = "ghp_TOKEN123";
+        using var sync = await Scenarios.RemoteSyncAsync();
+        var repository = await GitRepository.OpenAsync(NewRunner(), sync.Path, TestCancelled);
+        await sync.GitAsync("config", $"url.https://ci-bot:{Secret}@example.com/.insteadOf", "https://example.com/");
+        await sync.GitAsync("remote", "add", "hosted", "https://example.com/acme/app.git");
+        await sync.GitAsync("config", "--add", "remote.hosted.url", "https://example.com/acme/second.git");
+        await sync.GitAsync("remote", "add", "pushes", "https://example.com/acme/fetch.git");
+        await sync.GitAsync("remote", "set-url", "--push", "pushes", "https://example.com/acme/push.git");
+        Assert.Contains(Secret, (await sync.GitAsync("remote", "-v")).StandardOutput, StringComparison.Ordinal);
+
+        Assert.Equal(
+            [
+                new RemoteInfo("hosted", "https://example.com/acme/app.git", null),
+                new RemoteInfo("origin", sync.SiblingPath("origin.git"), null),
+                new RemoteInfo("pushes", "https://example.com/acme/fetch.git", "https://example.com/acme/push.git"),
+            ],
+            await repository.ReadRemotesAsync(TestCancelled));
     }
 
     [Fact]

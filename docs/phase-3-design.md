@@ -332,7 +332,9 @@ can cancel a write half-way; from now on a write that has started runs to its en
   `Task.Run` carries the async-local value to the thread pool.
 - `GitRunner.Record` passes the heads of standard output and standard error through
   `GitCommand.HideCredentials` before they reach `IGitCallLog`, as it already does for the
-  command line (D103): `git remote -v` and some error texts print URLs with a token in them.
+  command line (D103): `git remote -v`, `git config` and some error texts print URLs with a
+  token in them. The credentials are hidden before the head is cut to 16 KiB, and an authority
+  that runs on to the cut is left out, so that a cut between `://` and `@` shows nothing of it.
   A test adds a remote `https://alice:ghp_SECRET123@127.0.0.1:1/x.git`, runs `ReadRemotesAsync`
   and a failing fetch, and asserts that `ghp_SECRET123` is in no call record, no log line and no
   rendered text of the remotes dialog's list. The Change URL form is the one place that shows the
@@ -782,7 +784,9 @@ that the reflog or the stash list does not keep.
 - Failures: error dialog "Fetch failed" ("Git could not fetch from <r>.", naming every remote
   that failed: "Git could not fetch from origin and mirror."); `AuthenticationFailed` adds
   nothing more: git's output says what happened. A prompt cancelled by the user → `Cancelled`,
-  no dialog, "<Title> cancelled" ("Fetch cancelled", "Fetch origin cancelled").
+  no dialog, "<Title> cancelled" ("Fetch cancelled", "Fetch origin cancelled"); a fetch of all
+  remotes then stops at once (`NetworkOptions.PromptCancelled`, from the operation's prompt
+  scope) and does not ask again for the remotes after it.
 
 ### 2.17 Auto-fetch
 
@@ -841,7 +845,11 @@ that the reflog or the stash list does not keep.
   "Pulled and merged <r>/<u> into main"; a rebase → "Pulled and rebased main onto <r>/<u>";
   conflicts → as 2.8 ("Pull stopped: N files have conflicts"); a rebase that stopped leaves a
   rebase in progress: the banner offers Abort and says that continuing needs a terminal until
-  phase 4 (section 5).
+  phase 4 (section 5). When the fetch marked nothing for merge (`FETCH_HEAD` has only
+  `not-for-merge` lines: the upstream was deleted on its remote, while `<r>/<u>` stays here
+  without a prune, D99), nothing is merged or rebased and the pull succeeds with "<u> no longer
+  exists on <r>"; `git pull` fails there ("no such ref was fetched"), and a merge of `FETCH_HEAD`
+  would only say "Already up to date".
 - Failures: error dialog "Pull failed" (for `pull.ff=only` on diverged branches git says
   `Not possible to fast-forward`); a cancelled fetch → "Pull cancelled", nothing integrated.
 - Refresh: Refs.
@@ -868,9 +876,12 @@ that the reflog or the stash list does not keep.
 
 - Label: "Force push <b>…" on a local branch with a remote upstream (danger colour). Disabled
   when the upstream is gone: "<r>/<u> no longer exists: push normally".
-- Confirm: title "Force push <b>?", question "Replace <b> on <r> with your <b>? Commits on <r>
+- Confirm: title "Force push <b>?", question "Replace <u> on <r> with your <b>? Commits on <r>
   that your branch does not have are dropped there. The push stops if <r> has commits you have
-  not integrated into your <b>, even ones the last fetch brought.", button "Force push".
+  not integrated into your <b>, even ones the last fetch brought.", button "Force push". <u> is
+  the upstream's name on the remote (`UpstreamRemoteRef` without `refs/heads/`), the branch the
+  push replaces: a branch `fix` that tracks `origin/main` asks "Replace main on origin with your
+  fix?".
 - Backup: `force-push-<time>/<r>/<u>` → `UpstreamRef`'s commit, read inside the operation just
   before the push.
 - Git: `git push --progress --force-with-lease=<UpstreamRemoteRef> --force-if-includes <r>
@@ -921,8 +932,13 @@ All local, through the remotes dialog (4f) or the remote header's menu. Refresh:
 | Change URL | `git remote set-url <name> <url>` | URL not empty and changed | no | "Changed the URL of <name>" |
 | Remove | first a backup batch `remote-<time>/<name>/<b>` of every `refs/remotes/<name>/*` (2.0), then `git remote remove <name>` | — | title "Remove remote <name>?", question "Remove the remote <name> and its N remote branches? Your local branches stay; those that track it lose their upstream. Its URL was <shown url>.", detail "A backup is saved first, so this can be undone.", button "Remove" (danger) | "Removed remote <name>" |
 
-`ReadRemotesAsync` (new, a read with `GIT_OPTIONAL_LOCKS=0`): `git remote -v`, parsed into
-`RemoteInfo(Name, FetchUrl, PushUrl?)` (a `(push)` URL equal to the fetch URL gives null).
+`ReadRemotesAsync` (new, a read with `GIT_OPTIONAL_LOCKS=0`): the names `git remote` lists and
+their first `remote.<name>.url` and `remote.<name>.pushurl` as configured
+(`git config --null --get-regexp '^remote\..*\.(url|pushurl)$'`), into
+`RemoteInfo(Name, FetchUrl, PushUrl?)` (a push URL equal to the fetch URL gives null). Not
+`git remote -v`: it prints the URLs after `url.<base>.insteadOf` has rewritten them, and a
+global rule of that kind often carries a token, which the form would show and "Change URL"
+would write into the repository's settings.
 
 The form's messages, in `RemoteError`, the first that applies (D114): "Enter a name." (only once
 the box has been edited and is empty), "This is not a valid remote name: <reason>.", "A remote
@@ -1039,7 +1055,10 @@ the URL as configured, because saving it must keep what is there (D103).
 - Implementation (`AppendToGitignoreAsync(pattern)`, a local operation, no git call): append to
   `<working tree>/.gitignore`, creating it; first a line feed if the file does not end with one.
   Patterns: `/<path>` with `\` put before `*`, `?`, `[`, `\`, a leading `#` or `!`, and
-  trailing spaces; or `*.<ext>` with the same escaping.
+  trailing spaces; or `*.<ext>` with the same escaping. A name with a line break in it (Linux
+  and macOS allow one) cannot be written as a line: the operation is refused before anything is
+  written (D119), error dialog "Ignoring the file failed" with "This file name cannot be written
+  to .gitignore.".
 - Confirm: no. Backup: none. Refresh: Status. Success: "Added <the line as written> to
   .gitignore" ("Added /logs/run.log to .gitignore", "Added *.log to .gitignore", "Added
   /drafts/\[wip].txt to .gitignore"). An open diff of the file closes when the file leaves the
@@ -1083,11 +1102,21 @@ the URL as configured, because saving it must keep what is there (D103).
 - "Open file": `IFileLauncher.OpenAsync(fullPath)` → Avalonia's
   `TopLevel.Launcher.LaunchFileInfoAsync`. Disabled when the file is not in the working tree
   ("The file is not in the working tree"). A commit's file opens the working tree's version.
+  A file that the system would run rather than show, as a cloned repository can hold
+  (`RepositoryOperations.CanRunPrograms`: `.exe .bat .cmd .com .ps1 .vbs .vbe .js .jse .wsf .hta
+  .msi .scr .pif .cpl .lnk .url .reg .jar .app .command .sh .desktop` on every platform, and on
+  Linux and macOS a file with an executable bit), is asked about first: title "Open <file
+  name>?", question "This file can run programs. Open it anyway?", no detail, buttons "Cancel"
+  and "Open" (not the danger style). The menu item stays enabled.
 - "Show in folder" (one label on every platform, Q6): `IFileLauncher.RevealAsync(fullPath)`:
   Windows `explorer.exe /select,"<path>"`; macOS `open -R <path>`; Linux the
   `org.freedesktop.FileManager1.ShowItems` D-Bus call through `dbus-send`, falling back to
-  `xdg-open <folder>`. A missing file reveals its folder.
-- "Copy path" (the repository-relative path with `/`), "Copy SHA", "Copy SHAs" (one per line,
+  `xdg-open <folder>`. A missing file reveals its folder. Each program is started from its
+  absolute path: Explorer from the Windows folder, the others from the first fully qualified
+  folder of PATH that holds them (`FileLauncher.FindOnPath`), never by bare name, which .NET
+  would also look up in the current folder (a cloned repository, when the app was started there).
+- "Copy path" (the repository-relative path as git gives it, with `/`; a backslash, which Linux
+  and macOS allow in a name, is kept), "Copy SHA", "Copy SHAs" (one per line,
   in the selection's row order), "Copy branch name", "Copy tag name", "Copy URL":
   `IClipboardService.SetTextAsync` → `TopLevel.Clipboard.SetTextAsync`.
 - None of these is an operation in the queue; none touches git. Both services are interfaces in
@@ -1694,7 +1723,10 @@ than one tab with a repository (the error dialog always does, in `ErrorRepositor
 <repo name>" in the secondary colour under the title (`DialogRepository`). The visual checks use
 one repository tab, so no picture shows it. An ssh "confirm" prompt (3.2) is the confirmation
 dialog with the title "ssh asks", ssh's text as its question, no detail and the buttons "Cancel"
-and "Yes" (D115).
+and "Yes" (D115). A masked box (`CredentialPassword`, `PassphraseBox`, a masked `PromptBox`) is
+a `SecretTextBox`: a stock text box whose automation peer reads as an empty value and raises no
+change of its text while it is masked, so that no UI Automation client can read the secret
+(D103); Avalonia's peers have no "is password" property to report instead.
 
 Each dialog root has an automation peer that makes it a control element (4a), so the
 real-window pass can wait for `RemotesDialog`, `ErrorDialog` and the others by id, not only for
