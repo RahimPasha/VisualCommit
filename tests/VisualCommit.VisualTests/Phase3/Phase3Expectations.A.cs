@@ -432,6 +432,34 @@ public static partial class Phase3Expectations
 
         // ---- Check 4: file menus (the changes scenario). ----
 
+        /// <summary>
+        /// Check 4 step 6: "the diff of phase 2's check 3 step 2", src/Calculator.cs unstaged, inline
+        /// (phase 2's report, as phase 2's checks write the rows).
+        /// </summary>
+        public static readonly string[] CalculatorInline =
+        [
+            "@@ -12,7 +12,7 @@ public sealed class Calculator",
+            "C 12/12",
+            "C 13/13 public int Add(int a, int b)",
+            "C 14/14 {",
+            "R 15/- return a + b;",
+            "A -/15 return a + b + _offset;",
+            "C 16/16 }",
+            "C 17/17",
+            "C 18/18 public int Subtract(int a, int b)",
+            "@@ -29,4 +29,8 @@ public sealed class Calculator",
+            "C 29/29 {",
+            "C 30/30 return a / b;",
+            "C 31/31 }",
+            "A -/32",
+            "A -/33 public int Negate(int a) => -a;",
+            "A -/34",
+            "A -/35 public int Square(int a) => a * a;",
+            "C 32/36 }",
+        ];
+
+        public const string SnapshotLine = "A snapshot is saved first, so the changes can be restored.";
+
         public static readonly string[] CalculatorUnstagedMenu =
         [
             "Calculator.cs",

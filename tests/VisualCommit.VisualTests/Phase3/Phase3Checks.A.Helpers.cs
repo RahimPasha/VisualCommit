@@ -195,11 +195,40 @@ public sealed partial class Phase3ChecksA
             return;
         }
 
-        AssertColour(palette.Panel, screenshot, new Point(menu.Bounds.Right - 3, menu.Bounds.Top + 16), "menu's background");
+        // Samples where no text reaches, and not under an open tooltip (a rested pointer's tooltip
+        // opens below it, over the next item).
+        var tips = app.Window.GetVisualDescendants().OfType<ToolTip>().Where(tip => tip.IsEffectivelyVisible).Select(app.BoundsOf).ToList();
+        Point Free(params Point[] candidates) =>
+            candidates.FirstOrDefault(point => !tips.Any(tip => tip.Contains(point)), candidates[0]);
+        AssertColour(palette.Panel, screenshot, Free(new Point(menu.Bounds.Right - 3, menu.Bounds.Top + 16), new Point(menu.Bounds.Left + 3, menu.Bounds.Top + 16)), "menu's background");
         if (menu.Highlighted is { } highlighted)
         {
-            AssertColour(palette.Hover, screenshot, new Point(highlighted.Bounds.Right - 4, highlighted.Bounds.Center.Y), $"highlight of \"{highlighted.Label}\"");
+            var point = Free(new Point(highlighted.Bounds.Right - 4, highlighted.Bounds.Center.Y), new Point(highlighted.Bounds.Left + 4, highlighted.Bounds.Center.Y), new Point(highlighted.Bounds.Left + 4, highlighted.Bounds.Top + 2));
+            Assert.False(tips.Any(tip => tip.Contains(point)), $"A tooltip covers the highlighted \"{highlighted.Label}\".");
+            AssertColour(palette.Hover, screenshot, point, $"highlight of \"{highlighted.Label}\"");
         }
+    }
+
+    /// <summary>
+    /// Asserts where a menu opened by the pointer at <paramref name="pointer"/> is, by 4a's placement
+    /// rule ("The menu", Placement), for a step that gives no position of its own: its top-left 2
+    /// right of and 2 below the pointer; flipped to the left of the pointer (its right edge 2 left of
+    /// it) when it would cross the window's right edge, above it when it would cross the bottom;
+    /// then kept 4 inside the window (±2).
+    /// </summary>
+    private static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
+    {
+        var window = app.Window.ClientSize;
+        var size = menu.Bounds.Size;
+        var gap = WindowLayout.MenuPointerGap;
+        var inset = WindowLayout.MenuEdgeInset;
+        var x = pointer.X + gap + size.Width > window.Width ? pointer.X - gap - size.Width : pointer.X + gap;
+        var y = pointer.Y + gap + size.Height > window.Height ? pointer.Y - gap - size.Height : pointer.Y + gap;
+        x = Math.Max(Math.Min(x, window.Width - inset - size.Width), inset);
+        y = Math.Max(Math.Min(y, window.Height - inset - size.Height), inset);
+        Assert.True(
+            Math.Abs(menu.Bounds.X - x) <= 2 && Math.Abs(menu.Bounds.Y - y) <= 2,
+            $"The menu's top-left is {menu.Bounds.TopLeft}; 4a places a {size} menu opened at {pointer} at ({x}, {y}).");
     }
 
     /// <summary>The name dialog as the report gives it (title, context, the boxes, the option, the buttons).</summary>
@@ -390,6 +419,21 @@ public sealed partial class Phase3ChecksA
     {
         var text = await GitTextAsync(repo, arguments);
         return text.Length == 0 ? [] : text.Split('\n');
+    }
+
+    /// <summary>
+    /// <c>git check-ignore -v &lt;path&gt;</c>'s output: plain git, without the runner's
+    /// <c>GIT_LITERAL_PATHSPECS</c>, which check-ignore refuses.
+    /// </summary>
+    private static async Task<string> CheckIgnoreAsync(TempRepo repo, string path)
+    {
+        var command = new VisualCommit.Core.Git.GitCommand("check-ignore", "-v", path)
+        {
+            WorkingDirectory = repo.Path,
+            Environment = new Dictionary<string, string?>(repo.Environment) { ["GIT_LITERAL_PATHSPECS"] = null },
+        };
+        var result = await repo.Runner.RunAsync(command);
+        return result.EnsureSuccess(command).StandardOutput.Trim();
     }
 
     /// <summary>
