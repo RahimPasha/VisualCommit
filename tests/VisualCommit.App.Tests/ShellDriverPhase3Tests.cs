@@ -1,10 +1,13 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.Views.Shell;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -51,10 +54,75 @@ public class ShellDriverPhase3Tests
         using var app = ShellDriver.Start(data.Path, promptHandler: prompts);
         await app.WaitUntilReadyAsync();
 
-        // Until the askpass broker exists (WP3) the app's broker leads no prompt anywhere; the
-        // handler is what it was given, and it answers when asked.
+        // The session's broker asks the handler, not the dialogs: the real helper, run as git
+        // runs it in an open scope, gets the handler's answer, and no dialog opens.
         prompts.Answer("alice");
-        Assert.Equal(PromptAnswer.Of("alice"), await prompts.AnswerAsync(new GitPrompt(GitPromptKind.Username, "Username for 'http://127.0.0.1': ", "op-1", "Fetch", "auth"), CancellationToken.None));
+        string? environmentAnswer;
+        using (var scope = app.Session.Services.Prompts.Begin("Fetch", "auth", PromptMode.Ask))
+        {
+            var environment = scope.Environment;
+            var run = Task.Run(() => AskPassRunner.RunAsync(environment, "Username for 'http://127.0.0.1': ", cancellationToken: TestContext.Current.CancellationToken), TestContext.Current.CancellationToken);
+            await app.WaitForAsync(() => run.IsCompleted, "the helper to end", TimeSpan.FromSeconds(60));
+            environmentAnswer = (await run).Answer;
+        }
+
+        Assert.Equal("alice", environmentAnswer);
+        var asked = Assert.Single(prompts.Prompts);
+        Assert.Equal((GitPromptKind.Username, "Fetch", "auth"), (asked.Kind, asked.Title, asked.RepositoryName));
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task FindByAutomationId_looks_in_the_dialog_on_top_first_then_in_the_window()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var dialogs = app.Session.Services.Dialogs;
+        Assert.Null(app.TopDialogView);
+
+        // Two confirmations stacked (D104): the one below comes first in the visual tree.
+        var below = dialogs.ConfirmAsync(new ConfirmationRequest("Delete branch?", "Delete feature/alpha?", string.Empty, "Delete"));
+        var top = dialogs.ConfirmAsync(new ConfirmationRequest("ssh asks", "Allow use of key?", string.Empty, "Yes", IsDestructive: false));
+        app.Settle();
+
+        var view = Assert.IsAssignableFrom<Control>(app.TopDialogView);
+        Assert.Equal("ConfirmationDialog", AutomationProperties.GetAutomationId(view));
+        Assert.Same(app.Session.Services.DialogHost.Current, view.DataContext);
+        Assert.Equal("Yes", ((Button)app.FindByAutomationId("ConfirmButton")).Content);
+        Assert.Equal("ssh asks", ((TextBlock)app.FindByAutomationId("ConfirmTitle")).Text);
+        Assert.Same(app.FindByAutomationId("ConfirmButton"), app.FindByAutomationId(view, "ConfirmButton"));
+
+        // What is not in the dialog is still found in the window behind it.
+        Assert.Equal("Ready", ((TextBlock)app.FindByAutomationId("OperationStatus")).Text);
+        Assert.Throws<InvalidOperationException>(() => app.FindByAutomationId(view, "OperationStatus"));
+
+        app.Click(app.FindByAutomationId("CancelButton"));
+        Assert.False(await top);
+        Assert.Equal("Delete", ((Button)app.FindByAutomationId("ConfirmButton")).Content);
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        Assert.True(await below);
+        Assert.Null(app.TopDialogView);
+    }
+
+    [AvaloniaFact]
+    public async Task OpenMenuView_is_the_open_menu_and_FindByAutomationId_looks_in_it()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        Assert.Null(app.OpenMenuView);
+
+        app.Session.Shell.Menu.Open(new MenuModel([new MenuHeader("Tags"), new VisualCommit.App.ViewModels.Menus.MenuItem("Push v1.0 to origin", () => { })]), new MenuPosition(300, 450));
+        app.Menu();
+
+        var menu = Assert.IsAssignableFrom<Control>(app.OpenMenuView);
+        var header = app.FindByAutomationId(MenuLayer.HeaderAutomationId);
+        Assert.Same(header, app.FindByAutomationId(menu, MenuLayer.HeaderAutomationId));
+        Assert.Equal("Tags", AutomationProperties.GetName(header));
+
+        Assert.True(app.Session.Shell.Menu.Close());
+        Assert.Null(app.OpenMenuView);
     }
 
     [AvaloniaFact]

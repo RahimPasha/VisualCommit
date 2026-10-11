@@ -122,6 +122,68 @@ public sealed partial class ShellDriver
         };
     }
 
+    /// <summary>
+    /// The view of the dialog on top (<c>DialogHostViewModel.Current</c>, the one that takes the
+    /// input, D104) as the dialog layer draws it, or null when no dialog is open.
+    /// </summary>
+    public Control? TopDialogView
+    {
+        get
+        {
+            Settle();
+            return TopDialogViewNow();
+        }
+    }
+
+    /// <summary>The open context menu's presenter (4a), or null when no menu is open; it does not wait for one.</summary>
+    public Control? OpenMenuView
+    {
+        get
+        {
+            Settle();
+            return MenuPresenters().FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// Finds the control whose automation id is <paramref name="automationId"/> inside
+    /// <paramref name="scope"/> (the scope itself included), such as <see cref="TopDialogView"/>
+    /// or <see cref="OpenMenuView"/>: a visible control before a hidden one.
+    /// </summary>
+    public Control FindByAutomationId(Visual scope, string automationId)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return FindIn(scope, automationId)
+            ?? throw new InvalidOperationException($"No control with the automation id '{automationId}' is in the {scope.GetType().Name}.");
+    }
+
+    /// <summary>
+    /// The search of <see cref="FindByAutomationId(string)"/>: the open menu, the dialog on top,
+    /// the window. It looks at the window as it is, without letting the UI thread run first.
+    /// </summary>
+    private Control? FindWhereShown(string automationId)
+    {
+        ArgumentNullException.ThrowIfNull(automationId);
+        return (MenuPresenters().FirstOrDefault() is { } menu ? FindIn(menu, automationId) : null)
+            ?? (TopDialogViewNow() is { } dialog ? FindIn(dialog, automationId) : null)
+            ?? FindIn(Window, automationId);
+    }
+
+    private Control? TopDialogViewNow() =>
+        Session.Services.DialogHost.Current is { } current
+            ? Window.GetVisualDescendants().OfType<ContentPresenter>()
+                .FirstOrDefault(presenter => ReferenceEquals(presenter.Content, current) && presenter.Child is not null)?.Child
+            : null;
+
+    private static Control? FindIn(Visual scope, string automationId)
+    {
+        var matches = (scope is Control self ? new[] { self } : [])
+            .Concat(scope.GetVisualDescendants().OfType<Control>())
+            .Where(control => AutomationProperties.GetAutomationId(control) == automationId)
+            .ToList();
+        return matches.FirstOrDefault(control => control.IsEffectivelyVisible) ?? matches.FirstOrDefault();
+    }
+
     /// <summary>Waits until the dialog on top is a <typeparamref name="T"/> and returns its view model.</summary>
     public async Task<T> WaitForDialogAsync<T>(TimeSpan? timeout = null)
         where T : DialogViewModel
