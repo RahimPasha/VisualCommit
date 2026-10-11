@@ -29,6 +29,7 @@
                      Text="{Binding Remote}"
                      IsVisible="{Binding HasOneRemote}"
                      TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding Remote}"
                      AutomationProperties.AutomationId="PushRemote" />
           <ItemsControl Name="PushRemotes"
                         Grid.Column="1"
@@ -45,7 +46,7 @@
                              IsChecked="{Binding IsChecked}"
                              AutomationProperties.AutomationId="ChoiceOption"
                              AutomationProperties.Name="{Binding Text}">
-                  <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Text}" />
                 </RadioButton>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

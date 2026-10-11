@@ -56,7 +56,12 @@ public partial class MainWindowViewModel : ObservableObject
         // Every dialog of a repository's operations follows the window's one rule (4f).
         _tabServices.NamesRepositoryInDialogs = () => NamesRepositoryInDialogs;
         Theme = themes.Current;
-        Menu = new MenuLayerViewModel(_log, () => ActiveTab?.Repository?.Name);
+
+        // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
+        Menu = new MenuLayerViewModel(
+            _log,
+            () => ActiveTab?.Repository?.Name,
+            owner => ReferenceEquals(ActiveTab?.Repository, owner) && !Dialogs.IsOpen);
 
         // The tabs of the last session are there from the first frame, under their folder names;
         // InitializeAsync opens them once git has been found.

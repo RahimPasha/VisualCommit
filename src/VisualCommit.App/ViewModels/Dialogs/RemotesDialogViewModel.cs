@@ -216,13 +216,18 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
         RemoteError = string.Empty;
     }
 
-    /// <summary>"Save": adds the remote, or renames it and changes its URL, and waits.</summary>
+    /// <summary>
+    /// "Save": adds the remote, or renames it and changes its URL, and waits. When the rename
+    /// succeeds and the URL change fails, the form goes on editing the remote under its new name
+    /// (the list shows it too), so that Save again only changes the URL.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanSaveNow))]
     private async Task Save()
     {
         var (editing, name, url) = (_editing, RemoteName, RemoteUrl);
         IsSaving = true;
         string? error;
+        var renamed = false;
         try
         {
             if (editing is null)
@@ -235,6 +240,12 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
                 if (!string.Equals(name, editing.Name, StringComparison.Ordinal))
                 {
                     error = await _actions.RenameRemoteAsync(editing.Name, name);
+                    if (error is null)
+                    {
+                        renamed = true;
+                        editing = editing with { Name = name };
+                        _editing = editing;
+                    }
                 }
 
                 if (error is null && !string.Equals(url, editing.Url, StringComparison.Ordinal))
@@ -255,12 +266,18 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
 
         if (error is not null)
         {
+            if (renamed)
+            {
+                await ReloadAsync();
+            }
+
             RemoteError = error;
             return;
         }
 
         IsFormShown = false;
         _editing = null;
+        RemoteError = string.Empty;
         await ReloadAsync();
     }
 

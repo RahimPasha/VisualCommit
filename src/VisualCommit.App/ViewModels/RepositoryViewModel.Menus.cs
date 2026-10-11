@@ -35,6 +35,12 @@ public sealed partial class RepositoryViewModel
     }
 
     /// <summary>
+    /// The last menu that waits for a read (a drop's, a local branch's with its fast-forward), as a
+    /// task that completes with whether it opened; completed before any. Tests wait on it.
+    /// </summary>
+    public Task<bool> PendingMenu { get; private set; } = Task.FromResult(false);
+
+    /// <summary>
     /// The snapshot the menu builders read (<see cref="RepositoryMenuContext"/>), taken now: the
     /// refs, the status, the selected commits in row order with whether HEAD's history holds them
     /// (4h), the toolbar's states, whether an operation runs, and the other worktrees as last read
@@ -275,7 +281,8 @@ public sealed partial class RepositoryViewModel
     /// <summary>
     /// A drop of the branch <paramref name="sourceRef"/> onto <paramref name="targetRef"/> (4g): reads
     /// what the drop needs (<see cref="DropFacts"/>, the worktrees), then opens its menu at the
-    /// release point. Completes with whether a menu opened.
+    /// release point, unless Esc, another menu, a dialog or another tab came first (4a). Completes
+    /// with whether a menu opened.
     /// </summary>
     /// <remarks>
     /// <see cref="DropFacts.RemoteMapsBranchesDifferently"/> is not read: the Git layer has no read
@@ -291,6 +298,7 @@ public sealed partial class RepositoryViewModel
             return false;
         }
 
+        var request = layer.Request(this);
         var context = await ReadMenuContextAsync();
         var ancestor = true;
         if (targetRef.StartsWith("refs/heads/", StringComparison.Ordinal))
@@ -311,8 +319,16 @@ public sealed partial class RepositoryViewModel
         }
 
         context = context with { Drop = new DropFacts(ancestor) };
-        return OpenMenu(layer, RepositoryMenus.ForDrop(context, sourceRef, targetRef, MenuActions), position, MenuOpenedBy.Pointer);
+        return OpenRequested(layer, request, RepositoryMenus.ForDrop(context, sourceRef, targetRef, MenuActions), position, MenuOpenedBy.Pointer);
     }
+
+    /// <summary>
+    /// The menu of a request whose read has completed (<see cref="MenuLayerViewModel.Request"/>):
+    /// it opens only while nothing has dropped the request since (Esc, another menu or request, a
+    /// dialog, another tab; 4a) and the tab is still open.
+    /// </summary>
+    private bool OpenRequested(MenuLayerViewModel layer, MenuRequest request, MenuModel? menu, MenuPosition position, MenuOpenedBy openedBy) =>
+        !IsClosed && menu is not null && menu.Items.Any() && layer.OpenRequested(request, menu, position, openedBy);
 
     /// <summary>
     /// What a drop of a branch onto a branch opens (WP8's <see cref="BranchDropMenu"/> hook): the
@@ -324,7 +340,8 @@ public sealed partial class RepositoryViewModel
         ArgumentNullException.ThrowIfNull(layer);
         return drop =>
         {
-            Start(OpenDropMenuAsync(layer, drop.SourceRef, drop.TargetRef, new MenuPosition(drop.X, drop.Y)), "the drop's menu");
+            PendingMenu = OpenDropMenuAsync(layer, drop.SourceRef, drop.TargetRef, new MenuPosition(drop.X, drop.Y));
+            Start(PendingMenu, "the drop's menu");
             return null;
         };
     }
@@ -394,7 +411,8 @@ public sealed partial class RepositoryViewModel
     /// <summary>
     /// A local branch's menu (4b). Its fast-forward item depends on the other worktrees (2.7): when
     /// that item would otherwise be enabled, they are read first and the menu opens when the read
-    /// completes; the request counts as handled at once.
+    /// completes, unless Esc, another menu, a dialog or another tab came first (4a); the request
+    /// counts as handled at once.
     /// </summary>
     private bool OpenLocalBranchMenu(MenuLayerViewModel layer, string branchRef, MenuPosition position, MenuOpenedBy openedBy)
     {
@@ -410,14 +428,15 @@ public sealed partial class RepositoryViewModel
             return OpenMenu(layer, RepositoryMenus.ForLocalBranch(context, branchRef, MenuActions), position, openedBy);
         }
 
-        Start(OpenAfterReadingWorktreesAsync(layer, branchRef, position, openedBy), "a branch's menu");
+        PendingMenu = OpenAfterReadingWorktreesAsync(layer, layer.Request(this), branchRef, position, openedBy);
+        Start(PendingMenu, "a branch's menu");
         return true;
     }
 
-    private async Task OpenAfterReadingWorktreesAsync(MenuLayerViewModel layer, string branchRef, MenuPosition position, MenuOpenedBy openedBy)
+    private async Task<bool> OpenAfterReadingWorktreesAsync(MenuLayerViewModel layer, MenuRequest request, string branchRef, MenuPosition position, MenuOpenedBy openedBy)
     {
         var context = await ReadMenuContextAsync();
-        OpenMenu(layer, RepositoryMenus.ForLocalBranch(context, branchRef, MenuActions), position, openedBy);
+        return OpenRequested(layer, request, RepositoryMenus.ForLocalBranch(context, branchRef, MenuActions), position, openedBy);
     }
 
     /// <summary>

@@ -187,7 +187,22 @@ public sealed class BranchNameDialogViewModel : NameDialogViewModel
     /// <summary>The dialog renames a branch.</summary>
     public bool IsRename => _oldName is not null;
 
-    protected override string? ValidateName(string name) => DialogText.BranchNameError(name, _existing, _ignoreCase);
+    /// <summary>
+    /// The name's message. The branch's own old name counts too when only the case changes and case
+    /// is compared (Windows and macOS, D96): git refuses <c>git branch --move Feature feature</c>
+    /// there ("a branch named 'feature' already exists", the old ref's file answering for the new
+    /// name), so the box says "A branch named Feature exists in another case.". A name that only
+    /// starts with the old one, such as <c>feature/x</c> for <c>feature</c>, is no clash: git
+    /// moves a branch into a folder of its own name.
+    /// </summary>
+    protected override string? ValidateName(string name)
+    {
+        var caseOnly = _ignoreCase
+            && _oldName is not null
+            && string.Equals(name, _oldName, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(name, _oldName, StringComparison.Ordinal);
+        return DialogText.BranchNameError(name, caseOnly ? [.. _existing, _oldName!] : _existing, _ignoreCase);
+    }
 
     protected override bool MayConfirm(string name) => !string.Equals(name, _oldName, StringComparison.Ordinal);
 }
