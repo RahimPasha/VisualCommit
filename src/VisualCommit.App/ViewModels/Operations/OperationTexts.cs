@@ -338,57 +338,8 @@ public static partial class OperationTexts
     public static string Aborted(InProgressKind kind) =>
         kind == InProgressKind.ApplyMailbox ? "Aborted git am" : $"Aborted the {InProgressName(kind)}";
 
-    /// <summary>
-    /// The confirmation of 2.15 with section 5's question for <paramref name="state"/>, the
-    /// backup detail and the button "Abort &lt;kind&gt;" (danger). Whether a cherry-pick or revert
-    /// is a sequence started in a terminal (git's <c>sequencer/</c>, which the app itself never
-    /// starts) is read from the state: commits left after the stopped one, a sequence stopped
-    /// between commits (no commit named), or <see cref="InProgressState.AbortKeepsHead"/>.
-    /// </summary>
-    public static ConfirmationRequest ConfirmAbort(InProgressState state)
-    {
-        ArgumentNullException.ThrowIfNull(state);
-        var name = InProgressName(state.Kind);
-        return state.Kind == InProgressKind.ApplyMailbox
-            ? new("Abort git am?", AbortQuestion(state), BackupDetail, "Abort")
-            : new($"Abort the {name}?", AbortQuestion(state), BackupDetail, $"Abort {name}");
-    }
-
-    /// <summary>Section 5's Abort question for <paramref name="state"/> (D110 for <see cref="InProgressState.AbortKeepsHead"/>).</summary>
-    public static string AbortQuestion(InProgressState state)
-    {
-        ArgumentNullException.ThrowIfNull(state);
-        switch (state.Kind)
-        {
-            case InProgressKind.Merge:
-                return state.Subject is { } subject
-                    ? $"Abort merging \"{subject}\"? Changes made to resolve conflicts are lost."
-                    : "Abort the merge? Changes made to resolve conflicts are lost.";
-
-            case InProgressKind.CherryPick or InProgressKind.Revert:
-                var (name, done) = state.Kind == InProgressKind.CherryPick ? ("cherry-pick", "picked") : ("revert", "reverted");
-                if (state.AbortKeepsHead)
-                {
-                    var left = state.Remaining == 1 ? "The 1 commit left is" : string.Create(CultureInfo.InvariantCulture, $"The {state.Remaining} commits left are");
-                    return $"Abort the {name}? {left} not {done}. HEAD and the commits made so far stay as they are.";
-                }
-
-                var question = $"Abort the {name}? HEAD goes back to where it was before it started, and changes made to resolve conflicts are lost.";
-                var sequence = state.Remaining > 0 || state.Commit is null;
-                return sequence ? $"{question} Commits this {name} already made are dropped too." : question;
-
-            case InProgressKind.Rebase:
-                return state.Branch is { } branch
-                    ? $"Abort the rebase of {branch}? The branch goes back to where it was before it started."
-                    : "Abort the rebase? HEAD goes back to where it was before it started.";
-
-            case InProgressKind.ApplyMailbox:
-                return "Abort git am? The branch goes back to where it was before it started.";
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(state), state.Kind, "Nothing is in progress.");
-        }
-    }
+    // The Abort question of 2.15 (title, section 5's question, the backup's detail, "Abort <kind>")
+    // is the banner's, ConflictBannerViewModel.AbortConfirmation: the banner and AbortAsync ask it.
 
     // 2.16 to 2.18: fetch and pull.
 
