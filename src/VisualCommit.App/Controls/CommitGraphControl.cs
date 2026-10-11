@@ -30,6 +30,12 @@ namespace VisualCommit.App.Controls;
 /// view model can keep both per tab. The control changes them with <c>SetCurrentValue</c>,
 /// which keeps those bindings.
 /// </para>
+/// <para>
+/// Phase 3: several rows can be selected (<see cref="Selection"/>, the gestures in
+/// CommitGraphControl.Selection.cs), a right-click selects what it is on and asks for a menu
+/// (<see cref="ContextRequestedAt"/>), and a branch label can be dragged onto another
+/// (CommitGraphControl.Drag.cs, with the window's <c>BranchDragService</c>).
+/// </para>
 /// </remarks>
 public sealed partial class CommitGraphControl : Control
 {
@@ -72,8 +78,8 @@ public sealed partial class CommitGraphControl : Control
 
     /// <summary>
     /// The selected commits as SHAs (docs/phase-3-design.md 4h, D88). Binds two-way by default.
-    /// Declared by work package WP0; WP8 draws every selected row and builds the gestures that
-    /// change it. <see cref="SelectedIndex"/> stays the single selection.
+    /// Every row it names is drawn selected while it names two or more; <see cref="SelectedIndex"/>
+    /// stays the single selection and is -1 while several are selected.
     /// </summary>
     public static readonly StyledProperty<GraphSelection> SelectionProperty =
         AvaloniaProperty.Register<CommitGraphControl, GraphSelection>(nameof(Selection), GraphSelection.Empty, defaultBindingMode: BindingMode.TwoWay);
