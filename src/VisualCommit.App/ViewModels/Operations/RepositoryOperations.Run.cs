@@ -519,6 +519,38 @@ public sealed partial class RepositoryOperations
             exception.ExitCode);
     }
 
+    /// <summary>
+    /// The failure of the operation's last failed git call that <paramref name="isCall"/> picks,
+    /// as the session's call log recorded it (1.6, 1.7): git's output cleaned as the queue cleans
+    /// it, the command, the exit code, with <paramref name="summary"/>. For a git method that
+    /// reports a failed call only as an outcome, so that the error dialog still shows what git
+    /// said (an empty cherry-pick's <see cref="ApplyResult.Empty"/>, 2.12: its output and command,
+    /// check 25). Without a call log or such a call, the failure has no output and no command.
+    /// </summary>
+    /// <param name="context">The running operation: only its own calls are looked at.</param>
+    /// <param name="isCall">Picks the call by its command text (<c>git cherry-pick &lt;sha&gt;</c>).</param>
+    /// <param name="summary">The error dialog's summary.</param>
+    public GitFailure FailureOfLastCall(OperationContext context, Func<string, bool> isCall, string summary)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(isCall);
+        ArgumentNullException.ThrowIfNull(summary);
+        var call = Services?.GitCalls?.Snapshot().LastOrDefault(record =>
+            string.Equals(record.OperationId, context.OperationId, StringComparison.Ordinal) && !record.Succeeded && isCall(record.CommandText));
+        if (call is null)
+        {
+            Log.Warning($"{Repository.Name}: the failed git call of {context.OperationId} is not in the call log; its output cannot be shown.");
+            return new GitFailure(GitFailureKind.Other, summary, string.Empty, string.Empty, null);
+        }
+
+        return new GitFailure(
+            GitFailureClassifier.Classify(call.StandardError, call.StandardOutput, call.ExitCode),
+            summary,
+            GitOutputCleaner.Clean(call.StandardError, call.StandardOutput),
+            call.CommandText,
+            call.ExitCode);
+    }
+
     /// <summary>A failure the operation reports itself: the status bar says "&lt;Title&gt; failed" (4e) and the dialog shows <paramref name="failure"/>'s summary.</summary>
     public static OperationReport Failed(OperationText text, GitFailure failure)
     {

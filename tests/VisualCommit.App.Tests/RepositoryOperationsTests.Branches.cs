@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -5,6 +7,7 @@ using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -888,7 +891,95 @@ public partial class RepositoryOperationsTests
         Assert.Equal(($"Cherry-pick {alphaOne[..7]} failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.True(File.Exists(Path.Combine(repo.Path, ".git", "CHERRY_PICK_HEAD")));
         Assert.True(app.Operations.Status.InProgress.Empty);
+
+        // Check 25 step 7: git's own output and the command of the failed call (2.12, 1.6), which
+        // the operation reads from the session's call log.
+        AssertOutputOfFailedCall(app, dialog, $"git cherry-pick {alphaOne}");
+        Assert.StartsWith("The previous cherry-pick is now empty", dialog.Output, StringComparison.Ordinal);
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_revert_that_stops_on_a_commit_that_changes_nothing_shows_the_banner_and_no_dialog()
+    {
+        // D117's other case, check 12 part E: a git that keeps REVERT_HEAD after a revert that
+        // changes nothing (Git 2.36 and 2.55 fail it instead, which the test above covers).
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenWrappedAsync(repo, StoppingRevert.Wrap);
+        var mainWork = await repo.HeadAsync();
+        await repo.GitAsync("revert", "--no-edit", mainWork);
+        await app.Repository.RefreshAsync();
+        var head = await repo.HeadAsync();
+
+        await app.Operations.RevertAsync(mainWork);
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(($"Revert stopped: {mainWork[..7]} changes nothing on main: it is already undone.", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        Assert.Equal(OperationOutcome.Conflicts, app.LastResult?.Outcome);
+        Assert.Equal((InProgressKind.Revert, true), (app.Operations.Status.InProgress.Kind, app.Operations.Status.InProgress.Empty));
+        Assert.Equal(($"Reverting {mainWork[..7]} \"Main work\" changes nothing: it is already undone. Abort to go on.", "Abort revert"), (app.Repository.Banner.Text, app.Repository.Banner.AbortText));
+        Assert.Equal(head, await repo.HeadAsync());
+
+        // Several: the count so far, then the same sentence; still no dialog.
+        File.Delete(Path.Combine(repo.Path, ".git", "REVERT_HEAD"));
+        await app.Repository.RefreshAsync();
+        var addCore = await app.ShaAsync("main~2");
+        await app.Operations.RevertSeveralAsync([addCore, mainWork]);
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(($"Reverted 0 of 2 commits. {mainWork[..7]} changes nothing on main: it is already undone.", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        app.AssertScriptFollowed();
+    }
+
+    /// <summary>
+    /// The real repository, except that <see cref="IGitRepository.RevertAsync"/> stops as a git
+    /// that keeps <c>REVERT_HEAD</c> after a revert that changes nothing would (D117): it leaves
+    /// <c>REVERT_HEAD</c> naming the commit, changes nothing else and answers <see cref="ApplyResult.Empty"/>.
+    /// </summary>
+    public class StoppingRevert : DispatchProxy
+    {
+        private IGitRepository _inner = null!;
+
+        public static IGitRepository Wrap(IGitRepository inner)
+        {
+            var proxy = Create<IGitRepository, StoppingRevert>();
+            ((StoppingRevert)(object)proxy)._inner = inner;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            ArgumentNullException.ThrowIfNull(targetMethod);
+            if (targetMethod.Name == nameof(IGitRepository.RevertAsync))
+            {
+                File.WriteAllText(Path.Combine(_inner.GitDirectory, "REVERT_HEAD"), (string)args![0]! + "\n");
+                return Task.FromResult(ApplyResult.Empty);
+            }
+
+            try
+            {
+                return targetMethod.Invoke(_inner, args);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Throw(ex.InnerException);
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The error dialog shows the output and the command of the operation's failed git call
+    /// <paramref name="command"/>, as the call log recorded it and the queue cleans it (1.6): on
+    /// every git version, whatever its words.
+    /// </summary>
+    private static void AssertOutputOfFailedCall(OperationsHarness app, ErrorDialogViewModel dialog, string command)
+    {
+        var call = app.Calls.Snapshot().Last(record => record.CommandText == command);
+        Assert.False(call.Succeeded);
+        Assert.NotEqual(string.Empty, dialog.Output);
+        Assert.Equal(GitOutputCleaner.Clean(call.StandardError, call.StandardOutput), dialog.Output);
+        Assert.Equal(command, dialog.Command);
     }
 
     [Fact]
@@ -954,6 +1045,7 @@ public partial class RepositoryOperationsTests
 
         Assert.Equal(("Cherry-pick stopped", $"Cherry-picked 0 of 2 commits. {alphaOne[..7]} changes nothing on main: its changes are already there. Abort the cherry-pick to go on."),
             (app.Dialogs.Errors[0].Title, app.Dialogs.Errors[0].Summary));
+        AssertOutputOfFailedCall(app, app.Dialogs.Errors[0], $"git cherry-pick {alphaOne}");
         Assert.Equal("Cherry-pick 2 commits failed", app.StatusText);
 
         await repo.GitAsync("cherry-pick", "--abort");
@@ -1308,6 +1400,11 @@ public partial class RepositoryOperationsTests
         Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on hotfix: its changes are already there. Abort the cherry-pick to go on."),
             (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
         Assert.Equal($"Cherry-pick {alphaOne[..7]} failed", TextOf(app, "OperationStatus"));
+
+        // Git's output and the command, which the operation reads from the session's call log (2.12, 1.6).
+        Assert.True(app.FindByAutomationId("ErrorOutput").IsEffectivelyVisible);
+        Assert.StartsWith("The previous cherry-pick is now empty", TextOf(app, "ErrorOutput"), StringComparison.Ordinal);
+        Assert.Equal($"git cherry-pick {alphaOne}", TextOf(app, "ErrorCommand"));
         TestPictures.Save(app, "wp7-25a-empty-pick");
         app.Click(app.FindByAutomationId("ConfirmButton"));
         await pick;
