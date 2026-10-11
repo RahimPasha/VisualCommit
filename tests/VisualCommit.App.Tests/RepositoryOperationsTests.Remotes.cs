@@ -1,4 +1,5 @@
-using System.ComponentModel;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -6,6 +7,7 @@ using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
@@ -965,6 +967,138 @@ public partial class RepositoryOperationsTests
         Assert.Equal("refs/heads/main", await ConfigAsync(repo, "branch.main.merge"));
         Assert.NotNull(await RemoteHeadAsync(repo, "refs/heads/published"));
         Assert.Empty(await repo.BackupRefsAsync());
+    }
+
+    // Through the window (ShellDriver): checks 17 and 21 as a user starts them, the toolbar's
+    // buttons clicked and the remote's "Fetch origin" called as its menu item calls it. Their
+    // pictures are kept when VISUALCOMMIT_TEST_PICTURES names a folder (TestPictures).
+
+    [AvaloniaFact]
+    public async Task Through_the_window_a_held_fetch_shows_its_progress_and_Cancel_and_the_toolbars_Fetch_brings_the_remote_work()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        server.RequireAuth = false;
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0, "the graph");
+        await app.WaitForIdleAsync();
+        var status = (TextBlock)app.FindByAutomationId("OperationStatus");
+        var cancel = app.FindByAutomationId("OperationCancelButton");
+        var progress = (ProgressBar)app.FindByAutomationId("OperationProgress");
+        TestPictures.Save(app, "remotes-17a-before-fetch");
+        Assert.Equal("Ready", status.Text);
+        Assert.False(cancel.IsEffectivelyVisible);
+        Assert.Empty(server.Requests);
+
+        // Step 2: "Fetch origin", held with a percentage shown.
+        var held = server.HoldNextFetchPack();
+        var fetch = repository.Operations.FetchAsync("origin");
+        await app.WaitForAsync(() => held.IsCompleted && status.Text?.EndsWith('%') == true, "the fetch's percentage", NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-17b-fetch-progress");
+        Assert.Matches(@"^Fetching from origin… Counting objects \d{1,3}%$", status.Text);
+        Assert.True(cancel.IsEffectivelyVisible);
+        Assert.True(progress.IsEffectivelyVisible);
+        Assert.False(progress.IsIndeterminate);
+        Assert.InRange(progress.Value, 1, 100);
+        var before = await repo.RefTargetAsync("refs/remotes/origin/main");
+
+        // Step 3: Cancel in the status bar.
+        app.Click(cancel);
+        await app.WaitForAsync(() => fetch.IsCompleted, "the cancelled fetch to end", NetworkTimeout);
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        server.Release();
+        TestPictures.Save(app, "remotes-17c-fetch-cancelled");
+        Assert.Equal("Fetch origin cancelled", status.Text);
+        Assert.False(cancel.IsEffectivelyVisible);
+        Assert.False(progress.IsEffectivelyVisible);
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+        Assert.Equal(before, await repo.RefTargetAsync("refs/remotes/origin/main"));
+
+        // Step 4: the toolbar's Fetch, held, then released.
+        held = server.HoldNextFetchPack();
+        app.Click(app.FindByAutomationId("FetchButton"));
+        await app.WaitForAsync(() => held.IsCompleted && status.Text?.EndsWith('%') == true, "the toolbar fetch's percentage", NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-17d-fetch-all-progress");
+        Assert.Matches(@"^Fetching from all remotes… Counting objects \d{1,3}%$", status.Text);
+        Assert.True(cancel.IsEffectivelyVisible);
+
+        server.Release();
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        TestPictures.Save(app, "remotes-17e-fetched");
+        Assert.Equal("Fetched from all remotes", status.Text);
+        Assert.Equal("Remote work", (await repo.GitAsync("log", "-1", "--format=%s", "refs/remotes/origin/main")).StandardOutput.Trim());
+        Assert.Equal(1, repository.Operations.CurrentBranch?.Behind);
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task Through_the_window_the_toolbars_Fetch_signs_in_through_the_credentials_dialog_and_a_wrong_password_fails()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0, "the graph");
+        await app.WaitForIdleAsync();
+        var status = (TextBlock)app.FindByAutomationId("OperationStatus");
+
+        // Check 21 step 1: the toolbar's Fetch asks for a sign-in.
+        app.Click(app.FindByAutomationId("FetchButton"));
+        var credentials = await app.WaitForDialogAsync<CredentialsViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-21a-credentials");
+        Assert.Equal($"Sign in to 127.0.0.1:{server.Port}", credentials.Title);
+        Assert.Equal("Fetching from all remotes…", status.Text);
+        Assert.True(app.FindByAutomationId("OperationCancelButton").IsEffectivelyVisible);
+
+        // Step 2: sign in; git's second question is answered with the kept password.
+        app.TypeInto("CredentialUsername", "alice");
+        app.TypeInto("CredentialPassword", "s3cret");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        TestPictures.Save(app, "remotes-21b-signed-in");
+        Assert.Equal("Fetched from all remotes", status.Text);
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+        Assert.Equal(1, repository.Operations.CurrentBranch?.Behind);
+
+        // Step 3: the dialog comes again; Cancel ends the fetch as cancelled, without an error dialog.
+        app.Click(app.FindByAutomationId("FetchButton"));
+        await app.WaitForDialogAsync<CredentialsViewModel>(NetworkTimeout);
+        app.Click(app.FindByAutomationId("CancelButton"));
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        TestPictures.Save(app, "remotes-21c-cancelled");
+        Assert.Equal("Fetch cancelled", status.Text);
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+
+        // Step 4: "Fetch origin" with a wrong password: the error dialog with git's own words.
+        var fetch = repository.Operations.FetchAsync("origin");
+        await app.WaitForDialogAsync<CredentialsViewModel>(NetworkTimeout);
+        app.TypeInto("CredentialUsername", "alice");
+        app.TypeInto("CredentialPassword", "wrong");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        var error = await app.WaitForDialogAsync<ErrorDialogViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-21d-wrong-password");
+        Assert.Equal(("Fetch failed", "Git could not fetch from origin.", "In auth", "git fetch --progress origin"), (error.Title, error.Summary, error.RepositoryText, error.Command));
+        Assert.Contains($"fatal: Authentication failed for 'http://127.0.0.1:{server.Port}/remote.git/'", error.Output, StringComparison.Ordinal);
+        Assert.Equal("Fetch origin failed", status.Text);
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => fetch.IsCompleted, "the failed fetch to end", NetworkTimeout);
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+
+        // Throughout: neither password is in a call record.
+        Assert.All(app.Session.GitCalls.Snapshot(), call =>
+        {
+            Assert.DoesNotContain("s3cret", call.CommandText + call.StandardOutput + call.StandardError, StringComparison.Ordinal);
+            Assert.DoesNotContain("wrong", call.CommandText + call.StandardOutput + call.StandardError, StringComparison.Ordinal);
+        });
     }
 
     /// <summary>What <paramref name="remote"/> (a folder remote) has at <paramref name="fullRef"/>, unpeeled; null when it has nothing there.</summary>
