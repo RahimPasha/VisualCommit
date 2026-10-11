@@ -11,7 +11,7 @@ namespace VisualCommit.Testing;
 /// <c>VisualCommit.Git.Tests/ScenarioTests.cs</c> that pins down what it contains.
 /// </para>
 /// </summary>
-public static class Scenarios
+public static partial class Scenarios
 {
     /// <summary>
     /// Three commits in a line on <c>main</c>:
