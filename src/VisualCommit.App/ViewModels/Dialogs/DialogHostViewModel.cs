@@ -72,6 +72,9 @@ public sealed partial class DialogHostViewModel : ObservableObject, IDialogServi
 
     public bool IsOpen => Current is not null;
 
+    /// <summary>ssh's notices, which get no dialog (docs/phase-3-design.md 3.2): the status bar shows the newest while it lasts.</summary>
+    public PromptNotices Notices { get; } = new();
+
     /// <summary>
     /// Raised when a dialog has closed, just before it leaves <see cref="Open"/>: the window moves
     /// the keyboard focus away from it first (to the dialog below, D104).
