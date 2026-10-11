@@ -77,6 +77,12 @@ public sealed class AutoFetchScheduler : IDisposable
     public Func<string, string?> ReadEnvironment { get; init; } = Environment.GetEnvironmentVariable;
 
     /// <summary>
+    /// How long ago opening a repository began, which the first auto-fetch counts from: the
+    /// repository's own stopwatch. Tests give their own, because they move a manual clock.
+    /// </summary>
+    public Func<RepositoryViewModel, TimeSpan> SinceOpening { get; init; } = repository => repository.TimeSinceOpening;
+
+    /// <summary>
     /// The interval: the environment variable when it holds a whole number, otherwise the
     /// setting; zero (or less) turns auto-fetch off.
     /// </summary>
@@ -194,7 +200,7 @@ public sealed class AutoFetchScheduler : IDisposable
     }
 
     /// <summary>Whether a finished operation fetched: a fetch, a pull or an auto-fetch, by its title (2.33) or its dedupe key (1.2).</summary>
-    internal static bool Fetched(GitOperation operation, OperationResult result) =>
+    public static bool Fetched(GitOperation operation, OperationResult result) =>
         result.Outcome == OperationOutcome.Succeeded
         && (operation.Title is "Fetch" or "Pull" or Title
             || operation.Title.StartsWith("Fetch ", StringComparison.Ordinal)
@@ -222,7 +228,7 @@ public sealed class AutoFetchScheduler : IDisposable
         }
 
         // The moment opening began: a tab made active long after it opened fetches at once.
-        tracked = new Tracked(this, now - repository.TimeSinceOpening);
+        tracked = new Tracked(this, now - SinceOpening(repository));
         _tracked.Add(repository, tracked);
         repository.Queue.Finished += tracked.OnFinished;
         return tracked;
