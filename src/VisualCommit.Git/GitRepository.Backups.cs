@@ -122,21 +122,22 @@ public sealed partial class GitRepository
         var status = await ReadPlainStatusAsync(cancellationToken).ConfigureAwait(false);
 
         // What a hard reset loses (2.11): every staged or unstaged tracked file, every file staged
-        // as new, and every file in the working tree that the index does not track but the target
-        // does, which the reset overwrites without a word: an untracked file, and an ignored one
-        // too (git overwrites it the same way, and the status does not list it). Files the target
-        // does not track are left alone by the reset and are not saved.
+        // as new, and every file in the working tree that the index does not track but that the
+        // reset overwrites or deletes without a word, an untracked file and an ignored one alike
+        // (the status does not list ignored files): one at a path the target tracks, every file
+        // in a folder where the target has a file, and a file where the target has a folder.
+        // Files the reset leaves alone are not saved.
         var paths = ChangedTrackedPaths(status);
-        var targetTask = ReadOutputAsync(cancellationToken, "ls-tree", "-r", "--name-only", "-z", target, "--");
+        var targetTask = ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", target, "--");
         var indexTask = ReadOutputAsync(cancellationToken, "ls-files", "-z");
         await Task.WhenAll(targetTask, indexTask).ConfigureAwait(false);
         var inIndex = SplitNul(await indexTask.ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
-        foreach (var path in SplitNul(await targetTask.ConfigureAwait(false)))
+        var collisions = new ResetCollisions(this, target, inIndex, paths);
+        foreach (var entry in SplitNul(await targetTask.ConfigureAwait(false)))
         {
-            if (!inIndex.Contains(path) && File.Exists(WorkingTreePath(path)))
-            {
-                paths.Add(path);
-            }
+            // "<mode> <type> <object>\t<path>"; a submodule's entry has the type "commit".
+            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
+            collisions.Add(entry[(tab + 1)..], entry.AsSpan(0, tab).Contains(" commit ", StringComparison.Ordinal));
         }
 
         if (paths.Count == 0)
@@ -161,6 +162,124 @@ public sealed partial class GitRepository
             indexCommit,
             $"VisualCommit: snapshot before a hard reset to {shortTarget}",
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Finds what <c>git reset --hard &lt;target&gt;</c> deletes or overwrites in the working tree
+    /// that the index does not track, path by path of the target (2.11). Git takes a path's place
+    /// whatever is there: a file at the path, everything inside a folder at the path (ignored
+    /// files and nested folders too), and a file where the path has a folder. Only paths that
+    /// the index does not track, or that are changed, can meet anything of the kind: a tracked
+    /// file that is unchanged is in the working tree as a file, below folders.
+    /// </summary>
+    private sealed class ResetCollisions(GitRepository repository, string target, HashSet<string> inIndex, SortedSet<string> paths)
+    {
+        private static readonly EnumerationOptions AllEntries = new() { AttributesToSkip = 0, IgnoreInaccessible = false, RecurseSubdirectories = false };
+
+        private readonly HashSet<string> _changed = new(paths, StringComparer.Ordinal);
+
+        /// <summary>Whether a folder of a target path is a folder (or missing) in the working tree, by folder.</summary>
+        private readonly Dictionary<string, bool> _folders = new(StringComparer.Ordinal);
+
+        public void Add(string path, bool isSubmodule)
+        {
+            if (inIndex.Contains(path) && !_changed.Contains(path))
+            {
+                return;
+            }
+
+            // A file (or link) where the path has a folder is deleted, and what lies beyond it
+            // is not this path's: git does not follow the link.
+            var slash = path.LastIndexOf('/');
+            if (slash > 0 && !IsFolderOrMissing(path[..slash]))
+            {
+                return;
+            }
+
+            var full = repository.WorkingTreePath(path);
+            if (IsFileOrLink(full))
+            {
+                AddUntracked(path);
+            }
+            else if (Directory.Exists(full) && !isSubmodule)
+            {
+                // A submodule's folder is left as it is; any other folder gives way to the file.
+                AddFolder(path, full);
+            }
+        }
+
+        private bool IsFolderOrMissing(string folder)
+        {
+            if (_folders.TryGetValue(folder, out var known))
+            {
+                return known;
+            }
+
+            var slash = folder.LastIndexOf('/');
+            var clear = slash <= 0 || IsFolderOrMissing(folder[..slash]);
+            if (clear && IsFileOrLink(repository.WorkingTreePath(folder)))
+            {
+                AddUntracked(folder);
+                clear = false;
+            }
+
+            _folders[folder] = clear;
+            return clear;
+        }
+
+        private void AddFolder(string relative, string full)
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(full, "*", AllEntries))
+            {
+                var name = Path.GetFileName(entry);
+                if (string.Equals(name, ".git", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Git deletes a repository nested here with its history, which no snapshot
+                    // commit can hold: the reset does not start.
+                    var shortTarget = target.Length > 7 ? target[..7] : target;
+                    throw new IOException(
+                        $"A hard reset to {shortTarget} would delete the repository in '{relative}', which a backup cannot keep. Move it out of the working tree first.");
+                }
+
+                if (IsFileOrLink(entry))
+                {
+                    AddUntracked($"{relative}/{name}");
+                }
+                else
+                {
+                    AddFolder($"{relative}/{name}", entry);
+                }
+            }
+        }
+
+        private void AddUntracked(string path)
+        {
+            if (!inIndex.Contains(path))
+            {
+                paths.Add(path);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a working-tree path is a file or a link (to a folder too, or broken), which git
+    /// takes as a file: not a real folder, and not missing.
+    /// </summary>
+    private static bool IsFileOrLink(string fullPath)
+    {
+        if (File.Exists(fullPath))
+        {
+            return true;
+        }
+
+        try
+        {
+            return new FileInfo(fullPath).LinkTarget is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     public async Task<string?> SnapshotTrackedChangesAsync(CancellationToken cancellationToken = default)
@@ -248,8 +367,8 @@ public sealed partial class GitRepository
         string subject,
         CancellationToken cancellationToken)
     {
-        var present = paths.Where(path => File.Exists(WorkingTreePath(path))).ToList();
-        var gone = paths.Where(path => !File.Exists(WorkingTreePath(path))).ToList();
+        var present = paths.Where(path => IsFileOrLink(WorkingTreePath(path))).ToList();
+        var gone = paths.Where(path => !IsFileOrLink(WorkingTreePath(path))).ToList();
 
         var index = Path.Combine(Path.GetTempPath(), $"visualcommit-snapshot-{Guid.NewGuid():N}.index");
         try
