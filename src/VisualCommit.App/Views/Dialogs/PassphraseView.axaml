@@ -25,7 +25,7 @@
                    Classes="dialogText"
                    Text="{Binding Text}"
                    AutomationProperties.AutomationId="PassphraseText" />
-        <TextBox Name="PassphraseBox"
+        <c:SecretTextBox Name="PassphraseBox"
                  Classes="dialogBox"
                  Text="{Binding Passphrase}"
                  PasswordChar="{x:Static vm:PromptDialogViewModel.MaskCharacter}"

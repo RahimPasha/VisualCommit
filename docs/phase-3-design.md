@@ -1704,7 +1704,10 @@ than one tab with a repository (the error dialog always does, in `ErrorRepositor
 <repo name>" in the secondary colour under the title (`DialogRepository`). The visual checks use
 one repository tab, so no picture shows it. An ssh "confirm" prompt (3.2) is the confirmation
 dialog with the title "ssh asks", ssh's text as its question, no detail and the buttons "Cancel"
-and "Yes" (D115).
+and "Yes" (D115). A masked box (`CredentialPassword`, `PassphraseBox`, a masked `PromptBox`) is
+a `SecretTextBox`: a stock text box whose automation peer reads as an empty value and raises no
+change of its text while it is masked, so that no UI Automation client can read the secret
+(D103); Avalonia's peers have no "is password" property to report instead.
 
 Each dialog root has an automation peer that makes it a control element (4a), so the
 real-window pass can wait for `RemotesDialog`, `ErrorDialog` and the others by id, not only for

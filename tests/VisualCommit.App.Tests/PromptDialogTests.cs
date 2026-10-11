@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -433,6 +434,65 @@ public class PromptDialogTests
     }
 
     [AvaloniaFact]
+    public async Task A_masked_box_gives_UI_Automation_none_of_what_is_typed_and_a_plain_one_gives_it_all()
+    {
+        // D103: any process of the user can walk the window's automation tree and read a text
+        // box's Value pattern, or listen to its changes; a password, passphrase or PIN reaches none.
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var presenter = new PromptDialogPresenter(app.Session.Services.DialogHost);
+        var cases = new (GitPrompt Prompt, string Box, string Typed, bool Masked)[]
+        {
+            (Prompt(GitPromptKind.Password, "Password for 'http://alice@127.0.0.1:47391': "), "CredentialPassword", "hunter2-password", true),
+            (Prompt(GitPromptKind.Passphrase, FakeSsh.PassphrasePrompt), "PassphraseBox", "hunter2-passphrase", true),
+            (Prompt(GitPromptKind.Other, FakeSsh.PinPrompt), "PromptBox", "hunter2-pin", true),
+            (Prompt(GitPromptKind.Other, "Verification code: "), "PromptBox", "424242", false),
+        };
+
+        foreach (var (prompt, boxId, typed, masked) in cases)
+        {
+            using var scope = new CancellationTokenSource();
+            var shown = presenter.ShowAsync(prompt, scope.Token);
+            app.Settle();
+            var raised = new List<string>();
+            foreach (var peer in AllPeers(ControlAutomationPeer.CreatePeerForElement(app.Window)))
+            {
+                peer.PropertyChanged += (_, e) => raised.Add($"{e.Property}: {e.OldValue} -> {e.NewValue}");
+            }
+
+            app.TypeInto(boxId, typed);
+            app.Settle();
+
+            var box = (TextBox)app.FindByAutomationId(boxId);
+            Assert.Equal((typed, masked), (box.Text, box.PasswordChar != '\0'));
+            var boxPeer = ControlAutomationPeer.CreatePeerForElement(box);
+            Assert.Equal(AutomationControlType.Edit, boxPeer.GetAutomationControlType());
+            var value = boxPeer.GetProvider<IValueProvider>();
+            Assert.NotNull(value);
+            var exposed = AllPeers(ControlAutomationPeer.CreatePeerForElement(app.Window))
+                .SelectMany(peer => new[] { peer.GetName(), peer.GetHelpText(), peer.GetPlaceholderText(), peer.GetProvider<IValueProvider>()?.Value })
+                .Concat(raised)
+                .Where(text => !string.IsNullOrEmpty(text))
+                .ToList();
+            if (masked)
+            {
+                Assert.Equal(string.Empty, value.Value);
+                Assert.DoesNotContain(exposed, text => text!.Contains(typed, StringComparison.Ordinal));
+            }
+            else
+            {
+                Assert.Equal(typed, value.Value);
+                Assert.Contains(exposed, text => text!.Contains(typed, StringComparison.Ordinal));
+            }
+
+            await scope.CancelAsync();
+            await WaitAsync(() => shown.IsCompleted, "the dialog to close");
+            app.Settle();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task The_real_helper_run_as_ssh_runs_it_gets_the_answers_of_the_apps_dialogs()
     {
         // Check 21b steps 4 to 6, and the notice (design 3.5): the session's broker and dialogs,
@@ -665,6 +725,22 @@ public class PromptDialogTests
                 found.Add(peer);
             }
 
+            foreach (var child in peer.GetChildren())
+            {
+                Collect(child);
+            }
+        }
+    }
+
+    private static List<AutomationPeer> AllPeers(AutomationPeer root)
+    {
+        var found = new List<AutomationPeer>();
+        Collect(root);
+        return found;
+
+        void Collect(AutomationPeer peer)
+        {
+            found.Add(peer);
             foreach (var child in peer.GetChildren())
             {
                 Collect(child);
