@@ -207,6 +207,41 @@ public partial class RepositoryOperationsTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task Push_clicked_again_after_a_commit_made_while_a_push_runs_pushes_that_commit_too()
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await repo.CommitFileAsync("src/first.txt", "first\n", "First change");
+
+        // origin.git's pre-receive hook holds the push until the test lets it go.
+        var origin = repo.SiblingPath("origin.git");
+        var entered = Path.Combine(origin, "hook-entered");
+        var gate = Path.Combine(origin, "hook-gate");
+        var hook = Path.Combine(origin, "hooks", "pre-receive");
+        Directory.CreateDirectory(Path.GetDirectoryName(hook)!);
+        File.WriteAllText(hook, "#!/bin/sh\ntouch hook-entered\nwhile [ ! -f hook-gate ]; do sleep 0.1; done\ncat >/dev/null\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var first = app.Operations.PushCurrentBranchAsync();
+        await WaitUntilAsync(() => File.Exists(entered), "the push to reach the remote");
+
+        // The push has chosen what it sends; the user commits and clicks Push again.
+        var second = await repo.CommitFileAsync("src/second.txt", "second\n", "Second change");
+        var again = app.Operations.PushCurrentBranchAsync();
+        Assert.Equal(1, app.Repository.Queue.Waiting);
+        File.WriteAllText(gate, string.Empty);
+        await Task.WhenAll(first, again).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(second, await RemoteHeadAsync(repo, "refs/heads/main"));
+        Assert.Equal(0, app.Operations.CurrentBranch?.Ahead);
+        Assert.Equal("Pushed main to origin/main", app.StatusText);
+        Assert.Equal(2, Ran(app, "Push main"));
+    }
+
     /// <summary>
     /// Queues an operation of the test's own that waits until the returned source is set, then
     /// runs <paramref name="then"/> (a change to the repository, as an operation ahead of the one

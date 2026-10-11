@@ -327,16 +327,13 @@ public sealed class OperationQueue : IOperationQueue
             exception.ExitCode);
     }
 
-    /// <summary>A running (not background) or waiting operation with this dedupe key.</summary>
-    private Entry? FindByKey(string key)
-    {
-        if (_running is { Operation.IsBackground: false } running && running.Operation.DedupeKey == key)
-        {
-            return running;
-        }
-
-        return _waiting.FirstOrDefault(entry => entry.Operation.DedupeKey == key);
-    }
+    /// <summary>
+    /// A waiting operation with this dedupe key. A running one is never merged with: it has
+    /// already read what it acts on (a push has chosen the commits it sends, before a commit made
+    /// since), and one whose cancel was requested would end cancelled, so a second click on it
+    /// is queued behind it and runs.
+    /// </summary>
+    private Entry? FindByKey(string key) => _waiting.FirstOrDefault(entry => entry.Operation.DedupeKey == key);
 
     private List<TaskCompletionSource> TakeIdleWaiters()
     {

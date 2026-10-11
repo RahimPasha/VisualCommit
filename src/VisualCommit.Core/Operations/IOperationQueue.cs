@@ -14,15 +14,16 @@ public interface IOperationQueue : IDisposable
     /// <see cref="OperationOutcome.Failed"/> or <see cref="OperationOutcome.Cancelled"/> result.
     /// Call it on the UI thread: the operation runs on the caller's synchronization context.
     /// A queue that is disposed returns <see cref="OperationOutcome.Cancelled"/> at once.
-    /// An operation with the <see cref="GitOperation.DedupeKey"/> of one that waits or runs gets
-    /// that one's task.
+    /// An operation with the <see cref="GitOperation.DedupeKey"/> of one that waits gets that
+    /// one's task; one that runs is never merged with, so the new one waits behind it.
     /// </summary>
     Task<OperationResult> RunAsync(GitOperation operation);
 
     /// <summary>
     /// Starts <paramref name="operation"/> as a background operation (auto-fetch) only when
-    /// nothing runs or waits; returns false otherwise. A background operation is never cancelled
-    /// or pre-empted: operations queued meanwhile wait for it (1.8, D85).
+    /// nothing runs or waits; returns false otherwise. A background operation is never pre-empted:
+    /// operations queued meanwhile wait for it (1.8, D85). While one of them waits, the user can
+    /// cancel it (<see cref="OperationSnapshot.CanCancel"/>); closing the tab leaves it running.
     /// </summary>
     bool TryStartInBackground(GitOperation operation);
 
@@ -38,7 +39,7 @@ public interface IOperationQueue : IDisposable
     /// <summary>The last result of an operation that was not in the background, or null.</summary>
     OperationResult? LastResult { get; }
 
-    /// <summary>Cancels the running operation when <see cref="OperationSnapshot.CanCancel"/>; does nothing otherwise (a background operation is never cancelled).</summary>
+    /// <summary>Cancels the running operation when <see cref="OperationSnapshot.CanCancel"/>; does nothing otherwise (a background operation only while an operation of the user waits for it).</summary>
     void CancelCurrent();
 
     /// <summary>

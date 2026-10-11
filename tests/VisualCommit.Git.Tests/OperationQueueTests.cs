@@ -61,7 +61,7 @@ public class OperationQueueTests
     }
 
     [Fact]
-    public async Task A_second_operation_with_the_dedupe_key_of_a_waiting_or_running_one_gets_its_task()
+    public async Task A_second_operation_with_the_dedupe_key_of_a_waiting_one_gets_its_task_but_never_that_of_a_running_one()
     {
         using var queue = new TestQueue();
         var gate = new TaskCompletionSource();
@@ -74,17 +74,51 @@ public class OperationQueueTests
         })
         { DedupeKey = key };
 
+        // A running operation has already read what it acts on (a push, the commits it sends):
+        // the same request made while it runs waits behind it and runs (review: queue).
         var running = queue.Queue.RunAsync(Fetch("fetch:*"));
-        var sameWhileRunning = queue.Queue.RunAsync(Fetch("fetch:*"));
+        var whileRunning = queue.Queue.RunAsync(Fetch("fetch:*"));
+        var sameWhileWaiting = queue.Queue.RunAsync(Fetch("fetch:*"));
         var other = queue.Queue.RunAsync(Fetch("fetch:origin"));
-        var sameWhileWaiting = queue.Queue.RunAsync(Fetch("fetch:origin"));
+        var otherWhileWaiting = queue.Queue.RunAsync(Fetch("fetch:origin"));
         var withoutKey = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done(string.Empty))));
 
-        Assert.Same(running, sameWhileRunning);
-        Assert.Same(other, sameWhileWaiting);
-        Assert.Equal(2, queue.Queue.Waiting);
+        Assert.NotSame(running, whileRunning);
+        Assert.Same(whileRunning, sameWhileWaiting);
+        Assert.Same(other, otherWhileWaiting);
+        Assert.Equal(3, queue.Queue.Waiting);
         gate.SetResult();
-        await Task.WhenAll(running, other, withoutKey).WaitAsync(Patience, TestCancelled);
+        await Task.WhenAll(running, whileRunning, other, withoutKey).WaitAsync(Patience, TestCancelled);
+        Assert.Equal(3, fetches);
+    }
+
+    [Fact]
+    public async Task The_same_request_again_after_Cancel_runs_once_the_cancelled_one_has_ended()
+    {
+        using var queue = new TestQueue();
+        var started = new TaskCompletionSource();
+        var fetches = 0;
+        var first = queue.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.Refs, async context =>
+        {
+            Interlocked.Increment(ref fetches);
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Fetched from origin");
+        })
+        { DedupeKey = "fetch:origin" });
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        queue.Queue.CancelCurrent();
+        var retry = queue.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.Refs, _ =>
+        {
+            Interlocked.Increment(ref fetches);
+            return Task.FromResult(OperationReport.Done("Fetched from origin"));
+        })
+        { DedupeKey = "fetch:origin" });
+
+        Assert.NotSame(first, retry);
+        Assert.Equal(OperationOutcome.Cancelled, (await first.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal((OperationOutcome.Succeeded, "Fetched from origin"), ((await retry.WaitAsync(Patience, TestCancelled)).Outcome, (await retry).Message));
         Assert.Equal(2, fetches);
     }
 
