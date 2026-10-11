@@ -27,9 +27,10 @@ public class TempRepoClockTests
         Assert.Equal(later, other.ClockTime);
         await other.GitAsync("checkout", "--quiet", "-B", "main", "refs/remotes/origin/main");
         await other.CommitFileAsync("src/other.txt", "other\n", "Other work");
+        (DateTimeOffset, TimeSpan)[] authorAndCommitter = [(later, TimeSpan.Zero), (later, TimeSpan.Zero)];
         Assert.Equal(
-            "2026-01-02T09:01:00+00:00 2026-01-02T09:01:00+00:00",
-            (await other.GitAsync("log", "-1", "--format=%aI %cI")).StandardOutput.Trim());
+            authorAndCommitter,
+            GitIsoDates.ParseLines((await other.GitAsync("log", "-1", "--format=%aI%n%cI")).StandardOutput).Select(date => (date, date.Offset)));
 
         // A minute per commit from there, for both.
         Assert.Equal(later.AddMinutes(1), sync.ClockTime);

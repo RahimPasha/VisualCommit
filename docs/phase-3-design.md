@@ -1167,16 +1167,16 @@ dialog "Fetch origin — auth"; the log `auth: Fetch origin: Cancelled after <N>
   (section 0, checked on Windows). No quoting is added.
 - **The helper** (about 80 lines, no Avalonia):
   1. `VISUALCOMMIT_ASKPASS_DENY=1`, or no pipe or token → exit 1 at once, printing nothing.
-  2. Connect `NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.CurrentUserOnly)`
-     within 5 seconds, else exit 1.
+  2. Connect `NamedPipeClientStream(".", pipe, PipeDirection.InOut, …)` within 5 seconds, else
+     exit 1, and check that the pipe is the user's own (3.4), else exit 1.
   3. Send one UTF-8 line of JSON: `{"token":…,"operation":…,"prompt":<args[0]>,"sshPrompt":<SSH_ASKPASS_PROMPT or null>}`.
   4. Read one line `{"answer":<string or null>}`. Null, a closed pipe or a malformed line →
      exit 1. Otherwise write the answer and `\n` to standard output, exit 0 (for
      `SSH_ASKPASS_PROMPT=confirm` an answer means yes).
 - **The server** (`src/VisualCommit.Git/Prompts/AskPassBroker.cs`, implements Core's
   `IGitPromptBroker`, one per app session, created in `AppSession.Start`): a
-  `NamedPipeServerStream` loop (up to 4 instances, `PipeOptions.CurrentUserOnly |
-  Asynchronous`), one request per connection, lines up to 64 KiB, the token compared with
+  `NamedPipeServerStream` loop (up to 4 instances, asynchronous, for the user only: 3.4), one
+  request per connection, lines up to 64 KiB, the token compared with
   `CryptographicOperations.FixedTimeEquals`. `Begin(string title, string repositoryName,
   PromptMode mode, string? operationId = null)` returns a `PromptScope`, an abstract class in
   Core (`Id`, `Environment`, `UserCancelled`, `IsDisposed`, `Dispose`, a virtual `OnDisposed`);
@@ -1240,9 +1240,16 @@ an error (2.16). Answers are never logged, never put in a `GitCommand` and never
 
 ### 3.4 Security of the channel
 
-The pipe is created for the current user only (`CurrentUserOnly`: an ACL on Windows, the
-socket's owner check on macOS and Linux); the token, generated per app session and passed only
-in the environment of the git processes the app starts, must match; the operation id must
+The pipe is created for the current user only, and the helper talks only to a pipe of its own
+user: on macOS and Linux both ends use `PipeOptions.CurrentUserOnly` (the socket's user is
+checked); on Windows the pipe's ACL gives full control to the user of the app's access token
+alone and makes that user the owner, and the helper checks that owner against the user of its
+own token (`WindowsPipeUser`). `CurrentUserOnly` is not used on Windows because it compares the
+tokens' default owners, which differ in an elevated app (the Administrators group) and in the
+helper that Git for Windows' ssh, an MSYS2 program, starts (the MSYS2 runtime sets the user):
+there every ssh prompt failed unasked (found by CI's elevated Windows runner, run 38135815641).
+The token, generated per app session and passed only in the environment of the git processes
+the app starts, must match; the operation id must
 belong to an open scope, so a stale or forged request gets nothing; one request per
 connection, bounded in size. The trust boundary is the user account, as for GCM: another
 process of the same user that reads git's environment could ask, and would only get an answer
@@ -1255,7 +1262,7 @@ by showing the user a dialog that names the operation.
 | Classification | recorded prompt texts of git 2.30 to 2.55 and OpenSSH 8.x/9.x | `Git.Tests/PromptClassifierTests` |
 | Helper and server end to end, as git runs them | `git credential fill` with `GIT_ASKPASS` = the real helper (and a copy of the helper's folder under a path with spaces); a scripted `IGitPromptHandler` answers alice/s3cret → git prints them; a wrong token, an unknown operation id, a null answer, a closed scope, `DENY=1` → git fails with `could not read Username` | `Git.Tests/AskPassTests` |
 | HTTPS sign-in against a real server | `AuthRemoteServer` (7.3) demands Basic auth: fetch, pull and push with the scripted handler succeed; a wrong password fails as `AuthenticationFailed`; a cancelled prompt gives `Cancelled`; `Deny` fails without calling the handler | `Git.Tests/AuthenticatedRemoteTests` |
-| ssh passphrase through `SSH_ASKPASS_REQUIRE` | `ssh-keygen -y -f <key encrypted with s3cret>` with the `Ask` environment and standard input closed: the handler receives a `Passphrase` prompt and the public key comes out. `ssh-keygen` is found next to git on Windows (`<git>/../usr/bin`) and on PATH elsewhere; `scripts/setup-linux.sh` installs `openssh-client` | `Git.Tests/AskPassTests` |
+| ssh passphrase through `SSH_ASKPASS_REQUIRE` | `ssh-keygen -y -f <key encrypted with s3cret>` with the `Ask` environment and standard input closed: the handler receives a `Passphrase` prompt and the public key comes out. `ssh-keygen` is found next to git on Windows (`<git>/../usr/bin`) and on PATH elsewhere; `scripts/setup-linux.sh` installs `openssh-client`. On Windows this ssh-keygen is an MSYS2 program, so in an elevated run (CI's) it also proves 3.4's owner check; a second test checks that the pipe belongs to the token's user | `Git.Tests/AskPassTests` |
 | The dialogs | headless: fetch from the auth server, the credentials dialog appears, typing and "Sign in" complete the fetch; Cancel ends it as cancelled | `App.Tests`, scripted check |
 | Passphrase, unknown-host and generic prompt dialogs, as ssh would reach them | the real helper is run as OpenSSH runs it (the prompt as its argument, `SSH_ASKPASS_PROMPT` set as ssh sets it, with the `Ask` environment of an open scope) with recorded OpenSSH texts: `Enter passphrase for key '/home/u/.ssh/id_ed25519': `, the host-key question, `confirm` and an unknown text. The app's broker and `PromptDialogs` show the real dialog, the script types and confirms, and the helper prints the answer. No ssh server is needed | `App.Tests` (`PromptDialogTests`, `AskPassRunner`); the `confirm` and `none` cases only here |
 | The same dialogs through a real fetch (D115) | a remote `fake-ssh` (`ssh://git@example.invalid/x.git`) with `core.sshCommand` set to a test script (`FakeSsh`, WP-S2; `ssh.variant=simple`) that runs `"$SSH_ASKPASS"` with the recorded passphrase, host-key and PIN texts in turn (`SSH_ASKPASS_PROMPT` unset, as OpenSSH 8.9), appends each answer to a file, prints a recorded refusal and exits 1. "Fetch fake-ssh" from the remote's menu shows each dialog in turn over the running fetch; the fetch then fails ("Fetch failed") | check 21b steps 1 to 3, scripted and real window |

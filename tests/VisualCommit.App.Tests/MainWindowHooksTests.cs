@@ -116,8 +116,10 @@ public class MainWindowHooksTests
             return OperationReport.Done("Fetched");
         }));
 
-        // Wait for each step rather than settling once: macOS CI (run 38129130225) looked for the
-        // dialog before the second close had opened it.
+        // On CI (runs 38129130225, 38131248658 and 38135815641) the second close came before the
+        // app had acted on "Keep open", and asked nothing: the close waited for the dialog that
+        // had just closed. Closing_again_at_once_after_Keep_open_asks_again makes that order
+        // certain.
         app.Window.Close();
         await app.WaitForAsync(() => app.Session.Shell.Dialogs.Current is FinishingDialogViewModel, "the finishing dialog");
         app.PressKey(Key.Escape);
@@ -131,6 +133,49 @@ public class MainWindowHooksTests
         await app.WaitForAsync(() => !app.Window.IsVisible, "the window to close");
 
         // The session ends with the window: closing the tabs stops the network operation.
+        app.Session.Shell.CloseAll();
+        Assert.Equal(OperationOutcome.Cancelled, (await running).Outcome);
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_again_at_once_after_Keep_open_asks_again()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var gate = new TaskCompletionSource();
+        var running = repository.Queue.RunAsync(new GitOperation("Fetch", "Fetching…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            await gate.Task.WaitAsync(context.CancellationToken);
+            return OperationReport.Done("Fetched");
+        }));
+        app.Window.Close();
+        var first = Assert.IsType<FinishingDialogViewModel>(app.Session.Shell.Dialogs.Current);
+
+        // "Keep open", and the window closed again before the UI thread has done anything else:
+        // the app acts on the dialog's answer in a continuation that has not run yet (CI's
+        // runners got there in run 38135815641). The dialog has closed, so this close asks again.
+        Assert.True(app.Session.Shell.Dialogs.CancelCurrent());
+        Assert.True(first.IsClosed);
+        app.Window.Close();
+
+        var second = Assert.IsType<FinishingDialogViewModel>(app.Session.Shell.Dialogs.Current);
+        Assert.NotSame(first, second);
+        Assert.Single(app.Session.Shell.Dialogs.Open);
+        Assert.True(app.Window.IsVisible);
+
+        // The first answer, once acted on, changes nothing: the window waits for the second
+        // dialog, a further close opens no third, and the second's "Quit now" closes the window.
+        await first.Result;
+        app.Settle();
+        app.Window.Close();
+        Assert.Same(second, app.Session.Shell.Dialogs.Current);
+        Assert.Single(app.Session.Shell.Dialogs.Open);
+        second.QuitNowCommand.Execute(null);
+        await app.WaitForAsync(() => !app.Window.IsVisible, "the window to close");
+
         app.Session.Shell.CloseAll();
         Assert.Equal(OperationOutcome.Cancelled, (await running).Outcome);
     }
