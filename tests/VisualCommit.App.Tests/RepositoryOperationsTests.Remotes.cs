@@ -1,5 +1,7 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -1099,6 +1101,137 @@ public partial class RepositoryOperationsTests
             Assert.DoesNotContain("s3cret", call.CommandText + call.StandardOutput + call.StandardError, StringComparison.Ordinal);
             Assert.DoesNotContain("wrong", call.CommandText + call.StandardOutput + call.StandardError, StringComparison.Ordinal);
         });
+    }
+
+    [AvaloniaFact]
+    public async Task Through_the_window_the_dialogs_of_the_remote_operations_open_and_their_results_show()
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/remote.txt", "remote\n", "Remote change");
+        await repo.CommitFileAsync("src/local.txt", "local\n", "Local change");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0, "the graph");
+        await app.WaitForIdleAsync();
+        var status = (TextBlock)app.FindByAutomationId("OperationStatus");
+        var operations = repository.Operations;
+
+        // Check 19 steps 1 and 2: the toolbar's Push is rejected; "Pull" pulls.
+        app.Click(app.FindByAutomationId("PushButton"));
+        var rejected = await app.WaitForDialogAsync<ErrorDialogViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-19a-push-rejected");
+        Assert.Equal(("Push rejected", "Pull"), (rejected.Title, rejected.ExtraAction));
+        Assert.Equal("Push main failed", status.Text);
+        app.Click(app.FindByAutomationId("ErrorExtraButton"));
+        await app.WaitForAsync(() => status.Text == "Pulled and merged origin/main into main", "the pull", NetworkTimeout);
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        TestPictures.Save(app, "remotes-19b-pulled");
+        Assert.False(app.Session.Services.DialogHost.IsOpen);
+
+        // Check 28 step 2: the pick dialog, filtered, an item clicked.
+        var picking = operations.SetUpstreamAsync("refs/heads/topic");
+        await app.WaitForDialogAsync<PickDialogViewModel>(NetworkTimeout);
+        app.TypeInto("PickFilter", "pub");
+        app.Click(DialogControl(app, "PickItem", "origin/published"));
+        app.Settle();
+        TestPictures.Save(app, "remotes-28b-pick");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => picking.IsCompleted, "the upstream to be set", NetworkTimeout);
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        Assert.Equal("topic now tracks origin/published", status.Text);
+        await operations.UnsetUpstreamAsync("refs/heads/topic");
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        Assert.Equal("topic no longer tracks origin/published", status.Text);
+
+        // Check 29 steps 1 and 2: the push dialog of a branch without an upstream.
+        var pushing = operations.PushBranchAsync("refs/heads/topic");
+        await app.WaitForDialogAsync<PushDialogViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-29a-push-dialog");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => pushing.IsCompleted, "the push", NetworkTimeout);
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        TestPictures.Save(app, "remotes-29b-pushed");
+        Assert.Equal("Pushed topic to origin/topic, and set it as upstream", status.Text);
+
+        // Check 20's confirmation, cancelled.
+        var forcing = operations.ForcePushAsync("refs/heads/published");
+        await app.WaitForDialogAsync<ConfirmationViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-20c-force-push-confirmation");
+        app.Click(app.FindByAutomationId("CancelButton"));
+        await app.WaitForAsync(() => forcing.IsCompleted, "the cancelled force push", NetworkTimeout);
+        Assert.Empty(await repo.BackupRefsAsync());
+
+        // Check 30 step 4: delete a branch on its remote.
+        var deleting = operations.DeleteRemoteBranchAsync("refs/remotes/origin/published");
+        await app.WaitForDialogAsync<ConfirmationViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-30d-delete-confirmation");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => deleting.IsCompleted, "the deletion", NetworkTimeout);
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+        TestPictures.Save(app, "remotes-30e-deleted");
+        Assert.Equal("Deleted published on origin", status.Text);
+
+        // Check 22: the Remotes dialog, its form, and the removal's confirmation stacked over it (cancelled).
+        var managing = operations.ManageRemotesAsync();
+        await app.WaitForDialogAsync<RemotesDialogViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-22a-remotes");
+        app.Click(app.FindByAutomationId("AddRemoteButton"));
+        app.TypeInto("RemoteNameBox", "mirror");
+        app.Settle();
+        TestPictures.Save(app, "remotes-22-add-form");
+        app.Click(app.FindByAutomationId("CancelButton"));
+        app.Click(app.FindByAutomationId("RemoteRemoveButton"));
+        await app.WaitForDialogAsync<ConfirmationViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-22d-remove-stacked");
+        app.Click(app.FindByAutomationId("CancelButton"));
+        await app.WaitForDialogAsync<RemotesDialogViewModel>(NetworkTimeout);
+        app.Click(app.FindByAutomationId("CancelButton"));
+        await app.WaitForAsync(() => managing.IsCompleted, "the Remotes dialog to close", NetworkTimeout);
+        Assert.Equal("origin", (await repo.GitAsync("remote")).StandardOutput.Trim());
+    }
+
+    [AvaloniaFact]
+    public async Task Through_the_window_a_tag_is_pushed_to_the_remote_chosen_in_the_choice_dialog()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.AddBareRemoteAsync("mirror");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0, "the graph");
+        await app.WaitForIdleAsync();
+
+        var pushing = repository.Operations.PushTagAsync("refs/tags/v1.0");
+        await app.WaitForDialogAsync<ChoiceDialogViewModel>(NetworkTimeout);
+        app.Settle();
+        TestPictures.Save(app, "remotes-29c-choice");
+        app.Click(DialogControl(app, "ChoiceOption", "origin"));
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => pushing.IsCompleted, "the push", NetworkTimeout);
+        await app.WaitForIdleAsync(repository, NetworkTimeout);
+
+        Assert.Equal("Pushed tag v1.0 to origin", ((TextBlock)app.FindByAutomationId("OperationStatus")).Text);
+        Assert.Equal(await repo.RefTargetAsync("refs/tags/v1.0"), await RemoteHeadAsync(repo, "refs/tags/v1.0"));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/tags/v1.0", "mirror"));
+    }
+
+    /// <summary>The control <paramref name="automationId"/> of the dialog on top that stands for <paramref name="text"/> (a list item, a radio button).</summary>
+    private static Control DialogControl(ShellDriver app, string automationId, string text)
+    {
+        var dialog = app.TopDialogView ?? throw new InvalidOperationException("No dialog is open.");
+        return dialog.GetVisualDescendants().OfType<Control>().First(control =>
+            AutomationProperties.GetAutomationId(control) == automationId
+            && control.IsEffectivelyVisible
+            && (control.DataContext is string item ? item == text : control.DataContext is ChoiceOption option && option.Text == text));
     }
 
     /// <summary>What <paramref name="remote"/> (a folder remote) has at <paramref name="fullRef"/>, unpeeled; null when it has nothing there.</summary>
