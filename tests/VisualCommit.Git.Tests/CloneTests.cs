@@ -147,7 +147,7 @@ public class CloneTests(CloneTests.Source source) : IClassFixture<CloneTests.Sou
         "Cloning into 'copy'...\nremote: Compressing objects:  50% (1/2)\u001b[K\nResolving deltas: 100% (3/3), done.\nUpdating files:  33% (1/3)\rwarning: Clone succeeded, but checkout failed.\n",
         "warning: Clone succeeded, but checkout failed.")]
     public void The_error_text_of_a_failed_clone_leaves_out_only_gits_progress_lines(string standardError, string expected) =>
-        Assert.Equal(expected, GitRepository.CloneErrorText(standardError));
+        Assert.Equal(expected, VisualCommit.Core.Operations.GitOutputCleaner.Clean(standardError));
 
     [Fact]
     public async Task A_cancelled_clone_removes_what_it_created()

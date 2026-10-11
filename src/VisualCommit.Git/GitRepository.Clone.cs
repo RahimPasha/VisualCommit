@@ -1,6 +1,6 @@
-using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Git;
 
@@ -10,13 +10,15 @@ public sealed partial class GitRepository
     /// Clones <paramref name="url"/> into <paramref name="destination"/> and opens the result,
     /// reporting git's progress lines as they come (see <see cref="CloneProgressParser"/>).
     /// <para>
-    /// Git cannot ask for credentials (the runner turns prompts off), so a clone that needs them
-    /// fails with git's message. If the clone fails or is cancelled, a destination folder the
-    /// clone created is removed again; a destination that existed (empty) is emptied and kept.
+    /// The runner turns git's terminal prompts off. <paramref name="environment"/> holds the
+    /// variables of the clone's prompt scope (phase 3 design 3.3), which lead git's and ssh's
+    /// prompts to the app's dialogs; without it a clone that needs credentials fails with git's
+    /// message. If the clone fails or is cancelled, a destination folder the clone created is
+    /// removed again; a destination that existed (empty) is emptied and kept.
     /// </para>
     /// </summary>
     /// <exception cref="IOException">The destination is a file, or a folder that is not empty.</exception>
-    /// <exception cref="GitException">Git reported an error; the message is git's own.</exception>
+    /// <exception cref="GitException">Git reported an error; the message is git's own, without its progress lines (<see cref="GitOutputCleaner"/>).</exception>
     /// <exception cref="OperationCanceledException">The token was cancelled; git was stopped.</exception>
     public static async Task<GitRepository> CloneAsync(
         IGitRunner runner,
@@ -24,7 +26,8 @@ public sealed partial class GitRepository
         string destination,
         IProgress<CloneProgress>? progress,
         CancellationToken cancellationToken = default,
-        IAppLog? log = null)
+        IAppLog? log = null,
+        IReadOnlyDictionary<string, string?>? environment = null)
     {
         ArgumentNullException.ThrowIfNull(runner);
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
@@ -57,6 +60,7 @@ public sealed partial class GitRepository
         var command = new GitCommand("clone", "--progress", "--", url, Path.GetFileName(target))
         {
             WorkingDirectory = parent,
+            Environment = environment ?? new Dictionary<string, string?>(),
             OnErrorLine = line =>
             {
                 if (progress is not null && CloneProgressParser.Parse(line) is { } parsed)
@@ -71,9 +75,11 @@ public sealed partial class GitRepository
             var result = await runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
             if (!result.Succeeded)
             {
-                // Git shows URLs without their credentials; the error text is cleaned all the same,
-                // because the app shows it.
-                throw new GitException(command.DisplayText, result.ExitCode, GitCommand.HideCredentials(CloneErrorText(result.StandardError)));
+                // A failure in the middle of a clone leaves progress lines in front of the message
+                // that matters. Git shows URLs without their credentials; the text is cleaned of
+                // them all the same, because the app shows it.
+                var text = GitOutputCleaner.Clean(result.StandardError, result.StandardOutput);
+                throw new GitException(command.DisplayText, result.ExitCode, text.Length > 0 ? text : GitCommand.HideCredentials(result.StandardError));
             }
 
             return await OpenAsync(runner, target, cancellationToken, log).ConfigureAwait(false);
@@ -85,29 +91,6 @@ public sealed partial class GitRepository
             throw;
         }
     }
-
-    /// <summary>
-    /// Git's error output without its progress lines, which a failure in the middle of a clone
-    /// leaves in front of the message that matters. Only lines of git's progress shape are left
-    /// out (see <see cref="ProgressLinePattern"/>), so a message that merely holds a percent sign
-    /// after a digit, such as a URL with <c>%20</c> in it, is kept.
-    /// </summary>
-    internal static string CloneErrorText(string standardError)
-    {
-        var lines = standardError
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => !line.StartsWith("Cloning into ", StringComparison.Ordinal) && !ProgressLinePattern().IsMatch(line));
-        var text = string.Join('\n', lines);
-        return text.Length > 0 ? text : standardError;
-    }
-
-    /// <summary>
-    /// A progress line of git or of the other side: an optional <c>remote: </c>, a stage made of
-    /// words, a colon, spaces and a percentage, as in <c>Receiving objects:  45% (9/20), 1.20 MiB</c>
-    /// or <c>remote: Counting objects: 100% (5/5), done.</c>
-    /// </summary>
-    [GeneratedRegex(@"^(?:remote: )?[A-Za-z][A-Za-z ]*: +[0-9]{1,3}%")]
-    private static partial Regex ProgressLinePattern();
 
     /// <summary>
     /// Removes what a failed or cancelled clone wrote. Git marks its object files read-only, and
