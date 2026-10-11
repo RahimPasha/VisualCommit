@@ -409,7 +409,12 @@ public sealed partial class RepositoryOperations
             return default;
         }
 
-        dialog.RepositoryName = NamesRepositoryInDialogs ? Repository.Name : null;
+        if (NamesRepositoryInDialogs)
+        {
+            // An error dialog names its repository always, from its constructor (4f).
+            dialog.RepositoryName = Repository.Name;
+        }
+
         return await layer.ShowAsync(dialog);
     }
 
