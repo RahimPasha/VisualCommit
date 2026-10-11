@@ -345,6 +345,13 @@ public partial class MainWindow : Window
         else if (DialogLayer.ContainerFromItem(dialog) is { } view)
         {
             view.IsVisible = false;
+
+            // The last dialog closed: the focus goes back to where it was when the dialog opened
+            // (the graph, after a dialog opened from a menu), so that the keyboard goes on there.
+            if (before is InputElement { IsEffectivelyVisible: true } previous && previous.IsAttachedToVisualTree())
+            {
+                previous.Focus(NavigationMethod.Unspecified);
+            }
         }
     }
 
