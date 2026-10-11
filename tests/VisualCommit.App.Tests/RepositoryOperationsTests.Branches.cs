@@ -1,9 +1,12 @@
 using System.Text.RegularExpressions;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using Stopped = VisualCommit.Testing.Scenarios.InProgressKind;
 
@@ -1140,7 +1143,199 @@ public partial class RepositoryOperationsTests
         Assert.DoesNotContain(app.Log.Messages, message => message.Contains(" after ", StringComparison.Ordinal) && message.Contains("Succeeded", StringComparison.Ordinal));
     }
 
+    // ---- In the window (the headless driver): the dialogs and results as the checks show them ----
+    // Until the menus are built the operations are started by their methods, as a menu item would.
+    // With VISUALCOMMIT_TEST_PICTURES set, each step is saved as a picture to look at (TestPictures).
+
+    [AvaloniaFact]
+    public async Task In_the_window_a_blocked_checkout_its_stash_and_its_conflicts_show_as_checks_14_and_14b_say()
+    {
+        using var repo = await Scenarios.CheckoutBlockedAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var operations = (await GraphShownAsync(app)).Operations;
+
+        var run = operations.CheckoutAsync("refs/heads/feature/addfile");
+        await app.WaitForDialogAsync<ErrorDialogViewModel>();
+        Assert.Equal("Checkout blocked", TextOf(app, "ErrorTitle"));
+        Assert.Equal("Untracked files are in the way: feature/addfile has files with the same names. Move or delete them, then check out again.", TextOf(app, "ErrorSummary"));
+        Assert.Equal("In blocked", TextOf(app, "ErrorRepository"));
+        Assert.Contains("newfile.txt", TextOf(app, "ErrorOutput"), StringComparison.Ordinal);
+        Assert.False(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
+        Assert.Equal("Check out feature/addfile failed", TextOf(app, "OperationStatus"));
+        TestPictures.Save(app, "wp7-14a-untracked-in-the-way");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await run;
+
+        run = operations.CheckoutAsync("refs/heads/feature/other");
+        await app.WaitForDialogAsync<ErrorDialogViewModel>();
+        Assert.Equal("Your changes to these files would be overwritten by checking out feature/other.", TextOf(app, "ErrorSummary"));
+        Assert.Equal("Stash changes and check out", ((Button)app.FindByAutomationId("ErrorExtraButton")).Content);
+        Assert.True(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
+        TestPictures.Save(app, "wp7-14b-tracked-changes-in-the-way");
+        app.Click(app.FindByAutomationId("ErrorExtraButton"));
+        await run;
+        await app.WaitForIdleAsync();
+        Assert.Null(app.TopDialogView);
+        Assert.Equal("Checked out feature/other and re-applied your changes", TextOf(app, "OperationStatus"));
+        Assert.Equal("feature/other", TextOf(app, "CurrentBranch"));
+        TestPictures.Save(app, "wp7-14c-stashed-and-checked-out");
+
+        run = operations.CheckoutAsync("refs/heads/feature/clash");
+        await app.WaitForDialogAsync<ErrorDialogViewModel>();
+        app.Click(app.FindByAutomationId("ErrorExtraButton"));
+        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is ErrorDialogViewModel { Title: "Changes re-applied with conflicts" }, "the information dialog");
+        Assert.Equal(
+            "Checked out feature/clash. Re-applying your changes stopped with conflicts in 1 file. Your changes are kept in the stash \"VisualCommit: before checking out feature/clash\".",
+            TextOf(app, "ErrorSummary"));
+        Assert.False(app.FindByAutomationId("ErrorOutput").IsEffectivelyVisible);
+        Assert.False(app.FindByAutomationId("ErrorCopyButton").IsEffectivelyVisible);
+        Assert.False(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
+        TestPictures.Save(app, "wp7-14d-reapplied-with-conflicts");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await run;
+        await app.WaitForIdleAsync();
+        Assert.Equal("Checked out feature/clash. Re-applying your changes stopped with conflicts in 1 file.", TextOf(app, "OperationStatus"));
+        Assert.Equal("1 file has conflicts. Resolve it, then stage it.", TextOf(app, "BannerText"));
+        Assert.False(app.FindByAutomationId("BannerAbortButton").IsEffectivelyVisible);
+        TestPictures.Save(app, "wp7-14e-stash-conflict-banner");
+
+        run = operations.CheckoutAsync("refs/heads/main");
+        await app.WaitForDialogAsync<ErrorDialogViewModel>();
+        Assert.Equal(("Checkout failed", "Git could not check out main."), (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
+        Assert.StartsWith("error: you need to resolve your current index first", TextOf(app, "ErrorOutput"), StringComparison.Ordinal);
+        Assert.False(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
+        Assert.Equal("Check out main failed", TextOf(app, "OperationStatus"));
+        TestPictures.Save(app, "wp7-14f-checkout-failed");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await run;
+    }
+
+    [AvaloniaFact]
+    public async Task In_the_window_merge_abort_reset_create_delete_and_an_empty_pick_show_as_the_checks_say()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var operations = repository.Operations;
+        var addCore = (await repo.GitAsync("rev-parse", "main~1")).StandardOutput.Trim();
+        var alphaOne = (await repo.GitAsync("rev-parse", "feature/alpha~1")).StandardOutput.Trim();
+
+        // Check 9: the merge stops, the banner takes over; its Abort asks and backs up.
+        await operations.MergeAsync("refs/heads/feature/conflict", MergeMode.Default);
+        await app.WaitForIdleAsync();
+        Assert.Equal("Merge stopped: 1 file has conflicts", TextOf(app, "OperationStatus"));
+        Assert.Equal("Merging: \"Merge branch 'feature/conflict'\". 1 file has conflicts.", TextOf(app, "BannerText"));
+        Assert.Null(app.TopDialogView);
+        TestPictures.Save(app, "wp7-09a-merge-stopped");
+        app.Click(app.FindByAutomationId("BannerAbortButton"));
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        Assert.Equal(("Abort the merge?", "Abort merging \"Merge branch 'feature/conflict'\"? Changes made to resolve conflicts are lost."),
+            (TextOf(app, "ConfirmTitle"), TextOf(app, "ConfirmQuestion")));
+        TestPictures.Save(app, "wp7-09b-abort-question");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => app.TopDialogView is null && repository.OperationStatus.Text == "Aborted the merge", "the abort");
+        await app.WaitForIdleAsync();
+        Assert.False(app.FindByAutomationId("ConflictBanner").IsEffectivelyVisible);
+        Assert.Equal(2, (await repo.BackupRefsAsync()).Count);
+        TestPictures.Save(app, "wp7-09c-aborted");
+
+        // Check 10: the reset dialog is the confirmation; Hard turns its button to danger.
+        var reset = operations.ResetAsync(addCore);
+        await app.WaitForDialogAsync<ResetDialogViewModel>();
+        Assert.Equal(($"Reset main to {addCore[..7]}?", $"Move main to \"Add core\" ({addCore[..7]})."), (TextOf(app, "ResetTitle"), TextOf(app, "ResetText")));
+        app.Click(app.FindByAutomationId("ResetHard"));
+        Assert.Equal(ResetMode.Hard, app.Dialog<ResetDialogViewModel>().Mode);
+        TestPictures.Save(app, "wp7-10a-reset-hard");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await reset;
+        await app.WaitForIdleAsync();
+        Assert.Equal($"Reset main to {addCore[..7]} (hard)", TextOf(app, "OperationStatus"));
+        Assert.Equal(addCore, await repo.HeadAsync());
+        TestPictures.Save(app, "wp7-10b-reset-done");
+
+        // Check 13: the toolbar's Branch opens the name dialog at HEAD; Delete asks in its long form.
+        app.Click(app.FindByAutomationId("BranchButton"));
+        await app.WaitForDialogAsync<BranchNameDialogViewModel>();
+        Assert.Equal($"From {addCore[..7]} \"Add core\"", TextOf(app, "NameDialogContext"));
+        app.TypeInto("NameBox", "hotfix");
+        TestPictures.Save(app, "wp7-13a-create-branch");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForAsync(() => app.TopDialogView is null && repository.OperationStatus.Text == "Created hotfix and checked it out", "the new branch");
+        await app.WaitForIdleAsync();
+        Assert.Equal("hotfix", TextOf(app, "CurrentBranch"));
+        TestPictures.Save(app, "wp7-13b-created");
+
+        var delete = operations.DeleteBranchAsync("refs/heads/feature/ff");
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        Assert.Equal(("Delete branch?", "Delete the branch feature/ff? It has commits that hotfix does not have."), (TextOf(app, "ConfirmTitle"), TextOf(app, "ConfirmQuestion")));
+        TestPictures.Save(app, "wp7-13c-delete-question");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await delete;
+        await app.WaitForIdleAsync();
+        Assert.Equal("Deleted feature/ff", TextOf(app, "OperationStatus"));
+
+        // Check 25 step 7: a pick that changes nothing stops; the banner offers Abort.
+        await operations.CherryPickAsync(alphaOne);
+        await app.WaitForIdleAsync();
+        Assert.Equal($"Cherry-picked {alphaOne[..7]} onto hotfix", TextOf(app, "OperationStatus"));
+        var pick = operations.CherryPickAsync(alphaOne);
+        await app.WaitForDialogAsync<ErrorDialogViewModel>();
+        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on hotfix: its changes are already there. Abort the cherry-pick to go on."),
+            (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
+        Assert.Equal($"Cherry-pick {alphaOne[..7]} failed", TextOf(app, "OperationStatus"));
+        TestPictures.Save(app, "wp7-25a-empty-pick");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await pick;
+        await app.WaitForIdleAsync();
+        Assert.Equal($"Cherry-picking {alphaOne[..7]} \"Alpha one\" changes nothing: its changes are already here. Abort to go on.", TextOf(app, "BannerText"));
+        TestPictures.Save(app, "wp7-25b-empty-pick-banner");
+    }
+
+    [AvaloniaFact]
+    public async Task In_the_window_leaving_a_detached_head_asks_as_check_32_says()
+    {
+        using var repo = await Scenarios.EdgeCasesAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var operations = (await GraphShownAsync(app)).Operations;
+
+        var checkout = operations.CheckoutAsync("refs/heads/main");
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        Assert.Equal(
+            ("Leave these commits?", "HEAD is detached on 1 commit that is on no branch. After this checkout it no longer shows in the graph.", "A backup is saved first, so this can be undone.", "Check out"),
+            (TextOf(app, "ConfirmTitle"), TextOf(app, "ConfirmQuestion"), TextOf(app, "ConfirmDetail"), ((Button)app.FindByAutomationId("ConfirmButton")).Content as string));
+        TestPictures.Save(app, "wp7-32a-leave-these-commits");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await checkout;
+        await app.WaitForIdleAsync();
+        Assert.Equal(("Checked out main", "main"), (TextOf(app, "OperationStatus"), TextOf(app, "CurrentBranch")));
+        Assert.Single(await repo.BackupRefsAsync());
+        TestPictures.Save(app, "wp7-32b-checked-out-main");
+    }
+
     // ---- Helpers -------------------------------------------------------------------------------
+
+    /// <summary>Waits until the active tab's graph has loaded and its queue is idle.</summary>
+    private static async Task<RepositoryViewModel> GraphShownAsync(ShellDriver app)
+    {
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0, "the graph");
+        await app.WaitForIdleAsync(repository);
+        return repository;
+    }
+
+    /// <summary>The text a text block or a text box with this automation id shows (the dialog on top first, then the window).</summary>
+    private static string TextOf(ShellDriver app, string automationId) => app.FindByAutomationId(automationId) switch
+    {
+        TextBlock block => block.Text ?? string.Empty,
+        TextBox box => box.Text ?? string.Empty,
+        var other => throw new InvalidOperationException($"'{automationId}' is a {other.GetType().Name}."),
+    };
 
     /// <summary>How many times the queue ran the operation <paramref name="title"/> to its end (its log line, 1.7).</summary>
     private static int Ran(OperationsHarness app, string title) =>
