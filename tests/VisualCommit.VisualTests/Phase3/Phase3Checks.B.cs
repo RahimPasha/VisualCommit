@@ -379,6 +379,200 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.Equal(["## main...origin/main [ahead 2]"], await StatusAsync(repo));
     }
 
+    // ---------------------------------------------------------------------------------------
+    // Check 10: reset main to "Add core", soft, mixed and hard (1100×700).
+
+    /// <summary>Check 10 part A (steps 1 to 5): the commit menu, the reset dialog, Esc, and a soft reset.</summary>
+    [AvaloniaFact]
+    public async Task Check_10_reset_dialog_and_soft_reset()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+
+        // Step 2: "Add core"'s menu.
+        OpenMenu(app, app.GraphRowPoint(6), CommitMenuOnMain(Sha.AddCore, "Add core"), "Check out this commit");
+        await WaitForDetailsAsync(app, "Add core");
+        var menu = Shot(app, "10a-commit-menu");
+        AssertSelected(app, menu, 6);
+
+        // Step 3: the reset dialog, Mixed chosen.
+        app.ClickMenuItem("Reset main to this commit…");
+        await app.WaitForDialogAsync<ResetDialogViewModel>();
+        var dialog = Shot(app, "10b-reset-dialog");
+        AssertResetDialog(app, dialog, hard: false);
+        Assert.True(((RadioButton)app.FindByAutomationId("ResetMixed")).IsChecked == true, "Mixed is not chosen.");
+
+        // Step 4: Esc closes it; nothing changed.
+        app.PressKey(Key.Escape);
+        await AssertNoDialogAsync(app);
+        Assert.Equal(Sha.MainWorkFull, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal(["## main...origin/main"], await StatusAsync(repo));
+        await AssertNoBackupsAsync(repo);
+
+        // Step 5: a soft reset.
+        app.RightClick(app.GraphRowPoint(6));
+        app.ClickMenuItem("Reset main to this commit…");
+        await app.WaitForDialogAsync<ResetDialogViewModel>();
+        app.Click(app.FindByAutomationId("ResetSoft"));
+        await RunOperationAsync(app, "Reset main", () => app.Click(app.FindByAutomationId("ConfirmButton")));
+        await app.WaitForAsync(() => Graph(app).ShowsWorkingRow, "the working-changes row");
+        var soft = Shot(app, "10c-soft");
+        await AssertNoDialogAsync(app);
+        AssertGraph(app, G6, soft);
+        AssertWorkingRow(app, WorkingChanges, soft);
+        AssertSelected(app, soft, 6);
+        AssertStatus(app, StatusResetSoft);
+        await AssertLocalBranchAsync(app, "main", 0, 1, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.AddCoreFull, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal(["## main...origin/main [behind 1]", "M  src/core.txt"], await StatusAsync(repo));
+        Assert.Equal(Scenarios.OperationsFiles.CoreMainWork, await ShowAsync(repo, string.Empty, "src/core.txt"));
+        await AssertBackupsAsync(repo, "reset", Sha.MainWorkFull, changes: false);
+        AssertBackupsHidden(app);
+    }
+
+    /// <summary>Check 10 part B (step 6): a mixed reset.</summary>
+    [AvaloniaFact]
+    public async Task Check_10_mixed_reset()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+
+        app.RightClick(app.GraphRowPoint(6));
+        app.ClickMenuItem("Reset main to this commit…");
+        await app.WaitForDialogAsync<ResetDialogViewModel>();
+        Assert.True(((RadioButton)app.FindByAutomationId("ResetMixed")).IsChecked == true, "Mixed is not chosen.");
+        await RunOperationAsync(app, "Reset main", () => app.Click(app.FindByAutomationId("ConfirmButton")));
+        await app.WaitForAsync(() => Graph(app).ShowsWorkingRow, "the working-changes row");
+        await WaitForDetailsAsync(app, "Add core");
+        var mixed = Shot(app, "10d-mixed");
+        await AssertNoDialogAsync(app);
+        AssertGraph(app, G6, mixed);
+        AssertWorkingRow(app, WorkingChanges, mixed);
+        AssertSelected(app, mixed, 6);
+        AssertStatus(app, StatusResetMixed);
+        await AssertLocalBranchAsync(app, "main", 0, 1, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.AddCoreFull, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal(["## main...origin/main [behind 1]", " M src/core.txt"], await StatusAsync(repo));
+        Assert.Equal(Scenarios.OperationsFiles.Core, await ShowAsync(repo, string.Empty, "src/core.txt"));
+        await AssertBackupsAsync(repo, "reset", Sha.MainWorkFull, changes: false);
+    }
+
+    /// <summary>Check 10 part C (steps 7 to 10): a hard reset over staged, unstaged, new and untracked files, with both backups.</summary>
+    [AvaloniaFact]
+    public async Task Check_10_hard_reset_with_backups()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await WriteResetPartCFilesAsync(repo);
+        var indexBefore = await GitOutAsync(repo, "write-tree");
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+
+        // Step 7: the working-changes row and the stage panel.
+        AssertWorkingRow(app, WorkingChanges);
+        app.Click(app.WorkingRowPoint());
+        await WaitForStagePanelAsync(app, "Unstaged files (3)", "Staged files (2)");
+        var before = Shot(app, "10e-hard-before");
+        AssertGraph(app, G0, before);
+        Assert.Equal(["M README.md", "M core.txt src", "A todo.txt"], StageRows(app, "UnstagedFileList"));
+        Assert.Equal(["A scratch.txt", "M core.txt src"], StageRows(app, "StagedFileList"));
+        AssertNoClippedText(app);
+
+        // Step 8: the dialog with Hard chosen.
+        app.RightClick(app.GraphRowPoint(6));
+        app.ClickMenuItem("Reset main to this commit…");
+        await app.WaitForDialogAsync<ResetDialogViewModel>();
+        app.Click(app.FindByAutomationId("ResetHard"));
+        await WaitForDetailsAsync(app, "Add core");
+        var dialog = Shot(app, "10f-hard-dialog");
+        AssertResetDialog(app, dialog, hard: true);
+        AssertSelected(app, null, 6);
+
+        // Step 9: the hard reset.
+        await RunOperationAsync(app, "Reset main", () => app.Click(app.FindByAutomationId("ConfirmButton")));
+        await app.WaitForAsync(() => Graph(app).Data!.LabelsAt(6).Any(label => label.Text == "main"), "main on \"Add core\"");
+        await WaitForDetailsAsync(app, "Add core");
+        var done = Shot(app, "10g-hard-done");
+        await AssertNoDialogAsync(app);
+        AssertGraph(app, G6, done);
+        AssertWorkingRow(app, WorkingChanges, done);
+        AssertSelected(app, done, 6);
+        AssertStatus(app, StatusResetHard);
+        AssertNoClippedText(app);
+
+        // Step 10: only the untracked file is left.
+        app.Click(app.WorkingRowPoint());
+        await WaitForStagePanelAsync(app, "Unstaged files (1)", "Staged files (0)");
+        var panel = Shot(app, "10h-hard-stage-panel");
+        Assert.Equal(["A todo.txt"], StageRows(app, "UnstagedFileList"));
+        Assert.True(app.Find<TextBlock>("NoStaged").IsEffectivelyVisible, "\"No staged changes\" does not show.");
+        AssertNoClippedText(app);
+        _ = panel;
+
+        Assert.Equal(["## main...origin/main [behind 1]", "?? todo.txt"], await StatusAsync(repo));
+        Assert.Equal(Scenarios.OperationsFiles.Readme, WorkingFile(repo, "README.md"));
+        Assert.Equal(Scenarios.OperationsFiles.Core, WorkingFile(repo, "src/core.txt"));
+        Assert.False(File.Exists(Path.Combine(repo.Path, "scratch.txt")), "scratch.txt is still there.");
+        Assert.Equal(Todo, WorkingFile(repo, "todo.txt"));
+        var snapshot = await AssertBackupsAsync(repo, "reset", Sha.MainWorkFull, changes: true);
+        var parents = await ParentsAsync(repo, snapshot!);
+        Assert.Equal(2, parents.Length);
+        Assert.Equal(Sha.MainWorkFull, parents[0]);
+        Assert.Equal(indexBefore, await GitOutAsync(repo, "rev-parse", parents[1] + "^{tree}"));
+        Assert.Equal(ReadmeLocalEdit, await ShowAsync(repo, snapshot!, "README.md"));
+        Assert.Equal(Scratch, await ShowAsync(repo, snapshot!, "scratch.txt"));
+        Assert.Equal(CoreUnstaged, await ShowAsync(repo, snapshot!, "src/core.txt"));
+        Assert.DoesNotContain("todo.txt", (await GitOutAsync(repo, "ls-tree", "-r", "--name-only", snapshot!)).Split('\n'));
+        Assert.Equal(Scenarios.OperationsFiles.Readme, await ShowAsync(repo, parents[1], "README.md"));
+        Assert.Equal(Scratch, await ShowAsync(repo, parents[1], "scratch.txt"));
+        Assert.Equal(CoreStaged, await ShowAsync(repo, parents[1], "src/core.txt"));
+        AssertBackupsHidden(app);
+    }
+
+    /// <summary>Check 10 part C's files, written as a terminal would before the app starts.</summary>
+    private static async Task WriteResetPartCFilesAsync(TempRepo repo)
+    {
+        repo.WriteFile("src/core.txt", CoreStaged);
+        await repo.GitAsync("add", "src/core.txt");
+        repo.WriteFile("src/core.txt", CoreUnstaged);
+        repo.WriteFile("README.md", ReadmeLocalEdit);
+        repo.WriteFile("scratch.txt", Scratch);
+        await repo.GitAsync("add", "scratch.txt");
+        repo.WriteFile("todo.txt", Todo);
+    }
+
+    /// <summary>
+    /// The reset dialog of check 10 steps 3 and 8 (2.11, 4f): its title, text, three choices with
+    /// their lines (Hard's in the danger colour), the backup's line, Cancel and Reset (the danger
+    /// style while Hard is chosen, the primary one otherwise), on the 400-wide card over the backdrop.
+    /// </summary>
+    private static void AssertResetDialog(ShellDriver app, Screenshot picture, bool hard)
+    {
+        var view = app.TopDialogView ?? throw new Xunit.Sdk.XunitException("The reset dialog has no view.");
+        Assert.Equal(ResetTitle, ((TextBlock)app.FindByAutomationId(view, "ResetTitle")).Text);
+        Assert.Equal(ResetText, ((TextBlock)app.FindByAutomationId(view, "ResetText")).Text);
+        Assert.Equal(["Soft", ResetSoftLine], TextsIn(app.FindByAutomationId(view, "ResetSoft")));
+        Assert.Equal(["Mixed", ResetMixedLine], TextsIn(app.FindByAutomationId(view, "ResetMixed")));
+        Assert.Equal(["Hard", ResetHardLine], TextsIn(app.FindByAutomationId(view, "ResetHard")));
+        Assert.Equal(hard, ((RadioButton)app.FindByAutomationId(view, "ResetHard")).IsChecked == true);
+        Assert.Equal(!hard, ((RadioButton)app.FindByAutomationId(view, "ResetMixed")).IsChecked == true);
+        Assert.False(((RadioButton)app.FindByAutomationId(view, "ResetSoft")).IsChecked == true, "Soft is chosen.");
+        var palette = PaletteOf(app);
+        Assert.Equal(palette.Danger, (app.Find<TextBlock>("ResetHardText").Foreground as Avalonia.Media.ISolidColorBrush)?.Color);
+        Assert.Equal(BackupDetail, ((TextBlock)app.FindByAutomationId(view, "ConfirmDetail")).Text);
+        var cancel = (Button)app.FindByAutomationId(view, "CancelButton");
+        var confirm = (Button)app.FindByAutomationId(view, "ConfirmButton");
+        Assert.Equal("Cancel", cancel.Content);
+        Assert.Equal("Reset", confirm.Content);
+        Assert.Equal(hard, confirm.Classes.Contains("danger"));
+        Assert.Equal(hard ? palette.Danger : palette.Accent, (confirm.Background as Avalonia.Media.ISolidColorBrush)?.Color);
+        Assert.Equal(400, app.Find<Border>("ResetDialogCard").Bounds.Width, 0.5);
+        AssertBackdrop(app, picture);
+    }
+
     /// <summary>The stage panel of check 9 step 4 and check 9b step 3: the conflicted file flagged, nothing staged, the merge's message prefilled.</summary>
     private static void AssertConflictedStagePanel(ShellDriver app, Phase3Expectations.Palette palette)
     {
