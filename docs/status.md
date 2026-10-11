@@ -55,8 +55,10 @@ Start:
   stashes, conflicts, a remote that asks for credentials), pinned in `ScenarioTests`.
 - [ ] 5. Phase 3's visual checks written into `docs/test-reports/phase-3.md`, each marked for
   the real-window pass, reviewed independently, and committed before the UI they test.
-- [ ] 6. The flaky `DiffHighlighterTests` docstring test (failed once in the baseline run under
-  load, passes alone) fixed at its cause, not by loosening it.
+- [x] 6. The flaky `DiffHighlighterTests` docstring test (failed once in the baseline run under
+  load, passes alone) fixed at its cause, not by loosening it: `d72e500`. The first line a
+  grammar tokenizes compiles its regular expressions, and TextMateSharp counts that against the
+  one-second limit; a line that overran it is now tokenized once more.
 
 Git layer:
 
@@ -152,9 +154,11 @@ This always names the single next thing to do and is kept accurate in every comm
 
 - The default tests on `master` at `d3814bd`, before the phase started: 556 of 557 passed. The
   one failure, `DiffHighlighterTests.A_python_docstring_has_the_string_colour_and_def_and_the_function_name_theirs`
-  (a colour came back null), passes when its class runs alone, so it is a timing flake of the
-  highlighter's one-second safety net per line when three test projects run side by side.
-  Step 6 fixes it.
+  (a colour came back null), passed when its class ran alone: a timing flake of the
+  highlighter's one-second safety net per line when three test projects run side by side. Step 6
+  fixed it. Not fixed, found on the way: the first tokenization of a grammar that embeds other
+  languages (Markdown) reads TextMateSharp's grammar list with no shared lock while another
+  thread may be adding a grammar to it; no test has failed on it.
 - The owner answered four questions of taste on 2026-10-10: later phases' actions (rebase onto,
   squash, compare, file history, blame, create pull request) are left out of phase 3's menus;
   pull follows git's own configuration (`pull.rebase`, `pull.ff`) and merges when nothing is
