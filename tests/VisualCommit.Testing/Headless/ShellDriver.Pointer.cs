@@ -71,6 +71,14 @@ public sealed partial class ShellDriver
     {
         ArgumentNullException.ThrowIfNull(control);
         await WaitForAsync(() => ToolTip.GetIsOpen(control), $"the tooltip of the {control.GetType().Name} \"{control.Name}\" to open", timeout);
+
+        // The theme fades a tooltip in after it opens (an opacity transition): a picture taken
+        // while it does shows the tooltip half transparent with the text below showing through
+        // (seen in check 9's 09b). Wait for the fade to end, a condition and not a fixed time.
+        await WaitForAsync(
+            () => this.Window.GetVisualDescendants().OfType<ToolTip>().Where(tip => tip.IsEffectivelyVisible).All(tip => tip.Opacity >= 1),
+            $"the tooltip of the {control.GetType().Name} \"{control.Name}\" to fade in completely",
+            timeout);
         Settle();
         return TipText(ToolTip.GetTip(control));
     }

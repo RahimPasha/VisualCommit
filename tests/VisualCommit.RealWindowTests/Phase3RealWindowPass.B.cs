@@ -178,10 +178,6 @@ public partial class Phase3RealWindowPass
         Assert.Equal(Sha.PickedAlphaTwo, await repo.HeadAsync());
     }
 
-    /// <summary>Waits until the details panel shows the commit with this subject (its <c>DetailsSubject</c> element's name).</summary>
-    private static void WaitForDetails(RealApp app, string subject) =>
-        app.WaitFor(() => app.FindAll("DetailsSubject").Any(text => text.Name == subject), $"the details of \"{subject}\"", RealApp.DefaultWaitTimeout);
-
     /// <summary>Waits until the right panel shows the multi-selection view with this title.</summary>
     private static void WaitForMultiSelection(RealApp app, string title) =>
         app.WaitFor(() => app.FindAll("MultiSelectionTitle").Any(text => text.Name == title), $"the multi-selection view's \"{title}\"", RealApp.DefaultWaitTimeout);
