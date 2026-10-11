@@ -240,6 +240,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// dropped, "Finishing operations" lists what runs, and <paramref name="closeWindow"/> is
     /// called when they have ended, or when the user chooses "Quit now". A background auto-fetch
     /// does not hold the window. Once the close is confirmed, every later call returns true.
+    /// <para>
+    /// What a close does follows the dialog's own state, not when its answer is acted on (a
+    /// continuation that runs later on the UI thread): while the dialog is open, or after "Quit
+    /// now" until the window closes, a close only waits; once "Keep open" has closed the dialog,
+    /// the next close asks again at once.
+    /// </para>
     /// </summary>
     public bool TryClose(Action closeWindow)
     {
@@ -261,7 +267,7 @@ public partial class MainWindowViewModel : ObservableObject
             return true;
         }
 
-        if (_finishing is null)
+        if (_finishing is not { } finishing || (finishing.IsClosed && !QuitNowChosen(finishing)))
         {
             foreach (var tab in Tabs)
             {
@@ -277,6 +283,15 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Confirms the close without waiting: the app session ends (its owner disposes it).</summary>
     public void ConfirmClose() => _closeConfirmed = true;
 
+    /// <summary>Whether the user answered <paramref name="dialog"/> with "Quit now".</summary>
+    private static bool QuitNowChosen(FinishingDialogViewModel dialog) =>
+        dialog.Result.IsCompletedSuccessfully && dialog.Result.Result;
+
+    /// <summary>
+    /// Shows "Finishing operations" and closes the window when the operations have ended or the
+    /// user chooses "Quit now". <see cref="_finishing"/> keeps the dialog afterwards, also after
+    /// "Keep open": <see cref="TryClose"/> goes by its state.
+    /// </summary>
     private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, Action closeWindow)
     {
         var items = repositories
@@ -309,10 +324,12 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             _log.Error("Closing the window after the running operations failed.", ex);
-        }
-        finally
-        {
-            _finishing = null;
+
+            // A dialog that may never close must not keep the next close waiting.
+            if (ReferenceEquals(_finishing, dialog))
+            {
+                _finishing = null;
+            }
         }
     }
 
