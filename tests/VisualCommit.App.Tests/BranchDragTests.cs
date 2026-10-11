@@ -184,6 +184,48 @@ public class BranchDragTests
     }
 
     [AvaloniaFact]
+    public async Task A_press_right_after_a_drag_from_the_same_spot_is_no_double_click()
+    {
+        // Visual check 7 step 6: feature/ff dragged over v1.0 and released, then pressed again to
+        // drag it once more. Avalonia counts the two presses as a double-click (same spot, within
+        // the double-click time), which checked feature/ff out.
+        using var scenario = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
+        var repository = await GraphShownAsync(app);
+        var (actions, recorder) = RecordingActions.Create();
+        repository.MenuActions = actions;
+        var service = app.Find<DragLayer>("DragLayer").Service!;
+        var ff = LabelPoint(app, FastForwardMe, "feature/ff");
+        var tag = LabelPoint(app, AddCore, "v1.0");
+
+        app.PressMouse(ff);
+        app.MoveMouseHeld(tag, steps: 5);
+        Assert.True(service.IsDragging);
+        app.ReleaseMouse(tag);
+        app.PressMouse(ff);
+        Assert.True(service.PressFollowsDrag);
+        app.ReleaseMouse(ff);
+        Assert.Empty(recorder.Calls);
+
+        // The same in the left panel, a row dragged and then pressed again.
+        app.Click(LeftRow(app, row => row.Kind == RefItemKind.Folder && row.Depth == 1));
+        var row = app.BoundsOf(LeftRow(app, row => row.Key == "ref:refs/heads/feature/ff")).Center;
+        app.PressMouse(row);
+        app.MoveMouseHeld(tag, steps: 5);
+        Assert.True(service.IsDragging);
+        app.ReleaseMouse(tag);
+        app.PressMouse(row);
+        app.ReleaseMouse(row);
+        Assert.Empty(recorder.Calls);
+
+        // A double-click after that is one again.
+        app.DoubleClick(ff);
+        Assert.False(service.PressFollowsDrag);
+        Assert.Equal(["CheckoutAsync(refs/heads/feature/ff)"], recorder.Calls.Select(call => call.ToString()));
+    }
+
+    [AvaloniaFact]
     public async Task Left_panel_rows_are_sources_and_targets_and_the_row_dragged_gets_no_click()
     {
         using var scenario = await Scenarios.OperationsAsync();

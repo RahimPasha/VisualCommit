@@ -101,6 +101,34 @@ public class DialogHostTests
         Assert.Empty(Views(app));
     }
 
+    [AvaloniaFact]
+    public async Task When_the_last_dialog_closes_the_focus_goes_back_to_where_it_was_so_the_Menu_key_works_again()
+    {
+        // Visual check 5 step 3: Enter in "Alpha two"'s menu opens the branch dialog, Esc closes it,
+        // and the Menu key then opens the menu of the graph's selected row again.
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitForRepositoryAsync();
+        var graph = app.Find<VisualCommit.App.Controls.CommitGraphControl>("GraphRows");
+        app.Click(app.GraphRowPoint(4));
+        Assert.True(graph.IsFocused);
+
+        app.PressKey(Key.F10, RawInputModifiers.Shift);
+        app.Menu();
+        app.PressKey(Key.Down);
+        Assert.Equal("Create branch here…", app.Menu().Highlighted?.Label);
+        app.PressKey(Key.Enter);
+        await app.WaitForDialogAsync<NameDialogViewModel>();
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is null, "the dialog to close");
+
+        Assert.True(graph.IsFocused, $"The focus is on {app.Window.FocusManager?.GetFocusedElement()?.GetType().Name ?? "nothing"}, not the graph.");
+        app.PressKey(Key.Apps);
+        Assert.Equal("ce5ea6a Alpha two", app.Menu().Header);
+        app.PressKey(Key.Escape);
+    }
+
     private static List<ConfirmationView> Views(ShellDriver app) =>
         [.. app.Window.GetVisualDescendants().OfType<ConfirmationView>()];
 }

@@ -497,7 +497,10 @@ public sealed partial class CommitGraphControl : Control
 
     private void OnDoubleTappedHere(object? sender, TappedEventArgs e)
     {
-        if (LabelDoubleTapped is { } handler && HitTest(e.GetPosition(this)) is { Kind: GraphHitKind.Label } hit)
+        // The press after a drag that started on the press before is no double-click (4c).
+        if (LabelDoubleTapped is { } handler
+            && Views.Shell.BranchDragService.For(this) is not { PressFollowsDrag: true }
+            && HitTest(e.GetPosition(this)) is { Kind: GraphHitKind.Label } hit)
         {
             handler(this, hit);
         }
