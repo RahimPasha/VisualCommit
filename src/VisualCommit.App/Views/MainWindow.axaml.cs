@@ -3,8 +3,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.Core.Session;
 
 namespace VisualCommit.App.Views;
@@ -36,8 +38,8 @@ public partial class MainWindow : Window
         // Seen even when a control under the focus has handled it, as the diff's text may.
         AddHandler(KeyDownEvent, OnEscape, RoutingStrategies.Bubble, handledEventsToo: true);
 
-        // Shift+F10 asks for the focused element's context menu, as the Menu key does: Avalonia
-        // raises the request only for the Menu key (docs/phase-3-design.md section 0, 4a).
+        // Shift+F10 asks for the focused element's context menu, as the Menu key does, once per
+        // press: the app raises it only where the platform does not (D106, OnShiftF10).
         AddHandler(KeyDownEvent, OnShiftF10, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // The window's own links of the Esc chain; the menu layer and the drag service add theirs.
@@ -259,10 +261,20 @@ public partial class MainWindow : Window
         return false;
     }
 
-    /// <summary>Shift+F10 raises the context request on the focused element, without a position (4a).</summary>
+    /// <summary>
+    /// Shift+F10 raises the context request on the focused element, without a position (4a), but
+    /// only where the platform's <c>OpenContextMenu</c> gestures lack Shift+F10 (headless): where
+    /// they have it (Win32), Avalonia raises the request when the key is released, and raising it
+    /// here too would open a second menu (D106). The list is read at each press.
+    /// </summary>
     private void OnShiftF10(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.F10 || e.KeyModifiers != KeyModifiers.Shift || FocusManager?.GetFocusedElement() is not Control focused)
+        {
+            return;
+        }
+
+        if (!ContextMenuKeys.AppRaisesShiftF10(this.GetPlatformSettings()?.HotkeyConfiguration.OpenContextMenu))
         {
             return;
         }

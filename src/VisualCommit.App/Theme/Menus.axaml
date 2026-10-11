@@ -1,8 +1,90 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- The in-window context menu's styles and control themes (docs/phase-3-design.md, 4a, D86).
-       Work package WP0 created this file empty and App.axaml includes it; WP5 fills it, so that
-       no package edits Controls.axaml or App.axaml for the menu. -->
+  <!-- The in-window context menu (docs/phase-3-design.md 4a, D105): styles on Avalonia's stock
+       MenuFlyoutPresenter, MenuItem and Separator, for the presenter the menu layer marks with the
+       class vcContextMenu (Views/Shell/MenuLayer). Colours are theme tokens only.
+       Sizes: a 1-pixel border and 3 of padding (the items start 4 inside the menu's edge), the
+       header 24 high, an item 26, a separator 9; so a menu that fits is
+       8 + 24 + 26 × items + 9 × separators high. Width 200 to 360, set by the longest label. -->
+
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu">
+    <Setter Property="Background" Value="{DynamicResource VcPanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="3" />
+    <Setter Property="MinWidth" Value="200" />
+    <Setter Property="MaxWidth" Value="360" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu /template/ Border#LayoutRoot">
+    <Setter Property="BoxShadow" Value="{DynamicResource VcMenuShadow}" />
+  </Style>
+  <!-- Fluent's template keeps the items apart from the border by the items presenter's margin
+       (its MenuFlyoutScrollerMargin), not by the presenter's Padding: the 3 of padding go there. -->
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu /template/ ItemsPresenter#PART_ItemsPresenter">
+    <Setter Property="Margin" Value="3" />
+  </Style>
+
+  <!-- Items: 26 high, 10 of padding at each side, the primary text colour; the item that has the
+       focus (the highlight) on the hover background; a disabled one in the disabled colour, a
+       destructive one too (D114). A destructive item that is enabled has a local Foreground of
+       VcDangerBrush, which the header presenter shows in every state but the disabled one. -->
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem">
+    <Setter Property="Height" Value="26" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <!-- The highlight shows which item has the focus; no keyboard outline is drawn around it. -->
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem /template/ ContentPresenter#PART_HeaderPresenter">
+    <Setter Property="Foreground" Value="{Binding $parent[MenuItem].Foreground}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem /template/ TextBlock#PART_InputGestureText">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem:disabled /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+  </Style>
+
+  <!-- The header: what the menu acts on, 24 high, in the secondary colour, never highlighted. -->
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem.vcMenuHeader">
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem.vcMenuHeader:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem.vcMenuHeader:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- A separator: a 1-pixel line in the border colour, 9 high with its margins. -->
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu Separator">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Margin" Value="0,4" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource VcBorderBrush}" />
+  </Style>
 
 </Styles>

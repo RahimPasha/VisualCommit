@@ -1,18 +1,24 @@
+using System.Diagnostics;
+using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.Views.Shell;
 
 namespace VisualCommit.Testing.Headless;
 
 /// <summary>
 /// Phase 3's additions to the driver (docs/phase-3-design.md 7.4): clicks with modifier keys, a
 /// drag in separate steps, the open dialog, typing into a box, waiting for the operation queue,
-/// and the fakes of the file launcher and the clipboard. The menu helpers (<c>Menu()</c>,
-/// <c>ClickMenuItem</c>, <c>MenuItemBounds</c>) come with the menu adapter (WP5), in this file.
+/// the fakes of the file launcher and the clipboard, and the open context menu (<c>Menu()</c>,
+/// <c>ClickMenuItem</c>, <c>MenuItemBounds</c>, from the menu adapter's package WP5).
 /// </summary>
 public sealed partial class ShellDriver
 {
@@ -169,6 +175,155 @@ public sealed partial class ShellDriver
 
         // The queue's Changed and Finished go to the views through the UI thread.
         Settle();
+    }
+
+    /// <summary>Whether a context menu is in the window now, without waiting for one.</summary>
+    public bool IsMenuOpen
+    {
+        get
+        {
+            Settle();
+            return MenuPresenters().Any();
+        }
+    }
+
+    /// <summary>How many context menus are in the window now (4a: never more than one).</summary>
+    public int MenuCount
+    {
+        get
+        {
+            Settle();
+            return MenuPresenters().Count();
+        }
+    }
+
+    /// <summary>
+    /// The open context menu (4a): its header, its items with label, enabled, destructive and
+    /// highlighted, and its separators, in order. Waits for the menu by polling until it is in the
+    /// window, drawn and in the same place twice in a row (the first menu of a process can take
+    /// over a second to be placed), never for a fixed time.
+    /// </summary>
+    /// <exception cref="TimeoutException">No menu was open and placed within <paramref name="timeout"/> (<see cref="DefaultWaitTimeout"/> when null).</exception>
+    public MenuSnapshot Menu(TimeSpan? timeout = null)
+    {
+        var presenter = WaitForMenuPresenter(timeout);
+        string? header = null;
+        string? headerToolTip = null;
+        var entries = new List<MenuEntrySnapshot>();
+        foreach (var entry in presenter.Items.OfType<Control>())
+        {
+            switch (entry)
+            {
+                case Avalonia.Controls.MenuItem item when item.Classes.Contains(MenuLayer.HeaderClass):
+                    header = AutomationProperties.GetName(item);
+                    headerToolTip = ToolTip.GetTip(item) as string;
+                    break;
+                case Separator separator:
+                    entries.Add(new MenuEntrySnapshot("—", true, true, false, false, null, null, BoundsOf(separator)));
+                    break;
+                case Avalonia.Controls.MenuItem item:
+                    entries.Add(new MenuEntrySnapshot(
+                        item.Header as string ?? AutomationProperties.GetName(item) ?? string.Empty,
+                        false,
+                        item.IsEffectivelyEnabled,
+                        item.Classes.Contains(MenuLayer.DangerClass),
+                        item.IsSelected,
+                        ToolTip.GetTip(item) as string,
+                        TextColorOf(item),
+                        BoundsOf(item)));
+                    break;
+            }
+        }
+
+        return new MenuSnapshot(header, headerToolTip, entries, BoundsOf(presenter));
+    }
+
+    /// <summary>
+    /// Clicks the open menu's item labelled <paramref name="label"/> with the mouse, moved there in
+    /// one move (so it crosses no other item), and lets the UI thread run the action the click
+    /// posts. Throws when the menu has no such item or it is disabled.
+    /// </summary>
+    public void ClickMenuItem(string label)
+    {
+        var item = MenuItemControl(label);
+        if (!item.IsEffectivelyEnabled)
+        {
+            throw new InvalidOperationException($"The menu item \"{label}\" is disabled: a click on it does nothing.");
+        }
+
+        Click(BoundsOf(item).Center);
+
+        // The item closes the menu, then posts its action to the UI thread (4a).
+        Settle();
+    }
+
+    /// <summary>Where the open menu's item labelled <paramref name="label"/> is, in the window's logical pixels: to rest the pointer on it.</summary>
+    public Rect MenuItemBounds(string label) => BoundsOf(MenuItemControl(label));
+
+    private Avalonia.Controls.MenuItem MenuItemControl(string label)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        var presenter = WaitForMenuPresenter(null);
+        var matches = presenter.Items.OfType<Avalonia.Controls.MenuItem>()
+            .Where(item => !item.Classes.Contains(MenuLayer.HeaderClass) && item.Header as string == label)
+            .ToList();
+        return matches switch
+        {
+            [var item] => item,
+            [] => throw new InvalidOperationException($"The open menu has no item \"{label}\"; it has: {Menu()}."),
+            _ => throw new InvalidOperationException($"The open menu has more than one item \"{label}\"."),
+        };
+    }
+
+    private IEnumerable<MenuFlyoutPresenter> MenuPresenters() =>
+        Window.GetVisualDescendants().OfType<MenuFlyoutPresenter>()
+            .Where(presenter => AutomationProperties.GetAutomationId(presenter) == MenuLayer.MenuAutomationId && presenter.IsEffectivelyVisible);
+
+    private MenuFlyoutPresenter WaitForMenuPresenter(TimeSpan? timeout)
+    {
+        var limit = timeout ?? DefaultWaitTimeout;
+        var clock = Stopwatch.StartNew();
+        Rect? last = null;
+        while (true)
+        {
+            Settle();
+            var presenters = MenuPresenters().ToList();
+            if (presenters.Count > 1)
+            {
+                throw new InvalidOperationException($"{presenters.Count} context menus are open; there is never more than one (4a).");
+            }
+
+            if (presenters is [var presenter] && presenter.IsArrangeValid && presenter.Bounds.Width > 0 && presenter.Bounds.Height > 0)
+            {
+                var bounds = BoundsOf(presenter);
+                if (last == bounds)
+                {
+                    return presenter;
+                }
+
+                last = bounds;
+            }
+            else
+            {
+                last = null;
+            }
+
+            if (clock.Elapsed >= limit)
+            {
+                throw new TimeoutException(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"Timed out after {limit.TotalSeconds:0.###} s waiting for a context menu to open."));
+            }
+
+            Thread.Sleep(PollInterval);
+        }
+    }
+
+    /// <summary>The colour an item's label is drawn in: its header presenter's foreground.</summary>
+    private static Color? TextColorOf(Avalonia.Controls.MenuItem item)
+    {
+        var presenter = item.GetVisualDescendants().OfType<ContentPresenter>().FirstOrDefault(part => part.Name == "PART_HeaderPresenter");
+        return (presenter?.Foreground ?? item.Foreground) is ISolidColorBrush brush ? brush.Color : null;
     }
 
     private static RawInputModifiers Raw(KeyModifiers modifiers)

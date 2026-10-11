@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using VisualCommit.Core.Operations;
@@ -11,8 +12,8 @@ namespace VisualCommit.RealWindowTests;
 /// <summary>
 /// Phase 3's additions to the real-window driver (docs/phase-3-design.md 7.4): clicks with keys
 /// held, a drag in separate steps with the button always released, and waiting for the
-/// operation queue's line in the app's log. The menu helpers (<c>MenuItemNames()</c>,
-/// <c>ClickMenuItem</c>) come with the menu adapter (WP5), in this file.
+/// operation queue's line in the app's log, and the open context menu (<c>WaitForMenu</c>,
+/// <c>MenuItemNames()</c>, <c>ClickMenuItem</c>, from the menu adapter's package WP5).
 /// </summary>
 public sealed partial class RealApp
 {
@@ -129,6 +130,84 @@ public sealed partial class RealApp
         }
 
         WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// The pattern of the line the menu layer logs for every menu it opens (4a, D106):
+    /// <c>&lt;repo&gt;: Context menu opened: &lt;header&gt; by pointer</c> or <c>by keyboard</c>.
+    /// Null <paramref name="header"/> or <paramref name="by"/> match any.
+    /// </summary>
+    public static Regex MenuOpened(string repository, string? header = null, string? by = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
+        var headerPattern = header is null ? ".*" : Regex.Escape(header);
+        var byPattern = by is null ? "(pointer|keyboard)" : Regex.Escape(by);
+        return new Regex(
+            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: Context menu opened: {headerPattern} by {byPattern}$"),
+            RegexOptions.CultureInvariant);
+    }
+
+    /// <summary>
+    /// Waits for the open context menu (automation id <c>ContextMenu</c>) and returns it: polls UI
+    /// Automation until it is there with the same, non-empty rectangle twice in a row. The first
+    /// menu of a process took up to 1.7 s to be placed and drawn under load (4a), so the wait is
+    /// for the menu, never for a fixed time.
+    /// </summary>
+    /// <exception cref="TimeoutException">No menu settled within <paramref name="timeout"/> (10 s when null).</exception>
+    public AutomationElement WaitForMenu(TimeSpan? timeout = null)
+    {
+        AutomationElement? menu = null;
+        Rectangle? last = null;
+        WaitFor(
+            () =>
+            {
+                var found = FindAll("ContextMenu");
+                if (found.Count != 1 || found[0].BoundingRectangle is not { Width: > 0, Height: > 0 } bounds)
+                {
+                    last = null;
+                    return false;
+                }
+
+                var settled = last == bounds;
+                last = bounds;
+                menu = found[0];
+                return settled;
+            },
+            "a context menu to open and settle",
+            timeout ?? TimeSpan.FromSeconds(10));
+        return menu!;
+    }
+
+    /// <summary>The names (labels) of the open menu's items, in order, the header and separators left out. Waits for the menu (<see cref="WaitForMenu"/>).</summary>
+    public IReadOnlyList<string> MenuItemNames()
+    {
+        WaitForMenu();
+        return FindAll("ContextMenuItem").Select(item => item.Name).ToList();
+    }
+
+    /// <summary>
+    /// Clicks the open menu's item named <paramref name="name"/> with the real mouse, after waiting
+    /// for the menu (<see cref="WaitForMenu"/>). Throws when there is no such item or it is
+    /// disabled. The click lands on the item's centre; the pointer may cross other items on its
+    /// way, which moves the highlight but not the click.
+    /// </summary>
+    public void ClickMenuItem(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        WaitForMenu();
+        var matches = FindAll("ContextMenuItem").Where(item => item.Name == name).ToList();
+        var item = matches switch
+        {
+            [var only] => only,
+            [] => throw new InvalidOperationException($"The open menu has no item \"{name}\"; it has: {string.Join(" | ", MenuItemNames())}."),
+            _ => throw new InvalidOperationException($"The open menu has more than one item \"{name}\"."),
+        };
+        if (!item.IsEnabled)
+        {
+            throw new InvalidOperationException($"The menu item \"{name}\" is disabled: a click on it does nothing.");
+        }
+
+        ClickWithMouse(item);
     }
 
     /// <summary>How many lines of the app's log match <paramref name="pattern"/> now: what a test reads before an operation, to wait for the next match after it.</summary>

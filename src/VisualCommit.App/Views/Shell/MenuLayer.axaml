@@ -4,9 +4,10 @@
              x:Class="VisualCommit.App.Views.Shell.MenuLayer"
              x:DataType="vm:MenuLayerViewModel">
 
-  <!-- The layer the in-window context menu is drawn on (docs/phase-3-design.md 4a, D86): over the
-       main grid and under the dialog layer. Work package WP0 placed it in MainWindow.axaml, empty;
-       WP5 owns this file and draws the menu here. Without a background it takes no input. -->
+  <!-- The layer the in-window context menu opens from (docs/phase-3-design.md 4a, D105): over the
+       main grid and under the dialog layer, filling the client area. The menu itself is Avalonia's
+       stock MenuFlyout on the window's overlay layer, shown at a point of this panel; the panel has
+       no background, so it takes no input of its own. -->
   <Panel Name="MenuPanel" />
 
 </UserControl>
