@@ -708,6 +708,14 @@ public static partial class Phase3Expectations
         // The real-window pass: the operations' titles in the log (design 1.7) and the lanes its
         // row points are computed for.
 
+        /// <summary>
+        /// The centre of the label feature/conflict on G0's row 1 ("Conflicting change") at
+        /// 1100×700, in the window, before any banner shows: where check 9 step 2 right-clicks.
+        /// Only the scripted run can measure a label (D49); check 9 asserts this constant (±1) and
+        /// the real-window pass right-clicks it.
+        /// </summary>
+        public static readonly (double X, double Y) FeatureConflictLabelCentre = (314, 155);
+
         public const string MergeConflictTitle = "Merge feature/conflict";
         public const string AbortMergeOperation = "Abort the merge";
         public const string ResetOperation = "Reset main";

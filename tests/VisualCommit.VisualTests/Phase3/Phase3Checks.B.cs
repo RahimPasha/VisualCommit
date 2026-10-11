@@ -190,8 +190,13 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         using var app = await OpenAsync(data, repo);
         var palette = PaletteOf(app);
 
-        // Step 2: the merge stops; no dialog, the banner on two lines.
-        OpenMenu(app, LabelPoint(app, 1, "feature/conflict"), FeatureConflictMenu, "Check out feature/conflict");
+        // Step 2: the merge stops; no dialog, the banner on two lines. The label's centre is the
+        // point the real-window pass right-clicks.
+        var label = LabelPoint(app, 1, "feature/conflict");
+        Assert.True(
+            Math.Abs(label.X - FeatureConflictLabelCentre.X) <= 1 && Math.Abs(label.Y - FeatureConflictLabelCentre.Y) <= 1,
+            $"The label feature/conflict's centre is {label}; the real-window pass right-clicks {FeatureConflictLabelCentre}.");
+        OpenMenu(app, label, FeatureConflictMenu, "Check out feature/conflict");
         await RunOperationAsync(app, "Merge feature/conflict", () => app.ClickMenuItem("Merge feature/conflict into main"));
         await app.WaitForAsync(() => Graph(app).ShowsWorkingRow && app.BannerBounds is not null, "the banner and the working-changes row");
         await WaitForDetailsAsync(app, "Conflicting change");
