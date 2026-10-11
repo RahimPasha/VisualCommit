@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
@@ -75,6 +76,134 @@ public partial class RepositoryOperationsTests
             "HEAD moved while this waited: it is now detached on 1 commit that is on no branch. Nothing was checked out, so it is not left behind.",
             Assert.Single(app.Dialogs.Errors).Summary);
         Assert.Equal("Create branch topic failed", app.StatusText);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_pull_queued_behind_a_checkout_pulls_into_nothing_else()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+
+        // main tracks the local feature/ff, which has a commit main lacks.
+        await repo.GitAsync("branch", "--set-upstream-to=feature/ff", "main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var alpha = await app.ShaAsync("refs/heads/feature/alpha");
+        var main = await app.ShaAsync("refs/heads/main");
+        app.Dialogs.CloseError();
+
+        var (hold, ahead) = HoldQueue(app);
+        var checkout = app.Operations.CheckoutAsync("refs/heads/feature/alpha");
+        var pull = app.Operations.PullAsync();
+        Assert.Equal(2, app.Repository.Queue.Waiting);
+        hold.SetResult();
+        await Task.WhenAll(ahead, checkout, pull).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal("feature/alpha", await repo.CurrentBranchAsync());
+        Assert.Equal(alpha, await repo.RefTargetAsync("refs/heads/feature/alpha"));
+        Assert.Equal(main, await repo.RefTargetAsync("refs/heads/main"));
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Pull failed", "HEAD moved while this waited: it was on main and is on feature/alpha now. Nothing was pulled."),
+            (dialog.Title, dialog.Summary));
+        Assert.Equal(("Pull failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_pull_whose_branch_got_another_upstream_while_it_waited_pulls_nothing()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.GitAsync("branch", "--set-upstream-to=feature/ff", "main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var main = await app.ShaAsync("refs/heads/main");
+        app.Dialogs.CloseError();
+
+        var (hold, ahead) = HoldQueue(app, () => repo.GitAsync("branch", "--set-upstream-to=feature/alpha", "main"));
+        var pull = app.Operations.PullAsync();
+        hold.SetResult();
+        await Task.WhenAll(ahead, pull).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(main, await repo.RefTargetAsync("refs/heads/main"));
+        Assert.Equal(
+            "main's upstream changed while this waited: it is feature/alpha now, not feature/ff. Nothing was pulled.",
+            Assert.Single(app.Dialogs.Errors).Summary);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_reset_whose_branch_was_left_while_its_dialog_was_open_resets_nothing()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var initial = await app.ShaAsync("main~2");
+        var main = await app.ShaAsync("refs/heads/main");
+        var alpha = await app.ShaAsync("refs/heads/feature/alpha");
+
+        // The checkout happens while the dialog is open (a terminal, or an operation ahead).
+        app.Dialogs.Answer<ResetDialogViewModel>(dialog =>
+        {
+            repo.CheckoutAsync("feature/alpha").GetAwaiter().GetResult();
+            dialog.Mode = ResetMode.Hard;
+            dialog.ConfirmCommand.Execute(null);
+        }).CloseError();
+
+        await app.Operations.ResetAsync(initial);
+
+        Assert.Equal("feature/alpha", await repo.CurrentBranchAsync());
+        Assert.Equal(alpha, await repo.RefTargetAsync("refs/heads/feature/alpha"));
+        Assert.Equal(main, await repo.RefTargetAsync("refs/heads/main"));
+        Assert.Empty(await repo.BackupRefsAsync());
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Reset failed", "HEAD moved while this waited: it was on main and is on feature/alpha now. Nothing was reset."),
+            (dialog.Title, dialog.Summary));
+        Assert.Equal(("Reset main failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_reset_queued_behind_a_commit_on_its_branch_resets_nothing()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var initial = await app.ShaAsync("main~2");
+        var main = await app.ShaAsync("refs/heads/main");
+        string? committed = null;
+        app.Dialogs.Reset(ResetMode.Hard).CloseError();
+
+        var (hold, ahead) = HoldQueue(app, async () => committed = await repo.CommitAsync("Committed while the reset waited"));
+        var reset = app.Operations.ResetAsync(initial);
+        await WaitForQueuedAsync(app, 1);
+        hold.SetResult();
+        await Task.WhenAll(ahead, reset).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(committed, await repo.RefTargetAsync("refs/heads/main"));
+        Assert.Equal(
+            $"main moved while this waited: it was at {main[..7]} and is at {committed![..7]} now. Nothing was reset.",
+            Assert.Single(app.Dialogs.Errors).Summary);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_merge_queued_behind_a_checkout_merges_into_nothing_else()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var alpha = await app.ShaAsync("refs/heads/feature/alpha");
+        app.Dialogs.CloseError();
+
+        var (hold, ahead) = HoldQueue(app);
+        var checkout = app.Operations.CheckoutAsync("refs/heads/feature/alpha");
+        var merge = app.Operations.MergeAsync("refs/heads/feature/ff", MergeMode.Default);
+        Assert.Equal(2, app.Repository.Queue.Waiting);
+        hold.SetResult();
+        await Task.WhenAll(ahead, checkout, merge).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(alpha, await repo.RefTargetAsync("refs/heads/feature/alpha"));
+        Assert.Equal(
+            "HEAD moved while this waited: it was on main and is on feature/alpha now. Nothing was merged.",
+            Assert.Single(app.Dialogs.Errors).Summary);
+        Assert.Equal("Merge feature/ff failed", app.StatusText);
         app.AssertScriptFollowed();
     }
 

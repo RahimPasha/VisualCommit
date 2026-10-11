@@ -110,6 +110,13 @@ public sealed partial class RepositoryOperations
     /// </summary>
     private async Task<OperationReport> PullStepsAsync(OperationContext context, GitRef branch, string upstream, OperationText text)
     {
+        // The pull may have waited in the queue: it pulls into the branch, from the upstream, that
+        // the user saw when they chose it, or into nothing (design 1.3).
+        if (await RefuseIfPullTargetMovedAsync(text, branch, upstream) is { } refusal)
+        {
+            return refusal;
+        }
+
         var options = NetworkOptions.From(context);
         if (!branch.HasLocalUpstream)
         {
@@ -118,6 +125,13 @@ public sealed partial class RepositoryOperations
         }
 
         context.EndCancelWindow();
+
+        // Once more after the fetch, which can take long: a terminal may have moved HEAD meanwhile.
+        if (await RefuseIfHeadMovedAsync(text, new HeadState(branch.Name, branch.TargetSha), OperationTexts.NothingPulled) is { } moved)
+        {
+            return moved;
+        }
+
         PullResult pulled;
         try
         {
@@ -138,6 +152,32 @@ public sealed partial class RepositoryOperations
             PullOutcome.Conflicts => OperationReport.Conflicts(OperationTexts.PullConflicts(await CountConflictedFilesAsync())),
             _ => throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}."),
         };
+    }
+
+    /// <summary>
+    /// A refusal when HEAD is no longer on <paramref name="branch"/>, or the branch's upstream is
+    /// no longer the one the pull was chosen with, read now; null when both are as they were.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfPullTargetMovedAsync(OperationText text, GitRef branch, string upstream)
+    {
+        var refs = await Git.ReadRefsAsync();
+        string summary;
+        if (!string.Equals(refs.Head.BranchName, branch.Name, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadMoved(new HeadState(branch.Name, branch.TargetSha), refs.Head, OperationTexts.NothingPulled);
+        }
+        else if (refs.Refs.FirstOrDefault(gitRef => gitRef.FullName == branch.FullName) is var now
+            && !string.Equals(now?.UpstreamRef, branch.UpstreamRef, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.UpstreamChanged(branch.Name, upstream, now is { UpstreamRef: { } upstreamRef } ? UpstreamText(now) ?? ShortName(upstreamRef) : null);
+        }
+        else
+        {
+            return null;
+        }
+
+        Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
+        return Failed(text, StoppedFailure(summary));
     }
 
     // 2.19: push.

@@ -77,7 +77,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 async context =>
                 {
                     var options = NetworkOptions.From(context);
-                    if (await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
+
+                    // After a blocked checkout that asked and saved the backup, nothing more to do.
+                    if (!detachedBackedUp && await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
                         return refusal;
                     }
@@ -329,12 +331,18 @@ public sealed partial class RepositoryOperations : IInProgressActions
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceRef);
         var source = ShortName(sourceRef);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = mode == MergeMode.FastForwardOnly ? OperationTexts.FastForward(current, source) : OperationTexts.Merge(source, current);
         return GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
         {
             if (await RefuseWhileInProgressAsync(text) is { } refusal)
             {
                 return refusal;
+            }
+
+            if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingMerged) is { } moved)
+            {
+                return moved;
             }
 
             return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
@@ -348,10 +356,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.Reset(current, commit);
         return GuardAsync(text, async () =>
         {
-            if (IsClosed || Refs?.Head.IsUnborn != false)
+            if (IsClosed || seen is not { IsUnborn: false })
             {
                 // Nothing to reset before the first commit: the menus disable it (2.11).
                 return;
@@ -366,6 +375,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
             await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
             {
+                // The dialog named the branch and what it would lose: HEAD must still be there.
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReset, sameCommit: true) is { } moved)
+                {
+                    return moved;
+                }
+
                 var head = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
                 var changes = mode == ResetMode.Hard ? await Git.SnapshotForHardResetAsync(commit) : null;
                 await SaveBackupAsync(new BackupRequest("reset", [new BackupEntry(null, head)]) { ChangesCommit = changes });
@@ -382,6 +397,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.CherryPick(commit);
         FailureDisplay? display = null;
         return GuardAsync(text, () => RunAsync(
@@ -393,6 +409,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
+                }
+
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingCherryPicked) is { } moved)
+                {
+                    return moved;
                 }
 
                 switch (await Git.CherryPickAsync(commit, NetworkOptions.From(context)))
@@ -425,6 +446,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
         var count = ordered.Count;
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.CherryPickSeveral(count);
         FailureDisplay? display = null;
         return GuardAsync(text, () => RunAsync(
@@ -436,6 +458,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
+                }
+
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingCherryPicked) is { } moved)
+                {
+                    return moved;
                 }
 
                 // One git cherry-pick per commit, never git's sequencer (2.13, D88).
@@ -476,6 +503,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.Revert(commit);
         return GuardAsync(text, async () =>
         {
@@ -485,6 +513,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
+                }
+
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
+                {
+                    return moved;
                 }
 
                 ApplyResult result;
@@ -524,6 +557,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
         var count = ordered.Count;
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.RevertSeveral(count);
         return GuardAsync(text, async () =>
         {
@@ -545,6 +579,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     if (await RefuseWhileInProgressAsync(text) is { } refusal)
                     {
                         return refusal;
+                    }
+
+                    if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
+                    {
+                        return moved;
                     }
 
                     // One git revert per commit, newest first, never git's sequencer (2.14).
@@ -760,6 +799,40 @@ public sealed partial class RepositoryOperations : IInProgressActions
         }
 
         var summary = OperationTexts.DetachedCommitsSinceChosen(count);
+        Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
+        return Failed(text, StoppedFailure(summary));
+    }
+
+    /// <summary>
+    /// An operation on HEAD (merge, reset, cherry-pick, revert, pull) that waited in the queue
+    /// checks, inside its operation, that HEAD is still where the user saw it when they chose it
+    /// (<paramref name="seen"/>, the refs as last read then): on the same branch, or still
+    /// detached, and with <paramref name="sameCommit"/> at the same commit too. Otherwise it
+    /// refuses, saying where HEAD went and <paramref name="nothing"/>, so it never acts on a branch
+    /// the user did not name. Null when HEAD is where it was, or when no refs had been read.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfHeadMovedAsync(OperationText text, HeadState? seen, string nothing, bool sameCommit = false)
+    {
+        if (seen is null)
+        {
+            return null;
+        }
+
+        var now = await Git.ReadHeadAsync();
+        string summary;
+        if (!string.Equals(now.BranchName, seen.BranchName, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadMoved(seen, now, nothing);
+        }
+        else if (sameCommit && !string.Equals(now.Sha, seen.Sha, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadCommitMoved(seen.BranchName ?? "HEAD", seen.Sha ?? string.Empty, now.Sha ?? string.Empty, nothing);
+        }
+        else
+        {
+            return null;
+        }
+
         Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
         return Failed(text, StoppedFailure(summary));
     }

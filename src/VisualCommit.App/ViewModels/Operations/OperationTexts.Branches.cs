@@ -74,6 +74,14 @@ public static partial class OperationTexts
     public static string HeadCommitMoved(string current, string then, string now, string nothing) =>
         $"{current} moved while this waited: it was at {Short(then)} and is at {Short(now)} now. {nothing}";
 
+    /// <summary>
+    /// The summary of a pull refused because the branch's upstream changed while it waited (2.18):
+    /// "main's upstream changed while this waited: it is origin/dev now, not origin/main. Nothing
+    /// was pulled."; <paramref name="now"/> null: "it has none now".
+    /// </summary>
+    public static string UpstreamChanged(string branch, string then, string? now) =>
+        $"{branch}'s upstream changed while this waited: {(now is null ? "it has none now" : $"it is {now} now, not {then}")}. {NothingPulled}";
+
     public const string NothingReset = "Nothing was reset.";
 
     public const string NothingMerged = "Nothing was merged.";
