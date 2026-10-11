@@ -463,6 +463,39 @@ public abstract partial class Phase3Checks
         Assert.True(actual == expected, $"The {what} at {position} is {actual}, expected {expected}.");
     }
 
+    /// <summary>The date the harness gives the app's commits and ref updates (D72): 2026-01-02 09:00 UTC.</summary>
+    protected static readonly DateTimeOffset AppCommitTime = new(2026, 1, 2, 9, 0, 0, TimeSpan.Zero);
+
+    /// <summary>The scenario's clock time of a commit made at 12:<paramref name="minute"/> on 2026-01-01 UTC.</summary>
+    protected static DateTimeOffset ScenarioTime(int minute) => new(2026, 1, 1, 12, minute, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// Asserts that a date git printed in its strict ISO form (<c>%aI</c>, <c>%cI</c>) is the
+    /// instant <paramref name="expected"/> in the zone <paramref name="expected"/> carries. Git 2.36
+    /// writes UTC as <c>+00:00</c> and git 2.55 as <c>Z</c>, so the text is never compared: the
+    /// instant and the offset are (<see cref="GitIsoDates"/>).
+    /// </summary>
+    protected static void AssertGitDate(DateTimeOffset expected, string gitText)
+    {
+        ArgumentNullException.ThrowIfNull(gitText);
+        var actual = GitIsoDates.Parse(gitText);
+        Assert.Equal((expected, expected.Offset), (actual, actual.Offset));
+    }
+
+    /// <summary>
+    /// The working tree's folder as git names it (<c>rev-parse --show-toplevel</c>), which is the
+    /// folder the app shows and passes on: the physical one (macOS: <c>/private/var/…</c> for a
+    /// temporary folder made as <c>/var/…</c>), in the platform's form, full and without a trailing
+    /// separator. Compare a path the app reports with a path built from this, never from
+    /// <c>repo.Path</c>.
+    /// </summary>
+    protected static async Task<string> WorkingTreeAsync(TempRepo repo)
+    {
+        ArgumentNullException.ThrowIfNull(repo);
+        var topLevel = (await repo.GitAsync("rev-parse", "--show-toplevel")).StandardOutput.TrimEnd('\r', '\n');
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(topLevel));
+    }
+
     /// <summary>The graph's rows (the control <c>GraphRows</c>).</summary>
     protected static CommitGraphControl Graph(ShellDriver app)
     {

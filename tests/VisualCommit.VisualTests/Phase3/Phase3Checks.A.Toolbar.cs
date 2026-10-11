@@ -82,7 +82,7 @@ public sealed partial class Phase3ChecksA
         AssertStatus(app, "Stashed the changes");
         Assert.Contains("▾ Stashes 2", LeftPanelLines(app));
         AssertGraph(app, PartA.StashedGraph);
-        Assert.Equal("2026-01-02T09:00:00+00:00", await GitTextAsync(repo, "log", "-1", "--format=%aI", "stash@{0}"));
+        AssertGitDate(AppCommitTime, await GitTextAsync(repo, "log", "-1", "--format=%aI", "stash@{0}"));
         Assert.Equal(WindowLayout.GraphColumnWidth(4), Graph(app).Columns.Graph.Width);
         Assert.False(Graph(app).Columns.Date.IsVisible);
         AssertToolbar(app, new Dictionary<string, string>

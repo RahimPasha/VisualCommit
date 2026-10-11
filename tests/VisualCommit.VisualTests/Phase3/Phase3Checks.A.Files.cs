@@ -26,6 +26,8 @@ public sealed partial class Phase3ChecksA
         using var app = await OpenAsync(data, repo);
         var repository = Repo(app);
         var calculator = Path.Combine(repo.Path, "src", "Calculator.cs");
+        // The app passes on the folder as git names it (macOS: /private/var), not as the test made it.
+        var workingTree = await WorkingTreeAsync(repo);
         var snapshots = await GitTextAsync(repo, "for-each-ref", "refs/visualcommit");
 
         // Step 1: the unstaged, tracked src/Calculator.cs.
@@ -66,7 +68,7 @@ public sealed partial class Phase3ChecksA
         AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Show in folder");
         await app.WaitForAsync(() => app.Launcher.Requests.Count == 1, "the file manager to be asked");
-        Assert.Equal([FullPath(Path.Combine(repo.Path, "docs", "guide.md"))], app.Launcher.Revealed.Select(FullPath));
+        Assert.Equal([FullPath(Path.Combine(workingTree, "docs", "guide.md"))], app.Launcher.Revealed.Select(FullPath));
         app.RightClick(app.BoundsOf(await app.FileRowAsync("UnstagedFileList", "docs/guide.md")).Center);
         app.Menu();
         app.ClickMenuItem("Copy path");
@@ -100,7 +102,7 @@ public sealed partial class Phase3ChecksA
         app.Menu();
         app.ClickMenuItem("Open file");
         await app.WaitForAsync(() => app.Launcher.Requests.Count == 2, "the file to be opened");
-        Assert.Equal([FullPath(Path.Combine(repo.Path, "src", "helpers.py"))], app.Launcher.Opened.Select(FullPath));
+        Assert.Equal([FullPath(Path.Combine(workingTree, "src", "helpers.py"))], app.Launcher.Opened.Select(FullPath));
         await AssertNoDialogAsync(app);
         Assert.Equal(state, await GitStateAsync(repo));
 
@@ -226,7 +228,7 @@ public sealed partial class Phase3ChecksA
         AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Show in folder");
         await app.WaitForAsync(() => app.Launcher.Requests.Count == 3, "the file manager to be asked");
-        Assert.Equal(FullPath(repo.Path), FullPath(app.Launcher.Requests[^1].FullPath));
+        Assert.Equal(workingTree, FullPath(app.Launcher.Requests[^1].FullPath));
         Assert.Equal(FileLaunchKind.Reveal, app.Launcher.Requests[^1].Kind);
         var status = await GitTextAsync(repo, "status", "--porcelain");
         app.RightClick(app.WorkingRowPoint());
