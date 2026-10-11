@@ -433,7 +433,9 @@ public class BranchOperationTests
         Assert.Equal("Merge branch 'feature/ff'", await GitTextAsync(repo, "log", "-1", "--format=%B"));
         Assert.Equal($"{mainWork} {fastForwardMe}", await GitTextAsync(repo, "log", "-1", "--format=%P"));
         Assert.Equal(["A\tdocs/ff.txt"], await GitLinesAsync(repo, "diff", "--name-status", "HEAD^1", "HEAD"));
-        Assert.Equal("Test Author <author@example.com> 2026-01-02T09:00:00+00:00", await GitTextAsync(repo, "log", "-1", "--format=%an <%ae> %aI"));
+        Assert.Equal("Test Author <author@example.com>", await GitTextAsync(repo, "log", "-1", "--format=%an <%ae>"));
+        var authorDate = GitIsoDates.Parse(await GitTextAsync(repo, "log", "-1", "--format=%aI"));
+        Assert.Equal((GitIsolation.AppCommitDate, TimeSpan.Zero), (authorDate, authorDate.Offset));
         Assert.Empty(await GitLinesAsync(repo, "status", "--porcelain"));
     }
 

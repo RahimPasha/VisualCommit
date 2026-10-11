@@ -151,9 +151,15 @@ public class HistoryOperationTests
 
         Assert.Equal(ApplyResult.Applied, await repository.CherryPickAsync(alphaOne, cancellationToken: TestCancelled));
 
+        Assert.Equal($"Alpha one\n{mainWork}", await GitTextAsync(repo, "log", "-1", "--format=%B%P"));
+        (DateTimeOffset, TimeSpan)[] authorThenCommitter =
+        [
+            (new DateTimeOffset(2026, 1, 1, 12, 2, 0, TimeSpan.Zero), TimeSpan.Zero),
+            (GitIsolation.AppCommitDate, TimeSpan.Zero),
+        ];
         Assert.Equal(
-            $"Alpha one\n{mainWork}\n2026-01-01T12:02:00+00:00\n2026-01-02T09:00:00+00:00",
-            await GitTextAsync(repo, "log", "-1", "--format=%B%P%n%aI%n%cI"));
+            authorThenCommitter,
+            GitIsoDates.ParseLines(await GitTextAsync(repo, "log", "-1", "--format=%aI%n%cI")).Select(date => (date, date.Offset)));
         Assert.Equal(Scenarios.OperationsFiles.AlphaOne, ReadText(repo, "src/alpha.txt"));
         Assert.Equal(["## main...origin/main [ahead 1]"], await GitLinesAsync(repo, "status", "--short", "--branch"));
         Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
