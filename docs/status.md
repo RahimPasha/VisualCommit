@@ -11,7 +11,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 |---|---|---|---|---|
 | 0. Foundation | Done | `phase/0-foundation` | [phase-0](handoffs/phase-0.md) | [phase-0](test-reports/phase-0.md) |
 | 1. Repos and commit graph | Done | `phase/1-graph` | [phase-1](handoffs/phase-1.md) | [phase-1](test-reports/phase-1.md) |
-| 2. Diff and commit workflow | Awaiting acceptance | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
+| 2. Diff and commit workflow | Done | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
 | 3. Branch, remote, stash and tag operations | Not started | `phase/3-operations` | | |
 | 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
 | 5. History, traceability and undo | Not started | `phase/5-history` | | |
@@ -25,90 +25,22 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 2, Diff and commit workflow, is awaiting acceptance on `phase/2-diff-commit`: the whole
-visual test gate passed (see the [report](test-reports/phase-2.md) and the
-[handoff](handoffs/phase-2.md)). It was started on 2026-10-10 on the Windows machine, from
-`master` at `cec9c0c`. Phase 1 was accepted on
-2026-10-10 and merged into `master` (merge commit `b5eb1ed`); phase 0 on 2026-10-06 (merge
-commit `b5f4723`).
+None in progress. Phase 2 was accepted by the owner on 2026-10-10 and merged into `master`
+(merge commit `e039070`); its gate ran on `2a13804`. Phase 1 was accepted on 2026-10-10 (merge
+commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is
+phase 3.
 
-Gate commit: `2a13804`. `dotnet test` (557 passed) and the real-window pass (14 passed) ran on
-it, and every picture of both was inspected; the commits after it change only docs, which
-"Phase N accepted" checks.
+Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
+that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
+after it.
 
 ### Progress
 
-Each item is ticked in the commit that completes it. The numbers are plain step numbers, not
-requirement numbers.
-
-Start:
-
-- [x] 1. Phase branch created, phase set to "In progress", this checklist.
-- [x] 2. Open points from the phase 1 handoff decided and recorded in `decisions.md`: the
-  working-changes row, the default diff mode, how a discard is confirmed and restored, how a
-  diff opens (asked of the owner); the diff viewer's technology after trying AvaloniaEdit 12.0.0
-  on Avalonia 12.1.3, the font for code, when a file counts as very large, how stage and discard
-  are offered before phase 3's context menus, how the watcher sees the working tree and keeps
-  out of the app's own writes (owner told), no editor for git, how a discard's snapshot keeps
-  untracked files, in-app dialogs.
-- [x] 3. Harness: `TempRepo` writes bytes (a binary file, an image) and makes a PNG; scenario
-  repos get a local identity; the app's commits get fixed dates in both harnesses.
-- [x] 4. Scenario repos with known working-tree changes (modified, added, deleted, renamed,
-  binary, an image, a very large file; staged and unstaged; one with `core.autocrlf`), pinned in
-  `ScenarioTests`.
-- [x] 5. Phase 2's visual checks written into `docs/test-reports/phase-2.md`, each marked for
-  the real-window pass, reviewed, and committed before the UI they test.
-
-Git layer:
-
-- [x] 6. Working-tree status (`git status --porcelain=v2`): staged, unstaged, untracked,
-  renamed and conflicted files. Tests.
-- [x] 7. Diffs: a file's unstaged, staged and untracked changes and a commit's change to a file;
-  the unified-diff parser; binary files, images and file sizes. Tests.
-- [x] 8. Patches for a hunk or chosen lines, to stage, unstage and discard, applied with
-  `git apply`. Tests, including a repository with `core.autocrlf`.
-- [x] 9. Stage, unstage and discard whole files; commit and amend with the message passed
-  explicitly and no editor. Tests.
-- [x] 10. A snapshot before every discard, untracked files included, kept under
-  `refs/visualcommit/backup/`, and restoring it. Tests.
-- [x] 11. The watcher sees the working tree (not `.git`, not ignored files), and the app's own
-  writes do not set it off. Tests.
-
-App:
-
-- [x] 12. Working-changes row at the top of the graph when there are changes: drawing,
-  selection, keys. Tests.
-- [x] 13. Stage-and-commit panel in the right panel: unstaged and staged lists (flat or tree),
-  stage, unstage and discard by file and all, summary and description editor, amend, commit.
-- [x] 14. Confirmation dialog in the window; the restore bar after a discard.
-- [x] 15. Diff view in place of the graph: header with the file and its actions, close; opened
-  from the stage lists and from a commit's files.
-- [x] 16. Diff text, inline and side by side: line numbers, added and removed backgrounds, the
-  font for code, theme colours; the mode remembered.
-- [x] 17. Syntax highlighting and word-level highlights.
-- [x] 18. Stage, unstage and discard a hunk or chosen lines from the diff view.
-- [x] 19. Image diff; binary and very large files.
-- [x] 20. Phase 1's checks updated for anything phase 2 changes on purpose, recorded under
-  "Changes to expected results" in the phase 2 report.
-
-Visual checks:
-
-- [x] 21. Scripted walk-through: one test per check in `Phase2Checks`, screenshots under
-  `artifacts/visual/phase-2/scripted/`.
-- [x] 22. Real-window pass for the checks marked for it (`Phase2RealWindowPass`): checks 1, 3,
-  5, 10, 14, 17, 20 and 21.
-
-Closing:
-
-- [x] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
-  inspected, report completed.
-- [x] 24. CI run of the gate's commit read, every job.
-- [x] 25. `architecture.md` describes what is built.
-- [x] 26. `plan.md`: anything not delivered moved, risks updated.
-- [x] 27. Handoff `docs/handoffs/phase-2.md`.
-- [x] 28. Cold-read check by a fresh agent; gaps fixed.
-- [x] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
-- [x] 30. Owner told what passed, what did not, and what needs a decision.
+Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
+"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
+steps from `CLAUDE.md` and a step for the CI result that each phase's "Done when" asks for. Each
+item is ticked in the commit that completes it. Number the steps plainly; do not label them C1,
+C2 and so on, which are requirement numbers.
 
 ### CI
 
@@ -119,25 +51,18 @@ The last run on `phase/2-diff-commit` was
 [38097840078](https://github.com/RahimPasha/VisualCommit/actions/runs/38097840078), for the
 gate's commit `2a13804`: all five jobs succeeded (`windows-latest`, `macos-latest`,
 `ubuntu-latest` and the two "bare ubuntu container" jobs), each with 557 tests passed. The
-commits after it changed only docs, so no run followed.
+commits after it changed only docs. The run for the merge on `master` is added below once it has
+been read.
 
-The last run on `phase/1-graph` was
-[38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182), for the
-gate's commit `5673c3f`: all five jobs succeeded, each with 379 tests passed. The commits after
-it changed only docs.
-
-The run for the merge on `master`:
+Before phase 2, the last run on `master` was
 [38077727040](https://github.com/RahimPasha/VisualCommit/actions/runs/38077727040), for
-`eb626ba` (the merge commit `b5eb1ed` and the commit that set phase 1 to "Done"). All five jobs
-succeeded, each with 379 tests passed: `windows-latest`, `macos-latest`, `ubuntu-latest`, and
-the two "bare ubuntu container" jobs.
+`eb626ba` (phase 1's merge commit `b5eb1ed` and the commit that set phase 1 to "Done"): all five
+jobs succeeded, each with 379 tests passed. The changes made on `master` after it, up to
+`cec9c0c`, were docs only.
 
-Before phase 1, the last run on `master` was
-[38026062572](https://github.com/RahimPasha/VisualCommit/actions/runs/38026062572), for `edb811e`,
-the first run in the re-created repository (D41); all five jobs succeeded. The runs before
-2026-10-09 went with the deleted repository, so the run numbers that older commits and the
-phase 0 report and handoff mention no longer open; what they showed is as written there and in
-this file's history.
+The run numbers from before 2026-10-09 went with the deleted repository (D41), so those that
+older commits and the phase 0 report and handoff mention no longer open; what they showed is as
+written there and in this file's history.
 
 Earlier in phase 0 the test step froze the whole job on macOS in 4 of 9 runs. The freezes
 stopped with the commit that is now `0784112` (decision D37). If a macOS job ever sits in its
@@ -145,55 +70,44 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner. "Phase 2 accepted" merges `phase/2-diff-commit` into `master` as
-`CLAUDE.md` says. A change to anything but docs before then sets the phase back to "In
-progress" and needs both passes of the gate again.
+Wait for the owner to say "Start phase 3". Its first steps, and the open points to settle before
+its checks are written, are in the [phase 2 handoff](handoffs/phase-2.md) under "For the next
+phase".
+
+Once a phase is running, this always names the single next thing to do and is kept accurate in
+every commit.
 
 ### Notes for whoever resumes
 
-- The default tests passed (379) on `master` at `aead41b` before the phase started; the phase
-  started from `cec9c0c`, which differs from it in docs only.
-- An independent review of phase 2's code (an Opus agent, before the gate) found 14 problems;
-  all are fixed, each with a test, and D74 to D76 record what changed. The two that could lose
-  work: patches around "\ No newline at end of file" joined lines (now checked against git by
-  `PatchFuzzTests`), and Restore overwrote work done after the discard (it now asks and keeps
-  the newer version in a snapshot).
-- The owner answered the four questions of taste on 2026-10-10, each with the recommended option
-  (D60 to D63). The technical decisions are D64 to D72. AvaloniaEdit 12.0.0 was tried in a
-  throwaway headless program outside the repo: it drew an editor with TextMate colours and
-  JetBrains Mono on Avalonia 12.1.3. The plain JetBrains Mono draws `=>` as an arrow, hence the
-  NL cut (D64).
+- Nothing is in flight. `master` holds everything; the working tree was clean when phase 2 was
+  merged.
 - Phases 1 and 2 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
-  (git-ignored); the phase 1 handoff's "Things that cost time" says what to watch for. One
-  worktree, `.claude/worktrees/agent-a60aa26c7fe44ae22` on `wip/p1-git-fixes`, is still there:
-  this session's permission system refused `git worktree remove --force --force` on it. The owner
-  can remove it and the merged local branches `wip/p1-git-fixes` and
-  `worktree-agent-a60aa26c7fe44ae22` (`git branch -d`). None of them is on `origin`. Phase 2's
-  own worktree was removed with its branches.
-- No cloud session has worked on the repo yet; [cloud-sessions.md](cloud-sessions.md) lists what
-  the first one should check.
+  (git-ignored); the phase 1 handoff's "Things that cost time" says what to watch for. All of
+  them are merged and removed, with their local branches.
+- The next phase can be started on the Windows machine or in a cloud session; see
+  [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
+  page lists what the first one should check.
 - On the Windows development machine only: Windows 11 on an Intel Core i7-8650U laptop, .NET SDK
   10.0.303, Git 2.36.0.windows.1, `gh` signed in as RahimPasha. Its screen is 3000×2000 at 200%
   scaling: 1500×1000 logical pixels, of which 1500×952 is the work area. A 1920×1080 window does
-  not fit, so the real-window pass can only use 1100×700 there. The laptop is slower when hot:
-  let it rest a few minutes between `dotnet test` and the real-window pass, which times Q1.
-- Packages: Avalonia 12.1.3, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
+  not fit, so the real-window pass can only use sizes up to 1400×900 there. The laptop is slower
+  when hot: let it rest a few minutes before the gate's `dotnet test` and again before the
+  real-window pass, which times Q1.
+- Packages: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and
+  TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
   FlaUI 5.0.0.
 - Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled
   the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
-  apostrophes fails; write such a script to a file first.
+  apostrophes fails and turns `\n` in a string into a line break, and `sed -i` drops a CRLF
+  file's carriage returns; write such a script to a file first.
 - When a cloud session has worked on a phase, say so here. If it had to use a branch of its own,
   that name stands in the Branch column of the Phases table in place of the phase's.
 
 ## Waiting on the owner
 
-- Accept phase 2, or say what to change: "Phase 2 accepted" merges `phase/2-diff-commit` into
-  `master`.
-- The handoff's "Open points for phase 3" include questions of taste to settle when phase 3
-  starts, among them whether phase 3's menus leave out or disable the interaction table's
-  actions that belong to later phases.
-- Optional: remove the leftover phase 1 worktree `.claude/worktrees/agent-a60aa26c7fe44ae22` and
-  its merged local branches (see the Notes); the session's permission system would not.
+- When phase 3 starts: the questions of taste among the handoff's "Open points for phase 3",
+  such as whether phase 3's menus leave out or disable the interaction table's actions that
+  belong to later phases.
 - When you have a Mac at hand: the seven-step checklist at the end of the
   [phase 2 test report](test-reports/phase-2.md), the nine-step one at the end of the
   [phase 1 test report](test-reports/phase-1.md) and the eight-step one at the end of the
