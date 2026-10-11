@@ -19,6 +19,9 @@ public sealed partial class RepositoryOperations
     /// <summary>A HEAD that is not unborn, for <see cref="StashRefusal"/> before the refs are read: git then says whether there is a first commit.</summary>
     private static readonly HeadState HeadNotRead = new(null, "HEAD");
 
+    /// <summary>The toolbar's last Pop: the stash it pops and its task (UI thread only).</summary>
+    private (string Sha, Task Task)? _newestPop;
+
     /// <summary>
     /// "Stash" and "Stash changes…" (2.24): refused for the reasons that disable the toolbar's
     /// Stash and every "Stash changes…" item (<see cref="StashRefusal"/>, D119), otherwise the
@@ -65,7 +68,11 @@ public sealed partial class RepositoryOperations
     /// <summary>"Pop stash" (2.25): <c>git stash pop stash@{n}</c>; a pop that conflicts keeps the stash.</summary>
     public Task PopStashAsync(string stash) => ApplyOrPopAsync(stash, pop: true);
 
-    /// <summary>The toolbar's Pop (2.25): the newest stash, <c>stash@{0}</c>.</summary>
+    /// <summary>
+    /// The toolbar's Pop (2.25): the newest stash, <c>stash@{0}</c>. A second click while the pop
+    /// of that same stash has not ended (a double click, before the refs are read again) gets
+    /// that pop's task: it would pop the stash the first one already popped.
+    /// </summary>
     public Task PopNewestStashAsync()
     {
         if (IsClosed)
@@ -79,7 +86,15 @@ public sealed partial class RepositoryOperations
             return Task.CompletedTask;
         }
 
-        return PopStashAsync(newest.Sha);
+        if (_newestPop is { Task.IsCompleted: false } pending && string.Equals(pending.Sha, newest.Sha, StringComparison.Ordinal))
+        {
+            Log.Info($"{Repository.Name}: Pop: {newest.Name} is being popped already.");
+            return pending.Task;
+        }
+
+        var pop = PopStashAsync(newest.Sha);
+        _newestPop = (newest.Sha, pop);
+        return pop;
     }
 
     /// <summary>"Drop stash…" (2.26): confirms, backs the stash commit up as <c>stash-&lt;time&gt;</c> and drops it.</summary>

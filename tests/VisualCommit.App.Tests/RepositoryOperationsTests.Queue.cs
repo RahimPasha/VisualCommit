@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
@@ -316,6 +317,26 @@ public partial class RepositoryOperationsTests
         Assert.True(File.Exists(refLock), "The lock a live git took again was removed.");
         Assert.True(File.Exists(otherWorktree));
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_double_click_on_the_toolbars_Pop_pops_the_newest_stash_once()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.WriteFile("second.txt", "second\n").GitAsync("add", "second.txt");
+        await repo.GitAsync("stash", "push", "--message", "Second stash");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var before = (await repo.StashListAsync()).Count;
+        IToolbarActions toolbar = app.Operations;
+
+        var first = toolbar.PopAsync();
+        var second = toolbar.PopAsync();
+        await Task.WhenAll(first, second).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Empty(app.Dialogs.Errors);
+        Assert.Equal(("Popped stash@{0}", OperationStatusTone.Secondary), (app.StatusText, app.StatusTone));
+        Assert.Equal(before - 1, (await repo.StashListAsync()).Count);
+        Assert.Equal(1, Ran(app, "Pop stash@{0}"));
     }
 
     /// <summary>
