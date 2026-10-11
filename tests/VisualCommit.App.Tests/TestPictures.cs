@@ -21,4 +21,14 @@ internal static class TestPictures
             app.Capture().Save(Path.Combine(folder, name + ".png"));
         }
     }
+
+    /// <summary>Captures a view test's window as <c>&lt;name&gt;.png</c> in the folder, when one is named.</summary>
+    public static void Save(DiffHost host, string name)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        if (Environment.GetEnvironmentVariable(FolderVariable) is { Length: > 0 } folder)
+        {
+            host.Capture().Save(Path.Combine(folder, name + ".png"));
+        }
+    }
 }

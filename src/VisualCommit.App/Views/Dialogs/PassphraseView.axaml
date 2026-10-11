@@ -1,6 +1,7 @@
 <local:DialogView xmlns="https://github.com/avaloniaui"
                   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                   xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
                   xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
                   x:Class="VisualCommit.App.Views.Dialogs.PassphraseView"
                   x:DataType="vm:PassphraseViewModel"
@@ -20,7 +21,7 @@
                    Text="{Binding RepositoryText}"
                    IsVisible="{Binding ShowsRepository}"
                    AutomationProperties.AutomationId="DialogRepository" />
-        <TextBlock Name="PassphraseText"
+        <c:UrlTextBlock Name="PassphraseText"
                    Classes="dialogText"
                    Text="{Binding Text}"
                    AutomationProperties.AutomationId="PassphraseText" />
