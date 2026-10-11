@@ -1,0 +1,88 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.NameDialogView"
+                  x:DataType="vm:NameDialogViewModel"
+                  AutomationProperties.AutomationId="NameDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The name dialog (docs/phase-3-design.md 4f): the branch dialog (create, rename), the tag
+       dialog and the stash dialog, each showing the parts it has. The first box takes the focus;
+       its message shows only once it has been edited (D114). -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="NameDialogCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="NameDialogTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="NameDialogTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <TextBlock Name="NameDialogContext"
+                   Classes="secondary"
+                   Text="{Binding Context}"
+                   IsVisible="{Binding ShowsContext}"
+                   Margin="0,6,0,0"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding Context}"
+                   AutomationProperties.AutomationId="NameDialogContext" />
+        <TextBox Name="NameBox"
+                 Classes="dialogBox"
+                 Text="{Binding Name}"
+                 PlaceholderText="{Binding NamePlaceholder}"
+                 IsVisible="{Binding ShowsName}"
+                 AutomationProperties.AutomationId="NameBox"
+                 AutomationProperties.Name="{Binding NamePlaceholder}" />
+        <TextBlock Name="NameError"
+                   Classes="dialogError"
+                   Text="{Binding NameError}"
+                   IsVisible="{Binding HasNameError}"
+                   AutomationProperties.AutomationId="NameError" />
+        <TextBox Name="MessageBox"
+                 Classes="dialogBox"
+                 Classes.multiline="{Binding IsMessageMultiline}"
+                 Text="{Binding Message}"
+                 PlaceholderText="{Binding MessagePlaceholder}"
+                 IsVisible="{Binding ShowsMessage}"
+                 AcceptsReturn="{Binding IsMessageMultiline}"
+                 AutomationProperties.AutomationId="MessageBox"
+                 AutomationProperties.Name="Message" />
+        <CheckBox Name="NameDialogOption"
+                  Theme="{StaticResource VcCheckBox}"
+                  Content="{Binding OptionText}"
+                  IsChecked="{Binding IsOptionChecked}"
+                  IsVisible="{Binding ShowsOption}"
+                  Margin="0,12,0,0"
+                  AutomationProperties.AutomationId="NameDialogOption"
+                  AutomationProperties.Name="{Binding OptionText}" />
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <!-- The tag's message is three lines high and wraps; the stash's is one line. -->
+  <local:DialogView.Styles>
+    <Style Selector="TextBox#MessageBox.multiline">
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Height" Value="66" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

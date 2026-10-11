@@ -16,6 +16,21 @@ public abstract partial class DialogViewModel : ObservableObject
     /// <summary>The card's title.</summary>
     public abstract string Title { get; }
 
+    /// <summary>
+    /// The repository the dialog's operation acts on, named under the title as "In &lt;name&gt;"
+    /// (<c>DialogRepository</c>, 4f) when the window has more than one tab with a repository;
+    /// null (the default) shows no such line. Whoever opens the dialog sets it. The error dialog
+    /// always names its repository, in <c>ErrorRepository</c>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepositoryText), nameof(ShowsRepository))]
+    public partial string? RepositoryName { get; set; }
+
+    /// <summary>"In &lt;name&gt;", or empty.</summary>
+    public string RepositoryText => RepositoryName is null ? string.Empty : $"In {RepositoryName}";
+
+    public bool ShowsRepository => RepositoryName is not null;
+
     /// <summary>Completes when the dialog has closed, by any button, Esc or <see cref="Close"/>.</summary>
     public Task Closed => _closed.Task;
 
@@ -35,6 +50,12 @@ public abstract partial class DialogViewModel : ObservableObject
             Close();
         }
     }
+
+    /// <summary>
+    /// Esc on this dialog, the top one (D104). Cancels it, unless the dialog has a step to go back
+    /// to (the Remotes dialog's form goes back to its list) or must not be left now.
+    /// </summary>
+    public virtual void HandleEscape() => Cancel();
 
     /// <summary>Closes the dialog. Closing it a second time does nothing.</summary>
     protected void Close()
