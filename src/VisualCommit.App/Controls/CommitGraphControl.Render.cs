@@ -55,8 +55,8 @@ public sealed partial class CommitGraphControl
 
     private const string Ellipsis = "…";
 
-    /// <summary>What the working-changes row says in the Message column (D60).</summary>
-    public const string WorkingRowText = "Working changes";
+    /// <summary>What the working-changes row says in the Message column (D60) unless <see cref="WorkingRowText"/> says otherwise.</summary>
+    public const string DefaultWorkingRowText = "Working changes";
 
     /// <summary>The working-changes row's dashed line: dashes and gaps of 3 pixels, in units of the line's thickness.</summary>
     private const double DashLength = 3;
@@ -148,7 +148,7 @@ public sealed partial class CommitGraphControl
         {
             if (display < rowOffset)
             {
-                _workingRowLayout ??= CellLayout(WorkingRowText, CellTypeface, palette.TextSecondary, columns.Message);
+                _workingRowLayout ??= CellLayout(WorkingRowText ?? DefaultWorkingRowText, CellTypeface, palette.TextSecondary, columns.Message);
                 DrawCell(context, _workingRowLayout, columns.Message.X, RowTop(display, offset));
             }
             else

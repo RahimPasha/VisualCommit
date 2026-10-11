@@ -107,6 +107,21 @@ public class JsonSettingsStoreTests
     }
 
     [Fact]
+    public void A_file_of_phase_2_gets_phase_3s_defaults_and_keeps_an_auto_fetch_interval_once_set()
+    {
+        // docs/phase-3-design.md 6.1 and 6.2: auto-fetch every 5 minutes, untracked files stashed.
+        using var folder = new TempDirectory("settings");
+        var file = folder.Combine("settings.json");
+        File.WriteAllText(file, "{ \"theme\": \"Light\", \"fileList\": \"Tree\", \"diffMode\": \"SideBySide\" }");
+
+        var store = new JsonSettingsStore(file);
+        Assert.Equal((5, true), (store.Current.AutoFetchMinutes, store.Current.StashIncludeUntracked));
+        store.Update(settings => settings with { AutoFetchMinutes = 0, StashIncludeUntracked = false });
+
+        Assert.Equal((0, false), (new JsonSettingsStore(file).Current.AutoFetchMinutes, new JsonSettingsStore(file).Current.StashIncludeUntracked));
+    }
+
+    [Fact]
     public void A_save_that_fails_is_logged_and_the_change_still_applies_in_memory()
     {
         using var folder = new TempDirectory("settings");

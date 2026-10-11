@@ -25,5 +25,8 @@
     <!-- AvaloniaEdit's control templates, which the diff view needs (D64). -->
     <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     <StyleInclude Source="/Theme/Controls.axaml" />
+    <!-- Phase 3: the context menu's and the dialogs' own files (docs/phase-3-design.md, section 8). -->
+    <StyleInclude Source="/Theme/Menus.axaml" />
+    <StyleInclude Source="/Theme/Dialogs.axaml" />
   </Application.Styles>
 </Application>

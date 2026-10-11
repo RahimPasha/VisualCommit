@@ -40,6 +40,8 @@
                           IsWorkingRowSelected="{Binding IsWorkingRowSelected}"
                           Dates="{Binding Dates}"
                           SelectedIndex="{Binding SelectedIndex}"
+                          Selection="{Binding Selection}"
+                          WorkingRowText="{Binding WorkingRowText}"
                           ScrollOffset="{Binding ScrollOffset}"
                           AutomationProperties.AutomationId="GraphRows"
                           AutomationProperties.Name="Commit graph" />

@@ -56,6 +56,7 @@ public sealed record OperationResult(OperationOutcome Outcome, string Message, G
 /// <param name="Errors">Where its failure would be shown; a stage-panel operation leaves no message in the status bar (1.9).</param>
 /// <param name="Progress">Git's last progress line, or null before one came.</param>
 /// <param name="CanCancel">Cancel is offered: a network operation that is not in the background, before <see cref="OperationContext.EndCancelWindow"/>, and not cancelled yet.</param>
+/// <param name="HasSeveralSteps">The operation's <see cref="GitOperation.HasSeveralSteps"/>, for the "Finishing operations" dialog (1.8).</param>
 public sealed record OperationSnapshot(
     string Title,
     string RunningText,
@@ -63,7 +64,8 @@ public sealed record OperationSnapshot(
     bool IsBackground,
     ErrorDisplay Errors,
     OperationProgress? Progress,
-    bool CanCancel);
+    bool CanCancel,
+    bool HasSeveralSteps = false);
 
 /// <summary>One operation has ended: what it was and how it ended.</summary>
 public sealed class OperationFinishedEventArgs(GitOperation operation, OperationResult result) : EventArgs

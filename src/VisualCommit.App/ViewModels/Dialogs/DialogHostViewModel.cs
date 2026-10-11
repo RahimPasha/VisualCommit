@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -19,15 +20,13 @@ public interface IDialogService
 }
 
 /// <summary>One open confirmation: what it says and the two answers.</summary>
-public sealed partial class ConfirmationViewModel : ObservableObject
+public sealed partial class ConfirmationViewModel : DialogViewModel<bool>
 {
-    private readonly TaskCompletionSource<bool> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
     internal ConfirmationViewModel(ConfirmationRequest request) => Request = request;
 
     public ConfirmationRequest Request { get; }
 
-    public string Title => Request.Title;
+    public override string Title => Request.Title;
 
     public string Question => Request.Question;
 
@@ -39,48 +38,59 @@ public sealed partial class ConfirmationViewModel : ObservableObject
 
     public bool IsDestructive => Request.IsDestructive;
 
-    internal Task<bool> Answer => _answer.Task;
+    internal Task<bool> Answer => Result;
+
+    protected override bool CancelledResult => false;
 
     [RelayCommand]
-    private void Confirm() => _answer.TrySetResult(true);
-
-    [RelayCommand]
-    private void Cancel() => _answer.TrySetResult(false);
+    private void Confirm() => Complete(true);
 }
 
 /// <summary>
-/// The window's dialog layer (D69): at most one confirmation at a time, shown over a dimmed
-/// backdrop. A second request while one is open waits for the first to be answered.
+/// The window's dialog layer (D69), as a stack (D104): a dialog opened while another is open goes
+/// on top of it, over a backdrop of its own; the one below stays drawn, takes no input, and gets
+/// the focus back when the top one closes. Esc cancels the top dialog only. Views are found by
+/// the dialog's type (<c>DialogViewLocator</c>).
 /// </summary>
 public sealed partial class DialogHostViewModel : ObservableObject, IDialogService
 {
-    private readonly SemaphoreSlim _one = new(1, 1);
+    /// <summary>The open dialogs, the bottom one first: what the dialog layer draws, in this order.</summary>
+    public ObservableCollection<DialogViewModel> Open { get; } = [];
 
-    /// <summary>The confirmation on screen, or null.</summary>
+    /// <summary>The top dialog, which takes the input, or null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsOpen))]
-    public partial ConfirmationViewModel? Current { get; private set; }
+    public partial DialogViewModel? Current { get; private set; }
 
     public bool IsOpen => Current is not null;
 
-    public async Task<bool> ConfirmAsync(ConfirmationRequest request)
+    /// <summary>
+    /// Raised when a dialog has closed, just before it leaves <see cref="Open"/>: the window moves
+    /// the keyboard focus away from it first (to the dialog below, D104).
+    /// </summary>
+    public event EventHandler<DialogViewModel>? Removing;
+
+    public Task<bool> ConfirmAsync(ConfirmationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await _one.WaitAsync();
-        try
-        {
-            var dialog = new ConfirmationViewModel(request);
-            Current = dialog;
-            return await dialog.Answer;
-        }
-        finally
-        {
-            Current = null;
-            _one.Release();
-        }
+        return ShowAsync(new ConfirmationViewModel(request));
     }
 
-    /// <summary>Esc: cancels the open confirmation. Returns whether one was open.</summary>
+    /// <summary>Shows <paramref name="dialog"/> on top of any open one and completes with its answer when it closes.</summary>
+    public Task<TResult> ShowAsync<TResult>(DialogViewModel<TResult> dialog)
+    {
+        Show(dialog);
+        return dialog.Result;
+    }
+
+    /// <summary>Shows <paramref name="dialog"/> on top of any open one; completes when it closes.</summary>
+    public Task ShowAsync(DialogViewModel dialog)
+    {
+        Show(dialog);
+        return dialog.Closed;
+    }
+
+    /// <summary>Esc: cancels the top dialog. Returns whether one was open.</summary>
     public bool CancelCurrent()
     {
         if (Current is not { } dialog)
@@ -90,5 +100,31 @@ public sealed partial class DialogHostViewModel : ObservableObject, IDialogServi
 
         dialog.CancelCommand.Execute(null);
         return true;
+    }
+
+    private void Show(DialogViewModel dialog)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+        if (dialog.IsClosed || Open.Contains(dialog))
+        {
+            return;
+        }
+
+        dialog.Closing += OnClosing;
+        Open.Add(dialog);
+        Current = dialog;
+    }
+
+    private void OnClosing(object? sender, EventArgs e)
+    {
+        if (sender is not DialogViewModel dialog)
+        {
+            return;
+        }
+
+        dialog.Closing -= OnClosing;
+        Removing?.Invoke(this, dialog);
+        Open.Remove(dialog);
+        Current = Open.Count > 0 ? Open[^1] : null;
     }
 }

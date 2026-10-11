@@ -298,7 +298,8 @@ public sealed class OperationQueue : IOperationQueue
         entry.Operation.IsBackground,
         entry.Operation.Errors,
         entry.Progress,
-        CanCancel(entry));
+        CanCancel(entry),
+        entry.Operation.HasSeveralSteps);
 
     private static OperationResult CancelledResult(GitOperation operation) =>
         new(OperationOutcome.Cancelled, $"{operation.Title} cancelled", null);

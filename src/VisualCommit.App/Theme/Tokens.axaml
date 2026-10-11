@@ -42,6 +42,11 @@
       <SolidColorBrush x:Key="VcDiffHunkBrush" Color="#1C2130" />
       <SolidColorBrush x:Key="VcDiffFillerBrush" Color="#181A20" />
       <SolidColorBrush x:Key="VcBackdropBrush" Color="#99000000" />
+      <!-- Phase 3: the context menu's shadow, the conflict banner, a drop target's outline (the
+           accent's colour, kept as a token of its own so that it can change apart from it). -->
+      <BoxShadows x:Key="VcMenuShadow">0 6 16 0 #80000000</BoxShadows>
+      <SolidColorBrush x:Key="VcBannerBackgroundBrush" Color="#33291A" />
+      <SolidColorBrush x:Key="VcDragTargetBrush" Color="#7C8CFF" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#272C36" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C36" />
@@ -92,6 +97,11 @@
       <SolidColorBrush x:Key="VcDiffHunkBrush" Color="#EEF0FB" />
       <SolidColorBrush x:Key="VcDiffFillerBrush" Color="#F3F4F6" />
       <SolidColorBrush x:Key="VcBackdropBrush" Color="#66000000" />
+      <!-- Phase 3: the context menu's shadow, the conflict banner, a drop target's outline (the
+           accent's colour, kept as a token of its own so that it can change apart from it). -->
+      <BoxShadows x:Key="VcMenuShadow">0 6 16 0 #33000000</BoxShadows>
+      <SolidColorBrush x:Key="VcBannerBackgroundBrush" Color="#FFF4DE" />
+      <SolidColorBrush x:Key="VcDragTargetBrush" Color="#4353D8" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />

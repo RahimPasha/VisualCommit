@@ -868,6 +868,86 @@ public class CommitGraphControlTests
     /// at the newest commit and HEAD on the first branch among them, or detached at row
     /// <paramref name="detachedAt"/>.
     /// </summary>
+    [AvaloniaFact]
+    public void A_hit_test_names_the_label_the_commits_row_the_working_row_or_nothing()
+    {
+        // docs/phase-3-design.md section 8: the hook the menus and the drag build on.
+        var data = Linear(5, [Branch("main", head: true), Remote("origin/main"), Tag("release-2026")]);
+        var control = new CommitGraphControl { Data = data, Dates = Utc, ShowsWorkingRow = true };
+        using var host = Host.Show(control, AreaWidth, RowsHeight, ThemeVariant.Dark);
+        host.Capture();
+        var labels = control.LabelsInRow(0);
+
+        var onLabel = control.HitTest(labels[0].Bounds.Center);
+        var onPlus = control.HitTest(labels[1].Bounds.Center);
+        var onMessage = control.HitTest(new Point(300, control.RowBounds(3).Center.Y));
+        var onWorkingRow = control.HitTest(control.WorkingRowBounds.Center);
+        var below = control.HitTest(new Point(300, control.RowBounds(4).Bottom + 10));
+
+        Assert.Equal((GraphHitKind.Label, 0, data.CommitAt(0).Sha, "main"), (onLabel.Kind, onLabel.Row, onLabel.Sha, onLabel.Label!.FullText));
+        Assert.Equal((GraphHitKind.Label, true), (onPlus.Kind, onPlus.Label!.IsOverflow));
+        Assert.Equal(new GraphHit(GraphHitKind.Commit, 3, data.CommitAt(3).Sha, null), onMessage);
+        Assert.Equal(GraphHitKind.WorkingRow, onWorkingRow.Kind);
+        Assert.Equal(GraphHit.None, below);
+        Assert.Equal(GraphHit.None, control.HitTest(new Point(-1, 10)));
+    }
+
+    [AvaloniaFact]
+    public void A_right_click_asks_for_a_menu_for_what_is_under_the_pointer_and_a_double_click_on_a_label_is_told()
+    {
+        var data = Linear(5, [Branch("main", head: true)]);
+        var control = new CommitGraphControl { Data = data, Dates = Utc };
+        using var host = Host.Show(control, AreaWidth, RowsHeight, ThemeVariant.Dark);
+        host.Capture();
+        var asked = new List<GraphContextRequestedEventArgs>();
+        control.ContextRequestedAt += (_, e) =>
+        {
+            asked.Add(e);
+            e.Handled = true;
+        };
+        var doubleTapped = new List<GraphHit>();
+        control.LabelDoubleTapped += (_, hit) => doubleTapped.Add(hit);
+        var label = Assert.Single(control.LabelsInRow(0));
+
+        foreach (var point in new[] { label.Bounds.Center, new Point(300, control.RowBounds(2).Center.Y), new Point(300, control.RowBounds(4).Bottom + 20) })
+        {
+            var position = host.ToWindow(control, point);
+            host.Window.MouseMove(position);
+            host.Window.MouseDown(position, MouseButton.Right);
+            host.Window.MouseUp(position, MouseButton.Right);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal([GraphHitKind.Label, GraphHitKind.Commit, GraphHitKind.None], asked.Select(e => e.Hit.Kind));
+        Assert.Equal(label.Bounds.Center, asked[0].Position);
+        Assert.Equal(2, asked[1].Hit.Row);
+
+        // A double-click on the label (each press of it also selects its row, as phase 1's click does).
+        var onLabel = host.ToWindow(control, label.Bounds.Center);
+        for (var click = 0; click < 2; click++)
+        {
+            host.Window.MouseDown(onLabel, MouseButton.Left);
+            host.Window.MouseUp(onLabel, MouseButton.Left);
+        }
+
+        Dispatcher.UIThread.RunJobs();
+        var hit = Assert.Single(doubleTapped);
+        Assert.Equal(("main", 0), (hit.Label!.FullText, hit.Row));
+    }
+
+    [AvaloniaFact]
+    public void The_working_rows_text_comes_from_its_property()
+    {
+        var control = new CommitGraphControl { Data = Linear(3, [Branch("main", head: true)]), Dates = Utc, ShowsWorkingRow = true };
+        using var host = Host.Show(control, AreaWidth, RowsHeight, ThemeVariant.Dark);
+
+        Assert.Equal(CommitGraphControl.DefaultWorkingRowText, control.WorkingRowText);
+        control.WorkingRowText = "Working changes · 2 conflicts";
+        host.Capture();
+
+        Assert.Equal("Working changes · 2 conflicts", control.WorkingRowText);
+    }
+
     private static CommitGraphData Linear(int count, IReadOnlyList<Func<string, GitRef>>? refsOnTop = null, int detachedAt = -1)
     {
         var commits = LinearCommits(count);

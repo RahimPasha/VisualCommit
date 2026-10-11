@@ -226,7 +226,7 @@
                         IsVisible="{Binding IsFile}"
                         Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).ActivateUnstagedCommand}"
                         CommandParameter="{Binding}"
-                        ToolTip.Tip="{Binding ToolTip}"
+                        ToolTip.Tip="{Binding RowToolTip}"
                         AutomationProperties.AutomationId="StageFileRow"
                         AutomationProperties.Name="{Binding Key}">
                   <DockPanel Margin="0,0,60,0">
