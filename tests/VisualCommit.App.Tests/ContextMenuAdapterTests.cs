@@ -593,6 +593,10 @@ public class ContextMenuAdapterTests
         Assert.Equal(MenuOpenedBy.Keyboard, app.Session.Shell.Menu.OpenedBy);
         Assert.Equal("Check out this commit", menu.Highlighted?.Label);
 
+        // The app's log has one line for the press, the line the real-window pass counts (D106).
+        var log = string.Concat(Directory.GetFiles(Path.Combine(data.Path, "logs")).Select(File.ReadAllText));
+        Assert.Single(log.Split('\n'), line => line.TrimEnd('\r').EndsWith("] Context menu opened: Theme by keyboard", StringComparison.Ordinal));
+
         // Headless the platform lists only the Menu key: the app raised Shift+F10 itself (D106).
         Assert.True(ContextMenuKeys.AppRaisesShiftF10(app.Window.GetPlatformSettings()?.HotkeyConfiguration.OpenContextMenu));
     }
