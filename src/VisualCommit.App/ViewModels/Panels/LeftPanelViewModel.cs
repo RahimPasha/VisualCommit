@@ -117,8 +117,39 @@ public partial class LeftPanelViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Follows the graph's selection (docs/phase-3-design.md 6.3, D98): the ref the user clicked
+    /// keeps its selection background only while <paramref name="selectedSha"/>, the graph's
+    /// single selected commit, is that ref's target. Any other selection (another row, the keys,
+    /// a parent link, several rows or none: null) clears it. The graph's selection never
+    /// highlights a ref by itself, because several refs can point at one commit.
+    /// </summary>
+    public void SyncSelection(string? selectedSha)
+    {
+        if (_selectedKey is null)
+        {
+            return;
+        }
+
+        if (selectedSha is not null && _refs is not null && TargetOf(_refs, _selectedKey) == selectedSha)
+        {
+            return;
+        }
+
+        _selectedKey = null;
+        foreach (var row in Rows.OfType<RefItemRow>())
+        {
+            row.IsSelected = false;
+        }
+    }
+
     /// <summary>Raises <see cref="RefActivated"/>.</summary>
     protected void OnRefActivated(string sha) => RefActivated?.Invoke(this, sha);
+
+    /// <summary>The commit the ref or stash of <paramref name="key"/> points to, or null when it is gone.</summary>
+    private static string? TargetOf(RepoRefs refs, string key) =>
+        refs.Refs.FirstOrDefault(gitRef => RefKey(gitRef) == key)?.TargetSha
+        ?? refs.Stashes.FirstOrDefault(stash => StashKey(stash) == key)?.Sha;
 
     partial void OnFilterTextChanged(string value)
     {

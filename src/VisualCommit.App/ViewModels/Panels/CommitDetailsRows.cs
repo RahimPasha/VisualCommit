@@ -132,10 +132,13 @@ public sealed partial class ChangedFileRow : ObservableObject
     /// <summary>The whole path, and where it came from, for the tooltip of a row cut off by a narrow panel.</summary>
     public string ToolTip => HasOrigin ? $"{Key}\n{OriginText}" : Key;
 
+    /// <summary>What the tooltip of a conflicted file's row in the stage panel says (docs/phase-3-design.md section 5).</summary>
+    public const string ConflictToolTip = "Conflict: resolve it in your editor, then stage it";
+
     /// <summary>
     /// The tooltip of a file row in the stage panel's unstaged list, which binds to it
-    /// (docs/phase-3-design.md section 8): <see cref="ToolTip"/> for now. WP9 makes a conflicted
-    /// file's say "Conflict: resolve it in your editor, then stage it" (section 5).
+    /// (docs/phase-3-design.md section 8): <see cref="ConflictToolTip"/> for a conflicted file
+    /// (section 5), <see cref="ToolTip"/> for any other.
     /// </summary>
-    public string RowToolTip => ToolTip;
+    public string RowToolTip => File?.Kind == FileChangeKind.Conflicted ? ConflictToolTip : ToolTip;
 }
