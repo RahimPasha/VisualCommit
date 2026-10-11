@@ -1,63 +1,621 @@
 // Remotes and the network: docs/phase-3-design.md 2.16, 2.18 to 2.23, 2.29 (pushing and
 // deleting tags on a remote), the Remotes dialog's actions (IRemoteActions), 1.8's cancelled
 // fetches and pushes, and their texts in 2.33 (OperationTexts). Clone is not here (the welcome
-// page), nor auto-fetch (WP9). Stubs left by WP7-core: the sub-package WP7-remotes replaces each
-// body with the operation, built on the helpers of RepositoryOperations.Run.cs, and keeps every
-// signature (IRepositoryActions and IRemoteActions list them). Its tests go into
-// tests/VisualCommit.App.Tests/RepositoryOperationsTests.Remotes.cs (a part of the partial class
-// RepositoryOperationsTests, through OperationsHarness).
+// page), nor auto-fetch (AutoFetchScheduler, WP9), whose title is 2.33's "Auto-fetch". Built by
+// WP7-remotes on the helpers of RepositoryOperations.Run.cs; its tests are in
+// tests/VisualCommit.App.Tests/RepositoryOperationsTests.Remotes.cs.
+//
+// Every operation here that talks to a remote is a Network operation with PromptMode.Ask (3.3):
+// git's and ssh's prompts reach the app's dialogs, the status bar offers Cancel, and a cancel
+// that left lock files opens 1.8's dialog (RunAsync). Only Fetch, Pull and Push without choices
+// set a dedupe key (1.2), so that a second click while the same operation waits or runs does
+// nothing more.
 
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
 public sealed partial class RepositoryOperations
 {
-    private const string RemotesPackage = "remotes";
+    private const string LocalRemote = ".";
 
-    public Task FetchAllAsync() => NotBuilt(RemotesPackage);
+    /// <summary>The network operations' options: git's prompts reach the app's dialogs (3.3).</summary>
+    private static RunOptions NetworkRun(string? dedupeKey = null, Func<GitFailure, FailureDisplay?>? describeFailure = null) =>
+        new() { DedupeKey = dedupeKey, Prompts = PromptMode.Ask, DescribeFailure = describeFailure };
 
-    public Task FetchAsync(string remote) => NotBuilt(RemotesPackage);
+    // 2.16: fetch.
 
-    public Task PullAsync() => NotBuilt(RemotesPackage);
+    public Task FetchAllAsync()
+    {
+        var text = OperationTexts.FetchAll;
+        return GuardAsync(text, () => RunAsync(
+            text,
+            OperationKind.Network,
+            RefreshScope.Refs,
+            async context =>
+            {
+                await Git.FetchAsync(null, NetworkOptions.From(context), noAutoMaintenance: false, context.CancellationToken);
+                return OperationReport.Done(OperationTexts.FetchedAll);
+            },
+            NetworkRun("fetch:*", FetchAllFailureDisplay)));
+    }
 
-    public Task PushCurrentBranchAsync() => NotBuilt(RemotesPackage);
+    public Task FetchAsync(string remote)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remote);
+        var text = OperationTexts.Fetch(remote);
+        return GuardAsync(text, () => RunAsync(
+            text,
+            OperationKind.Network,
+            RefreshScope.Refs,
+            async context =>
+            {
+                await Git.FetchAsync(remote, NetworkOptions.From(context), noAutoMaintenance: false, context.CancellationToken);
+                return OperationReport.Done(OperationTexts.Fetched(remote));
+            },
+            NetworkRun("fetch:" + remote)));
+    }
 
-    public Task PushBranchAsync(string branchRef) => NotBuilt(RemotesPackage);
+    /// <summary>
+    /// The remotes a fetch of all remotes could not fetch, in order, from the lines
+    /// <c>error: Could not fetch &lt;r&gt;</c> that <see cref="IGitRepository.FetchAsync"/> adds
+    /// to git's output for each (D109).
+    /// </summary>
+    public static IReadOnlyList<string> FailedRemotes(string gitOutput)
+    {
+        ArgumentNullException.ThrowIfNull(gitOutput);
+        return [.. gitOutput.Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => line.StartsWith(OperationTexts.CouldNotFetchPrefix, StringComparison.Ordinal))
+            .Select(line => line[OperationTexts.CouldNotFetchPrefix.Length..].Trim())
+            .Where(remote => remote.Length > 0)
+            .Distinct(StringComparer.Ordinal)];
+    }
 
-    public Task PushBranchToAsync(string branchRef, string remoteBranchRef, bool setUpstream) => NotBuilt(RemotesPackage);
+    /// <summary>"Fetch failed" naming every remote that failed (2.16): "Git could not fetch from origin and mirror."</summary>
+    private static FailureDisplay? FetchAllFailureDisplay(GitFailure failure)
+    {
+        var failed = FailedRemotes(failure.GitOutput);
+        return failed.Count == 0 ? null : new FailureDisplay(OperationTexts.FetchAll.ErrorTitle, OperationTexts.FetchFailed(failed));
+    }
 
-    public Task ForcePushAsync(string branchRef) => NotBuilt(RemotesPackage);
+    // 2.18: pull.
 
-    public Task SetUpstreamAsync(string branchRef) => NotBuilt(RemotesPackage);
+    public Task PullAsync()
+    {
+        if (CurrentBranch is not { UpstreamRef: not null } branch)
+        {
+            Log.Info($"{Repository.Name}: Pull: not started, HEAD is not on a branch with an upstream.");
+            return Task.CompletedTask;
+        }
 
-    public Task UnsetUpstreamAsync(string branchRef) => NotBuilt(RemotesPackage);
+        var upstream = UpstreamText(branch) ?? ShortName(branch.UpstreamRef);
+        var text = OperationTexts.Pull(upstream, branch.Name);
+        return GuardAsync(text, () => RunAsync(
+            text,
+            branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
+            RefreshScope.Refs,
+            context => PullStepsAsync(context, branch, upstream, text),
+            NetworkRun("pull:" + branch.FullName)));
+    }
 
-    public Task DeleteRemoteBranchAsync(string remoteBranchRef) => NotBuilt(RemotesPackage);
+    /// <summary>
+    /// Pull's two steps (2.18, D84): the fetch of the upstream's remote, which can be cancelled
+    /// (skipped for a local upstream); the end of the cancel window, which stops here when the
+    /// user had cancelled, so nothing is integrated after Cancel; then the integration git pull
+    /// would choose, never cancelled. The message counts what HEAD gained, read after the pull.
+    /// </summary>
+    private async Task<OperationReport> PullStepsAsync(OperationContext context, GitRef branch, string upstream, OperationText text)
+    {
+        var options = NetworkOptions.From(context);
+        if (!branch.HasLocalUpstream)
+        {
+            var remote = branch.UpstreamRemote ?? throw new InvalidOperationException($"{branch.Name}'s upstream names no remote.");
+            await Git.FetchAsync(remote, options, noAutoMaintenance: false, context.CancellationToken);
+        }
 
-    public Task ManageRemotesAsync() => NotBuilt(RemotesPackage);
+        context.EndCancelWindow();
+        PullResult pulled;
+        try
+        {
+            pulled = await Git.IntegratePullAsync(branch, options, CancellationToken.None);
+        }
+        catch (GitException exception) when (exception.StandardError.TrimEnd().EndsWith(OperationTexts.SettingNotUnderstoodEnd, StringComparison.Ordinal))
+        {
+            // "pull.rebase is set to preserve, which this app does not understand." is the summary.
+            return Failed(text, FailureOf(exception, exception.StandardError.Trim()));
+        }
 
-    public Task ShowAddRemoteAsync() => NotBuilt(RemotesPackage);
+        return pulled.Outcome switch
+        {
+            PullOutcome.UpToDate => OperationReport.Done(OperationTexts.PullUpToDate(branch.Name)),
+            PullOutcome.FastForward => OperationReport.Done(OperationTexts.PulledFastForward(pulled.CommitCount, branch.Name)),
+            PullOutcome.Merged => OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name)),
+            PullOutcome.Rebased => OperationReport.Done(OperationTexts.PulledRebased(branch.Name, upstream)),
+            PullOutcome.Conflicts => OperationReport.Conflicts(OperationTexts.PullConflicts(await CountConflictedFilesAsync())),
+            _ => throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}."),
+        };
+    }
 
-    public Task ShowEditRemoteAsync(string remote) => NotBuilt(RemotesPackage);
+    // 2.19: push.
 
-    public Task RemoveRemoteAsync(string remote) => NotBuilt(RemotesPackage);
+    public Task PushCurrentBranchAsync()
+    {
+        if (CurrentBranch is not { } branch)
+        {
+            Log.Info($"{Repository.Name}: Push: not started, HEAD is not on a branch.");
+            return Task.CompletedTask;
+        }
 
-    public Task PushTagAsync(string tagRef) => NotBuilt(RemotesPackage);
+        return PushBranchAsync(branch.FullName);
+    }
 
-    public Task DeleteRemoteTagAsync(string tagRef) => NotBuilt(RemotesPackage);
+    public Task PushBranchAsync(string branchRef)
+    {
+        ArgumentNullException.ThrowIfNull(branchRef);
+        if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch } branch)
+        {
+            Log.Info($"{Repository.Name}: Push: not started, there is no local branch {branchRef}.");
+            return Task.CompletedTask;
+        }
 
-    // The Remotes dialog's own actions (IRemoteActions, 2.23).
+        if (branch.HasLocalUpstream)
+        {
+            // D101: a branch that tracks a local branch is not pushed; the menus leave it out.
+            Log.Info($"{Repository.Name}: Push {branch.Name}: not started, it tracks a local branch.");
+            return Task.CompletedTask;
+        }
+
+        if (branch is { UpstreamRemote: { } remote, UpstreamRemoteRef: { } remoteRef })
+        {
+            var target = UpstreamText(branch) ?? $"{remote}/{ShortName(remoteRef)}";
+            return GuardAsync(OperationTexts.Push(branch.Name, target), () => PushToAsync(branch, remote, remoteRef, target, setUpstream: false, toUpstream: true, dedupe: true));
+        }
+
+        return PushThroughDialogAsync(branch);
+    }
+
+    public Task PushBranchToAsync(string branchRef, string remoteBranchRef, bool setUpstream)
+    {
+        ArgumentNullException.ThrowIfNull(branchRef);
+        ArgumentNullException.ThrowIfNull(remoteBranchRef);
+        if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch } branch || SplitRemoteBranch(remoteBranchRef) is not { } split)
+        {
+            Log.Info($"{Repository.Name}: Push: not started, {branchRef} or {remoteBranchRef} is not known.");
+            return Task.CompletedTask;
+        }
+
+        var (remote, name) = split;
+        var target = $"{remote}/{name}";
+        var toUpstream = string.Equals(branch.UpstreamRef, remoteBranchRef, StringComparison.Ordinal);
+        return GuardAsync(
+            OperationTexts.Push(branch.Name, target),
+            () => PushToAsync(branch, remote, HeadsPrefix + name, target, setUpstream, toUpstream, dedupe: !setUpstream));
+    }
+
+    /// <summary>
+    /// The push dialog for a branch without an upstream (2.19, 4f): the remote, the branch's name
+    /// there and "Set as upstream"; then the push, which a second click never merges with another.
+    /// </summary>
+    private Task PushThroughDialogAsync(GitRef branch)
+    {
+        var remotes = RemoteNames;
+        if (remotes.Count == 0)
+        {
+            Log.Info($"{Repository.Name}: Push {branch.Name}: not started, the repository has no remotes.");
+            return Task.CompletedTask;
+        }
+
+        return GuardAsync(OperationTexts.Push(branch.Name, $"{remotes[0]}/{branch.Name}"), async () =>
+        {
+            if (await ShowDialogAsync(new PushDialogViewModel(branch.Name, remotes)) is not { } chosen)
+            {
+                return;
+            }
+
+            await PushToAsync(branch, chosen.Remote, HeadsPrefix + chosen.Branch, $"{chosen.Remote}/{chosen.Branch}", chosen.SetUpstream, toUpstream: false, dedupe: false);
+        });
+    }
+
+    /// <summary>
+    /// One push of a local branch (2.19): "Push rejected" offers "Pull" when the current branch was
+    /// pushed to its upstream (<paramref name="toUpstream"/>), otherwise "Fetch &lt;r&gt;".
+    /// </summary>
+    private Task<OperationResult> PushToAsync(GitRef branch, string remote, string remoteRef, string target, bool setUpstream, bool toUpstream, bool dedupe)
+    {
+        var request = new PushRequest(remote, branch.Name, remoteRef) { SetUpstream = setUpstream };
+        var current = toUpstream && string.Equals(Refs?.Head.BranchName, branch.Name, StringComparison.Ordinal);
+        return RunAsync(
+            OperationTexts.Push(branch.Name, target),
+            OperationKind.Network,
+            RefreshScope.Refs,
+            async context =>
+            {
+                await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken);
+                return OperationReport.Done(OperationTexts.Pushed(branch.Name, target, setUpstream));
+            },
+            NetworkRun(
+                dedupe ? $"push:{branch.FullName}->{remote}/{remoteRef}" : null,
+                failure => PushFailureDisplay(failure, branch.Name, remote, current)));
+    }
+
+    /// <summary>
+    /// <c>refs/remotes/&lt;r&gt;/&lt;x&gt;</c> as its remote and the branch's name there: from the
+    /// refs as read, else by the longest configured remote whose name starts it; null when no
+    /// remote does.
+    /// </summary>
+    private (string Remote, string Name)? SplitRemoteBranch(string remoteBranchRef)
+    {
+        if (FindRef(remoteBranchRef) is { Kind: RefKind.RemoteBranch, RemoteName: { } known } gitRef && gitRef.Name.StartsWith(known + "/", StringComparison.Ordinal))
+        {
+            return (known, gitRef.Name[(known.Length + 1)..]);
+        }
+
+        if (!remoteBranchRef.StartsWith(RemotesPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var rest = remoteBranchRef[RemotesPrefix.Length..];
+        var remote = RemoteNames
+            .Where(name => rest.StartsWith(name + "/", StringComparison.Ordinal) && rest.Length > name.Length + 1)
+            .OrderByDescending(name => name.Length)
+            .FirstOrDefault();
+        return remote is null ? null : (remote, rest[(remote.Length + 1)..]);
+    }
+
+    // 2.20: force push with lease.
+
+    public Task ForcePushAsync(string branchRef)
+    {
+        ArgumentNullException.ThrowIfNull(branchRef);
+        if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch, UpstreamRef: { } upstreamRef, UpstreamRemote: { } remote, UpstreamRemoteRef: { } remoteRef } branch
+            || remote == LocalRemote)
+        {
+            Log.Info($"{Repository.Name}: Force push: not started, {branchRef} has no remote upstream.");
+            return Task.CompletedTask;
+        }
+
+        var upstream = UpstreamText(branch) ?? ShortName(upstreamRef);
+        var text = OperationTexts.ForcePush(branch.Name, upstream);
+        var request = new PushRequest(remote, branch.Name, remoteRef) { ForceWithLease = true };
+        return GuardAsync(text, () => ConfirmAndRunAsync(
+            OperationTexts.ConfirmForcePush(branch.Name, remote),
+            text,
+            OperationKind.Network,
+            RefreshScope.Refs,
+            async _ =>
+            {
+                // UpstreamRef's commit as it is just before the push (2.20).
+                var commit = await Git.ResolveAsync(upstreamRef);
+                return commit is null ? null : new BackupRequest("force-push", [new BackupEntry(ShortName(upstreamRef), commit)]);
+            },
+            async (context, _) =>
+            {
+                await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken);
+                return OperationReport.Done(OperationTexts.ForcePushed(branch.Name, upstream));
+            },
+            NetworkRun(describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
+                ? new FailureDisplay(OperationTexts.ForcePushStoppedTitle, OperationTexts.ForcePushStopped(upstream, branch.Name))
+                : null)));
+    }
+
+    // 2.21: set or remove the upstream.
+
+    public Task SetUpstreamAsync(string branchRef)
+    {
+        ArgumentNullException.ThrowIfNull(branchRef);
+        var name = ShortName(branchRef);
+        var text = OperationTexts.SetUpstream(name);
+        return GuardAsync(text, async () =>
+        {
+            var remoteBranches = Refs?.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch).ToList() ?? [];
+            if (remoteBranches.Count == 0)
+            {
+                Log.Info($"{Repository.Name}: {text.Title}: not started, there are no remote branches to track.");
+                return;
+            }
+
+            var branch = FindRef(branchRef);
+            var current = branch is { UpstreamRef: { } upstreamRef, HasLocalUpstream: false } ? ShortName(upstreamRef) : null;
+            var dialog = new PickDialogViewModel(
+                OperationTexts.SetUpstreamDialogTitle(name),
+                [.. remoteBranches.Select(gitRef => gitRef.Name)],
+                current,
+                OperationTexts.SetUpstreamButton);
+            if (await ShowDialogAsync(dialog) is not { } picked)
+            {
+                return;
+            }
+
+            var target = remoteBranches.First(gitRef => gitRef.Name == picked).FullName;
+            await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
+            {
+                await Git.SetUpstreamAsync(name, target);
+                return OperationReport.Done(OperationTexts.UpstreamSet(name, picked));
+            });
+        });
+    }
+
+    public Task UnsetUpstreamAsync(string branchRef)
+    {
+        ArgumentNullException.ThrowIfNull(branchRef);
+        if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch, UpstreamRef: { } upstreamRef } branch)
+        {
+            Log.Info($"{Repository.Name}: Stop tracking: not started, {branchRef} has no upstream.");
+            return Task.CompletedTask;
+        }
+
+        var upstream = UpstreamText(branch) ?? ShortName(upstreamRef);
+        var text = OperationTexts.UnsetUpstream(branch.Name, upstream);
+        return GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
+        {
+            await Git.UnsetUpstreamAsync(branch.Name);
+            return OperationReport.Done(OperationTexts.UpstreamUnset(branch.Name, upstream));
+        }));
+    }
+
+    // 2.22: delete a branch on a remote.
+
+    public Task DeleteRemoteBranchAsync(string remoteBranchRef)
+    {
+        ArgumentNullException.ThrowIfNull(remoteBranchRef);
+        if (SplitRemoteBranch(remoteBranchRef) is not { } split)
+        {
+            Log.Info($"{Repository.Name}: Delete on a remote: not started, {remoteBranchRef} is not a remote branch.");
+            return Task.CompletedTask;
+        }
+
+        var (remote, name) = split;
+
+        var text = OperationTexts.DeleteRemoteBranch(name, remote);
+        string? expected = null;
+        return GuardAsync(text, () => ConfirmAndRunAsync(
+            OperationTexts.ConfirmDeleteRemoteBranch(name, remote),
+            text,
+            OperationKind.Network,
+            RefreshScope.Refs,
+            async _ =>
+            {
+                // Read inside the operation: a fetch since the menu opened has moved it (2.22).
+                expected = await ResolveOrFailAsync(remoteBranchRef);
+                return new BackupRequest("remote-branch", [new BackupEntry($"{remote}/{name}", expected)]);
+            },
+            async (context, _) =>
+            {
+                await Git.DeleteRemoteBranchAsync(remote, name, expected!, NetworkOptions.From(context), context.CancellationToken);
+                return OperationReport.Done(OperationTexts.DeletedRemoteBranch(name, remote));
+            },
+            NetworkRun(describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
+                ? new FailureDisplay(OperationTexts.DeletionStoppedTitle, OperationTexts.RemoteBranchChanged(name, remote))
+                : null)));
+    }
+
+    /// <summary>The object <paramref name="fullRef"/> names now, unpeeled; a <see cref="GitException"/> as git says it when it names nothing.</summary>
+    private async Task<string> ResolveOrFailAsync(string fullRef) =>
+        await Git.ResolveAsync(fullRef)
+        ?? throw new GitException($"git rev-parse --verify --quiet {fullRef}", 1, $"fatal: {fullRef} does not exist here any more.\n");
+
+    // 2.23: the Remotes dialog and the remote's menu.
+
+    public Task ManageRemotesAsync() => ShowRemotesDialogAsync(null, add: false);
+
+    public Task ShowAddRemoteAsync() => ShowRemotesDialogAsync(null, add: true);
+
+    public Task ShowEditRemoteAsync(string remote)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remote);
+        return ShowRemotesDialogAsync(remote, add: false);
+    }
+
+    /// <summary>
+    /// Opens the Remotes dialog (2.23, 4f) once its list is read: on its list, on its form for a
+    /// new remote (<paramref name="add"/>), or on its form for <paramref name="edit"/>; completes
+    /// when it closes. The dialog runs the add, rename, change-URL and remove operations through
+    /// <see cref="IRemoteActions"/>.
+    /// </summary>
+    private async Task ShowRemotesDialogAsync(string? edit, bool add)
+    {
+        if (IsClosed || Dialogs is not { } layer)
+        {
+            Log.Info($"{Repository.Name}: the Remotes dialog was not shown: {(IsClosed ? "the tab is closed" : "there is no dialog layer")}.");
+            return;
+        }
+
+        var dialog = new RemotesDialogViewModel(this, IgnoreCase, Log);
+        await dialog.Loading;
+        if (add)
+        {
+            dialog.AddCommand.Execute(null);
+        }
+        else if (edit is not null && dialog.Rows.FirstOrDefault(row => row.Name == edit) is { } row)
+        {
+            dialog.EditCommand.Execute(row);
+        }
+
+        if (IsClosed)
+        {
+            return;
+        }
+
+        if (NamesRepositoryInDialogs)
+        {
+            dialog.RepositoryName = Repository.Name;
+        }
+
+        await layer.ShowAsync(dialog);
+    }
+
+    public Task RemoveRemoteAsync(string remote)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remote);
+        var text = OperationTexts.RemoveRemote(remote);
+        return GuardAsync(text, async () =>
+        {
+            var shownUrl = (await Git.ReadRemotesAsync()).FirstOrDefault(info => info.Name == remote)?.ShownUrl ?? string.Empty;
+            await ConfirmAndRunAsync(
+                OperationTexts.ConfirmRemoveRemote(remote, RemoteBranchesOf(remote).Count, shownUrl),
+                text,
+                OperationKind.Local,
+                RefreshScope.Refs,
+                async _ =>
+                {
+                    // Every refs/remotes/<r>/* as it is now, in one batch (2.0, 2.23).
+                    var refs = await Git.ReadRefsAsync();
+                    var entries = refs.Refs
+                        .Where(gitRef => gitRef.Kind == RefKind.RemoteBranch && gitRef.RemoteName == remote)
+                        .Select(gitRef => new BackupEntry(gitRef.Name, gitRef.TargetSha))
+                        .ToList();
+                    return new BackupRequest("remote", entries);
+                },
+                async (_, _) =>
+                {
+                    await Git.RemoveRemoteAsync(remote);
+                    return OperationReport.Done(OperationTexts.RemovedRemote(remote));
+                });
+        });
+    }
+
+    // The Remotes dialog's own actions (IRemoteActions, 2.23): git's refusal goes to the form's
+    // RemoteError, not to an error dialog.
 
     /// <summary>The configured remotes, in git's order (<c>git remote -v</c>), for the Remotes dialog.</summary>
-    public Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync() => NotBuilt<IReadOnlyList<RemoteInfo>>(RemotesPackage);
+    public Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync() => Git.ReadRemotesAsync();
 
-    /// <summary>Adds a remote and waits; with <paramref name="fetchNow"/> also queues its fetch. Null, or git's message for the form.</summary>
-    public Task<string?> AddRemoteAsync(string name, string url, bool fetchNow) => NotBuilt<string?>(RemotesPackage);
+    /// <summary>Adds a remote and waits; with <paramref name="fetchNow"/> also queues its fetch ("Fetch &lt;name&gt;"), which it does not wait for. Null, or git's message for the form.</summary>
+    public async Task<string?> AddRemoteAsync(string name, string url, bool fetchNow)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(url);
+        var error = await RunRemoteFormAsync(OperationTexts.AddRemote(name), () => Git.AddRemoteAsync(name, url), OperationTexts.AddedRemote(name));
+        if (error is null && fetchNow)
+        {
+            // An operation of its own, waited for by nobody: its result shows in the status bar,
+            // a prompt for it stacks over the dialog, a failure opens its error dialog.
+            _ = FetchAsync(name);
+        }
+
+        return error;
+    }
 
     /// <summary>Renames a remote and waits. Null, or git's message for the form.</summary>
-    public Task<string?> RenameRemoteAsync(string name, string newName) => NotBuilt<string?>(RemotesPackage);
+    public Task<string?> RenameRemoteAsync(string name, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(newName);
+        return RunRemoteFormAsync(OperationTexts.RenameRemote(name), () => Git.RenameRemoteAsync(name, newName), OperationTexts.RenamedRemote(name, newName));
+    }
 
     /// <summary>Changes a remote's URL and waits. Null, or git's message for the form.</summary>
-    public Task<string?> SetRemoteUrlAsync(string name, string url) => NotBuilt<string?>(RemotesPackage);
+    public Task<string?> SetRemoteUrlAsync(string name, string url)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(url);
+        return RunRemoteFormAsync(OperationTexts.SetRemoteUrl(name), () => Git.SetRemoteUrlAsync(name, url), OperationTexts.ChangedRemoteUrl(name));
+    }
+
+    /// <summary>One local operation of the Remotes form: null when it succeeded, otherwise what the form's <c>RemoteError</c> shows (git's own message).</summary>
+    private async Task<string?> RunRemoteFormAsync(OperationText text, Func<Task> write, string done)
+    {
+        var result = await RunAsync(
+            text,
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async _ =>
+            {
+                await write();
+                return OperationReport.Done(done);
+            },
+            new RunOptions { ShowsErrorDialog = false });
+        return result.Outcome switch
+        {
+            OperationOutcome.Succeeded => null,
+            OperationOutcome.Failed when result.Failure is { GitOutput.Length: > 0 } failure => failure.GitOutput,
+            _ => result.Message,
+        };
+    }
+
+    // 2.29: tags on a remote.
+
+    public Task PushTagAsync(string tagRef)
+    {
+        ArgumentNullException.ThrowIfNull(tagRef);
+        var tag = ShortName(tagRef);
+        var remotes = RemoteNames;
+        if (remotes.Count == 0)
+        {
+            Log.Info($"{Repository.Name}: Push tag {tag}: not started, the repository has no remotes.");
+            return Task.CompletedTask;
+        }
+
+        return GuardAsync(OperationTexts.PushTag(tag, remotes[0]), async () =>
+        {
+            var remote = remotes.Count == 1
+                ? remotes[0]
+                : await ShowDialogAsync(new ChoiceDialogViewModel(OperationTexts.PushTagChoiceTitle(tag), remotes, OperationTexts.PushTagChoiceButton));
+            if (remote is null)
+            {
+                return;
+            }
+
+            await RunAsync(
+                OperationTexts.PushTag(tag, remote),
+                OperationKind.Network,
+                RefreshScope.Refs,
+                async context =>
+                {
+                    await Git.PushTagAsync(remote, tag, NetworkOptions.From(context), context.CancellationToken);
+                    return OperationReport.Done(OperationTexts.PushedTag(tag, remote));
+                },
+                NetworkRun());
+        });
+    }
+
+    public Task DeleteRemoteTagAsync(string tagRef)
+    {
+        ArgumentNullException.ThrowIfNull(tagRef);
+        var tag = ShortName(tagRef);
+        var remotes = RemoteNames;
+        if (remotes.Count == 0)
+        {
+            Log.Info($"{Repository.Name}: Delete tag {tag} on a remote: not started, the repository has no remotes.");
+            return Task.CompletedTask;
+        }
+
+        return GuardAsync(OperationTexts.DeleteRemoteTag(tag, remotes[0]), async () =>
+        {
+            var remote = remotes.Count == 1
+                ? remotes[0]
+                : await ShowDialogAsync(new ChoiceDialogViewModel(OperationTexts.DeleteRemoteTagChoiceTitle(tag), remotes, OperationTexts.DeleteRemoteTagChoiceButton, isDestructive: true));
+            if (remote is null)
+            {
+                return;
+            }
+
+            var text = OperationTexts.DeleteRemoteTag(tag, remote);
+            string? expected = null;
+            await ConfirmAndRunAsync(
+                OperationTexts.ConfirmDeleteRemoteTag(tag, remote),
+                text,
+                OperationKind.Network,
+                RefreshScope.Refs,
+                async _ =>
+                {
+                    // The local tag object, unpeeled: what the backup keeps and the lease expects (2.29).
+                    expected = await ResolveOrFailAsync(TagsPrefix + tag);
+                    return new BackupRequest("remote-tag", [new BackupEntry($"{remote}/{tag}", expected)]);
+                },
+                async (context, _) =>
+                {
+                    await Git.DeleteRemoteTagAsync(remote, tag, expected!, NetworkOptions.From(context), context.CancellationToken);
+                    return OperationReport.Done(OperationTexts.DeletedRemoteTag(tag, remote));
+                },
+                NetworkRun(describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
+                    ? new FailureDisplay(OperationTexts.DeletionStoppedTitle, OperationTexts.RemoteTagDiffers(remote, tag))
+                    : null));
+        });
+    }
 }

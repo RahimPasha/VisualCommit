@@ -38,6 +38,9 @@ internal sealed class OperationsHarness : IDisposable
         GitLocator.FindExecutable(GitSearchContext.FromSystem())
         ?? throw new InvalidOperationException("The tests need git, and no git executable was found."));
 
+    /// <summary>The prompt broker <see cref="OpenAsync(TempRepo, Func{DialogHostViewModel, IGitPromptHandler})"/> made, disposed with the harness.</summary>
+    private IDisposable? _broker;
+
     private OperationsHarness(TempRepo repo, RepositoryViewModel repository, DialogHostViewModel host, TabServices services, RecordingLog log, FakeClipboard clipboard, FakeFileLauncher launcher)
     {
         Repo = repo;
@@ -87,7 +90,17 @@ internal sealed class OperationsHarness : IDisposable
     public MainWindowViewModelTests.FakeSettings Settings => (MainWindowViewModelTests.FakeSettings)Services.Settings;
 
     /// <summary>Opens <paramref name="repo"/> as a tab would and reads it.</summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo)
+    public static Task<OperationsHarness> OpenAsync(TempRepo repo) => OpenAsync(repo, prompts: null);
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with the app's
+    /// prompt broker (the real askpass helper, design 3.1) answering git's and ssh's prompts
+    /// through the handler <paramref name="prompts"/> makes for the harness's dialog layer:
+    /// <c>host =&gt; new PromptDialogs(host)</c> shows the app's prompt dialogs there, for
+    /// <see cref="Dialogs"/> to answer; a <see cref="ScriptedPromptHandler"/> answers without any.
+    /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
+    /// </summary>
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var git = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
@@ -97,9 +110,10 @@ internal sealed class OperationsHarness : IDisposable
         var launcher = new FakeFileLauncher();
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
-        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, launcher: launcher, clipboard: clipboard);
+        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log);
+        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
-        var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher);
+        var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher) { _broker = broker as IDisposable };
         await repository.StartAsync();
         return harness;
     }
@@ -127,6 +141,7 @@ internal sealed class OperationsHarness : IDisposable
     {
         Dialogs.Dispose();
         Repository.Dispose();
+        _broker?.Dispose();
     }
 
     private sealed class MemorySession : ISessionStore
