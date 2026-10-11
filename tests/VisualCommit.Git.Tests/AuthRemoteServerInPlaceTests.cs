@@ -90,6 +90,22 @@ public class AuthRemoteServerInPlaceTests
     }
 
     [Fact]
+    public async Task The_auth_scenario_refuses_a_server_that_serves_a_repository_in_place_and_leaves_that_repository_alone()
+    {
+        using var sync = await Scenarios.RemoteSyncAsync();
+        var origin = sync.SiblingPath("origin.git");
+        var mainBefore = await GitInAsync(sync, origin, "rev-parse", "refs/heads/main");
+        await using var server = await AuthRemoteServer.StartAsync(existingRepository: origin);
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => Scenarios.AuthRemoteAsync(server));
+        Assert.Contains("in place", error.Message, StringComparison.Ordinal);
+
+        // The sync scenario's origin is still its own: not deleted, not replaced by the auth template's.
+        Assert.Equal(mainBefore, await GitInAsync(sync, origin, "rev-parse", "refs/heads/main"));
+        Assert.Equal(await sync.RefTargetAsync("refs/remotes/origin/published"), await GitInAsync(sync, origin, "rev-parse", "refs/heads/published"));
+    }
+
+    [Fact]
     public async Task The_servers_own_repository_is_unchanged_by_the_new_parameter()
     {
         await using var server = await AuthRemoteServer.StartAsync();

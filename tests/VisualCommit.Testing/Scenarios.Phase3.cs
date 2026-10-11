@@ -48,7 +48,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> OperationsAsync()
     {
-        var template = await OperationsTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("ops", OperationsTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -161,7 +161,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> RemoteSyncAsync()
     {
-        var template = await RemoteSyncTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("sync", RemoteSyncTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -209,7 +209,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> CheckoutBlockedAsync()
     {
-        var template = await CheckoutBlockedTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("blocked", CheckoutBlockedTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -258,7 +258,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> EdgeCasesAsync()
     {
-        var template = await EdgeCasesTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("edges", EdgeCasesTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -280,10 +280,18 @@ public static partial class Scenarios
     /// once per test process: the server's empty repository is replaced by the template's. Dispose
     /// it before its server.
     /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="server"/> serves an existing repository in place (<see cref="AuthRemoteServer.ServesInPlace"/>), which is not the server's to replace.</exception>
     public static async Task<TempRepo> AuthRemoteAsync(AuthRemoteServer server)
     {
         ArgumentNullException.ThrowIfNull(server);
-        var template = await AuthRemoteTemplate.Value.ConfigureAwait(false);
+        if (server.ServesInPlace)
+        {
+            throw new ArgumentException(
+                $"The server serves {server.RepositoryPath} in place; the auth scenario replaces the server's own repository and would delete that one. Start the server without an existing repository.",
+                nameof(server));
+        }
+
+        var template = await TemplateAsync("auth", AuthRemoteTemplate).ConfigureAwait(false);
         var repo = await template.CopyAsync().ConfigureAwait(false);
         try
         {

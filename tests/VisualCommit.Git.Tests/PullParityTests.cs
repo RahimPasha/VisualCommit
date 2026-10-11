@@ -321,10 +321,14 @@ internal static class PullParityTemplates
         new[] { PullState.FastForward, PullState.Diverged }.ToDictionary(state => state, state => new Lazy<Task<TempRepo>>(() => KeepUntilExit(BuildLocalAsync(state))));
 
     /// <summary>The remote sync scenario on main, origin at <c>../origin.git</c>, in <paramref name="state"/>.</summary>
-    public static Task<TempRepo> SyncAsync(PullState state) => Sync[state].Value;
+    /// <remarks>Built once per test process; the wait for it does not count against the test in the hang watchdog.</remarks>
+    public static Task<TempRepo> SyncAsync(PullState state) =>
+        HangWatchdogAttribute.SharedPreparationAsync($"the pull parity template sync {state}", Sync[state].Value);
 
     /// <summary>The edge cases scenario on <c>loc</c>, whose upstream is the local main, in <paramref name="state"/> (fast-forward or diverged).</summary>
-    public static Task<TempRepo> LocalAsync(PullState state) => Local[state].Value;
+    /// <remarks>Built once per test process; the wait for it does not count against the test in the hang watchdog.</remarks>
+    public static Task<TempRepo> LocalAsync(PullState state) =>
+        HangWatchdogAttribute.SharedPreparationAsync($"the pull parity template local {state}", Local[state].Value);
 
     private static async Task<TempRepo> KeepUntilExit(Task<TempRepo> building)
     {

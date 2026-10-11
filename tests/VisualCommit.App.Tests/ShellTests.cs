@@ -245,6 +245,30 @@ public class ShellTests
     }
 
     [AvaloniaFact]
+    public async Task Git_calls_that_end_after_the_session_do_not_bring_its_deleted_data_folder_back()
+    {
+        // As a check ends: the app is disposed, then its data folder deleted; a git call of the
+        // session that ends after that (one it cancelled, or a read under way) records itself
+        // in the session's log. Here the session's own provider runs git after the end, for sure.
+        using var repo = await Scenarios.LinearAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        app.Dispose();
+        data.Dispose();
+        Assert.False(Directory.Exists(data.Path));
+        var callsBefore = app.GitCalls().Count;
+
+        using var opened = await app.Session.Services.Repositories.OpenAsync(repo.Path, TestContext.Current.CancellationToken) as IDisposable;
+
+        Assert.True(app.GitCalls().Count > callsBefore, "The session ran no git call after it ended.");
+        if (Directory.Exists(data.Path))
+        {
+            Assert.Fail("The data folder came back: " + string.Join(", ", Directory.EnumerateFileSystemEntries(data.Path, "*", SearchOption.AllDirectories)));
+        }
+    }
+
+    [AvaloniaFact]
     public void A_session_started_without_a_size_keeps_the_size_the_app_chose()
     {
         using var data = new TempDirectory("data");

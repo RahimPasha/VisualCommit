@@ -334,8 +334,10 @@ public abstract partial class Phase3Checks
     /// always the app's own parts (title, summary, "In &lt;repo&gt;", the command, the buttons);
     /// for a dialog with git's output, that <c>ErrorOutput</c> is exactly
     /// <c>GitOutputCleaner.Clean</c> of the failed call's own standard error and output as the
-    /// call log recorded them; then, on Git 2.36, the report's quoted lines word for word, and on
-    /// another git the classifying key line among them. Returns what the dialog shows.
+    /// call log recorded them; on every git, without the app's code, that it is what git printed
+    /// (<see cref="AssertGitOutputShown"/>, with the classifying key line, which every dialog of
+    /// git's output names); then, on Git 2.36, the report's quoted lines word for word. Returns
+    /// what the dialog shows.
     /// </summary>
     protected static async Task<ErrorDialogSnapshot> AssertErrorDialogAsync(ShellDriver app, ExpectedErrorDialog expected)
     {
@@ -360,20 +362,62 @@ public abstract partial class Phase3Checks
             return dialog;
         }
 
+        var key = expected.KeyLine
+            ?? throw new Xunit.Sdk.XunitException("A dialog of git's output needs the line that classifies the failure (ExpectedErrorDialog.KeyLine): on another git than 2.36 it is what proves the output.");
         var call = app.LastCall(expected.Command);
         Assert.False(call.Succeeded, $"The call \"{call.CommandText}\" succeeded; the dialog shows a failure.");
         Assert.Equal(ShellDriver.CleanedOutputOf(call), dialog.Output);
+        AssertGitOutputShown(call, key, dialog.Output);
         if (await Phase3Expectations.IsReportGitAsync())
         {
             Assert.Equal(expected.Lines, dialog.OutputLines);
         }
-        else if (expected.KeyLine is { } key)
-        {
-            Assert.Contains(key, dialog.OutputLines);
-        }
 
         return dialog;
     }
+
+    /// <summary>
+    /// What the error dialog shows of a failed call (<paramref name="shown"/>, its
+    /// <c>ErrorOutput</c>), held against what git printed as the call log recorded it, by rules
+    /// of the test's own and not the app's cleaner (the conventions' "Git's own texts", on any
+    /// git): <paramref name="keyLine"/>, the line that classifies the failure, is a line git
+    /// printed (to standard error, or to standard output where git writes its failure there, as
+    /// an empty revert does) and a line of the dialog; every line of the dialog is a line git
+    /// printed, so nothing is made up or cut; every line of standard error that starts with
+    /// <c>fatal:</c>, <c>error:</c> or <c> ! [</c> is shown, so nothing that says what failed is
+    /// dropped; and no line shows git's progress count (<c>45% (9/20)</c>) or a carriage return.
+    /// </summary>
+    internal static void AssertGitOutputShown(GitCallRecord call, string keyLine, string shown)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        ArgumentException.ThrowIfNullOrEmpty(keyLine);
+        ArgumentNullException.ThrowIfNull(shown);
+        var error = PrintedLines(call.StandardError);
+        var printed = error.Concat(PrintedLines(call.StandardOutput)).ToHashSet(StringComparer.Ordinal);
+        var lines = shown.Split('\n');
+        Assert.True(printed.Contains(keyLine), $"git did not print the key line \"{keyLine}\". It printed:\n{call.StandardError}\n{call.StandardOutput}");
+        Assert.True(lines.Contains(keyLine, StringComparer.Ordinal), $"The dialog does not show the key line \"{keyLine}\". It shows:\n{shown}");
+        foreach (var line in lines)
+        {
+            Assert.True(printed.Contains(line), $"The dialog shows a line git did not print: \"{line}\".");
+        }
+
+        foreach (var line in error.Where(line => line.StartsWith("fatal:", StringComparison.Ordinal) || line.StartsWith("error:", StringComparison.Ordinal) || line.StartsWith(" ! [", StringComparison.Ordinal)))
+        {
+            Assert.True(lines.Contains(line, StringComparer.Ordinal), $"The dialog leaves out git's line \"{line}\". It shows:\n{shown}");
+        }
+
+        Assert.DoesNotContain('\r', shown);
+        Assert.DoesNotMatch(GitProgressCount(), shown);
+    }
+
+    /// <summary>The lines of git's raw output: split at every line feed and carriage return (git ends a progress update with one), without trailing spaces and empty lines.</summary>
+    private static List<string> PrintedLines(string output) =>
+        [.. output.Split(['\r', '\n']).Select(line => line.TrimEnd()).Where(line => line.Length > 0)];
+
+    /// <summary>The count of a progress line of git or of the other side, as in <c>Receiving objects:  45% (9/20)</c>.</summary>
+    [GeneratedRegex(@"\d{1,3}% \(\d+/\d+\)")]
+    private static partial Regex GitProgressCount();
 
     /// <summary>
     /// Asserts the confirmation on top (phase 2's dialog, D69, with phase 3's texts): its title

@@ -24,12 +24,13 @@ namespace VisualCommit.App;
 public sealed class AppSession : IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly FileAppLog _log;
     private bool _disposed;
     private bool _windowClosed;
 
     private AppSession(
         AppPaths paths,
-        IAppLog log,
+        FileAppLog log,
         ISettingsStore settings,
         ISessionStore session,
         IGitCallLog gitCalls,
@@ -38,6 +39,7 @@ public sealed class AppSession : IDisposable
         MainWindow mainWindow)
     {
         Paths = paths;
+        _log = log;
         Log = log;
         Settings = settings;
         SessionState = session;
@@ -189,5 +191,10 @@ public sealed class AppSession : IDisposable
         (Services.Prompts as IDisposable)?.Dispose();
 
         Log.Info("VisualCommit closed.");
+
+        // Git calls the session cancelled end a moment later and would log that they did: into
+        // a data folder a test may have deleted by then (recreating it), or into the log of the
+        // next session on the same folder. Nothing is written after "closed".
+        _log.Close();
     }
 }

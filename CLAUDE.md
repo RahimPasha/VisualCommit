@@ -260,9 +260,9 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
-| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); for phase 3, whose checks are in the classes `Phase3ChecksA` to `Phase3ChecksD`, `--filter-class "*Phase3Checks*"` (without the last `*` it finds no test) |
 | Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` |
-| Time scripted checks alone (step times from `artifacts/visual/phase-3/timings/`) | `bash scripts/time-scripted-check.sh "*Check_01_commit_menu"` |
+| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu"` (the phase is 3 when left out) |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |

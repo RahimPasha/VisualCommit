@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -99,5 +100,47 @@ public sealed class Phase3SupportTests : Phase3Checks
         app.Menu();
         await Assert.ThrowsAnyAsync<Exception>(() => AssertNoMenuAsync(app, mark));
         app.PressKey(Key.Escape);
+    }
+
+    /// <summary>
+    /// The half of the error dialog's assertion that does not use the app's cleaner
+    /// (<see cref="Phase3Checks.AssertGitOutputShown"/>): what a regression of the cleaner would
+    /// show on a git other than 2.36, where the report's lines are not compared, fails it.
+    /// </summary>
+    [Fact]
+    public void The_output_check_of_the_error_dialog_holds_without_the_apps_cleaner()
+    {
+        // A push rejected, with git's progress before the refusal, as the call log records it.
+        var push = new GitCallRecord(
+            DateTimeOffset.UnixEpoch,
+            TimeSpan.FromSeconds(1),
+            "git push --progress origin refs/heads/main:refs/heads/main",
+            null,
+            GitCallOutcome.Completed,
+            1,
+            string.Empty,
+            "Enumerating objects: 5, done.\nCounting objects:  50% (2/4)\rCounting objects: 100% (4/4), done.\nTo http://127.0.0.1:47391/origin.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'http://127.0.0.1:47391/origin.git'\nhint: Updates were rejected because the remote contains work that you do   \n");
+        const string Key = " ! [rejected]        main -> main (fetch first)";
+        const string Shown =
+            "Enumerating objects: 5, done.\nTo http://127.0.0.1:47391/origin.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'http://127.0.0.1:47391/origin.git'\nhint: Updates were rejected because the remote contains work that you do";
+        AssertGitOutputShown(push, Key, Shown);
+
+        // The key line dropped, an error line dropped, a progress line kept, a line made up.
+        Assert.ThrowsAny<Exception>(() => AssertGitOutputShown(push, Key, Shown.Replace(Key + "\n", string.Empty, StringComparison.Ordinal)));
+        Assert.ThrowsAny<Exception>(() => AssertGitOutputShown(push, Key, Shown.Replace("\nerror: failed to push some refs to 'http://127.0.0.1:47391/origin.git'", string.Empty, StringComparison.Ordinal)));
+        Assert.ThrowsAny<Exception>(() => AssertGitOutputShown(push, Key, "Counting objects:  50% (2/4)\n" + Shown));
+        Assert.ThrowsAny<Exception>(() => AssertGitOutputShown(push, Key, Shown + "\nfatal: something git never said"));
+
+        // A key line git never printed is not proven by the dialog alone.
+        Assert.ThrowsAny<Exception>(() => AssertGitOutputShown(push, "fatal: Authentication failed", Shown + "\nfatal: Authentication failed"));
+
+        // An empty revert writes its failure to standard output, with nothing on standard error.
+        var revert = push with
+        {
+            CommandText = "git revert --no-edit 88d6b91",
+            StandardOutput = "On branch main\nnothing to commit, working tree clean\n",
+            StandardError = string.Empty,
+        };
+        AssertGitOutputShown(revert, "nothing to commit, working tree clean", "On branch main\nnothing to commit, working tree clean");
     }
 }
