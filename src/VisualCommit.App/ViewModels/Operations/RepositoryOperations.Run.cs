@@ -71,6 +71,9 @@ public sealed partial class RepositoryOperations
     private const string RemotesPrefix = "refs/remotes/";
     private const string TagsPrefix = "refs/tags/";
 
+    /// <summary>The queue's tasks whose result a caller of <see cref="RunAsync"/> shows: a deduplicated second call does not show it again.</summary>
+    private readonly ConditionalWeakTable<Task<OperationResult>, OperationText> _resultsShown = new();
+
     // The repository's state.
 
     /// <summary>The tab was closed: nothing starts any more, and nothing is shown (1.8).</summary>
@@ -272,8 +275,17 @@ public sealed partial class RepositoryOperations
             HasSeveralSteps = options.HasSeveralSteps,
             Prompts = options.Prompts,
         };
-        var result = await Queue.RunAsync(operation);
-        await ShowResultAsync(text, result, options);
+        // A second call with the dedupe key of a waiting or running operation gets that
+        // operation's task (1.2): only the first caller shows its result, so a failure opens one
+        // error dialog, not one per click.
+        var running = Queue.RunAsync(operation);
+        var first = _resultsShown.TryAdd(running, text);
+        var result = await running;
+        if (first)
+        {
+            await ShowResultAsync(text, result, options);
+        }
+
         return result;
     }
 
