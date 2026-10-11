@@ -262,6 +262,7 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
 | One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` |
 | Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` |
+| Time scripted checks alone (step times from `artifacts/visual/phase-3/timings/`) | `bash scripts/time-scripted-check.sh "*Check_01_commit_menu"` |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |

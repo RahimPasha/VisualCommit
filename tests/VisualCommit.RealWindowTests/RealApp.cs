@@ -112,46 +112,36 @@ public sealed partial class RealApp : IDisposable
     /// Starts the built app on a data folder after writing its session file, so that the app
     /// starts with what <paramref name="session"/> holds: open tabs, recent repositories, the
     /// window's placement and the panel widths (D46). This is how a check opens repositories.
+    /// <paramref name="environment"/> adds variables to the app's environment, or removes those
+    /// whose value is null, after the isolation the other <c>Launch</c> applies.
     /// </summary>
-    public static RealApp Launch(string dataDirectory, SessionState session)
+    public static RealApp Launch(string dataDirectory, SessionState session, IReadOnlyDictionary<string, string?>? environment = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         JsonSessionStore.Write(new AppPaths(dataDirectory).SessionFile, session);
-        return Launch(dataDirectory);
+        return Launch(dataDirectory, environment);
     }
 
     /// <summary>
     /// The app's log files in a data folder, oldest first: <c>logs/visualcommit-yyyyMMdd.log</c>,
     /// one per day. A run's data folder is new, so they hold that run's log and nothing older.
     /// </summary>
-    public static IReadOnlyList<string> LogFiles(string dataDirectory)
-    {
-        var folder = new AppPaths(dataDirectory).LogDirectory;
-        return Directory.Exists(folder)
-            ? Directory.GetFiles(folder, FileAppLog.FilePrefix + "*.log").Order(StringComparer.Ordinal).ToList()
-            : [];
-    }
+    public static IReadOnlyList<string> LogFiles(string dataDirectory) => AppLogFile.Files(dataDirectory);
 
     /// <summary>
     /// The text of the app's log in a data folder, all files in order: what a check reads to
     /// find the measurements the app logs (D50). It can be read while the app is still writing.
+    /// The scripted walk-through reads the same files the same way (<see cref="AppLogFile"/>).
     /// </summary>
-    public static string ReadLog(string dataDirectory)
-    {
-        var text = new System.Text.StringBuilder();
-        foreach (var file in LogFiles(dataDirectory))
-        {
-            // The app keeps no file open between entries, and lets others read while it appends.
-            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream);
-            text.Append(reader.ReadToEnd());
-        }
+    public static string ReadLog(string dataDirectory) => AppLogFile.ReadText(dataDirectory);
 
-        return text.ToString();
-    }
-
-    /// <summary>Starts the built app on a data folder and waits for its main window.</summary>
-    public static RealApp Launch(string dataDirectory)
+    /// <summary>
+    /// Starts the built app on a data folder and waits for its main window. The app's environment
+    /// is cut off from the machine as the scripted walk-through's is; <paramref name="environment"/>
+    /// then adds variables (such as <c>VISUALCOMMIT_*</c> ones a check needs), or removes those
+    /// whose value is null.
+    /// </summary>
+    public static RealApp Launch(string dataDirectory, IReadOnlyDictionary<string, string?>? environment = null)
     {
         if (!File.Exists(Executable))
         {
@@ -205,6 +195,19 @@ public sealed partial class RealApp : IDisposable
         // No askpass program, ssh command or proxy of this machine, and no auto-fetch, as in the
         // scripted walk-through (D112).
         GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+
+        // What the check itself asks for comes last.
+        foreach (var (variable, value) in environment ?? new Dictionary<string, string?>())
+        {
+            if (value is null)
+            {
+                startInfo.Environment.Remove(variable);
+            }
+            else
+            {
+                startInfo.Environment[variable] = value;
+            }
+        }
 
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
         process.OutputDataReceived += (_, _) => { };

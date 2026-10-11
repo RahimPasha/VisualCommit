@@ -19,7 +19,12 @@ namespace VisualCommit.Testing.Headless;
 /// Phase 3's additions to the driver (docs/phase-3-design.md 7.4): clicks with modifier keys, a
 /// drag in separate steps, the open dialog, typing into a box, waiting for the operation queue,
 /// the fakes of the file launcher and the clipboard, and the open context menu (<c>Menu()</c>,
-/// <c>ClickMenuItem</c>, <c>MenuItemBounds</c>, from the menu adapter's package WP5).
+/// <c>ClickMenuItem</c>, <c>MenuItemBounds</c>, <c>MenuItemControl</c>, from the menu adapter's
+/// package WP5). What phase 3's visual checks share beyond that list (WP10) is in
+/// ShellDriver.Pointer.cs (the neutral point, resting the pointer until a tooltip is open),
+/// ShellDriver.Log.cs (the app's log lines, git's call records, step times) and
+/// ShellDriver.Checks.cs (opening a repository, the working-changes row and the banner, left-panel
+/// and file rows, replacing a box's text, the error dialog, progress, closing the window).
 /// </summary>
 public sealed partial class ShellDriver
 {
@@ -115,7 +120,7 @@ public sealed partial class ShellDriver
     public Point GraphRowPoint(int row)
     {
         var graph = Find<CommitGraphControl>("GraphRows");
-        var x = graph.Columns.Message.IsVisible ? graph.Columns.Message.X + 30 : graph.Columns.Graph.Right + 10;
+        var x = graph.Columns.Message.IsVisible ? graph.Columns.Message.X + WindowLayout.MessageClickInset : graph.Columns.Graph.Right + 10;
         return graph.TranslatePoint(new Point(x, graph.RowBounds(row).Center.Y), Window)
             ?? throw new InvalidOperationException("The graph is not in the window.");
     }
@@ -236,15 +241,7 @@ public sealed partial class ShellDriver
     public void TypeInto(string automationId, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var control = FindByAutomationId(automationId);
-        var box = control as TextBox
-            ?? control.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()
-            ?? throw new InvalidOperationException($"The control with the automation id '{automationId}' is a {control.GetType().Name}, not a text box.");
-        if (!box.IsEffectivelyEnabled || !box.IsEffectivelyVisible)
-        {
-            throw new InvalidOperationException($"The text box '{automationId}' cannot be typed into: it is {(box.IsEffectivelyVisible ? "disabled" : "not visible")}.");
-        }
-
+        var box = TextBoxOf(automationId);
         box.Focus(NavigationMethod.Pointer);
         Settle();
         box.CaretIndex = box.Text?.Length ?? 0;
@@ -356,7 +353,12 @@ public sealed partial class ShellDriver
     /// <summary>Where the open menu's item labelled <paramref name="label"/> is, in the window's logical pixels: to rest the pointer on it.</summary>
     public Rect MenuItemBounds(string label) => BoundsOf(MenuItemControl(label));
 
-    private Avalonia.Controls.MenuItem MenuItemControl(string label)
+    /// <summary>
+    /// The control of the open menu's item labelled <paramref name="label"/> (waiting for the menu
+    /// as <see cref="Menu"/> does): what <see cref="WaitForToolTipAsync"/> waits on when the pointer
+    /// rests on the item. Throws when the menu has no such item or more than one.
+    /// </summary>
+    public Avalonia.Controls.MenuItem MenuItemControl(string label)
     {
         ArgumentNullException.ThrowIfNull(label);
         var presenter = WaitForMenuPresenter(null);
