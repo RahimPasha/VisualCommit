@@ -137,7 +137,8 @@ public sealed class AppSession : IDisposable
         // prompt channel of the session, and the file launcher and clipboard of the window.
         MainWindow? mainWindow = null;
         var dialogs = new DialogHostViewModel();
-        var prompts = PromptDialogs.CreateBroker(promptHandler ?? new PromptDialogs(dialogs, log), log);
+        var promptPresenter = new PromptDialogPresenter(dialogs, dialogs.Notices);
+        var prompts = PromptDialogs.CreateBroker(promptHandler ?? new PromptDialogs(promptPresenter, log), log);
         var tabServices = new TabServices(
             new GitRepositoryProvider(new GitAccess(gitFound.Task), log),
             folderPicker ?? new StorageFolderPicker(() => mainWindow),
@@ -151,6 +152,9 @@ public sealed class AppSession : IDisposable
             launcher: launcher ?? new FileLauncher(() => mainWindow, log),
             clipboard: clipboard ?? new ClipboardService(() => mainWindow));
         var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session);
+
+        // A prompt dialog names its repository when more than one tab has one (4f).
+        promptPresenter.ShowsRepositoryName =() => shell.Tabs.Count(tab => tab.Repository is not null) > 1;
         mainWindow = new MainWindow { DataContext = shell };
         mainWindow.UseSession(session);
 

@@ -45,16 +45,6 @@ public class PromptDialogsTests
     }
 
     [Fact]
-    public async Task Until_the_dialogs_exist_every_prompt_fails_with_a_clear_reason()
-    {
-        var dialogs = new PromptDialogs(new DialogHostViewModel());
-
-        var error = await Assert.ThrowsAsync<NotSupportedException>(() => dialogs.AnswerAsync(Prompt(GitPromptKind.Username, "Username for 'https://example.com': ", "op-1"), TestCancelled));
-
-        Assert.Equal("dialogs: WP3b", error.Message);
-    }
-
-    [Fact]
     public async Task The_password_typed_with_the_user_name_answers_gits_password_prompt_of_the_same_scope()
     {
         var presenter = new ScriptedPresenter(new PromptDialogAnswer("alice", "s3cret"), new PromptDialogAnswer("s3cret-b"));
