@@ -51,7 +51,7 @@ Start:
   session: where the operation queue lives, credential and ssh prompts, which operations
   confirm and what their backup refs are called, what the toolbar buttons do, how context menus
   and drag-and-drop work in both harnesses, how far the conflict banner goes.
-- [ ] 3. Harness: whatever the two passes need to open a context menu, drag a branch and read
+- [x] 3. Harness (WP-S2, WP5; the real-window helpers are compiled, not run): whatever the two passes need to open a context menu, drag a branch and read
   an operation's progress; `TempRepo` helpers for remotes if they are missing.
 - [x] 4. Scenario repos for the operations (diverged branches, remotes ahead and behind, tags,
   stashes, conflicts, a remote that asks for credentials), pinned in `ScenarioTests`: work
@@ -65,24 +65,26 @@ Start:
 
 Git layer:
 
-- [ ] 7. Operation queue per repository (one write at a time, watcher paused, progress, cancel,
-  git's own output in the error), and backup refs before destructive operations. Tests.
-- [ ] 8. Branches: checkout (local, remote into a tracking branch, a commit), create, rename,
+- [x] 7. Operation queue per repository (one write at a time, watcher paused, progress, cancel,
+  git's own output in the error), and backup refs before destructive operations. Tests. (WP0,
+  WP1)
+- [x] 8. Branches (WP1): checkout (local, remote into a tracking branch, a commit), create, rename,
   delete (local and remote), set upstream. Tests.
-- [ ] 9. Merge (both kinds) and fast-forward, reset (soft, mixed, hard), cherry-pick, revert,
+- [x] 9. Merge (both kinds; WP1) and fast-forward, reset (soft, mixed, hard), cherry-pick, revert,
   and reading the in-progress state (conflicted files, which operation). Tests.
-- [ ] 10. Remotes: fetch, pull (as git is configured), push, safe force-push, set upstream,
+- [x] 10. Remotes (WP2; the auto-fetch scheduler is WP9): fetch, pull (as git is configured), push, safe force-push, set upstream,
   add, rename, change and remove remotes; auto-fetch. Tests against a local remote.
-- [ ] 11. Credential, passphrase and ssh host-key prompts answered in the app, and turned off
+- [x] 11. Credential (WP3a, WP3b), passphrase and ssh host-key prompts answered in the app, and turned off
   where there is no one to ask (auto-fetch). Tests with a local server that asks for credentials.
-- [ ] 12. Stash save, apply, pop, drop; tag create, delete, push (and delete on the remote). Tests.
+- [x] 12. Stash save (WP4), apply, pop, drop; tag create, delete, push (and delete on the remote). Tests.
 
 App:
 
-- [ ] 13. The operation queue in the app: it takes over `WriteAsync`, shows progress and Cancel
-  in the status bar, and shows a failure with git's own output.
-- [ ] 14. In-window context menu control and the dialogs the operations need (name input,
-  choice, error with git's output, credentials, remotes).
+- [x] 13. The operation queue in the app: it takes over `WriteAsync`, shows progress and Cancel
+  in the status bar, and shows a failure with git's own output (WP0, WP6; the operations
+  themselves are WP7).
+- [x] 14. In-window context menu control and the dialogs the operations need (name input,
+  choice, error with git's output, credentials, remotes): WP5, WP6, WP3b.
 - [ ] 15. Context menus on every object: commit, local branch, remote branch, tag, stash, file
   (both stage lists, the diff view and a commit's files), remote.
 - [ ] 16. Double-click actions (checkout a branch or remote branch, apply a stash...) and the
@@ -91,7 +93,7 @@ App:
 - [ ] 18. Ctrl and Shift selection of several commits in the graph; cherry-pick several.
 - [ ] 19. Confirmations for destructive operations; stash and re-apply for a blocked checkout.
 - [ ] 20. Basic conflict state: the banner with abort, conflicted files flagged.
-- [ ] 21. The left panel's selection follows the graph's (phase 1 follow-up).
+- [x] 21. The left panel's selection follows the graph's (phase 1 follow-up).
 - [ ] 22. Phases 0 to 2's checks updated for anything phase 3 changes on purpose, recorded under
   "Changes to expected results" in the phase 3 report.
 
