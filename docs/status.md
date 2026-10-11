@@ -51,8 +51,13 @@ The last run on `phase/2-diff-commit` was
 [38097840078](https://github.com/RahimPasha/VisualCommit/actions/runs/38097840078), for the
 gate's commit `2a13804`: all five jobs succeeded (`windows-latest`, `macos-latest`,
 `ubuntu-latest` and the two "bare ubuntu container" jobs), each with 557 tests passed. The
-commits after it changed only docs. The run for the merge on `master` is added below once it has
-been read.
+commits after it changed only docs.
+
+The run for the merge on `master`:
+[38116890189](https://github.com/RahimPasha/VisualCommit/actions/runs/38116890189), for
+`7aa3349` (the merge commit `e039070` and the commit that set phase 2 to "Done"). All five jobs
+succeeded, each with 557 tests passed: `windows-latest`, `macos-latest`, `ubuntu-latest`, and
+the two "bare ubuntu container" jobs.
 
 Before phase 2, the last run on `master` was
 [38077727040](https://github.com/RahimPasha/VisualCommit/actions/runs/38077727040), for
