@@ -151,14 +151,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 23: write the scripted walk-through (`Phase3Checks`) and step 24 the real-window pass
-(`Phase3RealWindowPass`) for the 41 checks. Everything they test is built and merged (WP0 to WP9);
-what is in flight: the integration branch `wip/p3-integration` (menu width, empty-pick output,
-the stash reason in one place, URL wrapping, repository naming in dialogs; then the whole default
-run) and WP10-core (the shared harness helpers and the skeleton of the checks); then four agents
-write the checks by report part A to D. The working files `docs/phase-3-checks-*.md`,
-`docs/phase-3-answers.md` (untracked) are the sources of the report (a script joined them) and are
-thrown away when the phase closes.
+Step 23 and 24, in progress: the scripted walk-through (`Phase3Checks` A to D) and the real-window
+pass code (`Phase3RealWindowPass`) for the 41 checks are being written by four agents, one per
+part of the report, on branches `wip/p3-wp10a` to `wip/p3-wp10d` (each runs its checks, opens its
+pictures and fixes the defects they find). The harness and the integration fixes are merged. After
+that: merge them, an independent review of the code (step 25), then the gate (step 26) on the
+Windows machine: `dotnet test`, then (the owner is told first) the real-window pass.
+The report `docs/test-reports/phase-3.md` is the source of truth for the expected results; the
+old working files are gone.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
