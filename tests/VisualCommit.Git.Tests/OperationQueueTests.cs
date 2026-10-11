@@ -578,6 +578,53 @@ public class OperationQueueTests
     }
 
     [Fact]
+    public async Task The_next_operation_whose_start_is_posted_but_has_not_run_does_not_run_after_the_tab_closed()
+    {
+        var context = new ManualContext();
+        var previous = SynchronizationContext.Current;
+        var nextRan = false;
+        Task<OperationResult> next;
+        var queue = new TestQueue();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            var gate = new TaskCompletionSource();
+            _ = queue.Queue.RunAsync(Local("Discard", async _ =>
+            {
+                await gate.Task;
+                return OperationReport.Done("Discarded");
+            }));
+            next = queue.Queue.RunAsync(Local("Delete branch", _ =>
+            {
+                nextRan = true;
+                return Task.FromResult(OperationReport.Done("Deleted"));
+            }));
+
+            // The Discard ends: Delete branch is next in line and its start is posted to the UI
+            // thread, which closes the tab before it gets to that start.
+            gate.SetResult();
+            while (queue.Queue.Current?.Title != "Delete branch")
+            {
+                Assert.True(context.RunOne(), "The queue stopped before Delete branch was next in line.");
+            }
+
+            queue.Dispose();
+            while (context.RunOne())
+            {
+            }
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.False(nextRan, "The operation next in line ran after the tab closed.");
+        Assert.Equal(OperationOutcome.Cancelled, (await next.WaitAsync(Patience, TestCancelled)).Outcome);
+        await queue.Queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+        Assert.Null(queue.Queue.Current);
+    }
+
+    [Fact]
     public async Task Closing_the_tab_leaves_a_background_operation_to_finish()
     {
         var queue = new TestQueue();
@@ -771,6 +818,33 @@ public class OperationQueueTests
 
             public void CancelByUser() => UserCancelled = true;
         }
+    }
+}
+
+/// <summary>A synchronization context whose posts run only when the test runs them, one at a time, on the test's thread.</summary>
+internal sealed class ManualContext : SynchronizationContext
+{
+    private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _posted = new();
+
+    public override void Post(SendOrPostCallback d, object? state) => _posted.Enqueue((d, state));
+
+    public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
+
+    /// <summary>Runs the oldest post; false when none waits (after a short wait for posts from other threads).</summary>
+    public bool RunOne()
+    {
+        for (var tries = 0; tries < 50; tries++)
+        {
+            if (_posted.TryDequeue(out var work))
+            {
+                work.Callback(work.State);
+                return true;
+            }
+
+            Thread.Sleep(10);
+        }
+
+        return false;
     }
 }
 

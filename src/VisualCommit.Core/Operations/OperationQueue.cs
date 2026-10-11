@@ -263,6 +263,14 @@ public sealed class OperationQueue : IOperationQueue
             dropped = [.. _waiting];
             _waiting.Clear();
             running = _running;
+            if (running is { Started: false })
+            {
+                // Next in line, its start posted but not run yet: it never started, so it ends
+                // as cancelled without running, as the waiting ones do (1.8).
+                dropped.Add(running);
+                _running = running = null;
+            }
+
             if (running is null)
             {
                 idle = TakeIdleWaiters();
@@ -387,6 +395,17 @@ public sealed class OperationQueue : IOperationQueue
     /// <summary>One operation, steps 3 to 8 of the design's section 1.3.</summary>
     private async Task ExecuteAsync(Entry entry)
     {
+        lock (_gate)
+        {
+            if (!ReferenceEquals(_running, entry))
+            {
+                // The tab closed between the post of its start and now: Dispose ended it.
+                return;
+            }
+
+            entry.Started = true;
+        }
+
         var operation = entry.Operation;
         entry.StartedAt = DateTimeOffset.Now;
         var stopwatch = Stopwatch.StartNew();
@@ -720,6 +739,9 @@ public sealed class OperationQueue : IOperationQueue
         public bool CancelWindowOpen { get; set; } = true;
 
         public bool CancelRequested { get; set; }
+
+        /// <summary>Its run has begun (set under the gate): until then, closing the tab drops it like a waiting one.</summary>
+        public bool Started { get; set; }
 
         public OperationProgress? Progress { get; set; }
 
