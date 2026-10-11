@@ -1,9 +1,14 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
+using VisualCommit.App.ViewModels.Diff;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core;
+using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Graph;
 using VisualCommit.Core.Logging;
@@ -13,14 +18,22 @@ namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// One repository open in a tab (D45): its refs, its graph, its left panel and commit details,
-/// its watcher, and everything that keeps them up to date. Closing the tab disposes it, which
-/// stops all of its work.
+/// its working-tree status with the stage panel and the open diff, its watcher, and everything
+/// that keeps them up to date. Every write the app makes to the repository runs here, with the
+/// watcher paused (D71). Closing the tab disposes it, which stops all of its work.
 /// </summary>
-public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
+public sealed partial class RepositoryViewModel : ObservableObject, IDisposable, IWorkingChangesHost, IDiffHost
 {
+    /// <summary>The height of a graph row: the working-changes row moves the rows below it by this much.</summary>
+    private const double GraphRowHeight = 26;
+
+    private const string SnapshotNote = "A snapshot is saved first, so the changes can be restored.";
+
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SynchronizationContext? _ui;
     private readonly IAppLog _log;
+    private readonly ISettingsStore _settings;
+    private readonly IDialogService? _dialogs;
     private readonly Stopwatch _sinceOpening;
     private readonly List<double> _frameTimes = [];
     private readonly List<double> _loadingFrameTimes = [];
@@ -28,32 +41,43 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     private string? _selectedSha;
     private string? _pendingSelection;
     private string? _fingerprint;
+    private string? _headSha;
     private readonly Lock _refreshGate = new();
+    private readonly Lock _statusGate = new();
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private bool _firstRowsLogged;
     private Task? _refreshing;
     private bool _refreshAgain;
+    private Task? _statusRefreshing;
+    private bool _statusAgain;
     private bool _restoringSelection;
     private bool _started;
     private bool _changedWhileStarting;
     private bool _disposed;
+    private DiscardSnapshot? _lastSnapshot;
+    private Dictionary<string, string?>? _afterDiscard;
 
     /// <param name="repository">The repository.</param>
-    /// <param name="settings">The settings, for the file list's flat or tree view.</param>
+    /// <param name="settings">The settings: the file list's flat or tree view, the diff mode.</param>
     /// <param name="dates">How dates are shown.</param>
     /// <param name="log">The app's log, which also gets the Q1 measurements (D50).</param>
     /// <param name="sinceOpening">Started when opening the repository began; the time to the first graph rows is measured from it.</param>
+    /// <param name="dialogs">Where a discard asks for confirmation (D62, D69). Without it, discards go ahead unasked: tests only.</param>
     public RepositoryViewModel(
         IGitRepository repository,
         ISettingsStore settings,
         DateDisplay dates,
         IAppLog? log = null,
-        Stopwatch? sinceOpening = null)
+        Stopwatch? sinceOpening = null,
+        IDialogService? dialogs = null)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(dates);
         Repository = repository;
         Dates = dates;
+        _settings = settings;
+        _dialogs = dialogs;
         _log = log ?? NullAppLog.Instance;
         _sinceOpening = sinceOpening ?? Stopwatch.StartNew();
         _ui = SynchronizationContext.Current;
@@ -62,6 +86,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         LeftPanel.RefActivated += (_, sha) => Select(sha, reveal: true);
         Details = new CommitDetailsViewModel(repository, settings, dates, _log);
         Details.ParentActivated += (_, sha) => Select(sha, reveal: true);
+        Details.FileActivated += (_, file) => OpenCommitDiff(file);
+        Changes = new WorkingChangesViewModel(this, settings);
     }
 
     public IGitRepository Repository { get; }
@@ -78,14 +104,21 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
 
     public CommitDetailsViewModel Details { get; }
 
+    /// <summary>The stage panel, shown while the working-changes row is selected.</summary>
+    public WorkingChangesViewModel Changes { get; }
+
     /// <summary>The commits the graph draws. Replaced whole when a refresh loads the history again (D52).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoCommits))]
     public partial CommitGraphData Graph { get; private set; } = CommitGraphData.Empty;
 
-    /// <summary>The selected row of the graph, or -1. The graph control binds to it both ways.</summary>
+    /// <summary>The selected commit's row of the graph, or -1. The graph control binds to it both ways.</summary>
     [ObservableProperty]
     public partial int SelectedIndex { get; set; } = -1;
+
+    /// <summary>The working-changes row is selected (and <see cref="SelectedIndex"/> is -1). The graph control binds to it both ways.</summary>
+    [ObservableProperty]
+    public partial bool IsWorkingRowSelected { get; set; }
 
     /// <summary>The graph's vertical scroll offset, kept here so that each tab keeps its own.</summary>
     [ObservableProperty]
@@ -99,6 +132,21 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string? ErrorText { get; private set; }
 
+    /// <summary>The staged, unstaged and untracked files, as last read.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasWorkingChanges))]
+    public partial WorkingTreeStatus Status { get; private set; } = WorkingTreeStatus.Clean;
+
+    /// <summary>The graph shows the working-changes row (D60).</summary>
+    public bool HasWorkingChanges => Status.HasChanges;
+
+    /// <summary>The diff open in place of the graph, or null (D63).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDiffOpen))]
+    public partial DiffViewModel? Diff { get; private set; }
+
+    public bool IsDiffOpen => Diff is not null;
+
     /// <summary>
     /// The history is loaded and has no commits: the graph area says "No commits yet". Not while
     /// the refs are still being read: the empty graph shown until then is no history yet.
@@ -106,13 +154,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     public bool HasNoCommits =>
         !ReferenceEquals(Graph, CommitGraphData.Empty) && Graph.IsComplete && Graph.Count == 0 && ErrorText is null;
 
+    /// <summary>HEAD has a commit.</summary>
+    public bool HasHead => _headSha is not null;
+
     /// <summary>Raised when a row should be scrolled into the middle of the view: after a ref or a parent was activated.</summary>
     public event EventHandler<int>? RevealRequested;
 
     /// <summary>
-    /// Reads the refs, loads the history page by page into <see cref="Graph"/> and starts
-    /// watching for outside changes. Completes when the whole history is loaded. Failures are
-    /// shown in <see cref="ErrorText"/> and logged, not thrown.
+    /// Reads the refs and the working-tree status, loads the history page by page into
+    /// <see cref="Graph"/> and starts watching for outside changes. Completes when the whole
+    /// history is loaded. Failures are shown in <see cref="ErrorText"/> and logged, not thrown.
     /// </summary>
     public async Task StartAsync()
     {
@@ -120,15 +171,19 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         try
         {
             // Watching starts first: a change made while the history loads (a commit in a
-            // terminal, an editor's fetch) is caught and shown once the load is done.
-            _watcher = Repository.CreateWatcher();
-            _watcher.Changed += (_, _) => OnUiThread(RequestRefresh);
-            _watcher.Start();
+            // terminal, an editor's save) is caught and shown once the load is done. It starts
+            // off the UI thread: on Linux it walks every folder of the working tree.
+            var watcher = Repository.CreateWatcher();
+            _watcher = watcher;
+            watcher.Changed += (_, e) => OnUiThread(() => OnRepositoryChanged(e));
+            var watching = Task.Run(watcher.Start, CancellationToken.None);
 
-            // The refs and the history are read side by side: git log does not need the refs,
-            // and starting it at once brings the first graph forward by the time they take (Q1).
+            // The refs, the history and the status are read side by side: git log does not need
+            // the refs, and starting it at once brings the first graph forward by the time they
+            // take (Q1). The status is small next to them.
             _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: opened after {_sinceOpening.ElapsedMilliseconds} ms"));
             var reading = Repository.ReadRefsAsync(cancellationToken);
+            var status = Repository.ReadStatusAsync(cancellationToken);
             var data = new Lazy<CommitGraphData>(() => new CommitGraphData(reading.Result), LazyThreadSafetyMode.ExecutionAndPublication);
             var loading = LoadAsync(reading, data, cancellationToken);
 
@@ -141,13 +196,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
             {
                 // The load fails with the same error; it is observed here so it is not reported twice.
                 _ = loading.ContinueWith(failed => _ = failed.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                _ = status.ContinueWith(failed => _ = failed.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                 throw;
             }
 
             _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: refs read after {_sinceOpening.ElapsedMilliseconds} ms"));
             ApplyRefs(refs);
             Graph = data.Value;
+            var statusShown = ShowStatusAsync(status);
             await loading;
+            await statusShown;
+            await watching;
             OnPropertyChanged(nameof(HasNoCommits));
 
             _started = true;
@@ -169,16 +228,21 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Reads the refs again, after an outside change, and loads the history again when the refs
-    /// changed what the graph shows (D52). The new graph replaces the old one once it is loaded,
-    /// with the same commit selected. A call that comes while a refresh runs makes that refresh
-    /// run once more and returns its task, so the caller always waits for a refresh that started
-    /// after its call.
+    /// Reads the refs again, after an outside change or a commit, and loads the history again when
+    /// the refs changed what the graph shows (D52); then reads the working-tree status. The new
+    /// graph replaces the old one once it is loaded, with the same commit selected. A call that
+    /// comes while a refresh runs makes that refresh run once more and returns its task, so the
+    /// caller always waits for a refresh that started after its call.
     /// </summary>
     public Task RefreshAsync()
     {
         lock (_refreshGate)
         {
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
+
             if (_refreshing is { IsCompleted: false })
             {
                 _refreshAgain = true;
@@ -187,6 +251,31 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
 
             _refreshing = RunRefreshesAsync();
             return _refreshing;
+        }
+    }
+
+    /// <summary>
+    /// Reads the working-tree status again, and the open diff: after a change in the working tree
+    /// or a write of the app's (D71). Calls that come while one runs are folded into one more run,
+    /// as <see cref="RefreshAsync"/> does.
+    /// </summary>
+    public Task RefreshStatusAsync()
+    {
+        lock (_statusGate)
+        {
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (_statusRefreshing is { IsCompleted: false })
+            {
+                _statusAgain = true;
+                return _statusRefreshing;
+            }
+
+            _statusRefreshing = RunStatusRefreshesAsync();
+            return _statusRefreshing;
         }
     }
 
@@ -207,13 +296,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
                 {
                     // Upstreams and their counts can change without moving a ref.
                     ApplyRefs(refs);
-                    continue;
+                }
+                else
+                {
+                    var data = new CommitGraphData(refs);
+                    await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), cancellationToken);
+                    ApplyRefs(refs);
+                    SwapGraph(data);
                 }
 
-                var data = new CommitGraphData(refs);
-                await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), cancellationToken);
-                ApplyRefs(refs);
-                SwapGraph(data);
+                // The index lives in the git folder: a change there may be a change of the status.
+                await RefreshStatusAsync();
             }
             while (RefreshRequestedAgain() && !cancellationToken.IsCancellationRequested);
         }
@@ -234,9 +327,43 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Selects the commit <paramref name="sha"/> in the graph; with <paramref name="reveal"/>, scrolls it into the middle of the view.</summary>
+    private async Task RunStatusRefreshesAsync()
+    {
+        var cancellationToken = _lifetime.Token;
+        try
+        {
+            bool again;
+            do
+            {
+                lock (_statusGate)
+                {
+                    _statusAgain = false;
+                }
+
+                var status = await Repository.ReadStatusAsync(cancellationToken);
+                ApplyStatus(status);
+                await ReloadDiffAsync();
+
+                lock (_statusGate)
+                {
+                    again = _statusAgain;
+                }
+            }
+            while (again && !cancellationToken.IsCancellationRequested);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"{Name}: reading the working tree's status failed.", ex);
+        }
+    }
+
+    /// <summary>Selects the commit <paramref name="sha"/> in the graph; with <paramref name="reveal"/>, scrolls it into the middle of the view. An open diff closes.</summary>
     public void Select(string sha, bool reveal)
     {
+        CloseDiff();
         var index = Graph.IndexOf(sha);
         if (index < 0)
         {
@@ -273,6 +400,34 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     public void OnFrameDrawn(TimeSpan duration) =>
         (Graph.IsComplete ? _frameTimes : _loadingFrameTimes).Add(duration.TotalMilliseconds);
 
+    /// <summary>Opens a working-tree file's diff: unstaged or staged (D63).</summary>
+    public void OpenDiff(ChangedFile file, bool staged)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        var target = new DiffTarget(
+            staged ? DiffSide.Staged : DiffSide.Unstaged,
+            file.Path,
+            file.Kind,
+            staged ? file.OldPath : null,
+            IsUntracked: !staged && Status.IsUntracked(file.Path));
+        ShowDiff(target, staged ? "Staged" : "Unstaged");
+        Details.SelectedFilePath = null;
+        Changes.ShowSelection(file.Path, staged);
+    }
+
+    /// <summary>Closes the diff view and shows the graph again; the file row loses its selection.</summary>
+    public void CloseDiff()
+    {
+        if (Diff is { } diff)
+        {
+            Diff = null;
+            diff.Dispose();
+        }
+
+        Changes.ShowSelection(null, staged: false);
+        Details.SelectedFilePath = null;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -283,12 +438,217 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         _disposed = true;
         _lifetime.Cancel();
         _watcher?.Dispose();
+        Diff?.Dispose();
         LogFrameStatistics();
         _lifetime.Dispose();
     }
 
+    // The stage panel's and the diff view's writes (IWorkingChangesHost, IDiffHost).
+
+    public Task<string?> StageAsync(IReadOnlyList<ChangedFile> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return files.Count == 0
+            ? Task.FromResult<string?>(null)
+            : WriteAsync(cancellationToken => Repository.StageAsync([.. files.Select(file => file.Path)], cancellationToken));
+    }
+
+    public Task<string?> UnstageAsync(IReadOnlyList<ChangedFile> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        // A rename unstages both its paths: the new one leaves the index, the old one comes back.
+        var paths = files.SelectMany(file => file.OldPath is { } old ? new[] { file.Path, old } : [file.Path]).Distinct().ToList();
+        return paths.Count == 0
+            ? Task.FromResult<string?>(null)
+            : WriteAsync(cancellationToken => Repository.UnstageAsync(paths, cancellationToken));
+    }
+
+    public async Task<string?> DiscardAsync(IReadOnlyList<ChangedFile> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        // A conflicted file has no unstaged version to go back to: it is resolved, not discarded.
+        // An untracked folder that git lists with a slash is a repository of its own: deleting
+        // it would delete its history too.
+        var leftOut = files.Where(file => file.Kind == FileChangeKind.Conflicted || file.Path.EndsWith('/')).ToList();
+        var paths = files.Except(leftOut).Select(file => file.Path).ToList();
+        if (paths.Count == 0)
+        {
+            Changes.ErrorText = leftOut.Count == 1
+                ? leftOut[0].Kind == FileChangeKind.Conflicted
+                    ? $"{DisplayName(leftOut[0])} has a conflict: resolve it before discarding."
+                    : $"{DisplayName(leftOut[0])} is a repository of its own: it is not discarded."
+                : "These files have conflicts or are repositories of their own: they are not discarded.";
+            return Changes.ErrorText;
+        }
+
+        var question = paths.Count == 1
+            ? $"Discard the changes to {WorkingChangesViewModel.FileName(paths[0])}?"
+            : string.Create(CultureInfo.InvariantCulture, $"Discard the changes to {paths.Count} files?");
+        if (leftOut.Count > 0)
+        {
+            question += leftOut.Count == 1
+                ? $" {DisplayName(leftOut[0])} is left as it is."
+                : string.Create(CultureInfo.InvariantCulture, $" {leftOut.Count} files that cannot be discarded are left as they are.");
+        }
+
+        if (!await ConfirmDiscardAsync(question))
+        {
+            return null;
+        }
+
+        var untracked = new HashSet<string>(paths.Where(Status.IsUntracked), StringComparer.Ordinal);
+        return await WriteAsync(
+            async cancellationToken =>
+            {
+                var snapshot = await Repository.SaveSnapshotAsync(paths, cancellationToken);
+                await Repository.DiscardAsync(paths, untracked, cancellationToken);
+                await RememberDiscardAsync(snapshot, cancellationToken);
+            });
+    }
+
+    public async Task<string?> RestoreAsync()
+    {
+        if (_disposed || _lastSnapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        // Work done on the files since the discard is not lost without a word: the user is asked,
+        // and it goes into a snapshot of its own first (D75).
+        var changed = await ChangedSinceDiscardAsync(_lifetime.Token);
+        if (changed.Count > 0)
+        {
+            var question = changed.Count == 1
+                ? $"{WorkingChangesViewModel.FileName(changed[0])} has changed since the discard. Put back the version from before the discard?"
+                : string.Create(CultureInfo.InvariantCulture, $"{changed.Count} files have changed since the discard. Put back the versions from before the discard?");
+            var request = new ConfirmationRequest("Restore discarded changes?", question, "A snapshot of the newer changes is saved first.", "Restore");
+            if (_dialogs is not null && !await _dialogs.ConfirmAsync(request))
+            {
+                return null;
+            }
+        }
+
+        return await WriteAsync(
+            async cancellationToken =>
+            {
+                if (changed.Count > 0)
+                {
+                    await Repository.SaveSnapshotAsync(changed, cancellationToken);
+                }
+
+                await Repository.RestoreSnapshotAsync(snapshot, cancellationToken);
+                _lastSnapshot = null;
+                _afterDiscard = null;
+                Changes.HideRestore();
+            });
+    }
+
+    public async Task<string?> CommitAsync(string message, bool amend)
+    {
+        string? commit = null;
+        var error = await WriteAsync(
+            async cancellationToken => commit = await Repository.CommitAsync(message, amend, cancellationToken),
+            refsChange: true);
+
+        // With nothing left to commit, the working-changes row is gone: the new commit is selected.
+        if (error is null && commit is not null && !HasWorkingChanges)
+        {
+            Select(commit, reveal: true);
+        }
+
+        return error;
+    }
+
+    public async Task<(string Subject, string Body)?> ReadHeadMessageAsync()
+    {
+        if (_headSha is not { } head)
+        {
+            return null;
+        }
+
+        try
+        {
+            var details = await Repository.ReadCommitDetailsAsync(head, _lifetime.Token);
+            return (details.Subject, details.Body);
+        }
+        catch (Exception ex) when (ex is GitException or OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    public Task<FileDiff> ReadDiffAsync(DiffTarget target, CancellationToken cancellationToken) =>
+        Repository.ReadDiffAsync(target, cancellationToken);
+
+    public Task<byte[]?> ReadFileAsync(FileVersion version, long maxBytes, CancellationToken cancellationToken) =>
+        Repository.ReadFileAsync(version, maxBytes, cancellationToken);
+
+    public Task<long?> ReadFileSizeAsync(FileVersion version, CancellationToken cancellationToken) =>
+        Repository.ReadFileSizeAsync(version, cancellationToken);
+
+    public async Task<string?> ApplyLinesAsync(DiffTarget target, FileDiff diff, IReadOnlySet<DiffLineRef> lines, LineAction action, bool wholeHunk)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(diff);
+        ArgumentNullException.ThrowIfNull(lines);
+        var chosen = lines.Where(line => line.Hunk < diff.Hunks.Count && line.Line < diff.Hunks[line.Hunk].Lines.Count && diff.Hunks[line.Hunk].Lines[line.Line].IsChange).ToHashSet();
+        if (chosen.Count == 0)
+        {
+            return null;
+        }
+
+        if (action == LineAction.Discard)
+        {
+            var name = WorkingChangesViewModel.FileName(target.Path);
+            var question = wholeHunk ? $"Discard this hunk of {name}?"
+                : chosen.Count == 1 ? $"Discard 1 selected line of {name}?"
+                : string.Create(CultureInfo.InvariantCulture, $"Discard {chosen.Count} selected lines of {name}?");
+            if (!await ConfirmDiscardAsync(question))
+            {
+                return null;
+            }
+        }
+
+        return await WriteAsync(
+            async cancellationToken =>
+            {
+                // The whole file goes into a discard's snapshot, so Restore puts all of it back (D67).
+                var snapshot = action == LineAction.Discard ? await Repository.SaveSnapshotAsync([target.Path], cancellationToken) : null;
+                if (snapshot is not null && target.IsUntracked && chosen.Count == diff.AddedCount)
+                {
+                    // Every line of an untracked file: the file goes, with the folders it leaves empty.
+                    await Repository.DiscardAsync([target.Path], new HashSet<string>(StringComparer.Ordinal) { target.Path }, cancellationToken);
+                }
+                else
+                {
+                    var direction = action == LineAction.Stage ? PatchDirection.Forward : PatchDirection.Reverse;
+                    var patch = PatchBuilder.Build(diff, chosen, direction);
+                    if (patch is not null)
+                    {
+                        await Repository.ApplyPatchAsync(patch, toIndex: action != LineAction.Discard, direction, cancellationToken);
+                    }
+                }
+
+                if (snapshot is not null)
+                {
+                    await RememberDiscardAsync(snapshot, cancellationToken);
+                }
+            });
+    }
+
     partial void OnSelectedIndexChanged(int value)
     {
+        if (value >= 0)
+        {
+            IsWorkingRowSelected = false;
+        }
+
         var sha = value >= 0 && value < Graph.Count ? Graph.CommitAt(value).Sha : null;
         if (sha == _selectedSha)
         {
@@ -303,8 +663,258 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
         }
     }
 
+    partial void OnIsWorkingRowSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            _pendingSelection = null;
+            SelectedIndex = -1;
+            Changes.SyncFileList();
+        }
+    }
+
     /// <summary>
-    /// Loads the history into <paramref name="data"/>, which is made from <paramref name="refs"/>
+    /// Shows a newly read status. When the working-changes row appears or goes while the graph is
+    /// scrolled away from the top, the offset moves with it so that the rows in view stay put (D60).
+    /// </summary>
+    private void ApplyStatus(WorkingTreeStatus status)
+    {
+        // The offset as it was: once the row goes, the graph control clamps the offset to its
+        // shorter extent at once, and moving the clamped offset would move the rows a row too far.
+        var had = HasWorkingChanges;
+        var offset = ScrollOffset;
+        Status = status;
+
+        // The real-window pass, which cannot see the graph's rows, waits for this line.
+        _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: working tree: {status.Staged.Count} staged, {status.Unstaged.Count} unstaged"));
+        if (had != status.HasChanges && offset > 0)
+        {
+            ScrollOffset = Math.Max(0, offset + (status.HasChanges ? GraphRowHeight : -GraphRowHeight));
+        }
+
+        if (!status.HasChanges && IsWorkingRowSelected)
+        {
+            IsWorkingRowSelected = false;
+            _ = Details.ShowAsync(null, null, _lifetime.Token);
+        }
+
+        Changes.Update(status, HasHead);
+    }
+
+    private async Task ShowStatusAsync(Task<WorkingTreeStatus> reading)
+    {
+        try
+        {
+            ApplyStatus(await reading);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"{Name}: reading the working tree's status failed.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Reads the open diff again after a write or an outside change, for the file as the status
+    /// now lists it. A working-tree diff whose file has left its list closes. A commit's diff
+    /// never changes.
+    /// </summary>
+    private async Task ReloadDiffAsync()
+    {
+        if (Diff is not { } diff || diff.Target.Side == DiffSide.Commit)
+        {
+            return;
+        }
+
+        var staged = diff.Target.Side == DiffSide.Staged;
+        var list = staged ? Status.Staged : Status.Unstaged;
+        var file = list.FirstOrDefault(candidate => candidate.Path == diff.Target.Path);
+        if (file is null)
+        {
+            CloseDiff();
+            return;
+        }
+
+        var target = diff.Target with
+        {
+            Kind = file.Kind,
+            OldPath = staged ? file.OldPath : null,
+            IsUntracked = !staged && Status.IsUntracked(file.Path),
+        };
+        await diff.LoadAsync(target);
+    }
+
+    private void OpenCommitDiff(ChangedFile file)
+    {
+        if (Details.Details is not { } commit)
+        {
+            return;
+        }
+
+        var target = new DiffTarget(DiffSide.Commit, file.Path, file.Kind, file.OldPath, Commit: commit.Sha, Parent: commit.Parents.FirstOrDefault());
+        ShowDiff(target, commit.Sha[..Math.Min(7, commit.Sha.Length)]);
+        Changes.ShowSelection(null, staged: false);
+        Details.SelectedFilePath = file.Path;
+    }
+
+    private void ShowDiff(DiffTarget target, string sideLabel)
+    {
+        // A commit still waiting to be selected when it loads would close this diff: the newer
+        // action wins.
+        _pendingSelection = null;
+        Diff?.Dispose();
+        var diff = new DiffViewModel(this, target, sideLabel, _settings, _log);
+        Diff = diff;
+        _ = diff.LoadAsync();
+    }
+
+    /// <summary>A file's name as dialogs and messages give it; a folder's without its slash.</summary>
+    private static string DisplayName(ChangedFile file) => WorkingChangesViewModel.FileName(file.Path.TrimEnd('/'));
+
+    private async Task<bool> ConfirmDiscardAsync(string question) =>
+        _dialogs is null || await _dialogs.ConfirmAsync(new ConfirmationRequest("Discard changes?", question, SnapshotNote, "Discard"));
+
+    /// <summary>
+    /// After a discard that succeeded: keeps its snapshot for Restore, and what the files hold now,
+    /// so that Restore can tell whether they changed since (D75). Shows the restore bar.
+    /// </summary>
+    private async Task RememberDiscardAsync(DiscardSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        _lastSnapshot = snapshot;
+        _afterDiscard = await FingerprintAsync(snapshot.Paths, cancellationToken);
+        Changes.ShowRestore(snapshot.Paths);
+    }
+
+    /// <summary>The last discard's files whose content is no longer what the discard left.</summary>
+    private async Task<List<string>> ChangedSinceDiscardAsync(CancellationToken cancellationToken)
+    {
+        if (_lastSnapshot is not { } snapshot || _afterDiscard is not { } before)
+        {
+            return [];
+        }
+
+        var now = await FingerprintAsync(snapshot.Paths, cancellationToken);
+        return [.. snapshot.Paths.Where(path => !string.Equals(before.GetValueOrDefault(path), now.GetValueOrDefault(path), StringComparison.Ordinal))];
+    }
+
+    /// <summary>
+    /// A hash of each working-tree file's bytes, null for a file that does not exist; a file that
+    /// cannot be read gets a value of its own, so that it counts as changed.
+    /// </summary>
+    private Task<Dictionary<string, string?>> FingerprintAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        var root = Repository.WorkingDirectory;
+        return Task.Run(
+            () => paths.Distinct(StringComparer.Ordinal).ToDictionary(
+                path => path,
+                path =>
+                {
+                    var full = System.IO.Path.Combine(root, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
+                    try
+                    {
+                        if (!File.Exists(full))
+                        {
+                            return null;
+                        }
+
+                        using var stream = File.OpenRead(full);
+                        return Convert.ToHexString(SHA256.HashData(stream));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        return (string?)("unreadable " + Guid.NewGuid().ToString("N"));
+                    }
+                },
+                StringComparer.Ordinal),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs one of the app's own writes with the watcher paused, then reads what changed: the
+    /// status (and the open diff), and with <paramref name="refsChange"/> the refs and history
+    /// too (D71). Returns git's message when the write failed, and shows it in the stage panel.
+    /// Writes run one at a time, each with the reading after it (D76): two at once would meet at
+    /// git's index lock.
+    /// </summary>
+    private async Task<string?> WriteAsync(Func<CancellationToken, Task> write, bool refsChange = false)
+    {
+        // The tab may have closed while a confirmation was open.
+        if (_disposed)
+        {
+            return null;
+        }
+
+        await _writeGate.WaitAsync();
+        try
+        {
+            return _disposed ? null : await WriteNowAsync(write, refsChange);
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    private async Task<string?> WriteNowAsync(Func<CancellationToken, Task> write, bool refsChange)
+    {
+        var cancellationToken = _lifetime.Token;
+        string? error = null;
+        using (_watcher?.Pause())
+        {
+            try
+            {
+                await write(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+            catch (GitException ex)
+            {
+                _log.Warning($"{Name}: {ex.Message}");
+                error = string.IsNullOrWhiteSpace(ex.StandardError) ? ex.Message : ex.StandardError.Trim();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.Warning($"{Name}: a write to the working tree failed.", ex);
+                error = ex.Message;
+            }
+        }
+
+        // Read again whether or not the write succeeded: it may have done part of its work.
+        if (refsChange)
+        {
+            await RefreshAsync();
+        }
+        else
+        {
+            await RefreshStatusAsync();
+        }
+
+        Changes.ErrorText = error;
+        return error;
+    }
+
+    private void OnRepositoryChanged(RepositoryChangedEventArgs change)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (!_started)
+        {
+            _changedWhileStarting = true;
+            return;
+        }
+
+        _ = change.GitFolder ? RefreshAsync() : RefreshStatusAsync();
+    }
+
+    /// <summary>
+    /// Loads the history into <paramref name="lazyData"/>, which is made from <paramref name="refs"/>
     /// once they are known. Git starts at once; no page arrives before the refs (the contract of
     /// <see cref="IGitRepository.LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>).
     /// </summary>
@@ -362,6 +972,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
     private void ApplyRefs(RepoRefs refs)
     {
         _fingerprint = refs.Fingerprint;
+        _headSha = refs.Head.Sha;
         BranchText = refs.Head switch
         {
             { BranchName: { } branch } => branch,
@@ -387,7 +998,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
 
         if (SelectedIndex < 0 && selected is not null)
         {
-            // The selected commit is gone (a reset, a deleted branch): show the placeholder.
+            // The selected commit is gone (a reset, a deleted branch, an amend): show the placeholder.
             _selectedSha = null;
             _ = Details.ShowAsync(null, null, _lifetime.Token);
         }
@@ -412,22 +1023,6 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable
             _pendingSelection = null;
             Select(sha, reveal: true);
         }
-    }
-
-    private void RequestRefresh()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        if (!_started)
-        {
-            _changedWhileStarting = true;
-            return;
-        }
-
-        _ = RefreshAsync();
     }
 
     private void OnUiThread(Action action)

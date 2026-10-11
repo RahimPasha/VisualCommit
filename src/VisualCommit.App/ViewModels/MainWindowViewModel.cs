@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -22,6 +23,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IAppLog _log;
     private readonly ISessionStore _session;
     private readonly TabServices _tabServices;
+    private readonly DialogHostViewModel _fallbackDialogs = new();
     private bool _restoring;
 
     public MainWindowViewModel(
@@ -67,6 +69,9 @@ public partial class MainWindowViewModel : ObservableObject
         _restoring = false;
         UpdateCanClose();
     }
+
+    /// <summary>The window's dialog layer (D69): what the overlay shows, and Esc's first target.</summary>
+    public DialogHostViewModel Dialogs => _tabServices.Dialogs as DialogHostViewModel ?? _fallbackDialogs;
 
     /// <summary>The theme the app is showing.</summary>
     [ObservableProperty]

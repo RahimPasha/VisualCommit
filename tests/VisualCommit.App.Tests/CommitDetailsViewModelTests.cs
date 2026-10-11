@@ -321,7 +321,7 @@ public class CommitDetailsViewModelTests(CommitDetailsViewModelTests.GraphScenar
         .ToList();
 
     /// <summary>A repository that only reads commit details, through a function the test sets.</summary>
-    internal sealed class FakeRepository : IGitRepository
+    internal sealed class FakeRepository : FakeRepositoryBase
     {
         public FakeRepository(Func<string, Task<CommitDetails>> read)
         {
@@ -338,22 +338,22 @@ public class CommitDetailsViewModelTests(CommitDetailsViewModelTests.GraphScenar
 
         private Func<string, CancellationToken, Task<CommitDetails>>? ReadWithToken { get; }
 
-        public string WorkingDirectory => "/fake";
+        public override string WorkingDirectory => "/fake";
 
-        public string GitDirectory => "/fake/.git";
+        public override string GitDirectory => "/fake/.git";
 
-        public string CommonDirectory => "/fake/.git";
+        public override string CommonDirectory => "/fake/.git";
 
-        public string Name => "fake";
+        public override string Name => "fake";
 
-        public Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default) =>
+        public override Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default) =>
             ReadWithToken is { } read ? read(sha, cancellationToken) : Read(sha);
 
-        public Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public override Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) =>
+        public override Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public IRepositoryWatcher CreateWatcher() => throw new NotSupportedException();
+        public override IRepositoryWatcher CreateWatcher() => throw new NotSupportedException();
     }
 }

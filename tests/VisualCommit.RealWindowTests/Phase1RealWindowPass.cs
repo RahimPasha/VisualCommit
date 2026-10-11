@@ -305,6 +305,14 @@ public class Phase1RealWindowPass(Phase1Run fixture) : IClassFixture<Phase1Run>
 
         await repo.CommitFileAsync("terminal.txt", "from a terminal\n", "Commit from a terminal");
         WaitForLog(app, data, "graph: loaded 14 commits");
+
+        // The file is written before it is committed: with the working tree watched (phase 2,
+        // D71) a working-changes row can show in between, until the next refresh.
+        app.WaitFor(
+            () => Regex.Matches(RealApp.ReadLog(data), @"graph: working tree: \d+ staged, \d+ unstaged") is { Count: > 0 } matches
+                && matches[^1].Value.EndsWith(": 0 staged, 0 unstaged", StringComparison.Ordinal),
+            "a clean working tree",
+            LoadTimeout);
         using (var appeared = app.CaptureClient())
         {
             Run.Save(appeared, "18a-terminal-commit");

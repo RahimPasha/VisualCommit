@@ -90,6 +90,12 @@ public sealed class TempRepo : IDisposable
             await repo.GitAsync("config", "core.autocrlf", "false");
             await repo.GitAsync("config", "commit.gpgsign", "false");
             await repo.GitAsync("config", "gc.auto", "0");
+
+            // The identity of commits the app under test makes here, which has no other: the
+            // tests leave out the user's configuration (D72). The builder's own commits set it
+            // through their environment.
+            await repo.GitAsync("config", "user.name", AuthorName);
+            await repo.GitAsync("config", "user.email", AuthorEmail);
             return repo;
         }
         catch
@@ -127,6 +133,15 @@ public sealed class TempRepo : IDisposable
         var fullPath = System.IO.Path.Combine(Path, relativePath);
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, content);
+        return this;
+    }
+
+    /// <summary>Writes a file in the working tree byte for byte, creating its folders: for binary files and images.</summary>
+    public TempRepo WriteBytes(string relativePath, byte[] content)
+    {
+        var fullPath = System.IO.Path.Combine(Path, relativePath);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, content);
         return this;
     }
 

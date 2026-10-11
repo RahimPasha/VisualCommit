@@ -14,6 +14,9 @@ public enum FileChangeKind
 
     /// <summary>A status letter the app does not know.</summary>
     Unknown,
+
+    /// <summary>The file has a merge conflict that is not resolved yet (only in the working-tree status).</summary>
+    Conflicted,
 }
 
 /// <summary>A file a commit changed.</summary>

@@ -14,6 +14,14 @@
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" />
+    <PackageReference Include="TextMateSharp" />
+    <PackageReference Include="TextMateSharp.Grammars" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- JetBrains Mono NL, the typeface of code in the diff view (D64; OFL, see THIRD-PARTY-NOTICES.md). -->
+    <AvaloniaResource Include="Assets\Fonts\**" />
   </ItemGroup>
 
   <ItemGroup>

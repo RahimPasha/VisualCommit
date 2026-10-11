@@ -26,16 +26,12 @@ public partial class CommitDetailsViewModel : ObservableObject
     /// </summary>
     private readonly Lock _gate = new();
 
-    /// <summary>Folders of the tree view the user closed; all others are open. Forgotten when another commit is shown.</summary>
-    private readonly HashSet<string> _closedFolders = new(StringComparer.Ordinal);
-
     /// <summary>Cancels the load still running, if any.</summary>
     private CancellationTokenSource? _loading;
 
     /// <summary>Counts the calls of <see cref="ShowAsync"/>; a load whose number is not the latest shows nothing.</summary>
     private int _version;
-
-    private IReadOnlyList<ChangedFile> _files = [];
+    private readonly ChangedFileList _fileList = new();
 
     public CommitDetailsViewModel(IGitRepository? repository, ISettingsStore settings, DateDisplay dates, IAppLog? log = null)
     {
@@ -46,6 +42,7 @@ public partial class CommitDetailsViewModel : ObservableObject
         _dates = dates;
         _log = log ?? NullAppLog.Instance;
         FileList = settings.Current.FileList;
+        _fileList.SetMode(FileList);
     }
 
     /// <summary>A commit's details are shown; false shows the placeholder.</summary>
@@ -130,12 +127,34 @@ public partial class CommitDetailsViewModel : ObservableObject
     public bool IsFlat => FileList == FileListMode.Flat;
 
     public bool IsTree => FileList == FileListMode.Tree;
+    /// <summary>The rows of the changed-file list, flat or as a tree.</summary>
+    public RowCollection<ChangedFileRow> Files => _fileList.Rows;
 
-    /// <summary>The rows of the changed-file list, top to bottom.</summary>
-    public RowCollection<ChangedFileRow> Files { get; } = [];
+    /// <summary>The commit shown: its id and first parent, for the diff of one of its files. Null without a commit.</summary>
+    public CommitDetails? Details { get; private set; }
+
+    /// <summary>The path of the file whose diff is open, whose row has the selection background; null for none.</summary>
+    public string? SelectedFilePath
+    {
+        get => _fileList.SelectedPath;
+        set => _fileList.SelectedPath = value;
+    }
 
     /// <summary>Raised when the user clicks a parent's id: the parent's full id, which the graph then selects.</summary>
     public event EventHandler<string>? ParentActivated;
+
+    /// <summary>A file of the list was clicked: its diff should open (D63).</summary>
+    public event EventHandler<ChangedFile>? FileActivated;
+
+    /// <summary>Opens the diff of a file row's file; does nothing for a folder.</summary>
+    [RelayCommand]
+    private void ActivateFile(ChangedFileRow? row)
+    {
+        if (row?.File is { } file)
+        {
+            FileActivated?.Invoke(this, file);
+        }
+    }
 
     /// <summary>
     /// Shows the details of <paramref name="sha"/>, or the placeholder when it is null. For a
@@ -178,6 +197,7 @@ public partial class CommitDetailsViewModel : ObservableObject
 
         // Another tab may have switched between flat and tree since this one last showed a commit.
         FileList = _settings.Current.FileList;
+        _fileList.SetMode(FileList);
         IsLoading = true;
         try
         {
@@ -241,7 +261,7 @@ public partial class CommitDetailsViewModel : ObservableObject
         {
             FileList = mode;
             _settings.Update(settings => settings with { FileList = mode });
-            RebuildFiles();
+            _fileList.SetMode(mode);
         }
     }
 
@@ -271,10 +291,10 @@ public partial class CommitDetailsViewModel : ObservableObject
         Parents = parents.Select(parent => new ParentLink(parent, OnParentActivated)).ToList();
         StashName = stash?.Name ?? string.Empty;
 
-        _files = details.Files;
-        _closedFolders.Clear();
+        Details = details;
+        _fileList.SelectedPath = null;
+        _fileList.Show(details.Files);
         ChangedFilesTitle = string.Create(CultureInfo.InvariantCulture, $"Changed files ({details.Files.Count})");
-        RebuildFiles();
 
         ErrorText = null;
         HasCommit = true;
@@ -295,80 +315,10 @@ public partial class CommitDetailsViewModel : ObservableObject
         Parents = [];
         StashName = string.Empty;
         ChangedFilesTitle = string.Empty;
-        _files = [];
-        _closedFolders.Clear();
-        Files.ReplaceAll([]);
+        Details = null;
+        _fileList.SelectedPath = null;
+        _fileList.Show([]);
     }
 
     private static string Person(string name, string email) => $"{name} <{email}>";
-
-    private void RebuildFiles()
-    {
-        if (FileList == FileListMode.Flat)
-        {
-            // As git lists them: by path.
-            Files.ReplaceAll(_files.Select(file => ChangedFileRow.ForFile(file, depth: 0, showFolder: true)));
-            return;
-        }
-
-        var root = new FileFolder();
-        foreach (var file in _files)
-        {
-            var parts = file.Path.Split('/');
-            var folder = root;
-            for (var i = 0; i < parts.Length - 1; i++)
-            {
-                if (!folder.Folders.TryGetValue(parts[i], out var child))
-                {
-                    child = new FileFolder();
-                    folder.Folders.Add(parts[i], child);
-                }
-
-                folder = child;
-            }
-
-            folder.Files.Add(file);
-        }
-
-        var rows = new List<ChangedFileRow>();
-        AddFolder(rows, root, path: string.Empty, depth: 0);
-        Files.ReplaceAll(rows);
-    }
-
-    /// <summary>Adds a folder's content: its subfolders first, then its files, each sorted by name.</summary>
-    private void AddFolder(List<ChangedFileRow> rows, FileFolder folder, string path, int depth)
-    {
-        foreach (var (name, child) in folder.Folders)
-        {
-            var childPath = path.Length == 0 ? name : path + "/" + name;
-            var open = !_closedFolders.Contains(childPath);
-            rows.Add(ChangedFileRow.ForFolder(childPath, name, depth, open, ToggleFolder));
-            if (open)
-            {
-                AddFolder(rows, child, childPath, depth + 1);
-            }
-        }
-
-        foreach (var file in folder.Files.OrderBy(file => file.Path[(file.Path.LastIndexOf('/') + 1)..], NameOrder.Instance))
-        {
-            rows.Add(ChangedFileRow.ForFile(file, depth, showFolder: false));
-        }
-    }
-
-    private void ToggleFolder(ChangedFileRow row)
-    {
-        if (!_closedFolders.Remove(row.Key))
-        {
-            _closedFolders.Add(row.Key);
-        }
-
-        RebuildFiles();
-    }
-
-    private sealed class FileFolder
-    {
-        public SortedDictionary<string, FileFolder> Folders { get; } = new(NameOrder.Instance);
-
-        public List<ChangedFile> Files { get; } = [];
-    }
 }

@@ -135,6 +135,172 @@
       </Style>
     </ControlTheme>
 
+
+    <!-- A small text button: Flat and Tree (the one in use with the selection background, class
+         "selected"), and the stage panel's and diff view's actions. -->
+    <ControlTheme x:Key="FileListToggle" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
+      <Style Selector="^.selected">
+        <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
+    </ControlTheme>
+
+    <!-- A folder row of a file tree: the whole row opens and closes it. -->
+    <ControlTheme x:Key="FileFolderButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+      </Style>
+    </ControlTheme>
+
+    <!-- An icon button 22 by 22 on a file row of the stage panel: Stage, Unstage, Discard. -->
+    <ControlTheme x:Key="VcIconButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <!-- Screen readers and UI Automation read the tooltip's words as the button's name. -->
+      <Setter Property="AutomationProperties.Name" Value="{Binding (ToolTip.Tip), RelativeSource={RelativeSource Self}}" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
+    </ControlTheme>
+
+    <!-- The main action of a panel or a dialog: the accent background (the commit button). -->
+    <ControlTheme x:Key="VcPrimaryButton" TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource VcAccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentTextBrush}" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </ControlTemplate>
+      </Setter>
+      <!-- Disabled: the control background, with a border so that it shows on a light panel too. -->
+      <Style Selector="^:disabled">
+        <Setter Property="Background" Value="{DynamicResource VcControlBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+      </Style>
+    </ControlTheme>
+
+    <!-- A button that destroys work, after a question: the danger background, white text. -->
+    <ControlTheme x:Key="VcDangerButton" TargetType="Button" BasedOn="{StaticResource VcPrimaryButton}">
+      <Setter Property="Background" Value="{DynamicResource VcDangerBrush}" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </ControlTheme>
+
+    <!-- A check box 20 high: a box of 14 with rounded corners, the accent with a check mark when ticked. -->
+    <ControlTheme x:Key="VcCheckBox" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid ColumnDefinitions="Auto,*" Background="{TemplateBinding Background}">
+            <Border Name="Box"
+                    Width="14" Height="14"
+                    CornerRadius="3"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource VcBorderBrush}"
+                    Background="{DynamicResource VcControlBackgroundBrush}"
+                    VerticalAlignment="Center">
+              <c:Icon Name="Check" Data="{DynamicResource IconCheck}" Width="10" Height="10"
+                      Foreground="{DynamicResource VcAccentTextBrush}" IsVisible="False" />
+            </Border>
+            <ContentPresenter Grid.Column="1"
+                              Margin="8,0,0,0"
+                              Content="{TemplateBinding Content}"
+                              VerticalAlignment="Center" />
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Box">
+        <Setter Property="BorderBrush" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ Border#Box">
+        <Setter Property="Background" Value="{DynamicResource VcAccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcAccentBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ c|Icon#Check">
+        <Setter Property="IsVisible" Value="True" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+    </ControlTheme>
+
   </Styles.Resources>
 
   <!-- Thin separator between toolbar groups. -->

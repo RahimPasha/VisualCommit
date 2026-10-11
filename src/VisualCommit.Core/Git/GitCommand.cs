@@ -19,6 +19,16 @@ public sealed class GitCommand
     public string? StandardInput { get; init; }
 
     /// <summary>
+    /// How <see cref="StandardInput"/> and standard output are turned into bytes and back. Null
+    /// means UTF-8. <see cref="Latin1"/> carries every byte as one character, for content that need
+    /// not be UTF-8: diffs, patches and file contents (D66). Standard error is always UTF-8.
+    /// </summary>
+    public System.Text.Encoding? Encoding { get; init; }
+
+    /// <summary>One character per byte, both ways: what <see cref="Encoding"/> takes for byte-exact content (D66).</summary>
+    public static System.Text.Encoding Latin1 => System.Text.Encoding.Latin1;
+
+    /// <summary>
     /// Extra environment variables for this call. They override the runner's defaults; a null
     /// value removes the variable.
     /// </summary>

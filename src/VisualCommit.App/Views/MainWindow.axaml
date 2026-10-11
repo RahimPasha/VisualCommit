@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:VisualCommit.App.ViewModels"
         xmlns:shell="using:VisualCommit.App.Views.Shell"
+        xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
         x:Class="VisualCommit.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="VisualCommit"
@@ -13,7 +14,9 @@
         FontSize="12.5">
 
   <!-- The layout follows "Main window layout" in docs/requirements.md:
-       repo tabs, toolbar, left panel | commit graph | right panel, status bar. -->
+       repo tabs, toolbar, left panel | commit graph | right panel, status bar. A dialog, when one
+       is open, lies over all of it (D69). -->
+  <Panel>
   <Grid RowDefinitions="36,52,*,26">
 
     <shell:RepoTabsView Grid.Row="0" />
@@ -29,7 +32,13 @@
       <!-- The three regions show the active tab (D45). -->
       <shell:LeftPanelView Grid.Column="0" DataContext="{Binding ActiveTab.LeftPanel}" />
       <shell:CommitGraphView Grid.Column="1" DataContext="{Binding ActiveTab}" />
-      <shell:RightPanelView Grid.Column="2" DataContext="{Binding ActiveTab.Details}" />
+      <!-- The commit's details, or the stage panel while the working-changes row is selected. -->
+      <Panel Grid.Column="2" IsVisible="{Binding !ActiveTab.ShowsWorkingChanges}">
+        <shell:RightPanelView DataContext="{Binding ActiveTab.Details}" />
+      </Panel>
+      <Panel Grid.Column="2" IsVisible="{Binding ActiveTab.ShowsWorkingChanges}">
+        <shell:WorkingChangesView DataContext="{Binding ActiveTab.Changes}" />
+      </Panel>
 
       <!-- The splitters lie over the panel edges: a 7-wide grab area centred on the 1-wide
            border line that each panel draws itself. -->
@@ -56,4 +65,8 @@
     <shell:StatusBarView Grid.Row="3" />
 
   </Grid>
+  <Panel IsVisible="{Binding Dialogs.IsOpen}">
+    <dialogs:ConfirmationView DataContext="{Binding Dialogs.Current}" />
+  </Panel>
+  </Panel>
 </Window>

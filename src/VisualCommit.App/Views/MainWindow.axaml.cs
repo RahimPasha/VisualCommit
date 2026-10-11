@@ -1,5 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using VisualCommit.App.ViewModels;
 using VisualCommit.Core.Session;
 
 namespace VisualCommit.App.Views;
@@ -24,6 +27,9 @@ public partial class MainWindow : Window
             splitter.DragStarted += (_, _) => _dragged = splitter;
             splitter.DragCompleted += (_, _) => PanelDragged(splitter);
         }
+
+        // Seen even when a control under the focus has handled it, as the diff's text may.
+        AddHandler(KeyDownEvent, OnEscape, RoutingStrategies.Bubble, handledEventsToo: true);
 
         PositionChanged += (_, _) => RememberNormalPlacement();
         SizeChanged += (_, _) => RememberNormalPlacement();
@@ -172,6 +178,35 @@ public partial class MainWindow : Window
         {
             // A platform without screen information (headless tests): leave the position to the system.
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Esc closes the open dialog, which cancels it; without one, the open diff, unless a text box
+    /// has the focus (the commit message).
+    /// </summary>
+    private void OnEscape(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || e.KeyModifiers != KeyModifiers.None || DataContext is not MainWindowViewModel shell)
+        {
+            return;
+        }
+
+        if (shell.Dialogs.CancelCurrent())
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            return;
+        }
+
+        if (shell.ActiveTab.Repository is { IsDiffOpen: true } repository)
+        {
+            repository.CloseDiff();
+            e.Handled = true;
         }
     }
 }

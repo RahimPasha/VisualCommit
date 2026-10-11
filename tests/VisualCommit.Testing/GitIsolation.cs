@@ -30,12 +30,32 @@ public static class GitIsolation
         Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", emptyGitConfig);
         Environment.SetEnvironmentVariable(CeilingVariable, CeilingDirectory);
         Environment.SetEnvironmentVariable(Core.DateDisplay.TimeZoneVariable, "UTC");
+        foreach (var (variable, value) in AppCommitDates)
+        {
+            Environment.SetEnvironmentVariable(variable, value);
+        }
 
         foreach (var variable in InheritedVariables)
         {
             Environment.SetEnvironmentVariable(variable, null);
         }
     }
+
+    /// <summary>
+    /// The author and committer date of every commit the app under test makes (D72): 2026-01-02
+    /// 09:00 UTC, the day after the scenario repos' own clock starts. With the identity that
+    /// scenario repos keep in their configuration (<see cref="TempRepo.CreateAsync"/>), a commit
+    /// made through the app gets the same SHA in every run. <see cref="TempRepo"/>'s own commits
+    /// set their dates per call, which takes precedence.
+    /// </summary>
+    public static DateTimeOffset AppCommitDate { get; } = new(2026, 1, 2, 9, 0, 0, TimeSpan.Zero);
+
+    /// <summary>The environment variables that give the app's commits <see cref="AppCommitDate"/>, for the real-window pass to hand the app.</summary>
+    public static IReadOnlyDictionary<string, string> AppCommitDates { get; } = new Dictionary<string, string>
+    {
+        ["GIT_AUTHOR_DATE"] = "2026-01-02T09:00:00+00:00",
+        ["GIT_COMMITTER_DATE"] = "2026-01-02T09:00:00+00:00",
+    };
 
     /// <summary>The environment variable that names the folders git does not search above.</summary>
     public const string CeilingVariable = "GIT_CEILING_DIRECTORIES";

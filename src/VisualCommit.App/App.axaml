@@ -22,6 +22,8 @@
         <ColorPaletteResources x:Key="Light" Accent="#4353D8" />
       </FluentTheme.Palettes>
     </FluentTheme>
+    <!-- AvaloniaEdit's control templates, which the diff view needs (D64). -->
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     <StyleInclude Source="/Theme/Controls.axaml" />
   </Application.Styles>
 </Application>

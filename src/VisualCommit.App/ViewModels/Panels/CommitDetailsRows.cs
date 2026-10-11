@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.Core.Git;
 
@@ -23,10 +24,11 @@ public sealed class ParentLink
 }
 
 /// <summary>
-/// One row of the changed-file list: a file, or in the tree view also a folder. The list is
-/// rebuilt whole when it switches between flat and tree or a folder opens or closes.
+/// One row of a file list (a commit's changed files, or the stage panel's lists): a file, or in
+/// the tree view also a folder. The list is rebuilt whole when it switches between flat and tree
+/// or a folder opens or closes.
 /// </summary>
-public sealed class ChangedFileRow
+public sealed partial class ChangedFileRow : ObservableObject
 {
     /// <summary>Where the first column starts in a row at depth 0, in logical pixels.</summary>
     public const double FirstIndent = 12;
@@ -87,7 +89,7 @@ public sealed class ChangedFileRow
 
     public bool HasFolder => Folder.Length > 0;
 
-    /// <summary>The status letter: A, M, D, R, C, T, or ? for a status the app does not know. Empty for a folder.</summary>
+    /// <summary>The status letter: A, M, D, R, C, T, U for a conflict, or ? for a status the app does not know. Empty for a folder.</summary>
     public string StatusLetter => File?.Kind switch
     {
         null => string.Empty,
@@ -97,8 +99,13 @@ public sealed class ChangedFileRow
         FileChangeKind.Renamed => "R",
         FileChangeKind.Copied => "C",
         FileChangeKind.TypeChanged => "T",
+        FileChangeKind.Conflicted => "U",
         _ => "?",
     };
+
+    /// <summary>The row's file has its diff open: the row has the selection background.</summary>
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
 
     /// <summary>The letter is drawn in the success colour.</summary>
     public bool IsAdded => File?.Kind == FileChangeKind.Added;
@@ -106,8 +113,8 @@ public sealed class ChangedFileRow
     /// <summary>The letter is drawn in the warning colour.</summary>
     public bool IsModified => File?.Kind == FileChangeKind.Modified;
 
-    /// <summary>The letter is drawn in the danger colour.</summary>
-    public bool IsDeleted => File?.Kind == FileChangeKind.Deleted;
+    /// <summary>The letter is drawn in the danger colour: a deletion or a conflict.</summary>
+    public bool IsDeleted => File?.Kind is FileChangeKind.Deleted or FileChangeKind.Conflicted;
 
     /// <summary>The letter is drawn in the accent colour.</summary>
     public bool IsRenamedOrCopied => File?.Kind is FileChangeKind.Renamed or FileChangeKind.Copied;
