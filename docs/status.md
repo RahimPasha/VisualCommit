@@ -42,7 +42,9 @@ requirement numbers.
 Start:
 
 - [x] 1. Phase branch created, phase set to "In progress", this checklist.
-- [ ] 2. Open points from the phase 2 handoff decided and recorded in `decisions.md`. The owner
+- [x] 2. Open points from the phase 2 handoff decided and recorded in `decisions.md` (D77 to
+  D115; the design behind them is `docs/phase-3-design.md`, working notes that close the phase
+  by being folded into `architecture.md` and deleted). The owner
   answered four questions of taste on 2026-10-10 (later phases' actions are left out of the
   menus; pull follows git's own configuration; auto-fetch is on, every 5 minutes; a checkout
   blocked by local changes offers to stash, check out and re-apply). The rest is decided by the
@@ -51,8 +53,9 @@ Start:
   and drag-and-drop work in both harnesses, how far the conflict banner goes.
 - [ ] 3. Harness: whatever the two passes need to open a context menu, drag a branch and read
   an operation's progress; `TempRepo` helpers for remotes if they are missing.
-- [ ] 4. Scenario repos for the operations (diverged branches, remotes ahead and behind, tags,
-  stashes, conflicts, a remote that asks for credentials), pinned in `ScenarioTests`.
+- [x] 4. Scenario repos for the operations (diverged branches, remotes ahead and behind, tags,
+  stashes, conflicts, a remote that asks for credentials), pinned in `ScenarioTests`: work
+  package WP-S1, merged in `efbbf83`.
 - [ ] 5. Phase 3's visual checks written into `docs/test-reports/phase-3.md`, each marked for
   the real-window pass, reviewed independently, and committed before the UI they test.
 - [x] 6. The flaky `DiffHighlighterTests` docstring test (failed once in the baseline run under
@@ -144,14 +147,23 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 2: record the decisions that settle phase 3's open points (see the phase 2 handoff's "For
-the next phase") in `decisions.md`, with the owner's four answers, before the scenario repos and
-the checks are written.
+Step 5: the four drafts of the visual checks (`docs/phase-3-checks-A.md` to `-D.md`, uncommitted
+working files) are being finalised against the settled design; then they are joined into
+`docs/test-reports/phase-3.md`, reviewed independently and committed. No UI work package (WP5 to
+WP9, and the dialogs of WP3 and WP6) starts before that commit. Meanwhile the Git-layer
+packages WP1, WP2, WP3a, WP4 and the harness package WP-S2 are built in worktrees
+(`.claude/worktrees/`, branches `wip/p3-wp1` and so on) and merged by the lead.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
 ### Notes for whoever resumes
 
+- Phase 3 is built by work packages (design section 8). Done and merged: WP0 (operation queue,
+  contracts, app plumbing: `cde2d28`) and WP-S1 (scenarios and the credential test server:
+  `efbbf83`). Each other package is built on a `wip/p3-*` branch in a git worktree and merged with
+  `--no-ff`; a worktree starts from the phase branch's newest commit, and its agent creates its
+  branch from `phase/3-operations` first. The menu spike (design 4a) found that the stock
+  `MenuFlyout` on the overlay layer works on real Win32 (D105).
 - The default tests on `master` at `d3814bd`, before the phase started: 556 of 557 passed. The
   one failure, `DiffHighlighterTests.A_python_docstring_has_the_string_colour_and_def_and_the_function_name_theirs`
   (a colour came back null), passed when its class ran alone: a timing flake of the
