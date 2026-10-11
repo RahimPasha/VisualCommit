@@ -194,6 +194,8 @@ public sealed partial class GitRepository
         var target = await ResolveAsync(reference + "^{commit}", cancellationToken).ConfigureAwait(false);
         var before = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
         var conflictedBefore = await HasConflictsAsync(cancellationToken).ConfigureAwait(false);
+        var mergeHead = Path.Combine(GitDirectory, "MERGE_HEAD");
+        var mergingBefore = File.Exists(mergeHead);
 
         var arguments = new List<string> { "merge" };
         if (mode == MergeMode.FastForwardOnly)
@@ -221,7 +223,11 @@ public sealed partial class GitRepository
         if (!result.Succeeded)
         {
             // Conflicts the merge made, not ones that were there before and made git refuse it.
-            if (!conflictedBefore && await HasConflictsAsync(cancellationToken).ConfigureAwait(false))
+            // A merge that git leaves in progress without them stopped all the same: rerere
+            // (with rerere.autoUpdate) staged its recorded resolutions, or a hook refused the
+            // merge commit. The merge waits for its commit or its abort, which the banner offers.
+            if (!conflictedBefore
+                && (await HasConflictsAsync(cancellationToken).ConfigureAwait(false) || (!mergingBefore && File.Exists(mergeHead))))
             {
                 return MergeResult.Conflicts;
             }

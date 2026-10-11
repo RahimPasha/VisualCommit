@@ -51,15 +51,21 @@ public sealed partial class GitRepository
     /// Runs one cherry-pick or revert and tells how it ended. A failure with a conflicted file in
     /// the index stopped with conflicts. A failure that left <paramref name="stateFile"/> in the git
     /// folder with no conflict and an index equal to HEAD's tree stopped on a commit that changes
-    /// nothing (2.12): git keeps the operation in progress, and Abort ends it. Any other failure
+    /// nothing (2.12): git keeps the operation in progress, and Abort ends it. One that left it with
+    /// staged changes and no conflict stopped as with conflicts that are resolved: rerere (with
+    /// <c>rerere.autoUpdate</c>) staged its recorded resolutions. Any other failure
     /// (local changes in the way, a hook that refused) throws <see cref="GitException"/> with git's
     /// own text. Git 2.36 writes no <c>REVERT_HEAD</c> for a revert that changes nothing: it fails
     /// with "nothing to commit" and leaves nothing in progress, which throws.
+    /// Known issue: under the reftable ref format (Git 2.45+) <c>CHERRY_PICK_HEAD</c> and <c>REVERT_HEAD</c> are no files, so a stop there is not seen.
     /// </summary>
     private async Task<ApplyResult> ApplyCommitAsync(NetworkOptions? options, string stateFile, CancellationToken cancellationToken, params string[] arguments)
     {
         // Conflicts that were there before make git refuse the call: a failure, not a stop.
+        // So do a pick or revert already in progress.
         var conflictedBefore = await HasConflictsAsync(cancellationToken).ConfigureAwait(false);
+        var statePath = Path.Combine(GitDirectory, stateFile);
+        var stoppedBefore = File.Exists(statePath);
         var command = WriteCommand(options, arguments);
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Succeeded)
@@ -67,7 +73,7 @@ public sealed partial class GitRepository
             return ApplyResult.Applied;
         }
 
-        if (conflictedBefore)
+        if (conflictedBefore || stoppedBefore)
         {
             result.EnsureSuccess(command);
         }
@@ -77,9 +83,11 @@ public sealed partial class GitRepository
             return ApplyResult.Conflicts;
         }
 
-        if (File.Exists(Path.Combine(GitDirectory, stateFile)) && await IndexEqualsHeadAsync(cancellationToken).ConfigureAwait(false))
+        if (File.Exists(statePath))
         {
-            return ApplyResult.Empty;
+            // In progress with nothing conflicted: empty, or changes staged that wait for their
+            // commit, as when rerere (with rerere.autoUpdate) staged its recorded resolutions.
+            return await IndexEqualsHeadAsync(cancellationToken).ConfigureAwait(false) ? ApplyResult.Empty : ApplyResult.Conflicts;
         }
 
         result.EnsureSuccess(command);

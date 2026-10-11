@@ -30,6 +30,7 @@ public sealed partial class GitRepository
     /// sequence started in a terminal, stopped between commits). Git calls are made only while
     /// something is in progress: the subject of the commit being picked or reverted, and HEAD when
     /// a sequencer is there (D110). <paramref name="status"/> tells whether a pick is empty.
+    /// Known issue: under the reftable ref format (Git 2.45+) <c>CHERRY_PICK_HEAD</c> and <c>REVERT_HEAD</c> are no files, so such a stop shows no banner.
     /// </summary>
     internal async Task<InProgressState> ReadInProgressAsync(WorkingTreeStatus status, CancellationToken cancellationToken)
     {
