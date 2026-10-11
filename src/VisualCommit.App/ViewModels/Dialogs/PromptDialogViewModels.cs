@@ -12,8 +12,8 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// <see cref="PromptDialogAnswer"/>: what was typed when the user confirms,
 /// <see cref="PromptDialogAnswer.CancelledByUser"/> for Cancel and Esc, and
 /// <see cref="PromptDialogAnswer.None"/> when the prompt's scope ended first
-/// (<see cref="CloseUnanswered"/>). Nothing typed is logged or kept here; the dialog's fields go
-/// with it when it closes.
+/// (<see cref="CloseUnanswered"/>). Nothing typed is logged; what is kept for the operation is
+/// <c>PromptDialogs</c>' to keep (3.2), and the dialog itself is dropped when it closes.
 /// </summary>
 public abstract partial class PromptDialogViewModel : DialogViewModel<PromptDialogAnswer>
 {
