@@ -357,6 +357,28 @@ public partial class RepositoryMenusTests
         Assert.Equal(["Stashes", "Stash changes… (disabled: \"Resolve the conflicts first\")"], Lines(RepositoryMenus.ForSection(Context(OpsLikeRefs(), status), RefSection.Stashes, actions)!));
     }
 
+    [Theory]
+    [InlineData(InProgressKind.CherryPick, "Finish or abort the cherry-pick first")]
+    [InlineData(InProgressKind.ApplyMailbox, "Finish or abort the git am first")]
+    public void Every_Stash_changes_item_gives_the_toolbars_reason_in_its_order(InProgressKind kind, string reason)
+    {
+        // 2.24's order (D119): the operation in progress comes before "nothing to stash", in each
+        // of the three menus that offer "Stash changes…" as in the toolbar.
+        var (actions, _) = RecordingActions.Create();
+        var status = WorkingTreeStatus.Clean with { InProgress = new InProgressState(kind, AlphaTwo, "Alpha two", null, null, 0, Empty: true) };
+        var context = Context(OpsLikeRefs(), status);
+        var item = $"Stash changes… (disabled: \"{reason}\")";
+
+        Assert.Contains(item, Lines(RepositoryMenus.ForWorkingChanges(context, actions)));
+        Assert.Equal(["Stashes", item], Lines(RepositoryMenus.ForSection(context, RefSection.Stashes, actions)!));
+        Assert.Contains(item, Lines(RepositoryMenus.ForEmptyGraphArea(context, actions)));
+        Assert.Equal(new ToolbarAvailability(false, reason), context.Toolbar.Stash);
+
+        // Before the first commit, that comes first.
+        var unborn = Context(OpsLikeRefs() with { Head = new HeadState("main", null) }, status);
+        Assert.Equal(["Stashes", "Stash changes… (disabled: \"Make the first commit first\")"], Lines(RepositoryMenus.ForSection(unborn, RefSection.Stashes, actions)!));
+    }
+
     // --- Tags, remotes, sections, the empty area (check 3, 23) --------------------------------
 
     [Fact]

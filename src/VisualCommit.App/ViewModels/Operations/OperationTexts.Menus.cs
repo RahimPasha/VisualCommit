@@ -72,8 +72,8 @@ public static partial class OperationTexts
         /// <summary>2.13: some of the selected commits are in HEAD's history already.</summary>
         public static string SomeAlreadyOn(string current) => $"Some of these commits are already on {current}";
 
-        /// <summary>2.8, 2.12, 2.14, D119: "Finish or abort the merge first".</summary>
-        public static string FinishOrAbort(Core.Git.InProgressKind kind) => $"Finish or abort the {InProgressName(kind)} first";
+        /// <summary>2.8, 2.12, 2.14, D119: "Finish or abort the merge first", the operations' and the toolbar's text (<see cref="FinishOrAbortFirst"/>).</summary>
+        public static string FinishOrAbort(Core.Git.InProgressKind kind) => FinishOrAbortFirst(kind);
 
 
         // Stashes (2.24 to 2.26).

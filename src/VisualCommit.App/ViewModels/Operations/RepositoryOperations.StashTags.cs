@@ -16,11 +16,15 @@ public sealed partial class RepositoryOperations
     /// <summary>What git says when local changes keep a stash from applying (2.25).</summary>
     private const string StashOverwriteMarker = "would be overwritten by merge";
 
+    /// <summary>A HEAD that is not unborn, for <see cref="StashRefusal"/> before the refs are read: git then says whether there is a first commit.</summary>
+    private static readonly HeadState HeadNotRead = new(null, "HEAD");
+
     /// <summary>
-    /// "Stash" and "Stash changes…" (2.24): refused while an operation or a conflict is in
-    /// progress (D119), otherwise the stash dialog with the last choice of "Include untracked
-    /// files" (6.2), which is saved when the dialog is confirmed, then <c>git stash push</c>.
-    /// Nothing to stash is no failure: the status bar says so.
+    /// "Stash" and "Stash changes…" (2.24): refused for the reasons that disable the toolbar's
+    /// Stash and every "Stash changes…" item (<see cref="StashRefusal"/>, D119), otherwise the
+    /// stash dialog with the last choice of "Include untracked files" (6.2), which is saved when
+    /// the dialog is confirmed, then <c>git stash push</c>. Nothing to stash is no failure: the
+    /// status bar says so.
     /// </summary>
     public Task StashAsync() => GuardAsync(OperationTexts.Stash, async () =>
     {
@@ -29,7 +33,7 @@ public sealed partial class RepositoryOperations
             return;
         }
 
-        if (OperationTexts.StashRefusedReason(Status) is { } reason)
+        if (StashRefusal(Status) is { } reason)
         {
             await RefuseAsync(OperationTexts.Stash, reason, RefreshScope.Status);
             return;
@@ -45,7 +49,7 @@ public sealed partial class RepositoryOperations
         await RunAsync(OperationTexts.Stash, OperationKind.Local, RefreshScope.Refs, async context =>
         {
             // The status may have changed while the dialog was open or the operation waited.
-            if (OperationTexts.StashRefusedReason(await Git.ReadStatusAsync()) is { } refused)
+            if (StashRefusal(await Git.ReadStatusAsync()) is { } refused)
             {
                 return Refusal(OperationTexts.Stash, refused);
             }
@@ -227,6 +231,18 @@ public sealed partial class RepositoryOperations
             ? new FailureDisplay(text.ErrorTitle, OperationTexts.StashWouldOverwrite(name))
             : null;
     }
+
+    /// <summary>
+    /// Why a stash is refused before git runs (D119): the toolbar's and the menus' reason
+    /// (<see cref="ToolbarViewModel.StashReason"/>, in 2.24's order), except "There are no changes
+    /// to stash", which is left to git: <paramref name="status"/> can be older than the working
+    /// tree, and git's "No local changes to save" is the message "There was nothing to stash".
+    /// </summary>
+    private string? StashRefusal(WorkingTreeStatus status) =>
+        ToolbarViewModel.StashReason(Refs?.Head ?? HeadNotRead, status) is { } reason
+        && !string.Equals(reason, ToolbarViewModel.NothingToStashText, StringComparison.Ordinal)
+            ? reason
+            : null;
 
     /// <summary>A stash the menu named is no longer listed (2.25): the operation fails at once, without a git call.</summary>
     private Task StashGoneAsync(OperationText text) =>
