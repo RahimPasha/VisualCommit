@@ -256,13 +256,14 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
         var mainWork = await RevAsync(repo, "refs/heads/main");
 
-        var folder = await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature", mainWork, checkout: false, cancellationToken: TestCancelled));
-        Assert.Contains("cannot lock ref", folder.StandardError, StringComparison.Ordinal);
-        var below = await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature/alpha/x", mainWork, checkout: true, cancellationToken: TestCancelled));
-        Assert.Contains("cannot lock ref", below.StandardError, StringComparison.Ordinal);
+        // Git 2.36 says "cannot lock ref" for both folder clashes; the wording is git's to change.
+        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature", mainWork, checkout: false, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature/alpha/x", mainWork, checkout: true, cancellationToken: TestCancelled));
         await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("main", mainWork, checkout: false, cancellationToken: TestCancelled));
 
         Assert.Null(await repo.RefTargetAsync("refs/heads/feature"));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/feature/alpha/x"));
+        Assert.Equal(mainWork, await repo.RefTargetAsync("refs/heads/main"));
         Assert.Equal("main", await repo.CurrentBranchAsync());
     }
 

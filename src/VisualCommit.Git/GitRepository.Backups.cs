@@ -62,12 +62,28 @@ public sealed partial class GitRepository
             }
 
             // A name taken (by a batch of the same millisecond, or a folder of that name) is
-            // retried under the next suffix; anything else is git's to explain.
-            if (attempt >= BackupAttempts || !result.StandardError.Contains("cannot lock ref", StringComparison.Ordinal))
+            // retried under the next suffix; anything else is git's to explain. The clash is
+            // looked up rather than read from git's message, whose wording may change.
+            if (attempt >= BackupAttempts || !await AnyBackupNameTakenAsync(lines.Select(line => line.Ref), cancellationToken).ConfigureAwait(false))
             {
                 result.EnsureSuccess(command);
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a ref already exists with one of <paramref name="names"/>, or as a folder of one of
+    /// them, or below one of them: each makes <c>create</c> fail. On Windows and macOS names that
+    /// differ only in case clash too, where refs are files.
+    /// </summary>
+    private async Task<bool> AnyBackupNameTakenAsync(IEnumerable<string> names, CancellationToken cancellationToken)
+    {
+        var existing = SplitLines(await ReadOutputAsync(cancellationToken, "for-each-ref", "--format=%(refname)", BackupRefPrefix).ConfigureAwait(false));
+        var comparison = RefNameRules.NamesIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return names.Any(name => existing.Any(taken =>
+            string.Equals(taken, name, comparison)
+            || taken.StartsWith(name + "/", comparison)
+            || name.StartsWith(taken + "/", comparison)));
     }
 
     private static void ValidateBackupRequest(BackupRequest request)
