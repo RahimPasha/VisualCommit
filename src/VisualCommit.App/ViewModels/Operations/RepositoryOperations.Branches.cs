@@ -40,12 +40,21 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     return OperationReport.Done(await plan.Run(NetworkOptions.From(context)));
                 },
-                new RunOptions { DescribeFailure = failure => CheckoutFailureDisplay(failure, target, offerStash: true) });
+                new RunOptions
+                {
+                    DescribeFailure = failure => CheckoutFailureDisplay(failure, target, offerStash: true) is { Extra: { } extra } display && backUpDetached
+                        // The detached commits were confirmed and backed up already: 2.31 does not ask again.
+                        ? display with { Extra = extra with { Run = () => StashAndCheckoutAsync(target, detachedBackedUp: true) } }
+                        : CheckoutFailureDisplay(failure, target, offerStash: true),
+                });
         });
     }
 
     /// <inheritdoc cref="IRepositoryActions.StashAndCheckoutAsync"/>
-    public Task StashAndCheckoutAsync(string target)
+    public Task StashAndCheckoutAsync(string target) => StashAndCheckoutAsync(target, detachedBackedUp: false);
+
+    /// <summary>2.31; <paramref name="detachedBackedUp"/>: the checkout it follows asked about the detached commits and saved them.</summary>
+    private Task StashAndCheckoutAsync(string target, bool detachedBackedUp)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         var plan = PlanCheckout(target);
@@ -53,7 +62,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var text = OperationTexts.StashAndCheckOut(name);
         return GuardAsync(text, async () =>
         {
-            if (await ConfirmLeavingDetachedHeadAsync() is not { } backUpDetached)
+            var leaving = detachedBackedUp ? false : await ConfirmLeavingDetachedHeadAsync();
+            if (leaving is not { } backUpDetached)
             {
                 return;
             }

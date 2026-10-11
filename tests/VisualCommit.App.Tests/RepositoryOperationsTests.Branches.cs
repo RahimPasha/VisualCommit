@@ -284,6 +284,27 @@ public partial class RepositoryOperationsTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task A_blocked_checkout_from_a_detached_head_asks_about_its_commits_once()
+    {
+        using var repo = await Scenarios.EdgeCasesAsync();
+        repo.WriteFile("src/detached.txt", "detached, edited\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var detached = await repo.HeadAsync();
+        app.Dialogs.Confirm().CloseError(clickExtra: true).CloseError();
+
+        await app.Operations.CheckoutAsync("refs/heads/main");
+
+        Assert.Single(app.Dialogs.Confirmations);
+        Assert.Equal("Checkout blocked", app.Dialogs.Errors[0].Title);
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+        Assert.Equal(1, Ran(app, "Check out main with your changes"));
+        var backup = Assert.Single(await repo.BackupRefsAsync());
+        Assert.Matches($"^refs/visualcommit/backup/detached-{BackupTime}$", backup.Name);
+        Assert.Equal(detached, backup.Sha);
+        app.AssertScriptFollowed();
+    }
+
     // ---- 2.4: create a branch ------------------------------------------------------------------
 
     [Fact]
