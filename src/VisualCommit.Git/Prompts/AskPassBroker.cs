@@ -259,6 +259,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     {
         private readonly AskPassBroker _owner;
         private readonly CancellationTokenSource _closed = new();
+        private readonly List<CancellationTokenSource> _askings = [];
 
         public Scope(AskPassBroker owner, string id, string title, string repositoryName, PromptMode mode, IReadOnlyDictionary<string, string?> environment)
             : base(id, environment)
@@ -292,13 +293,29 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
                 classification.User,
                 classification.KeyPath);
 
-            using var asking = CancellationTokenSource.CreateLinkedTokenSource(_closed.Token, _owner._lifetime.Token);
-            var helperGone = WatchForHangUpAsync(pipe, asking);
+            // The handler's token stays alive until the scope closes, so that a handler can hear
+            // of the scope's end after it has answered (PromptDialogs forgets what it kept then).
+            var asking = CancellationTokenSource.CreateLinkedTokenSource(_closed.Token, _owner._lifetime.Token);
+            CancellationToken token;
+            lock (_askings)
+            {
+                if (IsDisposed)
+                {
+                    asking.Dispose();
+                    return null;
+                }
+
+                _askings.Add(asking);
+                token = asking.Token;
+            }
+
+            using var watching = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var helperGone = WatchForHangUpAsync(pipe, asking, watching.Token);
             _owner._log.Debug($"{RepositoryName}: {Title}: git asks ({classification.Kind}).");
             PromptAnswer answer;
             try
             {
-                answer = await _owner._handler.AnswerAsync(prompt, asking.Token).ConfigureAwait(false) ?? PromptAnswer.Refused;
+                answer = await _owner._handler.AnswerAsync(prompt, token).ConfigureAwait(false) ?? PromptAnswer.Refused;
             }
             catch (OperationCanceledException)
             {
@@ -311,7 +328,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             }
             finally
             {
-                await asking.CancelAsync().ConfigureAwait(false);
+                await watching.CancelAsync().ConfigureAwait(false);
                 await helperGone.ConfigureAwait(false);
             }
 
@@ -334,18 +351,25 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             {
                 _owner._log.Error($"{RepositoryName}: {Title}: closing a prompt failed.", ex);
             }
+
+            lock (_askings)
+            {
+                _askings.ForEach(asking => asking.Dispose());
+                _askings.Clear();
+            }
         }
 
         /// <summary>
         /// Reads from the helper's end until it closes (the helper sends nothing after its
-        /// request), then cancels <paramref name="asking"/>. Ends when <paramref name="asking"/> is cancelled.
+        /// request), then cancels <paramref name="asking"/>: the prompt's dialog closes. Ends
+        /// without cancelling when <paramref name="stop"/> is cancelled: the prompt was answered.
         /// </summary>
-        private static async Task WatchForHangUpAsync(Stream pipe, CancellationTokenSource asking)
+        private static async Task WatchForHangUpAsync(Stream pipe, CancellationTokenSource asking, CancellationToken stop)
         {
             var buffer = new byte[256];
             try
             {
-                while (await pipe.ReadAsync(buffer, asking.Token).ConfigureAwait(false) > 0)
+                while (await pipe.ReadAsync(buffer, stop).ConfigureAwait(false) > 0)
                 {
                 }
             }
@@ -365,7 +389,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             }
             catch (ObjectDisposedException)
             {
-                // The prompt has been answered meanwhile.
+                // The scope has closed meanwhile.
             }
         }
     }
