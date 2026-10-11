@@ -25,7 +25,9 @@ public sealed partial class GitRepository
     /// whose command and exit code are the first failed call's and whose standard error is every
     /// failed call's, in order, each followed by <c>error: Could not fetch &lt;remote&gt;</c>, as
     /// <c>git fetch --all</c> prints it (2.16). A repository without remotes fetches nothing.
-    /// Cancelling stops the running fetch and skips the rest.
+    /// Cancelling stops the running fetch and skips the rest; so does a prompt the user cancelled
+    /// (<see cref="NetworkOptions.PromptCancelled"/>), after which the fetch that asked fails and
+    /// this throws <see cref="OperationCanceledException"/> instead of asking for the next remote.
     /// </summary>
     public async Task FetchAsync(string? remote, NetworkOptions options, bool noAutoMaintenance = false, CancellationToken cancellationToken = default)
     {
@@ -47,6 +49,11 @@ public sealed partial class GitRepository
             if (!result.Succeeded)
             {
                 failures.Add((remotes[i], command, result));
+                if (options.PromptCancelled?.Invoke() == true)
+                {
+                    // The user cancelled a prompt: the fetch is cancelled, and the next remote would ask again (2.16).
+                    throw new OperationCanceledException($"A prompt of the fetch from {remotes[i]} was cancelled.");
+                }
             }
         }
 

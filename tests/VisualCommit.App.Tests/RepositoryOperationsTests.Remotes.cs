@@ -187,6 +187,26 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
+    public async Task A_cancel_at_a_prompt_ends_the_fetch_of_all_remotes_without_asking_for_the_next_remote()
+    {
+        // Two remotes on a host that asks for credentials; Cancel at the first dialog cancels the
+        // whole fetch (2.16), so no second dialog asks for the other remote.
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        var url = (await repo.GitAsync("remote", "get-url", "origin")).StandardOutput.Trim();
+        await repo.GitAsync("remote", "add", "mirror", url);
+        using var app = await OperationsHarness.OpenAsync(repo, host => new PromptDialogs(host));
+        app.Dialogs.Answer<CredentialsViewModel>(dialog => dialog.Cancel());
+
+        await app.Operations.FetchAllAsync();
+
+        Assert.IsType<CredentialsViewModel>(Assert.Single(app.Dialogs.Shown));
+        Assert.Equal(("Fetch cancelled", OperationStatusTone.Secondary, OperationOutcome.Cancelled), (app.StatusText, app.StatusTone, app.LastResult?.Outcome));
+        Assert.Single(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_fetch_over_ssh_shows_the_passphrase_host_key_and_prompt_dialogs_and_then_its_failure()
     {
         await using var server = await AuthRemoteServer.StartAsync();

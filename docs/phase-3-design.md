@@ -784,7 +784,9 @@ that the reflog or the stash list does not keep.
 - Failures: error dialog "Fetch failed" ("Git could not fetch from <r>.", naming every remote
   that failed: "Git could not fetch from origin and mirror."); `AuthenticationFailed` adds
   nothing more: git's output says what happened. A prompt cancelled by the user → `Cancelled`,
-  no dialog, "<Title> cancelled" ("Fetch cancelled", "Fetch origin cancelled").
+  no dialog, "<Title> cancelled" ("Fetch cancelled", "Fetch origin cancelled"); a fetch of all
+  remotes then stops at once (`NetworkOptions.PromptCancelled`, from the operation's prompt
+  scope) and does not ask again for the remotes after it.
 
 ### 2.17 Auto-fetch
 

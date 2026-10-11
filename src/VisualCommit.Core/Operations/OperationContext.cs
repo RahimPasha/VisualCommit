@@ -7,6 +7,7 @@ public sealed class OperationContext
 
     private readonly CancellationToken _cancellationToken;
     private readonly Func<bool>? _endCancelWindow;
+    private readonly Func<bool>? _promptCancelled;
     private volatile bool _cancelWindowOpen = true;
 
     /// <param name="operationId">The operation's id, <c>op-&lt;n&gt;</c>.</param>
@@ -17,12 +18,14 @@ public sealed class OperationContext
     /// Called by <see cref="EndCancelWindow"/>: tells the queue that Cancel is no longer offered,
     /// and returns true when the user had already cancelled.
     /// </param>
+    /// <param name="promptCancelled">Whether the user has cancelled one of the operation's prompts (<see cref="PromptScope.UserCancelled"/>).</param>
     public OperationContext(
         string operationId,
         CancellationToken cancellationToken = default,
         IReadOnlyDictionary<string, string?>? environment = null,
         IProgress<OperationProgress>? progress = null,
-        Func<bool>? endCancelWindow = null)
+        Func<bool>? endCancelWindow = null,
+        Func<bool>? promptCancelled = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
         OperationId = operationId;
@@ -30,7 +33,15 @@ public sealed class OperationContext
         Environment = environment ?? NoVariables;
         Progress = progress ?? NoProgress.Instance;
         _endCancelWindow = endCancelWindow;
+        _promptCancelled = promptCancelled;
     }
+
+    /// <summary>
+    /// The user pressed Cancel or Esc at one of the operation's prompts: the operation ends as
+    /// cancelled (2.16), so a call that would ask again (the next remote of a fetch of all
+    /// remotes) is not made.
+    /// </summary>
+    public bool PromptCancelled => _promptCancelled?.Invoke() ?? false;
 
     /// <summary><c>op-&lt;n&gt;</c>, unique in the app session. Each git call of the operation records it (1.7).</summary>
     public string OperationId { get; }
