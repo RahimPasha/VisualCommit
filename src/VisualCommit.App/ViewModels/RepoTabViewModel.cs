@@ -20,7 +20,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     private readonly LeftPanelViewModel _emptyLeftPanel = new();
     private readonly CommitDetailsViewModel _emptyDetails;
     private readonly ToolbarViewModel _emptyToolbar = new(null);
-    private readonly OperationStatusViewModel _emptyStatus = new(null);
+    private readonly OperationStatusViewModel _emptyStatus;
     private bool _disposed;
 
     public RepoTabViewModel(TabServices services)
@@ -28,6 +28,9 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(services);
         _services = services;
         _emptyDetails = new CommitDetailsViewModel(null, services.Settings, services.Dates, services.Log);
+
+        // ssh's notices show here too: a clone on the welcome page can get one (3.2, 3.3).
+        _emptyStatus = new OperationStatusViewModel(null, services.DialogHost.Notices);
         Welcome = new WelcomeViewModel(this, services);
     }
 
@@ -201,6 +204,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
         _disposed = true;
         Welcome.Dispose();
+        _emptyStatus.Dispose();
         if (Repository is { } repository)
         {
             repository.PropertyChanged -= OnRepositoryPropertyChanged;
