@@ -1,14 +1,16 @@
 // The repository's menus: docs/phase-3-design.md 4a (opening a menu by pointer and by keyboard),
 // 4b (what a right-click on each object opens; a right-click on a graph row selects it first,
-// one on a left-panel row selects nothing), 4c (the double-click map) and 4g (the drop's menu).
-// WP7-core built the snapshot the builders read (MenuContext, ReadMenuContextAsync), IsClosed and
-// the shared OpenMenu; the Open…Menu and DoubleTap… entry points are stubs that the sub-package
-// WP7-menus fills (keeping their signatures), together with the views that call them.
+// one on a left-panel row selects nothing, D114), 4c (the double-click map, D93) and 4g (the
+// drop's menu, D120). WP7-core built the snapshot the builders read (MenuContext,
+// ReadMenuContextAsync), IsClosed and the shared OpenMenu; WP7-menus the entry points the views
+// call, each of which builds its menu from a fresh context and opens it through OpenMenu.
 
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -16,12 +18,21 @@ namespace VisualCommit.App.ViewModels;
 
 public sealed partial class RepositoryViewModel
 {
-    private const string MenusPackage = "WP7: menus";
-
     private IReadOnlyList<WorktreeInfo> _otherWorktrees = [];
+    private IRepositoryActions? _menuActions;
 
     /// <summary>The tab was closed (<see cref="Dispose"/>): operations start nothing and show nothing (1.8).</summary>
     public bool IsClosed => _disposed;
+
+    /// <summary>
+    /// What the menus' items and the double-clicks start: <see cref="Operations"/>, unless a test
+    /// gave a recording fake.
+    /// </summary>
+    public IRepositoryActions MenuActions
+    {
+        get => _menuActions ?? Operations;
+        set => _menuActions = value;
+    }
 
     /// <summary>
     /// The snapshot the menu builders read (<see cref="RepositoryMenuContext"/>), taken now: the
@@ -90,73 +101,358 @@ public sealed partial class RepositoryViewModel
         return true;
     }
 
-    // The entry points the views call (stubs: WP7-menus fills them). Each builds its menu from a
-    // fresh context and opens it through OpenMenu, and returns whether a menu opened.
-
     /// <summary>
     /// A right-click (or Shift+F10, the Menu key) on a commit's row outside its labels (4b): the row
     /// is selected alone first unless it is part of a multi-selection, whose menu then opens; a
     /// stash row opens the stash's menu.
     /// </summary>
-    public bool OpenCommitMenu(MenuLayerViewModel layer, string sha, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+    public bool OpenCommitMenu(MenuLayerViewModel layer, string sha, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(sha);
+        if (IsClosed || !SelectForMenu(sha))
+        {
+            return false;
+        }
+
+        var context = MenuContext;
+        var menu = context.HasMultiSelection && context.FindSelected(sha) is not null
+            ? RepositoryMenus.ForCommits(context, MenuActions)
+            : RepositoryMenus.ForCommit(context, sha, MenuActions);
+        return OpenMenu(layer, menu, position, openedBy);
+    }
 
     /// <summary>
     /// A right-click on a graph label (4b): the menu of what it stands for (a local or remote
     /// branch, a tag, a stash; <c>HEAD</c> and the "+N" label, <paramref name="label"/> null, open
     /// the commit's menu). The row is selected too.
     /// </summary>
-    public bool OpenLabelMenu(MenuLayerViewModel layer, string sha, RefLabel? label, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+    public bool OpenLabelMenu(MenuLayerViewModel layer, string sha, RefLabel? label, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(sha);
+        switch (label)
+        {
+            case null or { Kind: RefLabelKind.DetachedHead }:
+                return OpenCommitMenu(layer, sha, position, openedBy);
+
+            case { Kind: RefLabelKind.Stash }:
+                return !IsClosed && SelectForMenu(sha) && OpenMenu(layer, RepositoryMenus.ForStash(MenuContext, sha, MenuActions), position, openedBy);
+
+            case { RefName: { } refName }:
+                if (IsClosed || !SelectForMenu(sha))
+                {
+                    return false;
+                }
+
+                return label.Kind switch
+                {
+                    RefLabelKind.CurrentBranch or RefLabelKind.LocalBranch => OpenLocalBranchMenu(layer, refName, position, openedBy),
+                    RefLabelKind.RemoteBranch => OpenMenu(layer, RepositoryMenus.ForRemoteBranch(MenuContext, refName, MenuActions), position, openedBy),
+                    RefLabelKind.Tag => OpenMenu(layer, RepositoryMenus.ForTag(MenuContext, refName, MenuActions), position, openedBy),
+                    _ => false,
+                };
+
+            default:
+                return false;
+        }
+    }
 
     /// <summary>A right-click on the working-changes row (4b); the row is selected.</summary>
-    public bool OpenWorkingChangesMenu(MenuLayerViewModel layer, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+    public bool OpenWorkingChangesMenu(MenuLayerViewModel layer, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        if (IsClosed || !HasWorkingChanges)
+        {
+            return false;
+        }
 
-    /// <summary>A right-click below the last row of the graph, or in a graph without commits (4b).</summary>
-    public bool OpenEmptyGraphAreaMenu(MenuLayerViewModel layer, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+        if (!IsWorkingRowSelected)
+        {
+            IsWorkingRowSelected = true;
+        }
+
+        return OpenMenu(layer, RepositoryMenus.ForWorkingChanges(MenuContext, MenuActions), position, openedBy);
+    }
+
+    /// <summary>
+    /// A right-click below the last row of the graph, or in a graph without commits (4b). The
+    /// graph's selection does not change: asking for a menu changes nothing (check 3, as D114 for
+    /// the left panel).
+    /// </summary>
+    public bool OpenEmptyGraphAreaMenu(MenuLayerViewModel layer, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        return !IsClosed && Refs is not null && OpenMenu(layer, RepositoryMenus.ForEmptyGraphArea(MenuContext, MenuActions), position, openedBy);
+    }
 
     /// <summary>
     /// A right-click on a left-panel row (4b): a section header, a remote, a local or remote
     /// branch, a tag or a stash; a folder and "Pull requests" open nothing. Nothing is selected or
     /// highlighted, and the graph's selection does not change (D114).
     /// </summary>
-    public bool OpenRefRowMenu(MenuLayerViewModel layer, RefListRow row, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+    public bool OpenRefRowMenu(MenuLayerViewModel layer, RefListRow row, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(row);
+        if (IsClosed || Refs is null)
+        {
+            return false;
+        }
+
+        var actions = MenuActions;
+        return LeftPanelViewModel.TargetOf(row) switch
+        {
+            RefRowTarget.Section when row is RefSectionRow section =>
+                OpenMenu(layer, RepositoryMenus.ForSection(MenuContext, section.Section, actions), position, openedBy),
+            RefRowTarget.Remote =>
+                OpenMenu(layer, RepositoryMenus.ForRemote(MenuContext, LeftPanelViewModel.RemoteNameOf(row)!, actions), position, openedBy),
+            RefRowTarget.LocalBranch =>
+                OpenLocalBranchMenu(layer, LeftPanelViewModel.RefNameOf(row)!, position, openedBy),
+            RefRowTarget.RemoteBranch =>
+                OpenMenu(layer, RepositoryMenus.ForRemoteBranch(MenuContext, LeftPanelViewModel.RefNameOf(row)!, actions), position, openedBy),
+            RefRowTarget.Tag =>
+                OpenMenu(layer, RepositoryMenus.ForTag(MenuContext, LeftPanelViewModel.RefNameOf(row)!, actions), position, openedBy),
+            RefRowTarget.Stash when row is RefItemRow { TargetSha: { } stash } =>
+                OpenMenu(layer, RepositoryMenus.ForStash(MenuContext, stash, actions), position, openedBy),
+            _ => false,
+        };
+    }
 
     /// <summary>
     /// A right-click on a file of the stage panel's lists or of a commit's changed files (4b): its
     /// menu only; the list's selection and the open diff do not change.
     /// </summary>
-    public bool OpenFileMenu(MenuLayerViewModel layer, ChangedFile file, FileMenuPlace place, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+    public bool OpenFileMenu(MenuLayerViewModel layer, ChangedFile file, FileMenuPlace place, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(file);
+        if (IsClosed)
+        {
+            return false;
+        }
+
+        var context = MenuContext;
+        var target = new FileMenuTarget(
+            file,
+            IsUntracked: place == FileMenuPlace.Unstaged && Status.IsUntracked(file.Path),
+            ExistsInWorkingTree: ExistsInWorkingTree(file.Path),
+            CommitSha: place == FileMenuPlace.CommitFiles ? Selection.Single : null);
+        var menu = place switch
+        {
+            FileMenuPlace.Unstaged => RepositoryMenus.ForUnstagedFile(context, target, MenuActions),
+            FileMenuPlace.Staged => RepositoryMenus.ForStagedFile(context, target, MenuActions),
+            _ => RepositoryMenus.ForCommitFile(context, target, MenuActions),
+        };
+        return OpenMenu(layer, menu, position, openedBy);
+    }
 
     /// <summary>A right-click on the diff view's text or header (4b); <paramref name="hunk"/> is the hunk under the pointer, or null.</summary>
-    public bool OpenDiffMenu(MenuLayerViewModel layer, DiffViewModel diff, int? hunk, MenuPosition position, MenuOpenedBy openedBy) =>
-        throw new NotImplementedException(MenusPackage);
+    public bool OpenDiffMenu(MenuLayerViewModel layer, DiffViewModel diff, int? hunk, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(diff);
+        if (IsClosed)
+        {
+            return false;
+        }
+
+        var target = diff.Target;
+        var file = new FileMenuTarget(
+            new ChangedFile(target.Path, target.Kind, target.OldPath),
+            target.IsUntracked,
+            ExistsInWorkingTree(target.Path),
+            target.Side == DiffSide.Commit ? target.Commit : null);
+        var hunkInDiff = hunk is { } index && diff.Diff is { } read && index >= 0 && index < read.Hunks.Count ? hunk : null;
+        var menu = RepositoryMenus.ForDiff(
+            MenuContext,
+            new DiffMenuTarget(file, target.Side, diff.HasSelectedLines, hunkInDiff, diff.ActsOnLines),
+            MenuActions,
+            new DiffMenuActions(diff));
+        return OpenMenu(layer, menu, position, openedBy);
+    }
 
     /// <summary>
     /// A drop of the branch <paramref name="sourceRef"/> onto <paramref name="targetRef"/> (4g): reads
     /// what the drop needs (<see cref="DropFacts"/>, the worktrees), then opens its menu at the
     /// release point. Completes with whether a menu opened.
     /// </summary>
-    public Task<bool> OpenDropMenuAsync(MenuLayerViewModel layer, string sourceRef, string targetRef, MenuPosition position) =>
-        Task.FromException<bool>(new NotImplementedException(MenusPackage));
+    /// <remarks>
+    /// <see cref="DropFacts.RemoteMapsBranchesDifferently"/> is not read: the Git layer has no read
+    /// of a remote's fetch refspec yet, so a drop onto a remote branch always offers the push.
+    /// </remarks>
+    public async Task<bool> OpenDropMenuAsync(MenuLayerViewModel layer, string sourceRef, string targetRef, MenuPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(sourceRef);
+        ArgumentNullException.ThrowIfNull(targetRef);
+        if (IsClosed)
+        {
+            return false;
+        }
+
+        var context = await ReadMenuContextAsync();
+        var ancestor = true;
+        if (targetRef.StartsWith("refs/heads/", StringComparison.Ordinal))
+        {
+            try
+            {
+                ancestor = await Repository.IsAncestorAsync(targetRef, sourceRef, _lifetime.Token);
+            }
+            catch (OperationCanceledException) when (IsClosed)
+            {
+                return false;
+            }
+            catch (Exception ex)
+            {
+                // The fast-forward stays enabled and git decides (2.7 refuses a non-fast-forward).
+                _log.Warning($"{Name}: whether {targetRef} is an ancestor of {sourceRef} could not be read for the drop's menu.", ex);
+            }
+        }
+
+        context = context with { Drop = new DropFacts(ancestor) };
+        return OpenMenu(layer, RepositoryMenus.ForDrop(context, sourceRef, targetRef, MenuActions), position, MenuOpenedBy.Pointer);
+    }
+
+    /// <summary>
+    /// What a drop of a branch onto a branch opens (WP8's <see cref="BranchDropMenu"/> hook): the
+    /// drop's menu at the release point on <paramref name="layer"/>, once its facts are read (4g).
+    /// The function returns null, because the menu opens when the read completes, not at once.
+    /// </summary>
+    public Func<BranchDrop, MenuModel?> DropMenuOpener(MenuLayerViewModel layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        return drop =>
+        {
+            Start(OpenDropMenuAsync(layer, drop.SourceRef, drop.TargetRef, new MenuPosition(drop.X, drop.Y)), "the drop's menu");
+            return null;
+        };
+    }
 
     /// <summary>
     /// A double-click on a left-panel row (4c): a local branch checks out (nothing more on the
-    /// current one), a remote branch checks out into a tracking branch, a stash applies; any other
-    /// row does nothing more than its click.
+    /// current one), a remote branch checks out into a tracking branch (nothing while HEAD is on
+    /// the local branch it would check out), a stash applies; any other row does nothing more than
+    /// its click.
     /// </summary>
-    public void DoubleTapRefRow(RefListRow row) => throw new NotImplementedException(MenusPackage);
+    public void DoubleTapRefRow(RefListRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (IsClosed || Refs is null)
+        {
+            return;
+        }
+
+        switch (LeftPanelViewModel.TargetOf(row))
+        {
+            case RefRowTarget.LocalBranch or RefRowTarget.RemoteBranch:
+                CheckOutByDoubleClick(LeftPanelViewModel.RefNameOf(row)!);
+                break;
+            case RefRowTarget.Stash when row is RefItemRow { TargetSha: { } stash }:
+                Start(MenuActions.ApplyStashAsync(stash), "applying the stash");
+                break;
+        }
+    }
 
     /// <summary>
     /// A double-click on a graph label (4c): a local branch checks out (nothing more on the current
     /// one), a remote branch checks out into a tracking branch; a tag, a stash or <c>HEAD</c> does
     /// nothing more than the click (D93).
     /// </summary>
-    public void DoubleTapLabel(RefLabel label) => throw new NotImplementedException(MenusPackage);
+    public void DoubleTapLabel(RefLabel label)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        if (IsClosed || Refs is null)
+        {
+            return;
+        }
+
+        if (label is { Kind: RefLabelKind.LocalBranch or RefLabelKind.RemoteBranch, RefName: { } refName })
+        {
+            CheckOutByDoubleClick(refName);
+        }
+    }
+
+    /// <summary>Checks out a branch by a double-click, unless HEAD is on it already (as the menus leave out or disable the item).</summary>
+    private void CheckOutByDoubleClick(string refName)
+    {
+        var context = MenuContext;
+        if (context.FindRef(refName) is not { } branch)
+        {
+            return;
+        }
+
+        var local = branch.Kind == RefKind.RemoteBranch ? RepositoryMenuContext.LocalNameOf(branch) : branch.Name;
+        if (branch.IsHead || string.Equals(context.Head.BranchName, local, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Start(MenuActions.CheckoutAsync(refName), "the checkout");
+    }
+
+    /// <summary>
+    /// A local branch's menu (4b). Its fast-forward item depends on the other worktrees (2.7): when
+    /// that item would otherwise be enabled, they are read first and the menu opens when the read
+    /// completes; the request counts as handled at once.
+    /// </summary>
+    private bool OpenLocalBranchMenu(MenuLayerViewModel layer, string branchRef, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        var context = MenuContext;
+        if (context.FindRef(branchRef) is not { } branch)
+        {
+            return false;
+        }
+
+        var fastForwardable = !branch.IsHead && !branch.UpstreamGone && branch.UpstreamRef is not null && branch.Behind > 0 && branch.Ahead == 0;
+        if (!fastForwardable)
+        {
+            return OpenMenu(layer, RepositoryMenus.ForLocalBranch(context, branchRef, MenuActions), position, openedBy);
+        }
+
+        Start(OpenAfterReadingWorktreesAsync(layer, branchRef, position, openedBy), "a branch's menu");
+        return true;
+    }
+
+    private async Task OpenAfterReadingWorktreesAsync(MenuLayerViewModel layer, string branchRef, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        var context = await ReadMenuContextAsync();
+        OpenMenu(layer, RepositoryMenus.ForLocalBranch(context, branchRef, MenuActions), position, openedBy);
+    }
+
+    /// <summary>
+    /// Selects <paramref name="sha"/>'s row for its menu (4b), alone unless it is part of a
+    /// multi-selection. False when the graph does not have it.
+    /// </summary>
+    private bool SelectForMenu(string sha)
+    {
+        var index = Graph.IndexOf(sha);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        if (!(Selection.IsMultiple && Selection.Contains(sha)) && SelectedIndex != index)
+        {
+            SelectedIndex = index;
+        }
+
+        return true;
+    }
+
+    private bool ExistsInWorkingTree(string path)
+    {
+        var full = System.IO.Path.Combine(Path, path.TrimEnd('/'));
+        return File.Exists(full) || Directory.Exists(full);
+    }
+
+    /// <summary>Lets a task run without waiting for it, logging a failure that got past its own handling.</summary>
+    private void Start(Task task, string what) =>
+        _ = task.ContinueWith(
+            failed => _log.Error($"{Name}: {what} failed.", failed.Exception),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
 
     private static bool SamePath(string a, string b) => string.Equals(
         System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(a)),
@@ -165,67 +461,22 @@ public sealed partial class RepositoryViewModel
 
     /// <summary>
     /// The selected commits as the menus need them, in row order, with whether HEAD's history holds
-    /// each (4h): a walk over the parents from HEAD's commit through the rows loaded so far, which
-    /// stops once every selected commit is found. A commit not reached counts as not on HEAD, so
-    /// its item stays enabled and git decides (2.12).
+    /// each (4h): <see cref="CommitGraphData.IsReachableFromHead"/>, the graph's walk over the
+    /// parents from HEAD's commit through the rows loaded so far, cached per graph. A commit the
+    /// walk has not reached counts as not on HEAD, so its item stays enabled and git decides (2.12).
     /// </summary>
     private List<CommitMenuInfo> SelectedCommitsForMenus()
     {
         var graph = Graph;
-        var rows = Selection.Shas
+        return [.. Selection.Shas
             .Select(sha => (Sha: sha, Row: graph.IndexOf(sha)))
             .Where(entry => entry.Row >= 0)
             .OrderBy(entry => entry.Row)
-            .ToList();
-        if (rows.Count == 0)
-        {
-            return [];
-        }
-
-        var reachable = ReachableFromHead(graph, rows.Select(entry => entry.Sha).ToHashSet(StringComparer.Ordinal));
-        return [.. rows.Select(entry =>
-        {
-            var commit = graph.CommitAt(entry.Row);
-            return new CommitMenuInfo(commit.Sha, commit.Subject, commit.Parents, commit.Kind, entry.Row, reachable.Contains(commit.Sha));
-        })];
-    }
-
-    /// <summary>Which of <paramref name="wanted"/> HEAD's history holds, by a walk over the loaded rows' parents.</summary>
-    private HashSet<string> ReachableFromHead(CommitGraphData graph, HashSet<string> wanted)
-    {
-        var found = new HashSet<string>(StringComparer.Ordinal);
-        if (Refs?.Head.Sha is not { } head)
-        {
-            return found;
-        }
-
-        var seen = new HashSet<string>(StringComparer.Ordinal) { head };
-        var pending = new Stack<string>();
-        pending.Push(head);
-        while (pending.Count > 0 && found.Count < wanted.Count)
-        {
-            var sha = pending.Pop();
-            if (wanted.Contains(sha))
+            .Select(entry =>
             {
-                found.Add(sha);
-            }
-
-            var index = graph.IndexOf(sha);
-            if (index < 0)
-            {
-                // Not loaded yet: its history is not known here.
-                continue;
-            }
-
-            foreach (var parent in graph.CommitAt(index).Parents)
-            {
-                if (seen.Add(parent))
-                {
-                    pending.Push(parent);
-                }
-            }
-        }
-
-        return found;
+                var commit = graph.CommitAt(entry.Row);
+                var reachable = commit.Kind != CommitKind.Stash && graph.IsReachableFromHead(commit.Sha);
+                return new CommitMenuInfo(commit.Sha, commit.Subject, commit.Parents, commit.Kind, entry.Row, reachable);
+            })];
     }
 }

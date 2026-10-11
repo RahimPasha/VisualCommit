@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -220,6 +221,45 @@ public sealed partial class ToolbarViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// The buttons' states for a repository whose refs are <paramref name="refs"/> and whose
+    /// working tree is <paramref name="status"/> (4d): each enabled, or disabled with the first of
+    /// its reasons. The toolbar shows them; the menus that offer the same actions (the empty graph
+    /// area, "Stash changes…" everywhere, D119) take them from here.
+    /// </summary>
+    public static ToolbarMenuState StatesFor(RepoRefs refs, WorkingTreeStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(refs);
+        ArgumentNullException.ThrowIfNull(status);
+        var (fetch, pull, push, branch, stash, pop) = Reasons(refs, status);
+        return new(Of(fetch), Of(pull), Of(push), Of(branch), Of(stash), Of(pop));
+
+        static ToolbarAvailability Of(string? reason) => new(reason is null, reason);
+    }
+
+    /// <summary>
+    /// Why Stash cannot be used (2.24, 4d, D119), or null when it can: HEAD unborn; nothing to
+    /// stash; an operation in progress ("Finish or abort the merge first"), or conflicts that a
+    /// stash left without one ("Resolve the conflicts first"), because a stash during a merge drops
+    /// the merge without a word. Several reasons give the first, in this order.
+    /// </summary>
+    public static string? StashReason(HeadState head, WorkingTreeStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(head);
+        ArgumentNullException.ThrowIfNull(status);
+        return head.IsUnborn ? UnbornText
+            : !status.HasChanges ? NothingToStashText
+            : status.InProgress.IsActive ? $"Finish or abort the {InProgressName(status.InProgress.Kind)} first"
+            : HasConflicts(status) ? ResolveConflictsText
+            : null;
+    }
+
+    /// <summary>Stash with conflicts left by a stash, without an operation in progress (D119).</summary>
+    public const string ResolveConflictsText = "Resolve the conflicts first";
+
+    private static bool HasConflicts(WorkingTreeStatus status) =>
+        status.Unstaged.Any(file => file.Kind == FileChangeKind.Conflicted) || status.Staged.Any(file => file.Kind == FileChangeKind.Conflicted);
+
     private void Update()
     {
         if (Repository?.Refs is not { } refs)
@@ -229,13 +269,18 @@ public sealed partial class ToolbarViewModel : ObservableObject
             return;
         }
 
+        var (fetch, pull, push, branch, stash, pop) = Reasons(refs, Repository.Status);
+        SetStates(fetch, pull, push, branch, stash, pop, enabled: true);
+    }
+
+    private static (string? Fetch, string? Pull, string? Push, string? Branch, string? Stash, string? Pop) Reasons(RepoRefs refs, WorkingTreeStatus status)
+    {
         var head = refs.Head;
         var name = head.BranchName ?? "HEAD";
         var current = head.BranchName is { } branchName
             ? refs.Refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.FullName == "refs/heads/" + branchName)
             : null;
         var hasRemotes = refs.Remotes.Count > 0;
-        var status = Repository.Status;
 
         var fetch = hasRemotes ? null : NoRemotesText;
 
@@ -271,11 +316,9 @@ public sealed partial class ToolbarViewModel : ObservableObject
             : current?.HasLocalUpstream == true ? $"{name} tracks a local branch"
             : null;
         var branch = head.IsUnborn ? UnbornText : null;
-        var stash = head.IsUnborn ? UnbornText
-            : !status.HasChanges ? NothingToStashText
-            : null;
+        var stash = StashReason(head, status);
         var pop = refs.Stashes.Count == 0 ? NoStashesText : null;
-        SetStates(fetch, pull, push, branch, stash, pop, enabled: true);
+        return (fetch, pull, push, branch, stash, pop);
     }
 
     private void SetStates(string? fetch, string? pull, string? push, string? branch, string? stash, string? pop, bool enabled)

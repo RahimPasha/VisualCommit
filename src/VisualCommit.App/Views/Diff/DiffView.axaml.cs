@@ -1,10 +1,15 @@
 using System.ComponentModel;
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Diff;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.Views.Shell;
 using VisualCommit.Core.Diff;
 
 namespace VisualCommit.App.Views.Diff;
@@ -28,6 +33,63 @@ public partial class DiffView : UserControl
                 _viewModel.SelectedChanges = DiffText.SelectedChanges;
             }
         };
+
+        // The diff's menu (docs/phase-3-design.md 4b): a right-click on the text or the header, the
+        // Menu key or Shift+F10. A right-press leaves the text's selection as it is (the panes
+        // select with the left button only).
+        AddHandler(ContextRequestedEvent, OnContextRequested);
+    }
+
+    /// <summary>
+    /// Opens the diff's menu: at the pointer, with the hunk under it when the pointer is on the
+    /// text; from the keyboard at the top-left of the text, without a hunk.
+    /// </summary>
+    private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (e.Handled || _viewModel is not { } diff || ContextMenuRequests.ActiveRepository(this) is not ({ } layer, { } repository)
+            || !ReferenceEquals(repository.Diff, diff) || TopLevel.GetTopLevel(this) is not { } topLevel)
+        {
+            return;
+        }
+
+        MenuPosition position;
+        MenuOpenedBy openedBy;
+        int? hunk = null;
+        if (e.TryGetPosition(topLevel, out var pointer))
+        {
+            (position, openedBy) = (new MenuPosition(pointer.X, pointer.Y), MenuOpenedBy.Pointer);
+            if (diff.ShowsText && e.TryGetPosition(DiffText, out var inText))
+            {
+                hunk = HunkAt(inText);
+            }
+        }
+        else
+        {
+            var corner = DiffTextHost.TranslatePoint(default, topLevel) ?? default;
+            (position, openedBy) = (new MenuPosition(corner.X, corner.Y), MenuOpenedBy.Keyboard);
+        }
+
+        e.Handled = repository.OpenDiffMenu(layer, diff, hunk, position, openedBy);
+    }
+
+    /// <summary>The hunk whose rows (its header included) are drawn at <paramref name="point"/> of the text, or null outside every hunk.</summary>
+    private int? HunkAt(Point point)
+    {
+        if (point.X < 0 || point.Y < 0 || point.X >= DiffText.Bounds.Width || point.Y >= DiffText.Bounds.Height)
+        {
+            return null;
+        }
+
+        var rows = DiffText.Rows;
+        for (var row = 0; row < rows.Count; row++)
+        {
+            if (DiffText.RowBounds(row) is { } bounds && point.Y >= bounds.Top && point.Y < bounds.Bottom)
+            {
+                return rows[row].Hunk >= 0 ? rows[row].Hunk : null;
+            }
+        }
+
+        return null;
     }
 
     protected override void OnDataContextChanged(EventArgs e)
