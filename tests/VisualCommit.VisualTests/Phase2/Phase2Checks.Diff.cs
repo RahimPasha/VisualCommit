@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using VisualCommit.App.ViewModels.Diff;
+using VisualCommit.Core.Diff;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using VisualCommit.VisualTests.Phase0;
@@ -75,9 +76,14 @@ public partial class Phase2Checks
     {
         var row = await ScrollToFileRowAsync(app, list, path);
         app.Click(row);
+
+        // The same file can be in both lists, and the diff that was open before the click may be
+        // its other side: wait for the side of the list that was clicked (macOS CI once saw the
+        // unstaged diff still shown after a click on the staged row).
+        var side = list == "StagedFileList" ? DiffSide.Staged : DiffSide.Unstaged;
         await app.WaitForAsync(
-            () => app.Session.Shell.ActiveTab.Repository is { Diff: { } diff } && diff.Target.Path == path && diff.Body == body && app.FindByAutomationId("DiffView").IsEffectivelyVisible,
-            $"the diff of {path} ({body})");
+            () => app.Session.Shell.ActiveTab.Repository is { Diff: { } diff } && diff.Target.Side == side && diff.Target.Path == path && diff.Body == body && app.FindByAutomationId("DiffView").IsEffectivelyVisible,
+            $"the {side} diff of {path} ({body})");
         app.Settle();
     }
 
