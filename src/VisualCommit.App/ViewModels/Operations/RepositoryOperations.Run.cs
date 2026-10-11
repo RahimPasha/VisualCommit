@@ -270,7 +270,13 @@ public sealed partial class RepositoryOperations
             return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
         }
 
-        var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, run)
+        // The operation's id, for the git call a "<Title> cancelled" dialog of lock files names (1.8, 4f).
+        string? operationId = null;
+        var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, context =>
+        {
+            operationId = context.OperationId;
+            return run(context);
+        })
         {
             DedupeKey = options.DedupeKey,
             HasSeveralSteps = options.HasSeveralSteps,
@@ -284,7 +290,7 @@ public sealed partial class RepositoryOperations
         var result = await running;
         if (first)
         {
-            await ShowResultAsync(text, result, options);
+            await ShowResultAsync(text, result, options, operationId);
         }
 
         return result;
@@ -348,8 +354,10 @@ public sealed partial class RepositoryOperations
     /// error title with the operation's summary; the lock files of a cancelled network operation
     /// in the "&lt;Title&gt; cancelled" dialog (1.8). A success, a conflict (the banner shows it)
     /// and a plain cancel show nothing here. After the tab closed, a failure is only logged.
+    /// <paramref name="operationId"/> names the operation, whose last git call the lock-file dialog
+    /// shows as its command (4f: "the cancelled git call").
     /// </summary>
-    public async Task ShowResultAsync(OperationText text, OperationResult result, RunOptions? options = null)
+    public async Task ShowResultAsync(OperationText text, OperationResult result, RunOptions? options = null, string? operationId = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(result);
@@ -370,7 +378,7 @@ public sealed partial class RepositoryOperations
         }
         else if (result is { Outcome: OperationOutcome.Cancelled, StaleLockFiles.Count: > 0 })
         {
-            await ShowStaleLockFilesAsync(text, result.StaleLockFiles);
+            await ShowStaleLockFilesAsync(text, result.StaleLockFiles, operationId);
         }
     }
 
@@ -672,14 +680,18 @@ public sealed partial class RepositoryOperations
     private IReadOnlyList<string> NamesOf(RefKind kind) =>
         Refs?.Refs.Where(gitRef => gitRef.Kind == kind).Select(gitRef => gitRef.Name).ToList() ?? [];
 
-    private async Task ShowStaleLockFilesAsync(OperationText text, IReadOnlyList<string> files)
+    private async Task ShowStaleLockFilesAsync(OperationText text, IReadOnlyList<string> files, string? operationId)
     {
+        // 4f: ErrorCommand is the cancelled git call, the operation's last one in the session's call log.
+        var cancelledCall = operationId is null
+            ? null
+            : Services?.GitCalls?.Snapshot().LastOrDefault(record => string.Equals(record.OperationId, operationId, StringComparison.Ordinal));
         var dialog = new ErrorDialogViewModel(
             OperationTexts.Cancelled(text.Title),
             OperationTexts.StaleLockFilesSummary,
             Repository.Name,
             string.Join("\n", files.Select(ShowPath)),
-            command: null,
+            command: cancelledCall?.CommandText,
             extraAction: OperationTexts.RemoveLockFilesButton,
             clipboard: Services?.Clipboard,
             log: Log);
