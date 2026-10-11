@@ -24,6 +24,14 @@ public interface IGitRepository
     Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Where HEAD is now, without the rest of the refs: the branch it is on (null while detached)
+    /// and its commit (null while unborn). An operation that waited in the queue reads it to check
+    /// that HEAD is still where the user saw it. The default implementation reads all the refs.
+    /// </summary>
+    async Task<HeadState> ReadHeadAsync(CancellationToken cancellationToken = default) =>
+        (await ReadRefsAsync(cancellationToken).ConfigureAwait(false)).Head;
+
+    /// <summary>
     /// Streams the history the graph shows: every commit reachable from a branch, a remote branch,
     /// a tag or HEAD, in <c>git log --date-order</c> order, with the stashes of
     /// <paramref name="refs"/> merged in by date: each before the first commit older than it, and

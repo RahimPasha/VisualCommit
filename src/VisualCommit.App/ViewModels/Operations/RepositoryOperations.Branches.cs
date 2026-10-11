@@ -33,9 +33,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 RefreshScope.Refs,
                 async context =>
                 {
-                    if (backUpDetached)
+                    if (await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
-                        await SaveDetachedBackupAsync();
+                        return refusal;
                     }
 
                     return OperationReport.Done(await plan.Run(NetworkOptions.From(context)));
@@ -77,9 +77,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 async context =>
                 {
                     var options = NetworkOptions.From(context);
-                    if (backUpDetached)
+                    if (await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
-                        await SaveDetachedBackupAsync();
+                        return refusal;
                     }
 
                     // 1. The tracked changes only: the untracked files blocked nothing, and the
@@ -162,9 +162,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     }
 
                     var options = NetworkOptions.From(context);
-                    if (backUpDetached)
+                    if (await GuardDetachedHeadAsync(text, backUpDetached) is { } detached)
                     {
-                        await SaveDetachedBackupAsync();
+                        return detached;
                     }
 
                     // A failed checkout ends it with the checkout's dialog (2.33), without the stash
@@ -221,7 +221,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
             // Checking the new branch out leaves a detached HEAD: 2.1's rule for every checkout (D83),
             // unless the branch starts where HEAD is.
             var backUpDetached = false;
-            if (checkout && head?.IsDetached == true && await Git.ResolveAsync(startPoint) != head.Sha)
+            if (checkout && Refs?.Head is { IsDetached: true } now && await Git.ResolveAsync(startPoint) != now.Sha)
             {
                 if (await ConfirmLeavingDetachedHeadAsync() is not { } confirmed)
                 {
@@ -233,9 +233,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
             await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async operation =>
             {
-                if (backUpDetached)
+                // HEAD as it is now, not as it was when the dialog opened (2.1's rule, D83).
+                if (checkout && await GuardDetachedHeadAsync(text, backUpDetached, keptBy: startPoint) is { } refusal)
                 {
-                    await SaveDetachedBackupAsync();
+                    return refusal;
                 }
 
                 await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
@@ -727,6 +728,40 @@ public sealed partial class RepositoryOperations : IInProgressActions
         }
 
         return await ConfirmAsync(OperationTexts.ConfirmLeaveDetachedCommits(count)) ? true : null;
+    }
+
+    /// <summary>
+    /// 2.1's rule again inside a checkout's operation, where HEAD no longer moves: the question was
+    /// asked from the refs as they were when the checkout was chosen, and an operation queued
+    /// ahead of it (cherry-picks onto a detached HEAD) or a terminal may have moved HEAD since.
+    /// When the user confirmed, saves <c>detached-&lt;time&gt;</c>; otherwise, when HEAD is now
+    /// detached on commits that nothing else reaches (and that <paramref name="keptBy"/>, the
+    /// start of a new branch, does not keep), refuses: the user was never asked about them.
+    /// Null when the checkout may go on.
+    /// </summary>
+    private async Task<OperationReport?> GuardDetachedHeadAsync(OperationText text, bool backUpDetached, string? keptBy = null)
+    {
+        if (backUpDetached)
+        {
+            await SaveDetachedBackupAsync();
+            return null;
+        }
+
+        var head = await Git.ReadHeadAsync();
+        if (!head.IsDetached)
+        {
+            return null;
+        }
+
+        var count = await Git.CountDetachedCommitsAsync();
+        if (count == 0 || (keptBy is not null && await Git.ResolveAsync(keptBy) == head.Sha))
+        {
+            return null;
+        }
+
+        var summary = OperationTexts.DetachedCommitsSinceChosen(count);
+        Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
+        return Failed(text, StoppedFailure(summary));
     }
 
     /// <summary>Saves <c>detached-&lt;time&gt;</c> → HEAD's commit, inside the checkout's operation (2.0, 2.1).</summary>

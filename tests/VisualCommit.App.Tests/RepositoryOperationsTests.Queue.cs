@@ -1,0 +1,106 @@
+using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core.Git;
+using VisualCommit.Core.Operations;
+using VisualCommit.Testing;
+using Xunit;
+
+namespace VisualCommit.App.Tests;
+
+/// <summary>
+/// Operations that wait in the queue (docs/phase-3-design.md 1.3): what the user saw when they
+/// chose one may have changed by the time it runs, because an operation queued ahead of it, or a
+/// terminal, moved HEAD. Each decides and checks again inside its operation, and refuses, with
+/// the error dialog of its own kind and no question, rather than act on something the user did
+/// not name. Each test holds the queue with an operation of its own, queues the operation under
+/// test behind it, changes the repository, then lets the queue go on.
+/// </summary>
+public partial class RepositoryOperationsTests
+{
+    private static readonly TimeSpan QueueTimeout = TimeSpan.FromSeconds(60);
+
+    [Fact]
+    public async Task A_checkout_queued_behind_commits_made_on_a_detached_head_refuses_rather_than_leave_them_behind()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.DetachAsync("main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError().Confirm();
+        string? picked = null;
+
+        // HEAD is detached on main's commit: nothing would be left behind when the checkout is
+        // chosen, so it asks nothing. The operation ahead of it then commits on the detached HEAD.
+        var (hold, ahead) = HoldQueue(app, async () => picked = await repo.CommitAsync("Picked onto the detached HEAD"));
+        var checkout = app.Operations.CheckoutAsync("refs/heads/feature/ff");
+        await WaitForQueuedAsync(app, 1);
+        hold.SetResult();
+        await Task.WhenAll(ahead, checkout).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(picked, await repo.HeadAsync());
+        Assert.False((await repo.GitAllowingFailureAsync("symbolic-ref", "--quiet", "HEAD")).Succeeded);
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Empty(app.Dialogs.Confirmations);
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Checkout failed", "HEAD moved while this waited: it is now detached on 1 commit that is on no branch. Nothing was checked out, so it is not left behind."),
+            (dialog.Title, dialog.Summary));
+        Assert.Equal(("Check out feature/ff failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+
+        // Chosen again, with the refs read since, the checkout asks and backs the commit up (2.1).
+        await app.Operations.CheckoutAsync("refs/heads/feature/ff");
+
+        Assert.Equal("Leave these commits?", Assert.Single(app.Dialogs.Confirmations).Title);
+        Assert.Equal("feature/ff", await repo.CurrentBranchAsync());
+        Assert.Equal(picked, Assert.Single(await repo.BackupRefsAsync()).Sha);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_branch_created_and_checked_out_behind_commits_made_on_a_detached_head_is_not_created()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.DetachAsync("main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var start = await app.ShaAsync("refs/heads/feature/ff");
+        app.Dialogs.EnterName("topic").CloseError();
+
+        var (hold, ahead) = HoldQueue(app, () => repo.CommitAsync("Picked onto the detached HEAD"));
+        var create = app.Operations.CreateBranchAsync(start);
+        await WaitForQueuedAsync(app, 1);
+        hold.SetResult();
+        await Task.WhenAll(ahead, create).WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Null(await repo.RefTargetAsync("refs/heads/topic"));
+        Assert.False((await repo.GitAllowingFailureAsync("symbolic-ref", "--quiet", "HEAD")).Succeeded);
+        Assert.Equal(
+            "HEAD moved while this waited: it is now detached on 1 commit that is on no branch. Nothing was checked out, so it is not left behind.",
+            Assert.Single(app.Dialogs.Errors).Summary);
+        Assert.Equal("Create branch topic failed", app.StatusText);
+        app.AssertScriptFollowed();
+    }
+
+    /// <summary>
+    /// Queues an operation of the test's own that waits until the returned source is set, then
+    /// runs <paramref name="then"/> (a change to the repository, as an operation ahead of the one
+    /// under test would make it); waits until it runs.
+    /// </summary>
+    private static (TaskCompletionSource Hold, Task<OperationResult> Ahead) HoldQueue(OperationsHarness app, Func<Task>? then = null)
+    {
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ahead = app.Repository.Queue.RunAsync(new GitOperation("Held", "Holding…", OperationKind.Local, RefreshScope.Refs, async _ =>
+        {
+            await hold.Task;
+            if (then is not null)
+            {
+                await then();
+            }
+
+            return OperationReport.Done("Held");
+        }));
+        Assert.NotNull(app.Repository.Queue.Current);
+        return (hold, ahead);
+    }
+
+    /// <summary>Waits until <paramref name="count"/> operations wait in the queue.</summary>
+    private static Task WaitForQueuedAsync(OperationsHarness app, int count) =>
+        WaitUntilAsync(() => app.Repository.Queue.Waiting == count, $"{count} waiting operation(s)");
+}
