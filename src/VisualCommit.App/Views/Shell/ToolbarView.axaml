@@ -6,7 +6,10 @@
              x:DataType="vm:MainWindowViewModel"
              AutomationProperties.AutomationId="Toolbar">
 
-  <!-- Every button except Theme is a placeholder until the phase that builds its action. -->
+  <!-- Fetch, Pull, Push, Branch, Stash and Pop act on the active tab's repository
+       (docs/phase-3-design.md 4d, D90). A disabled one says why in its tooltip, which the button
+       theme shows on a disabled button too; an enabled one has none. Undo, Redo and Search stay
+       placeholders until phase 5. -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,0,0,1"
@@ -29,18 +32,30 @@
         <c:ToolbarButton Label="Redo" IconData="{StaticResource IconRedo}" IsEnabled="False"
                          AutomationProperties.AutomationId="RedoButton" />
         <Border Classes="toolbarSeparator" />
-        <c:ToolbarButton Label="Fetch" IconData="{StaticResource IconFetch}" IsEnabled="False"
+        <c:ToolbarButton Name="FetchButton" Label="Fetch" IconData="{StaticResource IconFetch}"
+                         Command="{Binding ActiveTab.Toolbar.FetchCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.FetchToolTip}"
                          AutomationProperties.AutomationId="FetchButton" />
-        <c:ToolbarButton Label="Pull" IconData="{StaticResource IconPull}" IsEnabled="False"
+        <c:ToolbarButton Name="PullButton" Label="Pull" IconData="{StaticResource IconPull}"
+                         Command="{Binding ActiveTab.Toolbar.PullCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.PullToolTip}"
                          AutomationProperties.AutomationId="PullButton" />
-        <c:ToolbarButton Label="Push" IconData="{StaticResource IconPush}" IsEnabled="False"
+        <c:ToolbarButton Name="PushButton" Label="Push" IconData="{StaticResource IconPush}"
+                         Command="{Binding ActiveTab.Toolbar.PushCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.PushToolTip}"
                          AutomationProperties.AutomationId="PushButton" />
         <Border Classes="toolbarSeparator" />
-        <c:ToolbarButton Label="Branch" IconData="{StaticResource IconBranch}" IsEnabled="False"
+        <c:ToolbarButton Name="BranchButton" Label="Branch" IconData="{StaticResource IconBranch}"
+                         Command="{Binding ActiveTab.Toolbar.BranchCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.BranchToolTip}"
                          AutomationProperties.AutomationId="BranchButton" />
-        <c:ToolbarButton Label="Stash" IconData="{StaticResource IconStash}" IsEnabled="False"
+        <c:ToolbarButton Name="StashButton" Label="Stash" IconData="{StaticResource IconStash}"
+                         Command="{Binding ActiveTab.Toolbar.StashCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.StashToolTip}"
                          AutomationProperties.AutomationId="StashButton" />
-        <c:ToolbarButton Label="Pop" IconData="{StaticResource IconPop}" IsEnabled="False"
+        <c:ToolbarButton Name="PopButton" Label="Pop" IconData="{StaticResource IconPop}"
+                         Command="{Binding ActiveTab.Toolbar.PopCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.PopToolTip}"
                          AutomationProperties.AutomationId="PopButton" />
       </StackPanel>
 

@@ -181,6 +181,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     [ObservableProperty]
     public partial string BranchText { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// The refs as last read: HEAD, the branches with their upstreams, the stashes and the
+    /// remotes; null before the first read. Set by every refresh, also when only an upstream or
+    /// its counts changed (which <see cref="Graph"/>'s refs do not follow). The toolbar's states
+    /// follow it (docs/phase-3-design.md 4d).
+    /// </summary>
+    [ObservableProperty]
+    public partial RepoRefs? Refs { get; private set; }
+
     /// <summary>Why the repository could not be read, or null.</summary>
     [ObservableProperty]
     public partial string? ErrorText { get; private set; }
@@ -1085,6 +1094,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             _ => string.Empty,
         };
         LeftPanel.Update(refs);
+        Refs = refs;
     }
 
     private void SwapGraph(CommitGraphData data)

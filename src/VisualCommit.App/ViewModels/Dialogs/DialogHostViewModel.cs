@@ -10,7 +10,11 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// <param name="Detail">A second line in the secondary colour, or empty.</param>
 /// <param name="ConfirmText">The label of the button that goes ahead, such as "Discard".</param>
 /// <param name="IsDestructive">The button that goes ahead has the danger colour.</param>
-public sealed record ConfirmationRequest(string Title, string Question, string Detail, string ConfirmText, bool IsDestructive = true);
+public sealed record ConfirmationRequest(string Title, string Question, string Detail, string ConfirmText, bool IsDestructive = true)
+{
+    /// <summary>The repository to name under the title ("In &lt;name&gt;", 4f), or null for none.</summary>
+    public string? RepositoryName { get; init; }
+}
 
 /// <summary>Asks the user to confirm, in a dialog drawn inside the main window (D69).</summary>
 public interface IDialogService
@@ -22,7 +26,11 @@ public interface IDialogService
 /// <summary>One open confirmation: what it says and the two answers.</summary>
 public sealed partial class ConfirmationViewModel : DialogViewModel<bool>
 {
-    internal ConfirmationViewModel(ConfirmationRequest request) => Request = request;
+    internal ConfirmationViewModel(ConfirmationRequest request)
+    {
+        Request = request;
+        RepositoryName = request.RepositoryName;
+    }
 
     public ConfirmationRequest Request { get; }
 
@@ -90,7 +98,10 @@ public sealed partial class DialogHostViewModel : ObservableObject, IDialogServi
         return dialog.Closed;
     }
 
-    /// <summary>Esc: cancels the top dialog. Returns whether one was open.</summary>
+    /// <summary>
+    /// Esc: the top dialog handles it (<see cref="DialogViewModel.HandleEscape"/>: it cancels, or
+    /// goes back a step); the dialogs below see nothing of it. Returns whether one was open.
+    /// </summary>
     public bool CancelCurrent()
     {
         if (Current is not { } dialog)
@@ -98,7 +109,7 @@ public sealed partial class DialogHostViewModel : ObservableObject, IDialogServi
             return false;
         }
 
-        dialog.CancelCommand.Execute(null);
+        dialog.HandleEscape();
         return true;
     }
 

@@ -2,12 +2,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels"
+             xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
              x:Class="VisualCommit.App.Views.Shell.StatusBarView"
              x:DataType="vm:MainWindowViewModel"
              AutomationProperties.AutomationId="StatusBar">
 
-  <!-- The branch of the active tab and the git version are real; the progress text and the
-       activity-log toggle are placeholders until phases 3 and 5 (D53). -->
+  <!-- Left to right (docs/phase-3-design.md 4e): the branch of the active tab; what its
+       operations are doing (the running text with git's progress, the result of the last one, or
+       "Ready"); the progress bar while one the user started runs (indeterminate until git gives a
+       percentage); Cancel while it can be stopped; how many wait. Hidden parts take no room, so
+       an idle bar reads as in phases 0 to 2. Right: the git version, and the activity-log toggle,
+       a placeholder until phase 5 (D53). -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,1,0,0">
@@ -37,11 +42,62 @@
                 Foreground="{DynamicResource VcTextSecondaryBrush}" />
         <TextBlock Name="CurrentBranch" Text="{Binding ActiveTab.BranchText}" FontSize="11.5" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="CurrentBranch" />
-        <TextBlock Name="OperationStatus" Classes="secondary" Text="Ready" FontSize="11.5"
+        <TextBlock Name="OperationStatus"
+                   Text="{Binding ActiveTab.OperationStatus.Text}"
+                   Classes.warning="{Binding ActiveTab.OperationStatus.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Warning}}"
+                   Classes.danger="{Binding ActiveTab.OperationStatus.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Danger}}"
+                   ToolTip.Tip="{Binding ActiveTab.OperationStatus.ToolTip}"
+                   FontSize="11.5"
+                   MaxWidth="520"
+                   TextTrimming="CharacterEllipsis"
                    Margin="16,0,0,0" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="OperationStatus" />
+        <ProgressBar Name="OperationProgress"
+                     IsVisible="{Binding ActiveTab.OperationStatus.IsRunning}"
+                     IsIndeterminate="{Binding ActiveTab.OperationStatus.IsIndeterminate}"
+                     Value="{Binding ActiveTab.OperationStatus.Percent, FallbackValue=0, TargetNullValue=0}"
+                     Minimum="0" Maximum="100"
+                     Width="80" Height="4" MinWidth="0" MinHeight="4"
+                     Margin="10,0,0,0" VerticalAlignment="Center"
+                     CornerRadius="2"
+                     Foreground="{DynamicResource VcAccentBrush}"
+                     Background="{DynamicResource VcBorderBrush}"
+                     AutomationProperties.AutomationId="OperationProgress"
+                     AutomationProperties.Name="Progress" />
+        <Button Name="OperationCancelButton"
+                Theme="{StaticResource VcFlatButton}"
+                IsVisible="{Binding ActiveTab.OperationStatus.CanCancel}"
+                Command="{Binding ActiveTab.OperationStatus.CancelCommand}"
+                CornerRadius="0"
+                Margin="6,0,0,0"
+                ToolTip.Tip="Stop git"
+                AutomationProperties.AutomationId="OperationCancelButton"
+                AutomationProperties.Name="Cancel">
+          <TextBlock Text="Cancel" FontSize="11.5" VerticalAlignment="Center" />
+        </Button>
+        <TextBlock Name="OperationWaiting"
+                   Classes="secondary"
+                   Text="{Binding ActiveTab.OperationStatus.WaitingText}"
+                   IsVisible="{Binding ActiveTab.OperationStatus.HasWaiting}"
+                   FontSize="11.5"
+                   Margin="10,0,0,0" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="OperationWaiting" />
       </StackPanel>
 
     </DockPanel>
   </Border>
+
+  <!-- The operation text's colour follows its tone (4e): secondary, the warning colour for a
+       stop with conflicts, the danger colour for a failure. -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock#OperationStatus">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock#OperationStatus.warning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock#OperationStatus.danger">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+  </UserControl.Styles>
 </UserControl>
