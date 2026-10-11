@@ -92,4 +92,26 @@ public sealed record FileDiff(
 
     /// <summary>Too large to show with highlighting until the user asks (D65).</summary>
     public bool IsVeryLarge => LineCount > VeryLargeLineCount || TextLength > VeryLargeTextLength;
+
+    /// <summary>
+    /// The same hunks with the same lines as <paramref name="other"/>: read again with nothing
+    /// changed, so a selection of its lines still means the same lines.
+    /// </summary>
+    public bool HasSameLines(FileDiff? other)
+    {
+        if (other is null || Hunks.Count != other.Hunks.Count)
+        {
+            return false;
+        }
+
+        for (var h = 0; h < Hunks.Count; h++)
+        {
+            if (Hunks[h].Header != other.Hunks[h].Header || !Hunks[h].Lines.SequenceEqual(other.Hunks[h].Lines))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

@@ -25,12 +25,25 @@ public sealed partial class GitRepository
     public async Task StageAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        if (paths.Count == 0)
+
+        // A path can vanish between the status read and the click, as an editor's temporary file
+        // does, and git add refuses the whole batch for a path that matches nothing. A path gone
+        // from the working tree is staged only when the index has it: its deletion is staged.
+        var gone = paths.Where(path => !File.Exists(WorkingTreePath(path)) && !Directory.Exists(WorkingTreePath(path))).ToList();
+        var stage = paths;
+        if (gone.Count > 0)
+        {
+            var output = await ReadOutputAsync(cancellationToken, ["ls-files", "-z", "--", .. gone]).ConfigureAwait(false);
+            var tracked = output.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+            stage = [.. paths.Where(path => !gone.Contains(path) || tracked.Contains(path))];
+        }
+
+        if (stage.Count == 0)
         {
             return;
         }
 
-        await WriteAsync(cancellationToken, ["add", "--all", "--", .. paths]).ConfigureAwait(false);
+        await WriteAsync(cancellationToken, ["add", "--all", "--", .. stage]).ConfigureAwait(false);
     }
 
     public async Task UnstageAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
@@ -87,22 +100,35 @@ public sealed partial class GitRepository
 
         var present = new HashSet<string>(paths.Where(path => File.Exists(WorkingTreePath(path))), StringComparer.Ordinal);
 
-        // A copy of the index takes the files as they are in the working tree; the real index
-        // is left alone.
+        // An index of its own, filled from HEAD, takes the files as they are in the working tree;
+        // the real index is left alone. Not a copy of the real index: one with a conflict in it
+        // cannot be written as a tree.
         var index = Path.Combine(Path.GetTempPath(), $"visualcommit-snapshot-{Guid.NewGuid():N}.index");
         try
         {
-            var realIndex = Path.Combine(GitDirectory, "index");
-            if (File.Exists(realIndex))
+            var environment = new Dictionary<string, string?>(SnapshotIdentity) { ["GIT_INDEX_FILE"] = index };
+            var head = await _runner.RunAsync(Read("rev-parse", "--verify", "--quiet", "HEAD"), cancellationToken).ConfigureAwait(false);
+            if (head.Succeeded)
             {
-                File.Copy(realIndex, index);
+                await RunAsync(environment, null, cancellationToken, "read-tree", "HEAD").ConfigureAwait(false);
             }
 
-            var environment = new Dictionary<string, string?>(SnapshotIdentity) { ["GIT_INDEX_FILE"] = index };
-            await RunAsync(environment, null, cancellationToken, ["add", "--all", "--force", "--", .. paths]).ConfigureAwait(false);
+            // A file that is gone is taken out by name: one that only the real index has would
+            // not match anything for git add.
+            var existing = paths.Where(present.Contains).ToList();
+            if (existing.Count > 0)
+            {
+                await RunAsync(environment, null, cancellationToken, ["add", "--all", "--force", "--", .. existing]).ConfigureAwait(false);
+            }
+
+            var gone = paths.Where(path => !present.Contains(path)).ToList();
+            if (gone.Count > 0)
+            {
+                await RunAsync(environment, null, cancellationToken, ["update-index", "--force-remove", "--", .. gone]).ConfigureAwait(false);
+            }
+
             var tree = (await RunAsync(environment, null, cancellationToken, "write-tree").ConfigureAwait(false)).Trim();
 
-            var head = await _runner.RunAsync(Read("rev-parse", "--verify", "--quiet", "HEAD"), cancellationToken).ConfigureAwait(false);
             var message = $"VisualCommit: snapshot before discarding {Count(paths.Count, "file")}\n\n{string.Join('\n', paths)}\n";
             var commitArguments = head.Succeeded
                 ? new[] { "commit-tree", tree, "-p", head.StandardOutput.Trim() }
@@ -201,10 +227,15 @@ public sealed partial class GitRepository
         return (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput;
     }
 
-    /// <summary>Deletes a file of the working tree, and then the folders it leaves empty, up to the top folder.</summary>
+    /// <summary>Deletes a file of the working tree, and then the folders it leaves empty, up to the top folder. A file already gone is left so.</summary>
     private void DeleteWorkingFile(string relativePath)
     {
         var path = WorkingTreePath(relativePath);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
         File.Delete(path);
 
         var top = Path.TrimEndingDirectorySeparator(WorkingDirectory);

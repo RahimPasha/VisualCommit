@@ -58,7 +58,14 @@ public class RepositoryWatcherTests
         await repository.LoadCommitsAsync(refs, _ => { }, TestCancelled);
         await repository.ReadCommitDetailsAsync(refs.Head.Sha!, TestCancelled);
         await repository.ReadCommitDetailsAsync(refs.Stashes[0].Sha, TestCancelled);
+        await Task.Delay(Settle, TestCancelled);
+        Assert.True(changed.Count == 0, $"Reading the refs, history and details raised Changed {changed.Count} times.");
+
+        // A file whose index entry no longer matches its time: a status that wrote the index
+        // would now rewrite it. The touch itself is reported once the ignore check has run, which
+        // takes a call of git, slow on a busy machine; it is waited for, not timed.
         File.SetLastWriteTimeUtc(Path.Combine(repo.Path, "a.txt"), DateTime.UtcNow.AddMinutes(-5));
+        Assert.True(await changed.WaitForAsync(1, Timeout), "Touching a.txt was not reported.");
         await Task.Delay(Settle, TestCancelled);
         changed.Reset();
         await repository.ReadStatusAsync(TestCancelled);
@@ -258,7 +265,12 @@ public class RepositoryWatcherTests
     [InlineData(@"objects\pack\pack-1.idx", false)]
     [InlineData("HEAD.lock", false)]
     [InlineData("refs/heads/main.lock", false)]
-    public void Leaves_out_objects_and_lock_files(string relativePath, bool relevant) =>
+    [InlineData("fsmonitor--daemon", false)]
+    [InlineData("fsmonitor--daemon/cookies/1234-1", false)]
+    [InlineData(@"fsmonitor--daemon\cookies\1234-2", false)]
+    [InlineData("fsmonitor--daemon.ipc", false)]
+    [InlineData("objectsfile", true)]
+    public void Leaves_out_objects_lock_files_and_the_file_system_monitor(string relativePath, bool relevant) =>
         Assert.Equal(relevant, RepositoryWatcher.IsRelevant(relativePath));
 
     /// <summary>Counts the watcher's Changed events.</summary>

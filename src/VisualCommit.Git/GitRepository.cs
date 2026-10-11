@@ -146,7 +146,9 @@ public sealed partial class GitRepository : IGitRepository
         var command = new GitCommand("check-ignore", "--stdin", "-z")
         {
             WorkingDirectory = WorkingDirectory,
-            Environment = ReadEnvironment,
+
+            // check-ignore refuses literal pathspecs, and takes each path as it is anyway.
+            Environment = new Dictionary<string, string?>(ReadEnvironment) { ["GIT_LITERAL_PATHSPECS"] = null },
             StandardInput = string.Concat(paths.Select(path => path + "\0")),
         };
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);

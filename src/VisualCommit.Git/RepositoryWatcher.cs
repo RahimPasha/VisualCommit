@@ -84,7 +84,9 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
     /// <summary>
     /// Starts watching. A folder that cannot be watched (it is gone, or on Linux the system's
-    /// limit on watches is reached) is logged and left out; this never throws.
+    /// limit on watches is reached) is logged and left out; this never throws. On Linux, watching
+    /// a folder adds a watch for each folder in it, which takes a while in a large working tree:
+    /// call this off the UI thread. <see cref="Pause"/> and <see cref="Dispose"/> do not wait for it.
     /// </summary>
     public void Start()
     {
@@ -96,15 +98,32 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
             }
 
             _started = true;
-            foreach (var folder in _folders)
-            {
-                Watch(folder, OnGitFolderEvent);
-            }
+        }
 
-            if (_workingDirectory is not null)
+        var watchers = new List<FileSystemWatcher>();
+        foreach (var folder in _folders)
+        {
+            Watch(folder, OnGitFolderEvent, watchers);
+        }
+
+        if (_workingDirectory is not null)
+        {
+            Watch(_workingDirectory, OnWorkingTreeEvent, watchers);
+        }
+
+        lock (_gate)
+        {
+            if (!_disposed)
             {
-                Watch(_workingDirectory, OnWorkingTreeEvent);
+                _watchers.AddRange(watchers);
+                return;
             }
+        }
+
+        // Disposed while starting.
+        foreach (var watcher in watchers)
+        {
+            watcher.Dispose();
         }
     }
 
@@ -150,7 +169,9 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
     /// <summary>
     /// Whether a change at <paramref name="relativePath"/> (relative to a watched git folder) can
-    /// matter to the views: anything but objects and lock files.
+    /// matter to the views: anything but objects, lock files and git's file-system monitor. The
+    /// monitor (<c>core.fsmonitor</c>) writes a cookie file into the git folder for every
+    /// <c>git status</c>, so the app's own reads would otherwise refresh it without end.
     /// </summary>
     internal static bool IsRelevant(string? relativePath)
     {
@@ -165,8 +186,11 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
             return false;
         }
 
-        return !(path.Equals("objects", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("objects/", StringComparison.OrdinalIgnoreCase));
+        return !(IsUnder(path, "objects") || IsUnder(path, "fsmonitor--daemon") || path.Equals("fsmonitor--daemon.ipc", StringComparison.OrdinalIgnoreCase));
+
+        static bool IsUnder(string path, string folder) =>
+            path.Equals(folder, StringComparison.OrdinalIgnoreCase)
+            || (path.Length > folder.Length && path[folder.Length] == '/' && path.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Whether a change at <paramref name="relativePath"/> (relative to the working tree) is in its <c>.git</c>, which the git folder's watcher covers.</summary>
@@ -198,7 +222,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         && path.StartsWith(folder, comparison)
         && (path[folder.Length] == Path.DirectorySeparatorChar || path[folder.Length] == Path.AltDirectorySeparatorChar);
 
-    private void Watch(string folder, FileSystemEventHandler onEvent)
+    private void Watch(string folder, FileSystemEventHandler onEvent, List<FileSystemWatcher> watchers)
     {
         FileSystemWatcher? watcher = null;
         try
@@ -215,7 +239,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
             watcher.Renamed += (sender, e) => onEvent(sender, e);
             watcher.Error += OnError;
             watcher.EnableRaisingEvents = true;
-            _watchers.Add(watcher);
+            watchers.Add(watcher);
         }
         catch (Exception ex)
         {

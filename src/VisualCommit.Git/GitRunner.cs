@@ -30,7 +30,8 @@ public sealed class GitRunner : IGitRunner
     /// Applied to every call. English messages keep git's output parseable and the same on every
     /// machine; with prompts off, git fails instead of waiting on a terminal that is not there.
     /// The editor is git's shell's no-op command, so a command that wants an editor goes on
-    /// without one instead of opening the user's editor out of sight (D68).
+    /// without one instead of opening the user's editor out of sight (D68). Paths are taken
+    /// literally, so a file named <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string?> DefaultEnvironment = new Dictionary<string, string?>
     {
@@ -38,6 +39,7 @@ public sealed class GitRunner : IGitRunner
         ["LANG"] = "en_US.UTF-8",
         ["GIT_TERMINAL_PROMPT"] = "0",
         ["GIT_EDITOR"] = ":",
+        ["GIT_LITERAL_PATHSPECS"] = "1",
     };
 
     private readonly IGitCallLog? _callLog;

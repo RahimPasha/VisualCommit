@@ -31,8 +31,9 @@ namespace VisualCommit.App.Controls.Diff;
 /// mode clears the selection.
 /// </para>
 /// <para>
-/// Diffs of more than <see cref="SynchronousHighlightLimit"/> lines are tokenized on a background
-/// thread and coloured when that finishes; smaller ones before they are first drawn.
+/// Diffs of more than <see cref="SynchronousHighlightLimit"/> lines are tokenized, and their
+/// words compared, on a background thread and coloured when that finishes; smaller ones before
+/// they are first drawn. Word comparisons have a budget either way (<see cref="DiffWordHighlights"/>).
 /// </para>
 /// <para>
 /// "Its own side" (for <see cref="LineNumberPoint"/>, <see cref="TextRangeBounds"/>,
@@ -44,7 +45,7 @@ namespace VisualCommit.App.Controls.Diff;
 /// </remarks>
 public sealed class DiffTextView : UserControl
 {
-    /// <summary>A diff of at most this many lines is tokenized on the UI thread, before it is drawn.</summary>
+    /// <summary>A diff of at most this many lines is tokenized and its words compared on the UI thread, before it is drawn.</summary>
     public const int SynchronousHighlightLimit = 1_000;
 
     public static readonly StyledProperty<FileDiff?> DiffProperty =
@@ -349,7 +350,7 @@ public sealed class DiffTextView : UserControl
 
         var pathChanged = _built && !string.Equals(path, _builtPath, StringComparison.Ordinal);
         var diffChanged = !_built || !ReferenceEquals(diff, _builtDiff);
-        if (diffChanged && _built && !pathChanged && SameLines(diff, _builtDiff))
+        if (diffChanged && _built && !pathChanged && diff is not null && diff.HasSameLines(_builtDiff))
         {
             // The same lines again (a refresh): keep everything, the selection included.
             diffChanged = false;
@@ -427,9 +428,9 @@ public sealed class DiffTextView : UserControl
             return;
         }
 
-        Words = DiffWordHighlights.Compute(diff);
         if (diff.LineCount <= SynchronousHighlightLimit)
         {
+            Words = DiffWordHighlights.Compute(diff, DiffWordHighlights.SynchronousBudget);
             Syntax = TokenizeOrNothing(diff, path, CancellationToken.None);
             return;
         }
@@ -439,6 +440,15 @@ public sealed class DiffTextView : UserControl
         _ = Task.Run(
             () =>
             {
+                IReadOnlyDictionary<DiffLineRef, IReadOnlyList<TextRange>>? words = null;
+                try
+                {
+                    words = DiffWordHighlights.Compute(diff, DiffWordHighlights.BackgroundBudget, cancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
                 var syntax = TokenizeOrNothing(diff, path, cancellation.Token);
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -446,12 +456,10 @@ public sealed class DiffTextView : UserControl
                     if (ReferenceEquals(_tokenizing, cancellation))
                     {
                         _tokenizing = null;
-                        if (syntax is not null)
-                        {
-                            Syntax = syntax;
-                            _left.Redraw();
-                            _right.Redraw();
-                        }
+                        Words = words ?? Words;
+                        Syntax = syntax ?? Syntax;
+                        _left.Redraw();
+                        _right.Redraw();
                     }
 
                     cancellation.Dispose();
@@ -680,24 +688,6 @@ public sealed class DiffTextView : UserControl
     private Point? ToThis(Visual from, Point point) => from.TranslatePoint(point, this);
 
     /// <summary>Two diffs with the same hunks and lines, as a refresh that found nothing new gives.</summary>
-    private static bool SameLines(FileDiff? a, FileDiff? b)
-    {
-        if (a is null || b is null || a.Hunks.Count != b.Hunks.Count)
-        {
-            return false;
-        }
-
-        for (var h = 0; h < a.Hunks.Count; h++)
-        {
-            if (a.Hunks[h].Header != b.Hunks[h].Header || !a.Hunks[h].Lines.SequenceEqual(b.Hunks[h].Lines))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     /// <summary>
     /// Where to scroll once the new rows are laid out: a vertical offset, or the row of a line to
     /// put at the top; sideways to the start, or where it is.

@@ -5,6 +5,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Diff;
+using VisualCommit.Core.Diff;
 
 namespace VisualCommit.App.Views.Diff;
 
@@ -31,15 +32,21 @@ public partial class DiffView : UserControl
 
     protected override void OnDataContextChanged(EventArgs e)
     {
+        // The selection belongs to the text control, which every tab's diff shares: a diff that
+        // leaves it, or comes to it, has no lines selected.
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.SelectionResetRequested -= OnSelectionResetRequested;
+            _viewModel.SelectedChanges = new HashSet<DiffLineRef>();
         }
 
+        _viewModel = null;
+        DiffText.ClearSelection();
         _viewModel = DataContext as DiffViewModel;
         if (_viewModel is not null)
         {
+            _viewModel.SelectedChanges = new HashSet<DiffLineRef>();
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _viewModel.SelectionResetRequested += OnSelectionResetRequested;
 

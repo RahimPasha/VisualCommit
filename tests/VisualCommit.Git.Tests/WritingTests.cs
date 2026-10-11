@@ -35,6 +35,41 @@ public class WritingTests
     }
 
     [Fact]
+    public async Task A_path_with_pattern_characters_means_that_file_alone()
+    {
+        using var repo = await TempRepo.CreateAsync("pathspec");
+        repo.WriteFile("pages/[id].tsx", "one\n").WriteFile("pages/d.tsx", "two\n").WriteFile("pages/[ab].md", "three\n").WriteFile("pages/a.md", "four\n");
+        await repo.CommitAsync("Add pages");
+        repo.WriteFile("pages/[id].tsx", "one, changed\n").WriteFile("pages/d.tsx", "two, changed\n").WriteFile("pages/[ab].md", "three, changed\n").WriteFile("pages/a.md", "four, changed\n");
+        var repository = await OpenAsync(repo);
+
+        await repository.StageAsync(["pages/[id].tsx"], TestCancelled);
+        Assert.Equal(["M  pages/[id].tsx"], await StagedAsync(repo));
+        await repository.UnstageAsync(["pages/[id].tsx"], TestCancelled);
+        Assert.Empty(await StagedAsync(repo));
+
+        await repository.DiscardAsync(["pages/[ab].md"], new HashSet<string>(), TestCancelled);
+        Assert.Equal("three\n", File.ReadAllText(Path.Combine(repo.Path, "pages", "[ab].md")));
+        Assert.Equal("four, changed\n", File.ReadAllText(Path.Combine(repo.Path, "pages", "a.md")));
+    }
+
+    [Fact]
+    public async Task A_path_that_vanished_before_staging_or_discarding_is_passed_over()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        repo.WriteFile("notes.txt", "A note\n").DeleteFile("README.md");
+        var repository = await OpenAsync(repo);
+
+        // "~notes.txt.swp" was an editor's file, listed as untracked and gone since.
+        await repository.StageAsync(["README.md", "notes.txt", "~notes.txt.swp"], TestCancelled);
+        Assert.Equal(["D  README.md", "A  notes.txt"], await StagedAsync(repo));
+
+        await repository.DiscardAsync(["~notes.txt.swp"], new HashSet<string> { "~notes.txt.swp" }, TestCancelled);
+        var snapshot = await repository.SaveSnapshotAsync(["~gone/file.txt"], TestCancelled);
+        Assert.Empty(snapshot.Present);
+    }
+
+    [Fact]
     public async Task Unstaging_before_the_first_commit_removes_the_entry()
     {
         using var repo = await TempRepo.CreateAsync("unborn");
@@ -118,6 +153,29 @@ public class WritingTests
     }
 
     [Fact]
+    public async Task Unstaging_one_hunk_keeps_the_staged_change_of_mode()
+    {
+        using var repo = await TempRepo.CreateAsync("mode");
+        var lines = Enumerable.Range(1, 12).Select(i => $"line {i}\n").ToList();
+        await repo.CommitFileAsync("run.sh", string.Concat(lines), "Add run.sh");
+        var changed = lines.ToList();
+        changed[0] = "line 1, changed\n";
+        changed[11] = "line 12, changed\n";
+        repo.WriteFile("run.sh", string.Concat(changed));
+        await repo.GitAsync("add", "run.sh");
+        await repo.GitAsync("update-index", "--chmod=+x", "run.sh");
+        var repository = await OpenAsync(repo);
+        var diff = await repository.ReadDiffAsync(new DiffTarget(DiffSide.Staged, "run.sh", FileChangeKind.Modified), TestCancelled);
+        Assert.Equal(("100644", "100755", 2), (diff.OldMode, diff.NewMode, diff.Hunks.Count));
+
+        await repository.ApplyPatchAsync(PatchBuilder.Build(diff, Hunk(diff, 0), PatchDirection.Reverse)!, toIndex: true, PatchDirection.Reverse, TestCancelled);
+
+        Assert.StartsWith("100755 ", (await repo.GitAsync("ls-files", "--stage", "run.sh")).StandardOutput, StringComparison.Ordinal);
+        changed[0] = lines[0];
+        Assert.Equal(string.Concat(changed), (await repo.GitAsync("show", ":run.sh")).StandardOutput);
+    }
+
+    [Fact]
     public async Task Staging_some_lines_of_an_untracked_file_and_of_a_deleted_file()
     {
         using var repo = await Scenarios.ChangesAsync();
@@ -187,6 +245,24 @@ public class WritingTests
     }
 
     [Fact]
+    public async Task With_autocrlf_discarding_lines_of_an_untracked_file_keeps_crlf()
+    {
+        using var repo = await Scenarios.CrlfAsync();
+        repo.WriteFile("todo.txt", "one\r\ntwo\r\nthree\r\n");
+        var repository = await OpenAsync(repo);
+        var diff = await repository.ReadDiffAsync(new DiffTarget(DiffSide.Unstaged, "todo.txt", FileChangeKind.Added, IsUntracked: true), TestCancelled);
+
+        await repository.ApplyPatchAsync(
+            PatchBuilder.Build(diff, new HashSet<DiffLineRef> { new(0, 1) }, PatchDirection.Reverse)!,
+            toIndex: false,
+            PatchDirection.Reverse,
+            TestCancelled);
+
+        Assert.Equal("one\r\nthree\r\n", File.ReadAllText(Path.Combine(repo.Path, "todo.txt")));
+        Assert.Contains("?? todo.txt", await PorcelainAsync(repo));
+    }
+
+    [Fact]
     public async Task A_patch_keeps_bytes_that_are_not_utf8()
     {
         using var repo = await TempRepo.CreateAsync("latin1");
@@ -230,6 +306,43 @@ public class WritingTests
 
         Assert.All(paths, path => Assert.Equal(before[path], ReadIfExists(repo, path)));
         Assert.Equal(index, (await repo.GitAsync("write-tree")).StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task A_snapshot_a_discard_and_a_restore_work_while_another_file_has_a_conflict()
+    {
+        using var repo = await Scenarios.ConflictAsync();
+        repo.WriteFile("other.txt", "one, changed\n");
+        var repository = await OpenAsync(repo);
+        var path = Path.Combine(repo.Path, "other.txt");
+
+        var snapshot = await repository.SaveSnapshotAsync(["other.txt"], TestCancelled);
+        await repository.DiscardAsync(["other.txt"], new HashSet<string>(), TestCancelled);
+        Assert.Equal("one\n", File.ReadAllText(path));
+        await repository.RestoreSnapshotAsync(snapshot, TestCancelled);
+
+        Assert.Equal("one, changed\n", File.ReadAllText(path));
+        Assert.Contains("UU both.txt", await PorcelainAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_snapshot_of_a_new_file_that_was_staged_and_then_deleted()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        repo.WriteFile("new.txt", "new\n");
+        await repo.GitAsync("add", "new.txt");
+        repo.DeleteFile("new.txt");
+        var repository = await OpenAsync(repo);
+        var path = Path.Combine(repo.Path, "new.txt");
+
+        var snapshot = await repository.SaveSnapshotAsync(["new.txt"], TestCancelled);
+        Assert.Empty(snapshot.Present);
+        await repository.DiscardAsync(["new.txt"], new HashSet<string>(), TestCancelled);
+        Assert.Equal("new\n", File.ReadAllText(path));
+        await repository.RestoreSnapshotAsync(snapshot, TestCancelled);
+
+        Assert.False(File.Exists(path));
+        Assert.Equal(["AD new.txt"], await PorcelainAsync(repo));
     }
 
     [Fact]

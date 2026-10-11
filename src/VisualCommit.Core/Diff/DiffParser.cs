@@ -125,6 +125,36 @@ public static class DiffParser
         return new FileDiff(header, hunks, isBinary, isNew, isDeleted, oldMode, newMode, length);
     }
 
+    /// <summary>
+    /// Parses git's output for a file whose type changed, such as a file that became a symbolic
+    /// link: git prints that as two diffs of the same path, a deletion and a creation. The result
+    /// holds both, the old content's lines removed and then the new content's lines added, as one
+    /// diff with the old side's header and modes. It is for showing only: no patch can be built
+    /// from it.
+    /// </summary>
+    /// <param name="latin1">Git's output, read as Latin-1.</param>
+    public static FileDiff ParseTypeChange(string latin1)
+    {
+        ArgumentNullException.ThrowIfNull(latin1);
+        var second = latin1.IndexOf("\ndiff --git ", StringComparison.Ordinal);
+        if (second < 0)
+        {
+            return Parse(latin1);
+        }
+
+        var removed = Parse(latin1[..(second + 1)]);
+        var added = Parse(latin1[(second + 1)..]);
+        return new FileDiff(
+            removed.HeaderLines,
+            [.. removed.Hunks, .. added.Hunks],
+            removed.IsBinary || added.IsBinary,
+            IsNewFile: false,
+            IsDeletedFile: false,
+            removed.OldMode,
+            added.NewMode,
+            removed.TextLength + added.TextLength);
+    }
+
     /// <summary>Splits on line feeds; a final line feed does not start another line. Carriage returns stay.</summary>
     private static List<string> SplitLines(string text)
     {

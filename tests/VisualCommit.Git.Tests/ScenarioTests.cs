@@ -279,6 +279,17 @@ public class ScenarioTests
         Assert.Equal(["@@ -1,5 +1,5 @@", "@@ -15,6 +15,6 @@ Note 14"], hunks);
     }
 
+    [Fact]
+    public async Task Conflict_stops_a_merge_with_both_txt_conflicted()
+    {
+        using var repo = await Scenarios.ConflictAsync();
+
+        Assert.Equal(["UU both.txt"], Lines(await repo.GitAsync("status", "--porcelain")));
+        Assert.Equal("one\n", File.ReadAllText(Path.Combine(repo.Path, "other.txt")));
+        Assert.True(File.Exists(Path.Combine(repo.Path, ".git", "MERGE_HEAD")));
+        Assert.Equal(["Ours", "Base"], Lines(await repo.GitAsync("log", "--format=%s")));
+    }
+
     private static string[] Lines(GitResult result) => Lines(result.StandardOutput);
 
     private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries);

@@ -162,8 +162,8 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `IGitRepository` / `GitRepository` | One open repository. Reads: `ReadRefsAsync`, `LoadCommitsAsync`, `ReadCommitDetailsAsync`, `ReadStatusAsync`, `ReadDiffAsync`, `ReadFileAsync`, `ReadFileSizeAsync`. Writes: `StageAsync`, `UnstageAsync`, `ApplyPatchAsync`, `SaveSnapshotAsync`, `DiscardAsync`, `RestoreSnapshotAsync`, `CommitAsync`. `CreateWatcher`; static `OpenAsync`, `InitAsync`, `CloneAsync`. Split over `GitRepository.cs`, `.Refs.cs`, `.Commits.cs`, `.Clone.cs`, `.Changes.cs` (status, diffs, file versions) and `.Writes.cs` |
 | `WorkingTreeStatus` | The staged files (HEAD → index), the unstaged ones (index → working tree, untracked as added, conflicted as `FileChangeKind.Conflicted`) and which are untracked, each list in byte order of the paths; from `git status --porcelain=v2 -z --untracked-files=all --renames` |
 | `DiffTarget`, `DiffSide`, `FileVersion` | Which diff to read: a file's unstaged, staged or commit change, with its kind, old path, whether it is untracked, the commit and its first parent; and where its versions before and after are (working tree, index, a commit) |
-| `FileDiff`, `DiffHunk`, `DiffLine`, `DiffParser` (Core, `Diff/`) | One file's diff as git prints it, parsed from Latin-1 text: git's header lines, the hunks with their ranges, and lines that keep their bytes (`Raw`) beside the text shown (`Text`, decoded as UTF-8, or Latin-1 when the file is not valid UTF-8). `IsBinary`, `IsNewFile`, `IsDeletedFile`, the modes, and `IsVeryLarge` (D65) |
-| `PatchBuilder` (Core) | The patch for chosen added and removed lines (a whole hunk is all of its lines), forward to stage, in reverse to unstage or discard (D66). Unchosen changes stay as they are on the side the patch is applied to; hunks without a chosen line are left out and the ranges after them moved. Git's header lines are kept, except that a rename's, or a creation or deletion applied only in part, becomes the header of a change to the file at its path |
+| `FileDiff`, `DiffHunk`, `DiffLine`, `DiffParser` (Core, `Diff/`) | One file's diff as git prints it, parsed from Latin-1 text: git's header lines, the hunks with their ranges, and lines that keep their bytes (`Raw`) beside the text shown (`Text`, decoded as UTF-8, or Latin-1 when the file is not valid UTF-8). `IsBinary`, `IsNewFile`, `IsDeletedFile`, the modes, `IsVeryLarge` (D65) and `HasSameLines`. A type change, which git prints as a deletion and a creation, is read by `ParseTypeChange` into one diff of both, for showing only (D76) |
+| `PatchBuilder` (Core) | The patch for chosen added and removed lines (a whole hunk is all of its lines), forward to stage, in reverse to unstage or discard (D66). Unchosen changes stay as they are on the side the patch is applied to; hunks without a chosen line are left out and the ranges after them moved. Git's header lines are kept, except that a rename's, or a creation or deletion applied only in part, becomes the header of a change to the file at its path, and a patch of only some lines leaves a change of mode out. "\ No newline at end of file" stays on the side applied to as git wrote it; on the side built, a line lacks its line feed only while it is still that side's last line, and a kept line that ends the file on one side only is written as a removed and an added line. `PatchFuzzTests` checks random choices against git |
 | `WordDiff` (Core) | The words of a removed line and its paired added line that differ: a longest common sequence of words, ties matched early in the added line |
 | `DiscardSnapshot` | A snapshot taken before a discard (D67): its ref under `refs/visualcommit/backup/discard-<UTC time>`, its commit, the paths, and which of them existed |
 | `RepoRefs`, `GitRef`, `HeadState`, `StashEntry` | What the refs are at one moment. `RepoRefs.Fingerprint` changes when HEAD, a ref's target or the stashes change (D52) |
@@ -171,14 +171,16 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `CommitDetails`, `ChangedFile`, `FileChangeKind` | What the details panel shows; files compared with the first parent, renames detected |
 | `CommitPager` | Internal: turns `git log` lines into pages and merges the stashes in. A date git cannot print (an ident without a time zone) is read as 1970-01-01 UTC, as git does, so such a commit is not lost |
 | `CloneProgressParser`, `CloneProgress` | Git's clone progress lines as stage and percentage |
-| `RepositoryWatcher` | `IRepositoryWatcher` (D52, D71): `FileSystemWatcher`s on the git folder, the common folder and the working tree. In the git folders, changes under `objects/` and to `*.lock` files are ignored; in the working tree, changes under `.git` are left to the others, and a burst whose paths `git check-ignore` calls all ignored is dropped. 300 ms of quiet before `Changed`, at most 2 s while changes keep coming; `RepositoryChangedEventArgs` says whether the git folder or the working tree changed. `Pause()` stops it reporting while the app writes |
+| `RepositoryWatcher` | `IRepositoryWatcher` (D52, D71): `FileSystemWatcher`s on the git folder, the common folder and the working tree. In the git folders, changes under `objects/` and to `*.lock` files are ignored; in the working tree, changes under `.git` are left to the others, and a burst whose paths `git check-ignore` calls all ignored is dropped. 300 ms of quiet before `Changed`, at most 2 s while changes keep coming; `RepositoryChangedEventArgs` says whether the git folder or the working tree changed. `Pause()` stops it reporting while the app writes. Changes under the file-system monitor's `fsmonitor--daemon/` are ignored too: it writes a cookie there for every `git status`. `Start()` walks the working tree's folders on Linux, so the view model calls it on a background thread |
 | `WindowsJob` | Internal: a Windows job object, used on Windows to stop git together with everything it started |
 
 Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
 
 - Every call gets `LC_ALL` and `LANG` set to `en_US.UTF-8`, so git's messages are English and
   parseable, `GIT_TERMINAL_PROMPT=0`, so git fails rather than waits for a terminal, and
-  `GIT_EDITOR=:`, so a command that wants an editor goes on without one (D68). Input and output
+  `GIT_EDITOR=:`, so a command that wants an editor goes on without one (D68), and
+  `GIT_LITERAL_PATHSPECS=1`, so a path is never read as a pattern (D74; `git check-ignore`, which
+  refuses it, runs without it). Input and output
   are UTF-8, unless the command asks for Latin-1 (`GitCommand.Encoding`, D66): diffs, patches and
   blobs then travel byte for byte. Standard error is always UTF-8.
 - Calls that only read also get `GIT_OPTIONAL_LOCKS=0` (from `GitRepository`), so a read never
@@ -269,7 +271,7 @@ out in well under a second.
   that file's diff for the commit (against its first parent), and the row keeps the selection
   background while the diff is open (`SelectedFilePath`).
 
-### Working changes and writes (C4, D62, D67 to D71)
+### Working changes and writes (C4, D62, D67 to D71, D74 to D76)
 
 - `ViewModels/Panels/WorkingChangesViewModel` is the stage panel (`Views/Shell/WorkingChangesView`):
   the unstaged and staged lists (two `ChangedFileList`s, flat or tree as D44 and D70 say), their
@@ -278,44 +280,58 @@ out in well under a second.
   message after a failed write (`ErrorText`, shown as `CommitError`), and the restore bar. It
   only shows what `Update(status)` gives it; every action goes to its `IWorkingChangesHost`.
 - `RepositoryViewModel` is that host, and the diff view's (`IDiffHost`). Every write runs through
-  `WriteAsync`: the watcher is paused while git writes (D71), then the status is read again (and
-  for a commit the refs and history too), and git's message, if any, goes to the stage panel.
-  Writes: stage and unstage whole files (a rename unstages both its paths), apply a patch made by
+  `WriteAsync`, one at a time (D76): the watcher is paused while git writes (D71), then the status
+  is read again (and for a commit the refs and history too), and git's message, if any, goes to
+  the stage panel. A write asked for after the tab closed (a confirmation was still open) does
+  nothing. Writes: stage and unstage whole files (a rename unstages both its paths; a path that
+  has vanished from the working tree and the index is passed over), apply a patch made by
   `PatchBuilder` for a hunk or chosen lines, discard (after `IDialogService.ConfirmAsync` and
-  `SaveSnapshotAsync`; an untracked file's chosen lines are written back without them, as git
-  cannot patch it), restore the last snapshot, and commit or amend (`git commit --file=-
-  --cleanup=whitespace [--amend]`, D68). After a commit that leaves the tree clean, the new
-  commit is selected.
+  `SaveSnapshotAsync`; every line of an untracked file deletes it, some of its lines go through
+  `git apply --reverse` like any other file's), restore the last snapshot, and commit or amend
+  (`git commit --file=- --cleanup=whitespace [--amend]`, D68). After a commit that leaves the
+  tree clean, the new commit is selected.
+- Discard and restore (D75): files with a conflict and nested repositories (untracked paths
+  ending in `/`) are left out of a discard, with a word in the question or the panel's message.
+  After a discard that succeeded, the view model keeps the snapshot and a SHA-256 of each of its
+  files as the discard left them, and shows the restore bar. Restore compares the files again:
+  when one has changed, it asks, and saves the changed files in a snapshot of their own before
+  `RestoreSnapshotAsync`; it hides the bar only when the files are back.
 - `RefreshStatusAsync` reads the status (folded like `RefreshAsync`: a call during a run makes it
   run once more), shows it, logs `<name>: working tree: <N> staged, <N> unstaged` at Debug level
   (the real-window pass waits for it), and reads the open diff again; a working-tree diff whose
   file has left its list closes.
-- Snapshots (D67): `GitRepository.SaveSnapshotAsync` copies the index to a temporary file, adds
-  the files with `GIT_INDEX_FILE` pointing at it, writes its tree, commits it with HEAD as parent
+- Snapshots (D67, D75): `GitRepository.SaveSnapshotAsync` reads HEAD into a temporary index
+  (`GIT_INDEX_FILE`), adds the files that exist and takes out those that do not, writes its tree, commits it with HEAD as parent
   under a fixed identity ("VisualCommit"), and keeps it as `refs/visualcommit/backup/discard-<UTC
   time>` (an empty old value to `update-ref`, so two never share a ref). `RestoreSnapshotAsync`
   runs `git restore --source=<snapshot> --worktree` for the files that existed and deletes the
   others. Discard runs `git restore --worktree` for tracked files and deletes untracked ones,
-  with the folders they leave empty.
+  with the folders they leave empty; one already gone is passed over.
 - Dialogs (D69): `ViewModels/Dialogs/DialogHostViewModel` holds at most one
   `ConfirmationViewModel`; `Views/Dialogs/ConfirmationView` covers the window with
-  `VcBackdropBrush` and shows the card, with the Cancel button focused. `MainWindow` handles Esc:
+  `VcBackdropBrush` and shows the card, with the Cancel button focused; Tab goes round the card's
+  buttons only (`KeyboardNavigation.TabNavigation="Cycle"`). `MainWindow` handles Esc:
   it cancels an open dialog first, and otherwise closes the active tab's diff unless a text box
   has the focus.
 
-### Diff view (C5, D61, D63 to D65)
+### Diff view (C5, D61, D63 to D65, D76)
 
 - `ViewModels/Diff/DiffViewModel`: one open diff. Its `Target` (`DiffTarget`), the header's texts,
   `Mode` (the `DiffMode` setting), and `Body`: `Text`, `VeryLarge` (until "Show diff", which
   turns `Highlighting` off), `Binary` (sizes), `Image` (both versions' bytes, read whole up to
   20 MB), `Empty`, `Conflict` or `Error`. It builds the actions on the file, a hunk or the
   selected lines (`SelectedChanges`, which the view keeps up to date) and hands them to the host.
-  `LoadAsync(target)` reads it again for the file as the status now lists it; a newer load wins.
+  `LoadAsync(target)` reads it again for the file as the status now lists it; a newer load wins,
+  and the selected lines are dropped unless the lines read are the same (`FileDiff.HasSameLines`,
+  as the text control keeps its selection then). A hunk or line action ignores clicks while one
+  runs. A type change has the file's actions only (`ActsOnLines`, D76); a nested repository's
+  "diff" is the `Error` body with a sentence that says what it is.
 - `Views/Diff/DiffView`: the header (status letter, name, folder, origin, what is compared,
   `CloseDiffButton`), the toolbar (`InlineDiffButton`, `SideBySideDiffButton`, the file's or
   the lines' buttons) and the bodies. Images are decoded in its code-behind, which writes their
   captions. It hosts the text control with `TextDiff` (the diff only while the body is text) and
-  gives it the keyboard focus when a diff opens.
+  gives it the keyboard focus when a diff opens. Every tab's diff shares the one view, so when
+  its `DataContext` changes the text's selection is cleared, and both view models' too.
 - `Controls/Diff/DiffTextView`, on AvaloniaEdit (D64): one pane inline, two side by side (a
   `*,1,*` grid, the halves scrolling together). `DiffLayout.Build(diff, mode)` turns the diff into
   display rows (`DiffDisplayRow`: a hunk header, a line with a cell per side, or a no-newline
@@ -335,13 +351,16 @@ out in well under a second.
   a token's style is the first matching rule's colour and font style (D64). Diffs of up to 1,000
   lines are tokenized before they are drawn, larger ones in the background. A line may take at
   most a second (a safety net), and lines over 5,000 characters stay plain.
-  `DiffWordHighlights` pairs the lines of each change and asks `WordDiff`.
+  `DiffWordHighlights` pairs the lines of each change and asks `WordDiff`, within a budget of
+  pairs of words (D76): 2 million before drawing, 40 million for a diff of more than 1,000 lines,
+  whose words are compared in the background with its tokens.
 - The test hooks the scripted walk-through uses: `DiffTextView.Rows`, `RowBounds`,
   `LineNumberPoint`, `TextRangeBounds`, `ForegroundAt` and `FontWeightAt`.
 
 ### Watching and refreshing (D52)
 
-`RepositoryViewModel` starts a `RepositoryWatcher` before it first reads the refs. A change that
+`RepositoryViewModel` starts a `RepositoryWatcher`, on a background thread, as it first reads the
+refs. A change that
 comes during the first load is remembered and refreshed once the load is done. A change in a git
 folder runs `RefreshAsync`; one in the working tree alone runs `RefreshStatusAsync` (D71).
 `RefreshAsync` reads the refs; when their fingerprint is unchanged only the left panel and status
@@ -502,7 +521,7 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 |---|---|---|
 | `TempDirectory` | `tests/VisualCommit.Testing` | A folder under the system temp folder, deleted on dispose |
 | `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy; anything else goes through `GitAsync` or `GitWithInputAsync` |
-| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) and `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration), built once per test process and copied for each test |
+| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration) and `ConflictAsync` (phase 2: a merge stopped with a conflict), built once per test process and copied for each test |
 | `TestImages` | same | Small PNGs whose bytes depend only on their pixels (stored deflate blocks), for scenario repos |
 | `FakeRepositoryBase` | same | The start of a fake `IGitRepository` for view-model tests: a clean working tree, and every write refused |
 | `LargeHistory` | same | The 100k-commit repo (D51), built once per machine with `git fast-import` under `%TEMP%/VisualCommit.Tests/shared/` and shared read-only; what each row shows follows from its number |

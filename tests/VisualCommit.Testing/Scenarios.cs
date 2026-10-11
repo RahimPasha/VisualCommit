@@ -1,3 +1,5 @@
+using VisualCommit.Core.Git;
+
 namespace VisualCommit.Testing;
 
 /// <summary>
@@ -275,6 +277,41 @@ public static class Scenarios
         var lines = Enumerable.Range(1, 20).Select(number =>
             changed && number is 2 or 18 ? $"Note {number}, changed" : $"Note {number}");
         return string.Concat(lines.Select(line => line + lineEnding));
+    }
+
+    /// <summary>
+    /// A repository in the middle of a merge with a conflict: "Base" adds <c>both.txt</c> ("base")
+    /// and <c>other.txt</c> ("one"); <c>main</c> changes both.txt to "ours" and the branch
+    /// <c>theirs</c> to "theirs"; <c>main</c> is checked out and <c>git merge theirs</c> has
+    /// stopped with both.txt conflicted. Nothing else is changed.
+    /// </summary>
+    public static async Task<TempRepo> ConflictAsync()
+    {
+        var repo = await TempRepo.CreateAsync("conflict");
+        try
+        {
+            repo.WriteFile("both.txt", "base\n").WriteFile("other.txt", "one\n");
+            await repo.CommitAsync("Base");
+            await repo.CreateBranchAsync("theirs");
+            await repo.CommitFileAsync("both.txt", "ours\n", "Ours");
+            await repo.CheckoutAsync("theirs");
+            await repo.CommitFileAsync("both.txt", "theirs\n", "Theirs");
+            await repo.CheckoutAsync("main");
+
+            // The merge stops with a conflict, which git reports as a failure.
+            var merge = await repo.Runner.RunAsync(new GitCommand("merge", "--quiet", "theirs") { WorkingDirectory = repo.Path, Environment = repo.Environment });
+            if (merge.Succeeded)
+            {
+                throw new InvalidOperationException("The merge was expected to stop with a conflict.");
+            }
+
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Deletes a shared template when the test process ends.</summary>

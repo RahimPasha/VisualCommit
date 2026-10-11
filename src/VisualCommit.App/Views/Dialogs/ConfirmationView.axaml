@@ -6,9 +6,11 @@
              AutomationProperties.AutomationId="ConfirmationDialog">
 
   <!-- A confirmation over the whole window (D69), as "The confirmation dialog" in
-       docs/test-reports/phase-2.md describes it: the backdrop, and a card in the middle. -->
+       docs/test-reports/phase-2.md describes it: the backdrop, and a card in the middle. Tab
+       goes round the card's buttons and never to the window behind. -->
   <Panel Background="{DynamicResource VcBackdropBrush}">
     <Border Name="ConfirmationCard"
+            KeyboardNavigation.TabNavigation="Cycle"
             MaxWidth="400"
             Margin="20"
             HorizontalAlignment="Stretch"

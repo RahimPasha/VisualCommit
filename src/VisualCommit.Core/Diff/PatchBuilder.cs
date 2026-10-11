@@ -111,14 +111,7 @@ public static class PatchBuilder
 
             delta += newCount - oldCount;
             body.Append(CultureInfo.InvariantCulture, $"@@ -{Range(oldStart, oldCount)} +{Range(newStart, newCount)} @@\n");
-            foreach (var (marker, line) in lines)
-            {
-                body.Append(marker).Append(line.Raw).Append('\n');
-                if (line.NoNewlineAtEnd)
-                {
-                    body.Append(NoNewlineMarker).Append('\n');
-                }
-            }
+            AppendLines(body, lines, direction);
         }
 
         if (!anyChosen)
@@ -127,6 +120,45 @@ public static class PatchBuilder
         }
 
         return string.Concat(Header(diff, direction, allChosen).Select(line => line + "\n")) + body;
+    }
+
+    /// <summary>
+    /// Writes a hunk's lines with "\ No newline at end of file" where it belongs in the patch. The
+    /// side applied to (the old side forward, the new side in reverse) is the diff's own side, so
+    /// its last line keeps git's marker. The other side is built: a line on it may lack its line
+    /// feed only when it is still that side's last line, because a line that the chosen changes
+    /// put after it needs one. A kept line that ends the file on one side only is written as a
+    /// removed and an added line, each with its own ending.
+    /// </summary>
+    private static void AppendLines(StringBuilder body, List<(char Marker, DiffLine Line)> lines, PatchDirection direction)
+    {
+        var builtMarker = direction == PatchDirection.Forward ? '+' : '-';
+        var lastBuilt = lines.FindLastIndex(entry => entry.Marker == ' ' || entry.Marker == builtMarker);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var (marker, line) = lines[i];
+            var endsAppliedSide = line.NoNewlineAtEnd;
+            var endsBuiltSide = line.NoNewlineAtEnd && i == lastBuilt;
+            if (marker == ' ' && endsAppliedSide != endsBuiltSide)
+            {
+                var (endsOld, endsNew) = direction == PatchDirection.Forward ? (endsAppliedSide, endsBuiltSide) : (endsBuiltSide, endsAppliedSide);
+                AppendLine(body, '-', line.Raw, endsOld);
+                AppendLine(body, '+', line.Raw, endsNew);
+            }
+            else
+            {
+                AppendLine(body, marker, line.Raw, marker == builtMarker ? endsBuiltSide : endsAppliedSide);
+            }
+        }
+    }
+
+    private static void AppendLine(StringBuilder body, char marker, string raw, bool noNewlineAtEnd)
+    {
+        body.Append(marker).Append(raw).Append('\n');
+        if (noNewlineAtEnd)
+        {
+            body.Append(NoNewlineMarker).Append('\n');
+        }
     }
 
     /// <summary>
@@ -145,9 +177,10 @@ public static class PatchBuilder
 
     /// <summary>
     /// Git's header lines, kept as they are when the patch still creates or deletes the whole file
-    /// the way the diff does, and turned into the header of a change to the file at its new path
-    /// otherwise: a rename's hunk changes only the content of the renamed file, and a creation or
-    /// deletion of which only some lines are applied leaves the file in place.
+    /// the way the diff does (without a change of mode when only some lines are applied), and
+    /// turned into the header of a change to the file at its new path otherwise: a rename's hunk
+    /// changes only the content of the renamed file, and a creation or deletion of which only some
+    /// lines are applied leaves the file in place.
     /// </summary>
     private static IEnumerable<string> Header(FileDiff diff, PatchDirection direction, bool allChosen)
     {
@@ -157,7 +190,10 @@ public static class PatchBuilder
             !(direction == PatchDirection.Reverse && diff.IsNewFile && !allChosen);
         if (!renamed && keepsFileWhole)
         {
-            return diff.HeaderLines;
+            // A change of mode goes with the whole file, not with some of its lines.
+            return allChosen
+                ? diff.HeaderLines
+                : diff.HeaderLines.Where(line => !line.StartsWith("old mode ", StringComparison.Ordinal) && !line.StartsWith("new mode ", StringComparison.Ordinal));
         }
 
         // The file's path as git wrote it on the side that is kept: the new side, or the old one

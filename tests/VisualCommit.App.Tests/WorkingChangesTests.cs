@@ -1,4 +1,5 @@
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core;
@@ -169,6 +170,31 @@ public class WorkingChangesTests
     }
 
     [Fact]
+    public async Task When_the_row_goes_at_the_bottom_of_the_graph_the_rows_in_view_stay_put()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        repo.WriteFile("notes.txt", "A note\n");
+        using var viewModel = await OpenAsync(repo);
+        Assert.True(viewModel.HasWorkingChanges);
+
+        // Scrolled to the bottom: 60 is as far as the graph goes with the row, 34 without. The
+        // control clamps the offset as soon as its rows get fewer, as the real one does.
+        viewModel.ScrollOffset = 60;
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RepositoryViewModel.HasWorkingChanges) && !viewModel.HasWorkingChanges)
+            {
+                viewModel.ScrollOffset = Math.Min(viewModel.ScrollOffset, 34);
+            }
+        };
+        File.Delete(Path.Combine(repo.Path, "notes.txt"));
+        await viewModel.RefreshStatusAsync();
+
+        Assert.False(viewModel.HasWorkingChanges);
+        Assert.Equal(34, viewModel.ScrollOffset);
+    }
+
+    [Fact]
     public async Task When_the_selected_row_goes_nothing_is_selected()
     {
         using var repo = await Scenarios.LinearAsync();
@@ -218,7 +244,7 @@ public class WorkingChangesTests
     {
         using var repo = await Scenarios.ChangesAsync();
         var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
-        var dialogs = new AnsweringDialogs(answer: false);
+        var dialogs = new AnsweringDialogs(false);
         using var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc), dialogs: dialogs);
         await viewModel.StartAsync();
         var file = Path.Combine(repo.Path, "src", "Calculator.cs");
@@ -229,6 +255,147 @@ public class WorkingChangesTests
         Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(file));
         Assert.Empty((await repo.GitAsync("for-each-ref", "refs/visualcommit/")).StandardOutput);
         Assert.False(viewModel.Changes.HasRestore);
+    }
+
+    [Fact]
+    public async Task Restore_asks_when_the_file_changed_since_the_discard_and_keeps_the_newer_version_in_a_snapshot()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var dialogs = new AnsweringDialogs(true, false, true);
+        using var viewModel = await OpenAsync(repo, dialogs);
+        var file = Path.Combine(repo.Path, "src", "Calculator.cs");
+        await viewModel.DiscardAsync([new ChangedFile("src/Calculator.cs", FileChangeKind.Modified)]);
+        Assert.True(viewModel.Changes.HasRestore);
+        File.WriteAllText(file, "newer\n");
+
+        // Cancelled: nothing changes, and the bar stays.
+        Assert.Null(await viewModel.RestoreAsync());
+        Assert.Equal(
+            new ConfirmationRequest("Restore discarded changes?", "Calculator.cs has changed since the discard. Put back the version from before the discard?", "A snapshot of the newer changes is saved first.", "Restore"),
+            dialogs.Asked[1]);
+        Assert.Equal("newer\n", File.ReadAllText(file));
+        Assert.True(viewModel.Changes.HasRestore);
+
+        Assert.Null(await viewModel.RestoreAsync());
+        Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(file));
+        Assert.False(viewModel.Changes.HasRestore);
+        var snapshots = (await repo.GitAsync("for-each-ref", "--sort=refname", "--format=%(refname)", "refs/visualcommit/")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(2, snapshots.Length);
+        Assert.Equal("newer\n", (await repo.GitAsync("show", snapshots[1] + ":src/Calculator.cs")).StandardOutput);
+    }
+
+    [Fact]
+    public async Task Restore_without_changes_since_the_discard_asks_nothing()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var dialogs = new AnsweringDialogs(true);
+        using var viewModel = await OpenAsync(repo, dialogs);
+
+        await viewModel.DiscardAsync([new ChangedFile("src/Calculator.cs", FileChangeKind.Modified), new ChangedFile("docs/guide.md", FileChangeKind.Added)]);
+        Assert.Null(await viewModel.RestoreAsync());
+
+        Assert.Single(dialogs.Asked);
+        Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(Path.Combine(repo.Path, "src", "Calculator.cs")));
+        Assert.True(File.Exists(Path.Combine(repo.Path, "docs", "guide.md")));
+        Assert.False(viewModel.Changes.HasRestore);
+    }
+
+    [Fact]
+    public async Task Discarding_leaves_conflicted_files_out_and_says_so()
+    {
+        using var repo = await Scenarios.ConflictAsync();
+        repo.WriteFile("other.txt", "one, changed\n");
+        var dialogs = new AnsweringDialogs(true);
+        using var viewModel = await OpenAsync(repo, dialogs);
+        Assert.Equal(
+            [("both.txt", FileChangeKind.Conflicted), ("other.txt", FileChangeKind.Modified)],
+            viewModel.Status.Unstaged.Select(file => (file.Path, file.Kind)));
+
+        // The conflicted file alone: nothing is asked or done.
+        var error = await viewModel.DiscardAsync([viewModel.Status.Unstaged[0]]);
+        Assert.Equal("both.txt has a conflict: resolve it before discarding.", error);
+        Assert.Empty(dialogs.Asked);
+
+        Assert.Null(await viewModel.DiscardAsync(viewModel.Status.Unstaged));
+        Assert.Equal("Discard the changes to other.txt? both.txt is left as it is.", dialogs.Asked.Single().Question);
+        Assert.Equal("one\n", File.ReadAllText(Path.Combine(repo.Path, "other.txt")));
+        Assert.Contains("UU both.txt", (await repo.GitAsync("status", "--porcelain")).StandardOutput, StringComparison.Ordinal);
+        Assert.Equal("Discarded changes to other.txt.", viewModel.Changes.RestoreText);
+    }
+
+    [Fact]
+    public async Task A_repository_inside_the_working_tree_is_never_discarded_and_its_diff_says_why()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        await repo.GitAsync("init", "--quiet", "inner");
+        repo.WriteFile("inner/notes.txt", "Notes\n");
+        var dialogs = new AnsweringDialogs(true);
+        using var viewModel = await OpenAsync(repo, dialogs);
+        Assert.Equal(["inner/"], viewModel.Status.Unstaged.Select(file => file.Path));
+
+        var error = await viewModel.DiscardAsync(viewModel.Status.Unstaged);
+
+        Assert.Equal("inner is a repository of its own: it is not discarded.", error);
+        Assert.Empty(dialogs.Asked);
+        Assert.True(Directory.Exists(Path.Combine(repo.Path, "inner", ".git")));
+        viewModel.OpenDiff(viewModel.Status.Unstaged[0], staged: false);
+        await viewModel.Diff!.LoadAsync(viewModel.Diff.Target);
+        Assert.Equal(DiffBody.Error, viewModel.Diff.Body);
+        Assert.Equal("This folder is a repository of its own: its files are not shown here.", viewModel.Diff.ErrorText);
+    }
+
+    [Fact]
+    public async Task A_discard_that_fails_shows_gits_message_and_no_restore_bar()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        using var viewModel = await OpenAsync(repo, new AnsweringDialogs(true));
+
+        var error = await viewModel.DiscardAsync([new ChangedFile("missing.txt", FileChangeKind.Modified)]);
+
+        Assert.NotNull(error);
+        Assert.Contains("missing.txt", error, StringComparison.Ordinal);
+        Assert.Equal(error, viewModel.Changes.ErrorText);
+        Assert.False(viewModel.Changes.HasRestore);
+    }
+
+    [Fact]
+    public async Task Closing_the_tab_while_a_discard_waits_for_its_answer_does_nothing()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        var dialogs = new WaitingDialogs();
+        var viewModel = await OpenAsync(repo, dialogs);
+        var discarding = viewModel.DiscardAsync([new ChangedFile("src/Calculator.cs", FileChangeKind.Modified)]);
+        await dialogs.Opened.Task;
+
+        viewModel.Dispose();
+        dialogs.Answer(true);
+
+        Assert.Null(await discarding);
+        Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(Path.Combine(repo.Path, "src", "Calculator.cs")));
+        Assert.Empty((await repo.GitAsync("for-each-ref", "refs/visualcommit/")).StandardOutput);
+    }
+
+    [Fact]
+    public async Task A_diff_opened_while_a_commit_waits_to_be_selected_stays_open()
+    {
+        var repository = new TwoPageRepository();
+        using var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+        var starting = viewModel.StartAsync();
+        await repository.FirstPageSent.Task;
+        for (var wait = 0; viewModel.Graph.Count == 0 && wait < 500; wait++)
+        {
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        // The second commit is not loaded yet: it waits to be selected. A diff opened meanwhile wins.
+        viewModel.Select(TwoPageRepository.Second.Sha, reveal: true);
+        viewModel.OpenDiff(new ChangedFile("a.txt", FileChangeKind.Modified), staged: false);
+        repository.SendSecondPage();
+        await starting;
+
+        Assert.Equal(2, viewModel.Graph.Count);
+        Assert.True(viewModel.IsDiffOpen);
+        Assert.NotEqual(1, viewModel.SelectedIndex);
     }
 
     [Fact]
@@ -248,10 +415,10 @@ public class WorkingChangesTests
         Assert.All(viewModel.Changes.Unstaged.Rows, row => Assert.False(row.IsSelected));
     }
 
-    private static async Task<RepositoryViewModel> OpenAsync(TempRepo repo)
+    private static async Task<RepositoryViewModel> OpenAsync(TempRepo repo, IDialogService? dialogs = null)
     {
         var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
-        var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+        var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc), dialogs: dialogs);
         await viewModel.StartAsync();
         return viewModel;
     }
@@ -294,16 +461,85 @@ public class WorkingChangesTests
         }
     }
 
-    /// <summary>Answers every confirmation the same way, and keeps what was asked.</summary>
-    private sealed class AnsweringDialogs(bool answer) : IDialogService
+    /// <summary>Answers the confirmations in the order given, the last answer from then on, and keeps what was asked.</summary>
+    private sealed class AnsweringDialogs(params bool[] answers) : IDialogService
     {
         public List<ConfirmationRequest> Asked { get; } = [];
 
         public Task<bool> ConfirmAsync(ConfirmationRequest request)
         {
             Asked.Add(request);
-            return Task.FromResult(answer);
+            return Task.FromResult(answers[Math.Min(Asked.Count, answers.Length) - 1]);
         }
+    }
+
+    /// <summary>A history of two commits whose second page waits until the test sends it; a.txt is changed.</summary>
+    private sealed class TwoPageRepository : FakeRepositoryBase
+    {
+        public static readonly CommitInfo First = Commit(2, [new string('1', 40)]);
+
+        public static readonly CommitInfo Second = Commit(1, []);
+
+        private readonly TaskCompletionSource _second = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource FirstPageSent { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override string WorkingDirectory => Path.Combine(Path.GetTempPath(), "fake");
+
+        public override string GitDirectory => Path.Combine(WorkingDirectory, ".git");
+
+        public override string CommonDirectory => GitDirectory;
+
+        public override string Name => "fake";
+
+        public void SendSecondPage() => _second.TrySetResult();
+
+        public override Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new RepoRefs(new HeadState("main", First.Sha), [new GitRef("refs/heads/main", "main", RefKind.LocalBranch, First.Sha, IsHead: true)], [], []));
+
+        public override async Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+        {
+            onPage([First]);
+            FirstPageSent.TrySetResult();
+            await _second.Task.WaitAsync(cancellationToken);
+            onPage([Second]);
+        }
+
+        public override Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default)
+        {
+            var commit = sha == First.Sha ? First : Second;
+            return Task.FromResult(new CommitDetails(commit.Sha, commit.Parents, commit.AuthorName, commit.AuthorEmail, commit.AuthorDate, commit.AuthorName, commit.AuthorEmail, commit.CommitDate, commit.Subject, string.Empty, []));
+        }
+
+        public override Task<WorkingTreeStatus> ReadStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WorkingTreeStatus([], [new ChangedFile("a.txt", FileChangeKind.Modified)], new HashSet<string>()));
+
+        public override Task<FileDiff> ReadDiffAsync(DiffTarget target, CancellationToken cancellationToken = default) =>
+            Task.FromResult(FileDiff.Empty);
+
+        public override IRepositoryWatcher CreateWatcher() => new CountingWatcher();
+
+        private static CommitInfo Commit(int number, string[] parents)
+        {
+            var date = new DateTimeOffset(2026, 1, 1, 12, number, 0, TimeSpan.Zero);
+            return new CommitInfo(new string((char)('0' + number), 40), parents, "Test Author", "author@example.com", date, date, $"Commit {number}");
+        }
+    }
+
+    /// <summary>Keeps a confirmation open until the test answers it.</summary>
+    private sealed class WaitingDialogs : IDialogService
+    {
+        private readonly TaskCompletionSource<bool> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Opened { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<bool> ConfirmAsync(ConfirmationRequest request)
+        {
+            Opened.TrySetResult();
+            return _answer.Task;
+        }
+
+        public void Answer(bool answer) => _answer.TrySetResult(answer);
     }
 
     /// <summary>A real repository whose watcher counts its pauses.</summary>

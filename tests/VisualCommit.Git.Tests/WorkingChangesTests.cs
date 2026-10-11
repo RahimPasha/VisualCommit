@@ -156,6 +156,26 @@ public class WorkingChangesTests
     }
 
     [Fact]
+    public async Task A_type_change_shows_the_old_lines_removed_and_the_new_ones_added()
+    {
+        // src/greeting.txt ("Hello") becomes a symbolic link to README.md in the index; no file
+        // system needs to support links for that.
+        using var repo = await Scenarios.LinearAsync();
+        var link = (await repo.GitWithInputAsync("README.md", "hash-object", "-w", "--stdin")).StandardOutput.Trim();
+        await repo.GitAsync("update-index", "--cacheinfo", $"120000,{link},src/greeting.txt");
+        var repository = await OpenAsync(repo);
+
+        var status = await repository.ReadStatusAsync(TestCancelled);
+        Assert.Equal(FileChangeKind.TypeChanged, status.Staged.Single().Kind);
+        var diff = await repository.ReadDiffAsync(new DiffTarget(DiffSide.Staged, "src/greeting.txt", FileChangeKind.TypeChanged), TestCancelled);
+
+        Assert.Equal(["@@ -1 +0,0 @@", "@@ -0,0 +1 @@"], diff.Hunks.Select(hunk => hunk.Header));
+        Assert.Equal(["-Hello", "+README.md"], diff.Hunks.SelectMany(hunk => hunk.Lines).Select(line => (line.Kind == DiffLineKind.Added ? "+" : "-") + line.Text));
+        Assert.Equal(("100644", "120000"), (diff.OldMode, diff.NewMode));
+        Assert.False(diff.IsNewFile || diff.IsDeletedFile);
+    }
+
+    [Fact]
     public async Task The_crlf_scenarios_diff_has_no_carriage_returns_in_its_lines()
     {
         using var repo = await Scenarios.CrlfAsync();

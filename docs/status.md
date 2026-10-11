@@ -136,14 +136,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-An independent review of phase 2's code (git layer, patches, view models, watcher, diff
-control), then fix what it finds; then the visual test gate (step 23): `dotnet test`, then,
-after telling the owner, the real-window pass of phases 0, 1 and 2 on the same commit, and every
-picture of both inspected.
+The visual test gate (step 23): `dotnet test`, then, after telling the owner, the real-window
+pass of phases 0, 1 and 2 on the same commit, and every picture of both inspected.
 
 ### Notes for whoever resumes
 
 - The default tests passed (379) on `master` at `aead41b` before the phase started.
+- An independent review of phase 2's code (an Opus agent, before the gate) found 14 problems;
+  all are fixed, each with a test, and D74 to D76 record what changed. The two that could lose
+  work: patches around "\ No newline at end of file" joined lines (now checked against git by
+  `PatchFuzzTests`), and Restore overwrote work done after the discard (it now asks and keeps
+  the newer version in a snapshot).
 - The owner answered the four questions of taste on 2026-10-10, each with the recommended option
   (D60 to D63). The technical decisions are D64 to D72. AvaloniaEdit 12.0.0 was tried in a
   throwaway headless program outside the repo: it drew an editor with TextMate colours and

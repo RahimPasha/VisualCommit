@@ -19,7 +19,7 @@ public static class WordDiff
     /// Above this many pairs of words the comparison is skipped and nothing is highlighted, so
     /// that a pair of very long lines costs no noticeable time.
     /// </summary>
-    private const long MaxWordPairs = 250_000;
+    public const long MaxWordPairs = 250_000;
 
     /// <summary>The ranges of <paramref name="removed"/> and of <paramref name="added"/> to highlight, each in order and not overlapping.</summary>
     public static (IReadOnlyList<TextRange> Removed, IReadOnlyList<TextRange> Added) Compare(string removed, string added)

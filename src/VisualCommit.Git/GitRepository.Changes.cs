@@ -186,7 +186,9 @@ public sealed partial class GitRepository
             result.EnsureSuccess(command);
         }
 
-        return DiffParser.Parse(result.StandardOutput);
+        return target.Kind == FileChangeKind.TypeChanged
+            ? DiffParser.ParseTypeChange(result.StandardOutput)
+            : DiffParser.Parse(result.StandardOutput);
 
         static string[] Paths(DiffTarget target) =>
             target.OldPath is { } old && old != target.Path ? ["--", target.Path, old] : ["--", target.Path];

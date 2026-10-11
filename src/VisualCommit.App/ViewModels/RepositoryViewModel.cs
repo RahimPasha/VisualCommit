@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Diff;
@@ -43,6 +44,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private string? _headSha;
     private readonly Lock _refreshGate = new();
     private readonly Lock _statusGate = new();
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private bool _firstRowsLogged;
     private Task? _refreshing;
     private bool _refreshAgain;
@@ -53,6 +55,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private bool _changedWhileStarting;
     private bool _disposed;
     private DiscardSnapshot? _lastSnapshot;
+    private Dictionary<string, string?>? _afterDiscard;
 
     /// <param name="repository">The repository.</param>
     /// <param name="settings">The settings: the file list's flat or tree view, the diff mode.</param>
@@ -168,10 +171,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         try
         {
             // Watching starts first: a change made while the history loads (a commit in a
-            // terminal, an editor's save) is caught and shown once the load is done.
-            _watcher = Repository.CreateWatcher();
-            _watcher.Changed += (_, e) => OnUiThread(() => OnRepositoryChanged(e));
-            _watcher.Start();
+            // terminal, an editor's save) is caught and shown once the load is done. It starts
+            // off the UI thread: on Linux it walks every folder of the working tree.
+            var watcher = Repository.CreateWatcher();
+            _watcher = watcher;
+            watcher.Changed += (_, e) => OnUiThread(() => OnRepositoryChanged(e));
+            var watching = Task.Run(watcher.Start, CancellationToken.None);
 
             // The refs, the history and the status are read side by side: git log does not need
             // the refs, and starting it at once brings the first graph forward by the time they
@@ -201,6 +206,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             var statusShown = ShowStatusAsync(status);
             await loading;
             await statusShown;
+            await watching;
             OnPropertyChanged(nameof(HasNoCommits));
 
             _started = true;
@@ -232,6 +238,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     {
         lock (_refreshGate)
         {
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
+
             if (_refreshing is { IsCompleted: false })
             {
                 _refreshAgain = true;
@@ -252,6 +263,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     {
         lock (_statusGate)
         {
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
+
             if (_statusRefreshing is { IsCompleted: false })
             {
                 _statusAgain = true;
@@ -456,38 +472,80 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             return null;
         }
 
-        var question = files.Count == 1
-            ? $"Discard the changes to {WorkingChangesViewModel.FileName(files[0].Path)}?"
-            : string.Create(CultureInfo.InvariantCulture, $"Discard the changes to {files.Count} files?");
+        // A conflicted file has no unstaged version to go back to: it is resolved, not discarded.
+        // An untracked folder that git lists with a slash is a repository of its own: deleting
+        // it would delete its history too.
+        var leftOut = files.Where(file => file.Kind == FileChangeKind.Conflicted || file.Path.EndsWith('/')).ToList();
+        var paths = files.Except(leftOut).Select(file => file.Path).ToList();
+        if (paths.Count == 0)
+        {
+            Changes.ErrorText = leftOut.Count == 1
+                ? leftOut[0].Kind == FileChangeKind.Conflicted
+                    ? $"{DisplayName(leftOut[0])} has a conflict: resolve it before discarding."
+                    : $"{DisplayName(leftOut[0])} is a repository of its own: it is not discarded."
+                : "These files have conflicts or are repositories of their own: they are not discarded.";
+            return Changes.ErrorText;
+        }
+
+        var question = paths.Count == 1
+            ? $"Discard the changes to {WorkingChangesViewModel.FileName(paths[0])}?"
+            : string.Create(CultureInfo.InvariantCulture, $"Discard the changes to {paths.Count} files?");
+        if (leftOut.Count > 0)
+        {
+            question += leftOut.Count == 1
+                ? $" {DisplayName(leftOut[0])} is left as it is."
+                : string.Create(CultureInfo.InvariantCulture, $" {leftOut.Count} files that cannot be discarded are left as they are.");
+        }
+
         if (!await ConfirmDiscardAsync(question))
         {
             return null;
         }
 
-        var paths = files.Select(file => file.Path).ToList();
         var untracked = new HashSet<string>(paths.Where(Status.IsUntracked), StringComparer.Ordinal);
         return await WriteAsync(
             async cancellationToken =>
             {
                 var snapshot = await Repository.SaveSnapshotAsync(paths, cancellationToken);
-                _lastSnapshot = snapshot;
-                Changes.ShowRestore(paths);
                 await Repository.DiscardAsync(paths, untracked, cancellationToken);
+                await RememberDiscardAsync(snapshot, cancellationToken);
             });
     }
 
-    public Task<string?> RestoreAsync()
+    public async Task<string?> RestoreAsync()
     {
-        if (_lastSnapshot is not { } snapshot)
+        if (_disposed || _lastSnapshot is not { } snapshot)
         {
-            return Task.FromResult<string?>(null);
+            return null;
         }
 
-        return WriteAsync(
+        // Work done on the files since the discard is not lost without a word: the user is asked,
+        // and it goes into a snapshot of its own first (D75).
+        var changed = await ChangedSinceDiscardAsync(_lifetime.Token);
+        if (changed.Count > 0)
+        {
+            var question = changed.Count == 1
+                ? $"{WorkingChangesViewModel.FileName(changed[0])} has changed since the discard. Put back the version from before the discard?"
+                : string.Create(CultureInfo.InvariantCulture, $"{changed.Count} files have changed since the discard. Put back the versions from before the discard?");
+            var request = new ConfirmationRequest("Restore discarded changes?", question, "A snapshot of the newer changes is saved first.", "Restore");
+            if (_dialogs is not null && !await _dialogs.ConfirmAsync(request))
+            {
+                return null;
+            }
+        }
+
+        return await WriteAsync(
             async cancellationToken =>
             {
+                if (changed.Count > 0)
+                {
+                    await Repository.SaveSnapshotAsync(changed, cancellationToken);
+                }
+
                 await Repository.RestoreSnapshotAsync(snapshot, cancellationToken);
                 _lastSnapshot = null;
+                _afterDiscard = null;
+                Changes.HideRestore();
             });
     }
 
@@ -560,24 +618,26 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         return await WriteAsync(
             async cancellationToken =>
             {
-                if (action == LineAction.Discard)
+                // The whole file goes into a discard's snapshot, so Restore puts all of it back (D67).
+                var snapshot = action == LineAction.Discard ? await Repository.SaveSnapshotAsync([target.Path], cancellationToken) : null;
+                if (snapshot is not null && target.IsUntracked && chosen.Count == diff.AddedCount)
                 {
-                    // The whole file goes into the snapshot, so Restore puts all of it back (D67).
-                    _lastSnapshot = await Repository.SaveSnapshotAsync([target.Path], cancellationToken);
-                    Changes.ShowRestore([target.Path]);
-                    if (target.IsUntracked)
+                    // Every line of an untracked file: the file goes, with the folders it leaves empty.
+                    await Repository.DiscardAsync([target.Path], new HashSet<string>(StringComparer.Ordinal) { target.Path }, cancellationToken);
+                }
+                else
+                {
+                    var direction = action == LineAction.Stage ? PatchDirection.Forward : PatchDirection.Reverse;
+                    var patch = PatchBuilder.Build(diff, chosen, direction);
+                    if (patch is not null)
                     {
-                        // An untracked file is all added lines: what stays is written back as it is.
-                        await DiscardUntrackedLinesAsync(target, diff, chosen, cancellationToken);
-                        return;
+                        await Repository.ApplyPatchAsync(patch, toIndex: action != LineAction.Discard, direction, cancellationToken);
                     }
                 }
 
-                var direction = action == LineAction.Stage ? PatchDirection.Forward : PatchDirection.Reverse;
-                var patch = PatchBuilder.Build(diff, chosen, direction);
-                if (patch is not null)
+                if (snapshot is not null)
                 {
-                    await Repository.ApplyPatchAsync(patch, toIndex: action != LineAction.Discard, direction, cancellationToken);
+                    await RememberDiscardAsync(snapshot, cancellationToken);
                 }
             });
     }
@@ -607,6 +667,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     {
         if (value)
         {
+            _pendingSelection = null;
             SelectedIndex = -1;
             Changes.SyncFileList();
         }
@@ -618,14 +679,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// </summary>
     private void ApplyStatus(WorkingTreeStatus status)
     {
+        // The offset as it was: once the row goes, the graph control clamps the offset to its
+        // shorter extent at once, and moving the clamped offset would move the rows a row too far.
         var had = HasWorkingChanges;
+        var offset = ScrollOffset;
         Status = status;
 
         // The real-window pass, which cannot see the graph's rows, waits for this line.
         _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: working tree: {status.Staged.Count} staged, {status.Unstaged.Count} unstaged"));
-        if (had != status.HasChanges && ScrollOffset > 0)
+        if (had != status.HasChanges && offset > 0)
         {
-            ScrollOffset = Math.Max(0, ScrollOffset + (status.HasChanges ? GraphRowHeight : -GraphRowHeight));
+            ScrollOffset = Math.Max(0, offset + (status.HasChanges ? GraphRowHeight : -GraphRowHeight));
         }
 
         if (!status.HasChanges && IsWorkingRowSelected)
@@ -697,21 +761,103 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     private void ShowDiff(DiffTarget target, string sideLabel)
     {
+        // A commit still waiting to be selected when it loads would close this diff: the newer
+        // action wins.
+        _pendingSelection = null;
         Diff?.Dispose();
         var diff = new DiffViewModel(this, target, sideLabel, _settings, _log);
         Diff = diff;
         _ = diff.LoadAsync();
     }
 
+    /// <summary>A file's name as dialogs and messages give it; a folder's without its slash.</summary>
+    private static string DisplayName(ChangedFile file) => WorkingChangesViewModel.FileName(file.Path.TrimEnd('/'));
+
     private async Task<bool> ConfirmDiscardAsync(string question) =>
         _dialogs is null || await _dialogs.ConfirmAsync(new ConfirmationRequest("Discard changes?", question, SnapshotNote, "Discard"));
+
+    /// <summary>
+    /// After a discard that succeeded: keeps its snapshot for Restore, and what the files hold now,
+    /// so that Restore can tell whether they changed since (D75). Shows the restore bar.
+    /// </summary>
+    private async Task RememberDiscardAsync(DiscardSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        _lastSnapshot = snapshot;
+        _afterDiscard = await FingerprintAsync(snapshot.Paths, cancellationToken);
+        Changes.ShowRestore(snapshot.Paths);
+    }
+
+    /// <summary>The last discard's files whose content is no longer what the discard left.</summary>
+    private async Task<List<string>> ChangedSinceDiscardAsync(CancellationToken cancellationToken)
+    {
+        if (_lastSnapshot is not { } snapshot || _afterDiscard is not { } before)
+        {
+            return [];
+        }
+
+        var now = await FingerprintAsync(snapshot.Paths, cancellationToken);
+        return [.. snapshot.Paths.Where(path => !string.Equals(before.GetValueOrDefault(path), now.GetValueOrDefault(path), StringComparison.Ordinal))];
+    }
+
+    /// <summary>
+    /// A hash of each working-tree file's bytes, null for a file that does not exist; a file that
+    /// cannot be read gets a value of its own, so that it counts as changed.
+    /// </summary>
+    private Task<Dictionary<string, string?>> FingerprintAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        var root = Repository.WorkingDirectory;
+        return Task.Run(
+            () => paths.Distinct(StringComparer.Ordinal).ToDictionary(
+                path => path,
+                path =>
+                {
+                    var full = System.IO.Path.Combine(root, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
+                    try
+                    {
+                        if (!File.Exists(full))
+                        {
+                            return null;
+                        }
+
+                        using var stream = File.OpenRead(full);
+                        return Convert.ToHexString(SHA256.HashData(stream));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        return (string?)("unreadable " + Guid.NewGuid().ToString("N"));
+                    }
+                },
+                StringComparer.Ordinal),
+            cancellationToken);
+    }
 
     /// <summary>
     /// Runs one of the app's own writes with the watcher paused, then reads what changed: the
     /// status (and the open diff), and with <paramref name="refsChange"/> the refs and history
     /// too (D71). Returns git's message when the write failed, and shows it in the stage panel.
+    /// Writes run one at a time, each with the reading after it (D76): two at once would meet at
+    /// git's index lock.
     /// </summary>
     private async Task<string?> WriteAsync(Func<CancellationToken, Task> write, bool refsChange = false)
+    {
+        // The tab may have closed while a confirmation was open.
+        if (_disposed)
+        {
+            return null;
+        }
+
+        await _writeGate.WaitAsync();
+        try
+        {
+            return _disposed ? null : await WriteNowAsync(write, refsChange);
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    private async Task<string?> WriteNowAsync(Func<CancellationToken, Task> write, bool refsChange)
     {
         var cancellationToken = _lifetime.Token;
         string? error = null;
@@ -749,40 +895,6 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         Changes.ErrorText = error;
         return error;
-    }
-
-    /// <summary>Discards chosen lines of an untracked file, which git cannot patch: the file is written again without them.</summary>
-    private async Task DiscardUntrackedLinesAsync(DiffTarget target, FileDiff diff, IReadOnlySet<DiffLineRef> chosen, CancellationToken cancellationToken)
-    {
-        var kept = new StringBuilder();
-        var all = true;
-        for (var h = 0; h < diff.Hunks.Count; h++)
-        {
-            var hunkLines = diff.Hunks[h].Lines;
-            for (var l = 0; l < hunkLines.Count; l++)
-            {
-                if (chosen.Contains(new DiffLineRef(h, l)))
-                {
-                    continue;
-                }
-
-                all = false;
-                kept.Append(hunkLines[l].Raw);
-                if (!hunkLines[l].NoNewlineAtEnd)
-                {
-                    kept.Append('\n');
-                }
-            }
-        }
-
-        if (all)
-        {
-            await Repository.DiscardAsync([target.Path], new HashSet<string>(StringComparer.Ordinal) { target.Path }, cancellationToken);
-            return;
-        }
-
-        var path = System.IO.Path.Combine(Repository.WorkingDirectory, target.Path.Replace('/', System.IO.Path.DirectorySeparatorChar));
-        await File.WriteAllBytesAsync(path, Encoding.Latin1.GetBytes(kept.ToString()), cancellationToken);
     }
 
     private void OnRepositoryChanged(RepositoryChangedEventArgs change)

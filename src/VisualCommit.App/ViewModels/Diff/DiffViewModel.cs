@@ -88,6 +88,7 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
     private readonly IAppLog _log;
     private readonly CancellationTokenSource _lifetime = new();
     private int _version;
+    private bool _applying;
 
     public DiffViewModel(IDiffHost host, DiffTarget target, string sideLabel, ISettingsStore settings, IAppLog? log = null)
     {
@@ -104,7 +105,7 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     /// <summary>The file and the versions compared.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusLetter), nameof(FileName), nameof(Folder), nameof(HasFolder), nameof(OriginText), nameof(HasOrigin), nameof(PathText), nameof(IsAdded), nameof(IsModified), nameof(IsDeleted), nameof(IsRenamed), nameof(HunkActions))]
+    [NotifyPropertyChangedFor(nameof(StatusLetter), nameof(FileName), nameof(Folder), nameof(HasFolder), nameof(OriginText), nameof(HasOrigin), nameof(PathText), nameof(IsAdded), nameof(IsModified), nameof(IsDeleted), nameof(IsRenamed), nameof(HunkActions), nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage))]
     public partial DiffTarget Target { get; private set; }
 
     /// <summary>"Unstaged", "Staged" or the commit's short id.</summary>
@@ -149,8 +150,14 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     public bool IsStaged => Target.Side == DiffSide.Staged;
 
+    /// <summary>
+    /// Hunks and lines can be staged, unstaged or discarded: not those of a type change, which git
+    /// shows as two diffs that no patch of some lines can stand for. Its file's own actions remain.
+    /// </summary>
+    public bool ActsOnLines => Target.Kind != FileChangeKind.TypeChanged;
+
     /// <summary>Which buttons the hunk headers show: stage and discard on an unstaged diff, unstage on a staged one.</summary>
-    public HunkActions HunkActions => Target.Side switch
+    public HunkActions HunkActions => !ActsOnLines ? HunkActions.None : Target.Side switch
     {
         DiffSide.Unstaged => HunkActions.StageAndDiscard,
         DiffSide.Staged => HunkActions.Unstage,
@@ -237,7 +244,7 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage))]
     public partial IReadOnlySet<DiffLineRef> SelectedChanges { get; set; } = new HashSet<DiffLineRef>();
 
-    public bool HasSelectedLines => SelectedChanges.Count > 0 && Body == DiffBody.Text;
+    public bool HasSelectedLines => SelectedChanges.Count > 0 && Body == DiffBody.Text && ActsOnLines;
 
     /// <summary>The file's own buttons show while no lines are selected.</summary>
     public bool ShowsFileActions => !HasSelectedLines;
@@ -267,8 +274,17 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
         {
             if (target.Kind == FileChangeKind.Conflicted)
             {
-                Diff = FileDiff.Empty;
+                SetDiff(FileDiff.Empty);
                 Body = DiffBody.Conflict;
+                return;
+            }
+
+            if (target.IsUntracked && target.Path.EndsWith('/'))
+            {
+                // Git lists a repository inside the working tree as one untracked folder.
+                SetDiff(FileDiff.Empty);
+                ErrorText = "This folder is a repository of its own: its files are not shown here.";
+                Body = DiffBody.Error;
                 return;
             }
 
@@ -278,7 +294,7 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            Diff = diff;
+            SetDiff(diff);
             if (diff.IsBinary)
             {
                 await ShowBinaryAsync(target, version, cancellationToken);
@@ -385,16 +401,40 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     private async Task ApplyLinesAsync(IReadOnlySet<DiffLineRef> lines, LineAction action, bool wholeHunk)
     {
-        if (Diff is not { } diff || lines.Count == 0)
+        // One action at a time: a second click before the diff is read again would apply a patch
+        // made for the old diff.
+        if (Diff is not { } diff || lines.Count == 0 || !ActsOnLines || _applying)
         {
             return;
         }
 
-        var error = await _host.ApplyLinesAsync(Target, diff, lines, action, wholeHunk);
-        if (error is null)
+        _applying = true;
+        try
         {
-            SelectionResetRequested?.Invoke(this, EventArgs.Empty);
+            var error = await _host.ApplyLinesAsync(Target, diff, lines, action, wholeHunk);
+            if (error is null)
+            {
+                SelectionResetRequested?.Invoke(this, EventArgs.Empty);
+            }
         }
+        finally
+        {
+            _applying = false;
+        }
+    }
+
+    /// <summary>
+    /// Shows a diff read again. Selected lines are kept only when its lines are the ones read
+    /// before, as the text control keeps its selection then; otherwise they meant other lines.
+    /// </summary>
+    private void SetDiff(FileDiff diff)
+    {
+        if (!diff.HasSameLines(Diff))
+        {
+            SelectedChanges = new HashSet<DiffLineRef>();
+        }
+
+        Diff = diff;
     }
 
     private void SetMode(DiffMode mode)

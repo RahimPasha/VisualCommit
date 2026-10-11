@@ -19,7 +19,7 @@ public interface IWorkingChangesHost
     /// <summary>Asks for confirmation, saves a snapshot and discards the files' unstaged changes (D62, D67).</summary>
     Task<string?> DiscardAsync(IReadOnlyList<ChangedFile> files);
 
-    /// <summary>Puts back what the last discard took (D62, D73).</summary>
+    /// <summary>Puts back what the last discard took (D62, D73), asking first when the files changed since (D75).</summary>
     Task<string?> RestoreAsync();
 
     /// <summary>Commits or amends with <paramref name="message"/> (D68).</summary>
@@ -185,6 +185,9 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
             : string.Create(CultureInfo.InvariantCulture, $"Discarded changes to {paths.Count} files.");
     }
 
+    /// <summary>Hides the restore bar: the discard has been restored.</summary>
+    public void HideRestore() => RestoreText = null;
+
     /// <summary>The file part of a path: what dialogs and the restore bar name a file by.</summary>
     public static string FileName(string path) => path[(path.LastIndexOf('/') + 1)..];
 
@@ -231,19 +234,9 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     [RelayCommand]
     private Task UnstageAll() => Run(_host.UnstageAsync(_status.Staged));
 
+    /// <summary>The host hides the bar once the files are restored; a cancelled or failed restore keeps it.</summary>
     [RelayCommand]
-    private async Task Restore()
-    {
-        var error = await _host.RestoreAsync();
-        if (error is null)
-        {
-            RestoreText = null;
-        }
-        else
-        {
-            ErrorText = error;
-        }
-    }
+    private Task Restore() => Run(_host.RestoreAsync());
 
     [RelayCommand]
     private void DismissRestore() => RestoreText = null;
