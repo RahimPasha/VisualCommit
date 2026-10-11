@@ -209,6 +209,56 @@ public class StatusBarTests
         Pictures(app, "statusbar-auto-fetch-failed");
     }
 
+    [AvaloniaFact]
+    public async Task An_ssh_notice_shows_in_the_status_bar_until_its_scope_ends()
+    {
+        // Design 3.2: a "none" prompt of ssh gets no dialog; the status bar shows its text, in the
+        // secondary colour, until the scope ends; on the welcome page (a clone) as in a repository.
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        var notices = app.Session.Services.DialogHost.Notices;
+        const string Presence = "Confirm user presence for key ED25519-SK SHA256:skokdAxs76eWz/jm50ga0Qz+ewMVrjE4KE91GAFIgTE";
+
+        await repository.Queue.RunAsync(new GitOperation("Push main", "Pushing main to origin/main…", OperationKind.Network, RefreshScope.None, _ =>
+            throw new GitException("git push --progress origin refs/heads/main:refs/heads/main", 1, " ! [rejected]        main -> main (fetch first)")));
+        app.Settle();
+        Assert.Equal("Push main failed", parts.Status.Text);
+
+        var shown = notices.Show(Presence);
+        app.Settle();
+        Assert.Equal(Presence, parts.Status.Text);
+        Assert.Equal(Presence, ToolTip.GetTip(parts.Status));
+        Assert.Equal(Brush(app, "VcTextSecondaryBrush"), Color(parts.Status));
+        Assert.False(app.Session.Services.DialogHost.IsOpen, "A notice opens no dialog.");
+        Assert.DoesNotContain(
+            LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true),
+            problem => problem.Contains("Confirm user presence", StringComparison.Ordinal));
+        Pictures(app, "statusbar-ssh-notice");
+
+        shown.Dispose();
+        app.Settle();
+        Assert.Equal("Push main failed", parts.Status.Text);
+        Assert.Equal(Brush(app, "VcDangerBrush"), Color(parts.Status));
+
+        // A new tab: the welcome page's "Ready" makes way for a notice as well.
+        app.Session.Shell.NewTabCommand.Execute(null);
+        app.Settle();
+        Assert.Null(app.Session.Shell.ActiveTab.Repository);
+        Assert.Equal("Ready", parts.Status.Text);
+        using (notices.Show(Presence))
+        {
+            app.Settle();
+            Assert.Equal(Presence, parts.Status.Text);
+        }
+
+        app.Settle();
+        Assert.Equal("Ready", parts.Status.Text);
+    }
+
     private static async Task<RepositoryViewModel> GraphShownAsync(ShellDriver app)
     {
         var repository = app.Session.Shell.ActiveTab.Repository!;

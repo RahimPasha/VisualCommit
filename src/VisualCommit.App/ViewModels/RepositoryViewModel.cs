@@ -103,7 +103,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             services?.Operations,
             _log,
             since => LockFiles.FindSince([repository.GitDirectory, repository.CommonDirectory], since));
-        OperationStatus = new OperationStatusViewModel(_queue);
+        OperationStatus = new OperationStatusViewModel(_queue, services?.DialogHost.Notices);
         Operations = new RepositoryOperations(this, _queue, services, _log);
         Toolbar = new ToolbarViewModel(this);
 

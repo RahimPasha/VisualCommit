@@ -20,24 +20,21 @@ public abstract partial class PromptDialogViewModel : DialogViewModel<PromptDial
     /// <summary>What a masked box shows for each character typed.</summary>
     public const char MaskCharacter = '•';
 
-    private readonly string? _repositoryName;
-
     /// <param name="prompt">The prompt it answers.</param>
-    /// <param name="repositoryName">The repository to name under the title ("In &lt;repo&gt;"), when the window has more than one tab with a repository (4f); null otherwise.</param>
+    /// <param name="repositoryName">
+    /// The repository to name under the title ("In &lt;repo&gt;", <c>DialogRepository</c>), when the
+    /// window has more than one tab with a repository (4f); null otherwise. It is the dialog's
+    /// <see cref="DialogViewModel.RepositoryName"/>, as for every other dialog.
+    /// </param>
     protected PromptDialogViewModel(GitPrompt prompt, string? repositoryName)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         Prompt = prompt;
-        _repositoryName = repositoryName;
+        RepositoryName = repositoryName;
     }
 
     /// <summary>The prompt as the broker classified it.</summary>
     public GitPrompt Prompt { get; }
-
-    /// <summary>"In &lt;repo&gt;", under the title (<c>DialogRepository</c>), or empty when it is not shown.</summary>
-    public string RepositoryLine => _repositoryName is null ? string.Empty : $"In {_repositoryName}";
-
-    public bool HasRepositoryLine => _repositoryName is not null;
 
     /// <summary>The label of the button that answers (<c>ConfirmButton</c>).</summary>
     public abstract string ConfirmText { get; }

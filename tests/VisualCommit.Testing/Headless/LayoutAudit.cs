@@ -51,9 +51,12 @@ public static class LayoutAudit
             var layout = text.TextLayout;
             var room = text.Bounds.Size.Deflate(text.Padding);
 
-            if (layout.WidthIncludingTrailingWhitespace > room.Width + Tolerance)
+            // A wrapped line ends in the space it broke at, which hangs past the edge and is not
+            // drawn: the width a wrapped text needs is its widest line without that space.
+            var needed = text.TextWrapping == Avalonia.Media.TextWrapping.NoWrap ? layout.WidthIncludingTrailingWhitespace : layout.Width;
+            if (needed > room.Width + Tolerance)
             {
-                problems.Add($"{label} needs a width of {layout.WidthIncludingTrailingWhitespace:F1} but has {room.Width:F1}.");
+                problems.Add($"{label} needs a width of {needed:F1} but has {room.Width:F1}.");
             }
 
             if (layout.Height > room.Height + Tolerance)

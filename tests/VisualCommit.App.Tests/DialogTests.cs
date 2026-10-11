@@ -906,15 +906,7 @@ public class DialogTests
             var card = app.Window.GetVisualDescendants().OfType<Border>()
                 .Last(border => border.Classes.Contains("dialogCard") && border.IsEffectivelyVisible);
             Assert.Equal(width, card.Bounds.Width);
-            // LayoutAudit measures a wrapped line with its trailing space, which hangs past the
-            // edge without being drawn: a wrapped text whose lines fit is not clipped.
-            var wrappedThatFit = app.Window.GetVisualDescendants().OfType<TextBlock>()
-                .Where(text => text.TextWrapping != TextWrapping.NoWrap && text.TextLayout.Width <= text.Bounds.Width - text.Padding.Left - text.Padding.Right + 0.75)
-                .Select(text => $"\"{text.Text}\" needs a width of")
-                .ToList();
-            var clipped = LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true)
-                .Where(problem => !wrappedThatFit.Any(fits => problem.StartsWith(fits, StringComparison.Ordinal)))
-                .ToList();
+            var clipped = LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true);
             Assert.True(clipped.Count == 0, string.Join(Environment.NewLine, clipped));
 
             // The card's buttons lie inside it, apart from each other.

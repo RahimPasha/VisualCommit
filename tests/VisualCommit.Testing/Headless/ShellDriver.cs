@@ -166,10 +166,14 @@ public sealed partial class ShellDriver : IDisposable
         Window.GetVisualDescendants().OfType<T>().FirstOrDefault(control => control.Name == name)
         ?? throw new InvalidOperationException($"No {typeof(T).Name} named '{name}' is in the window.");
 
-    /// <summary>Finds the control whose automation id is <paramref name="automationId"/>.</summary>
+    /// <summary>
+    /// Finds the control whose automation id is <paramref name="automationId"/>, where the user
+    /// would look for it: in the open context menu first, then in the view of the dialog on top
+    /// (<see cref="TopDialogView"/>: the confirmation over the Remotes dialog has its own
+    /// <c>ConfirmButton</c>), then anywhere in the window, a visible control before a hidden one.
+    /// </summary>
     public Control FindByAutomationId(string automationId) =>
-        Window.GetVisualDescendants().OfType<Control>()
-            .FirstOrDefault(control => Avalonia.Automation.AutomationProperties.GetAutomationId(control) == automationId)
+        FindWhereShown(automationId)
         ?? throw new InvalidOperationException($"No control with the automation id '{automationId}' is in the window.");
 
     /// <summary>Where a control is in the window, in logical pixels.</summary>

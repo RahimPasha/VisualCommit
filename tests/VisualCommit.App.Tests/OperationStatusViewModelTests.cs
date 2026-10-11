@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -128,6 +129,57 @@ public class OperationStatusViewModelTests
 
         Assert.Equal((OperationStatusViewModel.ReadyText, false, false, false), (status.Text, status.IsRunning, status.CanCancel, status.HasWaiting));
     }
+
+    [Fact]
+    public Task An_ssh_notice_is_the_text_until_it_goes_and_the_operations_text_comes_back() => WithoutContext(async () =>
+    {
+        var notices = new PromptNotices();
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue, notices);
+        using var empty = new OperationStatusViewModel(null, notices);
+        const string Presence = "Confirm user presence for key ED25519-SK SHA256:skokdAxs76eWz";
+
+        var shown = notices.Show(Presence);
+        Assert.Equal((Presence, OperationStatusTone.Secondary, Presence), (status.Text, status.Tone, status.ToolTip));
+        Assert.Equal(Presence, empty.Text);
+
+        // While git runs, the progress bar and Cancel stay; the notice keeps the text.
+        var started = new TaskCompletionSource();
+        var finish = new TaskCompletionSource();
+        var fetch = queue.RunAsync(new GitOperation("Fetch", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            started.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Fetched from origin");
+        }));
+        await started.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.IsRunning);
+        Assert.Equal((Presence, true, true), (status.Text, status.IsRunning, status.CanCancel));
+
+        shown.Dispose();
+        Assert.Equal(("Fetching from origin…", true), (status.Text, status.IsRunning));
+        Assert.Null(status.ToolTip);
+        Assert.Equal(OperationStatusViewModel.ReadyText, empty.Text);
+
+        // A failure's colour comes back too when a notice over it goes.
+        finish.SetResult();
+        await fetch.WaitAsync(Patience, TestCancelled);
+        await queue.RunAsync(new GitOperation("Push main", "Pushing…", OperationKind.Network, RefreshScope.None, _ =>
+            throw new GitException("git push", 1, " ! [rejected]        main -> main (fetch first)")));
+        using (notices.Show(Presence))
+        {
+            Assert.Equal((Presence, OperationStatusTone.Secondary), (status.Text, status.Tone));
+        }
+
+        Assert.Equal(("Push main failed", OperationStatusTone.Danger), (status.Text, status.Tone));
+
+        // A disposed view model no longer follows the notices.
+        status.Dispose();
+        using (notices.Show("Another notice"))
+        {
+            Assert.Equal("Push main failed", status.Text);
+        }
+    });
 
     /// <summary>Runs a test where no synchronization context is current, so the view model updates at once.</summary>
     private static Task WithoutContext(Func<Task> test) => Task.Run(test, TestCancelled);

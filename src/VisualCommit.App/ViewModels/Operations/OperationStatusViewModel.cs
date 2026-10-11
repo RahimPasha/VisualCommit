@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Operations;
 
 namespace VisualCommit.App.ViewModels.Operations;
@@ -23,7 +24,10 @@ public enum OperationStatusTone
 /// D95): the running operation's text and progress, Cancel, how many wait, and afterwards the
 /// last result, which stays until the next operation starts. A background operation (auto-fetch)
 /// shows nothing unless it fails; a stage-panel operation (phase 2's writes) leaves "Ready".
-/// It follows the queue's events on the synchronization context it was created on.
+/// While ssh shows a notice (3.2: "Confirm user presence for key …", a prompt that gets no
+/// dialog) the text is the notice's, whatever the operations do; the progress bar, Cancel and
+/// the waiting count go on as before. It follows the queue's events on the synchronization
+/// context it was created on.
 /// </summary>
 public sealed partial class OperationStatusViewModel : ObservableObject, IDisposable
 {
@@ -35,23 +39,32 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     public const string AutoFetchFailedText = "Auto-fetch failed";
 
     private readonly IOperationQueue? _queue;
+    private readonly PromptNotices? _notices;
     private readonly SynchronizationContext? _ui;
     private string _resultText = ReadyText;
     private OperationStatusTone _resultTone = OperationStatusTone.Secondary;
     private string? _resultToolTip;
     private bool _disposed;
 
-    /// <param name="queue">The repository's queue; null for a tab without a repository, which shows "Ready" for good.</param>
-    public OperationStatusViewModel(IOperationQueue? queue)
+    /// <param name="queue">The repository's queue; null for a tab without a repository, which shows "Ready" (or a notice) for good.</param>
+    /// <param name="notices">ssh's notices of the window (<c>DialogHostViewModel.Notices</c>), shown in place of the text while there is one; null for none.</param>
+    public OperationStatusViewModel(IOperationQueue? queue, PromptNotices? notices = null)
     {
         _queue = queue;
+        _notices = notices;
         _ui = SynchronizationContext.Current;
         if (queue is not null)
         {
             queue.Changed += OnQueueChanged;
             queue.Finished += OnQueueFinished;
-            Update();
         }
+
+        if (notices is not null)
+        {
+            notices.PropertyChanged += OnNoticesChanged;
+        }
+
+        Update();
     }
 
     /// <summary>The text: "Ready", the running text with its progress, "Waiting for auto-fetch…", or the last result.</summary>
@@ -95,14 +108,22 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
 
     public void Dispose()
     {
-        if (_disposed || _queue is null)
+        if (_disposed)
         {
             return;
         }
 
         _disposed = true;
-        _queue.Changed -= OnQueueChanged;
-        _queue.Finished -= OnQueueFinished;
+        if (_queue is not null)
+        {
+            _queue.Changed -= OnQueueChanged;
+            _queue.Finished -= OnQueueFinished;
+        }
+
+        if (_notices is not null)
+        {
+            _notices.PropertyChanged -= OnNoticesChanged;
+        }
     }
 
     /// <summary>Stops git: cancels the running network operation (1.9).</summary>
@@ -110,6 +131,14 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     private void Cancel() => _queue?.CancelCurrent();
 
     private void OnQueueChanged(object? sender, EventArgs e) => OnUiThread(Update);
+
+    private void OnNoticesChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or nameof(PromptNotices.Text))
+        {
+            OnUiThread(Update);
+        }
+    }
 
     private void OnQueueFinished(object? sender, OperationFinishedEventArgs e)
     {
@@ -154,8 +183,14 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
 
     private void Update()
     {
-        if (_queue is null || _disposed)
+        if (_disposed)
         {
+            return;
+        }
+
+        if (_queue is null)
+        {
+            Show(ReadyText, OperationStatusTone.Secondary, null, running: false, percent: null);
             return;
         }
 
@@ -197,6 +232,12 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
 
     private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent)
     {
+        // ssh's notice (3.2) waits for the user, so it is what the text says until its scope ends.
+        if (_notices?.Text is { } notice)
+        {
+            (text, tone, toolTip) = (notice, OperationStatusTone.Secondary, notice);
+        }
+
         Text = text;
         Tone = tone;
         ToolTip = toolTip;

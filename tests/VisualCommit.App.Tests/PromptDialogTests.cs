@@ -1,10 +1,13 @@
 using System.Collections.Specialized;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -41,7 +44,7 @@ public class PromptDialogTests
         Assert.Equal("Sign in to 127.0.0.1:47391", dialog.Title);
         Assert.Equal("Git needs a user name and a password or token for http://127.0.0.1:47391.", dialog.Text);
         Assert.True(dialog.IsUserEditable);
-        Assert.Equal(("Sign in", string.Empty, false), (dialog.ConfirmText, dialog.RepositoryLine, dialog.HasRepositoryLine));
+        Assert.Equal(("Sign in", null, string.Empty, false), (dialog.ConfirmText, dialog.RepositoryName, dialog.RepositoryText, dialog.ShowsRepository));
         Assert.False(dialog.ConfirmCommand.CanExecute(null), "Sign in is disabled while the user name is empty.");
 
         dialog.UserName = "  ";
@@ -65,7 +68,7 @@ public class PromptDialogTests
         Assert.False(dialog.IsUserEditable);
         Assert.True(dialog.IsUserShown);
         Assert.Equal("alice", dialog.UserName);
-        Assert.Equal(("In auth", true), (dialog.RepositoryLine, dialog.HasRepositoryLine));
+        Assert.Equal(("auth", "In auth", true), (dialog.RepositoryName, dialog.RepositoryText, dialog.ShowsRepository));
         Assert.True(dialog.ConfirmCommand.CanExecute(null));
 
         dialog.Password = "s3cret";
@@ -161,7 +164,7 @@ public class PromptDialogTests
         // Dialogs stack (D104): the prompt goes over the dialog that was open.
         Assert.Equal(2, dialogs.Open.Count);
         var credentials = Assert.IsType<CredentialsViewModel>(dialogs.Current);
-        Assert.Equal("In auth", credentials.RepositoryLine);
+        Assert.Equal("In auth", credentials.RepositoryText);
         credentials.UserName = "alice";
         credentials.Password = "s3cret";
         credentials.ConfirmCommand.Execute(null);
@@ -327,6 +330,74 @@ public class PromptDialogTests
     }
 
     [AvaloniaFact]
+    public async Task Each_prompt_dialog_is_a_UI_Automation_control_element_and_names_its_repository_as_every_dialog_does()
+    {
+        // 4f: every dialog root is a control element (a pane named by its title), and "In <repo>"
+        // under the title is DialogViewModel's RepositoryName for the prompt dialogs as for the others.
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var dialogs = app.Session.Services.DialogHost;
+        var presenter = new PromptDialogPresenter(dialogs) { ShowsRepositoryName = () => true };
+        var prompts = new (GitPrompt Prompt, string Root, string Title)[]
+        {
+            (Prompt(GitPromptKind.Username, UsernamePrompt), "CredentialsDialog", "Sign in to 127.0.0.1:47391"),
+            (Prompt(GitPromptKind.Passphrase, FakeSsh.PassphrasePrompt), "PassphraseDialog", "Key passphrase"),
+            (Prompt(GitPromptKind.HostKey, FakeSsh.HostKeyPrompt), "HostKeyDialog", "Unknown host"),
+            (Prompt(GitPromptKind.Other, FakeSsh.PinPrompt), "PromptDialog", "Git asks"),
+            (Prompt(GitPromptKind.Confirm, ConfirmPrompt), "ConfirmationDialog", "ssh asks"),
+        };
+        using var scope = new CancellationTokenSource();
+        var shown = prompts.Select(entry => presenter.ShowAsync(entry.Prompt, scope.Token)).ToList();
+        app.Settle();
+
+        Assert.Equal(prompts.Length, dialogs.Open.Count);
+        Assert.All(dialogs.Open, dialog => Assert.Equal(("auth", "In auth"), (dialog.RepositoryName, dialog.RepositoryText)));
+        var elements = ControlElements(ControlAutomationPeer.CreatePeerForElement(app.Window));
+        foreach (var (_, root, title) in prompts)
+        {
+            var peer = Assert.Single(elements, element => element.GetAutomationId() == root);
+            Assert.Equal((AutomationControlType.Pane, title), (peer.GetAutomationControlType(), peer.GetName()));
+            var view = (Control)((ControlAutomationPeer)peer).Owner;
+            var line = view.GetVisualDescendants().OfType<TextBlock>().Single(text => AutomationProperties.GetAutomationId(text) == "DialogRepository");
+            Assert.Equal(("In auth", true), (line.Text, line.IsEffectivelyVisible));
+            Assert.Contains("dialogRepository", line.Classes);
+        }
+
+        Keep(app.Capture(), "dark-stacked-with-repository");
+        await scope.CancelAsync();
+        await WaitAsync(() => shown.TrueForAll(task => task.IsCompleted), "the dialogs to close");
+        Assert.All(shown, task => Assert.Equal(PromptDialogAnswer.None, task.Result));
+    }
+
+    [AvaloniaFact]
+    public async Task Ssh_s_Yes_has_the_primary_style_and_a_destructive_confirmation_the_danger_style()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var dialogs = app.Session.Services.DialogHost;
+        var presenter = new PromptDialogPresenter(dialogs);
+
+        using var scope = new CancellationTokenSource();
+        var asking = presenter.ShowAsync(Prompt(GitPromptKind.Confirm, ConfirmPrompt), scope.Token);
+        app.Settle();
+        var yes = (Button)app.FindByAutomationId("ConfirmButton");
+        Assert.Equal("Yes", yes.Content);
+        Assert.Same(Resource(app, "VcPrimaryButton"), yes.Theme);
+        await scope.CancelAsync();
+        await WaitAsync(() => asking.IsCompleted, "the confirmation to close");
+
+        var discarding = dialogs.ConfirmAsync(new ConfirmationRequest("Discard changes?", "Discard the changes to a.txt?", string.Empty, "Discard"));
+        app.Settle();
+        var discard = (Button)app.FindByAutomationId("ConfirmButton");
+        Assert.Equal("Discard", discard.Content);
+        Assert.Same(Resource(app, "VcDangerButton"), discard.Theme);
+        dialogs.CancelCurrent();
+        Assert.False(await discarding);
+    }
+
+    [AvaloniaFact]
     public async Task The_masked_boxes_show_a_mask_for_each_character_and_enter_answers()
     {
         using var data = new TempDirectory("data");
@@ -442,7 +513,7 @@ public class PromptDialogTests
         Keep(app.Capture(), "dark-21a-credentials");
         Assert.Equal($"Sign in to 127.0.0.1:{server.Port}", credentials.Title);
         Assert.Equal($"Git needs a user name and a password or token for http://127.0.0.1:{server.Port}.", credentials.Text);
-        Assert.False(credentials.HasRepositoryLine);
+        Assert.False(credentials.ShowsRepository);
         Assert.True(((TextBox)app.FindByAutomationId("CredentialUsername")).IsFocused);
         Assert.False(((Button)app.FindByAutomationId("ConfirmButton")).IsEffectivelyEnabled);
         var first = Assert.Single(server.Requests);
@@ -581,6 +652,31 @@ public class PromptDialogTests
     }
 
     /// <summary>Saves <paramref name="shot"/> under <c>VISUALCOMMIT_TEST_PICTURES</c> when that names a folder.</summary>
+    private static List<AutomationPeer> ControlElements(AutomationPeer root)
+    {
+        var found = new List<AutomationPeer>();
+        Collect(root);
+        return found;
+
+        void Collect(AutomationPeer peer)
+        {
+            if (peer.IsControlElement())
+            {
+                found.Add(peer);
+            }
+
+            foreach (var child in peer.GetChildren())
+            {
+                Collect(child);
+            }
+        }
+    }
+
+    private static object Resource(ShellDriver app, string key) =>
+        app.Window.TryFindResource(key, app.Window.ActualThemeVariant, out var value) && value is not null
+            ? value
+            : throw new InvalidOperationException($"No resource {key}.");
+
     private static void Keep(Screenshot shot, string name)
     {
         var folder = Environment.GetEnvironmentVariable("VISUALCOMMIT_TEST_PICTURES");
