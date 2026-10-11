@@ -53,11 +53,18 @@ public sealed partial class GitRepository
     /// </summary>
     private async Task<ApplyResult> ApplyCommitAsync(NetworkOptions? options, string stateFile, CancellationToken cancellationToken, params string[] arguments)
     {
+        // Conflicts that were there before make git refuse the call: a failure, not a stop.
+        var conflictedBefore = await HasConflictsAsync(cancellationToken).ConfigureAwait(false);
         var command = WriteCommand(options, arguments);
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Succeeded)
         {
             return ApplyResult.Applied;
+        }
+
+        if (conflictedBefore)
+        {
+            result.EnsureSuccess(command);
         }
 
         if (await HasConflictsAsync(cancellationToken).ConfigureAwait(false))

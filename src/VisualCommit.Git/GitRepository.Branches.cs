@@ -186,6 +186,7 @@ public sealed partial class GitRepository
         // A name that is no commit gets no message; git's merge then refuses it in its own words.
         var target = await ResolveAsync(reference + "^{commit}", cancellationToken).ConfigureAwait(false);
         var before = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
+        var conflictedBefore = await HasConflictsAsync(cancellationToken).ConfigureAwait(false);
 
         var arguments = new List<string> { "merge" };
         if (mode == MergeMode.FastForwardOnly)
@@ -212,7 +213,8 @@ public sealed partial class GitRepository
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded)
         {
-            if (await HasConflictsAsync(cancellationToken).ConfigureAwait(false))
+            // Conflicts the merge made, not ones that were there before and made git refuse it.
+            if (!conflictedBefore && await HasConflictsAsync(cancellationToken).ConfigureAwait(false))
             {
                 return MergeResult.Conflicts;
             }

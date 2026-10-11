@@ -257,6 +257,26 @@ public class HistoryOperationTests
         Assert.Equal([" M src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
     }
 
+    [Fact]
+    public async Task With_conflicts_already_there_a_pick_a_revert_and_a_merge_are_refused_not_stopped()
+    {
+        // Conflicts from a stash, with no operation in progress: git refuses each call.
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.None);
+        var repository = await OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        var alphaOne = await RevAsync(repo, "refs/heads/feature/alpha~1");
+
+        await Assert.ThrowsAsync<GitException>(() => repository.CherryPickAsync(alphaOne, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.RevertAsync(head, isMerge: false, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, cancellationToken: TestCancelled));
+
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
+        Assert.False(GitFileExists(repo, "REVERT_HEAD"));
+        Assert.False(GitFileExists(repo, "MERGE_HEAD"));
+        Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+    }
+
     // ---- Revert -----------------------------------------------------------------------------------
 
     [Fact]
