@@ -93,14 +93,15 @@ Visual checks:
 
 - [x] 21. Scripted walk-through: one test per check in `Phase2Checks`, screenshots under
   `artifacts/visual/phase-2/scripted/`.
-- [ ] 22. Real-window pass for the checks marked for it (`Phase2RealWindowPass`): written for checks 1, 3, 5, 10, 14, 17, 20 and 21, not run yet.
+- [x] 22. Real-window pass for the checks marked for it (`Phase2RealWindowPass`): checks 1, 3,
+  5, 10, 14, 17, 20 and 21.
 
 Closing:
 
-- [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+- [x] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed.
-- [ ] 24. CI run of the gate's commit read, every job.
-- [ ] 25. `architecture.md` describes what is built.
+- [x] 24. CI run of the gate's commit read, every job.
+- [x] 25. `architecture.md` describes what is built.
 - [ ] 26. `plan.md`: anything not delivered moved, risks updated.
 - [ ] 27. Handoff `docs/handoffs/phase-2.md`.
 - [ ] 28. Cold-read check by a fresh agent; gaps fixed.
@@ -136,8 +137,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The visual test gate (step 23): `dotnet test`, then, after telling the owner, the real-window
-pass of phases 0, 1 and 2 on the same commit, and every picture of both inspected.
+The closing steps 26 to 30: `plan.md`, the handoff, the cold-read check, this file (state,
+gate commit `2a13804`, CI run 38097840078), and the report to the owner. The gate passed on
+`2a13804` (see the [phase 2 report](test-reports/phase-2.md)); only docs may change from here.
 
 ### Notes for whoever resumes
 
