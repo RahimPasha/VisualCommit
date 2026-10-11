@@ -26,6 +26,13 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IAppLog _log;
     private readonly ISessionStore _session;
     private readonly TabServices _tabServices;
+
+    /// <summary>
+    /// The repositories of tabs that were closed while an operation the user started ran in them
+    /// (1.8): a local one goes on to its end, every step of it, so the window waits for it as for
+    /// an open tab's. Each is kept until its queue is idle. Only touched on the UI thread.
+    /// </summary>
+    private readonly List<RepositoryViewModel> _closedButRunning = [];
     private bool _restoring;
     private bool _closeConfirmed;
     private FinishingDialogViewModel? _finishing;
@@ -205,6 +212,10 @@ public partial class MainWindowViewModel : ObservableObject
         Tabs.RemoveAt(index);
         tab.RepositoryOpened -= OnRepositoryOpened;
         tab.Dispose();
+        if (tab.Repository is { } repository && repository.Queue.Current is { IsBackground: false })
+        {
+            _ = KeepUntilIdleAsync(repository);
+        }
 
         if (Tabs.Count == 0)
         {
@@ -249,7 +260,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// The window is closing (docs/phase-3-design.md 1.8): returns true when it may close now.
-    /// While a repository runs an operation the user started, the close waits: what waits is
+    /// While a repository runs an operation the user started, the close waits (also for the local
+    /// operation of a tab closed meanwhile, which goes on to its end): what waits is
     /// dropped, "Finishing operations" lists what runs, and <paramref name="closeWindow"/> is
     /// called when they have ended, or when the user chooses "Quit now". A background auto-fetch
     /// does not hold the window. Once the close is confirmed, every later call returns true.
@@ -271,6 +283,7 @@ public partial class MainWindowViewModel : ObservableObject
         var running = Tabs
             .Select(tab => tab.Repository)
             .OfType<RepositoryViewModel>()
+            .Concat(_closedButRunning)
             .Select(repository => (Repository: repository, Current: repository.Queue.Current))
             .Where(entry => entry.Current is { IsBackground: false })
             .ToList();
@@ -291,6 +304,20 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         return false;
+    }
+
+    /// <summary>Keeps a closed tab's repository in <see cref="_closedButRunning"/> until its running operation has ended.</summary>
+    private async Task KeepUntilIdleAsync(RepositoryViewModel repository)
+    {
+        _closedButRunning.Add(repository);
+        try
+        {
+            await repository.Queue.WhenIdleAsync();
+        }
+        finally
+        {
+            _closedButRunning.Remove(repository);
+        }
     }
 
     /// <summary>Confirms the close without waiting: the app session ends (its owner disposes it).</summary>
