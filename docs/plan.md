@@ -187,6 +187,7 @@ Delivers:
 - Context menus on every object, double-click actions, drag a branch onto a branch, multi-select commits.
 - Operation queue with progress, cancel, and error messages that include git's own output. It takes over phase 2's writes, which already run one at a time with the watcher paused (D71, D76).
 - From phase 2 (D70): stage, unstage and discard in a file's right-click menu, in both stage lists and in the diff view. Today they are buttons.
+- From phase 1 (D53): the toolbar's Fetch, Pull, Push, Branch, Stash and Pop buttons, and the status bar's operation status, become real. Undo, Redo and Search stay placeholders until phase 5.
 - Credential and SSH passphrase prompts as in-app dialogs.
 - From phase 1: ssh's own prompts (an unknown host key, a key's passphrase) are answered in the app or turned off. Today a clone over ssh can wait for an answer on the terminal the app was started from, until it is cancelled.
 - From phase 1: the left panel's selection follows the graph's. Today a clicked ref keeps its selection background after the graph selection moves on.

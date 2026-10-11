@@ -104,7 +104,7 @@ Closing:
 - [x] 25. `architecture.md` describes what is built.
 - [x] 26. `plan.md`: anything not delivered moved, risks updated.
 - [x] 27. Handoff `docs/handoffs/phase-2.md`.
-- [ ] 28. Cold-read check by a fresh agent; gaps fixed.
+- [x] 28. Cold-read check by a fresh agent; gaps fixed.
 - [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
 - [ ] 30. Owner told what passed, what did not, and what needs a decision.
 
@@ -143,7 +143,8 @@ gate commit `2a13804`, CI run 38097840078), and the report to the owner. The gat
 
 ### Notes for whoever resumes
 
-- The default tests passed (379) on `master` at `aead41b` before the phase started.
+- The default tests passed (379) on `master` at `aead41b` before the phase started; the phase
+  started from `cec9c0c`, which differs from it in docs only.
 - An independent review of phase 2's code (an Opus agent, before the gate) found 14 problems;
   all are fixed, each with a test, and D74 to D76 record what changed. The two that could lose
   work: patches around "\ No newline at end of file" joined lines (now checked against git by
@@ -154,12 +155,13 @@ gate commit `2a13804`, CI run 38097840078), and the report to the owner. The gat
   throwaway headless program outside the repo: it drew an editor with TextMate colours and
   JetBrains Mono on Avalonia 12.1.3. The plain JetBrains Mono draws `=>` as an arrow, hence the
   NL cut (D64).
-- Phase 1 was built partly by sub-agents in git worktrees under `.claude/worktrees/`
+- Phases 1 and 2 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
   (git-ignored); the phase 1 handoff's "Things that cost time" says what to watch for. One
   worktree, `.claude/worktrees/agent-a60aa26c7fe44ae22` on `wip/p1-git-fixes`, is still there:
   this session's permission system refused `git worktree remove --force --force` on it. The owner
   can remove it and the merged local branches `wip/p1-git-fixes` and
-  `worktree-agent-a60aa26c7fe44ae22` (`git branch -d`). None of them is on `origin`.
+  `worktree-agent-a60aa26c7fe44ae22` (`git branch -d`). None of them is on `origin`. Phase 2's
+  own worktree was removed with its branches.
 - No cloud session has worked on the repo yet; [cloud-sessions.md](cloud-sessions.md) lists what
   the first one should check.
 - On the Windows development machine only: Windows 11 on an Intel Core i7-8650U laptop, .NET SDK

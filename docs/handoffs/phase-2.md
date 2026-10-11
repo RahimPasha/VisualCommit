@@ -167,7 +167,8 @@ Rules worth keeping:
   `CancellationToken` without `TestContext.Current.CancellationToken`.
 - **A sub-agent's worktree** (`.claude/worktrees/agent-a60aa26c7fe44ae22`, from phase 1) could
   not be removed: the permission system refused `git worktree remove --force --force`. It is
-  git-ignored and harmless; the owner can remove it.
+  git-ignored and harmless; the owner can remove it. Phase 2's own sub-agent worktree was clean
+  and merged, and `git worktree remove` (without force) and `git branch -d` removed it.
 
 ## For the next phase
 
@@ -182,6 +183,28 @@ Do first:
 2. Decide the operation queue's shape: it must keep D76's one-at-a-time rule and D71's pause,
    and show git's message for a failure (C11).
 3. Write phase 3's checks into `docs/test-reports/phase-3.md` before the UI.
+
+Open points for phase 3 (record each as a decision; ask the owner the ones that are a matter of
+taste, as D60 to D63 were asked):
+
+- **Where the operation queue lives.** `architecture.md` puts it in `VisualCommit.Git` ("Later:
+  the operation queue"); today the view model's `WriteAsync` does its job. Decide where it
+  lives and how the stage panel's writes join it.
+- **Credential and passphrase prompts (C11).** `architecture.md` says helper hooks; decide the
+  mechanism (an askpass helper the app ships, git's credential helper, or both), what happens
+  when Git Credential Manager is installed, and how this replaces `GIT_TERMINAL_PROMPT=0` (D30)
+  for operations that need a prompt. Phase 1's ssh prompts belong here too.
+- **Destructive operations.** Which ones confirm (Q3), and the names and lifetime of their
+  backup refs beside D67's `refs/visualcommit/backup/discard-*`.
+- **Pull.** Whether the app follows the user's `pull.rebase` or always merges, and the
+  auto-fetch default (its setting is phase 6's).
+- **The interaction table.** Phase 3's "Done when" asks that every row of `requirements.md`'s
+  interaction table works; some rows are later phases' actions (rebase onto, squash, compare,
+  file history and blame, create pull request). Settle with the owner whether phase 3 leaves
+  them out of the menus or shows them disabled.
+- **Context menus in the harnesses.** Whether an Avalonia context menu's popup appears in the
+  real-window pass's window capture; try it before writing the checks that need it.
+- **Cancel on a Mac.** D37's note to check cancelling a git call on macOS by hand.
 
 Risks to watch:
 

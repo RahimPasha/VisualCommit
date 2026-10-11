@@ -80,7 +80,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md`, commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 0's acceptance (`c033b58`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built; the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md`, commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built; the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -276,9 +276,10 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 2 to 2.5 minutes on the Windows machine, most of it in phase 1's
-  checks that load and clone a 100k-commit repo (built once into
-  `%TEMP%/VisualCommit.Tests/shared/` and reused). They use real git and a temporary folder for
+- The default tests take about 5 to 6 minutes on the Windows machine (the three test projects
+  run side by side; the scripted walk-through takes longest), up to a third longer when the
+  laptop is hot, and about 3.5 minutes on CI. Phase 1's checks load and clone a 100k-commit repo,
+  built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
   Every run that takes screenshots, `dotnet test` at the root included, empties that folder
@@ -288,7 +289,7 @@ What to know about them:
   a later run are the same files (the `tr` removes the line endings a Windows checkout adds,
   which `sha256sum` would take as part of each name).
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 3 minutes (phases 0 and 1): tell the
+  app on the desktop and moves the real mouse for about 6 minutes (phases 0, 1 and 2): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
   and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
