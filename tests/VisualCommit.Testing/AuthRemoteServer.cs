@@ -10,8 +10,8 @@ namespace VisualCommit.Testing;
 
 /// <summary>
 /// A small git server over HTTP for the tests (design 7.3, D97): a <see cref="TcpListener"/> on
-/// 127.0.0.1 serving one bare repository, <see cref="RepositoryName"/>, through
-/// <c>git http-backend</c> run as CGI. Unless <see cref="RequireAuth"/> is false it demands HTTP
+/// 127.0.0.1 serving one bare repository through <c>git http-backend</c> run as CGI: an empty one
+/// of its own, <see cref="RepositoryName"/>, or an existing one in place (<see cref="StartAsync"/>). Unless <see cref="RequireAuth"/> is false it demands HTTP
 /// Basic auth on every request (<see cref="Credentials"/>, alice/s3cret at first), so that git
 /// asks for a user name and password as it would of a real server. It runs the same on the
 /// three platforms with nothing to register.
@@ -48,6 +48,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(15);
 
     private readonly TempDirectory _root;
+
+    /// <summary>The folder that holds the served repository: <c>GIT_PROJECT_ROOT</c> of <c>http-backend</c>. <see cref="_root"/> unless the server serves a repository in place.</summary>
+    private readonly string _projectRoot;
     private readonly TcpListener _listener;
     private readonly GitRunner _runner;
     private readonly IReadOnlyDictionary<string, string?> _environment;
@@ -63,7 +66,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private volatile bool _requireAuth = true;
     private int _disposed;
 
-    private AuthRemoteServer(TempDirectory root, TcpListener listener, bool portWasTaken)
+    private AuthRemoteServer(TempDirectory root, TcpListener listener, bool portWasTaken, string projectRoot, string repositoryFolderName)
     {
         _root = root;
         _listener = listener;
@@ -71,6 +74,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         Port = ((IPEndPoint)listener.LocalEndpoint).Port;
         _runner = new GitRunner(TempRepo.GitPath);
         _environment = TempRepo.IsolatedEnvironment(root.Combine("home"));
+        _projectRoot = projectRoot;
+        RepositoryFolderName = repositoryFolderName;
     }
 
     /// <summary>The port the server listens on, on 127.0.0.1.</summary>
@@ -79,11 +84,21 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>Whether the port asked for was taken, so that the server took one the system picked.</summary>
     public bool PortWasTaken { get; }
 
-    /// <summary>The served repository's URL: <c>http://127.0.0.1:&lt;port&gt;/remote.git</c>.</summary>
-    public string Url => string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{RepositoryName}");
+    /// <summary>
+    /// The served repository's folder name, which is also the last part of <see cref="Url"/>:
+    /// <see cref="RepositoryName"/> for the server's own repository, the existing folder's name
+    /// for one served in place (<c>origin.git</c>).
+    /// </summary>
+    public string RepositoryFolderName { get; }
+
+    /// <summary>Whether the server serves an existing repository in place, which it neither made nor deletes.</summary>
+    public bool ServesInPlace => !string.Equals(_projectRoot, _root.Path, StringComparison.Ordinal);
+
+    /// <summary>The served repository's URL: <c>http://127.0.0.1:&lt;port&gt;/remote.git</c>, or <c>/origin.git</c> for <c>origin.git</c> served in place.</summary>
+    public string Url => string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{RepositoryFolderName}");
 
     /// <summary>The served bare repository's folder, for git calls that go around the server.</summary>
-    public string RepositoryPath => _root.Combine(RepositoryName);
+    public string RepositoryPath => Path.Combine(_projectRoot, RepositoryFolderName);
 
     /// <summary>Whether every request must carry <see cref="Credentials"/>. True at first.</summary>
     public bool RequireAuth
@@ -124,18 +139,32 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Creates the server's empty bare repository (on main) and starts listening on 127.0.0.1:
-    /// on <paramref name="port"/>, or on a port the system picks when it is 0. With
-    /// <paramref name="fallBackToFreePort"/>, a port that is taken gives way to one the system
-    /// picks (<see cref="PortWasTaken"/>); without it, it throws <see cref="SocketException"/>.
+    /// Starts listening on 127.0.0.1: on <paramref name="port"/>, or on a port the system picks
+    /// when it is 0. With <paramref name="fallBackToFreePort"/>, a port that is taken gives way to
+    /// one the system picks (<see cref="PortWasTaken"/>); without it, it throws
+    /// <see cref="SocketException"/>.
+    /// <para>
+    /// Without <paramref name="existingRepository"/> the server serves an empty bare repository
+    /// of its own (on main), <see cref="RepositoryName"/>, which disposing deletes. With it, the
+    /// server serves that existing bare repository in place (design 7.3), at a URL whose path is
+    /// the folder's name (<c>http://127.0.0.1:&lt;port&gt;/origin.git</c>), so that pushes made
+    /// around the server (a scenario's <c>PushFromElsewhereAsync</c>) land in what it serves.
+    /// The repository is not changed (its configuration included) and not deleted.
+    /// </para>
     /// </summary>
-    public static async Task<AuthRemoteServer> StartAsync(int port = 0, bool fallBackToFreePort = false)
+    /// <param name="port">The port, or 0 for one the system picks.</param>
+    /// <param name="fallBackToFreePort">Whether a taken port gives way to a free one.</param>
+    /// <param name="existingRepository">A bare repository to serve in place; its folder name may hold only letters, digits, '.', '-' and '_'.</param>
+    public static async Task<AuthRemoteServer> StartAsync(int port = 0, bool fallBackToFreePort = false, string? existingRepository = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(port);
         var root = new TempDirectory("auth-server");
         TcpListener? listener = null;
         try
         {
+            var served = existingRepository is null
+                ? null
+                : await ExistingRepositoryAsync(existingRepository, TempRepo.IsolatedEnvironment(root.Combine("home"))).ConfigureAwait(false);
             var portWasTaken = false;
             try
             {
@@ -147,8 +176,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 listener = Listen(0);
             }
 
-            var server = new AuthRemoteServer(root, listener, portWasTaken);
-            await server.CreateRepositoryAsync().ConfigureAwait(false);
+            var server = served is null
+                ? new AuthRemoteServer(root, listener, portWasTaken, root.Path, RepositoryName)
+                : new AuthRemoteServer(root, listener, portWasTaken, served.Value.ProjectRoot, served.Value.Name);
+            if (served is null)
+            {
+                await server.CreateRepositoryAsync().ConfigureAwait(false);
+            }
+
             server._acceptLoop = Task.Run(server.AcceptLoopAsync);
             return server;
         }
@@ -161,8 +196,43 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 
-    /// <summary>Starts a server for a visual check: on <see cref="VisualChecksPort"/>, or on a free port when it is taken.</summary>
-    public static Task<AuthRemoteServer> StartForVisualChecksAsync() => StartAsync(VisualChecksPort, fallBackToFreePort: true);
+    /// <summary>
+    /// Starts a server for a visual check: on <see cref="VisualChecksPort"/>, or on a free port
+    /// when it is taken; serving <paramref name="existingRepository"/> in place when given
+    /// (<see cref="StartAsync"/>).
+    /// </summary>
+    public static Task<AuthRemoteServer> StartForVisualChecksAsync(string? existingRepository = null) =>
+        StartAsync(VisualChecksPort, fallBackToFreePort: true, existingRepository);
+
+    /// <summary>The folder that holds <paramref name="repository"/> and its name, once it is known to be a bare repository with a name that needs no escaping in a URL.</summary>
+    private static async Task<(string ProjectRoot, string Name)?> ExistingRepositoryAsync(string repository, IReadOnlyDictionary<string, string?> environment)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repository));
+        if (!Directory.Exists(full))
+        {
+            throw new DirectoryNotFoundException($"No repository to serve at {full}.");
+        }
+
+        var name = Path.GetFileName(full);
+        if (name.Length == 0 || name is "." or ".." || !name.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_'))
+        {
+            throw new ArgumentException($"The served folder's name must need no escaping in a URL: '{name}'.", nameof(repository));
+        }
+
+        var command = new GitCommand("rev-parse", "--is-bare-repository")
+        {
+            WorkingDirectory = full,
+            Environment = environment,
+        };
+        var bare = await new GitRunner(TempRepo.GitPath).RunAsync(command).ConfigureAwait(false);
+        if (!bare.Succeeded || bare.StandardOutput.Trim() != "true")
+        {
+            throw new ArgumentException($"{full} is not a bare repository.", nameof(repository));
+        }
+
+        return (Path.GetDirectoryName(full)!, name);
+    }
 
     /// <summary>
     /// Holds back the next response that carries a pack: one to an upload-pack POST that asks for
@@ -208,7 +278,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 
-    /// <summary>Stops listening, ends every connection (a held response is not sent) and deletes the repository.</summary>
+    /// <summary>Stops listening, ends every connection (a held response is not sent) and deletes the server's own repository; one served in place stays.</summary>
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -477,8 +547,17 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     {
         var environment = new Dictionary<string, string?>(_environment)
         {
-            ["GIT_PROJECT_ROOT"] = _root.Path,
+            ["GIT_PROJECT_ROOT"] = _projectRoot,
             ["GIT_HTTP_EXPORT_ALL"] = "1",
+
+            // No background gc after a push, which would outlive the request; given through the
+            // environment (Git 2.31 and newer), so that a repository served in place keeps its
+            // configuration unchanged.
+            ["GIT_CONFIG_COUNT"] = "2",
+            ["GIT_CONFIG_KEY_0"] = "gc.auto",
+            ["GIT_CONFIG_VALUE_0"] = "0",
+            ["GIT_CONFIG_KEY_1"] = "receive.autogc",
+            ["GIT_CONFIG_VALUE_1"] = "false",
             ["REQUEST_METHOD"] = head.Method,
             ["PATH_INFO"] = path,
             ["QUERY_STRING"] = query,
@@ -494,7 +573,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         var command = new GitCommand("http-backend")
         {
-            WorkingDirectory = _root.Path,
+            WorkingDirectory = _projectRoot,
             Environment = environment,
             Encoding = GitCommand.Latin1,
             StandardInput = body.Length > 0 ? Encoding.Latin1.GetString(body) : null,
@@ -537,8 +616,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             : null;
     }
 
-    private static bool IsInRepository(string path) =>
-        path.StartsWith("/" + RepositoryName + "/", StringComparison.Ordinal) && !path.Contains("..", StringComparison.Ordinal);
+    private bool IsInRepository(string path) =>
+        path.StartsWith("/" + RepositoryFolderName + "/", StringComparison.Ordinal) && !path.Contains("..", StringComparison.Ordinal);
 
     private static (string Path, string Query) SplitTarget(string target)
     {

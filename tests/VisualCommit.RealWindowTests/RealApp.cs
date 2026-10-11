@@ -20,7 +20,7 @@ namespace VisualCommit.RealWindowTests;
 /// area, the same units as the scripted walk-through, unless a name says "screen".
 /// Every method that gives input waits afterwards until the app has handled it and painted.
 /// </summary>
-public sealed class RealApp : IDisposable
+public sealed partial class RealApp : IDisposable
 {
     private static readonly string Executable =
         typeof(RealApp).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
@@ -43,14 +43,18 @@ public sealed class RealApp : IDisposable
     private readonly UIA3Automation _automation;
     private readonly FlaUI.Core.Application _application;
 
-    private RealApp(Process process, UIA3Automation automation, FlaUI.Core.Application application, Window window)
+    private RealApp(Process process, UIA3Automation automation, FlaUI.Core.Application application, Window window, string dataDirectory)
     {
         _process = process;
         _automation = automation;
         _application = application;
         Window = window;
         Handle = window.Properties.NativeWindowHandle.Value;
+        DataDirectory = dataDirectory;
     }
+
+    /// <summary>The data folder the app was started on: its settings, session and log.</summary>
+    public string DataDirectory { get; }
 
     /// <summary>Anything that went wrong while cleaning up after a run. The pass writes these into its run notes.</summary>
     public static System.Collections.Concurrent.ConcurrentQueue<string> Problems { get; } = new();
@@ -198,6 +202,10 @@ public sealed class RealApp : IDisposable
             startInfo.Environment.Remove(variable);
         }
 
+        // No askpass program, ssh command or proxy of this machine, and no auto-fetch, as in the
+        // scripted walk-through (D112).
+        GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
         process.OutputDataReceived += (_, _) => { };
         process.ErrorDataReceived += (_, _) => { };
@@ -213,7 +221,7 @@ public sealed class RealApp : IDisposable
             var window = application.GetMainWindow(automation, TimeSpan.FromSeconds(30))
                 ?? throw new TimeoutException("The app's main window did not appear within 30 seconds.");
 
-            var app = new RealApp(process, automation, application, window);
+            var app = new RealApp(process, automation, application, window, dataDirectory);
 
             // On top of everything else, so that the screen captures show the app and the mouse
             // reaches it, whatever other windows are open.
@@ -543,6 +551,8 @@ public sealed class RealApp : IDisposable
     /// <summary>Makes sure the app is gone, however the test ended, and releases UI Automation.</summary>
     public void Dispose()
     {
+        // A drag the test left in the middle must not leave the real mouse button held down.
+        ReleaseHeldButton();
         Stop(_process);
         _application.Dispose();
         _automation.Dispose();
