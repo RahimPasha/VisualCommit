@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The askpass helper (docs/phase-3-design.md 3.1, D82): git and ssh run it with a prompt as
+       its one argument; it asks the running app over a named pipe and prints the answer. A small
+       framework-dependent console program with no references, so that it starts fast. Projects
+       that reference it (VisualCommit.Git, and through it the app and every test project) get its
+       app host in their output folders, next to their own assemblies. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>visualcommit-askpass</AssemblyName>
+    <RootNamespace>VisualCommit.AskPass</RootNamespace>
+    <!-- Nothing here depends on culture: no ICU to load at start-up. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>
