@@ -325,10 +325,14 @@ public sealed partial class Phase3ChecksC
     /// tooltip, above the column headers, at least 36 high, its background and its bottom line in
     /// the warning colour, and the warning icon, by pixel.
     /// </summary>
-    private static Rect AssertConflictsBanner(ShellDriver app, Screenshot screenshot, string text, string toolTip, string? abort = null)
+    private static Rect AssertConflictsBanner(ShellDriver app, Screenshot screenshot, string text, string? toolTip, string? abort = null)
     {
         var banner = AssertBanner(app, text, abort);
-        Assert.Equal(toolTip, BannerToolTip(app));
+        if (toolTip is not null)
+        {
+            // Asserted where the report states it; null: the step names none.
+            Assert.Equal(toolTip, BannerToolTip(app));
+        }
         Assert.Equal(banner.Bottom + WindowLayout.ColumnHeaderHeight, app.GraphRowsTop, 1.0);
         var palette = PaletteOf(app);
         var right = abort is null ? banner.Right - 4 : banner.Right - 3;
