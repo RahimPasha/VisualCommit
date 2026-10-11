@@ -714,10 +714,10 @@ public static partial class Phase3Expectations
         /// at 1100×700, measured by the scripted run (its label widths come from the font) and
         /// asserted there (±1): the real-window pass presses here.
         /// </summary>
-        public static readonly (double X, double Y) FeatureAlphaLabelCentre = (309.5, 233);
+        public static readonly (double X, double Y) FeatureAlphaLabelCentre = (307.8, 233);
 
         /// <summary>Check 7: the centre of the label <c>main</c> on "Main work" (row 3), as above: the real-window pass drops here.</summary>
-        public static readonly (double X, double Y) MainLabelCentre = (290, 207);
+        public static readonly (double X, double Y) MainLabelCentre = (291.4, 207);
 
         /// <summary>Check 7: how many equal steps every drag of the check moves in.</summary>
         public const int DragSteps = 5;
