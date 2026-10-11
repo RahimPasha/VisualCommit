@@ -10,6 +10,7 @@ using VisualCommit.App;
 using VisualCommit.App.Services;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 
 namespace VisualCommit.Testing.Headless;
@@ -20,7 +21,7 @@ namespace VisualCommit.Testing.Headless;
 /// app; disposing it closes the app. Use it on the UI thread, inside an <c>[AvaloniaFact]</c>
 /// or <see cref="FreshApplication.RunAsync{T}"/>.
 /// </summary>
-public sealed class ShellDriver : IDisposable
+public sealed partial class ShellDriver : IDisposable
 {
     /// <summary>How long <see cref="WaitForAsync"/> waits when the test names no time.</summary>
     public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(10);
@@ -31,10 +32,12 @@ public sealed class ShellDriver : IDisposable
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
 
-    private ShellDriver(AppSession session, FakeFolderPicker folders)
+    private ShellDriver(AppSession session, FakeFolderPicker folders, FakeFileLauncher launcher, FakeClipboard clipboard)
     {
         Session = session;
         Folders = folders;
+        Launcher = launcher;
+        Clipboard = clipboard;
     }
 
     /// <summary>The app instance under test.</summary>
@@ -49,14 +52,20 @@ public sealed class ShellDriver : IDisposable
     /// Starts the app on <paramref name="dataDirectory"/> through the same start-up code as the
     /// desktop app, and shows its window at the given size in logical pixels. Pass null for a
     /// size to keep the one the app chose itself, for a check of what the app restores.
+    /// The folder dialog, the file launcher and the clipboard are fakes (<see cref="Folders"/>,
+    /// <see cref="Launcher"/>, <see cref="Clipboard"/>), so nothing outside the window is opened or
+    /// changed. Prompts of git and ssh go to the app's own dialogs, unless
+    /// <paramref name="promptHandler"/> (a <see cref="ScriptedPromptHandler"/>) answers them instead.
     /// </summary>
-    public static ShellDriver Start(string dataDirectory, int? width = 1100, int? height = 700)
+    public static ShellDriver Start(string dataDirectory, int? width = 1100, int? height = 700, IGitPromptHandler? promptHandler = null)
     {
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
         var folders = new FakeFolderPicker();
-        var session = AppSession.Start(new AppPaths(dataDirectory), application, folders);
+        var launcher = new FakeFileLauncher();
+        var clipboard = new FakeClipboard();
+        var session = AppSession.Start(new AppPaths(dataDirectory), application, folders, launcher, clipboard, promptHandler);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -69,7 +78,7 @@ public sealed class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session, folders);
+        var driver = new ShellDriver(session, folders, launcher, clipboard);
         driver.Settle();
         return driver;
     }
@@ -84,13 +93,14 @@ public sealed class ShellDriver : IDisposable
         IReadOnlyList<string?> tabs,
         int activeTab = 0,
         int? width = 1100,
-        int? height = 700)
+        int? height = 700,
+        IGitPromptHandler? promptHandler = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height);
+        return Start(dataDirectory, width, height, promptHandler);
     }
 
     /// <summary>

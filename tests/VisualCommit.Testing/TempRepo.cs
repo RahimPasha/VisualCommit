@@ -55,8 +55,10 @@ public sealed class TempRepo : IDisposable
     /// The environment variables that cut a git call off from the machine, with
     /// <paramref name="home"/> (created, with an empty <c>.gitconfig</c>, when missing) as its
     /// home folder: no system or user configuration, no search for a repository above the tests'
-    /// own folder, and none of the variables through which a surrounding process hands git extra
-    /// configuration or another repository. <see cref="Environment"/> is this plus the author.
+    /// own folder, none of the variables through which a surrounding process hands git extra
+    /// configuration or another repository, and <see cref="GitIsolation.MachineIndependence"/>
+    /// (no askpass program, ssh command or proxy of the machine, D112). <see cref="Environment"/>
+    /// is this plus the author.
     /// </summary>
     public static IReadOnlyDictionary<string, string?> IsolatedEnvironment(string home)
     {
@@ -86,6 +88,12 @@ public sealed class TempRepo : IDisposable
         foreach (var variable in GitIsolation.InheritedVariables)
         {
             environment[variable] = null;
+        }
+
+        // Nor an askpass program, an ssh command or a proxy of the machine (D112).
+        foreach (var (variable, value) in GitIsolation.MachineIndependence)
+        {
+            environment[variable] = value;
         }
 
         return environment;
@@ -477,12 +485,46 @@ public sealed class TempRepo : IDisposable
         }
     }
 
+    /// <summary>
+    /// The time this repository's clock shows: the author, committer and ref-update date of its
+    /// next git call. Shared with the repositories next to it (<see cref="CloneSiblingAsync"/>).
+    /// </summary>
+    public DateTimeOffset ClockTime => _clock.Now;
+
+    /// <summary>
+    /// Moves the clock forward to <paramref name="time"/>, for a step that must look newer in
+    /// the reflog than an operation of the app under test, whose ref updates are dated
+    /// <see cref="GitIsolation.AppCommitDate"/> (D111): git's <c>--force-if-includes</c> looks only
+    /// at reflog entries newer than the remote-tracking ref's last update. The clock goes on from
+    /// there a minute per commit, stash and merge, and moves for the repositories next to this
+    /// one too (they share it). It never goes back: an earlier time throws.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="time"/> is before <see cref="ClockTime"/>.</exception>
+    public TempRepo MoveClockTo(DateTimeOffset time)
+    {
+        _clock.MoveTo(time);
+        return this;
+    }
+
     /// <summary>The builder's clock, shared by a repo and the clones made next to it.</summary>
     private sealed class Clock(DateTimeOffset now)
     {
         public DateTimeOffset Now { get; private set; } = now;
 
         public void Advance() => Now = Now.AddMinutes(1);
+
+        public void MoveTo(DateTimeOffset time)
+        {
+            if (time < Now)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(time),
+                    time,
+                    string.Create(CultureInfo.InvariantCulture, $"The clock only moves forward; it shows {Now:yyyy-MM-dd HH:mm:ss zzz}."));
+            }
+
+            Now = time;
+        }
     }
 }
 
