@@ -102,8 +102,8 @@ Closing:
   inspected, report completed.
 - [x] 24. CI run of the gate's commit read, every job.
 - [x] 25. `architecture.md` describes what is built.
-- [ ] 26. `plan.md`: anything not delivered moved, risks updated.
-- [ ] 27. Handoff `docs/handoffs/phase-2.md`.
+- [x] 26. `plan.md`: anything not delivered moved, risks updated.
+- [x] 27. Handoff `docs/handoffs/phase-2.md`.
 - [ ] 28. Cold-read check by a fresh agent; gaps fixed.
 - [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
 - [ ] 30. Owner told what passed, what did not, and what needs a decision.
