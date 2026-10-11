@@ -13,20 +13,29 @@ public sealed record GitResult(int ExitCode, string StandardOutput, string Stand
     public GitResult EnsureSuccess(GitCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return Succeeded ? this : throw new GitException(command.DisplayText, ExitCode, StandardError);
+        return Succeeded ? this : throw new GitException(command.DisplayText, ExitCode, StandardError, standardOutput: StandardOutput);
     }
 }
 
 /// <summary>A git call that failed: it could not be started, or it exited with an error.</summary>
 public sealed class GitException : Exception
 {
-    public GitException(string commandText, int? exitCode, string standardError, Exception? innerException = null)
+    public GitException(string commandText, int? exitCode, string standardError, Exception? innerException = null, string standardOutput = "")
         : base(BuildMessage(commandText, exitCode, standardError), innerException)
     {
+        ArgumentNullException.ThrowIfNull(standardOutput);
         CommandText = commandText;
         ExitCode = exitCode;
         StandardError = standardError;
+        StandardOutput = standardOutput;
     }
+
+    /// <summary>
+    /// What git wrote to standard output, or empty (a command that streamed it, or a call that
+    /// did not run). A merge writes its messages there; the error dialog shows them when standard
+    /// error is empty (phase 3 design 1.6).
+    /// </summary>
+    public string StandardOutput { get; }
 
     public string CommandText { get; }
 

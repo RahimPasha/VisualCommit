@@ -282,7 +282,12 @@ public partial class MainWindowViewModel : ObservableObject
         public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) =>
             throw new GitUnavailableException("No repositories can be created here.");
 
-        public Task<IGitRepository> CloneAsync(string url, string destination, IProgress<CloneProgress>? progress, CancellationToken cancellationToken = default) =>
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) =>
             throw new GitUnavailableException("No repositories can be cloned here.");
     }
 

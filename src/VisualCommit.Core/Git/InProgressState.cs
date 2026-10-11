@@ -1,0 +1,47 @@
+namespace VisualCommit.Core.Git;
+
+/// <summary>What git operation is in progress in the working tree (phase 3 design 5, D89).</summary>
+public enum InProgressKind
+{
+    /// <summary>None: there may still be conflicted files (a stash that did not apply cleanly).</summary>
+    None,
+
+    /// <summary><c>MERGE_HEAD</c> exists.</summary>
+    Merge,
+
+    /// <summary><c>CHERRY_PICK_HEAD</c> exists, or a sequencer of picks stopped between commits.</summary>
+    CherryPick,
+
+    /// <summary><c>REVERT_HEAD</c> exists, or a sequencer of reverts stopped between commits.</summary>
+    Revert,
+
+    /// <summary><c>rebase-merge/</c>, or <c>rebase-apply/</c> without <c>applying</c>.</summary>
+    Rebase,
+
+    /// <summary><c>git am</c>: <c>rebase-apply/</c> with <c>applying</c>.</summary>
+    ApplyMailbox,
+}
+
+/// <summary>The operation in progress, as the conflict banner shows it (phase 3 design 5).</summary>
+/// <param name="Kind">Which operation.</param>
+/// <param name="Commit">The commit being picked or reverted (<c>CHERRY_PICK_HEAD</c>, <c>REVERT_HEAD</c>) or merged (<c>MERGE_HEAD</c>); null when git names none.</param>
+/// <param name="Subject">A merge's message (<c>MERGE_MSG</c>'s first line), or the picked or reverted commit's subject.</param>
+/// <param name="Branch">A rebase's branch (<c>head-name</c> without <c>refs/heads/</c>).</param>
+/// <param name="Onto">A rebase's new base (<c>onto</c>).</param>
+/// <param name="Remaining">The commits a sequence (from a terminal) or a rebase has still to apply after the stopped one; 0 without one.</param>
+/// <param name="Empty">A cherry-pick or revert that changes nothing: its index equals HEAD's tree and nothing conflicts (2.12).</param>
+public sealed record InProgressState(
+    InProgressKind Kind,
+    string? Commit,
+    string? Subject,
+    string? Branch,
+    string? Onto,
+    int Remaining,
+    bool Empty)
+{
+    /// <summary>Nothing in progress.</summary>
+    public static InProgressState None { get; } = new(InProgressKind.None, null, null, null, null, 0, false);
+
+    /// <summary>An operation is in progress.</summary>
+    public bool IsActive => Kind != InProgressKind.None;
+}

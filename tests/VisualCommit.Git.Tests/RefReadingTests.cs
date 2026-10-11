@@ -78,8 +78,12 @@ public class RefReadingTests
         Assert.Equal(
             [
                 new GitRef("refs/heads/feature/login", "feature/login", RefKind.LocalBranch, first),
-                new GitRef("refs/heads/main", "main", RefKind.LocalBranch, ours, Upstream: "origin/main", Ahead: 1, Behind: 1, IsHead: true),
-                new GitRef("refs/heads/old/topic", "old/topic", RefKind.LocalBranch, first, Upstream: "origin/old/topic", UpstreamGone: true),
+                new GitRef(
+                    "refs/heads/main", "main", RefKind.LocalBranch, ours, Upstream: "origin/main", Ahead: 1, Behind: 1, IsHead: true,
+                    UpstreamRef: "refs/remotes/origin/main", UpstreamRemote: "origin", UpstreamRemoteRef: "refs/heads/main"),
+                new GitRef(
+                    "refs/heads/old/topic", "old/topic", RefKind.LocalBranch, first, Upstream: "origin/old/topic", UpstreamGone: true,
+                    UpstreamRef: "refs/remotes/origin/old/topic", UpstreamRemote: "origin", UpstreamRemoteRef: "refs/heads/old/topic"),
                 new GitRef("refs/remotes/origin/main", "origin/main", RefKind.RemoteBranch, theirs, RemoteName: "origin"),
                 new GitRef("refs/remotes/team/fork/main", "team/fork/main", RefKind.RemoteBranch, second, RemoteName: "team/fork"),
                 new GitRef("refs/tags/v0.1", "v0.1", RefKind.Tag, first),
@@ -108,6 +112,35 @@ public class RefReadingTests
         Assert.Equal(new HeadState(null, first), detached.Head);
         Assert.True(detached.Head.IsDetached);
         Assert.DoesNotContain(detached.Refs, gitRef => gitRef.IsHead);
+    }
+
+    [Fact]
+    public async Task Reads_an_upstream_as_its_full_ref_remote_and_remote_ref_also_when_it_is_local_or_renamed()
+    {
+        // D101: side tracks main of this repository (remote "."), whose short form is just
+        // "main"; topic tracks a branch whose name on the remote differs from the local one.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.GitAsync("branch", "--quiet", "side");
+        await repo.GitAsync("config", "branch.side.remote", ".");
+        await repo.GitAsync("config", "branch.side.merge", "refs/heads/main");
+        var originPath = Sibling(repo, "origin.git");
+        await repo.GitAsync("clone", "--quiet", "--bare", repo.Path, originPath);
+        await repo.GitAsync("remote", "add", "origin", originPath);
+        await repo.GitAsync("push", "--quiet", "origin", "main:refs/heads/server/topic");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        await repo.GitAsync("branch", "--quiet", "--track", "topic", "refs/remotes/origin/server/topic");
+
+        var refs = (await (await OpenAsync(repo)).ReadRefsAsync(TestCancelled)).Refs;
+
+        var side = refs.Single(gitRef => gitRef.FullName == "refs/heads/side");
+        Assert.Equal(("refs/heads/main", ".", "refs/heads/main"), (side.UpstreamRef, side.UpstreamRemote, side.UpstreamRemoteRef));
+        Assert.True(side.HasLocalUpstream);
+        var topic = refs.Single(gitRef => gitRef.FullName == "refs/heads/topic");
+        Assert.Equal(("refs/remotes/origin/server/topic", "origin", "refs/heads/server/topic"), (topic.UpstreamRef, topic.UpstreamRemote, topic.UpstreamRemoteRef));
+        Assert.False(topic.HasLocalUpstream);
+        var main = refs.Single(gitRef => gitRef.FullName == "refs/heads/main");
+        Assert.Equal((null, null, null), (main.UpstreamRef, main.UpstreamRemote, main.UpstreamRemoteRef));
     }
 
     [Theory]

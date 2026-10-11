@@ -184,7 +184,12 @@ public class RepoTabsTests
 
         public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<IGitRepository> CloneAsync(string url, string destination, IProgress<CloneProgress>? progress, CancellationToken cancellationToken = default) =>
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) =>
             throw new NotSupportedException();
     }
 

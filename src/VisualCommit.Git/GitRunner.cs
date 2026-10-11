@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Git;
 
@@ -30,8 +31,10 @@ public sealed class GitRunner : IGitRunner
     /// Applied to every call. English messages keep git's output parseable and the same on every
     /// machine; with prompts off, git fails instead of waiting on a terminal that is not there.
     /// The editor is git's shell's no-op command, so a command that wants an editor goes on
-    /// without one instead of opening the user's editor out of sight (D68). Paths are taken
-    /// literally, so a file named <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
+    /// without one instead of opening the user's editor out of sight (D68); so is the editor of a
+    /// rebase's list of commits, which a user's <c>sequence.editor</c> would otherwise open even
+    /// with <c>GIT_EDITOR</c> set (D102). Paths are taken literally, so a file named
+    /// <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string?> DefaultEnvironment = new Dictionary<string, string?>
     {
@@ -39,6 +42,7 @@ public sealed class GitRunner : IGitRunner
         ["LANG"] = "en_US.UTF-8",
         ["GIT_TERMINAL_PROMPT"] = "0",
         ["GIT_EDITOR"] = ":",
+        ["GIT_SEQUENCE_EDITOR"] = ":",
         ["GIT_LITERAL_PATHSPECS"] = "1",
     };
 
@@ -352,6 +356,9 @@ public sealed class GitRunner : IGitRunner
         string standardOutput,
         string standardError)
     {
+        // The output is recorded with the credentials of every URL hidden, as the command line
+        // is: git remote -v and some error texts print URLs with tokens in them (D103). The call
+        // belongs to the operation the queue is running in this flow, if any (1.7).
         var record = new GitCallRecord(
             startedAt,
             duration,
@@ -359,8 +366,9 @@ public sealed class GitRunner : IGitRunner
             command.WorkingDirectory,
             outcome,
             exitCode,
-            standardOutput,
-            standardError);
+            GitCommand.HideCredentials(standardOutput),
+            GitCommand.HideCredentials(standardError),
+            GitOperationScope.Current);
 
         var result = outcome == GitCallOutcome.Completed ? $"exit {exitCode}" : outcome.ToString();
         var where = command.WorkingDirectory is null ? string.Empty : $" in {command.WorkingDirectory}";
