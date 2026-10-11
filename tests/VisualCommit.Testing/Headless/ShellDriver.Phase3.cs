@@ -8,6 +8,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views.Shell;
@@ -105,6 +106,39 @@ public sealed partial class ShellDriver
         _mousePosition = position;
         Settle();
     }
+
+    /// <summary>
+    /// A point in the Message column of the active graph's commit row <paramref name="row"/>
+    /// (counted as <c>SelectedIndex</c> counts, without the working-changes row), in the window:
+    /// where a check clicks a row (4h).
+    /// </summary>
+    public Point GraphRowPoint(int row)
+    {
+        var graph = Find<CommitGraphControl>("GraphRows");
+        var x = graph.Columns.Message.IsVisible ? graph.Columns.Message.X + 30 : graph.Columns.Graph.Right + 10;
+        return graph.TranslatePoint(new Point(x, graph.RowBounds(row).Center.Y), Window)
+            ?? throw new InvalidOperationException("The graph is not in the window.");
+    }
+
+    /// <summary>
+    /// Where the active graph draws the label <paramref name="text"/> (as drawn: a name, a name cut
+    /// with "…", or "+N") of commit row <paramref name="row"/>, in the window: what a check
+    /// presses to drag a branch, or drops onto (4g).
+    /// </summary>
+    public Rect GraphLabelBounds(int row, string text)
+    {
+        var graph = Find<CommitGraphControl>("GraphRows");
+        var labels = graph.LabelsInRow(row);
+        var label = labels.FirstOrDefault(candidate => candidate.Text == text)
+            ?? throw new InvalidOperationException($"Row {row} has no label \"{text}\"; it has: {string.Join(", ", labels.Select(candidate => candidate.Text))}.");
+        var topLeft = graph.TranslatePoint(label.Bounds.TopLeft, Window)
+            ?? throw new InvalidOperationException("The graph is not in the window.");
+        return new Rect(topLeft, label.Bounds.Size);
+    }
+
+    /// <summary>The window's branch drag (4g): whether a drag runs, its source, its target.</summary>
+    public BranchDragService BranchDrag =>
+        Find<DragLayer>("DragLayer").Service ?? throw new InvalidOperationException("The drag layer has no drag service: it is in no window.");
 
     /// <summary>
     /// The view model of the dialog on top (the one that takes the input, D104), as

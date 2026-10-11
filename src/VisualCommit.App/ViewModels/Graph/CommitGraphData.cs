@@ -21,7 +21,11 @@ public enum RefLabelKind
 /// <summary>One label in the Branch / Tag column.</summary>
 /// <param name="Text">What the label says: a branch, remote branch or tag name, <c>stash@{0}</c>, or <c>HEAD</c>.</param>
 /// <param name="Kind">What it stands for, which decides how it is drawn.</param>
-public sealed record RefLabel(string Text, RefLabelKind Kind);
+/// <param name="RefName">
+/// The full ref name of a branch, remote branch or tag (<c>refs/heads/main</c>), which tells a
+/// local branch <c>origin/main</c> from the remote branch of that name; null for HEAD and a stash.
+/// </param>
+public sealed record RefLabel(string Text, RefLabelKind Kind, string? RefName = null);
 
 /// <summary>
 /// The commits of one repository with their graph rows and ref labels, as the graph control
@@ -105,6 +109,90 @@ public sealed class CommitGraphData
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Whether <paramref name="sha"/> is known to be reachable from HEAD's commit over the rows
+    /// loaded so far (docs/phase-3-design.md 4h; 2.12 and 2.13 disable a pick of a commit that is
+    /// already on the current branch). The walk over the parents runs when a menu first asks and
+    /// is cached per graph; rows that arrive later extend it. False also while the history is
+    /// still loading and the walk has parents left that are not loaded yet: then the menu item is
+    /// enabled and git decides. False for every commit when HEAD is unborn. Call on the UI thread.
+    /// </summary>
+    public bool IsReachableFromHead(string sha)
+    {
+        ArgumentNullException.ThrowIfNull(sha);
+        var walk = _reachable ??= new ReachabilityWalk(Refs.Head.Sha);
+        if (walk.Contains(sha))
+        {
+            return true;
+        }
+
+        walk.Extend(this);
+        return walk.Contains(sha);
+    }
+
+    private ReachabilityWalk? _reachable;
+
+    /// <summary>The commits reached from HEAD so far, and the parents the walk waits for because their rows are not loaded yet.</summary>
+    private sealed class ReachabilityWalk
+    {
+        private readonly HashSet<string> _reached = new(StringComparer.Ordinal);
+        private List<string> _waiting = [];
+        private int _seenCount = -1;
+
+        public ReachabilityWalk(string? head)
+        {
+            if (head is not null)
+            {
+                _waiting.Add(head);
+            }
+        }
+
+        public bool Contains(string sha) => _reached.Contains(sha);
+
+        /// <summary>Follows every waiting parent whose row has been loaded since the last walk.</summary>
+        public void Extend(CommitGraphData data)
+        {
+            if (data.Count == _seenCount || _waiting.Count == 0)
+            {
+                return;
+            }
+
+            _seenCount = data.Count;
+            var stack = new Stack<string>(_waiting);
+            var stillWaiting = new List<string>();
+            while (stack.TryPop(out var sha))
+            {
+                if (_reached.Contains(sha))
+                {
+                    continue;
+                }
+
+                var index = data.IndexOf(sha);
+                if (index < 0)
+                {
+                    // Not loaded yet; on a complete graph it never will be (a shallow history).
+                    if (!data.IsComplete)
+                    {
+                        stillWaiting.Add(sha);
+                    }
+
+                    continue;
+                }
+
+                _reached.Add(sha);
+                foreach (var parent in data.CommitAt(index).Parents)
+                {
+                    if (!_reached.Contains(parent))
+                    {
+                        stack.Push(parent);
+                    }
+                }
+            }
+
+            _waiting = stillWaiting;
+        }
+    }
+
     private static CommitGraphData CreateEmpty()
     {
         var empty = new CommitGraphData(new RepoRefs(new HeadState(null, null), [], [], []));
@@ -141,7 +229,7 @@ public sealed class CommitGraphData
                 RefKind.RemoteBranch => RefLabelKind.RemoteBranch,
                 _ => RefLabelKind.Tag,
             };
-            Add(gitRef.TargetSha, new RefLabel(gitRef.Name, kind));
+            Add(gitRef.TargetSha, new RefLabel(gitRef.Name, kind, gitRef.FullName));
         }
 
         foreach (var stash in refs.Stashes)
