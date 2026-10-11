@@ -155,8 +155,9 @@ public interface IGitRepository
 
     /// <summary>
     /// Before a hard reset to <paramref name="target"/>: a snapshot commit (D67's way, without a
-    /// ref) of every staged or unstaged tracked file, every file staged as new and every
-    /// untracked file whose path <paramref name="target"/> tracks (<c>git ls-tree -r</c>), with
+    /// ref) of every staged or unstaged tracked file, every file staged as new and every file the
+    /// index does not track whose path <paramref name="target"/> tracks (<c>git ls-tree -r</c>;
+    /// ignored files too, which a hard reset overwrites just as silently), with
     /// the real index's tree (<c>git write-tree</c>) as second parent when it has no conflicts.
     /// Null when there is nothing to save (2.11). It goes into the reset's backup batch as
     /// <see cref="BackupRequest.ChangesCommit"/>.
@@ -212,7 +213,9 @@ public interface IGitRepository
     /// current branch with the message git would write for its short name: the message from
     /// <c>git fmt-merge-msg</c>, then <c>git merge --no-edit --no-log -m &lt;message&gt;
     /// [--no-ff | --ff-only] &lt;reference&gt;</c> (2.8 to 2.10, D94). Conflicts are returned,
-    /// not thrown: git failed and the status lists a conflicted file.
+    /// not thrown: git failed and the status lists a conflicted file. A merge (or pick, or
+    /// revert) refused because the index already had conflicts is a failure, a
+    /// <see cref="GitException"/>, not a conflict of its own.
     /// </summary>
     Task<MergeResult> MergeAsync(string reference, MergeMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
@@ -231,7 +234,10 @@ public interface IGitRepository
 
     /// <summary>
     /// Reverts one commit: <c>git revert --no-edit &lt;sha&gt;</c>, a merge commit with
-    /// <c>-m 1</c> (<paramref name="isMerge"/>). Results as <see cref="CherryPickAsync"/> (2.14).
+    /// <c>-m 1</c> (<paramref name="isMerge"/>). Results as <see cref="CherryPickAsync"/> (2.14),
+    /// except that a revert that changes nothing leaves no state on Git 2.36 (no REVERT_HEAD):
+    /// it throws a <see cref="GitException"/> with git's output, and returns
+    /// <see cref="ApplyResult.Empty"/> only where git keeps REVERT_HEAD.
     /// </summary>
     Task<ApplyResult> RevertAsync(string commit, bool isMerge, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
@@ -246,8 +252,12 @@ public interface IGitRepository
 
     /// <summary>
     /// Fetches <paramref name="remote"/>, or every remote when null: <c>git fetch --progress
-    /// &lt;remote&gt;</c> or <c>git fetch --all --progress</c>, without <c>--prune</c> or
-    /// <c>--tags</c> (D99); with <paramref name="noAutoMaintenance"/> (auto-fetch, D85) also
+    /// &lt;remote&gt;</c>, and for null one such call per remote in <c>git remote</c>'s order
+    /// (D109), leaving out remotes with <c>remote.&lt;name&gt;.skipFetchAll</c>, every call but
+    /// the last with <c>--no-auto-maintenance</c>; it goes on after a remote fails and throws one
+    /// <see cref="GitException"/> at the end whose standard error has an <c>error: Could not
+    /// fetch &lt;remote&gt;</c> line per failed remote. Never <c>--prune</c> or <c>--tags</c>
+    /// (D99); with <paramref name="noAutoMaintenance"/> (auto-fetch, D85) every call has
     /// <c>--no-auto-maintenance</c> (2.16, 2.17). Pull's first step is the fetch of one remote (2.18).
     /// </summary>
     Task FetchAsync(string? remote, NetworkOptions options, bool noAutoMaintenance = false, CancellationToken cancellationToken = default);
@@ -256,7 +266,9 @@ public interface IGitRepository
     /// Pull's second step, after its fetch (2.18, D84): integrates the current branch
     /// <paramref name="branch"/>'s upstream as <c>git pull</c> would, from <c>pull.ff</c>,
     /// <c>branch.&lt;b&gt;.rebase</c> and <c>pull.rebase</c>: <c>git merge --ff-only FETCH_HEAD</c>,
-    /// <c>git rebase [--rebase-merges]</c> or <c>git merge --no-edit [--no-ff | --ff] FETCH_HEAD</c>;
+    /// <c>git rebase [--rebase-merges]</c> (with a rebase setting, HEAD that is an ancestor of
+    /// the fetched head is fast-forwarded with <c>git merge --ff-only</c>, as git 2.34 and later
+    /// do, and the result says <c>FastForward</c>) or <c>git merge --no-edit [--no-ff | --ff] FETCH_HEAD</c>;
     /// a local upstream uses <see cref="GitRef.UpstreamRef"/> in place of <c>FETCH_HEAD</c>.
     /// Conflicts are returned, not thrown.
     /// </summary>

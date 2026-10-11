@@ -1108,7 +1108,7 @@ has its own dialog ("Checkout blocked", "Push rejected", "Force push stopped", "
 | 2.11 Reset | Reset <current> (detached: Reset HEAD) | Resetting <current> to <sha>… | Reset failed | Git could not reset <current> to <sha>. |
 | 2.12 Cherry-pick one | Cherry-pick <sha> | Cherry-picking <sha>… | Cherry-pick failed (an empty pick: Cherry-pick stopped) | Git could not cherry-pick <sha>. |
 | 2.13 Cherry-pick several | Cherry-pick N commits | Cherry-picking N commits… | Cherry-pick failed / Cherry-pick stopped | 2.13's sentences |
-| 2.14 Revert | Revert <sha> / Revert N commits | Reverting <sha>… / Reverting N commits… | Revert failed (an empty revert: Revert stopped, "<sha> changes nothing on <current>: it is already undone. Abort the revert to go on.") | Git could not revert <sha>. |
+| 2.14 Revert | Revert <sha> / Revert N commits | Reverting <sha>… / Reverting N commits… | Revert failed (an empty revert, D117: the error dialog's summary is "<sha> changes nothing on <current>: it is already undone." with git's output beneath; only a git that keeps REVERT_HEAD gives the banner "Revert stopped") | Git could not revert <sha>. |
 | 2.15 Abort | Abort the <kind> | Aborting the <kind>… | Abort failed | Git could not abort the <kind>. |
 | 2.16 Fetch | Fetch (all remotes) / Fetch <r> | Fetching from all remotes… / Fetching from <r>… | Fetch failed | Git could not fetch from <r>[ and <r2>]. |
 | 2.17 Auto-fetch | Auto-fetch | none shown | none (4e's "Auto-fetch failed") | — |

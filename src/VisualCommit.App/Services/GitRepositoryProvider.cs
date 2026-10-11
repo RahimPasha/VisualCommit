@@ -31,9 +31,7 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
 
     /// <remarks>
     /// <paramref name="environment"/> holds the variables of the clone's prompt scope (phase 3
-    /// design 3.3), which <c>WelcomeViewModel</c> opens. TODO(WP2 merge): pass it on as
-    /// <c>GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log, environment)</c>;
-    /// <c>GitRepository.CloneAsync</c> takes it only once work package WP2 is merged.
+    /// design 3.3), which <c>WelcomeViewModel</c> opens; git gets them with the clone.
     /// </remarks>
     public async Task<IGitRepository> CloneAsync(
         string url,
@@ -45,6 +43,6 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
         // Nothing here needs the UI thread, so the app can wait for a clone to clean up while it
         // closes (MainWindowViewModel.CloseAll) without the clone waiting for the UI thread.
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return await GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log).ConfigureAwait(false);
+        return await GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log, environment).ConfigureAwait(false);
     }
 }
