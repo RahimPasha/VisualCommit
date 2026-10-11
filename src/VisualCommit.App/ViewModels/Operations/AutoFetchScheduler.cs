@@ -15,7 +15,10 @@ namespace VisualCommit.App.ViewModels.Operations;
 /// the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
 /// the repository began) is at least the interval ago, it starts the fetch of every remote, each
 /// call with <c>--no-auto-maintenance</c>, as the queue's background operation: it never prompts
-/// (<see cref="PromptMode.Deny"/>), is never pre-empted or stopped, and a failure only shows
+/// (<see cref="PromptMode.Deny"/>), is never pre-empted, ends by itself when its connection
+/// stalls (<see cref="NetworkTimeout"/>), can be cancelled by the user while an operation of
+/// theirs waits for it (the status bar's Cancel beside "Waiting for auto-fetch…"; the lock files a
+/// cancel leaves open the "Auto-fetch cancelled" dialog), and a failure only shows
 /// "Auto-fetch failed" in the status bar and the log (<see cref="OperationStatusViewModel"/>, the queue).
 /// </summary>
 public sealed class AutoFetchScheduler : IDisposable
@@ -152,9 +155,19 @@ public sealed class AutoFetchScheduler : IDisposable
     }
 
     /// <summary>
+    /// The network timeout of every auto-fetch call, as git settings (<c>git -c</c>): an HTTP
+    /// transfer that moves less than 1 byte a second for 60 seconds, a dead connection (Wi-Fi or
+    /// VPN gone, a server that went silent), is ended by git itself, and the auto-fetch fails.
+    /// A live server sends at least its keep-alive packets (every 5 seconds) while it prepares a
+    /// pack, so a slow fetch is not cut. ssh has no such setting that would not replace the user's
+    /// own ssh command; a stalled ssh auto-fetch is ended by the user's Cancel (1.8).
+    /// </summary>
+    public static readonly IReadOnlyList<string> NetworkTimeout = ["http.lowSpeedLimit=1", "http.lowSpeedTime=60"];
+
+    /// <summary>
     /// The auto-fetch (2.17): 2.16's fetch of every remote, each call with
-    /// <c>--no-auto-maintenance</c> (D109), as a background network operation that denies every
-    /// prompt and refreshes the refs afterwards.
+    /// <c>--no-auto-maintenance</c> (D109) and <see cref="NetworkTimeout"/>, as a background
+    /// network operation that denies every prompt and refreshes the refs afterwards.
     /// </summary>
     public static GitOperation CreateOperation(IGitRepository repository)
     {
@@ -166,7 +179,8 @@ public sealed class AutoFetchScheduler : IDisposable
             RefreshScope.Refs,
             async context =>
             {
-                await repository.FetchAsync(null, NetworkOptions.From(context), noAutoMaintenance: true, context.CancellationToken);
+                var options = NetworkOptions.From(context) with { Configuration = NetworkTimeout };
+                await repository.FetchAsync(null, options, noAutoMaintenance: true, context.CancellationToken);
                 return OperationReport.Done(string.Empty);
             })
         {
@@ -228,14 +242,28 @@ public sealed class AutoFetchScheduler : IDisposable
         }
 
         // The moment opening began: a tab made active long after it opened fetches at once.
-        tracked = new Tracked(this, now - SinceOpening(repository));
+        tracked = new Tracked(this, repository, now - SinceOpening(repository));
         _tracked.Add(repository, tracked);
         repository.Queue.Finished += tracked.OnFinished;
         return tracked;
     }
 
+    /// <summary>Shows what an auto-fetch the user cancelled left (1.8): the lock files of "Auto-fetch cancelled", on the UI thread.</summary>
+    private void ShowCancelled(RepositoryViewModel repository, OperationResult result)
+    {
+        void Show() => _ = repository.Operations.ShowResultAsync(new OperationText(Title, string.Empty, string.Empty, string.Empty), result);
+        if (_ui is null || SynchronizationContext.Current == _ui)
+        {
+            Show();
+        }
+        else
+        {
+            _ui.Post(_ => Show(), null);
+        }
+    }
+
     /// <summary>One repository's last fetch.</summary>
-    private sealed class Tracked(AutoFetchScheduler owner, DateTimeOffset opened)
+    private sealed class Tracked(AutoFetchScheduler owner, RepositoryViewModel repository, DateTimeOffset opened)
     {
         private long _lastFetch = opened.UtcTicks;
 
@@ -251,6 +279,10 @@ public sealed class AutoFetchScheduler : IDisposable
             if (Fetched(e.Operation, e.Result))
             {
                 LastFetch = owner.Clock.GetUtcNow();
+            }
+            else if (e.Operation.IsBackground && e.Result is { Outcome: OperationOutcome.Cancelled, StaleLockFiles.Count: > 0 })
+            {
+                owner.ShowCancelled(repository, e.Result);
             }
         }
     }

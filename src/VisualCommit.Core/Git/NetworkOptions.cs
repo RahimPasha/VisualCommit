@@ -21,6 +21,12 @@ public sealed record NetworkOptions
     /// <summary>Where git's progress lines go, parsed (<c>GitProgressParser</c>); null drops them.</summary>
     public IProgress<OperationProgress>? Progress { get; init; }
 
+    /// <summary>
+    /// Settings for the remote calls only, each <c>key=value</c>, passed as <c>git -c key=value</c>
+    /// before the command; empty for none. Auto-fetch sets a network timeout this way (6.1).
+    /// </summary>
+    public IReadOnlyList<string> Configuration { get; init; } = [];
+
     /// <summary>The options of a running operation: its prompt scope's variables and its progress.</summary>
     public static NetworkOptions From(OperationContext context)
     {

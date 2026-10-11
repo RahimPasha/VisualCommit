@@ -74,6 +74,28 @@ public class OperationStatusViewModelTests
     });
 
     [Fact]
+    public Task While_an_operation_waits_for_a_stalled_auto_fetch_Cancel_is_offered_and_stops_it() => WithoutContext(async () =>
+    {
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        Assert.True(queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.None, async context =>
+        {
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done(string.Empty);
+        })));
+        Assert.False(status.CanCancel);
+
+        var stage = queue.RunAsync(new GitOperation("Stage", "Staging…", OperationKind.Local, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Staged"))));
+
+        Assert.Equal((OperationStatusViewModel.WaitingForAutoFetchText, true), (status.Text, status.CanCancel));
+        Assert.True(status.CancelCommand.CanExecute(null));
+        status.CancelCommand.Execute(null);
+
+        Assert.Equal(OperationOutcome.Succeeded, (await stage.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal(("Staged", false), (status.Text, status.CanCancel));
+    });
+
+    [Fact]
     public Task A_background_operation_shows_nothing_unless_it_fails_and_what_waits_for_it_says_so() => WithoutContext(async () =>
     {
         using var queue = NewQueue();

@@ -263,6 +263,14 @@ public sealed class OperationQueue : IOperationQueue
             dropped = [.. _waiting];
             _waiting.Clear();
             running = _running;
+            if (running is { Started: false })
+            {
+                // Next in line, its start posted but not run yet: it never started, so it ends
+                // as cancelled without running, as the waiting ones do (1.8).
+                dropped.Add(running);
+                _running = running = null;
+            }
+
             if (running is null)
             {
                 idle = TakeIdleWaiters();
@@ -288,10 +296,16 @@ public sealed class OperationQueue : IOperationQueue
     private static string NextId() =>
         "op-" + Interlocked.Increment(ref _lastId).ToString(CultureInfo.InvariantCulture);
 
-    private static bool CanCancel(Entry entry) =>
-        entry.Cancellation is not null && entry.CancelWindowOpen && !entry.CancelRequested;
+    /// <summary>
+    /// Cancel is offered for a network operation until its cancel window ends; for a background
+    /// one (auto-fetch) only while an operation of the user waits for it, so that a fetch that
+    /// stalls never holds the user's operations without a way out. Call it under <see cref="_gate"/>.
+    /// </summary>
+    private bool CanCancel(Entry entry) =>
+        entry.Cancellation is not null && entry.CancelWindowOpen && !entry.CancelRequested
+        && (!entry.Operation.IsBackground || _waiting.Count > 0);
 
-    private static OperationSnapshot Snapshot(Entry entry) => new(
+    private OperationSnapshot Snapshot(Entry entry) => new(
         entry.Operation.Title,
         entry.Operation.RunningText,
         entry.Operation.Kind,
@@ -327,16 +341,13 @@ public sealed class OperationQueue : IOperationQueue
             exception.ExitCode);
     }
 
-    /// <summary>A running (not background) or waiting operation with this dedupe key.</summary>
-    private Entry? FindByKey(string key)
-    {
-        if (_running is { Operation.IsBackground: false } running && running.Operation.DedupeKey == key)
-        {
-            return running;
-        }
-
-        return _waiting.FirstOrDefault(entry => entry.Operation.DedupeKey == key);
-    }
+    /// <summary>
+    /// A waiting operation with this dedupe key. A running one is never merged with: it has
+    /// already read what it acts on (a push has chosen the commits it sends, before a commit made
+    /// since), and one whose cancel was requested would end cancelled, so a second click on it
+    /// is queued behind it and runs.
+    /// </summary>
+    private Entry? FindByKey(string key) => _waiting.FirstOrDefault(entry => entry.Operation.DedupeKey == key);
 
     private List<TaskCompletionSource> TakeIdleWaiters()
     {
@@ -384,6 +395,17 @@ public sealed class OperationQueue : IOperationQueue
     /// <summary>One operation, steps 3 to 8 of the design's section 1.3.</summary>
     private async Task ExecuteAsync(Entry entry)
     {
+        lock (_gate)
+        {
+            if (!ReferenceEquals(_running, entry))
+            {
+                // The tab closed between the post of its start and now: Dispose ended it.
+                return;
+            }
+
+            entry.Started = true;
+        }
+
         var operation = entry.Operation;
         entry.StartedAt = DateTimeOffset.Now;
         var stopwatch = Stopwatch.StartNew();
@@ -401,9 +423,10 @@ public sealed class OperationQueue : IOperationQueue
             result = FailedResult(operation, FailureOf(operation, "Unexpected error: " + ex.Message));
         }
 
-        if (result.Outcome == OperationOutcome.Cancelled && operation.Kind == OperationKind.Network && !operation.IsBackground)
+        // Git was stopped by the user's Cancel (or a closed tab): a background one only by the user.
+        if (result.Outcome == OperationOutcome.Cancelled && operation.Kind == OperationKind.Network && (!operation.IsBackground || entry.CancelRequested))
         {
-            result = ReportStaleLocks(operation, entry.StartedAt, result);
+            result = await ReportStaleLocksAsync(operation, entry.StartedAt, result);
         }
 
         if (!IsDisposed && operation.Refresh != RefreshScope.None)
@@ -512,14 +535,15 @@ public sealed class OperationQueue : IOperationQueue
 
     /// <summary>
     /// After a cancelled network operation (1.8): the lock files git left go with the result, for
-    /// the "&lt;Title&gt; cancelled" dialog, or to the log when the tab closed meanwhile.
+    /// the "&lt;Title&gt; cancelled" dialog, or to the log when the tab closed meanwhile. The
+    /// folders are read off the UI thread.
     /// </summary>
-    private OperationResult ReportStaleLocks(GitOperation operation, DateTimeOffset since, OperationResult result)
+    private async Task<OperationResult> ReportStaleLocksAsync(GitOperation operation, DateTimeOffset since, OperationResult result)
     {
         IReadOnlyList<string> locks;
         try
         {
-            locks = _findLockFiles(since);
+            locks = await Task.Run(() => _findLockFiles(since));
         }
         catch (Exception ex)
         {
@@ -709,13 +733,16 @@ public sealed class OperationQueue : IOperationQueue
 
         public TaskCompletionSource<OperationResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>For a network operation the user started; null for a local or background one, which is never cancelled.</summary>
+        /// <summary>For a network operation; null for a local one, which is never cancelled. A background one is cancelled only by the user, while an operation waits for it.</summary>
         public CancellationTokenSource? Cancellation { get; } =
-            operation.Kind == OperationKind.Network && !operation.IsBackground ? new CancellationTokenSource() : null;
+            operation.Kind == OperationKind.Network ? new CancellationTokenSource() : null;
 
         public bool CancelWindowOpen { get; set; } = true;
 
         public bool CancelRequested { get; set; }
+
+        /// <summary>Its run has begun (set under the gate): until then, closing the tab drops it like a waiting one.</summary>
+        public bool Started { get; set; }
 
         public OperationProgress? Progress { get; set; }
 

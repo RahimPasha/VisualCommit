@@ -109,7 +109,7 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
-    public async Task The_fetch_of_all_remotes_shows_its_progress_too_and_a_second_click_while_it_runs_runs_nothing_more()
+    public async Task The_fetch_of_all_remotes_shows_its_progress_too_and_clicks_while_it_runs_queue_one_more_fetch()
     {
         await using var server = await AuthRemoteServer.StartAsync();
         server.RequireAuth = false;
@@ -121,15 +121,21 @@ public partial class RepositoryOperationsTests
         var first = toolbar.FetchAllAsync();
         await held.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => app.StatusText.EndsWith('%'), "the fetch's percentage");
+
+        // A running fetch has already asked for what the remote has: a click now waits behind it
+        // and fetches again; more clicks while that one waits add nothing (1.2).
         var second = app.Operations.FetchAllAsync();
+        var third = app.Operations.FetchAllAsync();
 
         Assert.Matches(@"^Fetching from all remotes… Counting objects \d{1,3}%$", app.StatusText);
-        Assert.Equal(0, app.Repository.Queue.Waiting);
+        Assert.Equal(1, app.Repository.Queue.Waiting);
 
         server.Release();
-        await Task.WhenAll(first, second).WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
+        await Task.WhenAll(first, second, third).WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
 
         Assert.Equal("Fetched from all remotes", app.StatusText);
+        // The second fetch found nothing new, so only the first asked the server for a pack.
+        Assert.Equal(2, Ran(app, "Fetch"));
         Assert.Single(server.Requests, request => request.Command == "fetch");
         Assert.Equal("Remote work", (await repo.GitAsync("log", "-1", "--format=%s", "refs/remotes/origin/main")).StandardOutput.Trim());
         Assert.Equal(1, app.Operations.CurrentBranch?.Behind);
@@ -233,12 +239,16 @@ public partial class RepositoryOperationsTests
         using var app = await OperationsHarness.OpenAsync(repo, _ => prompts);
         app.Dialogs.CloseError();
 
+        // Both clicks come while an operation ahead runs: the second is merged with the first,
+        // which waits (1.2).
+        var (hold, ahead) = HoldQueue(app);
         var first = app.Operations.FetchAsync("origin");
-        await WaitUntilAsync(() => prompts.Prompts.Count == 1, "git's question");
         var second = app.Operations.FetchAsync("origin");
-        Assert.Equal(0, app.Repository.Queue.Waiting);
+        Assert.Equal(1, app.Repository.Queue.Waiting);
+        hold.SetResult();
+        await WaitUntilAsync(() => prompts.Prompts.Count == 1, "git's question");
         gate.SetResult();
-        await Task.WhenAll(first, second).WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
+        await Task.WhenAll(ahead, first, second).WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
 
         var error = Assert.Single(app.Dialogs.Errors);
         Assert.Equal(("Fetch failed", "Git could not fetch from origin."), (error.Title, error.Summary));

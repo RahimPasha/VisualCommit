@@ -345,6 +345,31 @@ public class GitRunnerTests
         }
     }
 
+    [Fact]
+    public async Task A_cancel_that_comes_after_git_exited_with_success_and_its_output_was_read_keeps_the_result()
+    {
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+
+        // The handler of git's only line holds the call until git has exited (a second and a half
+        // is plenty for a git that prints one line), then the user's Cancel comes, and the handler
+        // returns: git finished, with its output read in full, before the cancel reached it.
+        var result = await runner.RunAsync(
+            Script(
+                "echo only",
+                onOutputLine: _ =>
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(1.5));
+                    cancellation.Cancel();
+                }),
+            cancellation.Token).WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.True(result.Succeeded);
+        Assert.Equal(GitCallOutcome.Completed, Assert.Single(calls.Snapshot()).Outcome);
+    }
+
     [Theory]
     [InlineData("https://user:ghp_secret123@github.com/team/repo.git", "https://***@github.com/team/repo.git")]
     [InlineData("https://ghp_secret123@dev.azure.com/org/project/_git/repo", "https://***@dev.azure.com/org/project/_git/repo")]

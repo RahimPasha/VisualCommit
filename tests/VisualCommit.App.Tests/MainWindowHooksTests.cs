@@ -102,6 +102,42 @@ public class MainWindowHooksTests
     }
 
     [AvaloniaFact]
+    public async Task Closing_the_window_waits_for_the_local_operation_of_a_tab_closed_while_it_ran()
+    {
+        using var repo = await Scenarios.LinearAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var shell = app.Session.Shell;
+        var repository = shell.ActiveTab.Repository!;
+        var gate = new TaskCompletionSource();
+        var steps = new List<string>();
+        var running = repository.Queue.RunAsync(new GitOperation("Check out main with your changes", "Checking out main…", OperationKind.Local, RefreshScope.Refs, async _ =>
+        {
+            steps.Add("stash");
+            await gate.Task;
+            steps.Add("pop");
+            return OperationReport.Done("Checked out main and re-applied your changes");
+        })
+        { HasSeveralSteps = true });
+
+        // The tab closes; its local operation goes on (1.8), and the window waits for it.
+        shell.CloseTabCommand.Execute(shell.ActiveTab);
+        app.Settle();
+        app.Window.Close();
+        app.Settle();
+
+        Assert.True(app.Window.IsVisible, "The window waits for the closed tab's running operation.");
+        var finishing = Assert.IsType<FinishingDialogViewModel>(shell.Dialogs.Current);
+        Assert.Equal([new FinishingItem($"Check out main with your changes — {repository.Name}", true)], finishing.Items);
+
+        gate.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await running).Outcome);
+        await app.WaitForAsync(() => !app.Window.IsVisible, "the window to close by itself");
+        Assert.Equal(["stash", "pop"], steps);
+    }
+
+    [AvaloniaFact]
     public async Task Keep_open_leaves_the_window_and_Quit_now_closes_it_at_once()
     {
         using var repo = await Scenarios.LinearAsync();

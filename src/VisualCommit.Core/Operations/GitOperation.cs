@@ -68,8 +68,9 @@ public sealed record GitOperation(
 {
     /// <summary>
     /// Null (the default): never merged with another operation. Otherwise a second
-    /// <see cref="IOperationQueue.RunAsync"/> with the same key, while this one waits or runs,
-    /// returns this one's task instead of queueing a second run. The key names the operation and
+    /// <see cref="IOperationQueue.RunAsync"/> with the same key, while this one waits, returns
+    /// this one's task instead of queueing a second run; once this one runs, a second one is
+    /// queued behind it, because a running one has already read what it acts on. The key names the operation and
     /// every argument that changes what it does: <c>fetch:*</c>, <c>fetch:&lt;remote&gt;</c>,
     /// <c>pull:&lt;full branch ref&gt;</c>, <c>push:&lt;full branch ref&gt;-&gt;&lt;remote&gt;/&lt;remote ref&gt;</c>.
     /// </summary>
@@ -80,7 +81,8 @@ public sealed record GitOperation(
 
     /// <summary>
     /// Auto-fetch only: started with <see cref="IOperationQueue.TryStartInBackground"/>, never
-    /// cancelled, never pre-empted, shows no running text, progress or Cancel (1.8, D85).
+    /// pre-empted, shows no running text or progress (1.8, D85); the user can cancel it only while
+    /// an operation of theirs waits for it, which the status bar then offers.
     /// </summary>
     public bool IsBackground { get; init; }
 

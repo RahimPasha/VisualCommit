@@ -33,9 +33,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 RefreshScope.Refs,
                 async context =>
                 {
-                    if (backUpDetached)
+                    if (await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
-                        await SaveDetachedBackupAsync();
+                        return refusal;
                     }
 
                     return OperationReport.Done(await plan.Run(NetworkOptions.From(context)));
@@ -77,9 +77,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 async context =>
                 {
                     var options = NetworkOptions.From(context);
-                    if (backUpDetached)
+
+                    // After a blocked checkout that asked and saved the backup, nothing more to do.
+                    if (!detachedBackedUp && await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
-                        await SaveDetachedBackupAsync();
+                        return refusal;
                     }
 
                     // 1. The tracked changes only: the untracked files blocked nothing, and the
@@ -162,9 +164,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     }
 
                     var options = NetworkOptions.From(context);
-                    if (backUpDetached)
+                    if (await GuardDetachedHeadAsync(text, backUpDetached) is { } detached)
                     {
-                        await SaveDetachedBackupAsync();
+                        return detached;
                     }
 
                     // A failed checkout ends it with the checkout's dialog (2.33), without the stash
@@ -221,7 +223,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
             // Checking the new branch out leaves a detached HEAD: 2.1's rule for every checkout (D83),
             // unless the branch starts where HEAD is.
             var backUpDetached = false;
-            if (checkout && head?.IsDetached == true && await Git.ResolveAsync(startPoint) != head.Sha)
+            if (checkout && Refs?.Head is { IsDetached: true } now && await Git.ResolveAsync(startPoint) != now.Sha)
             {
                 if (await ConfirmLeavingDetachedHeadAsync() is not { } confirmed)
                 {
@@ -233,9 +235,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
             await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async operation =>
             {
-                if (backUpDetached)
+                // HEAD as it is now, not as it was when the dialog opened (2.1's rule, D83).
+                if (checkout && await GuardDetachedHeadAsync(text, backUpDetached, keptBy: startPoint) is { } refusal)
                 {
-                    await SaveDetachedBackupAsync();
+                    return refusal;
                 }
 
                 await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
@@ -328,12 +331,18 @@ public sealed partial class RepositoryOperations : IInProgressActions
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceRef);
         var source = ShortName(sourceRef);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = mode == MergeMode.FastForwardOnly ? OperationTexts.FastForward(current, source) : OperationTexts.Merge(source, current);
         return GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
         {
             if (await RefuseWhileInProgressAsync(text) is { } refusal)
             {
                 return refusal;
+            }
+
+            if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingMerged) is { } moved)
+            {
+                return moved;
             }
 
             return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
@@ -347,10 +356,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.Reset(current, commit);
         return GuardAsync(text, async () =>
         {
-            if (IsClosed || Refs?.Head.IsUnborn != false)
+            if (IsClosed || seen is not { IsUnborn: false })
             {
                 // Nothing to reset before the first commit: the menus disable it (2.11).
                 return;
@@ -365,6 +375,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
             await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
             {
+                // The dialog named the branch and what it would lose: HEAD must still be there.
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReset, sameCommit: true) is { } moved)
+                {
+                    return moved;
+                }
+
                 var head = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
                 // Hard: the changes it discards; mixed: the index it replaces, when anything is
                 // staged, so that "this can be undone" holds for a staged version too.
@@ -388,6 +404,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.CherryPick(commit);
         FailureDisplay? display = null;
         return GuardAsync(text, () => RunAsync(
@@ -399,6 +416,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
+                }
+
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingCherryPicked) is { } moved)
+                {
+                    return moved;
                 }
 
                 switch (await Git.CherryPickAsync(commit, NetworkOptions.From(context)))
@@ -431,6 +453,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
         var count = ordered.Count;
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.CherryPickSeveral(count);
         FailureDisplay? display = null;
         return GuardAsync(text, () => RunAsync(
@@ -442,6 +465,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
+                }
+
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingCherryPicked) is { } moved)
+                {
+                    return moved;
                 }
 
                 // One git cherry-pick per commit, never git's sequencer (2.13, D88).
@@ -482,6 +510,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.Revert(commit);
         return GuardAsync(text, async () =>
         {
@@ -491,6 +520,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
+                }
+
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
+                {
+                    return moved;
                 }
 
                 ApplyResult result;
@@ -530,6 +564,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
         var count = ordered.Count;
         var current = HeadName;
+        var seen = Refs?.Head;
         var text = OperationTexts.RevertSeveral(count);
         return GuardAsync(text, async () =>
         {
@@ -551,6 +586,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     if (await RefuseWhileInProgressAsync(text) is { } refusal)
                     {
                         return refusal;
+                    }
+
+                    if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
+                    {
+                        return moved;
                     }
 
                     // One git revert per commit, newest first, never git's sequencer (2.14).
@@ -734,6 +774,74 @@ public sealed partial class RepositoryOperations : IInProgressActions
         }
 
         return await ConfirmAsync(OperationTexts.ConfirmLeaveDetachedCommits(count)) ? true : null;
+    }
+
+    /// <summary>
+    /// 2.1's rule again inside a checkout's operation, where HEAD no longer moves: the question was
+    /// asked from the refs as they were when the checkout was chosen, and an operation queued
+    /// ahead of it (cherry-picks onto a detached HEAD) or a terminal may have moved HEAD since.
+    /// When the user confirmed, saves <c>detached-&lt;time&gt;</c>; otherwise, when HEAD is now
+    /// detached on commits that nothing else reaches (and that <paramref name="keptBy"/>, the
+    /// start of a new branch, does not keep), refuses: the user was never asked about them.
+    /// Null when the checkout may go on.
+    /// </summary>
+    private async Task<OperationReport?> GuardDetachedHeadAsync(OperationText text, bool backUpDetached, string? keptBy = null)
+    {
+        if (backUpDetached)
+        {
+            await SaveDetachedBackupAsync();
+            return null;
+        }
+
+        var head = await Git.ReadHeadAsync();
+        if (!head.IsDetached)
+        {
+            return null;
+        }
+
+        var count = await Git.CountDetachedCommitsAsync();
+        if (count == 0 || (keptBy is not null && await Git.ResolveAsync(keptBy) == head.Sha))
+        {
+            return null;
+        }
+
+        var summary = OperationTexts.DetachedCommitsSinceChosen(count);
+        Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
+        return Failed(text, StoppedFailure(summary));
+    }
+
+    /// <summary>
+    /// An operation on HEAD (merge, reset, cherry-pick, revert, pull) that waited in the queue
+    /// checks, inside its operation, that HEAD is still where the user saw it when they chose it
+    /// (<paramref name="seen"/>, the refs as last read then): on the same branch, or still
+    /// detached, and with <paramref name="sameCommit"/> at the same commit too. Otherwise it
+    /// refuses, saying where HEAD went and <paramref name="nothing"/>, so it never acts on a branch
+    /// the user did not name. Null when HEAD is where it was, or when no refs had been read.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfHeadMovedAsync(OperationText text, HeadState? seen, string nothing, bool sameCommit = false)
+    {
+        if (seen is null)
+        {
+            return null;
+        }
+
+        var now = await Git.ReadHeadAsync();
+        string summary;
+        if (!string.Equals(now.BranchName, seen.BranchName, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadMoved(seen, now, nothing);
+        }
+        else if (sameCommit && !string.Equals(now.Sha, seen.Sha, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadCommitMoved(seen.BranchName ?? "HEAD", seen.Sha ?? string.Empty, now.Sha ?? string.Empty, nothing);
+        }
+        else
+        {
+            return null;
+        }
+
+        Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
+        return Failed(text, StoppedFailure(summary));
     }
 
     /// <summary>Saves <c>detached-&lt;time&gt;</c> → HEAD's commit, inside the checkout's operation (2.0, 2.1).</summary>

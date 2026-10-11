@@ -53,6 +53,16 @@ public sealed partial class GitRepository
         return new RepoRefs(head, refs, stashes, remotes);
     }
 
+    public async Task<HeadState> ReadHeadAsync(CancellationToken cancellationToken = default)
+    {
+        var headRef = ReadHeadRefAsync(cancellationToken);
+        var headSha = ReadHeadShaAsync(cancellationToken);
+        await Task.WhenAll(headRef, headSha).ConfigureAwait(false);
+        var name = await headRef.ConfigureAwait(false);
+        var branchName = name is null ? null : name.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? name[HeadsPrefix.Length..] : name;
+        return new HeadState(branchName, await headSha.ConfigureAwait(false));
+    }
+
     /// <summary>The full name of the branch HEAD is on, or null when HEAD is detached.</summary>
     private async Task<string?> ReadHeadRefAsync(CancellationToken cancellationToken)
     {

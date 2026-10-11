@@ -61,7 +61,7 @@ public class OperationQueueTests
     }
 
     [Fact]
-    public async Task A_second_operation_with_the_dedupe_key_of_a_waiting_or_running_one_gets_its_task()
+    public async Task A_second_operation_with_the_dedupe_key_of_a_waiting_one_gets_its_task_but_never_that_of_a_running_one()
     {
         using var queue = new TestQueue();
         var gate = new TaskCompletionSource();
@@ -74,17 +74,51 @@ public class OperationQueueTests
         })
         { DedupeKey = key };
 
+        // A running operation has already read what it acts on (a push, the commits it sends):
+        // the same request made while it runs waits behind it and runs (review: queue).
         var running = queue.Queue.RunAsync(Fetch("fetch:*"));
-        var sameWhileRunning = queue.Queue.RunAsync(Fetch("fetch:*"));
+        var whileRunning = queue.Queue.RunAsync(Fetch("fetch:*"));
+        var sameWhileWaiting = queue.Queue.RunAsync(Fetch("fetch:*"));
         var other = queue.Queue.RunAsync(Fetch("fetch:origin"));
-        var sameWhileWaiting = queue.Queue.RunAsync(Fetch("fetch:origin"));
+        var otherWhileWaiting = queue.Queue.RunAsync(Fetch("fetch:origin"));
         var withoutKey = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done(string.Empty))));
 
-        Assert.Same(running, sameWhileRunning);
-        Assert.Same(other, sameWhileWaiting);
-        Assert.Equal(2, queue.Queue.Waiting);
+        Assert.NotSame(running, whileRunning);
+        Assert.Same(whileRunning, sameWhileWaiting);
+        Assert.Same(other, otherWhileWaiting);
+        Assert.Equal(3, queue.Queue.Waiting);
         gate.SetResult();
-        await Task.WhenAll(running, other, withoutKey).WaitAsync(Patience, TestCancelled);
+        await Task.WhenAll(running, whileRunning, other, withoutKey).WaitAsync(Patience, TestCancelled);
+        Assert.Equal(3, fetches);
+    }
+
+    [Fact]
+    public async Task The_same_request_again_after_Cancel_runs_once_the_cancelled_one_has_ended()
+    {
+        using var queue = new TestQueue();
+        var started = new TaskCompletionSource();
+        var fetches = 0;
+        var first = queue.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.Refs, async context =>
+        {
+            Interlocked.Increment(ref fetches);
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Fetched from origin");
+        })
+        { DedupeKey = "fetch:origin" });
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        queue.Queue.CancelCurrent();
+        var retry = queue.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.Refs, _ =>
+        {
+            Interlocked.Increment(ref fetches);
+            return Task.FromResult(OperationReport.Done("Fetched from origin"));
+        })
+        { DedupeKey = "fetch:origin" });
+
+        Assert.NotSame(first, retry);
+        Assert.Equal(OperationOutcome.Cancelled, (await first.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal((OperationOutcome.Succeeded, "Fetched from origin"), ((await retry.WaitAsync(Patience, TestCancelled)).Outcome, (await retry).Message));
         Assert.Equal(2, fetches);
     }
 
@@ -140,7 +174,7 @@ public class OperationQueueTests
     }
 
     [Fact]
-    public async Task A_background_operation_is_never_pre_empted_or_cancelled_and_the_users_operation_waits_for_it()
+    public async Task A_background_operation_is_never_pre_empted_and_the_users_operation_waits_for_it()
     {
         using var queue = new TestQueue();
         var gate = new TaskCompletionSource();
@@ -160,8 +194,11 @@ public class OperationQueueTests
         var current = queue.Queue.Current;
         Assert.NotNull(current);
         Assert.True(current.IsBackground);
+
+        // While nothing waits for it, it offers no Cancel, and a cancel does nothing.
         Assert.False(current.CanCancel);
-        Assert.False(backgroundToken.CanBeCanceled);
+        queue.Queue.CancelCurrent();
+        Assert.False(backgroundToken.IsCancellationRequested);
 
         var fetch = queue.Queue.RunAsync(new GitOperation("Fetch", "Fetching…", OperationKind.Network, RefreshScope.Refs, _ =>
         {
@@ -169,7 +206,6 @@ public class OperationQueueTests
             return Task.FromResult(OperationReport.Done("Fetched"));
         })
         { DedupeKey = "fetch:*" });
-        queue.Queue.CancelCurrent();
 
         Assert.Equal(1, queue.Queue.Waiting);
         Assert.False(fetch.IsCompleted);
@@ -180,6 +216,41 @@ public class OperationQueueTests
         Assert.Equal(OperationOutcome.Succeeded, result.Outcome);
         Assert.Equal(["auto-fetch", "fetch"], order);
         Assert.Same(result, queue.Queue.LastResult);
+    }
+
+    [Fact]
+    public async Task A_stalled_background_operation_can_be_cancelled_while_the_users_operation_waits_for_it()
+    {
+        using var folder = new TempDirectory("locks");
+        var gitFolder = Directory.CreateDirectory(Path.Combine(folder.Path, ".git")).FullName;
+        var left = Path.Combine(Directory.CreateDirectory(Path.Combine(gitFolder, "refs", "remotes", "origin")).FullName, "main.lock");
+        using var queue = new TestQueue(gitDirectory: gitFolder);
+        var finished = new TaskCompletionSource<OperationResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        queue.Queue.Finished += (_, e) =>
+        {
+            if (e.Operation.IsBackground)
+            {
+                finished.TrySetResult(e.Result);
+            }
+        };
+
+        // An auto-fetch whose connection went silent: it would never end by itself.
+        Assert.True(queue.Queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.Refs, async context =>
+        {
+            File.WriteAllText(left, string.Empty);
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done(string.Empty);
+        })));
+        var staged = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done(string.Empty))));
+
+        Assert.True(queue.Queue.Current!.CanCancel, "The user's operation waits for the auto-fetch: Cancel is offered.");
+        queue.Queue.CancelCurrent();
+
+        var background = await finished.Task.WaitAsync(Patience, TestCancelled);
+        Assert.Equal((OperationOutcome.Cancelled, "Auto-fetch cancelled"), (background.Outcome, background.Message));
+        Assert.Equal([Path.GetFullPath(left)], background.StaleLockFiles);
+        Assert.Equal(OperationOutcome.Succeeded, (await staged.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Contains(queue.Log.Entries, entry => entry.Message.Contains("graph: Auto-fetch: Cancelled after ", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -507,6 +578,53 @@ public class OperationQueueTests
     }
 
     [Fact]
+    public async Task The_next_operation_whose_start_is_posted_but_has_not_run_does_not_run_after_the_tab_closed()
+    {
+        var context = new ManualContext();
+        var previous = SynchronizationContext.Current;
+        var nextRan = false;
+        Task<OperationResult> next;
+        var queue = new TestQueue();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            var gate = new TaskCompletionSource();
+            _ = queue.Queue.RunAsync(Local("Discard", async _ =>
+            {
+                await gate.Task;
+                return OperationReport.Done("Discarded");
+            }));
+            next = queue.Queue.RunAsync(Local("Delete branch", _ =>
+            {
+                nextRan = true;
+                return Task.FromResult(OperationReport.Done("Deleted"));
+            }));
+
+            // The Discard ends: Delete branch is next in line and its start is posted to the UI
+            // thread, which closes the tab before it gets to that start.
+            gate.SetResult();
+            while (queue.Queue.Current?.Title != "Delete branch")
+            {
+                Assert.True(context.RunOne(), "The queue stopped before Delete branch was next in line.");
+            }
+
+            queue.Dispose();
+            while (context.RunOne())
+            {
+            }
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.False(nextRan, "The operation next in line ran after the tab closed.");
+        Assert.Equal(OperationOutcome.Cancelled, (await next.WaitAsync(Patience, TestCancelled)).Outcome);
+        await queue.Queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+        Assert.Null(queue.Queue.Current);
+    }
+
+    [Fact]
     public async Task Closing_the_tab_leaves_a_background_operation_to_finish()
     {
         var queue = new TestQueue();
@@ -525,7 +643,7 @@ public class OperationQueueTests
         gate.SetResult();
 
         Assert.Equal(OperationOutcome.Succeeded, (await finished.Task.WaitAsync(Patience, TestCancelled)).Outcome);
-        Assert.False(token.CanBeCanceled);
+        Assert.False(token.IsCancellationRequested);
     }
 
     [Fact]
@@ -700,6 +818,33 @@ public class OperationQueueTests
 
             public void CancelByUser() => UserCancelled = true;
         }
+    }
+}
+
+/// <summary>A synchronization context whose posts run only when the test runs them, one at a time, on the test's thread.</summary>
+internal sealed class ManualContext : SynchronizationContext
+{
+    private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _posted = new();
+
+    public override void Post(SendOrPostCallback d, object? state) => _posted.Enqueue((d, state));
+
+    public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
+
+    /// <summary>Runs the oldest post; false when none waits (after a short wait for posts from other threads).</summary>
+    public bool RunOne()
+    {
+        for (var tries = 0; tries < 50; tries++)
+        {
+            if (_posted.TryDequeue(out var work))
+            {
+                work.Callback(work.State);
+                return true;
+            }
+
+            Thread.Sleep(10);
+        }
+
+        return false;
     }
 }
 
