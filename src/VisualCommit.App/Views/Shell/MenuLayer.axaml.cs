@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives.PopupPositioning;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -55,6 +56,21 @@ public partial class MenuLayer : UserControl
 
     /// <summary>The header's text is cut with "…" past this width (4a).</summary>
     public const double HeaderMaxTextWidth = 340;
+
+    /// <summary>The narrowest a menu is (4a).</summary>
+    public const double MinMenuWidth = 200;
+
+    /// <summary>
+    /// The widest a menu is (4a): a menu is as wide as its longest label needs up to this, and a
+    /// label longer still is cut with "…", its whole text in its tooltip. <c>Theme/Menus.axaml</c>
+    /// sets the same numbers.
+    /// </summary>
+    public const double MaxMenuWidth = 520;
+
+    /// <summary>An item's label: its text, cut with "…" (and then its whole text as its tooltip) only when the widest menu cannot show it.</summary>
+    private static readonly FuncDataTemplate<string> LabelTemplate = new(
+        (label, _) => new TrimmedTextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis },
+        supportsRecycling: false);
 
     private MenuLayerViewModel? _viewModel;
     private MenuFlyoutWithLimit? _flyout;
@@ -369,11 +385,14 @@ public partial class MenuLayer : UserControl
 
     private static Avalonia.Controls.MenuItem CreateHeader(MenuHeader header)
     {
+        // Left-aligned like the items' labels: in a menu wider than the header's limit, a stretched
+        // text block with a MaxWidth would be centred.
         var text = new TextBlock
         {
             Text = header.Text,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = HeaderMaxTextWidth,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
         };
         var item = new Avalonia.Controls.MenuItem
         {
@@ -394,9 +413,12 @@ public partial class MenuLayer : UserControl
 
     private ContextMenuItem CreateItem(ModelItem model)
     {
+        // The label stays the header (harnesses find an item by it); the template draws it as text
+        // that is cut with "…" past the widest menu, never clipped.
         var item = new ContextMenuItem
         {
             Header = model.Label,
+            HeaderTemplate = LabelTemplate,
             IsEnabled = model.IsEnabled,
         };
         AutomationProperties.SetAutomationId(item, ItemAutomationId);

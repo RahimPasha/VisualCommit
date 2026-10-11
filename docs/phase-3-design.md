@@ -1363,7 +1363,10 @@ pointer" after it (the real-window pass counts these lines, D106).
   `VcPanelBackgroundBrush`, 1 px `VcBorderBrush`, corner radius 6, padding 4, `BoxShadow`
   `VcMenuShadow` on the presenter (Fluent's presenter draws none; the shadow is drawn inside the
   window and cut where the menu is closer to the window's edge than the shadow reaches); width
-  200 to 360 (the longest label decides); an item 26 high with 10 px side padding, a separator
+  200 to 520, as wide as the longest label needs (520 holds 4b's and 4g's longest labels with
+  the scenarios' names, such as "Merge origin/feature/alpha into main (create a merge commit)");
+  a label longer still is cut with "…" and shows its whole text as its tooltip, and nothing is
+  ever clipped at the menu's edge; an item 26 high with 10 px side padding, a separator
   9 high (a 1 px line), the header 24 high. Item text `VcTextPrimaryBrush`; the highlighted item
   `VcHoverBackgroundBrush`. So a menu that fits is 8 + 24 + 26 × items + 9 × separators high.
 - **Position:** top-left at the pointer + (2, 2). If it would cross the window's right edge it
