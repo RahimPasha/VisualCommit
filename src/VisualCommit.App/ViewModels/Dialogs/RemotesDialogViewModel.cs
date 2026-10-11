@@ -85,10 +85,13 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
 
     /// <summary>The card shows the form (adding or editing) instead of the list.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsListShown), nameof(IsAdding))]
+    [NotifyPropertyChangedFor(nameof(IsListShown), nameof(IsAdding), nameof(CancelText))]
     public partial bool IsFormShown { get; private set; }
 
     public bool IsListShown => !IsFormShown;
+
+    /// <summary>The <c>CancelButton</c>'s label: "Close" in the list, "Cancel" in the form.</summary>
+    public string CancelText => IsFormShown ? "Cancel" : "Close";
 
     /// <summary>The form adds a remote ("Fetch now" is shown).</summary>
     public bool IsAdding => IsFormShown && _editing is null;
@@ -113,7 +116,7 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
     /// <summary>Save is running: the form's buttons are disabled and Save says "Saving…".</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SaveText), nameof(IsIdle))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(CancelFormCommand), nameof(AddCommand), nameof(EditCommand), nameof(RemoveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(CancelOrCloseCommand), nameof(AddCommand), nameof(EditCommand), nameof(RemoveCommand))]
     public partial bool IsSaving { get; private set; }
 
     public bool IsIdle => !IsSaving;
@@ -168,8 +171,12 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private void Edit(RemoteRow row) => ShowForm(row);
 
-    /// <summary>A row's "Remove": the confirmation on top, the removal, then the list again.</summary>
-    [RelayCommand(CanExecute = nameof(IsIdle))]
+    /// <summary>
+    /// A row's "Remove": the confirmation on top, the removal, then the list again. The button
+    /// stays enabled while it runs (the confirmation covers the dialog meanwhile), so it keeps the
+    /// focus, which comes back to it when the confirmation closes (D104).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsIdle), AllowConcurrentExecutions = true)]
     private async Task Remove(RemoteRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -185,8 +192,23 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
         await ReloadAsync();
     }
 
-    /// <summary>The form's Cancel: back to the list, nothing changed.</summary>
+    /// <summary>
+    /// The card's <c>CancelButton</c>: in the form "Cancel", back to the list with nothing
+    /// changed; in the list "Close", which closes the dialog.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(IsIdle))]
+    private void CancelOrClose()
+    {
+        if (IsFormShown)
+        {
+            CancelForm();
+        }
+        else
+        {
+            Cancel();
+        }
+    }
+
     private void CancelForm()
     {
         IsFormShown = false;
@@ -281,10 +303,29 @@ public sealed partial class RemotesDialogViewModel : DialogViewModel
         try
         {
             var remotes = await _actions.ReadRemotesAsync();
-            Rows.Clear();
-            foreach (var remote in remotes)
+            var rows = remotes.Select(remote => new RemoteRow(remote.Name, remote.FetchUrl, remote.ShownUrl)).ToList();
+
+            // Updated in place: a row that did not change keeps its view, and with it the focus
+            // its button may have (a cancelled Remove gives the focus back to it, D104).
+            for (var i = Rows.Count - 1; i >= 0; i--)
             {
-                Rows.Add(new RemoteRow(remote.Name, remote.FetchUrl, remote.ShownUrl));
+                if (!rows.Contains(Rows[i]))
+                {
+                    Rows.RemoveAt(i);
+                }
+            }
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                if (i >= Rows.Count || Rows[i] != rows[i])
+                {
+                    Rows.Insert(i, rows[i]);
+                }
+            }
+
+            while (Rows.Count > rows.Count)
+            {
+                Rows.RemoveAt(Rows.Count - 1);
             }
         }
         catch (Exception ex)

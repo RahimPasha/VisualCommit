@@ -1,0 +1,89 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.PushDialogView"
+                  x:DataType="vm:PushDialogViewModel"
+                  AutomationProperties.AutomationId="PushDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The push dialog (docs/phase-3-design.md 2.19, 4f) for a branch without an upstream: "To"
+       the remote (its name, or a radio button per remote), the name on the remote (focused), and
+       "Set as upstream". -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="PushDialogCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="PushTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="PushTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <Grid ColumnDefinitions="Auto,*" Margin="0,14,0,0">
+          <TextBlock Classes="secondary" Text="To" Width="36" VerticalAlignment="Top" />
+          <TextBlock Name="PushRemote"
+                     Grid.Column="1"
+                     Text="{Binding Remote}"
+                     IsVisible="{Binding HasOneRemote}"
+                     TextTrimming="CharacterEllipsis"
+                     AutomationProperties.AutomationId="PushRemote" />
+          <ItemsControl Name="PushRemotes"
+                        Grid.Column="1"
+                        ItemsSource="{Binding Remotes}"
+                        IsVisible="{Binding !HasOneRemote}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChoiceOption">
+                <RadioButton Theme="{StaticResource VcRadioButton}"
+                             IsChecked="{Binding IsChecked}"
+                             AutomationProperties.AutomationId="ChoiceOption"
+                             AutomationProperties.Name="{Binding Text}">
+                  <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                </RadioButton>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Grid>
+        <TextBox Name="PushBranchBox"
+                 Classes="dialogBox"
+                 Text="{Binding BranchName}"
+                 PlaceholderText="Branch on the remote"
+                 AutomationProperties.AutomationId="PushBranchBox"
+                 AutomationProperties.Name="Branch on the remote" />
+        <TextBlock Name="PushBranchError"
+                   Classes="dialogError"
+                   Text="{Binding BranchError}"
+                   IsVisible="{Binding HasBranchError}"
+                   AutomationProperties.AutomationId="PushBranchError" />
+        <CheckBox Name="PushSetUpstream"
+                  Theme="{StaticResource VcCheckBox}"
+                  Content="Set as upstream"
+                  IsChecked="{Binding SetUpstream}"
+                  Margin="0,12,0,0"
+                  AutomationProperties.AutomationId="PushSetUpstream"
+                  AutomationProperties.Name="Set as upstream" />
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="Push"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="Push" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</local:DialogView>

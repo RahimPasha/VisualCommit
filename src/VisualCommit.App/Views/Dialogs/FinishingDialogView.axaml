@@ -1,0 +1,63 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.FinishingDialogView"
+                  x:DataType="vm:FinishingDialogViewModel"
+                  AutomationProperties.AutomationId="FinishingDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- "Finishing operations" (docs/phase-3-design.md 1.8, 4f): what still runs when the window
+       is closed, one line each ("Push main — graph"), with a warning under a local operation whose
+       later steps "Quit now" would leave undone. "Keep open" takes the focus. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="FinishingDialogCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="FinishingTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="FinishingTitle" />
+        <TextBlock Name="FinishingText"
+                   Classes="dialogText"
+                   Text="{Binding Text}"
+                   AutomationProperties.AutomationId="FinishingText" />
+        <ItemsControl Name="FinishingItems" ItemsSource="{Binding Items}" Margin="0,10,0,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:FinishingItem">
+              <StackPanel>
+                <!-- A text is a UI Automation element where a panel is not (design section 0). -->
+                <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Text}"
+                           AutomationProperties.AutomationId="FinishingItem"
+                           AutomationProperties.Name="{Binding Text}" />
+                <TextBlock Classes="secondary"
+                           Text="{x:Static vm:FinishingDialogViewModel.RemainingStepsText}"
+                           IsVisible="{Binding RemainingStepsWillNotRun}"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Keep open"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Keep open" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcDangerButton}"
+                  Content="Quit now"
+                  Command="{Binding QuitNowCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="Quit now" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</local:DialogView>

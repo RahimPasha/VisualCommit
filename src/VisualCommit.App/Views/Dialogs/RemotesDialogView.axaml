@@ -1,0 +1,158 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.RemotesDialogView"
+                  x:DataType="vm:RemotesDialogViewModel"
+                  AutomationProperties.AutomationId="RemotesDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The Remotes dialog (docs/phase-3-design.md 2.23, 4f) on the wide card (460). The list: a
+       row per remote with its name, its URL with credentials hidden (D103; cut with "…", whole in
+       the tooltip), "Edit" and "Remove"; "Add remote"; "Close". The form: name, URL as
+       configured, "Fetch now" when adding, the form's message, "Cancel" and "Save". Remove asks
+       its confirmation on top of the dialog (D104). -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="RemotesDialogCard" Classes="dialogCard wide">
+      <StackPanel>
+        <TextBlock Name="RemotesTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="RemotesTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+
+        <!-- The list. -->
+        <StackPanel IsVisible="{Binding IsListShown}">
+          <Border Margin="0,14,0,0"
+                  BorderBrush="{DynamicResource VcBorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="5"
+                  Background="{DynamicResource VcWindowBackgroundBrush}">
+            <ScrollViewer MaxHeight="248" HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl Name="RemoteRows" ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:RemoteRow">
+                    <local:DialogRow Classes="remoteRow"
+                                     AutomationProperties.AutomationId="RemoteRow"
+                                     AutomationProperties.Name="{Binding Name}">
+                      <Grid ColumnDefinitions="*,Auto,Auto" Margin="10,6,8,6">
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Classes="secondary"
+                                     Text="{Binding ShownUrl}"
+                                     FontSize="11.5"
+                                     Margin="0,2,0,0"
+                                     TextTrimming="CharacterEllipsis"
+                                     ToolTip.Tip="{Binding ShownUrl}"
+                                     AutomationProperties.AutomationId="RemoteUrl" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Classes="remoteAction"
+                                Theme="{StaticResource VcActionButton}"
+                                Content="Edit"
+                                Command="{Binding $parent[local:RemotesDialogView].((vm:RemotesDialogViewModel)DataContext).EditCommand}"
+                                CommandParameter="{Binding}"
+                                AutomationProperties.AutomationId="RemoteEditButton"
+                                AutomationProperties.Name="Edit" />
+                        <Button Grid.Column="2"
+                                Classes="remoteAction danger"
+                                Theme="{StaticResource VcActionButton}"
+                                Content="Remove"
+                                Margin="6,0,0,0"
+                                Command="{Binding $parent[local:RemotesDialogView].((vm:RemotesDialogViewModel)DataContext).RemoveCommand}"
+                                CommandParameter="{Binding}"
+                                AutomationProperties.AutomationId="RemoteRemoveButton"
+                                AutomationProperties.Name="Remove" />
+                      </Grid>
+                    </local:DialogRow>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+          <Button Name="AddRemoteButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Add remote"
+                  Command="{Binding AddCommand}"
+                  Margin="0,10,0,0"
+                  HorizontalAlignment="Left"
+                  AutomationProperties.AutomationId="AddRemoteButton"
+                  AutomationProperties.Name="Add remote" />
+        </StackPanel>
+
+        <!-- The form. -->
+        <StackPanel IsVisible="{Binding IsFormShown}">
+          <TextBox Name="RemoteNameBox"
+                   Classes="dialogBox"
+                   Text="{Binding RemoteName}"
+                   PlaceholderText="Name"
+                   IsEnabled="{Binding IsIdle}"
+                   AutomationProperties.AutomationId="RemoteNameBox"
+                   AutomationProperties.Name="Name" />
+          <TextBox Name="RemoteUrlBox"
+                   Classes="dialogBox"
+                   Text="{Binding RemoteUrl}"
+                   PlaceholderText="URL"
+                   IsEnabled="{Binding IsIdle}"
+                   Margin="0,8,0,0"
+                   AutomationProperties.AutomationId="RemoteUrlBox"
+                   AutomationProperties.Name="URL" />
+          <CheckBox Name="RemoteFetchOption"
+                    Theme="{StaticResource VcCheckBox}"
+                    Content="Fetch now"
+                    IsChecked="{Binding FetchNow}"
+                    IsVisible="{Binding IsAdding}"
+                    IsEnabled="{Binding IsIdle}"
+                    Margin="0,12,0,0"
+                    AutomationProperties.AutomationId="RemoteFetchOption"
+                    AutomationProperties.Name="Fetch now" />
+          <TextBlock Name="RemoteError"
+                     Classes="dialogError"
+                     Text="{Binding RemoteError}"
+                     IsVisible="{Binding HasError}"
+                     AutomationProperties.AutomationId="RemoteError" />
+        </StackPanel>
+
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="{Binding CancelText}"
+                  Command="{Binding CancelOrCloseCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="{Binding CancelText}" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding SaveText}"
+                  Command="{Binding SaveCommand}"
+                  IsVisible="{Binding IsFormShown}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding SaveText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <!-- The row's buttons are small; "Remove" is in the danger colour. -->
+  <local:DialogView.Styles>
+    <Style Selector="Button.remoteAction">
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.remoteAction.danger">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="local|DialogRow.remoteRow">
+      <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <!-- The list's own border closes the last row. -->
+    <Style Selector="ContentPresenter:nth-last-child(1) > local|DialogRow.remoteRow">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

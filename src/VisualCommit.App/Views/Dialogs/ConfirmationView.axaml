@@ -1,32 +1,29 @@
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
-             x:Class="VisualCommit.App.Views.Dialogs.ConfirmationView"
-             x:DataType="vm:ConfirmationViewModel"
-             AutomationProperties.AutomationId="ConfirmationDialog">
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.ConfirmationView"
+                  x:DataType="vm:ConfirmationViewModel"
+                  AutomationProperties.AutomationId="ConfirmationDialog"
+                  AutomationProperties.Name="{Binding Title}">
 
   <!-- A confirmation over the whole window (D69), as "The confirmation dialog" in
        docs/test-reports/phase-2.md describes it: the backdrop, and a card in the middle. Tab
-       goes round the card's buttons and never to the window behind. -->
-  <Panel Background="{DynamicResource VcBackdropBrush}">
-    <Border Name="ConfirmationCard"
-            KeyboardNavigation.TabNavigation="Cycle"
-            MaxWidth="400"
-            Margin="20"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Center"
-            Background="{DynamicResource VcPanelBackgroundBrush}"
-            BorderBrush="{DynamicResource VcBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="8"
-            Padding="20">
+       goes round the card's buttons and never to the window behind. Phase 3 reuses it for every
+       question of its operations (docs/phase-3-design.md 2, 4f): the button that goes ahead has
+       the danger style for a destructive one, the primary style otherwise (ssh's "Yes", D115). -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="ConfirmationCard" Classes="dialogCard">
       <StackPanel>
         <TextBlock Name="ConfirmTitle"
+                   Classes="dialogTitle"
                    Text="{Binding Title}"
-                   FontSize="16"
-                   FontWeight="SemiBold"
-                   TextWrapping="Wrap"
                    AutomationProperties.AutomationId="ConfirmTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
         <TextBlock Name="ConfirmQuestion"
                    Text="{Binding Question}"
                    Margin="0,12,0,0"
@@ -39,7 +36,7 @@
                    Margin="0,6,0,0"
                    TextWrapping="Wrap"
                    AutomationProperties.AutomationId="ConfirmDetail" />
-        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,20,0,0" HorizontalAlignment="Right">
+        <StackPanel Classes="dialogButtons">
           <Button Name="CancelButton"
                   Theme="{StaticResource VcActionButton}"
                   Content="Cancel"
@@ -47,7 +44,7 @@
                   AutomationProperties.AutomationId="CancelButton"
                   AutomationProperties.Name="Cancel" />
           <Button Name="ConfirmButton"
-                  Theme="{StaticResource VcDangerButton}"
+                  Classes.danger="{Binding IsDestructive}"
                   Content="{Binding ConfirmText}"
                   Command="{Binding ConfirmCommand}"
                   AutomationProperties.AutomationId="ConfirmButton"
@@ -56,4 +53,13 @@
       </StackPanel>
     </Border>
   </Panel>
-</UserControl>
+
+  <local:DialogView.Styles>
+    <Style Selector="Button#ConfirmButton">
+      <Setter Property="Theme" Value="{StaticResource VcPrimaryButton}" />
+    </Style>
+    <Style Selector="Button#ConfirmButton.danger">
+      <Setter Property="Theme" Value="{StaticResource VcDangerButton}" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>
