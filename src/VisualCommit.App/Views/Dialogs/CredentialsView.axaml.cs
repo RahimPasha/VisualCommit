@@ -5,15 +5,15 @@ namespace VisualCommit.App.Views.Dialogs;
 
 /// <summary>
 /// The credentials dialog (4f). On opening, the user name box takes the keyboard focus, or the
-/// password box when git named the user; Enter signs in.
+/// password box when git named the user; Enter signs in (<see cref="DialogView"/>).
 /// </summary>
-public partial class CredentialsView : UserControl
+public partial class CredentialsView : DialogView
 {
     public CredentialsView()
     {
         InitializeComponent();
-        PromptDialogViewSupport.Attach(
-            this,
-            () => DataContext is CredentialsViewModel { IsUserEditable: false } ? CredentialPassword : CredentialUsername);
     }
+
+    protected override TextBox? InitialTextBox =>
+        DataContext is CredentialsViewModel { IsUserEditable: false } ? CredentialPassword : CredentialUsername;
 }

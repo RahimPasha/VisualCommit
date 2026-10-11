@@ -275,9 +275,10 @@ public sealed class PromptDialogPresenter : IPromptDialogPresenter
             return PromptDialogAnswer.None;
         }
 
+        var repositoryName = ShowsRepositoryName?.Invoke() == true ? prompt.RepositoryName : null;
         if (prompt.Kind == GitPromptKind.Confirm)
         {
-            var confirmation = new ConfirmationViewModel(ConfirmationFor(prompt));
+            var confirmation = new ConfirmationViewModel(ConfirmationFor(prompt) with { RepositoryName = repositoryName });
             bool yes;
             using (cancellationToken.Register(() => OnUiThread(confirmation.Cancel)))
             {
@@ -289,7 +290,6 @@ public sealed class PromptDialogPresenter : IPromptDialogPresenter
                 : PromptDialogAnswer.CancelledByUser;
         }
 
-        var repositoryName = ShowsRepositoryName?.Invoke() == true ? prompt.RepositoryName : null;
         var dialog = CreateDialog(prompt, repositoryName) ?? new PromptViewModel(prompt, repositoryName);
         PromptDialogAnswer answer;
         using (cancellationToken.Register(() => OnUiThread(dialog.CloseUnanswered)))
