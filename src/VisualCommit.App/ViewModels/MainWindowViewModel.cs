@@ -46,6 +46,7 @@ public partial class MainWindowViewModel : ObservableObject
         _tabServices = tabServices ?? new TabServices(
             new UnavailableRepositoryProvider(), new NoFolderPicker(), settings, _session, DateDisplay.Resolve(), _log);
         Theme = themes.Current;
+        Menu = new MenuLayerViewModel(_log, () => ActiveTab?.Repository?.Name);
 
         // The tabs of the last session are there from the first frame, under their folder names;
         // InitializeAsync opens them once git has been found.
@@ -87,7 +88,7 @@ public partial class MainWindowViewModel : ObservableObject
     public DialogHostViewModel Dialogs => _tabServices.DialogHost;
 
     /// <summary>The window's in-window context menu layer (docs/phase-3-design.md 4a, D86).</summary>
-    public MenuLayerViewModel Menu { get; } = new();
+    public MenuLayerViewModel Menu { get; }
 
     /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
     public AutoFetchScheduler AutoFetch { get; }
