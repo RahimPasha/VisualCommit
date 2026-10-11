@@ -42,6 +42,22 @@ public class FileAppLogTests
     }
 
     [Fact]
+    public void A_closed_log_writes_nothing_and_does_not_make_its_folder_again()
+    {
+        using var folder = new TempDirectory("logs");
+        var logs = folder.Combine("logs");
+        var log = new FileAppLog(logs, clock: new FixedClock(Noon));
+        log.Info("before");
+        log.Close();
+        Directory.Delete(logs, recursive: true);
+
+        log.Info("after");
+        log.Error("after", new InvalidOperationException("late"));
+
+        Assert.False(Directory.Exists(logs));
+    }
+
+    [Fact]
     public void An_exception_is_written_under_its_entry_with_type_and_message()
     {
         using var folder = new TempDirectory("logs");
