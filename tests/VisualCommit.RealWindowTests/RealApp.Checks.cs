@@ -94,11 +94,25 @@ public sealed partial class RealApp
     {
         ArgumentException.ThrowIfNullOrEmpty(text);
         AutomationElement? found = null;
-        WaitFor(
-            () => (found = Window.FindAllDescendants(condition => condition.ByControlType(ControlType.ToolTip))
-                .FirstOrDefault(tip => tip.Name == text || tip.FindAllDescendants().Any(part => part.Name == text))) is not null,
-            $"the tooltip \"{text}\"",
-            timeout ?? DefaultWaitTimeout);
+        IReadOnlyList<string> seen = [];
+        try
+        {
+            WaitFor(
+                () =>
+                {
+                    var tips = Window.FindAllDescendants(condition => condition.ByControlType(ControlType.ToolTip));
+                    seen = [.. tips.Select(tip => tip.Name)];
+                    found = tips.FirstOrDefault(tip => tip.Name == text || tip.FindAllDescendants().Any(part => part.Name == text));
+                    return found is not null;
+                },
+                $"the tooltip \"{text}\"",
+                timeout ?? DefaultWaitTimeout);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new TimeoutException($"{ex.Message} Tooltips in the window: {(seen.Count == 0 ? "none" : string.Join(" | ", seen))}.", ex);
+        }
+
         return found!;
     }
 
@@ -263,6 +277,41 @@ public sealed partial class RealApp
         NativeMethods.GetClientRect(Handle, out var clientRect);
         var clientRight = client.X + clientRect.Width;
         return new Point(clientRight - (int)(23 * Scaling), (window.Top + client.Y) / 2);
+    }
+
+    /// <summary>
+    /// The processes the app started that run now, their own children included (git,
+    /// git-remote-http, the askpass helper, ssh): what check 31 step 5 reads while the held fetch
+    /// runs, to assert with <see cref="StillRunning"/> after "Quit now" that "no git process
+    /// started by the app is left".
+    /// </summary>
+    public IReadOnlyList<(int Id, string Name)> DescendantProcesses()
+    {
+        var all = NativeMethods.Processes();
+        var parents = new HashSet<int> { _process.Id };
+        var found = new List<(int Id, string Name)>();
+        for (var added = true; added;)
+        {
+            added = false;
+            foreach (var (id, parentId, name) in all)
+            {
+                if (parents.Contains(parentId) && parents.Add(id))
+                {
+                    found.Add((id, name));
+                    added = true;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>Which of <paramref name="processIds"/> still run (<see cref="DescendantProcesses"/>).</summary>
+    public static IReadOnlyList<int> StillRunning(IEnumerable<int> processIds)
+    {
+        ArgumentNullException.ThrowIfNull(processIds);
+        var running = NativeMethods.Processes().Select(process => process.Id).ToHashSet();
+        return [.. processIds.Where(running.Contains)];
     }
 
     /// <summary>Where the real pointer is now, in the client area's logical pixels.</summary>

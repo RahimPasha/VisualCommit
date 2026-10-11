@@ -48,6 +48,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Settings;
@@ -372,6 +373,63 @@ public abstract partial class Phase3Checks
         }
 
         return dialog;
+    }
+
+    /// <summary>
+    /// Asserts the confirmation on top (phase 2's dialog, D69, with phase 3's texts): its title
+    /// (<c>ConfirmTitle</c>), question (<c>ConfirmQuestion</c>), detail (<c>ConfirmDetail</c>,
+    /// hidden when <paramref name="detail"/> is empty), "Cancel" with the keyboard focus, and the
+    /// confirm button's label, in the danger style when <paramref name="destructive"/>. Waits for
+    /// the dialog first.
+    /// </summary>
+    protected static async Task AssertConfirmationAsync(ShellDriver app, string title, string question, string detail, string confirmText, bool destructive = true)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        var dialog = await app.WaitForDialogAsync<ConfirmationViewModel>();
+        var view = app.TopDialogView ?? throw new InvalidOperationException("The confirmation has no view in the window.");
+        Assert.Equal(title, ((TextBlock)app.FindByAutomationId(view, "ConfirmTitle")).Text);
+        Assert.Equal(question, ((TextBlock)app.FindByAutomationId(view, "ConfirmQuestion")).Text);
+        var detailBlock = (TextBlock)app.FindByAutomationId(view, "ConfirmDetail");
+        Assert.Equal(detail.Length > 0, detailBlock.IsEffectivelyVisible);
+        if (detail.Length > 0)
+        {
+            Assert.Equal(detail, detailBlock.Text);
+        }
+
+        var cancel = (Button)app.FindByAutomationId(view, "CancelButton");
+        Assert.Equal("Cancel", cancel.Content);
+        await app.WaitForAsync(() => cancel.IsFocused, "the confirmation's Cancel to have the keyboard focus");
+        var confirm = (Button)app.FindByAutomationId(view, "ConfirmButton");
+        Assert.Equal(confirmText, confirm.Content);
+        Assert.Equal(destructive, confirm.Classes.Contains("danger"));
+        Assert.Equal(destructive, dialog.IsDestructive);
+    }
+
+    /// <summary>
+    /// Asserts the in-progress banner (<c>ConflictBanner</c>, design section 5, D122): its text
+    /// (<c>BannerText</c>), its Abort button's label (<c>BannerAbortButton</c>; null for a banner
+    /// without one), and a height of at least 36, exactly 36 when <paramref name="oneLine"/> is
+    /// true (null: the check states no line count). Returns where the banner is.
+    /// </summary>
+    protected static Rect AssertBanner(ShellDriver app, string text, string? abortText, bool? oneLine = null)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        var bounds = app.BannerBounds ?? throw new Xunit.Sdk.XunitException("No banner is shown.");
+        Assert.Equal(text, ((TextBlock)app.FindByAutomationId("BannerText")).Text);
+        var abort = (Button)app.FindByAutomationId("BannerAbortButton");
+        Assert.Equal(abortText is not null, abort.IsEffectivelyVisible);
+        if (abortText is not null)
+        {
+            Assert.Equal(abortText, abort.Content);
+        }
+
+        Assert.True(bounds.Height >= WindowLayout.BannerMinHeight - 0.5, $"The banner is {bounds.Height} high, less than 36 (D122).");
+        if (oneLine is { } single)
+        {
+            Assert.Equal(single, Math.Abs(bounds.Height - WindowLayout.BannerMinHeight) < 0.5);
+        }
+
+        return bounds;
     }
 
     /// <summary>Asserts that no text in the window is cut off, except shortened text that shows the whole in its tooltip (phase 2's rule).</summary>

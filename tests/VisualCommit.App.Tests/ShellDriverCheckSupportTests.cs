@@ -91,6 +91,24 @@ public class ShellDriverCheckSupportTests
     }
 
     [AvaloniaFact]
+    public async Task An_unborn_repository_counts_as_open_once_its_empty_history_and_its_status_are_shown()
+    {
+        // Check 23 step 5: HEAD unborn on main, a bare remote, an untracked file.
+        using var repo = await TempRepo.CreateAsync("unborn");
+        await repo.AddBareRemoteAsync();
+        repo.WriteFile("notes.txt", "notes\n");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+
+        var repository = await app.WaitForRepositoryAsync();
+
+        Assert.Equal(0, repository.Graph.Count);
+        Assert.True(repository.HasNoCommits);
+        Assert.True(repository.HasWorkingChanges);
+        Assert.Equal("main", ((TextBlock)app.FindByAutomationId("CurrentBranch")).Text);
+    }
+
+    [AvaloniaFact]
     public async Task Below_a_banner_the_rows_and_the_working_row_move_down_by_its_height()
     {
         using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.Merge);
