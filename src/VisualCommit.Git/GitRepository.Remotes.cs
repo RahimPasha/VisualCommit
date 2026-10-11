@@ -232,41 +232,48 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
-    /// The configured remotes: <c>git remote -v</c>, read without optional locks, sorted by name
-    /// (2.23). A push URL equal to the fetch URL is null. URLs are as git prints them, credentials
-    /// included; the call record hides them (D103), and <see cref="RemoteInfo.ShownUrl"/> is what
-    /// the app shows.
+    /// The configured remotes, read without optional locks, sorted by name (2.23): the names
+    /// <c>git remote</c> lists, and for each the first <c>remote.&lt;name&gt;.url</c> and
+    /// <c>remote.&lt;name&gt;.pushurl</c> as they are configured (<c>git config --get-regexp</c>),
+    /// not as <c>git remote -v</c> prints them after a <c>url.&lt;base&gt;.insteadOf</c> rule has
+    /// rewritten them: such a rule, often a global one, can put a token into the URL, which the
+    /// Change URL form would then show and write into the repository's own settings. A push URL
+    /// equal to the fetch URL is null. URLs keep the credentials configured in them; the call
+    /// record hides them (D103), and <see cref="RemoteInfo.ShownUrl"/> is what the app shows.
     /// </summary>
     public async Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync(CancellationToken cancellationToken = default)
     {
-        var output = await ReadOutputAsync(cancellationToken, "remote", "-v").ConfigureAwait(false);
+        var names = SplitLines(await ReadOutputAsync(cancellationToken, "remote").ConfigureAwait(false)).Distinct(StringComparer.Ordinal).ToList();
         var fetchUrls = new Dictionary<string, string>(StringComparer.Ordinal);
         var pushUrls = new Dictionary<string, string>(StringComparer.Ordinal);
-        var names = new List<string>();
-        foreach (var line in SplitLines(output))
+
+        // Section and key names are printed in lower case; the remote's name (the subsection)
+        // keeps its case and may contain dots. --null prints "<key>\n<value>\0" per entry, in the
+        // order git reads them. Exit 1: no such setting.
+        var command = Read("config", "--null", "--get-regexp", @"^remote\..*\.(url|pushurl)$");
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode != 1)
         {
-            // "<name>\t<url> (fetch)" and "<name>\t<url> (push)". A URL can hold spaces (a folder).
-            var tab = line.IndexOf('\t', StringComparison.Ordinal);
-            if (tab <= 0)
+            const string Prefix = "remote.";
+            foreach (var entry in result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
             {
-                _log.Warning($"Skipped a line of git remote -v that could not be read: {GitCommand.HideCredentials(line)}");
-                continue;
-            }
+                // A key without a value ("[remote "x"] url") has no line feed; git refuses it as a URL.
+                var newline = entry.IndexOf('\n', StringComparison.Ordinal);
+                var key = newline < 0 ? entry : entry[..newline];
+                var value = newline < 0 ? string.Empty : entry[(newline + 1)..];
+                if (!key.StartsWith(Prefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
-            var name = line[..tab];
-            var rest = line[(tab + 1)..];
-            if (!names.Contains(name))
-            {
-                names.Add(name);
-            }
-
-            if (RemoteArguments.TrimSuffix(rest, " (fetch)") is { } fetchUrl)
-            {
-                fetchUrls.TryAdd(name, fetchUrl);
-            }
-            else if (RemoteArguments.TrimSuffix(rest, " (push)") is { } pushUrl)
-            {
-                pushUrls.TryAdd(name, pushUrl);
+                if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".pushurl") is { Length: > 0 } pushName)
+                {
+                    pushUrls.TryAdd(pushName, value);
+                }
+                else if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".url") is { Length: > 0 } fetchName)
+                {
+                    fetchUrls.TryAdd(fetchName, value);
+                }
             }
         }
 

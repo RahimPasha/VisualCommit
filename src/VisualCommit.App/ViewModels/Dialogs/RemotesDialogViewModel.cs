@@ -12,7 +12,7 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// </summary>
 public interface IRemoteActions
 {
-    /// <summary>The configured remotes (<c>git remote -v</c>), in git's order.</summary>
+    /// <summary>The configured remotes, with their URLs as configured (<see cref="Core.Git.IGitRepository.ReadRemotesAsync"/>), sorted by name.</summary>
     Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync();
 
     /// <summary>

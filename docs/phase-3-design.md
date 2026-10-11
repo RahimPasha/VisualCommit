@@ -332,7 +332,9 @@ can cancel a write half-way; from now on a write that has started runs to its en
   `Task.Run` carries the async-local value to the thread pool.
 - `GitRunner.Record` passes the heads of standard output and standard error through
   `GitCommand.HideCredentials` before they reach `IGitCallLog`, as it already does for the
-  command line (D103): `git remote -v` and some error texts print URLs with a token in them.
+  command line (D103): `git remote -v`, `git config` and some error texts print URLs with a
+  token in them. The credentials are hidden before the head is cut to 16 KiB, and an authority
+  that runs on to the cut is left out, so that a cut between `://` and `@` shows nothing of it.
   A test adds a remote `https://alice:ghp_SECRET123@127.0.0.1:1/x.git`, runs `ReadRemotesAsync`
   and a failing fetch, and asserts that `ghp_SECRET123` is in no call record, no log line and no
   rendered text of the remotes dialog's list. The Change URL form is the one place that shows the
@@ -921,8 +923,13 @@ All local, through the remotes dialog (4f) or the remote header's menu. Refresh:
 | Change URL | `git remote set-url <name> <url>` | URL not empty and changed | no | "Changed the URL of <name>" |
 | Remove | first a backup batch `remote-<time>/<name>/<b>` of every `refs/remotes/<name>/*` (2.0), then `git remote remove <name>` | — | title "Remove remote <name>?", question "Remove the remote <name> and its N remote branches? Your local branches stay; those that track it lose their upstream. Its URL was <shown url>.", detail "A backup is saved first, so this can be undone.", button "Remove" (danger) | "Removed remote <name>" |
 
-`ReadRemotesAsync` (new, a read with `GIT_OPTIONAL_LOCKS=0`): `git remote -v`, parsed into
-`RemoteInfo(Name, FetchUrl, PushUrl?)` (a `(push)` URL equal to the fetch URL gives null).
+`ReadRemotesAsync` (new, a read with `GIT_OPTIONAL_LOCKS=0`): the names `git remote` lists and
+their first `remote.<name>.url` and `remote.<name>.pushurl` as configured
+(`git config --null --get-regexp '^remote\..*\.(url|pushurl)$'`), into
+`RemoteInfo(Name, FetchUrl, PushUrl?)` (a push URL equal to the fetch URL gives null). Not
+`git remote -v`: it prints the URLs after `url.<base>.insteadOf` has rewritten them, and a
+global rule of that kind often carries a token, which the form would show and "Change URL"
+would write into the repository's settings.
 
 The form's messages, in `RemoteError`, the first that applies (D114): "Enter a name." (only once
 the box has been edited and is empty), "This is not a valid remote name: <reason>.", "A remote

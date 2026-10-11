@@ -1,8 +1,8 @@
 namespace VisualCommit.Core.Git;
 
-/// <summary>A configured remote, as <c>git remote -v</c> lists it (phase 3 design 2.23).</summary>
+/// <summary>A configured remote, with its URLs as its settings hold them (phase 3 design 2.23).</summary>
 /// <param name="Name">The remote's name.</param>
-/// <param name="FetchUrl">Its URL as configured, credentials included: show it only through <see cref="GitCommand.HideCredentials"/> (D103).</param>
+/// <param name="FetchUrl">Its URL as configured, before any <c>insteadOf</c> rule, credentials included: show it only through <see cref="GitCommand.HideCredentials"/> (D103).</param>
 /// <param name="PushUrl">Its push URL when it differs from <paramref name="FetchUrl"/>; null otherwise.</param>
 public sealed record RemoteInfo(string Name, string FetchUrl, string? PushUrl)
 {
