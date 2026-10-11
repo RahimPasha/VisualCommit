@@ -116,14 +116,16 @@ public class MainWindowHooksTests
             return OperationReport.Done("Fetched");
         }));
 
+        // Wait for each step rather than settling once: macOS CI (run 38129130225) looked for the
+        // dialog before the second close had opened it.
         app.Window.Close();
-        app.Settle();
+        await app.WaitForAsync(() => app.Session.Shell.Dialogs.Current is FinishingDialogViewModel, "the finishing dialog");
         app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.Session.Shell.Dialogs.IsOpen, "Keep open (Esc) to close the dialog");
         Assert.True(app.Window.IsVisible, "Keep open (Esc) leaves the window open.");
-        Assert.False(app.Session.Shell.Dialogs.IsOpen);
 
         app.Window.Close();
-        app.Settle();
+        await app.WaitForAsync(() => app.Session.Shell.Dialogs.Current is FinishingDialogViewModel, "the finishing dialog again");
         var finishing = Assert.IsType<FinishingDialogViewModel>(app.Session.Shell.Dialogs.Current);
         finishing.QuitNowCommand.Execute(null);
         await app.WaitForAsync(() => !app.Window.IsVisible, "the window to close");
