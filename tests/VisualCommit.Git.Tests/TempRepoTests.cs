@@ -221,4 +221,83 @@ public class TempRepoTests
 
         Assert.False(Directory.Exists(path));
     }
+
+    [Fact]
+    public async Task RefTarget_gives_what_a_full_ref_points_at_and_null_for_a_missing_one()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        var head = await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.AnnotatedTagAsync("v1", "Version 1");
+
+        Assert.Equal(head, await repo.RefTargetAsync("refs/heads/main"));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/missing"));
+
+        // Only the full name counts, and an annotated tag gives its tag object.
+        Assert.Null(await repo.RefTargetAsync("main"));
+        var tag = await repo.RefTargetAsync("refs/tags/v1");
+        Assert.NotEqual(head, tag);
+        Assert.Equal("tag", (await repo.GitAsync("cat-file", "-t", tag!)).StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task BackupRefs_and_StashList_read_what_git_holds()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        var first = await repo.CommitFileAsync("a.txt", "a\n", "First");
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Empty(await repo.StashListAsync());
+
+        await repo.GitAsync("update-ref", "refs/visualcommit/backup/main/20260101-120000", first);
+        await repo.GitAsync("update-ref", "refs/visualcommit/other", first);
+        repo.WriteFile("a.txt", "changed\n");
+        var stash = await repo.StashAsync("Work");
+
+        Assert.Equal([new RefEntry("refs/visualcommit/backup/main/20260101-120000", first)], await repo.BackupRefsAsync());
+        Assert.Equal([new StashListEntry("stash@{0}", stash, "On main: Work")], await repo.StashListAsync());
+    }
+
+    [Fact]
+    public async Task A_failing_step_can_be_run_without_throwing()
+    {
+        using var repo = await TempRepo.CreateAsync();
+
+        var result = await repo.GitAllowingFailureAsync("checkout", "no-such-branch");
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("no-such-branch", result.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_sibling_clone_shares_the_clock_and_the_folder()
+    {
+        string clonePath;
+        using (var repo = await TempRepo.CreateAsync())
+        {
+            await repo.AddBareRemoteAsync();
+            await repo.CommitFileAsync("a.txt", "a\n", "First");
+            await repo.PushAsync("origin", setUpstream: true, "main");
+            await repo.ConfigAsync("core.abbrev", "9");
+            Assert.Equal("9", (await repo.GitAsync("config", "core.abbrev")).StandardOutput.Trim());
+
+            using (var clone = await repo.CloneSiblingAsync("clone", repo.SiblingPath("origin.git")))
+            {
+                clonePath = clone.Path;
+                Assert.Equal(repo.SiblingPath("clone"), clone.Path);
+                Assert.Equal("false", (await clone.GitAsync("config", "core.autocrlf")).StandardOutput.Trim());
+                await clone.CommitFileAsync("b.txt", "b\n", "In the clone");
+            }
+
+            // Disposing the clone kept it; the next commit of either follows a minute later.
+            Assert.True(Directory.Exists(clonePath));
+            var reopened = repo.OpenSibling("clone");
+            await repo.CommitFileAsync("c.txt", "c\n", "In the repo");
+            await reopened.CommitFileAsync("d.txt", "d\n", "In the clone again");
+
+            Assert.Equal("12:01 In the clone", (await reopened.GitAsync("log", "-1", "--format=%ad %s", "--date=format:%H:%M", "HEAD~1")).StandardOutput.Trim());
+            Assert.Equal("12:02 In the repo", (await repo.GitAsync("log", "-1", "--format=%ad %s", "--date=format:%H:%M")).StandardOutput.Trim());
+            Assert.Equal("12:03 In the clone again", (await reopened.GitAsync("log", "-1", "--format=%ad %s", "--date=format:%H:%M")).StandardOutput.Trim());
+        }
+
+        Assert.False(Directory.Exists(clonePath));
+    }
 }

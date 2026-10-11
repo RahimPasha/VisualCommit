@@ -58,6 +58,7 @@ apt_install() {
 # --- System packages -------------------------------------------------------------------------
 #
 #   git, curl, ca-certificates  the tests run real git; curl and the certificates are for downloads
+#   openssh-client              the tests of ssh's passphrase prompt run ssh-keygen (phase 3)
 #   libicu                      .NET needs it for culture data (the build does not switch it off)
 #   libfontconfig1 and a font   the headless UI tests render with Skia, which loads fontconfig
 #   locales, en_US.UTF-8        the app starts git with LC_ALL=en_US.UTF-8 (decision D30);
@@ -74,6 +75,7 @@ has_locale() { grep -qi '^en_US\.utf-\?8$' <<<"$(locale -a 2>/dev/null || true)"
 packages=()
 command -v git >/dev/null 2>&1 || packages+=(git)
 command -v curl >/dev/null 2>&1 || packages+=(curl)
+command -v ssh-keygen >/dev/null 2>&1 || packages+=(openssh-client)
 [ -e /etc/ssl/certs/ca-certificates.crt ] || packages+=(ca-certificates)
 has_library 'libfontconfig\.so\.1' || packages+=(libfontconfig1 fonts-dejavu-core)
 need_icu=false
