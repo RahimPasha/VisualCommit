@@ -486,6 +486,52 @@ public class GitRunnerTests
         Assert.EndsWith(GitCallRecord.TruncationMarker, recorded);
     }
 
+    [Theory]
+    [InlineData(20)]
+    [InlineData(15)]
+    [InlineData(2)]
+    public async Task A_record_cut_off_inside_a_url_shows_none_of_its_credentials(int beforeCut)
+    {
+        // The cut falls <beforeCut> characters into "https://alice:ghp_SECRET...@example.com":
+        // inside the token, just after the user name, inside the scheme.
+        using var repo = await TempRepo.CreateAsync();
+        const string Url = "https://alice:ghp_SECRETTOKEN1234567890@example.com/x.git";
+        var filler = new string('x', GitCallRecord.MaxOutputLength - beforeCut - 1) + "\n";
+        var content = filler + Url + "\n" + string.Concat(Enumerable.Repeat("more output\n", 200));
+        await repo.CommitFileAsync("big.txt", content, "Add a big file");
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+
+        var result = await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
+
+        Assert.Equal(content, result.StandardOutput);
+        var recorded = Assert.Single(calls.Snapshot()).StandardOutput;
+        Assert.StartsWith(filler, recorded);
+        Assert.EndsWith(GitCallRecord.TruncationMarker, recorded);
+        Assert.InRange(recorded.Length, filler.Length, GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length);
+        Assert.DoesNotContain("alice", recorded, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_", recorded, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_record_hides_the_credentials_of_a_url_and_keeps_its_host_when_the_url_ends_before_the_cut()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        const string Url = "https://alice:ghp_SECRETTOKEN1234567890@example.com/x.git";
+        var filler = new string('x', GitCallRecord.MaxOutputLength - Url.Length - 100) + "\n";
+        var content = filler + Url + "\n" + string.Concat(Enumerable.Repeat("more output\n", 200));
+        await repo.CommitFileAsync("big.txt", content, "Add a big file");
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+
+        await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
+
+        var recorded = Assert.Single(calls.Snapshot()).StandardOutput;
+        Assert.Contains("\nhttps://***@example.com/x.git\n", recorded, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_", recorded, StringComparison.Ordinal);
+        Assert.Equal(GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length, recorded.Length);
+    }
+
     [Fact]
     public async Task Calls_can_run_at_the_same_time()
     {
