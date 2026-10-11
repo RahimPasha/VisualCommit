@@ -56,8 +56,10 @@ Start:
 - [x] 4. Scenario repos for the operations (diverged branches, remotes ahead and behind, tags,
   stashes, conflicts, a remote that asks for credentials), pinned in `ScenarioTests`: work
   package WP-S1, merged in `efbbf83`.
-- [ ] 5. Phase 3's visual checks written into `docs/test-reports/phase-3.md`, each marked for
-  the real-window pass, reviewed independently, and committed before the UI they test.
+- [x] 5. Phase 3's visual checks written into `docs/test-reports/phase-3.md`, each marked for
+  the real-window pass, reviewed independently, and committed before the UI they test: written
+  and committed in `82b622b` before the UI (WP5 onward); the independent review (six reviewers,
+  56 findings) corrected in `57134d2`.
 - [x] 6. The flaky `DiffHighlighterTests` docstring test (failed once in the baseline run under
   load, passes alone) fixed at its cause, not by loosening it: `d72e500`. The first line a
   grammar tokenizes compiles its regular expressions, and TextMateSharp counts that against the
@@ -85,14 +87,14 @@ App:
   themselves are WP7).
 - [x] 14. In-window context menu control and the dialogs the operations need (name input,
   choice, error with git's output, credentials, remotes): WP5, WP6, WP3b.
-- [ ] 15. Context menus on every object: commit, local branch, remote branch, tag, stash, file
+- [x] 15. Context menus on every object: commit, local branch, remote branch, tag, stash, file
   (both stage lists, the diff view and a commit's files), remote.
-- [ ] 16. Double-click actions (checkout a branch or remote branch, apply a stash...) and the
+- [x] 16. Double-click actions (checkout a branch or remote branch, apply a stash...) and the
   toolbar's Fetch, Pull, Push, Branch, Stash and Pop buttons become real.
-- [ ] 17. Drag a branch onto a branch: the action menu.
-- [ ] 18. Ctrl and Shift selection of several commits in the graph; cherry-pick several.
-- [ ] 19. Confirmations for destructive operations; stash and re-apply for a blocked checkout.
-- [ ] 20. Basic conflict state: the banner with abort, conflicted files flagged.
+- [x] 17. Drag a branch onto a branch: the action menu.
+- [x] 18. Ctrl and Shift selection of several commits in the graph; cherry-pick several.
+- [x] 19. Confirmations for destructive operations; stash and re-apply for a blocked checkout.
+- [x] 20. Basic conflict state: the banner with abort, conflicted files flagged.
 - [x] 21. The left panel's selection follows the graph's (phase 1 follow-up).
 - [ ] 22. Phases 0 to 2's checks updated for anything phase 3 changes on purpose, recorded under
   "Changes to expected results" in the phase 3 report.
@@ -149,12 +151,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5: the four drafts of the visual checks (`docs/phase-3-checks-A.md` to `-D.md`, uncommitted
-working files) are being finalised against the settled design; then they are joined into
-`docs/test-reports/phase-3.md`, reviewed independently and committed. No UI work package (WP5 to
-WP9, and the dialogs of WP3 and WP6) starts before that commit. Meanwhile the Git-layer
-packages WP1, WP2, WP3a, WP4 and the harness package WP-S2 are built in worktrees
-(`.claude/worktrees/`, branches `wip/p3-wp1` and so on) and merged by the lead.
+Step 23: write the scripted walk-through (`Phase3Checks`) and step 24 the real-window pass
+(`Phase3RealWindowPass`) for the 41 checks. Everything they test is built and merged (WP0 to WP9);
+what is in flight: the integration branch `wip/p3-integration` (menu width, empty-pick output,
+the stash reason in one place, URL wrapping, repository naming in dialogs; then the whole default
+run) and WP10-core (the shared harness helpers and the skeleton of the checks); then four agents
+write the checks by report part A to D. The working files `docs/phase-3-checks-*.md`,
+`docs/phase-3-answers.md` (untracked) are the sources of the report (a script joined them) and are
+thrown away when the phase closes.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
