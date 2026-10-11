@@ -747,8 +747,23 @@ public sealed partial class CommitGraphControl : Control
         }
 
         var row = display < 0 ? -1 : display - RowOffset;
-        ToolTip.SetTip(this, LabelsTipAt(row) ?? CellTipAt(row));
+        ToolTip.SetTip(this, display >= 0 && display < RowOffset ? WorkingRowTip() : LabelsTipAt(row) ?? CellTipAt(row));
     }
+
+    /// <summary>
+    /// The tooltip over the working-changes row's text when it is cut short with "…" ("Working
+    /// changes · 1 conflict" in a narrow Message column): the whole text, as every cut text shows
+    /// it. Null over the rest of the row and over a text shown whole.
+    /// </summary>
+    private string? WorkingRowTip() =>
+        _pointer is { } pointer
+        && Columns.Message.IsVisible
+        && pointer.X >= Columns.Message.X
+        && pointer.X < Columns.Message.Right
+        && _workingRowLayout is { TextLines.Count: > 0 } layout
+        && layout.TextLines[0].HasCollapsed
+            ? WorkingRowText ?? DefaultWorkingRowText
+            : null;
 
     /// <summary>
     /// The tooltip over a message or an author cut short with "…": the whole text, as everything

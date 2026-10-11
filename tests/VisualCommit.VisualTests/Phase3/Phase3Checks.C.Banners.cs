@@ -232,6 +232,7 @@ public sealed partial class Phase3ChecksC
         AssertConflictsBanner(app, shot, PartC.Check25RebaseBanner, null, "Abort rebase");
         AssertBranch(app, "Detached at 88d6b91");
         AssertGraph(app, shot, PartC.Check25Rebase, lanes: 3, PartC.WorkingConflict);
+        AssertWorkingRowCutWithToolTip(app);
         Assert.DoesNotContain(app.Session.Shell.ActiveTab.LeftPanel.Rows.OfType<RefItemRow>(), row => row.IsHead);
         Assert.Equal("refs/heads/feature/conflict", File.ReadAllText(Path.Combine(repo.Path, ".git", "rebase-merge", "head-name")).Trim());
         Assert.Equal(PartC.MainWorkSha, File.ReadAllText(Path.Combine(repo.Path, ".git", "rebase-merge", "onto")).Trim());

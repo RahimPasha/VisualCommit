@@ -196,6 +196,7 @@ public sealed partial class Phase3ChecksC
         AssertToolbar(app, "StashButton", enabled: false, PartC.ResolveFirst);
         AssertGraph(app, shot, PartC.Check14Conflicts, lanes: 3, PartC.Check14ConflictsWorking);
         AssertSelection(app, shot, null, workingRow: true);
+        AssertWorkingRowCutWithToolTip(app);
         Assert.Equal(1, SectionRow(app, "Stashes").Count);
         Assert.Equal([PartC.Check14StashMessage], SectionLines(app, "Stashes"));
         await AssertBranchRowAsync(app, ["Local branches", "feature", "clash"], head: true);
@@ -310,6 +311,19 @@ public sealed partial class Phase3ChecksC
         }
 
         Assert.Equal("Close", ((Button)app.FindByAutomationId(view, "ConfirmButton")).Content);
+    }
+
+    /// <summary>
+    /// The working-changes row's "Working changes · 1 conflict" does not fit a three-lane graph's
+    /// 126-wide Message column at 1100×700: it is cut with "…", and the graph's tooltip over it
+    /// gives the whole text (phase 2's rule for cut text). The pointer goes back to the neutral point.
+    /// </summary>
+    private static void AssertWorkingRowCutWithToolTip(ShellDriver app)
+    {
+        var graph = Graph(app);
+        app.MoveMouse(app.WorkingRowPoint());
+        Assert.Equal(PartC.WorkingChangesOneConflict, ToolTip.GetTip(graph) as string);
+        app.MoveToNeutral();
     }
 
     /// <summary>Nothing changed in the blocked scenario: HEAD on main, notes.txt changed, newfile.txt untracked, no stash.</summary>
