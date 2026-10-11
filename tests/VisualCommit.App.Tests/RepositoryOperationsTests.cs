@@ -218,9 +218,11 @@ public partial class RepositoryOperationsTests
         var lockFile = Path.Combine(app.Operations.Git.GitDirectory, "refs", "remotes", "origin", "main.lock");
         app.Dialogs.CloseError(clickExtra: true);
 
-        var result = await app.Operations.RunAsync(OperationTexts.Fetch("origin"), OperationKind.Network, RefreshScope.Refs, _ =>
+        var result = await app.Operations.RunAsync(OperationTexts.Fetch("origin"), OperationKind.Network, RefreshScope.Refs, context =>
         {
+            // The git call that was stopped, as the session's call log records it for the operation.
             File.WriteAllText(lockFile, "left by a stopped git");
+            app.Calls.Add(new GitCallRecord(DateTimeOffset.UtcNow, TimeSpan.Zero, "git fetch --progress origin", repo.Path, GitCallOutcome.Cancelled, null, string.Empty, string.Empty, context.OperationId));
             throw new OperationCanceledException();
         });
 
@@ -229,6 +231,9 @@ public partial class RepositoryOperationsTests
         Assert.Equal("Fetch origin cancelled", dialog.Title);
         Assert.Equal(OperationTexts.StaleLockFilesSummary, dialog.Summary);
         Assert.Equal(".git/refs/remotes/origin/main.lock", dialog.Output);
+
+        // 4f: ErrorCommand is the cancelled git call (check 17b).
+        Assert.Equal("git fetch --progress origin", dialog.Command);
         Assert.Equal("Remove lock files", dialog.ExtraAction);
         Assert.False(File.Exists(lockFile));
         app.AssertScriptFollowed();
