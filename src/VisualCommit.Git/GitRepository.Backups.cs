@@ -33,12 +33,13 @@ public sealed partial class GitRepository
         // part, never on the whole ref, so a "-changes" ref keeps its pair's name and a name with
         // slashes cannot clash with a folder of the same name (2.0).
         var time = BackupClock.GetUtcNow().ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        var names = BackupNames(request.Entries);
         for (var attempt = 1; ; attempt++)
         {
             var stamp = attempt == 1 ? time : string.Create(CultureInfo.InvariantCulture, $"{time}-{attempt}");
             var stem = $"{BackupRefPrefix}{request.Kind}-{stamp}";
             var lines = request.Entries
-                .Select(entry => (Ref: entry.Name is null ? stem : $"{stem}/{entry.Name}", entry.Target))
+                .Select((entry, i) => (Ref: names[i] is { } name ? $"{stem}/{name}" : stem, entry.Target))
                 .ToList();
             if (request.ChangesCommit is { } changes)
             {
@@ -84,6 +85,72 @@ public sealed partial class GitRepository
             string.Equals(taken, name, comparison)
             || taken.StartsWith(name + "/", comparison)
             || name.StartsWith(taken + "/", comparison)));
+    }
+
+    /// <summary>
+    /// The entries' names as the batch writes them: equal to the request's, except where a name
+    /// meets an earlier one ignoring case, as the remote branches <c>origin/Foo</c> and
+    /// <c>origin/foo</c> do. Where refs are files (Windows, macOS) the two would be one file, and
+    /// the whole batch would fail; on every platform the later one's clashing part gets a number,
+    /// <c>origin/foo-2</c>, as does a folder that meets a ref's name (<c>origin/foo-2/x</c> after
+    /// <c>origin/Foo</c>).
+    /// </summary>
+    private static List<string?> BackupNames(IReadOnlyList<BackupEntry> entries)
+    {
+        var root = new BackupNameFolder();
+        var names = new List<string?>(entries.Count);
+        foreach (var entry in entries)
+        {
+            if (entry.Name is null)
+            {
+                names.Add(null);
+                continue;
+            }
+
+            var parts = entry.Name.Split('/');
+            var folder = root;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var isRef = i == parts.Length - 1;
+                var part = parts[i];
+                for (var number = 2; !folder.CanTake(part, isRef); number++)
+                {
+                    part = string.Create(CultureInfo.InvariantCulture, $"{parts[i]}-{number}");
+                }
+
+                parts[i] = part;
+                folder = folder.Take(part, isRef);
+            }
+
+            names.Add(string.Join('/', parts));
+        }
+
+        return names;
+    }
+
+    /// <summary>The names a batch has used in one folder of its refs, compared ignoring case.</summary>
+    private sealed class BackupNameFolder
+    {
+        /// <summary>By name: its spelling, and the folder it names, or null for a ref.</summary>
+        private readonly Dictionary<string, (string Spelling, BackupNameFolder? Folder)> _names = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Whether <paramref name="name"/> is free here, or is the same folder spelled the same.</summary>
+        public bool CanTake(string name, bool isRef) =>
+            !_names.TryGetValue(name, out var taken)
+            || (!isRef && taken.Folder is not null && string.Equals(taken.Spelling, name, StringComparison.Ordinal));
+
+        /// <summary>Takes <paramref name="name"/>; returns the folder it names (a new, empty one for a ref, which has none).</summary>
+        public BackupNameFolder Take(string name, bool isRef)
+        {
+            if (_names.TryGetValue(name, out var taken) && taken.Folder is { } existing)
+            {
+                return existing;
+            }
+
+            var folder = new BackupNameFolder();
+            _names[name] = (name, isRef ? null : folder);
+            return folder;
+        }
     }
 
     private static void ValidateBackupRequest(BackupRequest request)

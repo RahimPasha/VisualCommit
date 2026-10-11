@@ -106,6 +106,27 @@ public partial class BackupRefTests
     }
 
     [Fact]
+    public async Task Names_that_differ_only_in_case_get_a_number_so_that_the_batch_can_be_written()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        repository.BackupClock = new FixedClock(FixedTime);
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        var alpha = await RevAsync(repo, "refs/heads/feature/alpha");
+
+        // A server can have Foo and foo; where refs are files the two loose refs would be one file.
+        var result = await repository.SaveBackupRefsAsync(
+            new BackupRequest("remote", [new BackupEntry("origin/Foo", mainWork), new BackupEntry("origin/foo", alpha), new BackupEntry("origin/FOO/x", mainWork)]),
+            TestCancelled);
+
+        const string Stem = "refs/visualcommit/backup/remote-20261011T101500123Z";
+        Assert.Equal([$"{Stem}/origin/Foo", $"{Stem}/origin/foo-2", $"{Stem}/origin/FOO-3/x"], result.Refs);
+        Assert.Equal(mainWork, await repo.RefTargetAsync($"{Stem}/origin/Foo"));
+        Assert.Equal(alpha, await repo.RefTargetAsync($"{Stem}/origin/foo-2"));
+        Assert.Equal(mainWork, await repo.RefTargetAsync($"{Stem}/origin/FOO-3/x"));
+    }
+
+    [Fact]
     public async Task A_batch_that_fails_for_another_reason_writes_nothing_and_throws_gits_text()
     {
         using var repo = await Scenarios.OperationsAsync();
