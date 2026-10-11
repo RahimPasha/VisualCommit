@@ -32,9 +32,18 @@ public enum PullState
 /// <summary>
 /// The app's pull (<see cref="GitRepository.FetchAsync"/>, then
 /// <see cref="GitRepository.IntegratePullAsync"/>) against <c>git pull</c> itself (phase 3 design
-/// 2.18, D84), for the settings that merge: nothing set, <c>pull.rebase=false</c> and
-/// <c>pull.ff</c>, and for a local upstream. <see cref="PullParity"/> says how they are compared;
-/// <see cref="PullRebaseParityTests"/> has the settings that rebase.
+/// 2.18, D84), for the settings that merge: here nothing set and <c>pull.rebase=false</c>;
+/// <see cref="PullFfOnlyParityTests"/> and <see cref="PullFfParityTests"/> have <c>pull.ff</c>,
+/// <see cref="PullLocalUpstreamParityTests"/> a local upstream, and
+/// <see cref="PullFailureParityTests"/> what fails. <see cref="PullParity"/> says how they are
+/// compared; <see cref="PullRebaseParityTests"/> and the classes beside it have the settings that
+/// rebase.
+/// <para>
+/// Each group of settings is a class of its own, because xunit runs the tests of one class (the
+/// rows of a theory included) one after another and different classes side by side: as two
+/// classes these were the longest of the test run. The groups share only the templates, which
+/// are built once per process behind a lock and copied for each case.
+/// </para>
 /// </summary>
 public class PullParityTests
 {
@@ -46,10 +55,46 @@ public class PullParityTests
         { "none", PullState.Same },
         { "none", PullState.Conflicting },
         { "pull.rebase=false", PullState.Diverged },
+    };
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
+
+    [Fact]
+    public async Task A_branch_without_an_upstream_cannot_be_integrated()
+    {
+        using var repo = await (await PullParityTemplates.SyncAsync(PullState.Same)).CopyAsync();
+        var repository = await OpenAsync(repo);
+        var topic = (await repository.ReadRefsAsync(TestCancelled)).Refs.Single(gitRef => gitRef.FullName == "refs/heads/topic");
+
+        await Assert.ThrowsAsync<ArgumentException>(() => repository.IntegratePullAsync(topic, cancellationToken: TestCancelled));
+    }
+}
+
+/// <summary><see cref="PullParityTests"/> for <c>pull.ff=only</c>.</summary>
+public class PullFfOnlyParityTests
+{
+    public static TheoryData<string, PullState> Cases => new()
+    {
         { "pull.ff=only", PullState.FastForward },
         { "pull.ff=only", PullState.Diverged },
         { "pull.ff=only", PullState.LocalAhead },
         { "pull.ff=only", PullState.Conflicting },
+    };
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
+}
+
+/// <summary><see cref="PullParityTests"/> for the other values of <c>pull.ff</c>.</summary>
+public class PullFfParityTests
+{
+    public static TheoryData<string, PullState> Cases => new()
+    {
         { "pull.ff=false", PullState.FastForward },
         { "pull.ff=false", PullState.Diverged },
         { "pull.ff=true", PullState.FastForward },
@@ -57,6 +102,15 @@ public class PullParityTests
         { "pull.ff=no", PullState.FastForward },
     };
 
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
+}
+
+/// <summary><see cref="PullParityTests"/> for a branch whose upstream is a local branch.</summary>
+public class PullLocalUpstreamParityTests
+{
     public static TheoryData<string, PullState> LocalUpstreamCases => new()
     {
         { "none", PullState.FastForward },
@@ -67,15 +121,14 @@ public class PullParityTests
     };
 
     [Theory]
-    [MemberData(nameof(Cases))]
-    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
-        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
-
-    [Theory]
     [MemberData(nameof(LocalUpstreamCases))]
     public async Task A_pull_from_a_local_upstream_ends_where_git_pull_ends(string settings, PullState state) =>
         await PullParity.CompareAsync(await PullParityTemplates.LocalAsync(state), settings);
+}
 
+/// <summary><see cref="PullParityTests"/> for what fails: a value the app does not understand, an upstream gone from the remote.</summary>
+public class PullFailureParityTests
+{
     [Theory]
     [InlineData("pull.rebase", "preserve", "pull.rebase is set to preserve, which this app does not understand.")]
     [InlineData("pull.rebase", "sometimes", "pull.rebase is set to sometimes, which this app does not understand.")]
@@ -138,22 +191,14 @@ public class PullParityTests
         Assert.False(pull.Succeeded);
         Assert.Contains("no such ref was fetched", pull.StandardError, StringComparison.Ordinal);
     }
-
-    [Fact]
-    public async Task A_branch_without_an_upstream_cannot_be_integrated()
-    {
-        using var repo = await (await PullParityTemplates.SyncAsync(PullState.Same)).CopyAsync();
-        var repository = await OpenAsync(repo);
-        var topic = (await repository.ReadRefsAsync(TestCancelled)).Refs.Single(gitRef => gitRef.FullName == "refs/heads/topic");
-
-        await Assert.ThrowsAsync<ArgumentException>(() => repository.IntegratePullAsync(topic, cancellationToken: TestCancelled));
-    }
 }
 
 /// <summary>
-/// <see cref="PullParityTests"/> for the settings that rebase (<c>pull.rebase</c>,
-/// <c>branch.&lt;b&gt;.rebase</c>), alone and with <c>pull.ff</c>, and values git reads its own way.
-/// A class of its own, so that the two run side by side.
+/// <see cref="PullParityTests"/> for the settings that rebase: here <c>pull.rebase=true</c>;
+/// <see cref="PullRebaseModesParityTests"/> has its other modes and <c>branch.&lt;b&gt;.rebase</c>,
+/// <see cref="PullRebaseFfParityTests"/> <c>pull.ff</c> with it, and
+/// <see cref="PullRebaseValuesParityTests"/> values git reads its own way. Classes of their own,
+/// so that they run side by side.
 /// </summary>
 public class PullRebaseParityTests
 {
@@ -165,16 +210,54 @@ public class PullRebaseParityTests
         { "pull.rebase=true", PullState.Same },
         { "pull.rebase=true", PullState.Conflicting },
         { "pull.rebase=true", PullState.DivergedWithMerge },
+    };
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
+}
+
+/// <summary><see cref="PullRebaseParityTests"/> for <c>pull.rebase</c>'s other modes and <c>branch.&lt;b&gt;.rebase</c>.</summary>
+public class PullRebaseModesParityTests
+{
+    public static TheoryData<string, PullState> Cases => new()
+    {
         { "pull.rebase=merges", PullState.Diverged },
         { "pull.rebase=merges", PullState.DivergedWithMerge },
         { "pull.rebase=interactive", PullState.Diverged },
         { "branch.main.rebase=true", PullState.Diverged },
         { "branch.main.rebase=false pull.rebase=true", PullState.Diverged },
+    };
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
+}
+
+/// <summary><see cref="PullRebaseParityTests"/> with <c>pull.ff</c>.</summary>
+public class PullRebaseFfParityTests
+{
+    public static TheoryData<string, PullState> Cases => new()
+    {
         { "pull.ff=only pull.rebase=true", PullState.FastForward },
         { "pull.ff=only pull.rebase=true", PullState.Diverged },
         { "pull.ff=false pull.rebase=true", PullState.FastForward },
         { "pull.ff=false pull.rebase=true", PullState.Diverged },
+    };
 
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_apps_pull_ends_where_git_pull_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
+}
+
+/// <summary><see cref="PullRebaseParityTests"/> for values that git reads its own way.</summary>
+public class PullRebaseValuesParityTests
+{
+    public static TheoryData<string, PullState> Cases => new()
+    {
         // Values that git reads its own way: a number and "m" (on Git 2.36 the number 0 with a
         // unit, so false) as booleans, the short form of interactive, a word in another case.
         { "pull.rebase=1", PullState.Diverged },

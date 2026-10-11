@@ -4,6 +4,7 @@ using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using Xunit;
+using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 
 namespace VisualCommit.App.Tests;
 
@@ -14,7 +15,7 @@ namespace VisualCommit.App.Tests;
 /// diff, with what each leaves in the repository, the status bar, the stage panel, the
 /// <see cref="FakeFileLauncher"/> and the <see cref="FakeClipboard"/>.
 /// </summary>
-public partial class RepositoryOperationsTests
+public class RepositoryOperationsFilesTests
 {
     // Stage, unstage, discard: phase 2's writes, through the repository (1.4).
 

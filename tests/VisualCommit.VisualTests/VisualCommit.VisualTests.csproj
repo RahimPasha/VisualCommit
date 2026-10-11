@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The scripted walk-throughs of the visual test gate (docs/plan.md). They drive the whole app
-       in Avalonia's headless mode and save a screenshot after every step under artifacts/visual/. -->
+  <!-- The scripted walk-throughs of the visual test gate (docs/plan.md) for phases 0 to 2. They
+       drive the whole app in Avalonia's headless mode and save a screenshot after every step under
+       artifacts/visual/ (VisualRun, in VisualCommit.Testing). Phase 3's are in
+       VisualCommit.VisualTests.Phase3: a test assembly has one headless UI thread, on which its
+       headless tests run one at a time, so a project of their own runs them beside these. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -17,10 +20,6 @@
     <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
     <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
     <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
   </ItemGroup>
 
 </Project>

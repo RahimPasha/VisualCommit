@@ -8,6 +8,10 @@
 //   of one class one after another and different classes side by side: the four parts then share
 //   the time of the walk-through (design 7.7). Only part D starts servers, so its checks, which
 //   all want port 47391, never run at the same time.
+// - The project: these files are VisualCommit.VisualTests.Phase3, apart from phases 0 to 2's
+//   walk-through (VisualCommit.VisualTests). Every [AvaloniaFact] of a test assembly runs on that
+//   assembly's one headless UI thread, one at a time, whatever its class; a project of its own is
+//   a test process with a UI thread of its own, which "dotnet test" runs beside the other.
 // - Phase3Expectations.Common.cs and Phase3Expectations.A.cs to .D.cs: what the checks compare
 //   against, also compiled by the real-window pass.
 // - The driver: tests/VisualCommit.Testing/Headless/ShellDriver.Phase3.cs (design 7.4's list:
@@ -562,7 +566,7 @@ public abstract partial class Phase3Checks
     }
 
     /// <summary>The visible texts inside a control, in reading order (top to bottom, then left to right).</summary>
-    protected static List<string> TextsIn(Visual region) => Phase0.ShellExpectations.TextsIn(region);
+    protected static List<string> TextsIn(Visual region) => VisibleTexts.In(region);
 
     /// <summary>Whether a branch drag runs in the window (4g): its pointer must stay where the drag is.</summary>
     private static bool IsDragging(ShellDriver app)

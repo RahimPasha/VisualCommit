@@ -14,11 +14,18 @@ namespace VisualCommit.App.Tests;
 /// (<c>RepositoryOperations.Run.cs</c>: a success, a failure in the error dialog with 2.33's texts
 /// or a dialog of its own and an extra button, a conflict, a cancel and its lock files, a closed
 /// tab, an <see cref="IOException"/>, confirmations with a backup, names, lookups) and that the
-/// toolbar and the Remotes dialog reach the operations of the same meaning. Each WP7 sub-package
-/// adds its own part of this partial class (<c>RepositoryOperationsTests.Branches.cs</c>,
-/// <c>.Remotes.cs</c>, <c>.StashTags.cs</c>, <c>.Files.cs</c>).
+/// toolbar and the Remotes dialog reach the operations of the same meaning. The WP7
+/// sub-packages' tests are classes of their own, by subject, so that xunit runs them side by
+/// side: <see cref="RepositoryOperationsCheckoutTests"/>, <see cref="RepositoryOperationsBranchesTests"/>,
+/// <see cref="RepositoryOperationsMergeTests"/> and <see cref="RepositoryOperationsHistoryTests"/>
+/// (WP7-branches); <see cref="RepositoryOperationsFetchTests"/>, <see cref="RepositoryOperationsPullTests"/>,
+/// <see cref="RepositoryOperationsPushTests"/> and <see cref="RepositoryOperationsRemotesTests"/>
+/// (WP7-remotes); <see cref="RepositoryOperationsStashTagsTests"/> and
+/// <see cref="RepositoryOperationsFilesTests"/> (WP7-stashtags); and
+/// <see cref="RepositoryOperationsQueueTests"/> for operations that wait in the queue. The helpers
+/// they share are in <see cref="RepositoryOperationsTestSupport"/>.
 /// </summary>
-public partial class RepositoryOperationsTests
+public class RepositoryOperationsTests
 {
     [Fact]
     public async Task A_successful_operation_leaves_its_message_in_the_status_bar_and_reads_the_refs_again()

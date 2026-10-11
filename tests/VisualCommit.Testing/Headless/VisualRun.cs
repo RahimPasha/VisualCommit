@@ -1,11 +1,13 @@
 using System.Reflection;
-using VisualCommit.Testing.Headless;
 
-namespace VisualCommit.VisualTests;
+namespace VisualCommit.Testing.Headless;
 
 /// <summary>
 /// Where the scripted walk-throughs keep their screenshots:
 /// <c>artifacts/visual/phase-N/scripted/</c> under the repo root. The folder is git-ignored.
+/// Shared by the walk-through projects (<c>VisualCommit.VisualTests</c> for phases 0 to 2,
+/// <c>VisualCommit.VisualTests.Phase3</c> for phase 3); each phase's checks are in one of them,
+/// so only one test process writes a phase's folder.
 /// </summary>
 public static class VisualRun
 {
@@ -28,6 +30,7 @@ public static class VisualRun
     /// </summary>
     public static string Save(this Screenshot screenshot, int phase, string name)
     {
+        ArgumentNullException.ThrowIfNull(screenshot);
         lock (Gate)
         {
             if (PhasesStarted.Add(phase) && Directory.Exists(FolderFor(phase)))
