@@ -85,7 +85,11 @@ public sealed partial class GitRepository
     /// removed in Git 2.34, or a typo) throws <see cref="GitException"/> with the sentence
     /// "&lt;key&gt; is set to &lt;value&gt;, which this app does not understand." as its standard
     /// error, before anything changes. Conflicts are returned, not thrown: git failed and the
-    /// index then has conflicted files (it had none before).
+    /// index then has conflicted files (it had none before). When the fetch marked nothing for
+    /// merge, because the upstream was deleted on its remote (<c>FETCH_HEAD</c> has only
+    /// <c>not-for-merge</c> lines, while the remote branch stays without a prune, D99), nothing runs
+    /// and <see cref="PullOutcome.UpstreamGone"/> is returned: git pull fails there with "no such
+    /// ref was fetched", and a merge of <c>FETCH_HEAD</c> would only say "Already up to date".
     /// </summary>
     public async Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -98,6 +102,13 @@ public sealed partial class GitRepository
         options ??= NetworkOptions.None;
         var ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
         var rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+        if (!branch.HasLocalUpstream && FetchMarkedNothingForMerge())
+        {
+            // The upstream was deleted on its remote: git merge FETCH_HEAD would say "Already up
+            // to date", and FETCH_HEAD names another branch, which a rebase would be checked against.
+            return new PullResult(PullOutcome.UpstreamGone, 0);
+        }
+
         var head = branch.HasLocalUpstream ? branch.UpstreamRef : "FETCH_HEAD";
         var before = await ReadPullHeadAsync(cancellationToken).ConfigureAwait(false);
         var conflictsBefore = await HasUnmergedEntriesAsync(cancellationToken).ConfigureAwait(false);
@@ -518,6 +529,23 @@ public sealed partial class GitRepository
         };
         var message = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput.TrimEnd();
         return message.Length > 0 ? message : null;
+    }
+
+    /// <summary>
+    /// Whether the fetch just run wrote a <c>FETCH_HEAD</c> whose every line is
+    /// <c>not-for-merge</c>: the upstream it would have marked for merge no longer exists on the
+    /// remote, where <c>git pull</c> fails with "no such ref was fetched". A line for merge has
+    /// an empty second field (<c>&lt;sha&gt;\t\tbranch 'main' of &lt;url&gt;</c>). False when there
+    /// is no <c>FETCH_HEAD</c>, and git's merge then says what is wrong.
+    /// </summary>
+    private bool FetchMarkedNothingForMerge()
+    {
+        if (ReadGitFile("FETCH_HEAD") is not { } fetchHead)
+        {
+            return false;
+        }
+
+        return !fetchHead.Split('\n').Any(line => line.Split('\t') is [{ Length: > 0 }, { Length: 0 }, ..]);
     }
 
     /// <summary>The commit HEAD points at, or null when its branch has no commit yet.</summary>

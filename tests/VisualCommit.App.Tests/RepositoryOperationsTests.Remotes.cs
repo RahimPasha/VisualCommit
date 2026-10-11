@@ -292,6 +292,25 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
+    public async Task Pull_of_a_branch_whose_upstream_was_deleted_on_the_remote_says_so_and_integrates_nothing()
+    {
+        // origin's published is deleted there (a merged pull request); origin/published stays here (D99).
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await repo.CheckoutAsync("published");
+        var head = await repo.CommitFileAsync("own.txt", "own\n", "Own work");
+        var deleted = await repo.GitAsync("--git-dir=" + repo.SiblingPath("origin.git"), "branch", "-D", "published");
+        Assert.True(deleted.Succeeded, deleted.StandardError);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.PullAsync();
+
+        Assert.Equal(("published no longer exists on origin", OperationOutcome.Succeeded), (app.StatusText, app.LastResult?.Outcome));
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git merge", StringComparison.Ordinal) || call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
+    [Fact]
     public async Task Pull_refused_by_pull_ff_only_shows_gits_message_after_the_fetch_ran()
     {
         using var repo = await Scenarios.RemoteSyncAsync();

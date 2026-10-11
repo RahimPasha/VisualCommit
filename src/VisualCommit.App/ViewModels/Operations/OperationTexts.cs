@@ -375,6 +375,12 @@ public static partial class OperationTexts
 
     public static string PullConflicts(int conflictedFiles) => $"Pull stopped: {FilesHaveConflicts(conflictedFiles)}";
 
+    /// <summary>
+    /// 2.18: the fetch found the upstream no more on its remote (deleted there), so nothing was
+    /// integrated; <paramref name="remoteBranch"/> is its name there: "feature no longer exists on origin".
+    /// </summary>
+    public static string PullUpstreamGone(string remoteBranch, string remote) => $"{remoteBranch} no longer exists on {remote}";
+
     /// <summary>"pull.rebase is set to preserve, which this app does not understand." (2.18).</summary>
     public static string PullSettingNotUnderstood(string setting, string value) =>
         $"{setting} is set to {value}, which this app does not understand.";

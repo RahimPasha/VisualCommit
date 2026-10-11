@@ -103,6 +103,42 @@ public class PullParityTests
         }
     }
 
+    [Theory]
+    [InlineData("none")]
+    [InlineData("pull.rebase=true")]
+    [InlineData("pull.ff=only")]
+    public async Task An_upstream_deleted_on_the_remote_is_not_integrated_where_git_pull_fails(string settings)
+    {
+        // published tracks origin/published, which is deleted on origin; without a prune (D99) the
+        // remote branch stays here, and the fetch writes only not-for-merge lines.
+        using var repo = await Scenarios.RemoteSyncAsync();
+        if (settings != "none")
+        {
+            var pair = settings.Split('=', 2);
+            await repo.ConfigAsync(pair[0], pair[1]);
+        }
+
+        await repo.CheckoutAsync("published");
+        await repo.CommitFileAsync("own.txt", "own\n", "Own work");
+        var head = await repo.HeadAsync();
+        var deleted = await NewRunner().RunAsync(new GitCommand("branch", "-D", "published") { WorkingDirectory = repo.SiblingPath("origin.git") }, TestCancelled);
+        Assert.True(deleted.Succeeded, deleted.StandardError);
+        var repository = await OpenAsync(repo);
+        var branch = (await repository.ReadRefsAsync(TestCancelled)).Refs.Single(gitRef => gitRef.IsHead);
+        await repository.FetchAsync("origin", NetworkOptions.None, cancellationToken: TestCancelled);
+        Assert.DoesNotContain(
+            (await File.ReadAllTextAsync(Path.Combine(repository.GitDirectory, "FETCH_HEAD"), TestCancelled)).Split('\n'),
+            line => line.Split('\t') is [{ Length: > 0 }, { Length: 0 }, ..]);
+
+        Assert.Equal(new PullResult(PullOutcome.UpstreamGone, 0), await repository.IntegratePullAsync(branch, cancellationToken: TestCancelled));
+
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(string.Empty, (await repo.GitAsync("status", "--porcelain")).StandardOutput);
+        var pull = await PullParity.RunGitAsync(repo, "pull");
+        Assert.False(pull.Succeeded);
+        Assert.Contains("no such ref was fetched", pull.StandardError, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_branch_without_an_upstream_cannot_be_integrated()
     {

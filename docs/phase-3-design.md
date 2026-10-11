@@ -843,7 +843,11 @@ that the reflog or the stash list does not keep.
   "Pulled and merged <r>/<u> into main"; a rebase → "Pulled and rebased main onto <r>/<u>";
   conflicts → as 2.8 ("Pull stopped: N files have conflicts"); a rebase that stopped leaves a
   rebase in progress: the banner offers Abort and says that continuing needs a terminal until
-  phase 4 (section 5).
+  phase 4 (section 5). When the fetch marked nothing for merge (`FETCH_HEAD` has only
+  `not-for-merge` lines: the upstream was deleted on its remote, while `<r>/<u>` stays here
+  without a prune, D99), nothing is merged or rebased and the pull succeeds with "<u> no longer
+  exists on <r>"; `git pull` fails there ("no such ref was fetched"), and a merge of `FETCH_HEAD`
+  would only say "Already up to date".
 - Failures: error dialog "Pull failed" (for `pull.ff=only` on diverged branches git says
   `Not possible to fast-forward`); a cancelled fetch → "Pull cancelled", nothing integrated.
 - Refresh: Refs.

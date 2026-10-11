@@ -136,6 +136,8 @@ public sealed partial class RepositoryOperations
             PullOutcome.Merged => OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name)),
             PullOutcome.Rebased => OperationReport.Done(OperationTexts.PulledRebased(branch.Name, upstream)),
             PullOutcome.Conflicts => OperationReport.Conflicts(OperationTexts.PullConflicts(await CountConflictedFilesAsync())),
+            PullOutcome.UpstreamGone => OperationReport.Done(OperationTexts.PullUpstreamGone(
+                ShortName(branch.UpstreamRemoteRef ?? branch.UpstreamRef!), branch.UpstreamRemote ?? LocalRemote)),
             _ => throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}."),
         };
     }
