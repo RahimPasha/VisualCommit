@@ -16,6 +16,13 @@ public sealed partial class RepositoryOperations
     /// <summary>What git says when local changes keep a stash from applying (2.25).</summary>
     private const string StashOverwriteMarker = "would be overwritten by merge";
 
+    /// <summary>
+    /// What git says when a stash's untracked files cannot be restored because files of their names
+    /// exist (each listed as "&lt;file&gt; already exists, no checkout"): its tracked changes are
+    /// applied by then, and the stash is kept (2.25).
+    /// </summary>
+    private const string StashUntrackedMarker = "could not restore untracked files from stash";
+
     /// <summary>A HEAD that is not unborn, for <see cref="StashRefusal"/> before the refs are read: git then says whether there is a first commit.</summary>
     private static readonly HeadState HeadNotRead = new(null, "HEAD");
 
@@ -115,7 +122,7 @@ public sealed partial class RepositoryOperations
                     await Git.DropStashAsync(stash);
                     return OperationReport.Done(OperationTexts.DroppedStash(now));
                 },
-                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name) });
+                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name, pop: false) });
         });
     }
 
@@ -215,16 +222,24 @@ public sealed partial class RepositoryOperations
                         ? OperationReport.Conflicts(OperationTexts.ApplyStashConflicts(await CountConflictedFilesAsync(), pop))
                         : OperationReport.Done(pop ? OperationTexts.PoppedStash(now) : OperationTexts.AppliedStash(now));
                 },
-                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name) });
+                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name, pop) });
         });
     }
 
-    /// <summary>2.25's summaries: a stash no longer listed, local changes in the way; null for 2.33's default.</summary>
-    private static FailureDisplay? StashFailureDisplay(OperationText text, GitFailure failure, string name)
+    /// <summary>
+    /// 2.25's summaries: a stash no longer listed, local changes in the way, untracked files whose
+    /// names are taken (the tracked changes applied all the same); null for 2.33's default.
+    /// </summary>
+    private static FailureDisplay? StashFailureDisplay(OperationText text, GitFailure failure, string name, bool pop)
     {
         if (failure.GitOutput.Contains(OperationTexts.StashGone, StringComparison.Ordinal))
         {
             return new FailureDisplay(text.ErrorTitle, OperationTexts.StashGone);
+        }
+
+        if (failure.GitOutput.Contains(StashUntrackedMarker, StringComparison.OrdinalIgnoreCase))
+        {
+            return new FailureDisplay(text.ErrorTitle, OperationTexts.StashUntrackedNotRestored(name, pop));
         }
 
         return failure.GitOutput.Contains(StashOverwriteMarker, StringComparison.Ordinal)

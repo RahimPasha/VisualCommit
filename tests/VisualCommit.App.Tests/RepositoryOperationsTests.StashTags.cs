@@ -264,6 +264,34 @@ public partial class RepositoryOperationsTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task A_pop_whose_untracked_files_exist_says_that_the_tracked_changes_were_applied_and_the_stash_is_kept()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nstashed\n").WriteFile("notes.txt", "stashed notes\n");
+        await repo.GitAsync("stash", "push", "--include-untracked", "--message", "With notes");
+        repo.WriteFile("notes.txt", "my notes\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var stash = await app.ShaAsync("refs/stash");
+        app.Dialogs.CloseError();
+
+        await app.Operations.PopNewestStashAsync();
+
+        // Git applied the tracked part, left notes.txt alone and kept the entry.
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal("Applying the stash failed", error.Title);
+        Assert.Equal(
+            "The tracked changes of stash@{0} were applied, but its untracked files were not: files of those names already exist. The stash is kept.",
+            error.Summary);
+        Assert.Contains("notes.txt already exists, no checkout", error.Output, StringComparison.Ordinal);
+        Assert.Equal("git stash pop stash@{0}", error.Command);
+        Assert.Equal("Pop stash@{0} failed", app.StatusText);
+        Assert.Equal("core\nmain work\nstashed\n", File.ReadAllText(Path.Combine(repo.Path, "src", "core.txt")));
+        Assert.Equal("my notes\n", File.ReadAllText(Path.Combine(repo.Path, "notes.txt")));
+        Assert.Contains(stash, (await repo.StashListAsync()).Select(entry => entry.Sha));
+        app.AssertScriptFollowed();
+    }
+
     [Theory]
     [InlineData(true, "Applying the stash stopped: 1 file has conflicts. The stash is kept.")]
     [InlineData(false, "Applying the stash stopped: 1 file has conflicts")]
