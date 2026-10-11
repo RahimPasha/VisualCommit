@@ -655,6 +655,30 @@ public partial class RepositoryOperationsTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task Force_push_of_a_branch_whose_upstream_has_another_name_asks_to_replace_the_upstream()
+    {
+        // fix tracks origin/main: the push replaces main on origin, which the question must name.
+        using var repo = await Scenarios.RemoteSyncAsync();
+        var main = await RemoteHeadAsync(repo, "refs/heads/main");
+        await repo.GitAsync("branch", "--quiet", "--track", "fix", "origin/main");
+        await repo.CheckoutAsync("fix");
+        await repo.GitAsync("commit", "--quiet", "--amend", "-m", "Rewritten main work");
+        await repo.CheckoutAsync("main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm(yes: false);
+
+        await app.Operations.ForcePushAsync("refs/heads/fix");
+
+        var confirmation = Assert.Single(app.Dialogs.Confirmations);
+        Assert.Equal(
+            ("Force push fix?",
+                "Replace main on origin with your fix? Commits on origin that your branch does not have are dropped there. The push stops if origin has commits you have not integrated into your fix, even ones the last fetch brought."),
+            (confirmation.Title, confirmation.Question));
+        Assert.Equal(main, await RemoteHeadAsync(repo, "refs/heads/main"));
+        app.AssertScriptFollowed();
+    }
+
     // 2.21: upstreams.
 
     [Fact]

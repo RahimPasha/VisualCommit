@@ -401,9 +401,14 @@ public static partial class OperationTexts
     public static string ForcePushStopped(string target, string branch) =>
         $"{target} has commits that your {branch} does not include. Pull or look at them before forcing.";
 
-    public static ConfirmationRequest ConfirmForcePush(string branch, string remote) => new(
+    /// <summary>
+    /// 2.20's question: <paramref name="remoteBranch"/> is the upstream's name on
+    /// <paramref name="remote"/>, the branch the push replaces, which can differ from
+    /// <paramref name="branch"/> ("Replace main on origin with your fix?").
+    /// </summary>
+    public static ConfirmationRequest ConfirmForcePush(string branch, string remote, string remoteBranch) => new(
         $"Force push {branch}?",
-        $"Replace {branch} on {remote} with your {branch}? Commits on {remote} that your branch does not have are dropped there. "
+        $"Replace {remoteBranch} on {remote} with your {branch}? Commits on {remote} that your branch does not have are dropped there. "
             + $"The push stops if {remote} has commits you have not integrated into your {branch}, even ones the last fetch brought.",
         BackupDetail,
         "Force push");

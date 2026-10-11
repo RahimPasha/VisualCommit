@@ -870,9 +870,12 @@ that the reflog or the stash list does not keep.
 
 - Label: "Force push <b>…" on a local branch with a remote upstream (danger colour). Disabled
   when the upstream is gone: "<r>/<u> no longer exists: push normally".
-- Confirm: title "Force push <b>?", question "Replace <b> on <r> with your <b>? Commits on <r>
+- Confirm: title "Force push <b>?", question "Replace <u> on <r> with your <b>? Commits on <r>
   that your branch does not have are dropped there. The push stops if <r> has commits you have
-  not integrated into your <b>, even ones the last fetch brought.", button "Force push".
+  not integrated into your <b>, even ones the last fetch brought.", button "Force push". <u> is
+  the upstream's name on the remote (`UpstreamRemoteRef` without `refs/heads/`), the branch the
+  push replaces: a branch `fix` that tracks `origin/main` asks "Replace main on origin with your
+  fix?".
 - Backup: `force-push-<time>/<r>/<u>` → `UpstreamRef`'s commit, read inside the operation just
   before the push.
 - Git: `git push --progress --force-with-lease=<UpstreamRemoteRef> --force-if-includes <r>

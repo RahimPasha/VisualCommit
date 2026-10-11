@@ -283,7 +283,7 @@ public sealed partial class RepositoryOperations
         var text = OperationTexts.ForcePush(branch.Name, upstream);
         var request = new PushRequest(remote, branch.Name, remoteRef) { ForceWithLease = true };
         return GuardAsync(text, () => ConfirmAndRunAsync(
-            OperationTexts.ConfirmForcePush(branch.Name, remote),
+            OperationTexts.ConfirmForcePush(branch.Name, remote, ShortName(remoteRef)),
             text,
             OperationKind.Network,
             RefreshScope.Refs,
