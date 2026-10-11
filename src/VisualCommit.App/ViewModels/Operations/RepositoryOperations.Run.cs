@@ -620,10 +620,13 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// "Remove lock files" (1.8): deletes those of <paramref name="files"/> that still exist; a file
-    /// that cannot be deleted opens "Removing lock files failed" with the system's message.
+    /// "Remove lock files" (1.8): deletes those of <paramref name="files"/> that still exist and,
+    /// when <paramref name="listed"/> gives a file's last write time and length as it was listed,
+    /// are still that same file: a lock removed meanwhile and taken again by a live git (an
+    /// auto-fetch, a terminal) is another file, with another time, and is left alone. A file that
+    /// cannot be deleted opens "Removing lock files failed" with the system's message.
     /// </summary>
-    public async Task RemoveLockFilesAsync(IReadOnlyList<string> files)
+    public async Task RemoveLockFilesAsync(IReadOnlyList<string> files, IReadOnlyDictionary<string, (DateTime Time, long Length)?>? listed = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         var problems = new List<string>();
@@ -631,7 +634,11 @@ public sealed partial class RepositoryOperations
         {
             try
             {
-                if (File.Exists(file))
+                if (listed is not null && listed.TryGetValue(file, out var stamp) && LockFiles.Stamp(file) is { } now && now != stamp)
+                {
+                    Log.Info($"{Repository.Name}: the lock file {file} changed since it was listed; it is left alone.");
+                }
+                else if (File.Exists(file))
                 {
                     File.Delete(file);
                     Log.Info($"{Repository.Name}: removed the lock file {file}");
@@ -682,6 +689,9 @@ public sealed partial class RepositoryOperations
 
     private async Task ShowStaleLockFilesAsync(OperationText text, IReadOnlyList<string> files, string? operationId)
     {
+        // What each file is as it is listed, right after the queue found it: the button removes
+        // only files that are still these (1.8).
+        var listed = files.ToDictionary(file => file, LockFiles.Stamp, StringComparer.Ordinal);
         // 4f: ErrorCommand is the cancelled git call, the operation's last one in the session's call log.
         var cancelledCall = operationId is null
             ? null
@@ -697,7 +707,7 @@ public sealed partial class RepositoryOperations
             log: Log);
         if (await ShowDialogAsync(dialog))
         {
-            await RemoveLockFilesAsync(files);
+            await RemoveLockFilesAsync(files, listed);
         }
     }
 

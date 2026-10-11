@@ -62,4 +62,45 @@ public class GitOutputCleanerTests
 
         Assert.Equal(new[] { branch, packed }.Select(Path.GetFullPath).Order(StringComparer.Ordinal), found);
     }
+
+    [Fact]
+    public async Task Only_the_locks_a_stopped_fetch_or_push_can_leave_are_found_and_only_while_they_stay()
+    {
+        using var folder = new TempDirectory("locks");
+        var git = Directory.CreateDirectory(folder.Combine(".git")).FullName;
+        var since = DateTimeOffset.UtcNow;
+        string Lock(params string[] parts)
+        {
+            var path = Path.Combine([git, .. parts]);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "lock");
+            return Path.GetFullPath(path);
+        }
+
+        // What a fetch or push takes: refs, packed-refs, shallow, the configuration.
+        string[] left = [Lock("refs", "remotes", "origin", "main.lock"), Lock("packed-refs.lock"), Lock("shallow.lock"), Lock("config.lock")];
+
+        // What other live git processes hold: this worktree's index and HEAD (a stage in a
+        // terminal), another worktree's, a submodule's, git's maintenance in objects/.
+        Lock("index.lock");
+        Lock("HEAD.lock");
+        Lock("worktrees", "wt", "index.lock");
+        Lock("worktrees", "wt", "HEAD.lock");
+        Lock("modules", "sub", "index.lock");
+        Lock("modules", "sub", "refs", "heads", "main.lock");
+        Lock("objects", "info", "commit-graph.lock");
+
+        // A ref lock of a live git, which it removes a moment later.
+        var live = Lock("refs", "heads", "topic.lock");
+        var removal = Task.Run(() =>
+        {
+            Thread.Sleep(100);
+            File.Delete(live);
+        }, TestContext.Current.CancellationToken);
+
+        var found = LockFiles.FindSince([git], since, settle: TimeSpan.FromSeconds(1));
+
+        await removal;
+        Assert.Equal(left.Order(StringComparer.Ordinal), found);
+    }
 }

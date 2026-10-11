@@ -426,7 +426,7 @@ public sealed class OperationQueue : IOperationQueue
         // Git was stopped by the user's Cancel (or a closed tab): a background one only by the user.
         if (result.Outcome == OperationOutcome.Cancelled && operation.Kind == OperationKind.Network && (!operation.IsBackground || entry.CancelRequested))
         {
-            result = ReportStaleLocks(operation, entry.StartedAt, result);
+            result = await ReportStaleLocksAsync(operation, entry.StartedAt, result);
         }
 
         if (!IsDisposed && operation.Refresh != RefreshScope.None)
@@ -535,14 +535,15 @@ public sealed class OperationQueue : IOperationQueue
 
     /// <summary>
     /// After a cancelled network operation (1.8): the lock files git left go with the result, for
-    /// the "&lt;Title&gt; cancelled" dialog, or to the log when the tab closed meanwhile.
+    /// the "&lt;Title&gt; cancelled" dialog, or to the log when the tab closed meanwhile. The
+    /// folders are read off the UI thread.
     /// </summary>
-    private OperationResult ReportStaleLocks(GitOperation operation, DateTimeOffset since, OperationResult result)
+    private async Task<OperationResult> ReportStaleLocksAsync(GitOperation operation, DateTimeOffset since, OperationResult result)
     {
         IReadOnlyList<string> locks;
         try
         {
-            locks = _findLockFiles(since);
+            locks = await Task.Run(() => _findLockFiles(since));
         }
         catch (Exception ex)
         {

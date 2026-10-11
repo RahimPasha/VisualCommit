@@ -282,6 +282,42 @@ public partial class RepositoryOperationsTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task A_cancelled_fetch_lists_neither_another_worktrees_index_lock_nor_a_lock_taken_again_since()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.GitAsync("worktree", "add", "--quiet", repo.SiblingPath("wt"), "feature/ff");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var gitFolder = app.Operations.Git.GitDirectory;
+        var refLock = Path.Combine(gitFolder, "refs", "remotes", "origin", "main.lock");
+        var otherWorktree = Path.Combine(gitFolder, "worktrees", "wt", "index.lock");
+        ErrorDialogViewModel? shown = null;
+
+        // While the dialog is open, the stale lock goes (a terminal's git removed it) and a live
+        // git takes that name again: "Remove lock files" must leave the new one alone.
+        app.Dialogs.Answer<ErrorDialogViewModel>(dialog =>
+        {
+            shown = dialog;
+            File.Delete(refLock);
+            File.WriteAllText(refLock, "held by a live git");
+            File.SetLastWriteTimeUtc(refLock, DateTime.UtcNow.AddSeconds(5));
+            dialog.ExtraCommand.Execute(null);
+        });
+
+        var result = await app.Operations.RunAsync(OperationTexts.Fetch("origin"), OperationKind.Network, RefreshScope.Refs, _ =>
+        {
+            File.WriteAllText(refLock, "left by a stopped git");
+            File.WriteAllText(otherWorktree, "held by a git in the other worktree");
+            throw new OperationCanceledException();
+        });
+
+        Assert.Equal([Path.GetFullPath(refLock)], result.StaleLockFiles);
+        Assert.Equal(".git/refs/remotes/origin/main.lock", shown!.Output);
+        Assert.True(File.Exists(refLock), "The lock a live git took again was removed.");
+        Assert.True(File.Exists(otherWorktree));
+        app.AssertScriptFollowed();
+    }
+
     /// <summary>
     /// Queues an operation of the test's own that waits until the returned source is set, then
     /// runs <paramref name="then"/> (a change to the repository, as an operation ahead of the one
