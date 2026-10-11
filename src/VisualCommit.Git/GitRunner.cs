@@ -97,10 +97,14 @@ public sealed class GitRunner : IGitRunner
         var exit = process.WaitForExitAsync(CancellationToken.None);
 
         // Cancelling stops git, which ends the wait below. Should git not stop, the wait is given
-        // up after StopTimeout: a call that was cancelled must return, whatever git does.
+        // up after StopTimeout: a call that was cancelled must return, whatever git does. A
+        // cancel that comes after git has exited stops nothing (stopped stays false), so the call
+        // that finished keeps its result.
         var gaveUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = false;
         using var stopOnCancel = cancellationToken.Register(() =>
         {
+            Volatile.Write(ref stopped, !exit.IsCompleted);
             Stop();
             _ = Task.Delay(StopTimeout, CancellationToken.None)
                 .ContinueWith(_ => gaveUp.TrySetResult(), TaskScheduler.Default);
@@ -148,7 +152,12 @@ public sealed class GitRunner : IGitRunner
         }
 
         var duration = stopwatch.Elapsed;
-        if (cancellationToken.IsCancellationRequested)
+
+        // A cancel that came after git had exited by itself (or so close before that git still
+        // exited with success) and after its output was read in full stopped nothing: the call
+        // keeps its result, so a push that went through is not reported as cancelled.
+        var endedByItself = exit.IsCompleted && pumps.IsCompletedSuccessfully && (!Volatile.Read(ref stopped) || process.ExitCode == 0);
+        if (cancellationToken.IsCancellationRequested && !endedByItself)
         {
             Record(command, startedAt, duration, GitCallOutcome.Cancelled, null, output.Head, error.Head);
             throw new OperationCanceledException(cancellationToken);
