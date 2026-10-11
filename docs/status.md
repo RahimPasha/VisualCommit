@@ -11,7 +11,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 |---|---|---|---|---|
 | 0. Foundation | Done | `phase/0-foundation` | [phase-0](handoffs/phase-0.md) | [phase-0](test-reports/phase-0.md) |
 | 1. Repos and commit graph | Done | `phase/1-graph` | [phase-1](handoffs/phase-1.md) | [phase-1](test-reports/phase-1.md) |
-| 2. Diff and commit workflow | In progress | `phase/2-diff-commit` | | [phase-2](test-reports/phase-2.md) (expected results only) |
+| 2. Diff and commit workflow | Awaiting acceptance | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
 | 3. Branch, remote, stash and tag operations | Not started | `phase/3-operations` | | |
 | 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
 | 5. History, traceability and undo | Not started | `phase/5-history` | | |
@@ -25,14 +25,16 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 2, Diff and commit workflow, is in progress on `phase/2-diff-commit`. It was started on
-2026-10-10 on the Windows machine, from `master` at `cec9c0c`. Phase 1 was accepted on
+Phase 2, Diff and commit workflow, is awaiting acceptance on `phase/2-diff-commit`: the whole
+visual test gate passed (see the [report](test-reports/phase-2.md) and the
+[handoff](handoffs/phase-2.md)). It was started on 2026-10-10 on the Windows machine, from
+`master` at `cec9c0c`. Phase 1 was accepted on
 2026-10-10 and merged into `master` (merge commit `b5eb1ed`); phase 0 on 2026-10-06 (merge
 commit `b5f4723`).
 
-Gate commit: none yet. When the phase is set to "Awaiting acceptance", this line names the
-commit that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs
-changed after it.
+Gate commit: `2a13804`. `dotnet test` (557 passed) and the real-window pass (14 passed) ran on
+it, and every picture of both was inspected; the commits after it change only docs, which
+"Phase N accepted" checks.
 
 ### Progress
 
@@ -105,13 +107,19 @@ Closing:
 - [x] 26. `plan.md`: anything not delivered moved, risks updated.
 - [x] 27. Handoff `docs/handoffs/phase-2.md`.
 - [x] 28. Cold-read check by a fresh agent; gaps fixed.
-- [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
-- [ ] 30. Owner told what passed, what did not, and what needs a decision.
+- [x] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [x] 30. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+The last run on `phase/2-diff-commit` was
+[38097840078](https://github.com/RahimPasha/VisualCommit/actions/runs/38097840078), for the
+gate's commit `2a13804`: all five jobs succeeded (`windows-latest`, `macos-latest`,
+`ubuntu-latest` and the two "bare ubuntu container" jobs), each with 557 tests passed. The
+commits after it changed only docs, so no run followed.
 
 The last run on `phase/1-graph` was
 [38071012182](https://github.com/RahimPasha/VisualCommit/actions/runs/38071012182), for the
@@ -137,9 +145,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The closing steps 26 to 30: `plan.md`, the handoff, the cold-read check, this file (state,
-gate commit `2a13804`, CI run 38097840078), and the report to the owner. The gate passed on
-`2a13804` (see the [phase 2 report](test-reports/phase-2.md)); only docs may change from here.
+Wait for the owner. "Phase 2 accepted" merges `phase/2-diff-commit` into `master` as
+`CLAUDE.md` says. A change to anything but docs before then sets the phase back to "In
+progress" and needs both passes of the gate again.
 
 ### Notes for whoever resumes
 
@@ -179,7 +187,15 @@ gate commit `2a13804`, CI run 38097840078), and the report to the owner. The gat
 
 ## Waiting on the owner
 
-- When you have a Mac at hand: the nine-step checklist at the end of the
+- Accept phase 2, or say what to change: "Phase 2 accepted" merges `phase/2-diff-commit` into
+  `master`.
+- The handoff's "Open points for phase 3" include questions of taste to settle when phase 3
+  starts, among them whether phase 3's menus leave out or disable the interaction table's
+  actions that belong to later phases.
+- Optional: remove the leftover phase 1 worktree `.claude/worktrees/agent-a60aa26c7fe44ae22` and
+  its merged local branches (see the Notes); the session's permission system would not.
+- When you have a Mac at hand: the seven-step checklist at the end of the
+  [phase 2 test report](test-reports/phase-2.md), the nine-step one at the end of the
   [phase 1 test report](test-reports/phase-1.md) and the eight-step one at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner said this will be looked at later.
 
