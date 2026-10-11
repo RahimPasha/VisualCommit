@@ -5,7 +5,7 @@ using Xunit;
 namespace VisualCommit.Git.Tests;
 
 /// <summary>Pins down what each scenario repo contains. Visual checks describe their expected results in these terms.</summary>
-public class ScenarioTests
+public partial class ScenarioTests
 {
     [Fact]
     public async Task Linear_has_three_commits_on_main_and_a_clean_working_tree()
