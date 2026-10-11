@@ -78,6 +78,7 @@ public partial class MenuLayer : UserControl
     private IDisposable? _escape;
     private MainWindowViewModel? _shell;
     private DialogHostViewModel? _dialogs;
+    private IInputElement? _focusBeforeMenu;
 
     public MenuLayer()
     {
@@ -87,6 +88,18 @@ public partial class MenuLayer : UserControl
 
     /// <summary>The open menu's presenter (automation id <see cref="MenuAutomationId"/>), or null.</summary>
     public Control? OpenMenu => _flyout is { IsOpen: true } flyout ? flyout.Presenter : null;
+
+    /// <summary>
+    /// The element that should have the focus once the menus are gone: <paramref name="focused"/>,
+    /// unless it is in a context menu (an item of it), whose focus is the menu's own; then the
+    /// element that had the focus before the menu opened. The window keeps it when a dialog opens
+    /// over a menu, which closes the menu, to give the focus back there when the dialog closes.
+    /// </summary>
+    public IInputElement? FocusOutsideMenus(IInputElement? focused) =>
+        focused is ContextMenuItem
+        || (focused is Visual visual && visual.GetSelfAndVisualAncestors().OfType<MenuFlyoutPresenter>().Any(presenter => presenter.Classes.Contains(PresenterClass)))
+            ? _focusBeforeMenu
+            : focused;
 
     /// <summary>
     /// Where a menu of <paramref name="menu"/>'s size opens in an area of <paramref name="area"/>'s
@@ -326,6 +339,9 @@ public partial class MenuLayer : UserControl
             }
         };
 
+        // Where the focus was before the menu takes it; a menu that replaces another keeps what
+        // the first one found.
+        _focusBeforeMenu = FocusOutsideMenus(_topLevel?.FocusManager?.GetFocusedElement());
         _flyout = flyout;
         flyout.ShowAt(MenuPanel);
     }

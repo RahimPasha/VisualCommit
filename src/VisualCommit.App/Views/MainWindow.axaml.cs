@@ -318,9 +318,11 @@ public partial class MainWindow : Window
     {
         if (e.Action == NotifyCollectionChangedAction.Add)
         {
+            // A dialog opening over a context menu closes the menu (4a), which has the focus now:
+            // what gets it back is the element that had it before the menu opened.
             foreach (var dialog in e.NewItems?.OfType<DialogViewModel>() ?? [])
             {
-                _focusBeforeDialog[dialog] = FocusManager?.GetFocusedElement();
+                _focusBeforeDialog[dialog] = MenuLayer.FocusOutsideMenus(FocusManager?.GetFocusedElement());
             }
         }
         else if (e.Action == NotifyCollectionChangedAction.Reset)

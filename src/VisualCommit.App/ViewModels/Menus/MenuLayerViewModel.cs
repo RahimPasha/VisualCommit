@@ -14,6 +14,12 @@ public enum MenuOpenedBy
 }
 
 /// <summary>
+/// A request for a menu that opens once a read completes (<see cref="MenuLayerViewModel.Request"/>):
+/// whose menu it is and which request of the layer it was.
+/// </summary>
+public readonly record struct MenuRequest(object Owner, int Number);
+
+/// <summary>
 /// The window's menu layer (docs/phase-3-design.md 4a, D105): the one place a context menu is
 /// opened, at a point of the window, and at most one menu open at a time. The view
 /// (<c>Views/Shell/MenuLayer</c>) draws <see cref="Current"/> with Avalonia's stock menu flyout and
@@ -23,6 +29,8 @@ public sealed partial class MenuLayerViewModel : ObservableObject
 {
     private readonly IAppLog _log;
     private readonly Func<string?> _repositoryName;
+    private readonly Func<object, bool> _mayOpenLater;
+    private int _requests;
 
     /// <summary>A layer that logs nothing.</summary>
     public MenuLayerViewModel()
@@ -37,12 +45,18 @@ public sealed partial class MenuLayerViewModel : ObservableObject
     /// </summary>
     /// <param name="log">Where to log.</param>
     /// <param name="repositoryName">The active tab's repository name, read at each open; null leaves the prefix out.</param>
-    public MenuLayerViewModel(IAppLog log, Func<string?> repositoryName)
+    /// <param name="mayOpenLater">
+    /// Whether a menu that waited for a read (<see cref="OpenRequested"/>) may still open for its
+    /// owner: the window's says so while the owner is the active tab's repository and no dialog is
+    /// open. Null: always.
+    /// </param>
+    public MenuLayerViewModel(IAppLog log, Func<string?> repositoryName, Func<object, bool>? mayOpenLater = null)
     {
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(repositoryName);
         _log = log;
         _repositoryName = repositoryName;
+        _mayOpenLater = mayOpenLater ?? (_ => true);
     }
 
     /// <summary>The open menu, or null.</summary>
@@ -84,9 +98,43 @@ public sealed partial class MenuLayerViewModel : ObservableObject
         _log.Debug($"{prefix}Context menu opened: {menu.HeaderText ?? "(no header)"} by {how}");
     }
 
-    /// <summary>Closes the open menu. Returns whether one was open (Esc's chain).</summary>
+    /// <summary>
+    /// Asks for a menu of <paramref name="owner"/> (a repository) that opens only once a read
+    /// completes (a drop's menu, a local branch's with its fast-forward): the result is what
+    /// <see cref="OpenRequested"/> takes then. A later request, a menu opened, and
+    /// <see cref="Close"/> (Esc, another tab, a dialog, a press outside a menu) each drop the
+    /// requests made before them.
+    /// </summary>
+    public MenuRequest Request(object owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        return new MenuRequest(owner, ++_requests);
+    }
+
+    /// <summary>
+    /// Opens <paramref name="menu"/> for <paramref name="request"/> once its read has completed,
+    /// only if nothing has dropped the request since (<see cref="Request"/>) and its owner may
+    /// still show a menu (its tab is active, no dialog is open). Returns whether it opened.
+    /// </summary>
+    public bool OpenRequested(MenuRequest request, MenuModel menu, MenuPosition position, MenuOpenedBy openedBy)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        if (request.Number != _requests || request.Owner is null || !_mayOpenLater(request.Owner))
+        {
+            return false;
+        }
+
+        Open(menu, position, openedBy);
+        return true;
+    }
+
+    /// <summary>
+    /// Closes the open menu and drops every menu request still waiting for its read. Returns
+    /// whether a menu was open (Esc's chain goes on when none was).
+    /// </summary>
     public bool Close()
     {
+        _requests++;
         if (Current is null)
         {
             return false;

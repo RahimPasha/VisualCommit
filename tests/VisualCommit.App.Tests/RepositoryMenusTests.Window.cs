@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.Views.Shell;
@@ -323,6 +324,90 @@ public partial class RepositoryMenusTests
         Assert.InRange(menu.Bounds.Height, 108, 112);
         TestPictures.Save(app, "07b-drop-menu");
         app.PressKey(Key.Escape);
+    }
+
+    [AvaloniaFact]
+    public async Task A_menu_that_waits_for_a_read_opens_nothing_after_Esc_another_menu_a_dialog_or_another_tab()
+    {
+        using var scenario = await Scenarios.OperationsAsync();
+
+        // A local branch behind its upstream (Add core, tracking origin/main at Main work): its
+        // menu reads the worktrees first, for its fast-forward.
+        await scenario.CreateBranchAsync("behind", "v1.0");
+        await scenario.GitAsync("branch", "--quiet", "--set-upstream-to=origin/main", "behind");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
+        var repository = await ShownAsync(app);
+        var (actions, recorder) = RecordingActions.Create();
+        repository.MenuActions = actions;
+        var shell = app.Session.Shell;
+        var at = new MenuPosition(400, 200);
+
+        // Esc while the drop's read runs.
+        var drop = repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at);
+        app.PressKey(Key.Escape);
+        Assert.False(await drop);
+        Assert.False(app.IsMenuOpen);
+
+        // Another menu opened meanwhile stays the open one.
+        drop = repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at);
+        app.RightClick(app.GraphRowPoint(AlphaTwoRow));
+        Assert.False(await drop);
+        Assert.Equal("ce5ea6a Alpha two", app.Menu().Header);
+        app.PressKey(Key.Escape);
+
+        // A dialog opened meanwhile, by an operation running in the background: no menu over it.
+        drop = repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at);
+        var failed = shell.Dialogs.ShowAsync(new ErrorDialogViewModel("Push failed", "Git could not push.", repository.Name));
+        Assert.False(await drop);
+        Assert.False(app.IsMenuOpen);
+        Assert.True(shell.Dialogs.CancelCurrent());
+        await failed;
+
+        // The local branch's menu, and another tab before its read ends.
+        app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/behind"));
+        shell.NewTabCommand.Execute(null);
+        Assert.False(await repository.PendingMenu);
+        Assert.False(app.IsMenuOpen);
+
+        // Nothing came between: the menus open.
+        shell.ActivateTabCommand.Execute(shell.Tabs[0]);
+        app.Settle();
+        app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/behind"));
+        Assert.True(await repository.PendingMenu);
+        Assert.True(app.Menu().Item("Fast-forward behind to origin/main").IsEnabled);
+        app.PressKey(Key.Escape);
+        Assert.True(await repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at));
+        Assert.Equal("feature/alpha → main", app.Menu().Header);
+        app.PressKey(Key.Escape);
+        Assert.Empty(recorder.Calls);
+    }
+
+    [AvaloniaFact]
+    public async Task A_dialog_that_opens_over_a_menu_gives_the_focus_back_to_where_it_was_before_the_menu()
+    {
+        using var scenario = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
+        var repository = await ShownAsync(app);
+        var graph = app.Find<CommitGraphControl>("GraphRows");
+        app.Click(app.GraphRowPoint(AlphaTwoRow));
+        Assert.Same(graph, app.Window.FocusManager?.GetFocusedElement());
+
+        app.RightClick(app.GraphRowPoint(AlphaTwoRow));
+        Assert.Equal("ce5ea6a Alpha two", app.Menu().Header);
+        Assert.IsType<ContextMenuItem>(app.Window.FocusManager?.GetFocusedElement());
+
+        // An operation running in the background fails while the menu is open: its error closes the menu.
+        var failed = app.Session.Shell.Dialogs.ShowAsync(new ErrorDialogViewModel("Push failed", "Git could not push.", repository.Name));
+        Assert.False(app.IsMenuOpen);
+        app.PressKey(Key.Escape);
+        await failed;
+
+        // The keyboard goes on in the graph.
+        Assert.Same(graph, app.Window.FocusManager?.GetFocusedElement());
+        app.PressKey(Key.Down);
+        Assert.Equal(AlphaTwoRow + 1, repository.SelectedIndex);
     }
 
     [AvaloniaFact]
