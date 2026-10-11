@@ -281,7 +281,7 @@ public partial class RepositoryMenusTests
         Assert.Equal("Fast-forward topic to origin/published (disabled: \"topic has commits that origin/published does not have\")", FastForward(behind with { Behind = 0, Ahead = 1 }));
         Assert.Equal("Fast-forward topic to origin/published (disabled: \"origin/published no longer exists\")", FastForward(behind with { UpstreamGone = true }));
         Assert.Equal(
-            "Fast-forward topic to origin/published (disabled: \"topic is checked out in another worktree (C:/work/topic-wt)\")",
+            "Fast-forward topic to origin/published (disabled: \"topic is checked out in another worktree (C:\\work\\topic-wt)\")",
             FastForward(behind, new WorktreeInfo("C:\\work\\topic-wt", "refs/heads/topic", IsMain: false)));
 
         // It fast-forwards to the upstream's full ref (2.7).
@@ -705,10 +705,11 @@ public partial class RepositoryMenusTests
         using var repo = await Scenarios.EdgeCasesAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         var layer = new MenuLayerViewModel();
-        var worktree = (await repo.GitAsync("worktree", "list", "--porcelain")).StandardOutput
+        // The folder as git lists it, in the platform's form (backslashes on Windows; check 30).
+        var worktree = Path.TrimEndingDirectorySeparator(Path.GetFullPath((await repo.GitAsync("worktree", "list", "--porcelain")).StandardOutput
             .Split('\n').Select(line => line.TrimEnd('\r'))
             .Where(line => line.StartsWith("worktree ", StringComparison.Ordinal)).Select(line => line["worktree ".Length..])
-            .Single(path => path.EndsWith(Scenarios.EdgeCasesWorktree, StringComparison.Ordinal));
+            .Single(path => path.EndsWith(Scenarios.EdgeCasesWorktree, StringComparison.Ordinal))));
 
         Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/main", "refs/heads/side", default));
 

@@ -162,9 +162,13 @@ public static partial class OperationTexts
         /// <summary>2.7, 2.10, 4g: not a fast-forward.</summary>
         public static string HasCommitsThat(string branch, string other) => $"{branch} has commits that {other} does not have";
 
-        /// <summary>2.7, D120: a branch checked out in another worktree is neither fast-forwarded nor checked out here.</summary>
+        /// <summary>
+        /// 2.7, D120: a branch checked out in another worktree is neither fast-forwarded nor checked
+        /// out here. The folder is named as <c>WorktreeInfo.Path</c> gives it, the full path in the
+        /// platform's form (backslashes on Windows; check 30).
+        /// </summary>
         public static string CheckedOutInAnotherWorktree(string branch, string path) =>
-            $"{branch} is checked out in another worktree ({path.Replace('\\', '/')})";
+            $"{branch} is checked out in another worktree ({path})";
 
         // A drop (4g).
 
