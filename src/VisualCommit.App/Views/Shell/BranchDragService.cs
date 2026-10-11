@@ -49,6 +49,7 @@ public sealed class BranchDragService : IEscapeHandler, IDisposable
     private IPointer? _pointer;
     private Point _pressedAt;
     private bool _ending;
+    private bool _draggedSincePress;
 
     /// <param name="topLevel">The window the drags happen in.</param>
     /// <param name="layer">Its drag layer, which captures the pointer while a branch is dragged.</param>
@@ -81,6 +82,14 @@ public sealed class BranchDragService : IEscapeHandler, IDisposable
     public int SourceColor { get; private set; }
 
     public bool IsDragging => Source is not null;
+
+    /// <summary>
+    /// Whether the latest press came after a drag that started with the press before it. Avalonia
+    /// counts that drag's press and this one as the two clicks of a double-click when they are
+    /// close enough in time and place, but the first was no click: a double-tap this press raises
+    /// is not a double-click (4c), and the graph's labels and the left panel's rows ignore it.
+    /// </summary>
+    public bool PressFollowsDrag { get; private set; }
 
     /// <summary>Raised when the drag starts, moves, finds or leaves a target, or ends: the drag layer redraws.</summary>
     public event EventHandler? Changed;
@@ -186,6 +195,9 @@ public sealed class BranchDragService : IEscapeHandler, IDisposable
             return;
         }
 
+        // Seen before the press reaches the control under the pointer and its double-tap.
+        PressFollowsDrag = _draggedSincePress;
+        _draggedSincePress = false;
         _pending = null;
         if (!e.GetCurrentPoint(_topLevel).Properties.IsLeftButtonPressed || e.KeyModifiers != KeyModifiers.None)
         {
@@ -283,6 +295,7 @@ public sealed class BranchDragService : IEscapeHandler, IDisposable
     private void Start(DragSource source, IPointer pointer, Point position)
     {
         _pending = null;
+        _draggedSincePress = true;
         Source = source;
         SourceColor = source.Sha is { } sha && GraphOf()?.LabelColorOf(sha) is { } color ? color : 0;
         Position = position;

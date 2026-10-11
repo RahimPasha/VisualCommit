@@ -68,7 +68,9 @@ public partial class LeftPanelView : UserControl
     /// </summary>
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // The press after a drag that started on the press before is no double-click (4c).
         if (RowOf(e.Source) is (_, { } row)
+            && BranchDragService.For(this) is not { PressFollowsDrag: true }
             && ContextMenuRequests.ActiveRepository(this) is (_, { } repository)
             && ReferenceEquals(repository.LeftPanel, DataContext))
         {
