@@ -41,6 +41,7 @@ public class BranchDragTests
         var repository = await GraphShownAsync(app);
         var layer = app.Find<DragLayer>("DragLayer");
         var service = layer.Service!;
+        Assert.Same(service, app.BranchDrag);
         var drops = new List<BranchDrop>();
         service.Dropped += (_, drop) => drops.Add(drop);
         var alpha = LabelPoint(app, AlphaTwo, "feature/alpha");
@@ -255,12 +256,7 @@ public class BranchDragTests
     /// <summary>The centre of a row's label named <paramref name="text"/>, in the window.</summary>
     private static Point LabelPoint(ShellDriver app, int row, string text) => LabelBounds(app, row, text).Center;
 
-    private static Rect LabelBounds(ShellDriver app, int row, string text)
-    {
-        var graph = Graph(app);
-        var label = graph.LabelsInRow(row).Single(candidate => candidate.Text == text);
-        return new Rect(graph.TranslatePoint(label.Bounds.TopLeft, app.Window)!.Value, label.Bounds.Size);
-    }
+    private static Rect LabelBounds(ShellDriver app, int row, string text) => app.GraphLabelBounds(row, text);
 
     /// <summary>The left panel's button of the first row that matches.</summary>
     private static Button LeftRow(ShellDriver app, Func<RefItemRow, bool> match) =>

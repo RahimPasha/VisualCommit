@@ -114,6 +114,13 @@ public class GraphSelectionTests
         Assert.Null(repository.MultiSelection);
         Assert.False(repository.Details.IsMultiSelection);
         await app.WaitForAsync(() => repository.Details.Subject == "Alpha one", "the details of Alpha one");
+
+        // Only the command modifier adds: a click with another key held selects one row.
+        app.Click(RowPoint(app, AlphaTwo), app.CommandModifier);
+        Assert.Equal(2, repository.Selection.Count);
+        app.Click(RowPoint(app, MainWork), KeyModifiers.Alt);
+        Assert.Equal([Sha(repository, MainWork)], repository.Selection.Shas);
+        Assert.Equal(MainWork, repository.SelectedIndex);
     }
 
     [AvaloniaFact]
@@ -378,11 +385,7 @@ public class GraphSelectionTests
     internal static CommitGraphControl Graph(ShellDriver app) => app.Find<CommitGraphControl>("GraphRows");
 
     /// <summary>A point in a commit row's Message column, in the window.</summary>
-    internal static Point RowPoint(ShellDriver app, int row)
-    {
-        var graph = Graph(app);
-        return graph.TranslatePoint(new Point(graph.Columns.Message.X + 30, graph.RowBounds(row).Center.Y), app.Window)!.Value;
-    }
+    internal static Point RowPoint(ShellDriver app, int row) => app.GraphRowPoint(row);
 
     private static Point WorkingRowPoint(ShellDriver app)
     {
