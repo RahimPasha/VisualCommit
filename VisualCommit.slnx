@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/VisualCommit.App/VisualCommit.App.csproj" />
+    <Project Path="src/VisualCommit.AskPass/VisualCommit.AskPass.csproj" />
     <Project Path="src/VisualCommit.Core/VisualCommit.Core.csproj" />
     <Project Path="src/VisualCommit.Git/VisualCommit.Git.csproj" />
   </Folder>

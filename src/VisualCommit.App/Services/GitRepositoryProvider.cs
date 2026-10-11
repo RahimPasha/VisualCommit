@@ -30,8 +30,10 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
     }
 
     /// <remarks>
-    /// <paramref name="environment"/>, the clone's prompt scope (phase 3 design 3.3), is not
-    /// passed to git yet: work package WP3 does that, through <c>GitRepository.CloneAsync</c>.
+    /// <paramref name="environment"/> holds the variables of the clone's prompt scope (phase 3
+    /// design 3.3), which <c>WelcomeViewModel</c> opens. TODO(WP2 merge): pass it on as
+    /// <c>GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log, environment)</c>;
+    /// <c>GitRepository.CloneAsync</c> takes it only once work package WP2 is merged.
     /// </remarks>
     public async Task<IGitRepository> CloneAsync(
         string url,

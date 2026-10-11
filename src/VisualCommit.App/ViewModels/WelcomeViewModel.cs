@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -178,9 +179,12 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
             }
         });
 
+        // Git's and ssh's prompts for the clone come to the app's dialogs (phase 3 design 3.3); a
+        // clone runs outside any operation queue, so it opens its own prompt scope.
+        var prompts = _services.Prompts.Begin("Clone", name, PromptMode.Ask);
         try
         {
-            var cloning = _services.Repositories.CloneAsync(url, System.IO.Path.Combine(parent, name), progress, _clone.Token);
+            var cloning = _services.Repositories.CloneAsync(url, System.IO.Path.Combine(parent, name), progress, _clone.Token, prompts.Environment);
             _cloneTask = cloning;
             var repository = await cloning;
             IsCloning = false;
@@ -189,6 +193,11 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
+            ErrorText = "Clone cancelled.";
+        }
+        catch (GitException) when (prompts.UserCancelled)
+        {
+            // The user cancelled a prompt, which made git fail: that is a cancel, not an error.
             ErrorText = "Clone cancelled.";
         }
         catch (Exception ex)
@@ -202,6 +211,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            prompts.Dispose();
             IsCloning = false;
             _clone.Dispose();
             _clone = null;
