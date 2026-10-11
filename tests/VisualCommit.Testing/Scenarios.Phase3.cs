@@ -48,7 +48,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> OperationsAsync()
     {
-        var template = await OperationsTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("ops", OperationsTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -161,7 +161,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> RemoteSyncAsync()
     {
-        var template = await RemoteSyncTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("sync", RemoteSyncTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -209,7 +209,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> CheckoutBlockedAsync()
     {
-        var template = await CheckoutBlockedTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("blocked", CheckoutBlockedTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -258,7 +258,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> EdgeCasesAsync()
     {
-        var template = await EdgeCasesTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("edges", EdgeCasesTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -291,7 +291,7 @@ public static partial class Scenarios
                 nameof(server));
         }
 
-        var template = await AuthRemoteTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("auth", AuthRemoteTemplate).ConfigureAwait(false);
         var repo = await template.CopyAsync().ConfigureAwait(false);
         try
         {

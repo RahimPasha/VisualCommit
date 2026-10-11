@@ -65,7 +65,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> GraphAsync()
     {
-        var template = await GraphTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("graph", GraphTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -89,7 +89,7 @@ public static partial class Scenarios
     /// </summary>
     public static async Task<TempRepo> ChangesAsync()
     {
-        var template = await ChangesTemplate.Value.ConfigureAwait(false);
+        var template = await TemplateAsync("changes", ChangesTemplate).ConfigureAwait(false);
         return await template.CopyAsync().ConfigureAwait(false);
     }
 
@@ -313,6 +313,15 @@ public static partial class Scenarios
             throw;
         }
     }
+
+    /// <summary>
+    /// A scenario's template, which the first test of the process that needs it builds and the
+    /// others wait for. The wait does not count against the test's time in the hang watchdog
+    /// (<see cref="HangWatchdogAttribute.SharedPreparationAsync{T}"/>): under load a build can
+    /// take a good part of the limit, and it is the process's cost, not that test's.
+    /// </summary>
+    private static Task<TempRepo> TemplateAsync(string scenario, Lazy<Task<TempRepo>> template) =>
+        HangWatchdogAttribute.SharedPreparationAsync($"the {scenario} scenario's template", template.Value);
 
     /// <summary>Deletes a shared template when the test process ends.</summary>
     private static async Task<TempRepo> KeepUntilExit(Task<TempRepo> building)
