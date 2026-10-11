@@ -30,6 +30,12 @@ public interface IWorkingChangesHost
 
     /// <summary>Opens a file's diff in place of the graph (D63).</summary>
     void OpenDiff(ChangedFile file, bool staged);
+
+    /// <summary>
+    /// <c>MERGE_MSG</c> as git left it, or null when there is none: the message a merge,
+    /// cherry-pick or revert in progress fills an empty commit message with (docs/phase-3-design.md section 5).
+    /// </summary>
+    Task<string?> ReadMergeMessageAsync() => Task.FromResult<string?>(null);
 }
 
 /// <summary>
@@ -45,6 +51,13 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     private readonly IWorkingChangesHost _host;
     private readonly ISettingsStore _settings;
     private WorkingTreeStatus _status = WorkingTreeStatus.Clean;
+    private int _conflicts;
+
+    /// <summary>The operation whose message the stage panel last looked at ("Merge:&lt;sha&gt;"), or null.</summary>
+    private string? _messageKey;
+
+    /// <summary>The summary and description as they were filled from <c>MERGE_MSG</c>, or null.</summary>
+    private (string Summary, string Description)? _filledMessage;
 
     public WorkingChangesViewModel(IWorkingChangesHost host, ISettingsStore settings)
     {
@@ -100,7 +113,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
 
     /// <summary>The commit replaces HEAD's ("Amend previous commit").</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit), nameof(CommitToolTip))]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsAmend { get; set; }
 
@@ -117,12 +130,30 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     public string CommitButtonText =>
         IsCommitting ? "Committing…"
         : IsAmend ? "Amend previous commit"
-        : _status.Staged.Count == 0 ? "Stage files to commit"
+        : _status.Staged.Count == 0 ? (CanCommitMerge ? MergeCommitText : "Stage files to commit")
         : _status.Staged.Count == 1 ? "Commit 1 file"
         : string.Create(CultureInfo.InvariantCulture, $"Commit {_status.Staged.Count} files");
 
-    /// <summary>The summary has text other than spaces and there is something to commit or amend.</summary>
-    public bool CanCommit => !IsCommitting && !string.IsNullOrWhiteSpace(Summary) && (IsAmend || _status.Staged.Count > 0);
+    /// <summary>
+    /// The summary has text other than spaces and there is something to commit or amend: staged
+    /// files, or a merge without conflicts left, which git records even with nothing staged
+    /// (docs/phase-3-design.md section 5, D89).
+    /// </summary>
+    public bool CanCommit => !IsCommitting && !string.IsNullOrWhiteSpace(Summary) && (IsAmend || _status.Staged.Count > 0 || CanCommitMerge);
+
+    /// <summary>
+    /// The commit button's tooltip, or null: during a cherry-pick or revert that changes nothing,
+    /// why the button stays disabled (section 5).
+    /// </summary>
+    public string? CommitToolTip => _status.InProgress is { Empty: true, Kind: InProgressKind.CherryPick or InProgressKind.Revert } empty && !IsAmend
+        ? $"This {(empty.Kind == InProgressKind.CherryPick ? "cherry-pick" : "revert")} changes nothing: abort it"
+        : null;
+
+    /// <summary>The label of the commit button that records a merge with nothing staged.</summary>
+    public const string MergeCommitText = "Commit merge";
+
+    /// <summary>A merge whose conflicts are all resolved: it can be committed with nothing staged.</summary>
+    private bool CanCommitMerge => _status.InProgress.Kind == InProgressKind.Merge && _conflicts == 0;
 
     /// <summary>Git's message when the last commit or other write failed, shown under the commit button; null otherwise.</summary>
     [ObservableProperty]
@@ -149,16 +180,86 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
             IsAmend = false;
         }
 
+        _conflicts = status.Unstaged.Count(file => file.Kind == FileChangeKind.Conflicted);
         SyncFileList();
         Unstaged.Show(status.Unstaged, keepFolders: true);
         Staged.Show(status.Staged, keepFolders: true);
-        UnstagedTitle = string.Create(CultureInfo.InvariantCulture, $"Unstaged files ({status.Unstaged.Count})");
+        UnstagedTitle = _conflicts > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"Unstaged files ({status.Unstaged.Count}, {_conflicts} with conflicts)")
+            : string.Create(CultureInfo.InvariantCulture, $"Unstaged files ({status.Unstaged.Count})");
         StagedTitle = string.Create(CultureInfo.InvariantCulture, $"Staged files ({status.Staged.Count})");
         HasUnstaged = status.Unstaged.Count > 0;
         HasStaged = status.Staged.Count > 0;
         OnPropertyChanged(nameof(CommitButtonText));
         OnPropertyChanged(nameof(CanCommit));
+        OnPropertyChanged(nameof(CommitToolTip));
         CommitCommand.NotifyCanExecuteChanged();
+        _ = FollowOperationMessageAsync(status.InProgress);
+    }
+
+    /// <summary>
+    /// The message of the merge, cherry-pick or revert in progress (section 5): when one starts,
+    /// or the stage panel first sees it, and the summary and description are empty, they are
+    /// filled from <c>MERGE_MSG</c> with every line that starts with <c>#</c> removed. Done once
+    /// per operation, so a message the user cleared stays clear. When the operation ends
+    /// (committed or aborted), a message still as it was filled in is cleared.
+    /// </summary>
+    private async Task FollowOperationMessageAsync(InProgressState state)
+    {
+        var key = state is { Kind: InProgressKind.Merge or InProgressKind.CherryPick or InProgressKind.Revert, Commit: { } commit }
+            ? $"{state.Kind}:{commit}"
+            : null;
+        if (key == _messageKey)
+        {
+            return;
+        }
+
+        if (_filledMessage is { } filled && Summary == filled.Summary && Description == filled.Description)
+        {
+            Summary = string.Empty;
+            Description = string.Empty;
+        }
+
+        _filledMessage = null;
+        _messageKey = key;
+        if (key is null || Summary.Length > 0 || Description.Length > 0 || IsAmend)
+        {
+            return;
+        }
+
+        var text = await _host.ReadMergeMessageAsync();
+        if (text is null || _messageKey != key || Summary.Length > 0 || Description.Length > 0 || IsAmend)
+        {
+            return;
+        }
+
+        var (summary, description) = SplitMessage(text);
+        Summary = summary;
+        Description = description;
+        _filledMessage = (summary, description);
+    }
+
+    /// <summary>
+    /// A message as <c>git commit</c> would take it from a file (section 5): the lines that start
+    /// with <c>#</c> removed, then the first line as the summary and the rest, after the blank
+    /// lines that follow it, as the description; trailing spaces and blank lines dropped.
+    /// </summary>
+    public static (string Summary, string Description) SplitMessage(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Where(line => !line.StartsWith('#'))
+            .Select(line => line.TrimEnd())
+            .SkipWhile(line => line.Length == 0)
+            .ToList();
+        if (lines.Count == 0)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var description = string.Join('\n', lines.Skip(1)).Trim('\n');
+        return (lines[0], description);
     }
 
     /// <summary>Takes the Flat or Tree setting again: the commit details may have changed it (D70).</summary>

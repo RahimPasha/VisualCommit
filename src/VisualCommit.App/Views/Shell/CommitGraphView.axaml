@@ -15,14 +15,21 @@
     <Panel IsVisible="{Binding ShowsWelcome}">
       <shell:WelcomeView DataContext="{Binding Welcome}" />
     </Panel>
-    <Panel IsVisible="{Binding HasRepository}">
+    <DockPanel IsVisible="{Binding HasRepository}">
+      <!-- The conflict banner above the graph or the diff while an operation is in progress or
+           files have conflicts (docs/phase-3-design.md section 5). -->
+      <Panel DockPanel.Dock="Top" IsVisible="{Binding Repository.Banner.IsVisible, FallbackValue=False}">
+        <shell:ConflictBanner DataContext="{Binding Repository.Banner}" />
+      </Panel>
       <!-- The graph, or the open diff in its place (D63). -->
-      <Panel IsVisible="{Binding !Repository.IsDiffOpen}">
-        <graph:RepositoryGraphView DataContext="{Binding Repository}" />
+      <Panel>
+        <Panel IsVisible="{Binding !Repository.IsDiffOpen}">
+          <graph:RepositoryGraphView DataContext="{Binding Repository}" />
+        </Panel>
+        <Panel IsVisible="{Binding Repository.IsDiffOpen}">
+          <diff:DiffView DataContext="{Binding Repository.Diff}" />
+        </Panel>
       </Panel>
-      <Panel IsVisible="{Binding Repository.IsDiffOpen}">
-        <diff:DiffView DataContext="{Binding Repository.Diff}" />
-      </Panel>
-    </Panel>
+    </DockPanel>
   </Panel>
 </UserControl>

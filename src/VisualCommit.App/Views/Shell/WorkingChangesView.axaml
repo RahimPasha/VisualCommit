@@ -414,6 +414,8 @@
                   HorizontalAlignment="Stretch"
                   Content="{Binding CommitButtonText}"
                   Command="{Binding CommitCommand}"
+                  ToolTip.Tip="{Binding CommitToolTip}"
+                  ToolTip.ShowOnDisabled="True"
                   AutomationProperties.AutomationId="CommitButton"
                   AutomationProperties.Name="{Binding CommitButtonText}" />
           <TextBlock Name="CommitError"
