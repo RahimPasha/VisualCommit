@@ -45,6 +45,9 @@ public partial class MainWindowViewModel : ObservableObject
         _session = session ?? new MemorySessionStore();
         _tabServices = tabServices ?? new TabServices(
             new UnavailableRepositoryProvider(), new NoFolderPicker(), settings, _session, DateDisplay.Resolve(), _log);
+
+        // Every dialog of a repository's operations follows the window's one rule (4f).
+        _tabServices.NamesRepositoryInDialogs = () => NamesRepositoryInDialogs;
         Theme = themes.Current;
         Menu = new MenuLayerViewModel(_log, () => ActiveTab?.Repository?.Name);
 
@@ -89,6 +92,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The window's in-window context menu layer (docs/phase-3-design.md 4a, D86).</summary>
     public MenuLayerViewModel Menu { get; }
+
+    /// <summary>
+    /// The one rule of docs/phase-3-design.md 4f: a dialog that an operation of a repository opens
+    /// (a confirmation, the name, choice, pick, push, reset, stash, tag and remotes dialogs, git's
+    /// and ssh's prompts) names that repository, "In &lt;repo&gt;" under its title, while more than
+    /// one tab has a repository. The error dialog names it always. Every tab's operations and the
+    /// prompt dialogs read it when a dialog opens (<see cref="TabServices.NamesRepositoryInDialogs"/>).
+    /// </summary>
+    public bool NamesRepositoryInDialogs => Tabs.Count(tab => tab.Repository is not null) > 1;
 
     /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
     public AutoFetchScheduler AutoFetch { get; }

@@ -154,8 +154,8 @@ public sealed class AppSession : IDisposable
             gitCalls: gitCalls);
         var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session);
 
-        // A prompt dialog names its repository when more than one tab has one (4f).
-        promptPresenter.ShowsRepositoryName =() => shell.Tabs.Count(tab => tab.Repository is not null) > 1;
+        // A prompt dialog names its repository by the window's one rule, as every other dialog (4f).
+        promptPresenter.ShowsRepositoryName = () => shell.NamesRepositoryInDialogs;
         mainWindow = new MainWindow { DataContext = shell };
         mainWindow.UseSession(session);
 

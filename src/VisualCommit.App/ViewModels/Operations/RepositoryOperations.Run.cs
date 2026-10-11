@@ -89,10 +89,11 @@ public sealed partial class RepositoryOperations
     public WorkingTreeStatus Status => Repository.Status;
 
     /// <summary>
-    /// Dialogs name the repository under their title ("In &lt;name&gt;", 4f): the window sets it while
-    /// it has more than one tab with a repository. False (the default) names none.
+    /// Dialogs name the repository under their title ("In &lt;name&gt;", 4f): the window's rule
+    /// (<see cref="TabServices.NamesRepositoryInDialogs"/>, more than one tab has a repository),
+    /// read when a dialog opens. False without services.
     /// </summary>
-    public bool NamesRepositoryInDialogs { get; set; }
+    public bool NamesRepositoryInDialogs => Services?.NamesRepositoryInDialogs() ?? false;
 
     /// <summary>Names compare ignoring case (D96); null (the default) follows <see cref="RefNameRules.NamesIgnoreCase"/>. Tests set it.</summary>
     public bool? IgnoreCaseInNames { get; set; }
