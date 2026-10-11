@@ -7,6 +7,13 @@ they are recorded in `decisions.md` as D77 to D104. Three independent reviews (g
 safety, UI and harnesses, coverage and consistency) were folded in before recording; what they
 changed is summarised in section 10.
 
+Updated on 2026-10-11 after stage 2 (work packages WP0 and WP-S1 built and merged, the menu
+spike of 4a run on the Windows machine, the visual checks drafted against real Git 2.36):
+decisions D105 to D115 record what that settled, the sections below say what is now built or
+decided, and section 10 ends with what stage 2 changed. `docs/phase-3-answers.md` answers the
+check writers' questions one by one. Where this file and the merged code differ, the code's doc
+comments describe what is built; tell the lead.
+
 The owner's four answers of 2026-10-10 are taken as given (D77 to D80):
 
 1. Later phases' actions (rebase onto, squash, compare, file history, blame, create pull
@@ -34,7 +41,13 @@ the remote, e.g. `refs/heads/main`), all available in Git 2.30 (D101). `<r>` is
 `UpstreamRemote`, `<u>` is `UpstreamRemoteRef` without `refs/heads/`, the lease, the backup and the
 fast-forward use `UpstreamRef`, and labels show `<r>/<u>`. A **local upstream** (`UpstreamRemote`
 is `.`) has no push, force push or remote deletion: those items are left out, and pull and
-fast-forward work against `UpstreamRef` without a fetch (2.18).
+fast-forward work against `UpstreamRef` without a fetch (2.18). Its labels name the local branch
+alone, never `./main`: "Pull from main", "Fast-forward loc to main", "Stop tracking main" (D114).
+`GitRef` also keeps phase 1's short `Upstream`, which the left panel uses, and gains
+`HasLocalUpstream` (D107). A **gone upstream** (`%(upstream:track)` is `[gone]`, phase 1's
+`UpstreamGone`) disables fast-forward (2.7), pull (2.18) and force push (2.20) with the reason
+"<r>/<u> no longer exists"; a normal push stays enabled (it creates the branch again), and the
+left panel shows no mark for it, as in phase 1 (D114).
 
 ## 0. Facts checked before deciding
 
@@ -80,9 +93,25 @@ from the Avalonia 12.1.3 packages in the NuGet cache. Builders can rely on these
 | `GIT_TERMINAL_PROMPT=0` together with `GIT_ASKPASS` | askpass is asked first; only when it fails does git fall back to the terminal, which the variable forbids (`could not read Username for '...': terminal prompts disabled`) |
 | `System.Net.HttpListener` on `http://localhost:<port>/` | starts without administrator rights here; not used (7.3) |
 | Avalonia popups | `AvaloniaHeadlessPlatformOptions.OverlayPopups` defaults to **true** (popups are drawn inside the window); `Win32PlatformOptions`, `X11PlatformOptions` and `AvaloniaNativePlatformOptions.OverlayPopups` default to **false** (a popup is a top-level window of its own) |
-| Avalonia 12.1.3 APIs | `ToolTip.ShowOnDisabled`, `LauncherExtensions.LaunchFileInfoAsync`, `ClipboardExtensions.SetTextAsync` exist; `Control.ContextRequested` is raised by a right-click (phase 1's `A_right_click_opens_the_context_menu_of_the_control` proves it in the headless harness) and by the Menu (Apps) key, **not** by Shift+F10: `HotkeyConfiguration.OpenContextMenu` is `Apps` only, headless and on Win32 (UI review's spike). The app adds Shift+F10 itself (4a) |
+| Avalonia 12.1.3 APIs | `ToolTip.ShowOnDisabled`, `LauncherExtensions.LaunchFileInfoAsync`, `ClipboardExtensions.SetTextAsync` exist; `Control.ContextRequested` is raised by a right-click (phase 1's `A_right_click_opens_the_context_menu_of_the_control` proves it in the headless harness) and, on the **key-up**, by every gesture in `TopLevel.PlatformSettings.HotkeyConfiguration.OpenContextMenu`: that list is `Apps` only headless, but `Apps, Shift+F10` on Win32 (`Win32PlatformSettings`, menu spike of 2026-10-11; the UI review's "Apps only on Win32" was wrong; macOS and Linux not checked). So Avalonia already raises it for Shift+F10 on Win32 and not headless; the app adds the gesture only where the list lacks it (4a, D106) |
 | Avalonia 12.1.3, headless (UI review's spike) | a stock `ContextMenu` and `MenuFlyout` render in `CaptureRenderedFrame` and can be clicked; tooltips appear after the real delay (about 0.7 s, then 0.1 s), `ShowOnDisabled` included; per-popup overlay exists (`Popup.ShouldUseOverlayLayer`, public `MenuFlyout.Popup`, attached `ToolTip.ShouldUseOverlayLayer`); a `Panel` with an automation id is not a UI Automation control element (custom peers are needed, 4a); a double-click on a row `Button` raises `DoubleTapped` once and runs its `Command` twice; headless windows never lose activation; pointer capture moved to a hit-test-invisible `Canvas` keeps the drop target findable by `InputHitTest` and suppresses the source button's `Click` |
 | The test projects' output folders | hold `VisualCommit.exe` and its runtimeconfig: an `Exe` project referenced by another project brings its app host along |
+
+Found in stage 2 (2026-10-11, Git 2.36.0.windows.1 unless said otherwise; each was reproduced by
+the lead or by two writers):
+
+| What | Result |
+|---|---|
+| Stock `MenuFlyout` with `Popup.ShouldUseOverlayLayer = true`, real Win32 at 200 % (menu spike) | drawn inside the client area at every edge (with `PlacementMode.Custom` exactly where the callback says), in the main window's UI Automation tree (items as MenuItem with name, `IsEnabled`, the disabled item's tooltip as `HelpText`; the presenter as **List**; items **without** Invoke); stock keyboard: the focus moves into the menu and **the first enabled item is highlighted** on opening, Down/Up wrap and skip the header, separators and disabled items, Home/End, Enter, Esc returns the focus; while it is open the window's tunnelling key handlers see none of these keys; a press outside closes it and is not passed on; window deactivation closes it; moving the pointer over an item moves the focus; the first menu of a process took 0.45 to 1.7 s to be drawn under load. Without the overlay the menu was a window of its own crossing the window's edge; a tooltip without `ToolTip.ShouldUseOverlayLayer` was a window of its own, cut at the edge in the capture; a tooltip opened from code needs `ToolTip.Placement` or opens at 0,0 (4a, D105) |
+| `git stash push --include-untracked` with `GIT_LITERAL_PATHSPECS=1` | exit 0, the untracked files saved in the stash's third parent **and left in the working tree**: git runs `git clean --force --quiet -d :/`, and the variable makes `:/` a literal name; a later pop fails with `<file> already exists, no checkout` and `error: could not restore untracked files from stash`, exit 1, the stash kept. Without the variable they are removed. No other phase 3 command runs git with pathspec magic (GIT_TRACE of merge, abort, cherry-pick, revert, rebase, stash pop `--index`, reset, switch, `fetch .`, tag, branch) (2.24, D108) |
+| `git stash pop --index` that conflicts (not the index part) | exit 1, standard error `Index was not unstashed.`, standard output `Auto-merging …`, `CONFLICT (content): …` and `The stash entry is kept in case you need it again.`; conflicted files in the status: a conflict (2.31), not the `conflicts in index` refusal |
+| `git switch <b>` during a merge | exit 128, `fatal: cannot switch branch while merging` and `Consider "git merge --quit" or "git worktree add".` (`git checkout`'s text, `you need to resolve your current index first`, is different). With conflicted files and no operation (a stash that conflicted): exit 1, `error: you need to resolve your current index first` and `<file>: needs merge` (2.1) |
+| `git fetch --all --progress` | runs `git fetch --append --no-auto-gc --no-write-commit-graph <r>` per remote **without `--progress`**: no progress is printed; `Fetching <r>` goes to standard output (2.16, D109) |
+| A sequence `git cherry-pick A C B` stopped at C, then C committed (`git commit`) | `sequencer/todo` still lists C and B, no `CHERRY_PICK_HEAD`; `--continue` picks only B (git always skips the todo's first line); `--abort` prints `warning: You seem to have moved HEAD. Not rewinding, check your HEAD!`, exits 0, removes `sequencer/` and leaves HEAD; it rewinds to the start only while HEAD equals `sequencer/abort-safety` (5, D110) |
+| `--force-if-includes` | git looks for the remote-tracking ref's commit in the local branch's tip and in those of its reflog entries that are newer than the remote-tracking ref's latest reflog entry; reflog entries are dated by the committer date of the call that wrote them (D111) |
+| A wrong password over HTTP | git prints the server's 401 body as `remote: <line>` before `fatal: Authentication failed for '<url>/'` |
+| OpenSSH 8.9 (Git for Windows) and `SSH_ASKPASS_PROMPT` | unset for the host-key question and for a key's passphrase; `confirm` only for ssh-agent's confirmations. A long key path in `Enter passphrase for key '…': ` is cut (a 120-character path came out after 101 characters) |
+| `GitOutputCleaner.Clean` as WP0 built it | trims line ends only (` ! [rejected]` keeps its leading space), drops `Cloning into` and lines of the progress shape **with a percentage**, keeps other lines (`Enumerating objects: 5, done.`, `Total 4 (delta 0), …`) (1.6) |
 
 ## 1. Operation queue
 
@@ -115,7 +144,8 @@ public enum ErrorDisplay { Dialog, StagePanel }               // where a failure
 public enum PromptMode { None, Ask, Deny }                    // section 3
 
 public sealed record GitOperation(
-    string Title,            // "Fetch", "Push main" — the log line and the error dialog's title prefix
+    string Title,            // "Fetch", "Push main" (2.33, D113): the log line, the status bar's "<Title> failed"
+                             // and "<Title> cancelled", the finishing dialog; error dialogs have section 2's titles
     string RunningText,      // "Fetching from all remotes…" — the status bar while it runs
     OperationKind Kind,
     RefreshScope Refresh,
@@ -126,27 +156,39 @@ public sealed record GitOperation(
     public bool IsBackground { get; init; }            // auto-fetch only
     public PromptMode? Prompts { get; init; }          // null: Ask for Network and for phase 3's Local
                                                        // operations (1.5), None for phase 2's writes; auto-fetch: Deny
+    public bool HasSeveralSteps { get; init; }         // a local operation of several git calls: the finishing
+                                                       // dialog's "remaining steps" line (1.8)
 }
 
 public sealed class OperationContext
 {
-    public string OperationId { get; }                       // "op-<n>", unique per app session
+    public string OperationId { get; }                       // "op-<n>", unique per app session; also the prompt scope's id
     public CancellationToken CancellationToken { get; }      // CancellationToken.None for Local operations
     public IReadOnlyDictionary<string, string?> Environment { get; }   // the prompt scope's variables; empty for PromptMode.None
     public IProgress<OperationProgress> Progress { get; }    // throttled to one update per 100 ms
     public void EndCancelWindow();                           // from now on Cancel is no longer offered and the token
-                                                             // no longer reaches git (pull's integration step, 2.18)
+                                                             // no longer reaches git (pull's integration step, 2.18);
+                                                             // throws OperationCanceledException when the user had
+                                                             // already cancelled, so a pull never integrates after Cancel
 }
 
 public enum OperationOutcome { Succeeded, Conflicts, Failed, Cancelled }
 
 public sealed record OperationReport(OperationOutcome Outcome, string Message)  // returned by Run
 {
+    public GitFailure? Failure { get; init; }                // a failure the operation reports itself (its own summary, a kind)
     public static OperationReport Done(string message);
     public static OperationReport Conflicts(string message);
+    public static OperationReport Failed(string message, GitFailure failure);
 }
 
-public sealed record OperationResult(OperationOutcome Outcome, string Message, GitFailure? Failure);
+public sealed record OperationResult(OperationOutcome Outcome, string Message, GitFailure? Failure)
+{
+    public IReadOnlyList<string> StaleLockFiles { get; init; } = [];   // after a cancelled network operation (1.8)
+}
+
+public sealed record OperationSnapshot(string Title, string RunningText, OperationKind Kind, bool IsBackground,
+    ErrorDisplay Errors, OperationProgress? Progress, bool CanCancel, bool HasSeveralSteps = false);
 
 public sealed record GitFailure(
     GitFailureKind Kind, string Summary, string GitOutput, string CommandText, int? ExitCode);
@@ -157,15 +199,21 @@ public interface IOperationQueue : IDisposable
     bool TryStartInBackground(GitOperation operation);   // runs it only when the queue is idle; false otherwise.
                                                          // A background operation is never cancelled (1.8)
     Task WhenIdleAsync();                                // the running operation, all its steps, has ended (app exit, 1.8)
-    OperationSnapshot? Current { get; }                  // Title, RunningText, Kind, IsBackground, Progress, CanCancel
+    OperationSnapshot? Current { get; }
     int Waiting { get; }
     OperationResult? LastResult { get; }                 // the last non-background operation's result
     void CancelCurrent();                                // no effect unless Current.CanCancel (never a background one)
+    void DropWaiting();                                  // closing the window: the waiting operations end Cancelled
+                                                         // without running (1.8)
     event EventHandler? Changed;                         // raised on any thread; listeners marshal themselves
+    event EventHandler<OperationFinishedEventArgs>? Finished;   // every ended operation with its result, background ones
+                                                         // included: "Auto-fetch failed" (4e), the scheduler's last fetch (6.1)
 }
 ```
 
-`OperationQueue(string repositoryName, string gitDirectory, Func<IDisposable?> pauseWatcher, Func<RefreshScope, Task> refresh, IGitPromptBroker? prompts, IOperationLog? operations, IAppLog log)`.
+`OperationQueue(string repositoryName, string gitDirectory, Func<IDisposable?> pauseWatcher, Func<RefreshScope, Task> refresh, IGitPromptBroker? prompts, IOperationLog? operations, IAppLog log, Func<DateTimeOffset, IReadOnlyList<string>>? findLockFiles = null)`;
+`findLockFiles` lists the lock files written since a time (null: the git folder only; a linked
+worktree passes its common git folder too). This is the API as WP0 built it (D107).
 
 **Dedupe (opt-in).** Only an operation with a non-null `DedupeKey` is deduplicated: a second
 `RunAsync` with the key of a waiting or running operation returns that operation's task. The
@@ -268,8 +316,13 @@ can cancel a write half-way; from now on a write that has started runs to its en
 | `IndexLocked` | `index.lock': File exists` |
 | `Other` | anything else |
 
-- `Summary`: the operation's own one-line sentence (the "Failures" column of section 2), such as
-  "Git refused to push main to origin."
+- `Summary`: the operation's own one-line sentence (2.33), such as "Git could not push main to
+  origin/main.". The queue fills in "<Title> failed." and the result message "<Title> failed";
+  `RepositoryOperations` replaces the summary with 2.33's sentence, and an operation that reports
+  its failure itself (`OperationReport.Failed`) keeps its own. When git printed nothing, `GitOutput`
+  is the exception's message (phase 2's stage-panel text stays as it was). As built (section 0),
+  the cleaning keeps a line's leading spaces (` ! [rejected]`) and drops only progress lines with
+  a percentage; the classifier reads the raw text.
 
 ### 1.7 Activity log (T4, IGitCallLog)
 
@@ -282,7 +335,8 @@ can cancel a write half-way; from now on a write that has started runs to its en
   command line (D103): `git remote -v` and some error texts print URLs with a token in them.
   A test adds a remote `https://alice:ghp_SECRET123@127.0.0.1:1/x.git`, runs `ReadRemotesAsync`
   and a failing fetch, and asserts that `ghp_SECRET123` is in no call record, no log line and no
-  rendered text of the remotes dialog.
+  rendered text of the remotes dialog's list. The Change URL form is the one place that shows the
+  URL as configured, token included (2.23, D103); no screenshot is taken of it with a token.
 - `IOperationLog` (Core) with `Add(OperationRecord)` and `Snapshot()`; `OperationLog` (Core,
   in-memory, the last 500) is created in `AppSession` and handed to each queue through
   `TabServices`. `OperationRecord(string Id, string Repository, string Title, DateTimeOffset
@@ -309,7 +363,9 @@ when the user asks for it, and reports what a kill left behind.
 - **App exit:** `MainWindow.Closing` cancels the close while any tab's queue runs a
   non-background operation and opens the dialog "Finishing operations" (`FinishingDialog`): one
   line per running operation ("Push main — graph"), and the button "Quit now" (danger). Waiting
-  operations are dropped at once. When the running ones end, the window closes by itself.
+  operations are dropped at once (`IOperationQueue.DropWaiting`: they end `Cancelled` without
+  running), and "Keep open" does not bring them back (D114). When the running ones end, the
+  window closes by itself.
   "Quit now" cancels the network operations and closes; a local one still running then
   finishes its current git call after the process has gone (the Windows job object has no
   kill-on-close limit, D31; on macOS and Linux git is not a child that dies with the app), but
@@ -324,8 +380,9 @@ when the user asks for it, and reports what a kill left behind.
   close or "Quit now" the same list goes to the log at Warning.
 - **Auto-fetch** (detail in 6.1) is a `GitOperation` with `IsBackground = true`, `Prompts =
   Deny`, started with `TryStartInBackground`, which does nothing unless the queue is idle. It
-  runs `git fetch --all --progress --no-auto-maintenance` (the user's own fetches keep git's
-  maintenance, Q5). It is **never pre-empted**: an operation the user starts while it runs
+  fetches every remote as 2.16 does (one `git fetch --progress <r>` per remote, D109), each call
+  with `--no-auto-maintenance` (the user's own fetches keep git's maintenance, Q5). It is **never
+  pre-empted**: an operation the user starts while it runs
   waits for it (usually a second or two; the status bar says "Waiting for auto-fetch…"). A
   background operation shows no running text, progress or Cancel, and never opens a dialog.
 
@@ -336,8 +393,9 @@ when the user asks for it, and reports what a kill left behind.
   leading `remote: ` removed) applied only to lines of git's progress shape: an optional
   `remote: `, then one of `Enumerating objects`, `Counting objects`, `Compressing objects`,
   `Receiving objects`, `Resolving deltas`, `Unpacking objects`, `Writing objects`,
-  `Updating files`, `Checking out files`, `Delta compression`, or `Fetching <remote>`. Other
-  lines return null and leave the shown progress as it is. `CloneProgressParser.Parse` keeps
+  `Updating files`, `Checking out files` or `Delta compression`. Other lines return null and
+  leave the shown progress as it is. (`Fetching <remote>` is not one: it is `git fetch --all`'s,
+  on standard output, and the app no longer runs `--all`, D109.) `CloneProgressParser.Parse` keeps
   its contract and delegates. Network methods set `GitCommand.OnErrorLine` to report into
   `NetworkOptions.Progress`.
 - The status bar (4e) shows `RunningText` and, when a progress line has come, `Stage Percent%`;
@@ -349,7 +407,7 @@ when the user asks for it, and reports what a kill left behind.
   the status bar says "<Title> cancelled".
 - Pull (2.18) is two git calls in one operation: a fetch, cancellable, and then a local merge or
   rebase. `EndCancelWindow()` is called between them, so no output parsing decides when killing
-  git is safe.
+  git is safe; it throws when Cancel came first, so nothing is integrated after a Cancel (D107).
 
 ## 2. Operations
 
@@ -364,6 +422,20 @@ restore bar makes true; its checks and `WorkingChangesTests` do not change). Eve
 question or a message is the short name (`feature/alpha`, `origin/main`, `v1.0`); a commit is
 shown as `a1b2c3d "Add core"` with the subject cut at 50 characters with "…".
 
+Three rules for every text below (D113, D114):
+
+- **Counts** use the singular for one: "1 file has conflicts", "conflicts in 1 file",
+  "Cherry-picked 1 of 2 commits", "1 more commit waits: continue it in a terminal", "stopped with 1
+  commit left", "Working changes · 1 conflict", "its 1 remote branch", "Pulled 1 commit into main
+  (fast-forward)", "HEAD is detached on 1 commit that is on no branch. After this checkout it no
+  longer shows in the graph."
+- **Several reasons:** where several conditions disable a button or a menu item, its tooltip gives
+  the first in the order its section lists them (2.12 before "already on <current>": a merge
+  commit on main says "Merge commits cannot be cherry-picked here"; 2.13: "Merge commits and
+  stashes cannot be cherry-picked" before "Some of these commits are already on main"; 4d's
+  order for the toolbar).
+- **Titles and failure texts** of every operation are in 2.33.
+
 ### 2.0 Backup refs (Q3)
 
 `GitRepository.SaveBackupRefsAsync(BackupRequest)` →
@@ -374,8 +446,11 @@ shown as `a1b2c3d "Add core"` with the subject cut at 50 characters with "…".
 with the suffix on the `kind-time` part (`branch-<time>-2/feature/alpha`, `reset-<time>-2` and
 `reset-<time>-2-changes`), never on the whole ref: a name with slashes then cannot clash with a
 folder of the same name, and a `-changes` ref always pairs with its main ref by name. D67's
-`discard-<time>` refs keep their own scheme. `SaveSnapshotAsync` (D67) gets an overload that
-returns the snapshot commit without making a ref, so the snapshot joins the operation's batch.
+`discard-<time>` refs keep their own scheme. The snapshots are made without a ref and join the
+operation's batch as `BackupRequest.ChangesCommit`: `SnapshotForHardResetAsync(target)` (2.11) and
+`SnapshotTrackedChangesAsync()` (2.15) stand for the "overload of `SaveSnapshotAsync`" this section
+first planned (D107). `BackupRequest(Kind, Entries)` holds `BackupEntry(Name, Target)` lines;
+`BackupResult(Time, Refs)` returns the timestamp with its retry suffix and the refs written.
 Kinds:
 
 | Kind | Points at | Saved before |
@@ -427,8 +502,13 @@ that the reflog or the stash list does not keep.
   **"Stash changes and check out"** (2.31). Failure `CheckoutBlockedByUntrackedFiles`: error
   dialog "Checkout blocked" with summary "Untracked files are in the way: <b> has files with
   the same names. Move or delete them, then check out again." and no extra button (stashing
-  could not bring them back, section 0). Other failures (a merge in progress: `you need to
-  resolve your current index first`): error dialog "Checkout failed".
+  could not bring them back, section 0). Git's message comes first in the error dialog's
+  `ErrorOutput` as git prints it: when both apply, both lists in one run (tracked, then
+  untracked). Other failures: error dialog "Checkout failed", summary "Git could not check out
+  <b>." (2.33). Examples (section 0): during a merge, `git switch` says `fatal: cannot switch
+  branch while merging` and `Consider "git merge --quit" or "git worktree add".` (exit 128); with
+  conflicted files and no operation, `error: you need to resolve your current index first` and
+  `<file>: needs merge` (exit 1).
 
 ### 2.2 Check out a remote branch (into a tracking branch)
 
@@ -439,7 +519,9 @@ that the reflog or the stash list does not keep.
   A remote branch `origin/feature/x` gives the local name `feature/x`: the part after
   `<r>/`, with `<r>` taken from `GitRef.RemoteName` (`GitRepository.FindRemote`, which already
   handles remote names with slashes).
-- Shown for every remote branch. Confirm and backup: as 2.1 (only from a detached HEAD).
+- Shown for every remote branch. Disabled while HEAD is on the local branch `<b>` that it would
+  check out: "<b> is already checked out" (D114). Confirm and backup: as 2.1 (only from a
+  detached HEAD).
 - Refresh: Refs. Success: "Created <b> tracking <r>/<b> and checked it out" or as 2.1.
 - Failures: as 2.1, including the extra button. When the local name exists but tracks
   something else, it is checked out as is and the success message says what it tracks.
@@ -473,6 +555,21 @@ that the reflog or the stash list does not keep.
   under `feature/` while HEAD names `Feature/beta`). Messages under the box: "Enter a name.", "A
   branch named <name> exists.", "A branch named <existing> exists in another case.", "This
   conflicts with the branch <existing>.", "This is not a valid branch name: <reason>."
+  Which one (D114): `RefNameRules.FindClash` (WP0) prefers the same name, then another case, then
+  a folder, and among equals the first existing branch in git's order (by name, byte order). An
+  `OtherCase` clash gives "A branch named <existing> exists in another case." only when the whole
+  name equals `<existing>` ignoring case (`Main` beside `main`); when a folder differs only in case
+  (`Feature/beta` beside `feature/alpha`) it gives "This conflicts with the branch <existing>.".
+  `<reason>` is `RefNameRules`' text ("it contains ..", "it starts with -", "it cannot be HEAD",
+  "it contains a space", …). On opening the box is empty and `NameError` shows nothing, with the
+  confirm button disabled; "Enter a name." shows only once the box has been edited and is empty
+  (D114). Rename opens with the old name, no message and the button disabled until the name
+  changes. Tags use the same rules and texts with "tag" ("A tag named v1.0 exists.", "This is not
+  a valid tag name: it contains a space."); remotes with "remote" (2.23).
+- The dialog's context names what it starts from: `From a1b2c3d "Add core"` for a commit row, the
+  toolbar's Branch, the "Local branches" header, the empty graph area and the working-changes row
+  (HEAD's commit); `From <b>` for a local branch (row or label); `From <r>/<b>` for a remote
+  branch; `From <t>` for a tag.
 - Confirm: no. Backup: none. Refresh: Refs.
 - Success: "Created <name>" or "Created <name> and checked it out".
 - Failures: error dialog "Creating the branch failed".
@@ -501,8 +598,10 @@ that the reflog or the stash list does not keep.
 - Label: "Fast-forward <b> to <r>/<u>" on a local branch with an upstream; from a drop (4g):
   "Fast-forward <B> to <A>".
 - Enabled only when the branch is behind and not ahead (`Behind > 0 && Ahead == 0` for the
-  upstream; for a drop, `git merge-base --is-ancestor <B> <A>`). Disabled reasons: "<b> is up
-  to date with <r>/<u>", "<b> has commits that <r>/<u> does not have".
+  upstream; for a drop, `git merge-base --is-ancestor <B> <A>`). Disabled reasons, in this
+  order: "<r>/<u> no longer exists" (a gone upstream, D114), "<b> is up to date with <r>/<u>",
+  "<b> has commits that <r>/<u> does not have". With a local upstream `<r>/<u>` reads as the
+  local branch's name ("Fast-forward loc to main").
 - On the branch HEAD is on, this item is replaced by "Pull" (2.18). Disabled, with the reason
   "<b> is checked out in another worktree (<path>)", when `git worktree list --porcelain`
   (read with the refs) shows the branch checked out in a linked worktree.
@@ -523,7 +622,8 @@ that the reflog or the stash list does not keep.
 
 - Label: "Merge <x> into <current>" on a local branch, remote branch (and from a drop). Not on
   the current branch itself.
-- Disabled when HEAD is detached: "Check out a branch to merge into"; when a merge,
+- Disabled when HEAD is detached: "Check out a branch to merge into" (the labels then read
+  "Merge <x> into HEAD" and "Merge <x> into HEAD (create a merge commit)"); when a merge,
   cherry-pick, revert or rebase is in progress: "Finish or abort the <kind> first".
 - Git, two calls in one operation:
   1. The message, as git would write it for the short name: `git fmt-merge-msg` with one line
@@ -592,7 +692,8 @@ that the reflog or the stash list does not keep.
 
 - Label: "Cherry-pick onto <current>" (detached: "Cherry-pick onto HEAD").
 - Disabled: on a merge commit: "Merge commits cannot be cherry-picked here"; when the commit is
-  already reachable from HEAD (the graph's ancestry, 4h): "This commit is already on <current>";
+  already reachable from HEAD (the graph's ancestry, 4h): "This commit is already on <current>"
+  (detached: "This commit is already on HEAD");
   when HEAD is unborn; during an operation in progress (as 2.8).
 - Git: `git cherry-pick <sha>`.
 - Confirm: no. Backup: none.
@@ -622,7 +723,10 @@ that the reflog or the stash list does not keep.
   on <current>").
 - Result: "Cherry-picked N commits onto main". A stop: outcome `Conflicts` (or `Failed` for an
   empty pick, as 2.12) with the message "Cherry-picked K of N commits. a1b2c3d stopped with
-  conflicts in M files; not picked: b2c3d4e "Alpha two"[, …]." The banner shows the single
+  conflicts in M files; not picked: b2c3d4e "Alpha two"[, …]." When the stopped commit was the
+  last one, "; not picked: …" is left out ("Cherry-picked 1 of 2 commits. a1b2c3d stopped with
+  conflicts in 1 file."). A later pick that fails otherwise: "Cherry-pick failed", summary
+  "Cherry-picked K of N commits. Git could not cherry-pick a1b2c3d.". The banner shows the single
   pick (section 5); the commits not picked are named in that message, which stays in the status
   bar (its tooltip lists them all), so the user can pick them again after finishing.
 - Refresh: Refs.
@@ -657,21 +761,31 @@ that the reflog or the stash list does not keep.
 
 - Labels: toolbar Fetch (all remotes); "Fetch <r>" on a remote header; "Fetch all remotes" on
   the "Remotes" header and the empty graph area.
-- Git: all: `git fetch --all --progress`; one: `git fetch --progress <r>`. No `--prune` and no
-  `--tags`: `fetch.prune` and tag following work as the user configured them (Q5, D99).
+- Git: one: `git fetch --progress <r>`. All (D109): one `git fetch --progress <r>` per remote, in
+  `git remote`'s order, leaving out remotes with `remote.<r>.skipFetchAll` set, each but the last
+  with `--no-auto-maintenance` (so git's maintenance runs once, as `--all` runs it); not
+  `git fetch --all`, whose fetches of each remote print no progress (section 0). It goes on after a
+  remote fails; Cancel stops the running fetch and skips the rest. Progress shows as for one
+  remote ("Fetching from all remotes… Receiving objects 45%"). No `--prune` and no `--tags`:
+  `fetch.prune` and tag following work as the user configured them (Q5, D99).
+  `FetchAsync(null, …)` (WP2) does the loop; when any remote failed it throws one `GitException`
+  at the end whose command text is the first failed call's and whose standard error is the
+  failed calls' standard errors in order, each followed by `error: Could not fetch <r>` (as
+  `git fetch --all` prints).
 - Disabled when the repository has no remotes: "This repository has no remotes".
 - Network, prompts Ask, cancellable (1.8: a cancel reports stale locks). Dedupe keys `fetch:*`
   and `fetch:<r>`. Confirm: no. Backup: none.
 - Refresh: Refs. Success: "Fetched from all remotes" / "Fetched from <r>".
-- Failures: error dialog "Fetch failed" ("Git could not fetch from <r>."); `AuthenticationFailed`
-  adds nothing more: git's output says what happened. A prompt cancelled by the user →
-  `Cancelled`, no dialog, "Fetch cancelled".
+- Failures: error dialog "Fetch failed" ("Git could not fetch from <r>.", naming every remote
+  that failed: "Git could not fetch from origin and mirror."); `AuthenticationFailed` adds
+  nothing more: git's output says what happened. A prompt cancelled by the user → `Cancelled`,
+  no dialog, "<Title> cancelled" ("Fetch cancelled", "Fetch origin cancelled").
 
 ### 2.17 Auto-fetch
 
-- `git fetch --all --progress --no-auto-maintenance` with `PromptMode.Deny` (section 3),
-  `IsBackground`, through `TryStartInBackground`; never pre-empted, never killed (1.8). Detail
-  in 6.1.
+- The fetch of all remotes of 2.16, every call with `--no-auto-maintenance` (D109), with
+  `PromptMode.Deny` (section 3), `IsBackground`, through `TryStartInBackground`; never
+  pre-empted, never killed (1.8). Detail in 6.1.
 - Refresh: Refs (the ahead and behind counts follow).
 - Success: nothing shown. Failure: the status bar says "Auto-fetch failed" in the secondary
   colour, its tooltip git's first error line; logged at Warning. No dialog, ever.
@@ -680,9 +794,13 @@ that the reflog or the stash list does not keep.
 
 - Labels: toolbar Pull; "Pull from <r>/<u>" on the current branch; "Pull" on the empty graph
   area.
-- Disabled: detached ("HEAD is detached: check out a branch to pull"); no upstream ("<b> has no
-  upstream: set one first"); an operation in progress (as 2.8); no remotes (unless the upstream
-  is local).
+- Disabled, in this order: detached ("HEAD is detached: check out a branch to pull"); no
+  upstream ("<b> has no upstream: set one first"); a gone upstream ("<r>/<u> no longer exists",
+  D114); an operation in progress (as 2.8); no remotes, unless the upstream is local ("This
+  repository has no remotes").
+- Built as `FetchAsync(<r>, …)` (skipped for a local upstream), `EndCancelWindow()`, then
+  `IntegratePullAsync(<the branch's GitRef>, …)`, which returns `PullResult(Outcome,
+  CommitCount)` (D107).
 - Git (D84): what `git pull` does, as two steps, so that only the network part can be cancelled
   (a merge prints its first line only after it has written the tree, and a rebase after it has
   checked out the new base, so no line of one `git pull` call can tell when killing it becomes
@@ -803,6 +921,12 @@ All local, through the remotes dialog (4f) or the remote header's menu. Refresh:
 `ReadRemotesAsync` (new, a read with `GIT_OPTIONAL_LOCKS=0`): `git remote -v`, parsed into
 `RemoteInfo(Name, FetchUrl, PushUrl?)` (a `(push)` URL equal to the fetch URL gives null).
 
+The form's messages, in `RemoteError`, the first that applies (D114): "Enter a name." (only once
+the box has been edited and is empty), "This is not a valid remote name: <reason>.", "A remote
+named <name> exists.", "A remote named <existing> exists in another case." (Windows and macOS),
+"Enter a URL." (once edited and empty). "Save" is disabled while one applies and, when editing,
+until the name or the URL has changed. After "Save" git's own refusal shows there too.
+
 URLs can carry a user name and a token (`https://alice:ghp_…@host/x.git`). Everything the app
 shows or copies uses the **shown URL**: the remotes list, its tooltip, the Remove question and
 the error dialog use `GitCommand.HideCredentials` (`https://***@host/x.git`); "Copy URL" copies
@@ -818,9 +942,13 @@ the URL as configured, because saving it must keep what is there (D103).
 - Disabled when there is nothing to stash (no staged or unstaged changes, and no untracked
   files): "There are no changes to stash"; and when HEAD is unborn: "Make the first commit
   first" (git: `You do not have the initial commit yet`).
-- Git: `git stash push [--include-untracked] [--message <m>]`. An empty message lets git name it
-  ("WIP on main: a1b2c3d Add core"). Exit 0 with `No local changes to save` → message "There
-  was nothing to stash".
+- Git: `git stash push [--include-untracked] [--message <m>]`, run **without**
+  `GIT_LITERAL_PATHSPECS` (D108: with it, git leaves the untracked files in the working tree,
+  section 0; the app passes no path, so the variable protects nothing here). An empty message lets
+  git name it ("WIP on main: a1b2c3d Add core"). Exit 0 with `No local changes to save` → message
+  "There was nothing to stash". `StashAsync` returns the new stash's commit, or null for nothing
+  to stash. `StashTagTests` assert that after a stash with untracked files the working tree is
+  clean and a pop brings the files back.
 - Confirm: no. Backup: none (the stash is the backup). Refresh: Refs.
 - Success: "Stashed the changes". Failures: error dialog "Stash failed".
 
@@ -839,8 +967,10 @@ the URL as configured, because saving it must keep what is there (D103).
 - Result: "Applied stash@{n}" / "Popped stash@{n}"; conflicts → outcome `Conflicts`, "Applying
   the stash stopped: N files have conflicts" (pop adds " The stash is kept."). The banner shows
   the conflicts-only form (section 5).
-- Refresh: Refs. Failures (`Your local changes ... would be overwritten`): error dialog
-  "Applying the stash failed".
+- Refresh: Refs. Failures: error dialog "Applying the stash failed" (apply and pop), summary
+  "Your changes to these files would be overwritten by applying stash@{n}." for git's `Your local
+  changes to the following files would be overwritten by merge`, "This stash no longer exists."
+  for a stash no longer listed, otherwise "Git could not apply stash@{n}.".
 
 ### 2.26 Stash drop
 
@@ -895,7 +1025,10 @@ the URL as configured, because saving it must keep what is there (D103).
   `<working tree>/.gitignore`, creating it; first a line feed if the file does not end with one.
   Patterns: `/<path>` with `\` put before `*`, `?`, `[`, `\`, a leading `#` or `!`, and
   trailing spaces; or `*.<ext>` with the same escaping.
-- Confirm: no. Backup: none. Refresh: Status. Success: "Added /<path> to .gitignore".
+- Confirm: no. Backup: none. Refresh: Status. Success: "Added <the line as written> to
+  .gitignore" ("Added /logs/run.log to .gitignore", "Added *.log to .gitignore", "Added
+  /drafts/\[wip].txt to .gitignore"). An open diff of the file closes when the file leaves the
+  list, as phase 2 closes a working-tree diff whose file left its list.
 
 ### 2.31 Stash changes and check out (owner's answer 4)
 
@@ -915,11 +1048,14 @@ the URL as configured, because saving it must keep what is there (D103).
      and has changed nothing (section 0), `git stash pop stash@{n}` follows.
 - Results:
   - clean → "Checked out <target> and re-applied your changes";
-  - the pop conflicts (non-zero, conflicted files in the status) → outcome `Conflicts`, an
-    information dialog (the error dialog's layout, title "Changes re-applied with conflicts")
-    "Checked out <target>. Re-applying your changes stopped with conflicts in N files. Your
-    changes are kept in the stash "VisualCommit: before checking out <target>"." The banner
-    shows the conflicts;
+  - the pop conflicts (non-zero, conflicted files in the status; with `--index` git then says
+    `Index was not unstashed.` and lists the conflicts on standard output, section 0) → outcome
+    `Conflicts`, an information dialog (the error dialog's layout, title "Changes re-applied with
+    conflicts") "Checked out <target>. Re-applying your changes stopped with conflicts in N
+    files. Your changes are kept in the stash "VisualCommit: before checking out <target>"." It
+    shows no git output, no command and no "Copy output" (D114): the banner and the stage panel
+    show the conflicts. The status bar shows the dialog's first two sentences in the warning
+    colour;
   - the pop fails without conflicts (non-zero, no conflicted file: an unexpected case) →
     outcome `Failed`, error dialog "Changes not re-applied": "Checked out <target>, but your
     changes could not be re-applied. They are kept in the stash "VisualCommit: before checking
@@ -946,6 +1082,57 @@ the URL as configured, because saving it must keep what is there (D103).
   touches the clipboard. The real-window pass never invokes these items (it would open the
   owner's file manager or overwrite the owner's clipboard): its menu checks invoke an item
   without side effects outside the window (7.5).
+
+### 2.33 Titles, running texts and failure texts (D113)
+
+`GitOperation.Title` names the action and its object. It is what the status bar shows as
+"<Title> failed" and "<Title> cancelled" (4e), what the log line and the finishing dialog (1.8)
+name, and nothing else. An error dialog's title is the one in this table (section 2's), never
+"<Title> failed"; its summary is the sentence here, unless a recognised failure kind of section 2
+has its own dialog ("Checkout blocked", "Push rejected", "Force push stopped", "Deletion stopped",
+"Cherry-pick stopped"). `RepositoryOperations` (WP7) builds these texts. Phase 2's writes keep
+1.4's titles. `<sha>` is the short SHA; the other names are short names.
+
+| Operation | Title | Running text | Error dialog | Summary of other failures |
+|---|---|---|---|---|
+| 2.1 Check out a local branch | Check out <b> | Checking out <b>… | Checkout failed | Git could not check out <b>. |
+| 2.2 Check out a remote branch | Check out <r>/<b> | Checking out <r>/<b>… | Checkout failed | Git could not check out <r>/<b>. |
+| 2.3 Check out a commit or a tag | Check out <sha> / Check out <t> | Checking out <sha>… / Checking out <t>… | Checkout failed | Git could not check out <sha>. / … <t>. |
+| 2.31 Stash changes and check out | Check out <target> with your changes | Checking out <target> with your changes… | 2.31's dialogs | 2.31's texts |
+| 4g Check out and merge | Check out <B> and merge <A> | Checking out <B> and merging <A>… | Checkout failed, or Merge failed for the second step | as 2.1, or as 2.8 |
+| 2.4 Create a branch | Create branch <name> | Creating <name>… | Creating the branch failed | Git could not create the branch <name>. |
+| 2.5 Rename a branch | Rename <b> | Renaming <b> to <new>… | Renaming the branch failed | Git could not rename <b> to <new>. |
+| 2.6 Delete a branch | Delete <b> | Deleting <b>… | Deleting the branch failed | Git could not delete <b>. |
+| 2.7, 2.10 Fast-forward | Fast-forward <b> | Fast-forwarding <b> to <target>… | Fast-forward failed | 2.7's sentences, otherwise Git could not fast-forward <b> to <target>. |
+| 2.8, 2.9 Merge | Merge <x> | Merging <x> into <current>… | Merge failed | Git could not merge <x> into <current>. |
+| 2.11 Reset | Reset <current> (detached: Reset HEAD) | Resetting <current> to <sha>… | Reset failed | Git could not reset <current> to <sha>. |
+| 2.12 Cherry-pick one | Cherry-pick <sha> | Cherry-picking <sha>… | Cherry-pick failed (an empty pick: Cherry-pick stopped) | Git could not cherry-pick <sha>. |
+| 2.13 Cherry-pick several | Cherry-pick N commits | Cherry-picking N commits… | Cherry-pick failed / Cherry-pick stopped | 2.13's sentences |
+| 2.14 Revert | Revert <sha> / Revert N commits | Reverting <sha>… / Reverting N commits… | Revert failed (an empty revert: Revert stopped, "<sha> changes nothing on <current>: it is already undone. Abort the revert to go on.") | Git could not revert <sha>. |
+| 2.15 Abort | Abort the <kind> | Aborting the <kind>… | Abort failed | Git could not abort the <kind>. |
+| 2.16 Fetch | Fetch (all remotes) / Fetch <r> | Fetching from all remotes… / Fetching from <r>… | Fetch failed | Git could not fetch from <r>[ and <r2>]. |
+| 2.17 Auto-fetch | Auto-fetch | none shown | none (4e's "Auto-fetch failed") | — |
+| 2.18 Pull | Pull | Pulling <r>/<u> into <b>… | Pull failed | Git could not pull <r>/<u> into <b>. |
+| 2.19 Push, a drop's push | Push <b> | Pushing <b> to <r>/<u>… | Push failed (rejected: Push rejected) | Git could not push <b> to <r>/<u>. |
+| 2.20 Force push | Force push <b> | Force-pushing <b> to <r>/<u>… | Force push failed (stale: Force push stopped) | Git could not force-push <b> to <r>/<u>. |
+| 2.21 Set or remove the upstream | Set upstream of <b> / Stop tracking <r>/<u> | Setting the upstream of <b>… / Removing the upstream of <b>… | Setting the upstream failed | Git could not set the upstream of <b>. / Git could not remove the upstream of <b>. |
+| 2.22 Delete a remote branch | Delete <b> on <r> | Deleting <b> on <r>… | Deleting the remote branch failed (stale: Deletion stopped) | Git could not delete <b> on <r>. |
+| 2.23 Add, rename, change URL | Add remote <name> / Rename remote <old> / Change URL of <name> | Adding remote <name>… / Renaming remote <old>… / Changing the URL of <name>… | none: git's message in the form's `RemoteError` | — |
+| 2.23 Remove a remote | Remove remote <name> | Removing remote <name>… | Removing the remote failed | Git could not remove the remote <name>. |
+| 2.24 Stash | Stash | Stashing the changes… | Stash failed | Git could not stash the changes. |
+| 2.25 Apply, pop | Apply stash@{n} / Pop stash@{n} | Applying stash@{n}… / Popping stash@{n}… | Applying the stash failed | 2.25's sentences |
+| 2.26 Drop | Drop stash@{n} | Dropping stash@{n}… | Dropping the stash failed | Git could not drop stash@{n}. |
+| 2.27 Create a tag | Create tag <t> | Creating tag <t>… | Creating the tag failed | Git could not create the tag <t>. |
+| 2.28 Delete a tag | Delete tag <t> | Deleting tag <t>… | Deleting the tag failed | Git could not delete the tag <t>. |
+| 2.29 Push a tag | Push tag <t> | Pushing tag <t> to <r>… | Pushing the tag failed | Git could not push <t> to <r>. |
+| 2.29 Delete a tag on a remote | Delete tag <t> on <r> | Deleting tag <t> on <r>… | Deleting the remote tag failed (stale: Deletion stopped) | Git could not delete the tag <t> on <r>. |
+| 2.30 Ignore | the item's label: Ignore <file name> / Ignore all *.<ext> files | Adding <line> to .gitignore… | Ignoring the file failed | The file .gitignore could not be written. |
+| Lock files after a cancel (1.8) | — | — | <Title> cancelled | 1.8's sentence |
+
+So the status bar reads, for example, "Check out feature/addfile failed", "Push main failed", "Pull
+failed", "Fetch cancelled" (the toolbar), "Fetch origin cancelled", "Pop stash@{0} failed",
+"Delete tag v1.2 on origin failed", "Cherry-pick 1a2b3c4 failed" (an empty pick); the finishing
+dialog "Fetch origin — auth"; the log `auth: Fetch origin: Cancelled after <N> ms`.
 
 ## 3. Credentials, passphrases and ssh prompts (C11)
 
@@ -991,10 +1178,16 @@ the URL as configured, because saving it must keep what is there (D103).
   `NamedPipeServerStream` loop (up to 4 instances, `PipeOptions.CurrentUserOnly |
   Asynchronous`), one request per connection, lines up to 64 KiB, the token compared with
   `CryptographicOperations.FixedTimeEquals`. `Begin(string title, string repositoryName,
-  PromptMode mode)` returns a `PromptScope` (`Id`, `Environment`, `UserCancelled`,
-  `Dispose`). A request for an id that has no open scope is answered null. The request is
-  classified (3.2) and handed to Core's `IGitPromptHandler.AnswerAsync(GitPrompt, CancellationToken)`;
-  disposing the scope cancels that token.
+  PromptMode mode, string? operationId = null)` returns a `PromptScope`, an abstract class in
+  Core (`Id`, `Environment`, `UserCancelled`, `IsDisposed`, `Dispose`, a virtual `OnDisposed`);
+  the queue passes the operation's id, which becomes the scope's id (D107). A request for an id
+  that has no open scope is answered null. The request is classified (3.2) into a
+  `GitPrompt(Kind, Text, ScopeId, Title, RepositoryName, Url?, User?, KeyPath?)` and handed to
+  Core's `IGitPromptHandler.AnswerAsync(GitPrompt, CancellationToken)`, which returns
+  `PromptAnswer(Text, UserCancelled)` (`Refused`, `Cancelled`, `Of(text)`); disposing the scope
+  cancels that token. `NullGitPromptBroker` (Core) is the broker of tests and of an app without
+  the helper. WP0 left `PromptDialogs.CreateBroker(IGitPromptHandler, IAppLog)` in App, which
+  `AppSession.Start` calls; WP3 makes it return the `AskPassBroker`.
 - **Git Credential Manager and other `credential.helper`s keep working unchanged (Q5):** git asks
   its credential helpers first and runs askpass only when none of them had an answer; it then
   tells the helpers to store what worked. GCM may show its own sign-in window for an `Ask`
@@ -1019,14 +1212,16 @@ the URL as configured, because saving it must keep what is there (D103).
 | `Password` | `^Password for '(.+)': $` | when not answered from the kept value: Credentials with the user name shown and only Password editable |
 | `Passphrase` | `^Enter passphrase for (key )?'?(.+?)'?: ?$` or `^Enter passphrase: ?$` | Passphrase |
 | `HostKey` | contains `Are you sure you want to continue connecting` | Unknown host: the prompt's text (host, key type, fingerprint) in the code font; answer `yes` |
-| `Confirm` | `sshPrompt == "confirm"` | Confirmation with ssh's text; answer `yes` |
+| `Confirm` | `sshPrompt == "confirm"` (OpenSSH 8.9 sets it only for ssh-agent's confirmations; the host-key question and a passphrase come without it, section 0) | Confirmation (`ConfirmationDialog`) titled "ssh asks", ssh's text as its question, no detail, buttons "Cancel" and "Yes"; answer `yes` (D115) |
 | `Notice` | `sshPrompt == "none"` | No dialog: the status bar shows the text (such as "Confirm user presence for key …") until the scope ends; the helper waits for its pipe to close |
 | `Other` | anything else | Prompt: the text and one box, masked when the text contains `password`, `passphrase`, `PIN` or `token` (ignoring case) |
 
 `PromptDialogs` (App, `Services/PromptDialogs.cs`) implements `IGitPromptHandler`: it posts to
 the UI thread and shows the dialog through the dialog host, on top of any dialog already open
 (dialogs stack, 4f, D104: a prompt for a fetch started from the Remotes dialog appears over it).
-The dialog's title names the repository and operation ("Fetch from origin — graph"). Within
+The dialog's title is 4f's ("Sign in to <host>", "Key passphrase", "Unknown host", "Git asks",
+"ssh asks"); it names the repository by 4f's last rule, when the window has more than one tab
+with a repository. Within
 one operation's scope an answer given for a prompt text is reused for the same text (for at
 most 2 minutes), so a pull's or a multi-remote fetch's second contact does not ask twice. Cancel, Esc, or the scope ending → null, which makes the helper exit 1; the scope
 records `UserCancelled` for Cancel and Esc, so the queue reports `Cancelled` instead of
@@ -1062,8 +1257,9 @@ by showing the user a dialog that names the operation.
 | HTTPS sign-in against a real server | `AuthRemoteServer` (7.3) demands Basic auth: fetch, pull and push with the scripted handler succeed; a wrong password fails as `AuthenticationFailed`; a cancelled prompt gives `Cancelled`; `Deny` fails without calling the handler | `Git.Tests/AuthenticatedRemoteTests` |
 | ssh passphrase through `SSH_ASKPASS_REQUIRE` | `ssh-keygen -y -f <key encrypted with s3cret>` with the `Ask` environment and standard input closed: the handler receives a `Passphrase` prompt and the public key comes out. `ssh-keygen` is found next to git on Windows (`<git>/../usr/bin`) and on PATH elsewhere; `scripts/setup-linux.sh` installs `openssh-client` | `Git.Tests/AskPassTests` |
 | The dialogs | headless: fetch from the auth server, the credentials dialog appears, typing and "Sign in" complete the fetch; Cancel ends it as cancelled | `App.Tests`, scripted check |
-| Passphrase, unknown-host and generic prompt dialogs, as ssh would reach them | the real helper is run as OpenSSH runs it (the prompt as its argument, `SSH_ASKPASS_PROMPT` set as ssh sets it, with the `Ask` environment of an open scope) with recorded OpenSSH texts: `Enter passphrase for key '/home/u/.ssh/id_ed25519': `, the host-key question, `confirm` and an unknown text. The app's broker and `PromptDialogs` show the real dialog, the script types and confirms, and the helper prints the answer. No ssh server is needed | `App.Tests` (`PromptDialogTests`), scripted check 21b |
-| The real app's own helper, real process environment | the real-window pass fetches from `AuthRemoteServer` and signs in through the dialog | real-window check |
+| Passphrase, unknown-host and generic prompt dialogs, as ssh would reach them | the real helper is run as OpenSSH runs it (the prompt as its argument, `SSH_ASKPASS_PROMPT` set as ssh sets it, with the `Ask` environment of an open scope) with recorded OpenSSH texts: `Enter passphrase for key '/home/u/.ssh/id_ed25519': `, the host-key question, `confirm` and an unknown text. The app's broker and `PromptDialogs` show the real dialog, the script types and confirms, and the helper prints the answer. No ssh server is needed | `App.Tests` (`PromptDialogTests`, `AskPassRunner`); the `confirm` and `none` cases only here |
+| The same dialogs through a real fetch (D115) | a remote `fake-ssh` (`ssh://git@example.invalid/x.git`) with `core.sshCommand` set to a test script (`FakeSsh`, WP-S2; `ssh.variant=simple`) that runs `"$SSH_ASKPASS"` with the recorded passphrase, host-key and PIN texts in turn (`SSH_ASKPASS_PROMPT` unset, as OpenSSH 8.9), appends each answer to a file, prints a recorded refusal and exits 1. "Fetch fake-ssh" from the remote's menu shows each dialog in turn over the running fetch; the fetch then fails ("Fetch failed") | check 21b steps 1 to 3, scripted and real window |
+| The real app's own helper, real process environment | the real-window pass fetches from `AuthRemoteServer` and signs in through the dialog, and runs check 21b's fetch | real-window checks 21 and 21b |
 
 Only by hand: an ssh host-key question from a real ssh server (the dialog itself is checked
 with recorded texts above), and GCM's own window (neither can run without a network service).
@@ -1075,35 +1271,48 @@ appears), and fetch an HTTPS remote with GCM installed.
 
 ### 4a. The in-window context menu
 
-**What is fixed and what a spike decides (D86).** Fixed: menus are data (`MenuModel`, below),
-built by pure functions; they are drawn **inside the main window**, never as a top-level window
-of their own; they have a header row, disabled items with their reason as a tooltip, and open
-at a given point (the pointer, a drop, a keyboard row). The reason for "inside the window": on
-the desktop platforms Avalonia draws a popup as a window of its own by default
-(`OverlayPopups` is false for Win32, X11 and macOS, true headless; section 0), and such a menu
-would be outside `RealApp.Window`'s UI Automation tree and could reach beyond the client area
-the real-window pass captures, so the two harnesses would see different things. Avalonia 12.1.3
-can put a single popup on the window's overlay layer (`Popup.ShouldUseOverlayLayer`, and
-`MenuFlyout.Popup` is public), so turning `OverlayPopups` on for the whole app is not needed
-either way.
+**What draws it (D86, D105).** Menus are data (`MenuModel`, below), built by pure functions,
+and drawn **inside the main window**, never as a top-level window of their own: on the desktop
+platforms Avalonia draws a popup as a window of its own by default (`OverlayPopups` is false for
+Win32, X11 and macOS, true headless; section 0), and such a menu would be outside
+`RealApp.Window`'s capture and could reach beyond the client area, so the two harnesses would see
+different things. The spike of 2026-10-11 on the Windows machine (real Win32, 200 % scaling;
+section 0) adopted Avalonia's stock **`MenuFlyout` with `Popup.ShouldUseOverlayLayer = true`**:
+it stays inside the client area at every edge, it and its items are in the window's UI
+Automation tree, it opens at any window point, and it shows a header and disabled items with
+their reason, with Avalonia's keyboard handling, light dismiss and focus return. WP5 is
+therefore an **adapter** from `MenuModel` to `MenuFlyout`, not a control of its own
+(`InWindowMenu` is not built). The adapter adds what the spike found missing:
 
-Open: which control draws the menu. **Before WP5 starts**, the lead runs a short spike on the
-Windows machine (a small throwaway window, not the real-window pass; it does not take over the
-mouse): a stock `MenuFlyout` whose `Popup.ShouldUseOverlayLayer` is true, opened with
-`ShowAt(target, showAtPointer: true)` and at a point after a drop. It is adopted if (1) it is
-drawn inside the client area, also near the right and bottom edges; (2) it and its items are in
-the window's UI Automation tree, the items as MenuItem with name, enabled state and Invoke;
-(3) a header entry and a disabled item with a `ShowOnDisabled` tooltip can be built from
-`MenuModel`; (4) it opens at an arbitrary window point. Then WP5 is a `MenuModel` → `MenuItem`
-adapter plus Shift+F10, and the stock keyboard handling and accessibility come with it.
-Otherwise WP5 builds `InWindowMenu` as described below. The spike's result is written into this
-section and recorded as a new row of `decisions.md` (as D86 requires) before WP5 starts. Either way the menu layer, the automation ids
-and the behaviour listed below hold, and `InWindowMenuTests` test them. Tooltips stay
-Avalonia's; the same spike checks that a tooltip inside the client area appears in the
-real-window pass's capture (assumed so far from phase 1's report) and, if not, sets
-`ToolTip.ShouldUseOverlayLayer` for the app.
+1. **Invoke.** Items are a `MenuItem` subclass (`Controls/ContextMenuItem.cs`, `StyleKeyOverride
+   => typeof(MenuItem)`) whose automation peer derives from `MenuItemAutomationPeer` and
+   implements `IInvokeProvider`: `Invoke()` closes the menu (the ancestor `MenuBase.Close()`) and
+   then raises `MenuItem.ClickEvent`; on a disabled item it throws and runs nothing. The stock
+   peer has no Invoke, and raising Click alone leaves the flyout open. The presenter gets
+   `AutomationProperties.ControlTypeOverride = Menu` (stock: List) and the automation id
+   `ContextMenu`, set in `flyout.Opened`.
+2. **Placement.** `Placement = PlacementMode.Custom` with a `CustomPopupPlacementCallback` that
+   applies the position rules below exactly (anchor top-left, gravity bottom-right, a 1×1 anchor
+   rectangle, the computed offset, no constraint adjustment), shown with `ShowAt(<a panel that
+   fills the client area>)`; the offset and `Popup.PlacementRect` are set before `ShowAt` (set
+   after it they apply only when a layout pass happens to run). A `MenuFlyoutPresenter` style
+   sets `MaxHeight` to the client height less 8, so a tall menu scrolls (Fluent's scroll arrows)
+   instead of reaching past the bottom.
+3. **Tooltips in the window.** `ToolTip.ShouldUseOverlayLayer` is true for the whole app (its
+   default value is overridden at start-up, in `App.axaml.cs`), so every tooltip, a disabled
+   item's reason included, is drawn inside the window and is in the real-window pass's capture;
+   without it a tooltip is a window of its own and was cut at the window's edge. A tooltip opened
+   from code, not by the pointer, sets `ToolTip.Placement`, or it opens at the window's 0,0.
 
-**Model** (`ViewModels/Menus/MenuModel.cs`, no Avalonia types):
+The **header** is a `MenuItem` with `Focusable = false` and a `TextBlock` header
+(`TextTrimming = CharacterEllipsis`, `MaxWidth` 340: a plain string header is cut without "…"),
+in `VcTextSecondaryBrush`, its pointer presses handled (a click on it does nothing and keeps the
+menu open), `ControlTypeOverride = Text`, automation id `ContextMenuHeader`, name and tooltip its
+full text; keyboard navigation skips it. A **separator** is a stock `Separator`. A destructive
+item has a local `Foreground` of `VcDangerBrush` while it is enabled; a disabled item, a
+destructive one too, is drawn in `VcTextDisabledBrush` (D114).
+
+**Model** (`ViewModels/Menus/MenuModel.cs`, no Avalonia types; built by WP0):
 
 ```csharp
 public abstract record MenuEntry;
@@ -1111,64 +1320,96 @@ public sealed record MenuHeader(string Text, string? ToolTip = null) : MenuEntry
 public sealed record MenuSeparator : MenuEntry;
 public sealed record MenuItem(string Label, Action Invoke, bool IsEnabled = true,
     string? DisabledReason = null, bool IsDestructive = false) : MenuEntry;
-public sealed record MenuModel(IReadOnlyList<MenuEntry> Entries);
+public sealed record MenuModel(IReadOnlyList<MenuEntry> Entries);   // + HeaderText, Items
+public readonly record struct MenuPosition(double X, double Y);     // a point of the main window
 ```
 
 Builders (`ViewModels/Menus/RepositoryMenus.cs`): pure functions of the repository's state
 (refs, status, in-progress state, selection, remotes) that return a `MenuModel`, unit-tested
-without a UI. Items that open a dialog end in "…".
+without a UI. Items that open a dialog end in "…". A builder never leaves a separator right after
+the header, at the end, or two in a row: a group whose items are all left out leaves no
+separator (D114).
 
-**Control (when the spike does not adopt the stock flyout):** `Controls/InWindowMenu.cs` (a
-templated control showing a `MenuModel`) inside
-`Views/Shell/MenuLayer` (a `Panel` in `MainWindow.axaml` over the main grid and under the
-dialog layer; `MenuLayerViewModel` on `MainWindowViewModel.Menu`, with `Open(MenuModel,
-Point windowPosition)` and `Close()`).
+**The menu layer.** `MainWindowViewModel.Menu` is a `MenuLayerViewModel` (WP0's placeholder:
+`Open(MenuModel, MenuPosition)`, `Close()`, `Current`, `Position`, `IsOpen`), the one place a
+menu is opened; at most one is open. `Views/Shell/MenuLayer` (WP0's placeholder control in
+`MainWindow.axaml`, over the main grid and under the dialog layer) builds the flyout from
+`Current` and shows it at `Position`; when the flyout closes, `Current` is cleared. It logs
+`<repo>: Context menu opened: <header>` at Debug on every open, with "by keyboard" or "by
+pointer" after it (the real-window pass counts these lines, D106).
 
-- Look: background `VcPanelBackgroundBrush`, 1 px `VcBorderBrush`, corner radius 6, padding 4,
-  shadow `VcMenuShadow` (new token, 6.4). Width 200 to 360 (the longest label decides); an item
-  is 26 high with 10 px side padding, a separator 9 high (a 1 px line), the header 24 high in
-  `VcTextSecondaryBrush`, cut with "…" and a tooltip. Item text `VcTextPrimaryBrush`; a
-  destructive item `VcDangerBrush`; a disabled item `VcTextDisabledBrush` with its reason as a
-  tooltip (`ToolTip.ShowOnDisabled="True"`); the item under the pointer or the keyboard
-  `VcHoverBackgroundBrush`.
-- Position: top-left at the pointer + (2, 2). If it would cross the window's right edge it opens
-  to the left of the pointer; past the bottom, above it; then it is moved to stay 4 px inside
-  the window. Taller than the window less 8 px: it scrolls.
-- Light dismiss: a press of any mouse button outside the menu closes it and is not passed on;
-  so do Esc, a tab switch, the window losing activation (tested by unit test of the handler:
-  headless windows never lose activation), a dialog opening, and a scroll of the graph. Only
-  one menu is open at a time.
-- Keyboard: on opening it takes the focus with nothing highlighted; Down/Up highlight the next
-  or previous enabled item (wrapping, skipping separators, the header and disabled items),
-  Home/End the first or last; Enter or Space invokes; Esc closes and gives the focus back to
-  the element that opened it. `MainWindow.OnEscape` closes an open menu before a dialog or a
-  diff.
-- Invoking: the item's click (pointer released on it) closes the menu first, then posts
-  `Invoke` to the UI thread.
-- Opening: views handle Avalonia's `ContextRequested` routed event (a right-click or the Menu
-  key). Avalonia does not raise it for Shift+F10 (section 0), so `MainWindow` handles Shift+F10
-  in a tunnelling `KeyDown` (handled events too) and raises `ContextRequestedEventArgs` without
-  a position on the focused element. With a pointer position the menu opens there; from the
-  keyboard it opens at the bottom-left of the focused row (the graph: the selected row's message
-  cell). `InWindowMenuTests` assert that Shift+F10 and the Menu key both open the graph's
-  commit menu headless.
-- Accessibility and harnesses: the menu has automation id `ContextMenu` and control type Menu;
-  the header `ContextMenuHeader`; each item `ContextMenuItem` with its label as name (D49's
-  rule: buttons carry their text as their name), control type MenuItem, `IsEnabled` as drawn.
-  A `Panel` or templated control is not a UI Automation control element by default (section 0),
-  so the menu container, each dialog root (4f), the conflict banner and `MultiSelectionView`
-  get an automation peer with `IsControlElementCore() => true` and a control type (Menu, Pane,
-  Pane, List), as `CommitGraphControl`, `DiffPane` and `DiffTextView` already have. One headless
-  test walks `ControlAutomationPeer.CreatePeerForElement(window)` and asserts that each of these
-  ids is a control element.
+- **Look** (`Theme/Menus.axaml`, styles on the stock controls): background
+  `VcPanelBackgroundBrush`, 1 px `VcBorderBrush`, corner radius 6, padding 4, `BoxShadow`
+  `VcMenuShadow` on the presenter (Fluent's presenter draws none; the shadow is drawn inside the
+  window and cut where the menu is closer to the window's edge than the shadow reaches); width
+  200 to 360 (the longest label decides); an item 26 high with 10 px side padding, a separator
+  9 high (a 1 px line), the header 24 high. Item text `VcTextPrimaryBrush`; the highlighted item
+  `VcHoverBackgroundBrush`. So a menu that fits is 8 + 24 + 26 × items + 9 × separators high.
+- **Position:** top-left at the pointer + (2, 2). If it would cross the window's right edge it
+  opens to the left of the pointer (its right edge 2 left of it); past the bottom, above it (its
+  bottom edge 2 above it); then it is moved to stay 4 px inside the window. Taller than the
+  window less 8 px: it scrolls. From the keyboard (no position) it opens at the bottom-left of
+  the focused row (the graph: the selected row's message cell; the left panel: the focused row).
+- **Light dismiss:** a press of any mouse button outside the menu closes it and is not passed
+  on; so do Esc and the window losing activation (all three stock, checked in the spike; the
+  last tested by a unit test of the handler headless, where windows never lose activation). The
+  menu layer also closes the menu when a dialog opens or the active tab changes (it observes
+  `MainWindowViewModel.Dialogs.IsOpen` and `ActiveTab`, its data context's) and on a mouse wheel
+  anywhere in the window (a tunnelling handler it adds to its window).
+- **Keyboard (stock, D105):** when the menu opens, however it was opened, the focus moves into it
+  and its **first enabled item is highlighted** (the adapter focuses that item on `Opened` where
+  the stock behaviour has not); Down/Up highlight the next or previous enabled item (wrapping,
+  skipping the header, separators and disabled items), Home/End the first or last; Enter or Space
+  invokes; Esc closes and gives the focus back to the element focused before. While the menu is
+  open the window's own key handlers see none of these keys, so `MainWindow`'s Esc chain never
+  sees the Esc that closes it (its menu link stays for safety).
+- **Pointer (stock, D105):** moving over an enabled item highlights it and moves the focus there;
+  a disabled item takes neither (resting on it shows its reason). A harness that rests the
+  pointer on an item moves it there without crossing other enabled items, or the highlight moves
+  with it.
+- **Invoking:** a click on an item, Enter, or UI Automation's Invoke closes the menu first, then
+  posts `Invoke` to the UI thread.
+- **Opening:** views handle Avalonia's `ContextRequested` routed event: a right-click, the Menu
+  key and Shift+F10. **Shift+F10 (D106):** Avalonia raises `ContextRequested` on the key-up of
+  every gesture in `TopLevel.PlatformSettings.HotkeyConfiguration.OpenContextMenu`: `Apps`
+  headless, `Apps, Shift+F10` on Win32 (section 0). `MainWindow`'s tunnelling Shift+F10 handler
+  (WP0's `OnShiftF10`) therefore raises the request itself, on key-down, without a position, on
+  the focused element, **only when that list has no Shift+F10 gesture**; otherwise it does
+  nothing (and does not mark the key handled) and leaves the key to Avalonia. The rule is the pure
+  function `ContextMenuKeys.AppRaisesShiftF10(IReadOnlyList<KeyGesture> openContextMenu)` (WP5),
+  read at the time of the key press, so each press raises exactly one request on every platform.
+  Proven by: a unit test of the function with `[Apps]` (true) and `[Apps, Shift+F10]` (false); a
+  headless test that presses Shift+F10 (down, then up) with the graph focused and asserts one
+  `ContextRequested` and one menu, and the same for the Menu key; and the real-window pass's
+  check 5, which presses the real Shift+F10 on Win32 and asserts that the menu is open and that
+  exactly one "Context menu opened" line was logged for the press.
+- **The first open is slow:** on the spike's loaded machine the first menu of a process took 0.45
+  to 1.7 s to be placed and drawn, later ones under 0.45 s. Both harnesses wait for the menu
+  (`ShellDriver.Menu()` polls; `RealApp` polls UI Automation for `ContextMenu` with a stable
+  rectangle), never for a fixed time. Nothing is warmed up at start-up.
+- **Accessibility and harnesses:** the menu (`ContextMenu`, control type Menu), the header
+  (`ContextMenuHeader`, Text) and each item (`ContextMenuItem`, control type MenuItem, its label
+  as name by D49's rule, `IsEnabled` as drawn, the Invoke pattern, its disabled reason as
+  `HelpText`) are in the main window's UI Automation tree. A `Panel` or templated control is not a
+  UI Automation control element by default (section 0), so each dialog root (4f), the conflict
+  banner and `MultiSelectionView` get an automation peer with `IsControlElementCore() => true` and
+  a control type (Pane, Pane, List), as `CommitGraphControl`, `DiffPane` and `DiffTextView`
+  already have. One headless test walks `ControlAutomationPeer.CreatePeerForElement(window)` and
+  asserts that each of these ids, an open menu's included, is a control element.
 
 ### 4b. Menus for every object
 
 Order as listed; "—" is a separator. The header is the first entry of every menu. Items for
-later phases are left out (owner's answer 1: D77, D92). "current" is the branch HEAD is on.
+later phases are left out (owner's answer 1: D77, D92). "current" is the branch HEAD is on (while
+HEAD is detached, "HEAD": "Cherry-pick onto HEAD", "Merge <x> into HEAD"). Where an item is left
+out, a group may become empty: no separator then follows the header or ends the menu, and two
+never follow each other (D114).
 A menu acts on the objects captured when it opened (SHAs and full ref names), never on row
 numbers. A right-click on a file row opens its menu only: it does not change the list's
-selection and does not open the file's diff (D63's click does).
+selection and does not open the file's diff (D63's click does). A right-click on a **left-panel
+row** (a branch, remote branch, remote, tag or stash) likewise opens its menu only: the row is not
+selected or highlighted and the graph's selection does not change (D114). A right-click on a
+graph row or label selects the row (below).
 
 **Commit** (one selected commit, right-click on its row outside its labels). Header:
 `a1b2c3d Add core`.
@@ -1202,7 +1443,8 @@ a row outside it, the row is selected alone first.
 **Working-changes row.** Header: `Working changes`.
 1. Stage all (disabled without unstaged files: "Nothing to stage")
 2. Unstage all (disabled without staged files: "Nothing staged")
-3. Discard all changes… (phase 2's Discard all, danger; disabled without unstaged files)
+3. Discard all changes… (phase 2's Discard all, danger; disabled without unstaged files:
+   "Nothing to discard")
 — 
 4. Stash changes… (2.24)
 5. Create branch here… (2.4 from HEAD; the changes follow the new branch)
@@ -1231,7 +1473,8 @@ a row outside it, the row is selected alone first.
 13. Copy branch name
 
 **Remote branch** `<r>/<b>`. Header: `<r>/<b>`.
-1. Check out <r>/<b> (2.2)
+1. Check out <r>/<b> (2.2; disabled while HEAD is on the local `<b>`: "<b> is already checked
+   out")
 2. Merge <r>/<b> into <current> (2.8)
 3. Merge <r>/<b> into <current> (create a merge commit) (2.9)
 — 
@@ -1262,7 +1505,8 @@ a row outside it, the row is selected alone first.
 — 
 6. Copy tag name
 
-**Section headers** of the left panel: "Local branches": Create branch…; "Remotes": Add remote…,
+**Section headers** of the left panel (each menu's header is the section's title: "Local
+branches", "Remotes", "Tags", "Stashes"): "Local branches": Create branch…; "Remotes": Add remote…,
 Fetch all remotes, Manage remotes…; "Tags": Create tag at HEAD…; "Stashes": Stash changes…;
 "Pull requests": no menu (phase 7). **Folder rows** (`feature/`) have no menu: they are not
 objects of the repository, only groups of names. **Repository tabs** have no menu in phase 3:
@@ -1334,7 +1578,7 @@ enabled). No dropdowns. A disabled button's tooltip gives its reason
 |---|---|---|
 | Undo, Redo, Search | Placeholders until phase 5 | always (no tooltip change) |
 | Fetch | 2.16, all remotes | no repository; no remotes ("This repository has no remotes") |
-| Pull | 2.18, the current branch from its upstream | no repository; detached; no upstream; operation in progress; no remotes |
+| Pull | 2.18, the current branch from its upstream | no repository; detached; no upstream; a gone upstream; operation in progress; no remotes (2.18's texts, in this order) |
 | Push | 2.19, the current branch: to its upstream, or the push dialog | no repository; detached; HEAD unborn; no remotes; a local upstream ("<b> tracks a local branch") |
 | Branch | 2.4, the name dialog at HEAD, "Check out the new branch" ticked | no repository; HEAD unborn |
 | Stash | 2.24, the stash dialog | no repository; HEAD unborn; nothing to stash |
@@ -1374,8 +1618,12 @@ are stable). A background operation does not change the text unless it fails.
 
 ### 4f. Dialogs
 
-All are drawn by the dialog layer (D69) on phase 2's card (max width 400, 460 for those with
-lists; padding 20; backdrop `VcBackdropBrush`). **Dialogs stack (D104):** `DialogHostViewModel`
+All are drawn by the dialog layer (D69) on phase 2's card (max width 400, 460 for the Remotes and
+Pick dialogs, whose lists scroll; padding 20; backdrop `VcBackdropBrush`). As WP0 built it, the
+dialog layer in `MainWindow.axaml` is an `ItemsControl` over `DialogHostViewModel.Open` with a
+`Panel` as its items panel and `DialogViewLocator` as its item template, so every open dialog is
+drawn and the one below stays visible under the top one's backdrop; when the last dialog closes
+its view is hidden before it leaves the window (D107). **Dialogs stack (D104):** `DialogHostViewModel`
 keeps a stack instead of phase 2's one-at-a-time semaphore. A dialog opened while another is
 open goes on top, over a second backdrop; the one below stays drawn, takes no input and gets
 the focus back when the top one closes. This is what lets the Remotes dialog ask its Remove
@@ -1399,12 +1647,12 @@ text box takes the focus on opening (the confirmation keeps focusing Cancel).
 | Branch name (`NameDialog`) | "Create branch" / "Rename branch" | `NameDialogContext` ("From a1b2c3d "Add core"", "From origin/feature/x", "Rename feature/alpha"); `NameBox` (placeholder "Branch name"); `NameError` (danger text, empty when valid); `NameDialogOption` check box "Check out the new branch" (create only, ticked) | "Create branch" / "Rename" | 2.4; the button is disabled while invalid |
 | Tag (`NameDialog`) | "Create tag" | context "At a1b2c3d "Add core""; `NameBox` (placeholder "Tag name"); `MessageBox` (multi-line, 3 lines, placeholder "Message (optional: makes an annotated tag)") | "Create tag" | 2.27 |
 | Stash (`NameDialog`) | "Stash changes" | `MessageBox` single line (placeholder "Message (optional)"); `NameDialogOption` "Include untracked files" | "Stash" | — |
-| Reset (`ResetDialog`) | "Reset main to a1b2c3d?" | text "Move main to "Add core" (a1b2c3d)."; three radio buttons `ResetSoft`, `ResetMixed` (checked), `ResetHard`, each with a secondary line: Soft "Keep every change; the changes of the commits after it are staged.", Mixed "Keep every change; nothing is staged.", Hard "Discard every change to tracked files." (danger colour); `ConfirmDetail` "A backup is saved first, so this can be undone." | "Reset" (danger style while Hard is chosen); no second confirmation follows | — |
+| Reset (`ResetDialog`) | "Reset main to a1b2c3d?" | text "Move main to "Add core" (a1b2c3d)."; three radio buttons `ResetSoft` "Soft", `ResetMixed` "Mixed" (checked), `ResetHard` "Hard", each with a secondary line: Soft "Keep every change; the changes of the commits after it are staged.", Mixed "Keep every change; nothing is staged.", Hard "Discard every change to tracked files." (danger colour); `ConfirmDetail` "A backup is saved first, so this can be undone." | "Reset" (danger style while Hard is chosen); no second confirmation follows | — |
 | Pick (`PickDialog`) | "Set upstream for <b>" | `PickFilter` box; `PickList` of remote branches (`PickItem`, name = the branch), the current upstream selected | "Set upstream" | an item must be selected |
 | Remote choice (`ChoiceDialog`) | "Push <t> to…" / "Delete <t> on…" / push dialog's remote | radio buttons `ChoiceOption` (name = remote), the first checked | per operation | — |
 | Push (`PushDialog`) | "Push <b>" | "To" — the remote as text when there is one, else `ChoiceOption` radios; `PushBranchBox` (the remote branch's name, default `<b>`); `PushSetUpstream` "Set as upstream" (ticked) | "Push" | branch name valid |
 | Remotes (`RemotesDialog`) | "Remotes" | a list: per remote a `RemoteRow` (name = the remote) with its name, shown fetch URL (credentials hidden, 2.23; cut with "…", tooltip), `RemoteEditButton` ("Edit") and `RemoteRemoveButton` ("Remove", danger); below, `AddRemoteButton` ("Add remote"). Edit and Add switch the card to a form: `RemoteNameBox`, `RemoteUrlBox` (the URL as configured), `RemoteFetchOption` "Fetch now" (Add only, ticked), `RemoteError`, buttons Cancel and "Save" (`ConfirmButton`). Save runs the add, rename or set-url operation and waits for it (the form's buttons disabled, "Saving…"), then returns to the list, or shows git's message in `RemoteError`. "Fetch now" queues the fetch as its own operation and the dialog does not wait for it; a credential prompt for it stacks over the dialog. Remove opens the confirmation of 2.23 on top (stacking) and, after it, runs the removal and refreshes the list | list mode: "Close" (`CancelButton` only) | 2.23 |
-| Error (`ErrorDialog`) | "<Title> failed", "Checkout blocked", "Push rejected", "Force push stopped", "Deletion stopped", "Changes re-applied with conflicts", "Changes not re-applied", "<Title> cancelled" (stale locks, 1.8) | `ErrorSummary` (the summary, wrapped); `ErrorRepository` ("In <repo name>", secondary); `ErrorOutput` (git's output in the code font, read-only, selectable, scrolls, max height 220); `ErrorCommand` (the command line, secondary, small, cut with "…" and a tooltip) | buttons: `ErrorCopyButton` ("Copy output"), optional `ErrorExtraButton` ("Stash changes and check out", "Pull", "Fetch <r>", "Remove lock files"), `ConfirmButton` "Close" (primary) | — |
+| Error (`ErrorDialog`) | "<Title> failed", "Checkout blocked", "Push rejected", "Force push stopped", "Deletion stopped", "Changes re-applied with conflicts", "Changes not re-applied", "<Title> cancelled" (stale locks, 1.8) | `ErrorSummary` (the summary, wrapped); `ErrorRepository` ("In <repo name>", secondary); `ErrorOutput` (git's output in the code font, read-only, selectable, scrolls, max height 220); `ErrorCommand` (the command line, secondary, small, cut with "…" and a tooltip) | buttons: `ErrorCopyButton` ("Copy output"), optional `ErrorExtraButton` ("Stash changes and check out", "Pull", "Fetch <r>", "Remove lock files"), `ConfirmButton` "Close" (primary). A dialog without git output ("Changes re-applied with conflicts", 2.31) leaves out `ErrorOutput`, `ErrorCommand` and "Copy output" (D114). The lock-file dialog of 1.8: title "<Title> cancelled", `ErrorSummary` 1.8's sentence, `ErrorOutput` the lock files one per line, relative to the working tree's folder with `/` (`.git/refs/remotes/origin/main.lock`; a full path for one outside it), `ErrorCommand` the cancelled git call; "Remove lock files" deletes those that still exist and closes the dialog (one that cannot be deleted opens "Removing lock files failed" with the system's message) | — |
 | Finishing (`FinishingDialog`) | "Finishing operations" | text "VisualCommit closes when these operations end."; one line per running operation (`FinishingItem`: "<Title> — <repo>", and "Its remaining steps will not run if you quit now" under a local operation of several steps) | `CancelButton` "Keep open" (closes the dialog; the window stays and the operations go on) and `ConfirmButton` "Quit now" (danger) | — |
 | Credentials (`CredentialsDialog`) | "Sign in to <host>" | text "Git needs a user name and a password or token for <url>." (`CredentialsText`); `CredentialUsername` (or the user as text for a `Password` prompt); `CredentialPassword` (masked) | "Sign in" | user name not empty |
 | Passphrase (`PassphraseDialog`) | "Key passphrase" | "Enter the passphrase for <key path>." (or ssh's text); `PassphraseBox` (masked) | "Unlock" | — |
@@ -1412,7 +1660,11 @@ text box takes the focus on opening (the confirmation keeps focusing Cancel).
 | Prompt (`PromptDialog`) | "Git asks" | the prompt's text (`PromptText`); `PromptBox` (masked as 3.2) | "OK" | — |
 
 Every dialog an operation of a repository opens names that repository when the window has more
-than one tab with a repository (the error dialog always does).
+than one tab with a repository (the error dialog always does, in `ErrorRepository`): a line "In
+<repo name>" in the secondary colour under the title (`DialogRepository`). The visual checks use
+one repository tab, so no picture shows it. An ssh "confirm" prompt (3.2) is the confirmation
+dialog with the title "ssh asks", ssh's text as its question, no detail and the buttons "Cancel"
+and "Yes" (D115).
 
 Each dialog root has an automation peer that makes it a control element (4a), so the
 real-window pass can wait for `RemotesDialog`, `ErrorDialog` and the others by id, not only for
@@ -1530,10 +1782,14 @@ branch, stash and pop are one toolbar click.
   `MERGE_HEAD` → Merge (subject: `MERGE_MSG`'s first line); `CHERRY_PICK_HEAD` → CherryPick
   (the commit and its subject); `REVERT_HEAD` → Revert; `sequencer/todo` without those →
   CherryPick or Revert by its first line's verb (`pick` or `revert`), stopped between commits.
-  `Remaining` for CherryPick and Revert: the non-comment lines of `sequencer/todo`, less one
-  while `CHERRY_PICK_HEAD` or `REVERT_HEAD` exists (git keeps the stopped pick as the todo's
-  first line, section 0); 0 without `sequencer/`. Only a sequence started outside the app has
-  a sequencer: the app picks and reverts one commit at a time (2.13).
+  `Remaining` for CherryPick and Revert: the non-comment lines of `sequencer/todo` less one,
+  both while `CHERRY_PICK_HEAD` or `REVERT_HEAD` exists and after the stopped pick was committed
+  (git keeps the stopped pick as the todo's first line and `--continue` always skips it, section
+  0, D110); 0 without `sequencer/`. `AbortKeepsHead` (a new init property of `InProgressState`,
+  WP1, D110): `sequencer/` exists and HEAD differs from `sequencer/abort-safety`, as after the
+  stopped pick was committed; git's `--abort` then ends the sequence and leaves HEAD where it is.
+  Only a sequence started outside the app has a sequencer: the app picks and reverts one commit
+  at a time (2.13).
   `Empty`: a CherryPick or Revert whose index equals HEAD's tree and has no conflicts (git
   stopped on a pick that changes nothing, 2.12).
   `WorkingTreeStatus` gains `InProgressState InProgress { get; init; }` (default None:
@@ -1553,7 +1809,7 @@ branch, stash and pop are one toolbar click.
 | State | Text | Button |
 |---|---|---|
 | Merge | `Merging: "Merge branch 'feature/conflict'". 1 file has conflicts.` / `… Conflicts resolved: commit to finish the merge.` | "Abort merge" |
-| CherryPick | `Cherry-picking a1b2c3d "Conflicting change". 1 file has conflicts.` / `… Conflicts resolved: commit to finish the cherry-pick.`; when `Remaining > 0` (a sequence from a terminal) ` 2 more commits wait: continue them in a terminal (git cherry-pick --continue).`; stopped between commits: `Cherry-pick stopped with 2 commits left: continue in a terminal, or abort.`; `Empty`: `Cherry-picking a1b2c3d "…" changes nothing: its changes are already here. Abort to go on.` | "Abort cherry-pick" |
+| CherryPick | `Cherry-picking a1b2c3d "Conflicting change". 1 file has conflicts.` / `… Conflicts resolved: commit to finish the cherry-pick.`; when `Remaining > 0` (a sequence from a terminal) ` 2 more commits wait: continue them in a terminal (git cherry-pick --continue).`; stopped between commits: `Cherry-pick stopped with 2 commits left: continue in a terminal, or abort.` (none left: `Cherry-pick stopped with no commits left: abort to end it.`); `Empty`: `Cherry-picking a1b2c3d "…" changes nothing: its changes are already here. Abort to go on.` | "Abort cherry-pick" |
 | Revert | as CherryPick with "Reverting", "revert" and `git revert --continue` | "Abort revert" |
 | Rebase | `Rebasing feature/conflict onto 1a2b3c4. 1 file has conflicts.` / `… Conflicts resolved: continue in a terminal (git rebase --continue), or abort.` | "Abort rebase" |
 | ApplyMailbox | `Applying patches (git am). 1 file has conflicts.` | "Abort" |
@@ -1565,7 +1821,9 @@ branch, stash and pop are one toolbar click.
   'feature/conflict'"? Changes made to resolve conflicts are lost." / "Abort the cherry-pick?
   HEAD goes back to where it was before it started, and changes made to resolve conflicts are
   lost." plus, when `sequencer/` exists, " Commits this cherry-pick already made are dropped
-  too." / "Abort the revert? …" (as cherry-pick) / "Abort the rebase of feature/conflict? The
+  too."; when `AbortKeepsHead` (D110) instead "Abort the cherry-pick? The 1 commit left is not
+  picked. HEAD and the commits made so far stay as they are." / "Abort the revert? …" (as
+  cherry-pick, with "reverted") / "Abort the rebase of feature/conflict? The
   branch goes back to where it was before it started." / "Abort git am? …". The detail is
   always "A backup is saved first, so this can be undone." (`abort-<time>` holds HEAD before
   the abort, so dropped commits stay reachable).
@@ -1608,9 +1866,15 @@ branch, stash and pop are one toolbar click.
   (any fetch or pull that succeeded, or the moment the repository was opened) is at least the
   interval ago → `TryStartInBackground(autoFetch)`. So the first auto-fetch comes one interval
   after opening, not at start-up (Q1's measurement stays clean), and a tab that becomes active
-  after a long time fetches within 30 seconds. The fetch is `git fetch --all --progress
-  --no-auto-maintenance` (1.8): a background fetch does not start git's maintenance, and it is
-  never killed (tab close and app exit leave it to finish; the user's operations wait for it).
+  after a long time fetches within 30 seconds. The fetch is 2.16's fetch of all remotes, every
+  call with `--no-auto-maintenance` (1.8, D109): a background fetch does not start git's
+  maintenance, and it is never killed (tab close and app exit leave it to finish; the user's
+  operations wait for it).
+- WP0 created the scheduler as a placeholder that `MainWindowViewModel` already creates and
+  starts: `AutoFetchScheduler(Func<RepositoryViewModel?> activeRepository, Func<bool>
+  isDialogOpen, ISettingsStore settings, TimeProvider clock, IAppLog log)` with `Start`, `Tick`
+  and `Dispose`. WP9 fills it in; it learns of every successful fetch or pull, and of a failed
+  auto-fetch, from the queue's `Finished` event (1.2).
 - Tests call `Tick(now)` directly with chosen times and a fake repository view model state; no
   test waits for a real timer.
 
@@ -1637,7 +1901,8 @@ Tokens (both themes, in `Tokens.axaml` and `architecture.md`'s table): `VcMenuSh
 (`BoxShadows`, dark `0 6 16 0 #80000000`, light `0 6 16 0 #33000000`),
 `VcBannerBackgroundBrush` (dark `#33291A`, light `#FFF4DE`), `VcDragTargetBrush` = the accent
 (an alias, so the outline can change apart from it). Icons (`Icons.axaml`, Lucide outlines,
-listed in `THIRD-PARTY-NOTICES.md`): `IconAlert` (triangle-alert). Menus have no icons.
+listed in `THIRD-PARTY-NOTICES.md`): `IconAlert` (triangle-alert). Menus have no icons. WP0 added
+all of these; closing step 2 adds the three tokens to `architecture.md`'s table.
 
 ### 6.5 Changes to phases 0 to 2's checks that phase 3 causes on purpose
 
@@ -1662,6 +1927,17 @@ To be recorded under "Changes to expected results" in the phase 3 report, each w
    a started write runs to its end (1.4).
 5. `docs/test-reports/phase-1-pictures.sha256` and `phase-2-pictures.sha256` then name pictures
    that differ; the phase 3 report says which and why.
+6. Tooltips are drawn on the window's overlay layer everywhere (D105). In the real window a
+   tooltip is now inside the window and in its capture, as in the scripted run; a phase 1 or 2
+   real-window picture that showed a tooltip as a window of its own would change.
+7. WP0 changed `tests/VisualCommit.VisualTests/Phase2/Phase2Checks.Discard.cs`: it looks for a
+   visible `ConfirmationDialog`, because a closed dialog's view now leaves the window (D107).
+   Phase 2's expected results are unchanged; the report lists the change.
+8. Not caused by phase 3: phase 0's `06c` and phase 1's `11a`, `13b`, `14a` and `14b` scripted
+   pictures already differed from the recorded hashes on `07203b7`, before phase 3's code (WP0's
+   report). The report says so.
+9. A setting missing from `settings.json` now gets its default instead of 0 or false (WP0's fix
+   of `JsonSettingsStore`, D107); `architecture.md` says so at closing step 2.
 
 ### 6.6 Changes to `plan.md` for closing step 3
 
@@ -1677,9 +1953,16 @@ To be recorded under "Changes to expected results" in the phase 3 report, each w
 
 ### 7.1 Scenario repos (new, in `tests/VisualCommit.Testing/Scenarios.Phase3.cs`; `Scenarios` becomes `static partial`)
 
-All pinned in `ScenarioTests` (refs, SHAs, the graph's row order and lanes), built once per test
-process and copied per test (`TempRepo.CopyAsync`), unless said otherwise. TempRepo's clock
-gives 2026-01-01 12:00 UTC plus one minute per commit.
+All built by WP-S1 (stage 2) and pinned in `ScenarioTests.Phase3.cs` (refs, SHAs, upstreams,
+the graph's rows and lanes as `GraphLayout` lays out the app's pages), built once per test
+process and copied per test (`TempRepo.CopyAsync`, which gives the copy its own clock carrying
+on from the template's), unless said otherwise. TempRepo's clock gives 2026-01-01 12:00 UTC plus
+one minute per commit, stash and merge, and dates every git call, ref updates included. Where
+this section left details open, WP-S1's choices below stand; `Scenarios.Phase3.cs`'s doc
+comments and the pins are the reference. `Scenarios.InProgressKind` is nested in `Scenarios`
+(Core has its own `InProgressKind`). Scenarios are built before the app runs, so their reflog
+entries are older than any app operation and need nothing for `--force-if-includes`; only a step
+a test makes through `TempRepo` after an app operation may need `MoveClockTo` (7.2, D111).
 
 **`OperationsAsync`** ("ops"): the base for branches, merges, resets, cherry-picks, reverts,
 tags and stashes.
@@ -1702,47 +1985,77 @@ stash@{0} (lane 0, to Main work), Conflicting change (lane 1, to Add core), Fast
 (lane 2, to Main work), Main work (lane 0; lane 2 ends here; to Add core), Alpha two (lane 2),
 Alpha one (lane 2, to Add core), Add core (lane 0; lanes 1 and 2 end here), Initial commit
 (lane 0); 3 lanes. Expected results of merges, resets, cherry-picks and reverts are derived from
-this table.
+this table. Pinned short SHAs: stash 0e95aca, Conflicting change 078ef05, Fast-forward me
+d93814d, Main work 88d6b91, Alpha two ce5ea6a, Alpha one dff8fbf, Add core 8beca34, Initial
+commit 4ef1f7c, the tag object `v1.0` c8e9976. `origin` (`origin.git` next to `ops`) has no tags.
 
 **`StoppedAsync(InProgressKind kind)`**: an `OperationsAsync` copy stopped in the given state,
-through `TempRepo` git calls (as a terminal would): Merge — `git merge feature/conflict`
-(src/core.txt conflicted); CherryPick — `git cherry-pick <Alpha one> <Conflicting change> <Alpha
-two>` (stops at the second; one more waits); Revert — a commit "Core again" changing
-src/core.txt line 2 on main, then `git revert <Main work>` (conflict); Rebase — on
-`feature/conflict`, `git rebase main` (conflict); None — `git stash apply` of a stash that
-changes src/core.txt after main changed it (conflicts without an operation). Built each time.
+through `TempRepo` git calls (as a terminal would), on main unless said otherwise: Merge —
+`git merge feature/conflict` (src/core.txt conflicted, `MERGE_MSG` "Merge branch
+'feature/conflict'"); CherryPick — `git cherry-pick <Alpha one> <Conflicting change> <Alpha
+two>`: Alpha one is picked (a new commit 187627e on main, 12:08), Conflicting change stops,
+Alpha two waits (`sequencer/todo` holds the stopped pick and Alpha two); Revert — a commit "Core
+again" (12:08, src/core.txt "core\ncore again\n", 963800f), then `git revert <Main work>`
+(conflict, `REVERT_HEAD`, no sequencer); Rebase — on `feature/conflict`, `git rebase main`
+(conflict, HEAD detached at Main work, `rebase-merge/` with nothing left in its todo); None —
+src/core.txt changed to "core\nmain work, stashed\n" and stashed as "Core experiment" (12:08,
+stash 230e84c, so `stash@{0}` is "On main: Core experiment" and "Experiment" becomes
+`stash@{1}`), a commit "Core again" (12:09, "core\ncore again\n", 91a5538), then `git stash apply`
+(src/core.txt conflicted, no operation, both stashes kept). Built each time.
 
-**`RemoteSyncAsync`** ("sync"): a repository `sync` with a bare `origin`:
-12:00 "Initial commit" (README.md), 12:01 "Shared work" (src/shared.txt) on main, pushed and
-tracked; branch `published` (12:02 "Published work", pushed and tracked, then 12:03 "Unpushed
-work": 1 ahead); branch `topic` (12:04 "Topic work", never pushed, no upstream); HEAD on main.
-A helper `PushFromElsewhereAsync(TempRepo sync, string branch, string file, string content,
-string message)` clones `origin` into a sibling folder `other` (once per test) and pushes a
-commit from there, so a test makes `origin` ahead of `sync` when it needs to (fetch shows
-behind 1; a local commit then makes it diverge; a push is rejected). Built once and copied;
-`other` is made per test after the copy.
+**`RemoteSyncAsync`** ("sync"): a repository `sync` with a bare `origin` (`origin.git` next to
+it): 12:00 "Initial commit" (README.md "# Sync\n"), 12:01 "Shared work" (src/shared.txt
+"shared\n") on main, pushed and tracked; branch `published` from Shared work (12:02 "Published
+work", src/published.txt "published\n", pushed and tracked, then 12:03 "Unpushed work",
+"published\nunpushed\n": 1 ahead); branch `topic` from Shared work (12:04 "Topic work",
+src/topic.txt "topic\n", never pushed, no upstream); HEAD on a clean main. Graph: Topic work
+(lane 0), Unpushed work (lane 1), Published work (lane 1), Shared work (lane 0, lane 1 ends),
+Initial commit; 2 lanes. A helper `PushFromElsewhereAsync(TempRepo sync, string branch, string
+file, string content, string message)` clones `origin.git` into a sibling folder `other` (the
+first time in a test), puts `branch` where origin has it (origin's main when origin has no such
+branch), commits at the next minute of sync's clock and pushes, so a test makes `origin` ahead
+of `sync` when it needs to (fetch shows behind 1; a local commit then makes it diverge; a push is
+rejected). Built once and copied; `other` is made per test after the copy. A check that points
+`origin` at `AuthRemoteServer` serves `origin.git` itself in place (7.3, WP-S2), so that
+`PushFromElsewhereAsync` still pushes into what the server serves.
 
-**`CheckoutBlockedAsync`**: main with notes.txt "one\ntwo\nthree\nfour\nfive\nsix\nseven\n"
-(12:00 "Add notes"); `feature/other` changes line 7 to "seven (other)" (12:01); `feature/clash`
-changes line 1 to "one (clash)" (12:02); HEAD on main with an uncommitted change of line 1 to
-"one (local)". Checking out either branch is blocked; stash-and-checkout re-applies cleanly onto
-`feature/other` and conflicts on `feature/clash`. A third branch `feature/addfile` (12:03) adds
-`newfile.txt`, and the scenario has an untracked `newfile.txt` "mine\n": checking out
-`feature/addfile` is blocked by the untracked file (and by the tracked change), so its dialog
-has no stash button. Built once and copied.
+**`CheckoutBlockedAsync`** ("blocked", no remote): main with notes.txt
+"one\ntwo\nthree\nfour\nfive\nsix\nseven\n" (12:00 "Add notes"); `feature/other` from Add notes
+changes line 7 to "seven (other)" (12:01 "Other change"); `feature/clash` from Add notes changes
+line 1 to "one (clash)" (12:02 "Clashing change"); `feature/addfile` **from Other change** adds
+`newfile.txt` "theirs\n" (12:03 "Add newfile"); HEAD on main with an unstaged change of line 1 to
+"one (local)" and an untracked `newfile.txt` "mine\n". Checking out `feature/other` or
+`feature/clash` is blocked by the tracked change; stash-and-checkout re-applies cleanly onto
+`feature/other` and conflicts on `feature/clash`. Checking out `feature/addfile` is blocked by
+the untracked file **and** by the tracked change (it changes notes.txt line 7 too), so git prints
+both lists in one run (section 0) and the dialog has no stash button. Graph: Add newfile (lane
+0), Clashing change (lane 1), Other change (lane 0), Add notes (lane 0, lane 1 ends); 2 lanes.
+Built once and copied.
 
-**`EdgeCasesAsync`** ("edges"): small cases the reviews found, each pinned in `ScenarioTests`:
-a branch `side` checked out in a linked worktree `edges-wt` next to the repository and behind
-`main` (fast-forward disabled, and `git fetch .` refusing it); a branch `loc` whose upstream is
-local (`branch.loc.remote = .`, `branch.loc.merge = refs/heads/main`); a local branch named
-`origin/main` beside the remote branch of that name; HEAD detached on a commit "Detached work"
-that no ref reaches; a tag `feature/alpha` beside the branch `feature/alpha`. Built once and
-copied (the worktree's path is fixed up by `git worktree repair` after the copy).
+**`EdgeCasesAsync`** ("edges"): small cases the reviews found, each pinned in `ScenarioTests`.
+Commits: 12:00 "Initial commit" on main (README.md "# Edge cases\n"); 12:01 "Main work" on main
+(src/main.txt "main\n"), main pushed to a bare `origin` and tracked (0 ahead, 0 behind); 12:02
+"Alpha work" on `feature/alpha` from Main work (src/alpha.txt "alpha\n", no upstream); 12:03
+"Detached work" (src/detached.txt "detached\n") on HEAD detached from Main work, where HEAD
+stays: no ref reaches it. Refs at Initial commit: `side` (no upstream, checked out in the linked
+worktree `edges-wt` next to the repository, so behind `main` by 1 and not fast-forwardable: `git
+fetch .` refuses it), `loc` (local upstream: `branch.loc.remote = .`, `branch.loc.merge =
+refs/heads/main`; behind 1), and a local branch `origin/main` (`refs/heads/origin/main`) beside
+the remote branch `refs/remotes/origin/main` at Main work; a lightweight tag `feature/alpha` at
+Main work, beside the branch `feature/alpha`. Graph: Detached work (lane 0), Alpha work (lane 1),
+Main work (lane 0, lane 1 ends), Initial commit (lane 0); 2 lanes. Built once and copied (the
+copy's worktree is joined to the copy: `CopyAsync` rewrites its `.git` file and runs `git worktree
+repair`).
 
-**`AuthRemoteAsync(AuthRemoteServer server)`**: a clone of a bare repository that the server
-serves, with `origin` = `http://127.0.0.1:<port>/remote.git`; the bare repository has main with
-two commits "Initial commit", "Remote work" and the clone was made before "Remote work" (so a
-fetch brings one commit). Built each time with its server.
+**`AuthRemoteAsync(AuthRemoteServer server)`** ("auth"): a repository set up as a clone of the
+bare repository the server serves, with `origin` = `http://127.0.0.1:<port>/remote.git` and main
+tracking `origin/main` (no `refs/remotes/origin/HEAD`); the served repository's main has 12:00
+"Initial commit" (README.md "# Remote\n", e4a56bd) and 12:01 "Remote work" (src/remote.txt
+"remote work\n", e6761c7, a 4-object pack), and the local repository has never seen "Remote
+work" (a fetch brings one commit; main is then behind 1); no request has reached the server yet.
+The sibling clone `elsewhere` can push more remote work. Made for each server from a template
+built once (the server's empty repository is replaced by the template's copy); dispose it before
+its server.
 
 Phase 2's `ConflictAsync` stays.
 
@@ -1750,9 +2063,16 @@ Phase 2's `ConflictAsync` stays.
 
 Bare repositories on disk next to the working tree (`TempRepo.AddBareRemoteAsync`, as phase 1),
 reached by their folder path. `TempRepo.CopyAsync` already points a copy's remotes at the
-copy's bare repositories. New helpers on `TempRepo`: `CloneSiblingAsync(string name, string
-from)`, `ConfigAsync(key, value)`, `RefTargetAsync(string fullRef)` (null when missing),
-`BackupRefsAsync()` (`for-each-ref refs/visualcommit/backup`), `StashListAsync()`.
+copy's bare repositories. Helpers WP-S1 added to `TempRepo`: `CloneSiblingAsync(string name,
+string from)` and `OpenSibling(name)` (siblings share the repository's clock),
+`ConfigAsync(key, value)`, `RefTargetAsync(string fullRef)` (null when missing),
+`BackupRefsAsync()` (`for-each-ref refs/visualcommit/backup`, `RefEntry` records),
+`StashListAsync()` (`StashListEntry` records), `GitAllowingFailureAsync` (a step meant to stop),
+`IsolatedEnvironment(home)`. `CopyAsync` leaves http URLs alone and joins linked worktrees to the
+copy. `AddBareRemoteAsync` makes a bare repository whose HEAD names `master`: a clone of it checks
+out nothing, so a helper that clones it checks out the branch it needs (as
+`PushFromElsewhereAsync` does). WP-S2 adds `MoveClockTo(DateTimeOffset)` (forward only), for a
+step that must look newer in the reflog than an app operation (D111).
 
 ### 7.3 The credential test server
 
@@ -1783,16 +2103,29 @@ there; on Linux it is inside the range, so a clash is possible but rare.
   isolation. `GitRunner` returns standard output only when git has exited, so the server runs
   `http-backend` to its end and then sends the response; it never streams. The CGI's `Status:`
   and other header lines become the HTTP response's.
+- As WP-S1 built it: `StartAsync(port = 0, fallBackToFreePort = false)`,
+  `StartForVisualChecksAsync()` (47391, or a free port when it is taken: `PortWasTaken`), `Port`,
+  `Url`, `RepositoryPath` (the server owns a temporary folder with an empty bare repository on
+  main, `RepositoryName` `remote.git`), `Credentials` (a `NetworkCredential`), `Requests`
+  (`AuthRemoteRequest` records), `Errors`; `REMOTE_USER` is `anonymous` without auth, so pushes
+  work then too; `Expect: 100-continue` is answered; disposal deletes its folder. WP-S2 adds
+  serving an **existing** bare repository in place (a parameter naming its folder; the URL's
+  path is then that folder's name, `http://127.0.0.1:47391/origin.git`), so that checks 18 to 20
+  and 22 can point `sync`'s `origin` at the server while `PushFromElsewhereAsync` keeps pushing
+  into the same folder.
 - Test controls: `RequireAuth`, `Credentials` (change the password), `Requests` (a log), and
-  `HoldNextFetchPack()` / `Release()`. The hold applies to the next `git-upload-pack` POST that
+  `HoldNextFetchPack()` (returns a task that completes when the hold begins) / `Release()`
+  (also drops a hold that has not begun). The hold applies to the next `git-upload-pack` POST that
   **carries a pack request**: under protocol v2 (git's default since 2.26) one whose body
   contains `command=fetch`, not the `command=ls-refs` POST that comes first and carries no
   progress; under protocol v0 any upload-pack POST. The server takes http-backend's complete
   response, parses its pkt-lines, sends the bytes up to and including the first band-2
   (progress) pkt-line whose text contains `%`, and holds the rest until `Release()`. A visual
   check thereby shows a fetch in progress with a percentage (git 2.36 on a 4-object remote
-  prints `Counting objects:  25% (1/4)`; the value depends on the pack, so the check accepts any
-  from 1 to 100) and can click Cancel while git really waits.
+  prints `Counting objects:  25% (1/4)`; the value depends on the pack, and the first such
+  pkt-line can carry several updates, so the check accepts any from 1 to 100) and can click
+  Cancel while git really waits. A response without a progress line (git asked for none) is held
+  after its headers. Only fetches are held, never a push.
 
 ### 7.4 Harness additions
 
@@ -1800,9 +2133,10 @@ there; on Linux it is inside the range, so a clash is possible but rare.
 |---|---|
 | `ShellDriver` (made `partial`; `ShellDriver.Phase3.cs`) | `Click(Point, KeyModifiers)` (Ctrl and Shift clicks through `Window.MouseDown(position, button, modifiers)`); `PressMouse(Point)`, `MoveMouseHeld(Point)`, `ReleaseMouse(Point)` (a drag with captures in the middle); `Menu()` → the open menu's header and items (label, enabled, destructive) in order; `ClickMenuItem(string label)`; `MenuItemBounds(string label)`; `Dialog<T>()` → the open dialog's view model; `TypeInto(string automationId, string text)`; `WaitForIdleAsync(RepositoryViewModel? repo = null)` (the queue idle and its refresh done); `Start` injects `FakeFileLauncher` and `FakeClipboard` by default (properties `Launcher`, `Clipboard`), as it injects `FakeFolderPicker`. The Ctrl modifier for multi-select is read from the headless platform's `CommandModifiers` (4h) |
 | `RealApp` (made `partial`; `RealApp.Phase3.cs`) | `ClickAt(x, y, params VirtualKeyShort[] held)`; `MouseDownAt`, `MoveHeldTo`, `MouseUpAt` (a drag with a capture in the middle; the button is released in a `finally`); `MenuItemNames()` (`FindAll("ContextMenuItem")`); `ClickMenuItem(string name)`; `WaitForLogLine(Regex, TimeSpan)` (the queue's `<repo>: <Title>: <outcome>` lines) |
-| `GitIsolation` | sets `VISUALCOMMIT_AUTO_FETCH_MINUTES=0` (and `RealApp.Launch` does the same); removes `GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE` and `GCM_INTERACTIVE` from the test process's environment (and from `RealApp.Launch`'s), so an askpass program of the machine (VS Code's) never answers a test |
-| `FakeRepositoryBase` | every new member, throwing `NotSupportedException` (reads: empty results) |
-| Fakes | `FakeFileLauncher`, `FakeClipboard`, `ScriptedPromptHandler` (answers from a queue, records prompts) in `tests/VisualCommit.Testing`; `AskPassRunner` (runs the real helper with a prompt text, `SSH_ASKPASS_PROMPT` and an open scope's environment, as OpenSSH would, for the prompt dialog checks, 3.5) |
+| `GitIsolation` | sets `VISUALCOMMIT_AUTO_FETCH_MINUTES=0` (and `RealApp.Launch` does the same); removes `GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE` and `GCM_INTERACTIVE` from the test process's environment (and from `RealApp.Launch`'s), so an askpass program of the machine (VS Code's) never answers a test; removes `http_proxy`, `https_proxy` and `all_proxy` in both cases and sets `no_proxy` and `NO_PROXY` to `127.0.0.1,localhost`, so a machine's proxy never carries a request for the test server elsewhere (D112) |
+| `TempRepo`, `AuthRemoteServer` | `MoveClockTo` (7.2, D111); serving an existing bare repository in place (7.3) |
+| `FakeRepositoryBase` | done by WP0: every new member, throwing `NotSupportedException` (reads: empty results) |
+| Fakes | `FakeFileLauncher`, `FakeClipboard`, `ScriptedPromptHandler` (answers from a queue, records prompts) in `tests/VisualCommit.Testing`, injected through `AppSession.Start`'s optional `launcher`, `clipboard` and `promptHandler` parameters (WP0); `AskPassRunner` (runs the real helper with a prompt text, `SSH_ASKPASS_PROMPT` and an open scope's environment, as OpenSSH would, 3.5); `FakeSsh` (writes check 21b's `core.sshCommand` script and reads the answers it wrote, D115) |
 
 The graph's rows are not in UI Automation (D49): the real-window pass right-clicks and drags them
 at positions computed from the same constants as the scripted expectations, as phase 1's pass
@@ -1821,6 +2155,16 @@ pick, push and choice dialogs (28, 29), the finishing dialog (31). RW steps in t
 invoke no item that touches something outside the window (no "Copy …", "Open file", "Show in
 folder").
 
+Stage 2's check writers added 5b (menu placement at the edges, light dismiss), 9b (a merge from a
+terminal committed in the stage panel), 11b (a multi-pick stopped at its second commit), 13b
+(branches from a remote branch and a tag), 14b ("Checkout failed"), 15b (a pop refused and a pop
+with conflicts), 17b (lock files after a cancel) and 18b (pull as a fast-forward, up to date,
+refused); their fragments say why, and `docs/phase-3-answers.md` settles their questions. Check
+21b's steps 1 to 3 run through a real fetch in both harnesses (D115); check 17 may hold "Fetch
+origin" or the toolbar's Fetch, which both show progress (D109). The real-window pass does not
+repeat check 6: check 14's RW steps double-click left-panel rows with the real mouse, which uses
+the same Avalonia double-tap recognition as the graph's labels.
+
 1. Commit menu (RW: right-click with the real mouse, the menu captured, "Create branch here…"
    clicked and the name dialog cancelled; "Copy SHA" is clicked only in the scripted run,
    which asserts `FakeClipboard`).
@@ -1829,8 +2173,10 @@ folder").
 4. File menus: unstaged (tracked and untracked), staged, the diff view (with selected lines),
    a commit's file; the working-changes row's menu ("Stage all" invoked: the stage lists
    change); "Show in folder" asserted on `FakeFileLauncher`.
-5. Keyboard: Shift+F10 on the graph opens the commit menu, and so does the Menu key; Down,
-   Down, Enter runs an item; Esc closes another (RW: real keyboard).
+5. Keyboard: Shift+F10 on the graph opens the commit menu with its first enabled item
+   highlighted (D105), and so does the Menu key; Down, Enter runs the second item; Esc closes
+   another (RW: real keyboard, and exactly one "Context menu opened" log line per Shift+F10
+   press, D106).
 6. Double-click a local branch (checkout), a remote branch (tracking branch created), and a
    stash in the left panel (applied).
 7. Drag feature/alpha onto main: the press selects Alpha two's row first (4g); the adorner and
@@ -1894,7 +2240,7 @@ folder").
 | Checkout, create, rename, delete; merge and fast-forward; reset; cherry-pick; revert | `BranchOperationTests` (merge messages, `git fetch .` and the linked worktree, name clashes), `HistoryOperationTests` (one pick at a time), `RepositoryOperationsTests` | 6, 8, 9, 10, 11, 12, 13, 30, 32 |
 | Fetch, pull, push, safe force-push, set upstream, manage remotes, auto-fetch | `RemoteOperationTests` (leases, `--force-if-includes`, local upstreams), `PullParityTests`, `AuthenticatedRemoteTests`, `AutoFetchSchedulerTests` | 17, 18, 19, 20, 22, 28, 29, 30 (auto-fetch: tests only; the harnesses turn it off) |
 | Stash save, apply, pop, drop; tag create, delete, push | `StashTagTests` | 15, 16, 29 |
-| Context menus on every object, double-click actions, drag a branch onto a branch, multi-select | `RepositoryMenusTests`, `InWindowMenuTests`, `BranchDragTests`, `GraphSelectionTests` | 1 to 7, 11 |
+| Context menus on every object, double-click actions, drag a branch onto a branch, multi-select | `RepositoryMenusTests`, `ContextMenuAdapterTests` (4a, D105, D106), `BranchDragTests`, `GraphSelectionTests` | 1 to 7, 5b, 11 |
 | Operation queue with progress, cancel and git's own output; takes over phase 2's writes | `OperationQueueTests` (UI context, opt-in dedupe, no pre-emption, stale locks), `ProgressParserTests`, `FailureClassifierTests`, `StatusBarTests`; phase 2's tests still green | 17, 18, 19, 31 |
 | Stage, unstage and discard in a file's menu (from phase 2) | `RepositoryMenusTests` | 4 |
 | Toolbar Fetch, Pull, Push, Branch, Stash, Pop and the status bar's operation status (from phase 1) | `ToolbarTests`, `StatusBarTests` | 17, 18, 23 |
@@ -1909,10 +2255,11 @@ folder").
 - The budget is set from measurements, not guessed. Phase 2's real-window pass took 5 min 56 s
   for 14 tests, every real input waits 400 ms (`RealApp.WaitUntilIdle`), each prompt starts the
   .NET helper (about 0.4 s per prompt measured), and phase 3 adds 20 RW checks, most with
-  several steps. So: once WP-S is merged, the lead times one representative scripted check and
+  several steps. So: once WP-S2 is merged, the lead times one representative scripted check and
   one RW check, extrapolates, and writes the budget for both passes into `status.md`'s Notes
   and the report before WP10 starts. To keep it down: RW checks share app launches and servers
-  where their scenarios allow (17, 21 and 21b on one server and one launch; 28 and 29 on one;
+  where their scenarios allow (17 and 21 on one server and one launch, 21b on its own because
+  its `fake-ssh` remote would be fetched by the toolbar's Fetch, D115; 28 and 29 on one;
   9, 10 and 14 on one), shared scenario templates, the held server instead of waits, and no
   fixed sleeps. The report records the measured times.
 - Risks:
@@ -1924,8 +2271,13 @@ folder").
   4. Pull is a fetch and a merge or rebase chosen by the app as `git pull` would (D84). Git may
      change its rules; `PullParityTests` on CI's Git 2.55 catch that. Not mirrored: submodule
      recursion after a pull, and options that exist only on pull's command line.
-  5. If the spike keeps the custom `InWindowMenu` (4a), its keyboard and screen-reader
-     behaviour is ours to get right (R7, phase 8's accessibility pass).
+  5. The menu adapter's Invoke peer (4a, D105) relies on `MenuBase.Close()` and
+     `MenuItem.ClickEvent` behaving as in Avalonia 12.1.3; an Avalonia update can change them.
+     `ContextMenuAdapterTests` invoke through the peer, so a change shows up there. The stock
+     menu's first open took up to 1.7 s on a loaded machine: harnesses poll, never sleep.
+     Shift+F10's gesture list was read on Win32 and headless only; on macOS and Linux the app
+     raises the request itself if the list lacks the gesture (D106), which the CI jobs' headless
+     runs cannot tell apart.
   6. OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE`: when the app was started from a
      terminal, such an ssh still asks there (Ubuntu 20.04 ships 8.2). Git for Windows 2.36
      bundles 8.9; which OpenSSH the oldest supported Git for Windows (2.30) bundles was not
@@ -1948,55 +2300,117 @@ folder").
   12. The detached-HEAD check (2.1) counts commits that no branch, remote branch or tag
       reaches; commits reachable only from a stash or a backup ref count as left behind
       (confirming more often than strictly needed, the safe direction).
+  13. Facts found on Git 2.36 that CI's Git 2.55 may change (WP-S1's list): gzip of upload-pack
+      bodies above 1 KiB, the progress line's form, `refusing to fetch into`, `could not read
+      Username`, the sequencer's todo lines, `--force-if-includes`' reflog rule (D111) and
+      `git fetch --all`'s missing progress (no longer used, D109). The tests that rely on them
+      run on CI's Git 2.55 and fail there if git changed.
+  14. The two fixed clocks of the tests (D72's for the app, TempRepo's) can put reflog entries out
+      of order; a force-push test states the order it relies on (D111).
 
 ## 8. Work breakdown
 
+**Done (stage 2, merged into `phase/3-operations`):** WP0, contracts, queue and app plumbing
+(`229903e`, `152ed38`, merged in `cde2d28`); WP-S1, scenario repos, `TempRepo` helpers,
+`AuthRemoteServer` and their pins (`8984f2b`, `a01c9d1`, `097862b`, merged in `efbbf83`). The
+lead's menu spike ran (4a, D105). **Left:** WP-S2, WP1 to WP10, below.
+
 Each package is built on its own branch from `phase/3-operations` (worktrees under
 `.claude/worktrees/`, as in phases 1 and 2: create the branch from the phase branch first) and
-merged back with tests green. Shared files are edited only by the package named for them; a
-later package that needs a change there asks the lead, who makes it on the phase branch.
+merged back with tests green. A package edits only the files named for it; a later package that
+needs a change elsewhere asks the lead, who makes it on the phase branch.
+
+**What WP0 left for the others.** Every new `IGitRepository` member is declared (with its git
+command and design section in its doc comment) and stubbed in `src/VisualCommit.Git/
+GitRepository.Stubs.cs`, grouped by the package that implements it, and in
+`FakeRepositoryBase`; each package deletes its group of stubs as it implements them, and whoever
+deletes the last group deletes the file. WP0 also left placeholder files whose signatures its
+own code calls; the package that inherits each keeps them:
+
+| File (WP0's placeholder) | Package | Signatures to keep |
+|---|---|---|
+| `Core/Operations/GitFailureClassifier.cs` | WP2 | `static GitFailureKind Classify(string standardError, string standardOutput, int? exitCode)` |
+| `App/Services/PromptDialogs.cs` | WP3 | `PromptDialogs(DialogHostViewModel dialogs, IAppLog? log = null)`, implementing `IGitPromptHandler`; `static IGitPromptBroker CreateBroker(IGitPromptHandler handler, IAppLog log)`, which `AppSession.Start` calls and which must return the `AskPassBroker` |
+| `App/Services/FileLauncher.cs`, `ClipboardService.cs` | WP4 | `FileLauncher(Func<TopLevel?> topLevel, IAppLog? log = null)` (`OpenAsync`, `RevealAsync`), `ClipboardService(Func<TopLevel?> topLevel)` (`SetTextAsync`); the interfaces in `IFileLauncher.cs` stay |
+| `ViewModels/Menus/MenuLayerViewModel.cs`, `Views/Shell/MenuLayer.axaml(.cs)` | WP5 | `MenuLayerViewModel()` with `Open(MenuModel, MenuPosition)`, `Close()` (returns whether a menu was open), `Current`, `Position`, `IsOpen`; `MenuLayer()` |
+| `ViewModels/ToolbarViewModel.cs`, `ViewModels/Dialogs/FinishingDialogViewModel.cs` | WP6 | `ToolbarViewModel(RepositoryViewModel? repository)`; `FinishingDialogViewModel(IReadOnlyList<FinishingItem> items)` with `QuitNowCommand`, `CloseAsFinished()` and `Result` (true: Quit now); `FinishingItem(string Text, bool RemainingStepsWillNotRun)` |
+| `Views/Shell/DragLayer.cs` | WP8 | `DragLayer()` |
+| `ViewModels/Operations/AutoFetchScheduler.cs` | WP9 | `AutoFetchScheduler(Func<RepositoryViewModel?> activeRepository, Func<bool> isDialogOpen, ISettingsStore settings, TimeProvider clock, IAppLog log)` with `Start()`, `Tick(DateTimeOffset)`, `Dispose()` (`MainWindowViewModel` already creates and starts it) |
+
+WP0's hooks, so that no later package edits a file another owns:
+
+- `RepositoryViewModel.cs`: it owns the `OperationQueue` (`WriteAsync` goes through it with 1.4's
+  titles; `_writeGate` and `WriteNowAsync` are gone) and exposes `Queue`, `OperationStatus`,
+  `Operations`, `Toolbar`, `Selection`, `MultiSelection` and `WorkingRowText`; its constructor
+  takes an optional `TabServices`; the partial methods `OnGraphSelectionChanged(GraphSelection)`,
+  `OnGraphSwapped(CommitGraphData)` and `OnStatusApplied(WorkingTreeStatus)` are called from the
+  selection setter, `SwapGraph` and `ApplyStatus`. `GraphSelection` (`ViewModels/Graph`) is
+  immutable: SHAs, an anchor and a focus; one commit sets `SelectedIndex`, several set it to -1.
+- `CommitGraphControl.cs`: the events `ContextRequestedAt` (`GraphContextRequestedEventArgs`: a
+  `GraphHit` and a `Point`, raised from `ContextRequested`) and `LabelDoubleTapped(GraphHit)`;
+  `GraphHit HitTest(Point)` (None, WorkingRow, Commit or Label, on phase 1's label geometry); the
+  styled properties `Selection` (two-way) and `WorkingRowText` (the constant in
+  `CommitGraphControl.Render.cs` is now `DefaultWorkingRowText`), bound in
+  `RepositoryGraphView.axaml`.
+- `RightPanelView.axaml`: the `MultiSelectionSlot` `ContentControl`, bound through
+  `$parent[Window]` to `ActiveTab.Repository.MultiSelection` and templated by `DialogViewLocator`.
+- `LeftPanelView.axaml`: `RefDrag.Source="{Binding}"` on the ref rows (`Views/Shell/RefDrag.cs`);
+  `LeftPanelView.RefRowAt(Point)`.
+- `WorkingChangesView.axaml`: the unstaged row's tooltip binds to `ChangedFileRow.RowToolTip`
+  (`ViewModels/Panels/CommitDetailsRows.cs`); `UnstagedTitle` was already bound.
+- `MainWindow.axaml.cs`: `AddEscapeHandler(IEscapeHandler, EscapeOrder)` with the orders Menu,
+  Drag, Dialog, Diff (`Views/IEscapeHandler.cs`); `OnShiftF10` (to be made conditional by WP5,
+  D106); the `Closing` hook, which calls `MainWindowViewModel.TryClose`.
+- `MainWindowViewModel.cs`: `Menu`, `AutoFetch` (created and started), `TryClose` (the finishing
+  dialog's call site: drops what waits, closes by itself when idle, "Quit now", "Keep open") and
+  `ConfirmClose` (used by `AppSession.Dispose`).
+- `RepoTabViewModel.cs`: `Toolbar` and `OperationStatus`, each with an empty version for a tab
+  without a repository.
+- `DialogViewLocator`: views found by registration or by naming convention.
+- `IRepositoryProvider.CloneAsync(…, environment)`; `AppSession.Start`'s optional `launcher`,
+  `clipboard` and `promptHandler` parameters (for WP-S2's fakes).
 
 | # | Package | Files it owns (new unless marked) | Needs |
 |---|---|---|---|
-| WP0 | Contracts and the queue (first, alone) | `Core/Operations/*` (queue, records, `GitFailure`, `GitOutputCleaner`, `IOperationLog`, `IGitPromptBroker`, `IGitPromptHandler`, `GitOperationScope`); `Core/Git/RefNameRules.cs`, `InProgressState.cs`, `RemoteInfo.cs`, `MergeResult.cs`, `PushRequest.cs`, `NetworkOptions.cs`; **shared**: `Core/Git/IGitRepository.cs` (every new member at once), `GitResult.cs` (`GitException.StandardOutput`), `GitCallRecord.cs` (`OperationId`), `WorkingTreeStatus.cs` (`InProgress`), `Settings/AppSettings.cs`; `Git/GitRunner.cs` (record the operation id; hide credentials in the recorded output, D103; `GIT_SEQUENCE_EDITOR=:`, D102); `GitRef` (the three upstream fields, D101) and `GitRepository.Refs.cs`'s format; `Git/GitRepository.Stubs.cs` (every new member throwing `NotImplementedException`, deleted piece by piece by WP1 to WP4); **shared** `tests/VisualCommit.Testing/FakeRepositoryBase.cs`; App: `ViewModels/Operations/OperationStatusViewModel.cs`, `RepositoryOperations.cs` (skeleton), `ViewModels/Menus/MenuModel.cs`, `ViewModels/Dialogs/DialogViewModel.cs` and the generalised `DialogHostViewModel.cs`; **shared** `RepositoryViewModel.cs` (the queue replaces `WriteAsync`'s gate; exposes `Queue`, `OperationStatus`, `Operations`, `Toolbar`, `Selection`), `TabServices.cs`, `AppSession.cs` (creates the broker, operation log, launcher and clipboard services, scheduler; no-op implementations where WP3 and WP9 fill in), `MainWindow.axaml` (the dialog layer becomes a `ContentControl` with templates; adds `MenuLayer` and `DragLayer` placeholders), `App.axaml` (includes the new `Theme/Menus.axaml` and `Theme/Dialogs.axaml`, created empty), `Theme/Tokens.axaml` and `Theme/Icons.axaml` (all of 6.4); `RefNameRulesTests` (against `git check-ref-format`), `OperationQueueTests`. **Hooks for the later packages, so that none of them edits a file another owns** (WP0 merges before they start; afterwards the file belongs to the package named): in `RepositoryViewModel.cs` the partial methods `OnGraphSelectionChanged(GraphSelection)`, `OnGraphSwapped(CommitGraphData)`, `OnStatusApplied(WorkingTreeStatus)` called from `SwapGraph`, the selection setter and `ApplyStatus`, and `GraphSelection` itself (immutable, SHAs, 4h); in `CommitGraphControl.cs` the events `ContextRequestedAt(GraphHit, Point)` and `LabelDoubleTapped(GraphHit)`, a `GraphHit HitTest(Point)` that phase 1's label hit test already answers, the styled properties `Selection` and `WorkingRowText` (replacing the constant in `CommitGraphControl.Render.cs`); in `RightPanelView.axaml` a `ContentControl` slot bound to `RepositoryViewModel.MultiSelection`; in `LeftPanelView.axaml` the attached property `RefDrag.Source` on branch rows and `LeftPanelView.RefRowAt(Point)`; in `WorkingChangesView.axaml` bindings to `RowToolTip` and `UnstagedTitle` (WP9 fills them); in `MainWindow.axaml.cs` an ordered Esc chain (`IEscapeHandler`s registered by the menu layer, drag service, dialog host and diff) and the Shift+F10 handler (4a) and the `Closing` hook (1.8); in `MainWindowViewModel.cs` the `Menu` layer, `AutoFetchScheduler` wiring (a no-op scheduler until WP9) and `FinishingDialog`'s call site; in `RepoTabViewModel.cs` `Toolbar`; `DialogViewLocator` (4f); `IRepositoryProvider.CloneAsync`'s environment parameter (WP3 implements it) | — |
-| WP-S | Scenarios and harness | `Testing/Scenarios.Phase3.cs`, `Scenarios.cs` (only `partial`), `TempRepo.cs` helpers, `AuthRemoteServer.cs`, fakes, `ShellDriver.Phase3.cs`, `RealApp.Phase3.cs`, `GitIsolation.cs`, `ScenarioTests` additions, `scripts/setup-linux.sh` (`openssh-client`) | can start before WP0 (needs only `TempRepo`); the fakes need WP0's interfaces |
-| WP1 | Git: branches, history, in-progress, backups | `Git/GitRepository.Branches.cs`, `.History.cs`, `.InProgress.cs`, `.Backups.cs`; `GitRepository.Writes.cs` (snapshot overload); `GitRepository.Changes.cs` (`InProgress` in `ReadStatusAsync`); tests `BranchOperationTests`, `HistoryOperationTests`, `InProgressTests`, `BackupRefTests` | WP0, WP-S |
-| WP2 | Git: remotes and network | `Git/GitRepository.Remotes.cs`, `GitProgressParser.cs`, `CloneProgressParser.cs` (delegate), `GitRepository.Clone.cs` (environment, `CloneErrorText` → Core's cleaner); `Core/Operations/GitFailureClassifier.cs`; tests `RemoteOperationTests`, `ProgressParserTests`, `FailureClassifierTests` | WP0, WP-S |
-| WP3 | Prompts | `src/VisualCommit.AskPass/*` (new project, in `VisualCommit.slnx`), `Git/Prompts/*`, `Git/VisualCommit.Git.csproj` (the reference), `App/Services/PromptDialogs.cs`, `ViewModels/Dialogs/PromptDialogViewModels.cs`, `Views/Dialogs/Credentials|Passphrase|HostKey|PromptView.axaml`; `WelcomeViewModel.cs` and `GitRepositoryProvider.cs` (clone environment); tests `PromptClassifierTests`, `AskPassTests`, `AuthenticatedRemoteTests` | WP0, WP-S (server), WP2 (fetch) for the end-to-end tests |
-| WP4 | Git: stash, tags, ignore; file services | `Git/GitRepository.Stash.cs`, `.Tags.cs`, `.Ignore.cs`; `App/Services/FileLauncher.cs`, `ClipboardService.cs`; tests `StashTagTests`, `IgnoreTests`, `FileLauncherTests` (argument building only) | WP0 |
-| WP5 | The menu (after the spike of 4a) | `Controls/InWindowMenu.cs` or the `MenuFlyout` adapter, `Views/Shell/MenuLayer.axaml(.cs)`, `ViewModels/Menus/MenuLayerViewModel.cs`, `Theme/Menus.axaml`, the menu's automation peer; registers its Esc handler (no edit of `MainWindow.axaml.cs`); tests `InWindowMenuTests` (headless: open, position, dismiss, keyboard incl. Shift+F10 and the Menu key, automation ids as control elements) | WP0; the spike's result |
-| WP6 | Status bar, toolbar, dialogs | `Views/Shell/StatusBarView.axaml`, `ToolbarView.axaml`, `ViewModels/ToolbarViewModel.cs`, `Views/Dialogs/*` except WP3's, `ViewModels/Dialogs/*` except WP3's (`FinishingDialog` included), `Theme/Dialogs.axaml`, the dialog stack in `DialogHostViewModel.cs` (after WP0) and the dialog roots' automation peers; tests `StatusBarTests`, `ToolbarTests`, `DialogTests` (stacking) | WP0 |
-| WP7 | Menus and actions | `ViewModels/Menus/RepositoryMenus.cs`, `ViewModels/Operations/RepositoryOperations.*.cs`, `RepositoryViewModel.Menus.cs` (partial), `LeftPanelViewModel.Actions.cs` (partial: events), `Views/Shell/LeftPanelView.axaml.cs` and `.axaml` (context and double-tap; the drag-source property WP0 put there stays), `WorkingChangesView` (menus), `DiffView` code-behind (context requests); handles the graph's `ContextRequestedAt` through WP0's `HitTest` stub; tests `RepositoryMenusTests`, `RepositoryOperationsTests` (real git through scenarios, scripted dialogs) | WP1, WP2, WP4, WP5, WP6 |
-| WP8 | Graph input: multi-select, drag, hit tests | `Controls/CommitGraphControl.cs` (input only; after WP0's declarations), `CommitGraphControl.Selection.cs`, `.Drag.cs`, `.HitTest.cs`; `CommitGraphControl.Render.cs` (selected rows, drag outline); `CommitGraphData.cs` (`IsReachableFromHead`); `Views/Shell/BranchDragService.cs`, `DragLayer` (registers its Esc handler); `RepositoryViewModel.Selection.cs` (partial, implements `OnGraphSwapped`'s re-mapping); `Views/Shell/MultiSelectionView.axaml` (fills WP0's slot) and its automation peer, `CommitDetailsViewModel` (multi state); tests `GraphSelectionTests`, `BranchDragTests` | WP0, WP5 (the drop menu) |
-| WP9 | Conflict banner, left panel selection, auto-fetch | `Views/Shell/ConflictBanner.axaml` and its automation peer, `CommitGraphView.axaml` (the banner's place), `RepositoryViewModel.InProgress.cs` (partial, implements `OnStatusApplied` and `OnGraphSelectionChanged`'s `SyncSelection` call), `WorkingChangesViewModel` (titles, `RowToolTip`, `CanCommit` during an operation, MERGE_MSG prefill), `LeftPanelViewModel.cs` (`SyncSelection`), `ViewModels/Operations/AutoFetchScheduler.cs`; sets `WorkingRowText` through the view model; tests `ConflictBannerTests`, `AutoFetchSchedulerTests`, `LeftPanelViewModelTests` additions | WP0, WP1 |
+| WP-S2 | Fakes and harness | `tests/VisualCommit.Testing`: `FakeFileLauncher`, `FakeClipboard`, `ScriptedPromptHandler`, `AskPassRunner`, `FakeSsh` (D115); `ShellDriver.Phase3.cs` (`ShellDriver` made `partial`; 7.4's list; `Start` injects the fakes through `AppSession.Start`'s optional parameters); `RealApp.Phase3.cs` (7.4's list); `GitIsolation.cs` and `RealApp.Launch` (auto-fetch off; askpass and proxy variables, D112); `TempRepo.MoveClockTo` (D111); `AuthRemoteServer` serving an existing repository in place (7.3); tests of each | WP0, WP-S1 (done) |
+| WP1 | Git: branches, history, in-progress, backups | `Git/GitRepository.Branches.cs`, `.History.cs`, `.InProgress.cs`, `.Backups.cs` (the WP1 group of stubs: reads, backups and snapshots, checkouts, branches, fast-forward, merge, reset, cherry-pick, revert, abort); `GitRepository.Changes.cs` (`InProgress` in `ReadStatusAsync`, `Remaining` and `AbortKeepsHead` by D110); `Core/Git/InProgressState.cs` (adds the init property `AbortKeepsHead`); tests `BranchOperationTests`, `HistoryOperationTests`, `InProgressTests`, `BackupRefTests` | WP0, WP-S1 (done) |
+| WP2 | Git: remotes and network | `Git/GitRepository.Remotes.cs` (the WP2 group: fetch, by D109 for all remotes; `IntegratePullAsync`; pushes; upstreams; remote deletion; `ReadRemotesAsync`; add, rename, set-url, remove; `PushTagAsync`, `DeleteRemoteTagAsync`), `GitProgressParser.cs`, `CloneProgressParser.cs` (delegates), `GitRepository.Clone.cs` (the environment parameter, `CloneErrorText` → `GitOutputCleaner`); `Core/Operations/GitFailureClassifier.cs` (WP0's placeholder); tests `RemoteOperationTests`, `PullParityTests`, `ProgressParserTests`, `FailureClassifierTests` | WP0, WP-S1 (done) |
+| WP3 | Prompts | `src/VisualCommit.AskPass/*` (new project, in `VisualCommit.slnx`), `Git/Prompts/*` (`AskPassBroker` and its `PromptScope`, `GitPromptClassifier`), `Git/VisualCommit.Git.csproj` (the reference), `App/Services/PromptDialogs.cs` (WP0's placeholder), `ViewModels/Dialogs/PromptDialogViewModels.cs`, `Views/Dialogs/Credentials\|Passphrase\|HostKey\|PromptView.axaml`; `WelcomeViewModel.cs` and `GitRepositoryProvider.cs` (clone environment); tests `PromptClassifierTests`, `AskPassTests`, `AuthenticatedRemoteTests`, `PromptDialogTests` | WP0; WP-S2 (fakes) and WP2 (fetch) for the end-to-end tests |
+| WP4 | Git: stash, tags, ignore; file services | `Git/GitRepository.Stash.cs` (`stash push` without `GIT_LITERAL_PATHSPECS`, D108), `.Tags.cs` (create, delete), `.Ignore.cs` (the WP4 group of stubs); `App/Services/FileLauncher.cs`, `ClipboardService.cs` (WP0's placeholders); tests `StashTagTests`, `IgnoreTests`, `FileLauncherTests` (argument building only) | WP0 |
+| WP5 | The menu adapter (4a, D105, D106) | `Views/Shell/MenuLayer.axaml(.cs)` and `ViewModels/Menus/MenuLayerViewModel.cs` (WP0's placeholders), `Controls/ContextMenuItem.cs` (the `MenuItem` subclass and its Invoke peer), `ViewModels/Menus/ContextMenuKeys.cs`, `Theme/Menus.axaml`; two granted edits outside its files: the condition of `OnShiftF10` in `MainWindow.axaml.cs` (D106; WP0's handler raises always and marks the key handled) and the app-wide default of `ToolTip.ShouldUseOverlayLayer` in `App.axaml.cs`; registers its Esc handler with `AddEscapeHandler`; tests `ContextMenuAdapterTests` (headless: open at a point and at the edges, `MaxHeight`, light dismiss incl. a dialog opening, a tab switch and the wheel, the keyboard with the first enabled item highlighted, Shift+F10 and the Menu key once each, Invoke through the peer, automation ids as control elements; the `AppRaisesShiftF10` rule with both lists) | WP0 |
+| WP6 | Status bar, toolbar, dialogs | `Views/Shell/StatusBarView.axaml`, `ToolbarView.axaml`, `ViewModels/ToolbarViewModel.cs` and `ViewModels/Dialogs/FinishingDialogViewModel.cs` (WP0's placeholders), `Views/Dialogs/*` except WP3's, `ViewModels/Dialogs/*` except WP3's, `Theme/Dialogs.axaml`, `DialogHostViewModel.cs` (the stack is built; WP6 owns the file from now on), the dialog roots' automation peers, `DialogRepository` (4f); tests `StatusBarTests`, `ToolbarTests`, `DialogTests` (stacking) | WP0 |
+| WP7 | Menus and actions | `ViewModels/Menus/RepositoryMenus.cs`, `ViewModels/Operations/RepositoryOperations.*.cs` (2.33's titles and texts), `RepositoryViewModel.Menus.cs` (partial), `LeftPanelViewModel.Actions.cs` (partial: events), `Views/Shell/LeftPanelView.axaml.cs` and `.axaml` (context and double-tap; the drag-source property WP0 put there stays), `WorkingChangesView` (menus), `DiffView` code-behind (context requests); handles the graph's `ContextRequestedAt`; tests `RepositoryMenusTests`, `RepositoryOperationsTests` (real git through scenarios, scripted dialogs) | WP1, WP2, WP4, WP5, WP6 |
+| WP8 | Graph input: multi-select, drag, hit tests | `Controls/CommitGraphControl.cs` (input only), `CommitGraphControl.Selection.cs`, `.Drag.cs`, `.HitTest.cs`; `CommitGraphControl.Render.cs` (selected rows, drag outline); `CommitGraphData.cs` (`IsReachableFromHead`); `Views/Shell/BranchDragService.cs`, `DragLayer.cs` (WP0's placeholder; registers its Esc handler); `RepositoryViewModel.Selection.cs` (partial, implements `OnGraphSwapped`'s re-mapping); `Views/Shell/MultiSelectionView.axaml` (fills WP0's slot) and its automation peer, `CommitDetailsViewModel` (multi state); may edit `RepositoryGraphView.axaml`; tests `GraphSelectionTests`, `BranchDragTests` | WP0, WP5 (the drop menu) |
+| WP9 | Conflict banner, left panel selection, auto-fetch | `Views/Shell/ConflictBanner.axaml` and its automation peer, `CommitGraphView.axaml` (the banner's place), `RepositoryViewModel.InProgress.cs` (partial, implements `OnStatusApplied` and `OnGraphSelectionChanged`'s `SyncSelection` call), `WorkingChangesViewModel` (titles, `CanCommit` during an operation, MERGE_MSG prefill), `ViewModels/Panels/CommitDetailsRows.cs` (`ChangedFileRow.RowToolTip`), `LeftPanelViewModel.cs` (`SyncSelection`), `ViewModels/Operations/AutoFetchScheduler.cs` (WP0's placeholder); sets `WorkingRowText` through the view model; the banner's texts and the Abort question with D110's `AbortKeepsHead`; tests `ConflictBannerTests`, `AutoFetchSchedulerTests`, `LeftPanelViewModelTests` additions | WP0, WP1 |
 | WP10 | Visual checks and the real-window pass | `VisualTests/Phase3/*`, `RealWindowTests/Phase3RealWindowPass.cs`, `Phase3Expectations.cs`; the phase 0 to 2 tests changed by 6.5 | everything |
 
-Order: WP0 (with WP-S beside it, and the lead's menu spike of 4a) → WP1, WP2, WP3, WP4, WP5,
-WP6 in parallel → WP7, WP8, WP9 in parallel → WP10. Strictly sequential: WP0 before everything that compiles against it; WP7 after
-WP5 and WP6 (it opens menus and dialogs) and after the Git packages whose operations it calls (it
-can start against WP0's stubs and fakes, and finishes when they are merged); WP10 last. The
-report's checks (step 5 of the Progress checklist) are written and committed before WP5 to WP9
-build the UI they test (D15).
+Order: WP-S2, WP1, WP2, WP3, WP4, WP5 and WP6 in parallel → WP7, WP8, WP9 in parallel → WP10.
+Strictly sequential: WP7 after WP5 and WP6 (it opens menus and dialogs) and after the Git
+packages whose operations it calls (it can start against the stubs and fakes, and finishes when
+they are merged); WP3's end-to-end tests after WP-S2 and WP2; WP10 last. The report's checks
+(step 5 of the Progress checklist) are finalised from `docs/phase-3-checks-*.md` and
+`docs/phase-3-answers.md`, and committed, before WP5 to WP9 build the UI they test (D15).
 
-Shared files and their editors: `IGitRepository.cs`, `FakeRepositoryBase.cs`,
-`RepositoryViewModel.cs`, `TabServices.cs`, `AppSession.cs`, `MainWindow.axaml`,
-`MainWindow.axaml.cs`, `MainWindowViewModel.cs`, `RepoTabViewModel.cs`, `App.axaml`,
-`Icons.axaml` and `Tokens.axaml` — WP0 only. `Controls.axaml` is not edited in phase 3 (menus
-and dialogs get their own resource files; dialog views are found by `DialogViewLocator`, so WP3
-and WP6 add no XAML to a shared file). `LeftPanelViewModel.cs` — WP9; its partial
+Shared files, from now on the lead's (on the phase branch): `IGitRepository.cs`,
+`FakeRepositoryBase.cs`, `RepositoryViewModel.cs`, `TabServices.cs`, `AppSession.cs`,
+`MainWindow.axaml`, `MainWindow.axaml.cs` (except WP5's granted condition), `MainWindowViewModel.cs`,
+`RepoTabViewModel.cs`, `App.axaml`, `App.axaml.cs` (except WP5's granted tooltip default),
+`Icons.axaml`, `Tokens.axaml`, `GitRunner.cs`, `GitRef` and `GitRepository.Refs.cs`, the Core
+records WP0 added (except `InProgressState.cs`, WP1's). `Controls.axaml` is not edited in phase 3
+(menus and dialogs have their own resource files; dialog views are found by `DialogViewLocator`,
+so WP3 and WP6 add no XAML to a shared file). `LeftPanelViewModel.cs` — WP9; its partial
 `LeftPanelViewModel.Actions.cs` — WP7. `LeftPanelView.axaml(.cs)`, `WorkingChangesView`,
-`DiffView` — WP7 (after WP0's hooks). `RightPanelView.axaml` — WP0 only (the slot);
-`CommitGraphControl*.cs` — WP0 for the declarations, then WP8 only; WP7 uses its events.
-`DialogHostViewModel.cs` — WP0, then WP6. `GitRepository.Clone.cs` — WP2 (cleaner); the clone
-environment goes through WP0's `CloneAsync` signature and `GitRepositoryProvider.cs`, which WP3
-owns. `RepositoryViewModel` grows only through partial files owned by WP7, WP8 and WP9, which
-implement the partial methods WP0 declared. If a package still finds it needs a change in a
-file it does not own, it asks the lead, who makes it on the phase branch.
+`DiffView` — WP7. `RightPanelView.axaml` — nobody (WP0's slot is done). `CommitGraphControl*.cs`
+— WP8 only; WP7 uses its events. `DialogHostViewModel.cs` — WP6. `GitRepository.Clone.cs` — WP2
+(cleaner); the clone environment goes through WP0's `CloneAsync` signature and
+`GitRepositoryProvider.cs`, which WP3 owns. `RepositoryViewModel` grows only through partial files
+owned by WP7, WP8 and WP9, which implement the partial methods WP0 declared.
 
 ## 9. Decisions
 
-Recorded in `decisions.md` as D77 to D104 (dated 2026-10-10); the text there is binding, and
-this index only says where each one shows in this design.
+Recorded in `decisions.md` as D77 to D104 (dated 2026-10-10) and, after stage 2, D105 to D115
+(dated 2026-10-11); the text there is binding, and this index only says where each one shows in
+this design.
 
 | # | In short | Sections |
 |---|---|---|
@@ -2028,6 +2442,17 @@ this index only says where each one shows in this design.
 | D102 | `GIT_SEQUENCE_EDITOR=:` on every call | 2.18 |
 | D103 | Credentials hidden in recorded output and on screen | 1.7, 2.23 |
 | D104 | Dialogs stack | 4f, 3.2 |
+| D105 | The menu is the stock `MenuFlyout` on the overlay layer, through an adapter (Invoke peer, custom placement and `MaxHeight`, tooltips on the overlay app-wide); first enabled item highlighted on opening; hover moves the focus | 0, 4a, 6.5, 7.7, 8 (WP5) |
+| D106 | Shift+F10: the app raises the request only where the platform's gesture list lacks it | 0, 4a, 8 (WP5) |
+| D107 | WP0's contract changes: queue API additions, prompt contracts, `NetworkOptions` on local writes, the repository members, the dialog layer, settings defaults | 1.2, 1.6, 1.9, 2.0, 2.18, 3.1, 4f, 6.1, 6.5, 8 |
+| D108 | `git stash push` runs without `GIT_LITERAL_PATHSPECS` (second exception to D74) | 0, 2.24, 8 (WP4) |
+| D109 | Fetching all remotes is one `git fetch --progress <r>` per remote, not `--all` | 0, 1.8, 1.9, 2.16, 2.17, 6.1, 8 (WP2) |
+| D110 | The commits a terminal's sequence has left; Abort after the stopped pick was committed | 0, 5, 8 (WP1, WP9) |
+| D111 | `--force-if-includes` and the tests' two clocks | 0, 7.2, 7.7 |
+| D112 | Test isolation also removes askpass and proxy variables | 7.4, 8 (WP-S2) |
+| D113 | Titles, running texts and failure texts; singular counts | 1.2, 2 (intro), 2.33 |
+| D114 | Menu and dialog rules settled for the checks | Conventions, 1.8, 2.2, 2.4, 2.7, 2.18, 2.23, 2.31, 4a, 4b, 4f |
+| D115 | Check 21b through a real fetch with a fake `core.sshCommand`; the "ssh asks" dialog | 3.2, 3.5, 4f, 7.4, 7.5 |
 
 ## 10. What the reviews changed
 
@@ -2051,3 +2476,20 @@ command modifier on macOS; the time budget; the multi-commit cherry-pick's seque
 replaced sentence; the conflict-dialog exception; the reset's single confirmation; the Pull
 button after rejecting another branch's push; pull's success count; the auth switch for check
 17; the open ambiguities; the plan's phase 4 entry and repository tabs.
+
+**What stage 2 changed (2026-10-11).** WP0 built the contracts and the queue and WP-S1 the
+scenarios and the test server; where they filled gaps or found needs, their choices are now this
+design (1.2, 2.0, 3.1, 4f, 7.1 to 7.3, 8; D107; the code wins where they differ, and the scenario
+pins are the reference). The menu spike on real Win32 adopted the stock overlay `MenuFlyout`
+through an adapter, with the first enabled item highlighted on opening (4a, D105), and showed
+that Avalonia already raises the context request for Shift+F10 on Win32, so the app adds it only
+where the platform lacks it (section 0, D106). Four writers drafting the visual checks against
+real Git 2.36 found that `git stash push --include-untracked` leaves the untracked files behind
+under `GIT_LITERAL_PATHSPECS` (D108), that `git fetch --all` prints no progress (D109), how many
+picks a terminal's sequence has left once its stopped pick is committed and that Abort then keeps
+HEAD (D110), that `--force-if-includes` reads reflog dates, which the tests' two clocks can put out
+of order (D111), and that `git switch` during a merge has its own message (2.1). WP-S1 asked for
+the proxy variables to be cleared in the tests (D112). The writers' questions (in
+`docs/phase-3-answers.md`) filled in titles, running texts and failure texts (2.33, D113) and a
+set of menu and dialog rules (D114), and gave check 21b a real route in both harnesses (D115).
+Section 8 now plans only what is left: WP-S2 and WP1 to WP10.
