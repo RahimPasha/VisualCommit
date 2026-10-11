@@ -33,7 +33,7 @@
                            IsChecked="{Binding IsChecked}"
                            AutomationProperties.AutomationId="ChoiceOption"
                            AutomationProperties.Name="{Binding Text}">
-                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Text}" />
               </RadioButton>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
