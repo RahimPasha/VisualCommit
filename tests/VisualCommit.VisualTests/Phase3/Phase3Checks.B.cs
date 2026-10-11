@@ -261,6 +261,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
             CheckoutFailedTitle, CheckoutFailedSummary, Ops, CheckoutCommand, ["Copy output", "Close"], CheckoutWhileMergingLines, KeyLine: CheckoutWhileMergingLines[0]));
         AssertStatus(app, StatusCheckoutAlphaFailed, OperationStatusTone.Danger);
+        AssertNoClippedText(app);
         Assert.NotNull(GitDirFile(repo, "MERGE_HEAD"));
         Assert.Equal(["## main...origin/main", "UU src/core.txt"], await StatusAsync(repo));
         app.Click(app.FindByAutomationId("ConfirmButton"));
@@ -271,6 +272,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         await AssertConfirmationAsync(app, AbortMergeTitle, AbortMergeQuestion, BackupDetail, "Abort merge");
         var confirmation = Shot(app, "09f-abort-confirmation");
         AssertBackdrop(app, confirmation);
+        AssertNoClippedText(app);
 
         // Step 9: Cancel changes nothing.
         app.Click(app.FindByAutomationId("CancelButton"));
@@ -713,7 +715,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         app.Click(app.FindByAutomationId("BannerAbortButton"));
         await AssertConfirmationAsync(app, AbortCherryPickTitle, AbortCherryPickQuestion, BackupDetail, "Abort cherry-pick");
         var confirmation = Shot(app, "11b3-abort-confirmation");
-        _ = confirmation;
+        AssertBackdrop(app, confirmation);
+        AssertNoClippedText(app);
 
         // Step 5: Abort undoes only the stopped pick.
         await RunOperationAsync(app, "Abort the cherry-pick", () => app.Click(app.FindByAutomationId("ConfirmButton")));
@@ -737,6 +740,361 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.Equal(CoreCherryPickConflict, await ShowAsync(repo, snapshot!, "src/core.txt"));
         AssertBackupsHidden(app);
         _ = palette;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Check 12: revert a commit, a merge commit, two commits, a revert stopped by a conflict,
+    // and one that changes nothing (1400×900).
+
+    /// <summary>Check 12 part A (step 2): "Revert this commit" on "Main work".</summary>
+    [AvaloniaFact]
+    public async Task Check_12_revert_a_commit()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+
+        await RevertMainWorkAsync(app, 3);
+        var reverted = Shot(app, "12a-reverted");
+        AssertRevertedMainWork(app, reverted);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.RevertMainWork, await RevAsync(repo, "HEAD"));
+        Assert.Equal($"Revert \"Main work\"\n\nThis reverts commit {Sha.MainWorkFull}.", await MessageAsync(repo, "HEAD"));
+        Assert.Equal([Sha.MainWorkFull], await ParentsAsync(repo, "HEAD"));
+        Assert.Equal((AppCommitTime, AppCommitTime), await DatesAsync(repo, "HEAD"));
+        Assert.Equal(Scenarios.OperationsFiles.Core, WorkingFile(repo, "src/core.txt"));
+        Assert.Equal(["## main...origin/main [ahead 1]"], await StatusAsync(repo));
+    }
+
+    /// <summary>Check 12 part B (steps 3 to 6): a merge commit with another commit, the merge's own menu, and its revert (<c>-m 1</c>).</summary>
+    [AvaloniaFact]
+    public async Task Check_12_revert_a_merge_commit()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+        var command = app.CommandModifier;
+
+        // Step 3: the merge of feature/alpha (no picture).
+        app.RightClick(LabelPoint(app, 4, "feature/alpha"));
+        await RunOperationAsync(app, "Merge feature/alpha", () => app.ClickMenuItem("Merge feature/alpha into main (create a merge commit)"));
+        await WaitForGraphAsync(app, 9, "f19f50a");
+        AssertGraph(app, G10BeforeRevert);
+        AssertStatus(app, StatusMergedAlpha);
+        await AssertLocalBranchAsync(app, "main", 3, 0, head: true);
+        Assert.Equal(Sha.MergeAlpha, await RevAsync(repo, "HEAD"));
+
+        // Step 4: the merge and "Main work" together.
+        app.Click(app.GraphRowPoint(0));
+        app.Click(app.GraphRowPoint(4), command);
+        OpenMenu(app, app.GraphRowPoint(4), MergeAndOtherMenu, "Copy SHAs");
+        var both = Shot(app, "12b-merge-and-other-menu");
+        AssertSelected(app, both, 0, 4);
+        AssertMultiSelection(app, "f19f50a Merge branch 'feature/alpha'", "88d6b91 Main work");
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, null);
+
+        // Step 5: the merge alone.
+        app.Click(app.GraphRowPoint(0));
+        OpenMenu(app, app.GraphRowPoint(0), MergeCommitMenu, "Check out this commit");
+        await WaitForDetailsAsync(app, "Merge branch 'feature/alpha'");
+        var merge = Shot(app, "12c-merge-menu");
+        AssertSelected(app, merge, 0);
+
+        // Step 6: its revert.
+        await RunOperationAsync(app, "Revert f19f50a", () => app.ClickMenuItem("Revert this merge commit"));
+        await WaitForGraphAsync(app, 10, "f5df804");
+        var reverted = Shot(app, "12d-merge-reverted");
+        AssertGraph(app, G10, reverted);
+        AssertSelected(app, reverted, 1);
+        AssertStatus(app, StatusRevertedMerge);
+        await AssertLocalBranchAsync(app, "main", 4, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.RevertMergeAlpha, await RevAsync(repo, "HEAD"));
+        Assert.Equal(
+            $"Revert \"Merge branch 'feature/alpha'\"\n\nThis reverts commit {Sha.MergeAlpha}, reversing\nchanges made to {Sha.MainWorkFull}.",
+            await MessageAsync(repo, "HEAD"));
+        Assert.Equal([Sha.MergeAlpha], await ParentsAsync(repo, "HEAD"));
+        Assert.Equal("D\tsrc/alpha.txt", await GitOutAsync(repo, "diff", "--name-status", "HEAD^", "HEAD"));
+    }
+
+    /// <summary>Check 12 part C (step 7): "Revert 2 commits", newest first.</summary>
+    [AvaloniaFact]
+    public async Task Check_12_revert_two_commits()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+
+        app.Click(app.GraphRowPoint(3));
+        app.Click(app.GraphRowPoint(6), app.CommandModifier);
+        app.RightClick(app.GraphRowPoint(6));
+        await RunOperationAsync(app, "Revert 2 commits", () => app.ClickMenuItem("Revert 2 commits"));
+        await WaitForGraphAsync(app, 10, "123d13b");
+        var reverted = Shot(app, "12e-two-reverted");
+        AssertGraph(app, G11, reverted);
+        AssertSelected(app, reverted, 5, 8);
+        AssertMultiSelection(app, "88d6b91 Main work", "8beca34 Add core");
+        AssertStatus(app, StatusRevertedTwo);
+        await AssertLocalBranchAsync(app, "main", 2, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(
+            ["123d13b Revert \"Add core\"", "13c773d Revert \"Main work\"", "88d6b91 Main work"],
+            (await GitOutAsync(repo, "log", "--format=%h %s", "-3", "main")).Split('\n'));
+        Assert.Equal(Sha.RevertAddCore, await RevAsync(repo, "HEAD"));
+        Assert.Equal(Sha.RevertMainWork, await RevAsync(repo, "HEAD^"));
+        Assert.Equal($"Revert \"Add core\"\n\nThis reverts commit {Sha.AddCoreFull}.", await MessageAsync(repo, "HEAD"));
+        Assert.False(File.Exists(Path.Combine(repo.Path, "src", "core.txt")), "src/core.txt still exists.");
+        Assert.Equal(["## main...origin/main [ahead 2]"], await StatusAsync(repo));
+    }
+
+    /// <summary>Check 12 part D (steps 8 and 9): a revert stopped by a conflict, its banner, and its Abort.</summary>
+    [AvaloniaFact]
+    public async Task Check_12_revert_stopped_by_a_conflict_and_aborted()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        Assert.Equal(Sha.CoreAgain, await repo.CommitFileAsync("src/core.txt", Scenarios.OperationsFiles.CoreAgain, "Core again"));
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+        AssertGraph(app, G12);
+        await AssertLocalBranchAsync(app, "main", 1, 0, head: true);
+
+        // Step 8: the revert stops.
+        await RevertMainWorkAsync(app, 4);
+        await app.WaitForAsync(() => app.BannerBounds is not null && Graph(app).ShowsWorkingRow, "the banner and the working-changes row");
+        await WaitForDetailsAsync(app, "Main work");
+        var stopped = Shot(app, "12f-revert-stopped");
+        await AssertNoDialogAsync(app);
+        var banner = AssertBanner(app, RevertBanner, "Abort revert");
+        AssertBannerLook(app, banner, stopped);
+        AssertGraph(app, G12, stopped);
+        AssertWorkingRow(app, WorkingChangesOneConflict, stopped);
+        AssertSelected(app, stopped, 4);
+        AssertStatus(app, StatusRevertStopped, OperationStatusTone.Warning);
+        AssertNoClippedText(app);
+        Assert.Equal(["## main...origin/main [ahead 1]", "UU src/core.txt"], await StatusAsync(repo));
+        Assert.StartsWith(Sha.MainWork, GitDirFile(repo, "REVERT_HEAD"), StringComparison.Ordinal);
+        Assert.False(HasSequencer(repo), "git's folder has a sequencer folder.");
+        Assert.Equal($"Revert \"Main work\"\n\nThis reverts commit {Sha.MainWorkFull}.\n\n# Conflicts:\n#\tsrc/core.txt\n", GitDirFile(repo, "MERGE_MSG"));
+        Assert.Equal(CoreRevertConflict, WorkingFile(repo, "src/core.txt"));
+
+        // Step 9: Abort, with its confirmation.
+        app.Click(app.FindByAutomationId("BannerAbortButton"));
+        await AssertConfirmationAsync(app, AbortRevertTitle, AbortRevertQuestion, BackupDetail, "Abort revert");
+        var confirmation = Shot(app, "12g-abort-revert-confirmation");
+        AssertBackdrop(app, confirmation);
+        AssertNoClippedText(app);
+        await RunOperationAsync(app, "Abort the revert", () => app.Click(app.FindByAutomationId("ConfirmButton")));
+        await app.WaitForAsync(() => app.BannerBounds is null && !Graph(app).ShowsWorkingRow, "the banner and the working-changes row to go");
+        var aborted = Shot(app, "12h-revert-aborted");
+        await AssertNoDialogAsync(app);
+        AssertNoBanner(app);
+        AssertNoWorkingRow(app);
+        AssertGraph(app, G12, aborted);
+        AssertSelected(app, aborted, 4);
+        AssertStatus(app, StatusAbortedRevert);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.CoreAgain, await RevAsync(repo, "HEAD"));
+        Assert.Equal(["## main...origin/main [ahead 1]"], await StatusAsync(repo));
+        Assert.Equal(Scenarios.OperationsFiles.CoreAgain, WorkingFile(repo, "src/core.txt"));
+        Assert.Null(GitDirFile(repo, "REVERT_HEAD"));
+        Assert.Null(GitDirFile(repo, "MERGE_MSG"));
+        var snapshot = await AssertBackupsAsync(repo, "abort", Sha.CoreAgain, changes: true);
+        Assert.Equal([Sha.CoreAgain], await ParentsAsync(repo, snapshot!));
+        Assert.Equal(CoreRevertConflict, await ShowAsync(repo, snapshot!, "src/core.txt"));
+        AssertBackupsHidden(app);
+    }
+
+    /// <summary>Check 12 part E (steps 10 to 12): reverting "Main work" twice; the second changes nothing (D117).</summary>
+    [AvaloniaFact]
+    public async Task Check_12_revert_that_changes_nothing()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+
+        // Step 10: as part A.
+        await RevertMainWorkAsync(app, 3);
+        AssertRevertedMainWork(app, null);
+
+        // Step 11: the menu still offers the revert (2.14: git decides), which changes nothing.
+        OpenMenu(app, app.GraphRowPoint(4), CommitMenuOnMain(Sha.MainWork, "Main work"), "Check out this commit");
+        await RunOperationAsync(app, "Revert " + Sha.MainWork, () => app.ClickMenuItem("Revert this commit"));
+        if (GitDirFile(repo, "REVERT_HEAD") is null)
+        {
+            // Git 2.36: an ordinary failure with git's own output (D117).
+            await app.WaitForDialogAsync<ErrorDialogViewModel>();
+            Shot(app, "12i-revert-changes-nothing");
+            await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
+                RevertFailedTitle, EmptyRevertSummary, Ops, EmptyRevertCommand, ["Copy output", "Close"], EmptyRevertLines, KeyLine: EmptyRevertLines[^1]));
+            AssertStatus(app, StatusRevertFailed, OperationStatusTone.Danger);
+            AssertNoClippedText(app);
+            AssertNoBanner(app);
+            AssertNoWorkingRow(app);
+            Assert.Equal(Sha.RevertMainWork, await RevAsync(repo, "HEAD"));
+            Assert.False(HasSequencer(repo), "git's folder has a sequencer folder.");
+            Assert.Equal(["## main...origin/main [ahead 1]"], await StatusAsync(repo));
+            await AssertNoBackupsAsync(repo);
+            if (await IsReportGitAsync())
+            {
+                Assert.Equal(EmptyRevertMergeMsg, GitDirFile(repo, "MERGE_MSG"));
+            }
+
+            // Step 12.
+            app.Click(app.FindByAutomationId("ConfirmButton"));
+            await AssertNoDialogAsync(app);
+            AssertRevertedMainWork(app, null, StatusRevertFailed, OperationStatusTone.Danger);
+            return;
+        }
+
+        // A git that keeps REVERT_HEAD after an empty revert (D117's other case): the banner of an
+        // empty revert, and Abort leaves HEAD where it was.
+        Assert.False(await IsReportGitAsync(), "Git 2.36 kept REVERT_HEAD after an empty revert.");
+        await AssertNoDialogAsync(app);
+        await app.WaitForAsync(() => app.BannerBounds is not null, "the banner of the empty revert");
+        Shot(app, "12i-revert-changes-nothing");
+        AssertBanner(app, EmptyRevertBanner, "Abort revert");
+        Assert.StartsWith("Revert stopped", app.Session.Shell.ActiveTab.OperationStatus.Text, StringComparison.Ordinal);
+        app.Click(app.FindByAutomationId("BannerAbortButton"));
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        await RunOperationAsync(app, "Abort the revert", () => app.Click(app.FindByAutomationId("ConfirmButton")));
+        Assert.Equal(Sha.RevertMainWork, await RevAsync(repo, "HEAD"));
+    }
+
+    /// <summary>Right-clicks "Main work" (commit row <paramref name="row"/>) and clicks "Revert this commit", waiting until the revert has ended.</summary>
+    private static async Task RevertMainWorkAsync(ShellDriver app, int row)
+    {
+        app.RightClick(app.GraphRowPoint(row));
+        await RunOperationAsync(app, "Revert " + Sha.MainWork, () => app.ClickMenuItem("Revert this commit"));
+    }
+
+    /// <summary>G9, "Main work" (row 4) selected, main ↑1, and the status of check 12 step 2 (or the one given).</summary>
+    private static void AssertRevertedMainWork(ShellDriver app, Screenshot? picture, string status = StatusRevertedMainWork, OperationStatusTone tone = OperationStatusTone.Secondary)
+    {
+        AssertGraph(app, G9, picture);
+        AssertColumns(app, author: true, date: true, sha: true);
+        AssertSelected(app, picture, 4);
+        AssertStatus(app, status, tone);
+        AssertNoWorkingRow(app);
+        var main = (VisualCommit.App.ViewModels.Panels.RefItemRow)app.RefRowModel("Local branches", "main");
+        Assert.Equal((1, 0), (main.Ahead, main.Behind));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Check 32: leaving a detached HEAD whose commit no ref reaches (edges, 1100×700).
+
+    /// <summary>Check 32 (steps 1 to 8): the detached labels and menus, the confirmation before leaving the commit, its backup, and a detached HEAD that needs none.</summary>
+    [AvaloniaFact]
+    public async Task Check_32_leaving_a_detached_head()
+    {
+        using var repo = await Scenarios.EdgeCasesAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+        var palette = PaletteOf(app);
+
+        // Step 1: E0.
+        var start = Shot(app, "32a-detached");
+        AssertGraph(app, E0, start);
+        AssertColumns(app, author: false, date: true, sha: false);
+        AssertSelected(app, start);
+        AssertStatus(app, "Ready");
+        AssertBranch(app, "Detached at " + Sha.DetachedWork);
+        var head = Graph(app).LabelsInRow(0)[0];
+        Assert.Equal(("HEAD", VisualCommit.App.ViewModels.Graph.RefLabelKind.DetachedHead), (head.Text, head.Kind));
+        AssertColour(palette.Lane(0), start, app.BoundsOf(Graph(app)).TopLeft + new Point(head.Bounds.Left + 2, head.Bounds.Center.Y), "the filled HEAD label");
+        await AssertLocalBranchAsync(app, "main", 0, 0, head: false);
+        AssertNoClippedText(app);
+
+        // Step 2: the detached commit's menu.
+        OpenMenu(app, app.GraphRowPoint(0), DetachedCommitMenu, "Create branch here…");
+        await WaitForDetailsAsync(app, "Detached work");
+        var commitMenu = Shot(app, "32b-detached-commit-menu");
+        AssertSelected(app, commitMenu, 0);
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, null);
+
+        // Step 3: main's menu while HEAD is detached; the right-click selects nothing (D114).
+        var mainRow = await app.RefRowAsync("Local branches", "main");
+        OpenMenu(app, app.BoundsOf(mainRow).Center, MainMenuWhileDetached, "Check out main");
+        var branchMenu = Shot(app, "32c-branch-menu-detached");
+        AssertSelected(app, branchMenu, 0);
+        Assert.False(((VisualCommit.App.ViewModels.Panels.RefItemRow)app.RefRowModel("Local branches", "main")).IsSelected, "The right-click selected main's row.");
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, null);
+
+        // Step 4: a double-click asks before leaving "Detached work".
+        Assert.Equal("1", await GitOutAsync(repo, "rev-list", "--count", "HEAD", "--not", "--branches", "--remotes", "--tags"));
+        app.DoubleClick(await app.RefRowAsync("Local branches", "main"));
+        await AssertConfirmationAsync(app, LeaveTitle, LeaveQuestion, BackupDetail, "Check out", destructive: false);
+        await WaitForDetailsAsync(app, "Main work");
+        var confirmation = Shot(app, "32d-leave-confirmation");
+        AssertSelected(app, null, 2);
+        Assert.True(((VisualCommit.App.ViewModels.Panels.RefItemRow)app.RefRowModel("Local branches", "main")).IsSelected, "The first click did not select main's row.");
+        Assert.StartsWith(Sha.DetachedWork, await RevAsync(repo, "HEAD"), StringComparison.Ordinal);
+        AssertBackdrop(app, confirmation);
+        AssertNoClippedText(app);
+
+        // Step 5: Cancel.
+        app.Click(app.FindByAutomationId("CancelButton"));
+        await AssertNoDialogAsync(app);
+        Assert.StartsWith(Sha.DetachedWork, await RevAsync(repo, "HEAD"), StringComparison.Ordinal);
+        Assert.False((await repo.GitAllowingFailureAsync("symbolic-ref", "-q", "HEAD")).Succeeded, "HEAD is on a branch.");
+        await AssertNoBackupsAsync(repo);
+
+        // Step 6: "Check out" leaves the commit, after its backup.
+        app.DoubleClick(await app.RefRowAsync("Local branches", "main"));
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        await RunOperationAsync(app, "Check out main", () => app.Click(app.FindByAutomationId("ConfirmButton")), Edges);
+        await WaitForGraphAsync(app, 3, Sha.EdgesAlphaWork);
+        var checkedOut = Shot(app, "32e-checked-out");
+        await AssertNoDialogAsync(app);
+        AssertGraph(app, E1, checkedOut);
+        AssertSelected(app, checkedOut, 1);
+        AssertBranch(app, "main");
+        AssertStatus(app, StatusCheckedOutMain);
+        await AssertLocalBranchAsync(app, "main", 0, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal("refs/heads/main", await GitOutAsync(repo, "symbolic-ref", "HEAD"));
+        Assert.Equal(["## main...remotes/origin/main"], await StatusAsync(repo));
+        var backups = await BackupsAsync(repo);
+        var backup = Assert.Single(backups);
+        Assert.Equal(("detached", false, (string?)null), (backup.Ref.Kind, backup.Ref.IsChanges, backup.Ref.Name));
+        Assert.StartsWith(Sha.DetachedWork, backup.Sha, StringComparison.Ordinal);
+        Assert.Equal("side", await GitOutAsync(repo, "-C", repo.SiblingPath(Scenarios.EdgeCasesWorktree), "symbolic-ref", "--short", "HEAD"));
+        AssertBackupsHidden(app);
+
+        // Step 7: detaching at a commit main reaches asks nothing.
+        app.RightClick(app.GraphRowPoint(2));
+        await RunOperationAsync(app, "Check out " + Sha.EdgesInitial, () => app.ClickMenuItem("Check out this commit"), Edges);
+        await app.WaitForAsync(() => Graph(app).Data!.LabelsAt(2).FirstOrDefault()?.Text == "HEAD", "the HEAD label on \"Initial commit\"");
+        await WaitForDetailsAsync(app, "Initial commit");
+        var detached = Shot(app, "32f-detached-reachable");
+        await AssertNoDialogAsync(app);
+        AssertGraph(app, E1Detached, detached);
+        AssertSelected(app, detached, 2);
+        AssertBranch(app, "Detached at " + Sha.EdgesInitial);
+        AssertStatus(app, StatusDetachedAtInitial);
+        await AssertLocalBranchAsync(app, "main", 0, 0, head: false);
+        AssertNoClippedText(app);
+        Assert.Equal(["## HEAD (no branch)"], await StatusAsync(repo));
+        Assert.Single(await repo.BackupRefsAsync());
+
+        // Step 8: back to main without a confirmation: nothing would be left behind.
+        Assert.Equal("0", await GitOutAsync(repo, "rev-list", "--count", "HEAD", "--not", "--branches", "--remotes", "--tags"));
+        var mainAgain = await app.RefRowAsync("Local branches", "main");
+        await RunOperationAsync(app, "Check out main", () => app.DoubleClick(mainAgain), Edges);
+        await app.WaitForAsync(() => Graph(app).Data!.LabelsAt(1).FirstOrDefault()?.Kind == VisualCommit.App.ViewModels.Graph.RefLabelKind.CurrentBranch, "main's check mark");
+        await WaitForDetailsAsync(app, "Main work");
+        var back = Shot(app, "32g-back-without-confirmation");
+        await AssertNoDialogAsync(app);
+        AssertGraph(app, E1, back);
+        AssertSelected(app, back, 1);
+        AssertBranch(app, "main");
+        AssertStatus(app, StatusCheckedOutMain);
+        await AssertLocalBranchAsync(app, "main", 0, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal("refs/heads/main", await GitOutAsync(repo, "symbolic-ref", "HEAD"));
+        Assert.Single(await repo.BackupRefsAsync());
     }
 
     /// <summary>Check 10 part C's files, written as a terminal would before the app starts.</summary>
@@ -778,6 +1136,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.Equal(hard ? palette.Danger : palette.Accent, (confirm.Background as Avalonia.Media.ISolidColorBrush)?.Color);
         Assert.Equal(400, app.Find<Border>("ResetDialogCard").Bounds.Width, 0.5);
         AssertBackdrop(app, picture);
+        AssertNoClippedText(app);
     }
 
     /// <summary>The stage panel of check 9 step 4 and check 9b step 3: the conflicted file flagged, nothing staged, the merge's message prefilled.</summary>
