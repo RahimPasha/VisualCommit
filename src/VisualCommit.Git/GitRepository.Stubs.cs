@@ -75,48 +75,6 @@ public sealed partial class GitRepository
     public Task AbortAsync(InProgressKind kind, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw NotBuilt(nameof(AbortAsync));
 
-    // WP2: GitRepository.Remotes.cs (fetch, pull's integration, pushes, upstreams, remotes; the
-    // tag push and remote tag deletion of 2.29 are pushes too).
-
-    public Task FetchAsync(string? remote, NetworkOptions options, bool noAutoMaintenance = false, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(FetchAsync));
-
-    public Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(IntegratePullAsync));
-
-    public Task PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(PushAsync));
-
-    public Task SetUpstreamAsync(string branch, string remoteBranchRef, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(SetUpstreamAsync));
-
-    public Task UnsetUpstreamAsync(string branch, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(UnsetUpstreamAsync));
-
-    public Task DeleteRemoteBranchAsync(string remote, string branch, string expectedCommit, NetworkOptions options, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(DeleteRemoteBranchAsync));
-
-    public Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync(CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(ReadRemotesAsync));
-
-    public Task AddRemoteAsync(string name, string url, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(AddRemoteAsync));
-
-    public Task RenameRemoteAsync(string name, string newName, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(RenameRemoteAsync));
-
-    public Task SetRemoteUrlAsync(string name, string url, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(SetRemoteUrlAsync));
-
-    public Task RemoveRemoteAsync(string name, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(RemoveRemoteAsync));
-
-    public Task PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(PushTagAsync));
-
-    public Task DeleteRemoteTagAsync(string remote, string tag, string expectedObject, NetworkOptions options, CancellationToken cancellationToken = default) =>
-        throw NotBuilt(nameof(DeleteRemoteTagAsync));
-
     // WP4: GitRepository.Stash.cs, .Tags.cs, .Ignore.cs.
 
     public Task<string?> StashAsync(string? message, bool includeUntracked, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
