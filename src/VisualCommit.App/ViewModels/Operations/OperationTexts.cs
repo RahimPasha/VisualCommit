@@ -24,9 +24,11 @@ public sealed record OperationText(string Title, string RunningText, string Erro
 /// confirmation. Names are short names (<c>feature/alpha</c>, <c>origin/main</c>, <c>v1.0</c>);
 /// a commit is its short SHA, or <c>a1b2c3d "Add core"</c> where a dialog names it. Every count
 /// uses the singular for one ("1 file has conflicts", "Cherry-picked 1 of 2 commits", D113).
-/// Menu labels and disabled reasons are the menus' own (<c>RepositoryMenus</c>).
+/// Menu labels and disabled reasons are the menus' own (<c>RepositoryMenus</c>). A WP7
+/// sub-package that needs a text not here adds it in a part of its own
+/// (<c>OperationTexts.&lt;Package&gt;.cs</c>), so that the packages never edit one file.
 /// </summary>
-public static class OperationTexts
+public static partial class OperationTexts
 {
     /// <summary>The detail of every confirmation that saves a backup first (design 2).</summary>
     public const string BackupDetail = DialogText.BackupDetail;
