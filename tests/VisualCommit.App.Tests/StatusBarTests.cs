@@ -223,7 +223,7 @@ public class StatusBarTests
         {
             app.Window.RequestedThemeVariant = theme;
             app.Settle();
-            TestPictures.Save(app.Capture(), $"{name}-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
+            TestPictures.Save(app, $"{name}-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
         }
 
         app.Window.RequestedThemeVariant = ThemeVariant.Dark;

@@ -929,7 +929,7 @@ public class DialogTests
                 var touching = buttons.Where(other => other.Name != buttonName && other.Area.Inflate(-0.5).Intersects(area.Inflate(2))).ToList();
                 Assert.True(touching.Count == 0, $"{picture}: {buttonName} {area} touches {string.Join(", ", touching)}.");
             }
-            TestPictures.Save(app.Capture(), "dialog-" + picture);
+            TestPictures.Save(app, "dialog-" + picture);
         }
     }
 

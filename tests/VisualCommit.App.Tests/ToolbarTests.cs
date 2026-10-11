@@ -292,7 +292,7 @@ public class ToolbarTests
             app.MoveMouse(stash);
             await app.WaitForAsync(() => ToolTip.GetIsOpen(stash), "the tooltip", TimeSpan.FromSeconds(5));
             app.Settle();
-            TestPictures.Save(app.Capture(), $"toolbar-stash-tooltip-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
+            TestPictures.Save(app, $"toolbar-stash-tooltip-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
         }
     }
 
