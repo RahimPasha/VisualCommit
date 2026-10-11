@@ -218,21 +218,27 @@ public class GraphSelectionTests
         app.Click(RowPoint(app, AlphaOne), KeyModifiers.Shift);
 
         // Check 11 step 10: right-click a selected row; the selection stays.
+        // Each right-click opens a menu (WP7); Esc closes it, since a press outside an open menu
+        // only closes it (4a).
         app.RightClick(RowPoint(app, AlphaOne));
         Assert.Equal(Rows(repository, AlphaTwo, AlphaOne), Selected(repository));
         Assert.Equal((GraphHitKind.Commit, AlphaOne), (asked[^1].Hit.Kind, asked[^1].Hit.Row));
         Assert.Equal("2 commits selected", ((MultiSelectionViewModel)repository.MultiSelection!).Title);
+        app.PressKey(Key.Escape);
 
         // A label of a selected row keeps it too.
         var label = graph.LabelsInRow(AlphaTwo)[0];
         app.RightClick(graph.TranslatePoint(label.Bounds.Center, app.Window)!.Value);
         Assert.Equal(Rows(repository, AlphaTwo, AlphaOne), Selected(repository));
         Assert.Equal((GraphHitKind.Label, "refs/heads/feature/alpha"), (asked[^1].Hit.Kind, asked[^1].Hit.Label!.RefName));
+        await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "the branch's menu");
+        app.PressKey(Key.Escape);
 
         // Below the last row: nothing changes.
         app.RightClick(graph.TranslatePoint(new Point(400, graph.RowBounds(repository.Graph.Count - 1).Bottom + 40), app.Window)!.Value);
         Assert.Equal(Rows(repository, AlphaTwo, AlphaOne), Selected(repository));
         Assert.Equal(GraphHitKind.None, asked[^1].Hit.Kind);
+        app.PressKey(Key.Escape);
 
         // Outside it: that row alone.
         app.RightClick(RowPoint(app, MainWork));

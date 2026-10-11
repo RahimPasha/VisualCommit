@@ -159,12 +159,33 @@ public class ToolbarTests
     [InlineData(InProgressKind.CherryPick, "Finish or abort the cherry-pick first")]
     [InlineData(InProgressKind.Revert, "Finish or abort the revert first")]
     [InlineData(InProgressKind.Rebase, "Finish or abort the rebase first")]
-    public async Task An_operation_in_progress_stops_Pull_only(InProgressKind kind, string reason)
+    public async Task An_operation_in_progress_stops_Pull_and_Stash(InProgressKind kind, string reason)
     {
+        // D119: a stash during a merge would drop the merge without a word.
         var status = Changed with { InProgress = new InProgressState(kind, Older, "Conflicting change", null, null, 0, false) };
         using var viewModel = await StartAsync(OpsRefs(), status);
 
-        AssertReasons(viewModel.Toolbar, fetch: null, pull: reason, push: null, branch: null, stash: null, pop: null);
+        AssertReasons(viewModel.Toolbar, fetch: null, pull: reason, push: null, branch: null, stash: reason, pop: null);
+    }
+
+    [Fact]
+    public async Task Conflicts_left_by_a_stash_stop_Stash_and_nothing_else()
+    {
+        var status = new WorkingTreeStatus([], [new ChangedFile("src/core.txt", FileChangeKind.Conflicted)], new HashSet<string>(StringComparer.Ordinal));
+        using var viewModel = await StartAsync(OpsRefs(), status);
+
+        AssertReasons(viewModel.Toolbar, fetch: null, pull: null, push: null, branch: null, stash: "Resolve the conflicts first", pop: null);
+    }
+
+    [Fact]
+    public void Several_reasons_for_Stash_give_the_first_in_its_order()
+    {
+        var merge = new InProgressState(InProgressKind.Merge, Older, "Conflicting change", null, null, 0, false);
+
+        Assert.Equal("Make the first commit first", ToolbarViewModel.StashReason(new HeadState("main", null), Changed with { InProgress = merge }));
+        Assert.Equal("There are no changes to stash", ToolbarViewModel.StashReason(new HeadState("main", Main), WorkingTreeStatus.Clean with { InProgress = merge }));
+        Assert.Equal("Finish or abort the merge first", ToolbarViewModel.StashReason(new HeadState("main", Main), Changed with { InProgress = merge }));
+        Assert.Null(ToolbarViewModel.StashReason(new HeadState("main", Main), Changed));
     }
 
     [Fact]
