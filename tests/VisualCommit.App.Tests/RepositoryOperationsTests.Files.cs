@@ -151,7 +151,7 @@ public partial class RepositoryOperationsTests
         Assert.Equal("Added /logs/run.log to .gitignore", app.StatusText);
         Assert.Equal(OperationStatusTone.Secondary, app.StatusTone);
         Assert.DoesNotContain(app.Operations.Status.Unstaged, file => file.Path == "logs/run.log");
-        Assert.Equal([" M src/core.txt", "?? .gitignore", "?? TODO", "?? drafts/[wip].txt", "?? trace.log"], await PorcelainAsync(repo));
+        Assert.Equal([" M src/core.txt", "?? .gitignore", "?? TODO", "?? drafts/[wip].txt", "?? trace.log"], await PorcelainAllAsync(repo));
         Assert.Single(app.Log.Messages, message => message.StartsWith($"{app.Repository.Name}: Ignore run.log: Succeeded after ", StringComparison.Ordinal));
         Assert.Empty(app.Dialogs.Shown);
     }
@@ -169,7 +169,7 @@ public partial class RepositoryOperationsTests
         Assert.Equal("*.tmp\n*.log\n", File.ReadAllText(Path.Combine(repo.Path, ".gitignore")));
         Assert.Null(app.Repository.Diff);
         Assert.Equal("Added *.log to .gitignore", app.StatusText);
-        Assert.Equal([" M src/core.txt", "?? .gitignore", "?? TODO", "?? drafts/[wip].txt"], await PorcelainAsync(repo));
+        Assert.Equal([" M src/core.txt", "?? .gitignore", "?? TODO", "?? drafts/[wip].txt"], await PorcelainAllAsync(repo));
         AssertRanOnce(app, "Ignore all *.log files");
     }
 
@@ -309,7 +309,7 @@ public partial class RepositoryOperationsTests
         using var repo = await IgnoreScenarioAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         var core = app.Operations.Status.Unstaged.Single(file => file.Path == "src/core.txt");
-        var porcelain = await PorcelainAsync(repo);
+        var porcelain = await PorcelainAllAsync(repo);
         app.Repository.Dispose();
         app.Dialogs.Confirm();
 
@@ -335,7 +335,7 @@ public partial class RepositoryOperationsTests
         Assert.Empty(app.Launcher.Requests);
         Assert.Empty(app.Clipboard.Texts);
         Assert.Null(app.Repository.Diff);
-        Assert.Equal(porcelain, await PorcelainAsync(repo));
+        Assert.Equal(porcelain, await PorcelainAllAsync(repo));
         Assert.Equal("*.tmp", File.ReadAllText(Path.Combine(repo.Path, ".gitignore")));
     }
 
@@ -360,6 +360,6 @@ public partial class RepositoryOperationsTests
             .WriteFile("src/core.txt", "core\nmain work\nlocal\n");
     }
 
-    private static async Task<IReadOnlyList<string>> PorcelainAsync(TempRepo repo) =>
+    private static async Task<IReadOnlyList<string>> PorcelainAllAsync(TempRepo repo) =>
         (await repo.GitAsync("status", "--porcelain", "--untracked-files=all")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 }

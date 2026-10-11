@@ -755,7 +755,8 @@ that the reflog or the stash list does not keep.
   (section 5's question says so).
 - Git: `git merge --abort` | `git cherry-pick --abort` | `git revert --abort` |
   `git rebase --abort` | `git am --abort`.
-- Refresh: Refs. Success: "Aborted the <kind>". Failures: error dialog "Abort failed".
+- Refresh: Refs. Success: "Aborted the <kind>" (`git am`: "Aborted git am", title "Abort git
+  am", as built). Failures: error dialog "Abort failed".
 
 ### 2.16 Fetch
 
@@ -939,9 +940,17 @@ the URL as configured, because saving it must keep what is there (D103).
 - Labels: toolbar Stash; "Stash changes…" on the working-changes row, the "Stashes" header and
   the empty graph area. Opens the stash dialog (4f): Message (optional), "Include untracked
   files" (ticked by default; the last choice is kept in settings, 6.2).
-- Disabled when there is nothing to stash (no staged or unstaged changes, and no untracked
-  files): "There are no changes to stash"; and when HEAD is unborn: "Make the first commit
-  first" (git: `You do not have the initial commit yet`).
+- Disabled, with the first reason that holds in this order (D119): when HEAD is unborn: "Make
+  the first commit first" (git: `You do not have the initial commit yet`); while an operation is
+  in progress (a merge, a cherry-pick or revert, a rebase or `git am`, section 5): "Finish or
+  abort the <kind> first"; while files have conflicts and no operation is in progress (a stash
+  that did not apply cleanly): "Resolve the conflicts first"; when there is nothing to stash (no
+  staged or unstaged changes, and no untracked files): "There are no changes to stash". The same
+  holds for every "Stash changes…" item (4b) and the toolbar's Stash (4d). Why (D119, checked on
+  Git 2.36): `git stash push` during a merge that has no conflicts left succeeds and deletes
+  `MERGE_HEAD`, so the pending merge is lost without a word (the merged files go into the stash,
+  the second parent is gone); with conflicted files git refuses (`<file>: needs merge`).
+  Applying and popping a stash stay enabled and are left to git.
 - Git: `git stash push [--include-untracked] [--message <m>]`, run **without**
   `GIT_LITERAL_PATHSPECS` (D108: with it, git leaves the untracked files in the working tree,
   section 0; the app passes no path, so the variable protects nothing here). An empty message lets
@@ -965,8 +974,9 @@ the URL as configured, because saving it must keep what is there (D103).
 - Confirm: no. Backup: none (a pop that conflicts keeps the stash; one that applies cleanly
   had nothing more to lose).
 - Result: "Applied stash@{n}" / "Popped stash@{n}"; conflicts → outcome `Conflicts`, "Applying
-  the stash stopped: N files have conflicts" (pop adds " The stash is kept."). The banner shows
-  the conflicts-only form (section 5).
+  the stash stopped: N files have conflicts"; a pop adds ". The stash is kept." ("Applying the
+  stash stopped: 1 file has conflicts. The stash is kept."). The banner shows the conflicts-only
+  form (section 5).
 - Refresh: Refs. Failures: error dialog "Applying the stash failed" (apply and pop), summary
   "Your changes to these files would be overwritten by applying stash@{n}." for git's `Your local
   changes to the following files would be overwritten by merge`, "This stash no longer exists."
@@ -985,10 +995,13 @@ the URL as configured, because saving it must keep what is there (D103).
 - Labels: "Create tag here…" on a commit, branch, remote branch; "Create tag at HEAD…" on the
   "Tags" header. Tag dialog (4f): Name, Message (optional; a message makes an annotated tag).
 - Validation: `RefNameRules.IsValidTagName`; no tag of that name.
-- Git: lightweight `git tag <t> <sha>`; annotated `git tag --annotate --cleanup=whitespace
-  --file=- <t> <sha>` with the message on standard input (D68's way: a message such as "#42
-  hotfix release" is kept, where git's default cleanup would empty it, section 0; it gets the
-  repository's identity, D72 in tests).
+- Git: lightweight `git tag <t> <sha>^{commit}`; annotated `git tag --annotate
+  --cleanup=whitespace --file=- <t> <sha>^{commit}` with the message on standard input (D68's
+  way: a message such as "#42 hotfix release" is kept, where git's default cleanup would empty
+  it, section 0; it gets the repository's identity, D72 in tests). The target is peeled
+  (`^{commit}`, D121), so a tag made on the ref of an annotated tag points at its commit and is
+  not a tag of a tag; for a commit the result is the same, and the call log shows the
+  `^{commit}` form.
 - Confirm: no. Backup: none. Refresh: Refs. Success: "Created tag <t>".
 
 ### 2.28 Tag delete
@@ -1132,7 +1145,8 @@ has its own dialog ("Checkout blocked", "Push rejected", "Force push stopped", "
 So the status bar reads, for example, "Check out feature/addfile failed", "Push main failed", "Pull
 failed", "Fetch cancelled" (the toolbar), "Fetch origin cancelled", "Pop stash@{0} failed",
 "Delete tag v1.2 on origin failed", "Cherry-pick 1a2b3c4 failed" (an empty pick); the finishing
-dialog "Fetch origin — auth"; the log `auth: Fetch origin: Cancelled after <N> ms`.
+dialog "Fetch origin — auth"; the log `auth: Fetch origin: Cancelled after <N> ms: Fetch origin
+cancelled` (1.7).
 
 ## 3. Credentials, passphrases and ssh prompts (C11)
 
@@ -1453,7 +1467,9 @@ a row outside it, the row is selected alone first.
 3. Discard all changes… (phase 2's Discard all, danger; disabled without unstaged files:
    "Nothing to discard")
 — 
-4. Stash changes… (2.24)
+4. Stash changes… (2.24; disabled as the toolbar's Stash, in 2.24's order: "Make the first
+   commit first", "Finish or abort the <kind> first" while an operation is in progress, "Resolve
+   the conflicts first" while files have conflicts without one, D119)
 5. Create branch here… (2.4 from HEAD; the changes follow the new branch)
 — 
 6. Show in folder (the working tree's folder)
@@ -1514,8 +1530,9 @@ a row outside it, the row is selected alone first.
 
 **Section headers** of the left panel (each menu's header is the section's title: "Local
 branches", "Remotes", "Tags", "Stashes"): "Local branches": Create branch…; "Remotes": Add remote…,
-Fetch all remotes, Manage remotes…; "Tags": Create tag at HEAD…; "Stashes": Stash changes…;
-"Pull requests": no menu (phase 7). **Folder rows** (`feature/`) have no menu: they are not
+Fetch all remotes, Manage remotes…; "Tags": Create tag at HEAD…; "Stashes": Stash changes…
+(enabled and disabled as the toolbar's Stash, with its reasons in 2.24's order, D119); "Pull
+requests": no menu (phase 7). **Folder rows** (`feature/`) have no menu: they are not
 objects of the repository, only groups of names. **Repository tabs** have no menu in phase 3:
 a tab is a place in the window, not an object of the repository, and its close button and the
 working-changes row's "Show in folder" cover what a tab menu would offer (D92).
@@ -1552,7 +1569,8 @@ working-changes row's "Show in folder" cover what a tab menu would offer (D92).
 
 **Empty graph area** (below the last row, or a graph without commits). Header: the repository's
 name. 1. Fetch all remotes 2. Pull 3. Push — 4. Create branch… 5. Stash changes… — 6. Manage
-remotes…. Enabled as the toolbar's buttons (4d).
+remotes…. Enabled as the toolbar's buttons (4d), with their tooltips as reasons (so "Stash
+changes…" is disabled during an operation in progress, D119).
 
 **Graph labels:** a right-click on a label opens the menu of what it stands for (local branch,
 remote branch, tag, stash; `HEAD` → the commit menu); the "+N" label opens the commit's menu.
@@ -1588,7 +1606,7 @@ enabled). No dropdowns. A disabled button's tooltip gives its reason
 | Pull | 2.18, the current branch from its upstream | no repository; detached; no upstream; a gone upstream; operation in progress; no remotes (2.18's texts, in this order) |
 | Push | 2.19, the current branch: to its upstream, or the push dialog | no repository; detached; HEAD unborn; no remotes; a local upstream ("<b> tracks a local branch") |
 | Branch | 2.4, the name dialog at HEAD, "Check out the new branch" ticked | no repository; HEAD unborn |
-| Stash | 2.24, the stash dialog | no repository; HEAD unborn; nothing to stash |
+| Stash | 2.24, the stash dialog | no repository; HEAD unborn; an operation in progress ("Finish or abort the <kind> first", D119); conflicts without an operation ("Resolve the conflicts first", D119); nothing to stash (2.24's texts, in this order) |
 | Pop | 2.25, pops `stash@{0}` | no repository; no stashes |
 
 While an operation runs the buttons stay enabled and a click queues its operation; a second
@@ -1675,7 +1693,15 @@ and "Yes" (D115).
 
 Each dialog root has an automation peer that makes it a control element (4a), so the
 real-window pass can wait for `RemotesDialog`, `ErrorDialog` and the others by id, not only for
-their buttons.
+their buttons. As built (WP3b, WP6), each title is a text element with an id of its own:
+`ConfirmTitle`, `NameDialogTitle`, `ResetTitle`, `PickTitle`, `ChoiceTitle`, `PushTitle`,
+`RemotesTitle`, `ErrorTitle`, `FinishingTitle`, and `DialogTitle` for the four prompt dialogs;
+and these texts have ids too: `ResetText` (the reset dialog's text), `PushRemote` (the push
+dialog's remote shown as text), `PushBranchError` (its validation message), `RemoteUrl` (a
+remote row's shown URL), `FinishingText`, `PassphraseText`, `HostKeyQuestion`,
+`CredentialUser` (the user shown as text for a `Password` prompt). The credentials dialog
+labels its boxes "User name" and "Password"; `PickFilter`'s placeholder is "Filter",
+`PushBranchBox`'s "Branch on the remote", `RemoteNameBox`'s "Name" and `RemoteUrlBox`'s "URL".
 
 ### 4g. Drag a branch onto a branch
 
@@ -1711,7 +1737,7 @@ drive and capture it with plain mouse input, and nothing leaves the window.
 | Target B | Items |
 |---|---|
 | The current branch | Merge <A> into <B> (2.8) · Merge <A> into <B> (create a merge commit) (2.9) · Fast-forward <B> to <A> (2.10; disabled unless B is an ancestor of A: "<B> has commits that <A> does not have") |
-| Another local branch | Fast-forward <B> to <A> (2.7; same rule, and disabled when B is checked out in another worktree) · Check out <B> and merge <A> into it (2.1 then 2.8 in one operation, "Check out and merge"; the detached-HEAD confirmation of 2.1 applies; a blocked checkout stops it with the plain "Checkout blocked" dialog, without the stash button, because the merge would then run on top of re-applied changes) |
+| Another local branch | Fast-forward <B> to <A> (2.7; same rule, and disabled when B is checked out in another worktree: "<B> is checked out in another worktree (<folder>)") · Check out <B> and merge <A> into it (2.1 then 2.8 in one operation, "Check out and merge"; disabled when B is checked out in another worktree, with the same reason, because git refuses that checkout, D120; the detached-HEAD confirmation of 2.1 applies; a blocked checkout stops it with the plain "Checkout blocked" dialog, without the stash button, because the merge would then run on top of re-applied changes) |
 | A remote branch `<r>/<x>` (A local) | Push <A> to <r>/<x> (`git push --progress <r> refs/heads/<A>:refs/heads/<x>`) · Push <A> to <r>/<x> and track it (`--set-upstream`). The remote-side name is `<x>` as `refs/remotes/<r>/<x>` maps under the remote's default fetch refspec; for a remote with another fetch refspec the drop offers nothing ("<r> maps its branches differently: use Push <A>…") |
 
   Rebase and "create pull request" are left out (owner's answer 1).
@@ -1748,7 +1774,7 @@ drive and capture it with plain mouse input, and nothing leaves the window.
   title `MultiSelectionTitle` "3 commits selected", then `MultiSelectionList` with one
   `MultiSelectionItem` per commit in row order: short SHA (code font, secondary) and subject
   (cut with "…"), then the hint "Right-click a selected commit for what can be done with all of
-  them." (secondary). No changed-file list.
+  them." (secondary, `MultiSelectionHint`). No changed-file list.
 - **What works on several:** cherry-pick (2.13), revert (2.14), copy SHAs. Squash and compare are
   left out (phase 4, phase 5).
 - **Ancestry for the menus:** `CommitGraphData.IsReachableFromHead(sha)`, computed lazily when
@@ -1807,23 +1833,33 @@ branch, stash and pop are one toolbar click.
   merge started in a terminal sets off `RefreshAsync`, which reads the status: the banner
   appears. The app's own operations pause the watcher and refresh afterwards (D71), so the banner
   appears once, after the operation.
-- **Banner** (`Views/Shell/ConflictBanner`, in `CommitGraphView` above the graph or the diff,
-  36 high, `ConflictBanner`): warning icon (`IconAlert`, new), `BannerText`, and `BannerAbortButton`
-  at the right. Background `VcBannerBackgroundBrush`, a 1 px bottom line `VcWarningBrush`
-  (6.4). Texts ("N files have conflicts" uses "1 file has" for one; "conflicts resolved" when
-  none is conflicted):
+- **Banner** (`Views/Shell/ConflictBanner`, in `CommitGraphView` above the graph's column
+  headers or the diff, `ConflictBanner`): warning icon (`IconAlert`, new), `BannerText`, and
+  `BannerAbortButton` at the right. Background `VcBannerBackgroundBrush`, a 1 px bottom line
+  `VcWarningBrush` (6.4). **Height (D122):** the text wraps and the banner grows with it: it is
+  at least 36 high, exactly 36 when its text fits on one line (a wide enough graph area), and as
+  high as its lines need otherwise. At 1100×700 the graph area is 440 wide, so the merge
+  banner below has two lines and the cherry-pick banner of a sequence (with "1 more commit
+  waits…") four. The column headers and the rows below it move down by the banner's height:
+  harnesses take row positions from the graph control's bounds in the scripted pass, and in
+  the real window from the `ConflictBanner` element's bounds (UI Automation) plus the row
+  constants (headers 28, rows 26), never from fixed numbers while a banner is shown. Texts ("N
+  files have conflicts" uses "1 file has" for one; "conflicts resolved" when none is
+  conflicted):
 
 | State | Text | Button |
 |---|---|---|
 | Merge | `Merging: "Merge branch 'feature/conflict'". 1 file has conflicts.` / `… Conflicts resolved: commit to finish the merge.` | "Abort merge" |
 | CherryPick | `Cherry-picking a1b2c3d "Conflicting change". 1 file has conflicts.` / `… Conflicts resolved: commit to finish the cherry-pick.`; when `Remaining > 0` (a sequence from a terminal) ` 2 more commits wait: continue them in a terminal (git cherry-pick --continue).`; stopped between commits: `Cherry-pick stopped with 2 commits left: continue in a terminal, or abort.` (none left: `Cherry-pick stopped with no commits left: abort to end it.`); `Empty`: `Cherry-picking a1b2c3d "…" changes nothing: its changes are already here. Abort to go on.` | "Abort cherry-pick" |
-| Revert | as CherryPick with "Reverting", "revert" and `git revert --continue` | "Abort revert" |
+| Revert | as CherryPick with "Reverting", "revert" and `git revert --continue`; `Empty` (only on a git that keeps `REVERT_HEAD` after an empty revert, D117): `Reverting a1b2c3d "…" changes nothing: it is already undone. Abort to go on.` | "Abort revert" |
 | Rebase | `Rebasing feature/conflict onto 1a2b3c4. 1 file has conflicts.` / `… Conflicts resolved: continue in a terminal (git rebase --continue), or abort.` | "Abort rebase" |
-| ApplyMailbox | `Applying patches (git am). 1 file has conflicts.` | "Abort" |
-| Conflicts without an operation (a stash that did not apply cleanly) | `1 file has conflicts. Resolve it, then stage it.` | none |
+| ApplyMailbox | `Applying patches (git am). 1 file has conflicts.` / `Applying patches (git am). Continue in a terminal (git am --continue), or abort.` | "Abort" |
+| Conflicts without an operation (a stash that did not apply cleanly) | `1 file has conflicts. Resolve it, then stage it.` (several: `N files have conflicts. Resolve them, then stage them.`) | none |
 
   The banner's tooltip says: "Continue and Skip, and the conflict resolver, come in a later
-  version. Resolve the files in your editor and stage them, or abort." (phase 4).
+  version. Resolve the files in your editor and stage them, or abort." (phase 4); for conflicts
+  without an operation, which have no Abort: "The conflict resolver comes in a later version.
+  Resolve the files in your editor and stage them." (as built by WP9).
 - **Abort** (2.15), confirmation question per kind: "Abort merging "Merge branch
   'feature/conflict'"? Changes made to resolve conflicts are lost." / "Abort the cherry-pick?
   HEAD goes back to where it was before it started, and changes made to resolve conflicts are
@@ -1852,9 +1888,14 @@ branch, stash and pop are one toolbar click.
 - **Left for phase 4:** continue, skip, the resolver, taking a side per file, an external merge
   tool, and the banner of a rebase the app itself starts from its menus. A pull that rebases
   (D84) and stops is shown by this phase's banner, with Abort.
-- **Toolbar and menus during an operation in progress:** Pull, Merge, Cherry-pick and Revert are
-  disabled with "Finish or abort the <kind> first"; checkout, reset, stash and others are left to
-  git, whose refusal shows in the error dialog.
+- **Toolbar and menus during an operation in progress:** Pull, Merge, Cherry-pick, Revert and
+  Stash (the toolbar's Stash and every "Stash changes…" item, D119) are disabled with "Finish or
+  abort the <kind> first"; while files have conflicts without an operation, Stash is disabled
+  with "Resolve the conflicts first" (D119). Checkout, reset, applying and popping a stash and
+  the others are left to git, whose refusal shows in the error dialog. Stash is not left to git
+  because git does not always refuse it: during a merge with no conflicts left,
+  `git stash push` succeeds and deletes `MERGE_HEAD`, losing the pending merge without a word
+  (checked on Git 2.36; with conflicts git refuses with `needs merge`).
 
 ## 6. Settings, session, left panel, earlier checks
 
@@ -2265,10 +2306,17 @@ the same Avalonia double-tap recognition as the graph's labels.
   several steps. So: once WP-S2 is merged, the lead times one representative scripted check and
   one RW check, extrapolates, and writes the budget for both passes into `status.md`'s Notes
   and the report before WP10 starts. To keep it down: RW checks share app launches and servers
-  where their scenarios allow (17 and 21 on one server and one launch, 21b on its own because
-  its `fake-ssh` remote would be fetched by the toolbar's Fetch, D115; 28 and 29 on one;
-  9, 10 and 14 on one), shared scenario templates, the held server instead of waits, and no
-  fixed sleeps. The report records the measured times.
+  where their scenarios allow, shared scenario templates, the held server instead of waits, and
+  no fixed sleeps. The report records the measured times. The launches the report's parts
+  settle on: checks 1, 5, 7 and 23 on one launch on an ops copy (check 7's merge last); 13 and
+  16 on one launch on an ops copy; 17 and 21 on one server and one launch; 28 and 29 step 1 on
+  one launch on sync. Every other RW check takes launches of its own: 21b (its `fake-ssh`
+  remote would be fetched by the toolbar's Fetch, D115); 9, 10 and 14, each on a fresh copy of
+  its own scenario (check 9 needs the ops scenario as built, check 10 part C files written
+  before the launch, check 14 `CheckoutBlockedAsync`, and three tabs in one launch would put a
+  strip of tabs into every capture that the scripted pictures do not have); 11; 15 (its changes
+  are written before the launch); 19 and 22, each on sync at the server; 29 step 3 on ops with
+  `mirror`; and 31, two launches (one per close).
 - Risks:
   1. Test duration (plan risk 12): the scripted walk-through grows again; watch the hot laptop.
   2. Cancel on macOS (D37): only git is killed; ssh and the askpass helper end when their pipes
