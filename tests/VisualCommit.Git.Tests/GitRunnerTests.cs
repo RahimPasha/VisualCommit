@@ -134,6 +134,35 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task Git_speaks_English_when_the_user_has_LANGUAGE_set_to_another_language()
+    {
+        // gettext puts LANGUAGE before LC_ALL; a German desktop sets it, and git inherits it from
+        // the app's own environment. Set here for this process for a moment: every git call of
+        // the tests goes through the runner, which overrides it.
+        using var repo = await TempRepo.CreateAsync();
+        var runner = new GitRunner(GitPath);
+        var before = Environment.GetEnvironmentVariable("LANGUAGE");
+        GitResult language;
+        GitResult refused;
+        try
+        {
+            Environment.SetEnvironmentVariable("LANGUAGE", "de_DE:de");
+            language = await runner.RunAsync(Script("echo language=${LANGUAGE-unset}"), TestCancelled);
+            refused = await runner.RunAsync(
+                new GitCommand("switch", "--no-guess", "no-such-branch") { WorkingDirectory = repo.Path, Environment = repo.Environment },
+                TestCancelled);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("LANGUAGE", before);
+        }
+
+        Assert.Equal("language=en", language.StandardOutput.Trim());
+        Assert.False(refused.Succeeded);
+        Assert.Contains("invalid reference: no-such-branch", refused.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Output_lines_are_streamed_while_git_is_still_running()
     {
         var runner = new GitRunner(GitPath);
