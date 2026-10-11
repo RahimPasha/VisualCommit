@@ -280,9 +280,17 @@ public static partial class Scenarios
     /// once per test process: the server's empty repository is replaced by the template's. Dispose
     /// it before its server.
     /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="server"/> serves an existing repository in place (<see cref="AuthRemoteServer.ServesInPlace"/>), which is not the server's to replace.</exception>
     public static async Task<TempRepo> AuthRemoteAsync(AuthRemoteServer server)
     {
         ArgumentNullException.ThrowIfNull(server);
+        if (server.ServesInPlace)
+        {
+            throw new ArgumentException(
+                $"The server serves {server.RepositoryPath} in place; the auth scenario replaces the server's own repository and would delete that one. Start the server without an existing repository.",
+                nameof(server));
+        }
+
         var template = await AuthRemoteTemplate.Value.ConfigureAwait(false);
         var repo = await template.CopyAsync().ConfigureAwait(false);
         try
