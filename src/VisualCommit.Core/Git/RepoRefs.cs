@@ -26,6 +26,19 @@ public enum RefKind
 /// <param name="Behind">Commits on the upstream that the local branch lacks. 0 without an upstream.</param>
 /// <param name="UpstreamGone">The branch has an upstream configured, but the remote branch no longer exists.</param>
 /// <param name="IsHead">This local branch is the one HEAD points to.</param>
+/// <param name="UpstreamRef">
+/// For a local branch with an upstream, the upstream's full ref (<c>%(upstream)</c>):
+/// <c>refs/remotes/origin/main</c>, or <c>refs/heads/main</c> for a local upstream. Null without
+/// an upstream (D101). Leases, backups and fast-forwards use it.
+/// </param>
+/// <param name="UpstreamRemote">
+/// For a local branch with an upstream, its remote's name (<c>%(upstream:remotename)</c>):
+/// <c>origin</c>, or <c>.</c> for a local upstream (<see cref="HasLocalUpstream"/>). Null without one.
+/// </param>
+/// <param name="UpstreamRemoteRef">
+/// For a local branch with an upstream, the branch's name on the remote
+/// (<c>%(upstream:remoteref)</c>), such as <c>refs/heads/main</c>. Null without one.
+/// </param>
 public sealed record GitRef(
     string FullName,
     string Name,
@@ -36,7 +49,14 @@ public sealed record GitRef(
     int Ahead = 0,
     int Behind = 0,
     bool UpstreamGone = false,
-    bool IsHead = false);
+    bool IsHead = false,
+    string? UpstreamRef = null,
+    string? UpstreamRemote = null,
+    string? UpstreamRemoteRef = null)
+{
+    /// <summary>The upstream is a branch of this repository (<c>branch.&lt;b&gt;.remote = .</c>): no push, force push or remote deletion (D101).</summary>
+    public bool HasLocalUpstream => UpstreamRemote == ".";
+}
 
 /// <summary>One entry of <c>git stash list</c>.</summary>
 /// <param name="Index">Its position: 0 for the newest.</param>

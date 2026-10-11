@@ -65,8 +65,27 @@
     <shell:StatusBarView Grid.Row="3" />
 
   </Grid>
-  <Panel IsVisible="{Binding Dialogs.IsOpen}">
-    <dialogs:ConfirmationView DataContext="{Binding Dialogs.Current}" />
-  </Panel>
+
+  <!-- The in-window context menu (docs/phase-3-design.md 4a), over the main grid and under the
+       dialogs; and the layer a dragged branch is drawn on (4g), which takes no input. Both are
+       empty until WP5 and WP8 fill them. -->
+  <shell:MenuLayer Name="MenuLayer" DataContext="{Binding Menu}" />
+  <shell:DragLayer Name="DragLayer" />
+
+  <!-- The dialog layer (D69): the open dialogs, the bottom one first, each over a backdrop of its
+       own, so that a dialog opened over another covers it (D104). The view of each is found by
+       its view model's type. -->
+  <ItemsControl Name="DialogLayer"
+                ItemsSource="{Binding Dialogs.Open}"
+                IsVisible="{Binding Dialogs.IsOpen}">
+    <ItemsControl.ItemsPanel>
+      <ItemsPanelTemplate>
+        <Panel />
+      </ItemsPanelTemplate>
+    </ItemsControl.ItemsPanel>
+    <ItemsControl.ItemTemplate>
+      <dialogs:DialogViewLocator />
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
   </Panel>
 </Window>

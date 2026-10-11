@@ -52,7 +52,7 @@ public partial class Phase2Checks
         app.MoveMouse(new Point(130, 700 - 13));
         var discarded = app.Capture();
         discarded.Save(Phase, "17b-discarded");
-        Assert.False(app.FindByAutomationId("ConfirmationDialog").IsEffectivelyVisible);
+        Assert.False(IsDialogShown(app));
         Assert.Equal("Discarded changes to Calculator.cs.", app.Find<TextBlock>("RestoreBarText").Text);
         Assert.True(app.Find<Button>("RestoreDiscardButton").IsEffectivelyVisible);
         Assert.True(app.Find<Button>("DismissRestoreButton").IsEffectivelyVisible);
@@ -220,10 +220,19 @@ public partial class Phase2Checks
     }
 
     private static Task WaitForDialogAsync(ShellDriver app) =>
-        app.WaitForAsync(() => app.FindByAutomationId("ConfirmationDialog").IsEffectivelyVisible && app.Find<Button>("CancelButton").IsFocused, "the confirmation dialog, Cancel focused");
+        app.WaitForAsync(() => IsDialogShown(app) && app.Find<Button>("CancelButton").IsFocused, "the confirmation dialog, Cancel focused");
 
     private static Task WaitForNoDialogAsync(ShellDriver app) =>
-        app.WaitForAsync(() => !app.FindByAutomationId("ConfirmationDialog").IsEffectivelyVisible, "the dialog to close");
+        app.WaitForAsync(() => !IsDialogShown(app), "the dialog to close");
+
+    /// <summary>
+    /// Whether a confirmation is shown. Since phase 3's dialog layer (D104) a closed dialog's view
+    /// leaves the window instead of staying there hidden, so a closed dialog is one that is not
+    /// there or not visible.
+    /// </summary>
+    private static bool IsDialogShown(ShellDriver app) =>
+        app.Window.GetVisualDescendants().OfType<Control>().Any(control =>
+            Avalonia.Automation.AutomationProperties.GetAutomationId(control) == "ConfirmationDialog" && control.IsEffectivelyVisible);
 
     /// <summary>The discard dialog as "The confirmation dialog" says: texts, buttons, the focus on Cancel, the backdrop over the window.</summary>
     private static void AssertDialog(ShellDriver app, Screenshot screenshot, string question)

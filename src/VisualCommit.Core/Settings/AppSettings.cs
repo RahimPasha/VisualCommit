@@ -39,4 +39,15 @@ public sealed record AppSettings
     public FileListMode FileList { get; init; } = FileListMode.Flat;
 
     public DiffMode DiffMode { get; init; } = DiffMode.Inline;
+
+    /// <summary>
+    /// How often the active tab's repository is fetched in the background, in minutes; 0 turns
+    /// auto-fetch off (phase 3 design 6.1, D79, D85). No screen sets it in phase 3: it is edited
+    /// in <c>settings.json</c>. The environment variable <c>VISUALCOMMIT_AUTO_FETCH_MINUTES</c>
+    /// overrides it.
+    /// </summary>
+    public int AutoFetchMinutes { get; init; } = 5;
+
+    /// <summary>The stash dialog's "Include untracked files" starts with the last choice (phase 3 design 6.2).</summary>
+    public bool StashIncludeUntracked { get; init; } = true;
 }

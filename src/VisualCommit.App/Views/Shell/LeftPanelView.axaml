@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
+             xmlns:shell="using:VisualCommit.App.Views.Shell"
              x:Class="VisualCommit.App.Views.Shell.LeftPanelView"
              x:DataType="vm:LeftPanelViewModel"
              AutomationProperties.AutomationId="LeftPanel">
@@ -118,6 +119,7 @@
                     Height="26"
                     Classes.selected="{Binding IsSelected}"
                     Command="{Binding ActivateCommand}"
+                    shell:RefDrag.Source="{Binding}"
                     AutomationProperties.AutomationId="RefItem"
                     AutomationProperties.Name="{Binding Text}">
               <DockPanel Margin="0,0,12,0">

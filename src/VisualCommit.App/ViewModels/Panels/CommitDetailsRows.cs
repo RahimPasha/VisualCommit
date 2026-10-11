@@ -131,4 +131,11 @@ public sealed partial class ChangedFileRow : ObservableObject
 
     /// <summary>The whole path, and where it came from, for the tooltip of a row cut off by a narrow panel.</summary>
     public string ToolTip => HasOrigin ? $"{Key}\n{OriginText}" : Key;
+
+    /// <summary>
+    /// The tooltip of a file row in the stage panel's unstaged list, which binds to it
+    /// (docs/phase-3-design.md section 8): <see cref="ToolTip"/> for now. WP9 makes a conflicted
+    /// file's say "Conflict: resolve it in your editor, then stage it" (section 5).
+    /// </summary>
+    public string RowToolTip => ToolTip;
 }

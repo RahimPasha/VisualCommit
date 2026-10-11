@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -18,6 +19,8 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     private readonly TabServices _services;
     private readonly LeftPanelViewModel _emptyLeftPanel = new();
     private readonly CommitDetailsViewModel _emptyDetails;
+    private readonly ToolbarViewModel _emptyToolbar = new(null);
+    private readonly OperationStatusViewModel _emptyStatus = new(null);
     private bool _disposed;
 
     public RepoTabViewModel(TabServices services)
@@ -42,7 +45,14 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// <summary>The repository open in this tab, or null for the welcome page.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasRepository), nameof(ShowsWelcome), nameof(LeftPanel), nameof(Details), nameof(BranchText), nameof(Changes), nameof(ShowsWorkingChanges))]
+    [NotifyPropertyChangedFor(nameof(Toolbar), nameof(OperationStatus))]
     public partial RepositoryViewModel? Repository { get; private set; }
+
+    /// <summary>The toolbar's buttons (docs/phase-3-design.md 4d): the repository's, or a toolbar whose commands are all disabled.</summary>
+    public ToolbarViewModel Toolbar => Repository?.Toolbar ?? _emptyToolbar;
+
+    /// <summary>What the status bar shows of the operations (4e): the repository's, or "Ready".</summary>
+    public OperationStatusViewModel OperationStatus => Repository?.OperationStatus ?? _emptyStatus;
 
     public bool HasRepository => Repository is not null;
 
@@ -163,7 +173,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
         FailedPath = null;
         var previous = Repository;
-        var opened = new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening, _services.Dialogs);
+        var opened = new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening, _services.Dialogs, _services);
         opened.PropertyChanged += OnRepositoryPropertyChanged;
         Repository = opened;
         Title = repository.Name;

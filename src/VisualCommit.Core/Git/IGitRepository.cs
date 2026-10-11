@@ -105,6 +105,243 @@ public interface IGitRepository
 
     /// <summary>Creates a watcher for this repository's git folder and working tree (D52, D71). It does nothing until started.</summary>
     IRepositoryWatcher CreateWatcher();
+
+    // Phase 3: branch, remote, stash and tag operations (docs/phase-3-design.md, section 2). Each
+    // runs inside one operation of the queue (D81). A write throws GitException with git's own
+    // text when git refuses; "options" carries the operation's prompt variables and progress
+    // (NetworkOptions); local writes get CancellationToken.None from the queue (1.5).
+
+    // Reads (GIT_OPTIONAL_LOCKS=0).
+
+    /// <summary>
+    /// How many commits HEAD has that no branch, remote branch or tag reaches:
+    /// <c>git rev-list --count HEAD --not --branches --remotes --tags</c>. Asked before any
+    /// checkout while HEAD is detached; above 0, the checkout confirms and backs up (2.1).
+    /// </summary>
+    Task<int> CountDetachedCommitsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether <paramref name="ancestor"/> is an ancestor of <paramref name="descendant"/>, or the
+    /// same commit: <c>git merge-base --is-ancestor</c> (exit 0 yes, 1 no). Used by 2.6's
+    /// question, the drop menu's fast-forwards (2.7, 2.10, 4g).
+    /// </summary>
+    Task<bool> IsAncestorAsync(string ancestor, string descendant, CancellationToken cancellationToken = default);
+
+    /// <summary>The number of commits in <paramref name="to"/> that <paramref name="from"/> lacks: <c>git rev-list --count &lt;from&gt;..&lt;to&gt;</c> (2.18's result).</summary>
+    Task<int> CountCommitsAsync(string from, string to, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The object id <paramref name="revision"/> names, without peeling a tag
+    /// (<c>git rev-parse --verify --quiet</c>), or null when it names nothing. Used for the
+    /// commit a backup or a lease holds (2.20, 2.22, 2.29) and the new stash (2.31).
+    /// </summary>
+    Task<string?> ResolveAsync(string revision, CancellationToken cancellationToken = default);
+
+    /// <summary>The repository's worktrees and the branch each has checked out: <c>git worktree list --porcelain</c> (2.7).</summary>
+    Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The configured remotes with their URLs: <c>git remote -v</c>, sorted by name (2.23). URLs are as configured: show them through <see cref="RemoteInfo.ShownUrl"/> (D103).</summary>
+    Task<IReadOnlyList<RemoteInfo>> ReadRemotesAsync(CancellationToken cancellationToken = default);
+
+    // Backups (2.0, D83).
+
+    /// <summary>
+    /// Writes the backup refs of <paramref name="request"/> under <c>refs/visualcommit/backup/</c>
+    /// with one UTC timestamp (D67's format) in one <c>git update-ref --stdin</c> transaction of
+    /// <c>create</c> lines; on a collision the whole batch is retried with a suffix on the
+    /// kind-and-time part (2.0).
+    /// </summary>
+    Task<BackupResult> SaveBackupRefsAsync(BackupRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Before a hard reset to <paramref name="target"/>: a snapshot commit (D67's way, without a
+    /// ref) of every staged or unstaged tracked file, every file staged as new and every
+    /// untracked file whose path <paramref name="target"/> tracks (<c>git ls-tree -r</c>), with
+    /// the real index's tree (<c>git write-tree</c>) as second parent when it has no conflicts.
+    /// Null when there is nothing to save (2.11). It goes into the reset's backup batch as
+    /// <see cref="BackupRequest.ChangesCommit"/>.
+    /// </summary>
+    Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Before an abort: a snapshot commit (D67's way, without a ref) of every changed tracked
+    /// file, or null when none changed (2.15).
+    /// </summary>
+    Task<string?> SnapshotTrackedChangesAsync(CancellationToken cancellationToken = default);
+
+    // Branches and checkouts (2.1 to 2.10).
+
+    /// <summary>Checks out the local branch <paramref name="branch"/> (short name): <c>git switch --no-guess &lt;branch&gt;</c> (2.1).</summary>
+    Task CheckoutBranchAsync(string branch, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates the local branch <paramref name="branch"/> tracking the remote branch
+    /// <paramref name="remoteBranchRef"/> (<c>refs/remotes/&lt;r&gt;/&lt;b&gt;</c>) and checks it out:
+    /// <c>git switch --create &lt;branch&gt; --track &lt;remoteBranchRef&gt;</c> (2.2).
+    /// </summary>
+    Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Detaches HEAD at <paramref name="commit"/>: <c>git switch --detach &lt;sha&gt;</c> (2.3).</summary>
+    Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates the branch <paramref name="name"/> at <paramref name="startPoint"/> (a full SHA,
+    /// <c>refs/heads/…</c>, <c>refs/remotes/…</c> or <c>refs/tags/&lt;t&gt;^{commit}</c>):
+    /// <c>git branch &lt;name&gt; &lt;start&gt;</c>, or with <paramref name="checkout"/>
+    /// <c>git switch --create &lt;name&gt; &lt;start&gt;</c>. A remote branch as start becomes the
+    /// upstream, as git's <c>branch.autoSetupMerge</c> says (2.4).
+    /// </summary>
+    Task CreateBranchAsync(string name, string startPoint, bool checkout, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Renames a local branch, the current one too; its upstream setting moves with it: <c>git branch --move &lt;branch&gt; &lt;newName&gt;</c> (2.5).</summary>
+    Task RenameBranchAsync(string branch, string newName, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes a local branch, merged or not: <c>git branch --delete --force &lt;branch&gt;</c>. Save its backup first (2.6).</summary>
+    Task DeleteBranchAsync(string branch, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fast-forwards the local branch <paramref name="branch"/>, which is not checked out, to
+    /// <paramref name="target"/> (a full ref): <c>git fetch --no-auto-maintenance
+    /// --no-write-fetch-head . &lt;target&gt;:refs/heads/&lt;branch&gt;</c>. Git refuses a
+    /// non-fast-forward and a branch checked out in any worktree (2.7). No prompts.
+    /// </summary>
+    Task FastForwardBranchAsync(string branch, string target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Merges <paramref name="reference"/> (the full name of a local or remote branch) into the
+    /// current branch with the message git would write for its short name: the message from
+    /// <c>git fmt-merge-msg</c>, then <c>git merge --no-edit --no-log -m &lt;message&gt;
+    /// [--no-ff | --ff-only] &lt;reference&gt;</c> (2.8 to 2.10, D94). Conflicts are returned,
+    /// not thrown: git failed and the status lists a conflicted file.
+    /// </summary>
+    Task<MergeResult> MergeAsync(string reference, MergeMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    // History (2.11 to 2.15).
+
+    /// <summary>Moves the current branch (or a detached HEAD) to <paramref name="commit"/>: <c>git reset --soft | --mixed --quiet | --hard &lt;sha&gt;</c>. Save the backups first (2.11).</summary>
+    Task ResetAsync(string commit, ResetMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies one commit on HEAD: <c>git cherry-pick &lt;sha&gt;</c>, never several at once (no
+    /// sequencer, D88). Returns <see cref="ApplyResult.Conflicts"/> when it stopped with
+    /// conflicted files and <see cref="ApplyResult.Empty"/> when it stopped with nothing to
+    /// commit (2.12).
+    /// </summary>
+    Task<ApplyResult> CherryPickAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reverts one commit: <c>git revert --no-edit &lt;sha&gt;</c>, a merge commit with
+    /// <c>-m 1</c> (<paramref name="isMerge"/>). Results as <see cref="CherryPickAsync"/> (2.14).
+    /// </summary>
+    Task<ApplyResult> RevertAsync(string commit, bool isMerge, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Aborts the operation in progress: <c>git merge --abort</c>, <c>git cherry-pick --abort</c>,
+    /// <c>git revert --abort</c>, <c>git rebase --abort</c> or <c>git am --abort</c>. Save the
+    /// backups first (2.15).
+    /// </summary>
+    Task AbortAsync(InProgressKind kind, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    // Remotes and the network (2.16 to 2.23, 2.29).
+
+    /// <summary>
+    /// Fetches <paramref name="remote"/>, or every remote when null: <c>git fetch --progress
+    /// &lt;remote&gt;</c> or <c>git fetch --all --progress</c>, without <c>--prune</c> or
+    /// <c>--tags</c> (D99); with <paramref name="noAutoMaintenance"/> (auto-fetch, D85) also
+    /// <c>--no-auto-maintenance</c> (2.16, 2.17). Pull's first step is the fetch of one remote (2.18).
+    /// </summary>
+    Task FetchAsync(string? remote, NetworkOptions options, bool noAutoMaintenance = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pull's second step, after its fetch (2.18, D84): integrates the current branch
+    /// <paramref name="branch"/>'s upstream as <c>git pull</c> would, from <c>pull.ff</c>,
+    /// <c>branch.&lt;b&gt;.rebase</c> and <c>pull.rebase</c>: <c>git merge --ff-only FETCH_HEAD</c>,
+    /// <c>git rebase [--rebase-merges]</c> or <c>git merge --no-edit [--no-ff | --ff] FETCH_HEAD</c>;
+    /// a local upstream uses <see cref="GitRef.UpstreamRef"/> in place of <c>FETCH_HEAD</c>.
+    /// Conflicts are returned, not thrown.
+    /// </summary>
+    Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pushes a local branch: <c>git push --progress [--set-upstream] &lt;remote&gt;
+    /// refs/heads/&lt;branch&gt;:&lt;remote ref&gt;</c>, or with a lease
+    /// <c>--force-with-lease=&lt;remote ref&gt; --force-if-includes</c> (2.19, 2.20, 4g, D100).
+    /// </summary>
+    Task PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>Makes <paramref name="remoteBranchRef"/> (<c>refs/remotes/&lt;r&gt;/&lt;x&gt;</c>) the upstream of a local branch: <c>git branch --set-upstream-to=&lt;ref&gt; &lt;branch&gt;</c> (2.21).</summary>
+    Task SetUpstreamAsync(string branch, string remoteBranchRef, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a local branch's upstream: <c>git branch --unset-upstream &lt;branch&gt;</c> (2.21).</summary>
+    Task UnsetUpstreamAsync(string branch, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the branch <paramref name="branch"/> on <paramref name="remote"/> only while it is
+    /// still at <paramref name="expectedCommit"/>: <c>git push --progress
+    /// --force-with-lease=refs/heads/&lt;b&gt;:&lt;sha&gt; &lt;remote&gt; --delete refs/heads/&lt;b&gt;</c> (2.22, D100).
+    /// </summary>
+    Task DeleteRemoteBranchAsync(string remote, string branch, string expectedCommit, NetworkOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a remote: <c>git remote add &lt;name&gt; &lt;url&gt;</c> (2.23).</summary>
+    Task AddRemoteAsync(string name, string url, CancellationToken cancellationToken = default);
+
+    /// <summary>Renames a remote: <c>git remote rename &lt;old&gt; &lt;new&gt;</c> (2.23).</summary>
+    Task RenameRemoteAsync(string name, string newName, CancellationToken cancellationToken = default);
+
+    /// <summary>Changes a remote's URL: <c>git remote set-url &lt;name&gt; &lt;url&gt;</c> (2.23).</summary>
+    Task SetRemoteUrlAsync(string name, string url, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a remote and its remote branches: <c>git remote remove &lt;name&gt;</c>. Save the backups of its remote branches first (2.23).</summary>
+    Task RemoveRemoteAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Pushes a tag: <c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29).</summary>
+    Task PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the tag <paramref name="tag"/> on <paramref name="remote"/> only when it is the tag
+    /// object <paramref name="expectedObject"/> (the local tag's, which its backup holds):
+    /// <c>git push --progress --force-with-lease=refs/tags/&lt;t&gt;:&lt;sha&gt; &lt;remote&gt;
+    /// --delete refs/tags/&lt;t&gt;</c> (2.29, D100).
+    /// </summary>
+    Task DeleteRemoteTagAsync(string remote, string tag, string expectedObject, NetworkOptions options, CancellationToken cancellationToken = default);
+
+    // Stashes, tags, ignore (2.24 to 2.30).
+
+    /// <summary>
+    /// Stashes the changes: <c>git stash push [--include-untracked] [--message &lt;m&gt;]</c> (an
+    /// empty message lets git name it). Returns the new stash commit (<c>refs/stash</c>), or null
+    /// when git had nothing to stash (<c>No local changes to save</c>) (2.24, 2.31).
+    /// </summary>
+    Task<string?> StashAsync(string? message, bool includeUntracked, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies or pops the stash whose commit is <paramref name="stashCommit"/>, found again by
+    /// its id in <c>git stash list</c> (its position may have changed): <c>git stash apply
+    /// stash@{n}</c>, <c>git stash pop stash@{n}</c> or <c>git stash pop --index stash@{n}</c>
+    /// with its fallback (<see cref="StashApplyMode"/>). A stash no longer listed throws
+    /// <see cref="GitException"/> saying "This stash no longer exists" (2.25, 2.31).
+    /// </summary>
+    Task<ApplyResult> ApplyStashAsync(string stashCommit, StashApplyMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Drops the stash whose commit is <paramref name="stashCommit"/>, found by its id as <see cref="ApplyStashAsync"/> finds it: <c>git stash drop stash@{n}</c>. Save its backup first (2.26).</summary>
+    Task DropStashAsync(string stashCommit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a tag at <paramref name="target"/>: lightweight (<c>git tag &lt;t&gt; &lt;sha&gt;</c>),
+    /// or annotated with <paramref name="message"/> (<c>git tag --annotate --cleanup=whitespace
+    /// --file=- &lt;t&gt; &lt;sha&gt;</c>, the message on standard input) (2.27).
+    /// </summary>
+    Task CreateTagAsync(string name, string target, string? message, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes a local tag: <c>git tag --delete &lt;t&gt;</c>. Save its backup first (2.28).</summary>
+    Task DeleteTagAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends <paramref name="pattern"/> (already escaped, 2.30) as a line of the working tree's
+    /// <c>.gitignore</c>, creating it, after a line feed when the file does not end with one. No
+    /// git call.
+    /// </summary>
+    Task AppendToGitignoreAsync(string pattern, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A snapshot taken before a discard (D67).</summary>
@@ -129,9 +366,16 @@ public interface IRepositoryProvider
     /// Clones <paramref name="url"/> into <paramref name="destination"/>, which must not exist yet
     /// or be empty, reporting git's progress, and opens the result. If the clone fails or is
     /// cancelled, a destination folder the clone created is removed again.
+    /// <paramref name="environment"/> holds the variables of the clone's prompt scope, which lead
+    /// git's and ssh's prompts to the app's dialogs (phase 3 design 3.3); null adds none.
     /// </summary>
     /// <exception cref="GitException">Git reported an error; its message is git's own.</exception>
-    Task<IGitRepository> CloneAsync(string url, string destination, IProgress<CloneProgress>? progress, CancellationToken cancellationToken = default);
+    Task<IGitRepository> CloneAsync(
+        string url,
+        string destination,
+        IProgress<CloneProgress>? progress,
+        CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string?>? environment = null);
 }
 
 /// <summary>A line of progress from <c>git clone</c>.</summary>

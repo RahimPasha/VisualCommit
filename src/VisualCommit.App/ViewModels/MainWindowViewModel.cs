@@ -3,9 +3,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 
@@ -23,8 +26,9 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IAppLog _log;
     private readonly ISessionStore _session;
     private readonly TabServices _tabServices;
-    private readonly DialogHostViewModel _fallbackDialogs = new();
     private bool _restoring;
+    private bool _closeConfirmed;
+    private FinishingDialogViewModel? _finishing;
 
     public MainWindowViewModel(
         ISettingsStore settings,
@@ -68,10 +72,25 @@ public partial class MainWindowViewModel : ObservableObject
         Activate(Tabs[saved.ActiveTab >= 0 && saved.ActiveTab < Tabs.Count ? saved.ActiveTab : 0]);
         _restoring = false;
         UpdateCanClose();
+
+        // Auto-fetch looks at the active tab's repository (docs/phase-3-design.md 6.1, D85).
+        AutoFetch = new AutoFetchScheduler(
+            () => ActiveTab.Repository,
+            () => Dialogs.IsOpen,
+            settings,
+            _tabServices.Clock,
+            _log);
+        AutoFetch.Start();
     }
 
-    /// <summary>The window's dialog layer (D69): what the overlay shows, and Esc's first target.</summary>
-    public DialogHostViewModel Dialogs => _tabServices.Dialogs as DialogHostViewModel ?? _fallbackDialogs;
+    /// <summary>The window's dialog layer (D69, D104): what the overlay shows, and one of Esc's targets.</summary>
+    public DialogHostViewModel Dialogs => _tabServices.DialogHost;
+
+    /// <summary>The window's in-window context menu layer (docs/phase-3-design.md 4a, D86).</summary>
+    public MenuLayerViewModel Menu { get; } = new();
+
+    /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
+    public AutoFetchScheduler AutoFetch { get; }
 
     /// <summary>The theme the app is showing.</summary>
     [ObservableProperty]
@@ -195,6 +214,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void CloseAll()
     {
+        AutoFetch.Dispose();
         var clones = Tabs.Select(tab => tab.Welcome.RunningClone).OfType<Task>().ToArray();
         foreach (var tab in Tabs)
         {
@@ -211,6 +231,88 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 // Cancelled or failed: the clone removed its folder either way.
             }
+        }
+    }
+
+    /// <summary>
+    /// The window is closing (docs/phase-3-design.md 1.8): returns true when it may close now.
+    /// While a repository runs an operation the user started, the close waits: what waits is
+    /// dropped, "Finishing operations" lists what runs, and <paramref name="closeWindow"/> is
+    /// called when they have ended, or when the user chooses "Quit now". A background auto-fetch
+    /// does not hold the window. Once the close is confirmed, every later call returns true.
+    /// </summary>
+    public bool TryClose(Action closeWindow)
+    {
+        ArgumentNullException.ThrowIfNull(closeWindow);
+        if (_closeConfirmed)
+        {
+            return true;
+        }
+
+        var running = Tabs
+            .Select(tab => tab.Repository)
+            .OfType<RepositoryViewModel>()
+            .Select(repository => (Repository: repository, Current: repository.Queue.Current))
+            .Where(entry => entry.Current is { IsBackground: false })
+            .ToList();
+        if (running.Count == 0)
+        {
+            _closeConfirmed = true;
+            return true;
+        }
+
+        if (_finishing is null)
+        {
+            foreach (var tab in Tabs)
+            {
+                tab.Repository?.Queue.DropWaiting();
+            }
+
+            _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), closeWindow);
+        }
+
+        return false;
+    }
+
+    /// <summary>Confirms the close without waiting: the app session ends (its owner disposes it).</summary>
+    public void ConfirmClose() => _closeConfirmed = true;
+
+    private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, Action closeWindow)
+    {
+        var items = repositories
+            .Select(repository => (Repository: repository, Current: repository.Queue.Current))
+            .Where(entry => entry.Current is { IsBackground: false })
+            .Select(entry => new FinishingItem(
+                $"{entry.Current!.Title} — {entry.Repository.Name}",
+                entry.Current.Kind == OperationKind.Local && entry.Current.HasSeveralSteps))
+            .ToList();
+        var dialog = new FinishingDialogViewModel(items);
+        _finishing = dialog;
+        try
+        {
+            var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()));
+            var answer = Dialogs.ShowAsync(dialog);
+            var first = await Task.WhenAny(idle, answer);
+            if (first == idle)
+            {
+                dialog.CloseAsFinished();
+            }
+            else if (!await answer)
+            {
+                // "Keep open": the window stays and the operations go on.
+                return;
+            }
+
+            _closeConfirmed = true;
+            closeWindow();
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Closing the window after the running operations failed.", ex);
+        }
+        finally
+        {
+            _finishing = null;
         }
     }
 
@@ -282,7 +384,12 @@ public partial class MainWindowViewModel : ObservableObject
         public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) =>
             throw new GitUnavailableException("No repositories can be created here.");
 
-        public Task<IGitRepository> CloneAsync(string url, string destination, IProgress<CloneProgress>? progress, CancellationToken cancellationToken = default) =>
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) =>
             throw new GitUnavailableException("No repositories can be cloned here.");
     }
 

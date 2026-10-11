@@ -346,6 +346,63 @@ public class GitRunnerTests
         Assert.Equal("git clone " + (argument.Contains(' ') ? $"\"{argument}\"" : argument), command.DisplayText);
     }
 
+    [Theory]
+    [InlineData("https://user:ghp_secret123@github.com/team/repo.git", "https://github.com/team/repo.git")]
+    [InlineData("http://user:p@ss@127.0.0.1:8080/x.git", "http://127.0.0.1:8080/x.git")]
+    [InlineData("https://a:secret@one/x https://b:secret@two/y", "https://one/x https://two/y")]
+    [InlineData("git@github.com:team/repo.git", "git@github.com:team/repo.git")]
+    [InlineData("https://host/people/user@example.com/repo.git", "https://host/people/user@example.com/repo.git")]
+    public void Removing_credentials_leaves_a_url_that_can_be_shared(string url, string expected) =>
+        Assert.Equal(expected, GitCommand.RemoveCredentials(url));
+
+    [Fact]
+    public async Task Every_call_runs_with_a_no_op_sequence_editor()
+    {
+        // D102: a user's sequence.editor would otherwise open for a rebase's list of commits.
+        var runner = new GitRunner(GitPath);
+
+        var result = await runner.RunAsync(Script("printf '%s' \"$GIT_SEQUENCE_EDITOR\""), TestCancelled);
+
+        Assert.Equal(":", result.StandardOutput);
+    }
+
+    [Fact]
+    public async Task The_recorded_output_hides_credentials_and_names_the_operation_the_call_belongs_to()
+    {
+        // D103 and 1.7: git remote -v and some errors print URLs with tokens in them.
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+        var secret = "https://alice:ghp_SECRET123@127.0.0.1:1/x.git";
+
+        using (VisualCommit.Core.Operations.GitOperationScope.Enter("op-42"))
+        {
+            await runner.RunAsync(Script($"echo {secret}; echo {secret} >&2"), TestCancelled);
+        }
+
+        await runner.RunAsync(new GitCommand("--version"), TestCancelled);
+
+        var (inside, outside) = (calls.Snapshot()[0], calls.Snapshot()[1]);
+        Assert.Equal("op-42", inside.OperationId);
+        Assert.Null(outside.OperationId);
+        Assert.DoesNotContain("ghp_SECRET123", inside.StandardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_SECRET123", inside.StandardError, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_SECRET123", inside.CommandText, StringComparison.Ordinal);
+        Assert.Contains("https://***@127.0.0.1:1/x.git", inside.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_failure_carries_gits_standard_output_too()
+    {
+        var runner = new GitRunner(GitPath);
+        var command = Script("echo merged-message; echo failed >&2; exit 1");
+
+        var result = await runner.RunAsync(command, TestCancelled);
+        var exception = Assert.Throws<GitException>(() => result.EnsureSuccess(command));
+
+        Assert.Equal("merged-message", exception.StandardOutput.Trim());
+        Assert.Equal("failed", exception.StandardError.Trim());
+    }
+
     [Fact]
     public async Task A_token_that_is_already_cancelled_does_not_start_git()
     {

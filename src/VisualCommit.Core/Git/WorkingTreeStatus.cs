@@ -16,16 +16,24 @@ public sealed record WorkingTreeStatus(
     /// <summary>A clean working tree.</summary>
     public static WorkingTreeStatus Clean { get; } = new([], [], new HashSet<string>(StringComparer.Ordinal));
 
+    /// <summary>
+    /// The merge, cherry-pick, revert, rebase or <c>git am</c> in progress, read from the files git
+    /// leaves in the git folder (phase 3 design 5, D89); <see cref="InProgressState.None"/> when
+    /// there is none.
+    /// </summary>
+    public InProgressState InProgress { get; init; } = InProgressState.None;
+
     /// <summary>Anything to show in the working-changes row (D60).</summary>
     public bool HasChanges => Staged.Count > 0 || Unstaged.Count > 0;
 
     /// <summary>Whether <paramref name="path"/> is untracked.</summary>
     public bool IsUntracked(string path) => Untracked.Contains(path);
 
-    /// <summary>Equal when both lists hold the same files with the same kinds, in the same order.</summary>
+    /// <summary>Equal when both lists hold the same files with the same kinds, in the same order, and the same operation is in progress.</summary>
     public bool SameAs(WorkingTreeStatus other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        return Staged.SequenceEqual(other.Staged) && Unstaged.SequenceEqual(other.Unstaged) && Untracked.SetEquals(other.Untracked);
+        return Staged.SequenceEqual(other.Staged) && Unstaged.SequenceEqual(other.Unstaged) && Untracked.SetEquals(other.Untracked)
+            && InProgress == other.InProgress;
     }
 }

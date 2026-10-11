@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Menus"
+             x:Class="VisualCommit.App.Views.Shell.MenuLayer"
+             x:DataType="vm:MenuLayerViewModel">
+
+  <!-- The layer the in-window context menu is drawn on (docs/phase-3-design.md 4a, D86): over the
+       main grid and under the dialog layer. Work package WP0 placed it in MainWindow.axaml, empty;
+       WP5 owns this file and draws the menu here. Without a background it takes no input. -->
+  <Panel Name="MenuPanel" />
+
+</UserControl>
