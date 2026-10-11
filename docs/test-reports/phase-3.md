@@ -93,10 +93,13 @@ Conventions:
   path the app copies (`FakeClipboard`) is relative to the working tree, with `/`, exactly as
   written in the check.
 - **The pointer before a capture.** Before a capture with no menu open that is not about hover,
-  both harnesses move the pointer to the neutral point (520, 640) at 1100×700. That point is in
-  the graph's Message column below the last row in every scenario of this part, where nothing
-  has a hover background or a tooltip. Phase 1's pass used (130, 687) in the status bar, but in
-  phase 3 the operation text there can have a tooltip. A capture with a menu open leaves the
+  both harnesses move the pointer to the neutral point (760, 687) at 1100×700, the same point as
+  part D's: the empty middle of the status bar, right of the operation's text, its bar, Cancel
+  and the "waiting" text and left of the git version, where nothing has a hover background or a
+  tooltip (`WindowLayout.NeutralX`/`NeutralY`; `ShellDriverCheckSupportTests` checks it, also
+  while the status bar is at its widest). Phase 1's pass used (130, 687), but in phase 3 the
+  operation text there can have a tooltip. The point first written here, (520, 640), was replaced
+  by part D's so that both harnesses use one point for every part. A capture with a menu open leaves the
   pointer where the right-click or the release opened the menu, outside it. Before a key opens a
   menu (check 5), the pointer is first moved to the neutral point, so that the menu does not open
   under it. A capture in the middle of a drag keeps the pointer where the drag is. A tooltip that
@@ -189,7 +192,7 @@ Operations that run report in the status bar's `OperationStatus` (4e) with secti
 - **UI Automation.** The container is `ContextMenu` (control type Menu), the header `ContextMenuHeader` (control type Text, named by its full text). Each item is a `ContextMenuItem` (control type MenuItem), named by its label, with `IsEnabled` as drawn, the Invoke pattern, and a disabled item's reason as its `HelpText`.
 - **Look.**
   - Background `VcPanelBackgroundBrush` (`#1A1D24` dark, `#F5F6F8` light), a 1-pixel `VcBorderBrush` border, corners rounded by 6, padding 4, and the `VcMenuShadow` shadow.
-  - Width 200 to 360, set by the longest label.
+  - Width 200 to 520, as wide as the longest label needs (design 4a); a label longer still is cut with "…" and shows its whole text as its tooltip, and no label is clipped at the menu's edge.
   - The header row is 24 high, its text in `VcTextSecondaryBrush` (`#9BA3B0` dark), cut with "…" past 340, the whole text in its tooltip. A click on it does nothing and keeps the menu open.
   - An item is 26 high, with 10 px of padding at each side. A separator is 9 high, with a 1-pixel line.
   - So a menu that fits the window is 8 + 24 + 26 × items + 9 × separators high (±2).
