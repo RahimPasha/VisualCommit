@@ -42,6 +42,11 @@ public class BranchDragTests
         var layer = app.Find<DragLayer>("DragLayer");
         var service = layer.Service!;
         Assert.Same(service, app.BranchDrag);
+
+        // The drag alone: the drop's menu, which the graph's view gives the repository (WP7), is
+        // tested in RepositoryMenusTests.
+        Assert.NotNull(repository.BranchDropMenu);
+        repository.BranchDropMenu = null;
         var drops = new List<BranchDrop>();
         service.Dropped += (_, drop) => drops.Add(drop);
         var alpha = LabelPoint(app, AlphaTwo, "feature/alpha");
@@ -185,6 +190,7 @@ public class BranchDragTests
         using var data = new TempDirectory("data");
         using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
         var repository = await GraphShownAsync(app);
+        repository.BranchDropMenu = null;
         var layer = app.Find<DragLayer>("DragLayer");
         var service = layer.Service!;
         var drops = new List<BranchDrop>();
@@ -239,6 +245,7 @@ public class BranchDragTests
         using var data = new TempDirectory("data");
         using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
         var repository = await GraphShownAsync(app);
+        repository.BranchDropMenu = null;
         var service = app.Find<DragLayer>("DragLayer").Service!;
         app.Click(RowPoint(app, AlphaTwo));
         app.Click(RowPoint(app, AlphaOne), app.CommandModifier);
