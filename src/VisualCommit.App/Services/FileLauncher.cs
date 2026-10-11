@@ -99,8 +99,8 @@ public sealed class FileLauncher : IFileLauncher
                 // Explorer reads its command line itself: "/select," and the quoted path must stay
                 // one piece, which .NET's quoting of an argument list would break up.
                 return [exists
-                    ? new LaunchCommand("explorer.exe", []) { CommandLine = $"/select,\"{path}\"" }
-                    : new LaunchCommand("explorer.exe", []) { CommandLine = $"\"{folder}\"" }];
+                    ? new LaunchCommand("explorer.exe", []) { CommandLine = "/select," + QuoteForExplorer(path) }
+                    : new LaunchCommand("explorer.exe", []) { CommandLine = QuoteForExplorer(folder) }];
 
             case RevealPlatform.MacOS:
                 return [exists ? new LaunchCommand("open", ["-R", path]) : new LaunchCommand("open", [folder])];
@@ -227,6 +227,12 @@ public sealed class FileLauncher : IFileLauncher
             return false;
         }
     }
+
+    /// <summary>
+    /// A path in double quotes, which Windows paths cannot contain. Only a drive's root ends with
+    /// a backslash, which would escape the closing quote; it has no spaces and goes unquoted.
+    /// </summary>
+    private static string QuoteForExplorer(string path) => path.EndsWith('\\') ? path : $"\"{path}\"";
 
     private static readonly char[] WindowsSeparators = ['\\', '/'];
 
