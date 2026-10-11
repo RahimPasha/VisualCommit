@@ -29,6 +29,23 @@ public class IgnoreTests
     }
 
     [Fact]
+    public async Task A_gitignore_that_is_a_symbolic_link_is_not_written_through()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var outside = Sibling(repo, "outside.txt");
+        File.WriteAllText(outside, "# outside the working tree\n");
+
+        // A cloned repository can hold .gitignore as a link to any file, such as ~/.bashrc.
+        File.CreateSymbolicLink(Path.Combine(repo.Path, ".gitignore"), outside);
+        var repository = await OpenAsync(repo);
+
+        var error = await Assert.ThrowsAsync<IOException>(() => repository.AppendToGitignoreAsync("/build.log", TestCancelled));
+
+        Assert.Contains("symbolic link", error.Message, StringComparison.Ordinal);
+        Assert.Equal("# outside the working tree\n", File.ReadAllText(outside));
+    }
+
+    [Fact]
     public async Task A_folder_is_ignored_whole()
     {
         using var repo = await Scenarios.OperationsAsync();
