@@ -532,6 +532,213 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertBackupsHidden(app);
     }
 
+    // ---------------------------------------------------------------------------------------
+    // Check 11: cherry-pick one commit, select several with Ctrl and Shift, pick two (1400×900);
+    // check 11b: a pick of two that stops at the second.
+
+    /// <summary>Check 11 part A (steps 1 to 4): the disabled pick of a commit on main, the pick of "Alpha one", its details.</summary>
+    [AvaloniaFact]
+    public async Task Check_11_cherry_pick_one_commit()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+
+        // Step 2: "Main work" is already on main.
+        OpenMenu(app, app.GraphRowPoint(3), CommitMenuOnMain(Sha.MainWork, "Main work"), "Check out this commit");
+        await WaitForDetailsAsync(app, "Main work");
+        var tip = await RestOnMenuItemAsync(app, "Cherry-pick onto main");
+        var disabled = Shot(app, "11a-already-on-main", keepPointer: true);
+        Assert.Equal("This commit is already on main", tip);
+        AssertHighlighted(app.Menu(), "Check out this commit");
+        AssertSelected(app, disabled, 3);
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, null);
+
+        // Step 3: the pick of "Alpha one".
+        app.RightClick(app.GraphRowPoint(5));
+        await RunOperationAsync(app, "Cherry-pick " + Sha.AlphaOne, () => app.ClickMenuItem("Cherry-pick onto main"));
+        await WaitForGraphAsync(app, 9, "d1f9fb5");
+        var picked = Shot(app, "11b-picked");
+        AssertGraph(app, G7, picked);
+        AssertColumns(app, author: true, date: true, sha: true);
+        Assert.Equal(TempRepo.AuthorName, Graph(app).Data!.CommitAt(0).AuthorName);
+        AssertSelected(app, picked, 6);
+        AssertStatus(app, StatusPickedAlphaOne);
+        await AssertLocalBranchAsync(app, "main", 1, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.PickedAlphaOne, await RevAsync(repo, "HEAD"));
+        Assert.Equal("Alpha one", await MessageAsync(repo, "HEAD"));
+        Assert.Equal([Sha.MainWorkFull], await ParentsAsync(repo, "HEAD"));
+        Assert.Equal((ScenarioTime(2), AppCommitTime), await DatesAsync(repo, "HEAD"));
+        Assert.Equal("A\tsrc/alpha.txt", await GitOutAsync(repo, "diff", "--name-status", "HEAD^", "HEAD"));
+        Assert.Equal(Scenarios.OperationsFiles.AlphaOne, await ShowAsync(repo, "HEAD", "src/alpha.txt"));
+        Assert.Null(GitDirFile(repo, "CHERRY_PICK_HEAD"));
+        Assert.Equal(["## main...origin/main [ahead 1]"], await StatusAsync(repo));
+        await AssertNoBackupsAsync(repo);
+
+        // Step 4: the picked commit's details show its commit date.
+        app.Click(app.GraphRowPoint(0));
+        await AssertDetailsAsync(app, "Alpha one", "2026-01-01 12:02", AppDate, [Sha.MainWork], "A alpha.txt src");
+        var details = Shot(app, "11c-picked-details");
+        AssertSelected(app, details, 0);
+        AssertNoClippedText(app);
+    }
+
+    /// <summary>Check 11 part B (steps 5 to 12): Ctrl and Shift selections, the several-commits menu, the pick of two.</summary>
+    [AvaloniaFact]
+    public async Task Check_11_select_several_and_cherry_pick_two()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+        var command = app.CommandModifier;
+
+        // Step 5: a click and a Ctrl+click.
+        app.Click(app.GraphRowPoint(5));
+        app.Click(app.GraphRowPoint(4), command);
+        await app.WaitForAsync(() => Shown(app, "MultiSelectionView") is not null, "the multi-selection view");
+        var two = Shot(app, "11d-two-selected");
+        AssertSelected(app, two, 4, 5);
+        AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
+        AssertNoClippedText(app);
+
+        // Step 6: a third commit, on main: its pick is disabled.
+        app.Click(app.GraphRowPoint(3), command);
+        OpenMenu(app, app.GraphRowPoint(3), ThreeCommitsMenu, "Revert 3 commits");
+        var tip = await RestOnMenuItemAsync(app, "Cherry-pick 3 commits onto main");
+        var three = Shot(app, "11e-three-disabled", keepPointer: true);
+        Assert.Equal("Some of these commits are already on main", tip);
+        AssertHighlighted(app.Menu(), "Revert 3 commits");
+        AssertSelected(app, three, 3, 4, 5);
+        AssertMultiSelection(app, "88d6b91 Main work", "ce5ea6a Alpha two", "dff8fbf Alpha one");
+        Assert.DoesNotContain(app.Menu().Items, item => item.Label.Contains("Squash", StringComparison.Ordinal) || item.Label.Contains("Compare", StringComparison.Ordinal));
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, null);
+
+        // Step 7: Ctrl+click takes a row out again.
+        app.Click(app.GraphRowPoint(3), command);
+        AssertSelected(app, null, 4, 5);
+        AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
+
+        // Step 8: a click, then a Shift+click.
+        app.Click(app.GraphRowPoint(4));
+        AssertSelected(app, null, 4);
+        await WaitForDetailsAsync(app, "Alpha two");
+        app.Click(app.GraphRowPoint(5), KeyModifiers.Shift);
+        AssertSelected(app, null, 4, 5);
+        AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
+
+        // Step 9: Shift with the arrow keys.
+        app.PressKey(Key.Down, RawInputModifiers.Shift);
+        var shiftDown = Shot(app, "11f-shift-down");
+        AssertSelected(app, shiftDown, 4, 5, 6);
+        AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one", "8beca34 Add core");
+        app.PressKey(Key.Up, RawInputModifiers.Shift);
+        AssertSelected(app, null, 4, 5);
+
+        // Step 10: a right-click on a selected row keeps the selection.
+        OpenMenu(app, app.GraphRowPoint(5), TwoCommitsMenu, "Cherry-pick 2 commits onto main");
+        var menu = Shot(app, "11g-multi-menu");
+        Assert.All(app.Menu().Items, item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
+        AssertSelected(app, menu, 4, 5);
+
+        // Step 11: the pick of two, oldest first.
+        await RunOperationAsync(app, "Cherry-pick 2 commits", () => app.ClickMenuItem("Cherry-pick 2 commits onto main"));
+        await WaitForGraphAsync(app, 10, "c0f718d");
+        var picked = Shot(app, "11h-two-picked");
+        AssertGraph(app, G8, picked);
+        AssertSelected(app, picked, 6, 7);
+        AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
+        AssertStatus(app, StatusPickedTwo);
+        await AssertLocalBranchAsync(app, "main", 2, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(["c0f718d Alpha two", "d1f9fb5 Alpha one", "88d6b91 Main work"], (await GitOutAsync(repo, "log", "--format=%h %s", "-3", "main")).Split('\n'));
+        Assert.Equal(Sha.PickedAlphaTwo, await RevAsync(repo, "HEAD"));
+        Assert.Equal(Sha.PickedAlphaOne, await RevAsync(repo, "HEAD^"));
+        Assert.Equal((ScenarioTime(3), AppCommitTime), await DatesAsync(repo, "HEAD"));
+        Assert.Equal((ScenarioTime(2), AppCommitTime), await DatesAsync(repo, "HEAD^"));
+        Assert.Equal(Scenarios.OperationsFiles.AlphaTwo, WorkingFile(repo, "src/alpha.txt"));
+        Assert.False(HasSequencer(repo), "git's folder has a sequencer folder.");
+        Assert.Null(GitDirFile(repo, "CHERRY_PICK_HEAD"));
+
+        // Step 12: Ctrl on a stash row acts as a plain click.
+        app.Click(app.GraphRowPoint(2), command);
+        AssertSelected(app, null, 2);
+        await WaitForDetailsAsync(app, "On main: Experiment");
+        Assert.Null(Shown(app, "MultiSelectionView"));
+    }
+
+    /// <summary>Check 11b (steps 1 to 5): a pick of two that stops at the second, its banner and status, and an Abort that keeps the first pick.</summary>
+    [AvaloniaFact]
+    public async Task Check_11b_cherry_pick_of_two_stops_at_the_second()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
+        var palette = PaletteOf(app);
+
+        // Step 2: "Alpha one" is picked, "Conflicting change" stops.
+        app.Click(app.GraphRowPoint(1));
+        app.Click(app.GraphRowPoint(5), app.CommandModifier);
+        app.RightClick(app.GraphRowPoint(5));
+        await RunOperationAsync(app, "Cherry-pick 2 commits", () => app.ClickMenuItem("Cherry-pick 2 commits onto main"));
+        await app.WaitForAsync(() => app.BannerBounds is not null && Graph(app).ShowsWorkingRow, "the banner and the working-changes row");
+        await WaitForGraphAsync(app, 9, "d1f9fb5");
+        var stopped = Shot(app, "11b1-pick-stopped");
+        await AssertNoDialogAsync(app);
+        var banner = AssertBanner(app, CherryPickBanner, "Abort cherry-pick");
+        AssertBannerLook(app, banner, stopped);
+        AssertGraph(app, G7, stopped);
+        AssertWorkingRow(app, WorkingChangesOneConflict, stopped);
+        AssertSelected(app, stopped, 2, 6);
+        AssertMultiSelection(app, "078ef05 Conflicting change", "dff8fbf Alpha one");
+        AssertStatus(app, StatusPickStopped, OperationStatusTone.Warning);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.PickedAlphaOne, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal([Sha.MainWorkFull], await ParentsAsync(repo, "refs/heads/main"));
+        Assert.StartsWith(Sha.Conflicting, GitDirFile(repo, "CHERRY_PICK_HEAD"), StringComparison.Ordinal);
+        Assert.False(HasSequencer(repo), "git's folder has a sequencer folder.");
+        Assert.Equal("Conflicting change\n\n# Conflicts:\n#\tsrc/core.txt\n", GitDirFile(repo, "MERGE_MSG"));
+        Assert.Equal("UU src/core.txt", await GitOutAsync(repo, "status", "--short"));
+        Assert.Equal(CoreCherryPickConflict, WorkingFile(repo, "src/core.txt"));
+
+        // Step 3: the status's tooltip holds the whole message.
+        var tip = await RestOnAsync(app, app.FindByAutomationId("OperationStatus"));
+        Shot(app, "11b2-status-tooltip", keepPointer: true);
+        Assert.Equal(StatusPickStopped, tip);
+
+        // Step 4: the banner's Abort asks first.
+        app.MoveToNeutral();
+        app.Click(app.FindByAutomationId("BannerAbortButton"));
+        await AssertConfirmationAsync(app, AbortCherryPickTitle, AbortCherryPickQuestion, BackupDetail, "Abort cherry-pick");
+        var confirmation = Shot(app, "11b3-abort-confirmation");
+        _ = confirmation;
+
+        // Step 5: Abort undoes only the stopped pick.
+        await RunOperationAsync(app, "Abort the cherry-pick", () => app.Click(app.FindByAutomationId("ConfirmButton")));
+        await app.WaitForAsync(() => app.BannerBounds is null && !Graph(app).ShowsWorkingRow, "the banner and the working-changes row to go");
+        var aborted = Shot(app, "11b4-aborted");
+        await AssertNoDialogAsync(app);
+        AssertNoBanner(app);
+        AssertNoWorkingRow(app);
+        AssertGraph(app, G7, aborted);
+        AssertSelected(app, aborted, 2, 6);
+        AssertStatus(app, StatusAbortedPick);
+        await AssertLocalBranchAsync(app, "main", 1, 0, head: true);
+        AssertNoClippedText(app);
+        Assert.Equal(Sha.PickedAlphaOne, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal(Scenarios.OperationsFiles.CoreMainWork, WorkingFile(repo, "src/core.txt"));
+        Assert.Equal(Scenarios.OperationsFiles.AlphaOne, WorkingFile(repo, "src/alpha.txt"));
+        Assert.Null(GitDirFile(repo, "CHERRY_PICK_HEAD"));
+        Assert.Null(GitDirFile(repo, "MERGE_MSG"));
+        var snapshot = await AssertBackupsAsync(repo, "abort", Sha.PickedAlphaOne, changes: true);
+        Assert.Equal([Sha.PickedAlphaOne], await ParentsAsync(repo, snapshot!));
+        Assert.Equal(CoreCherryPickConflict, await ShowAsync(repo, snapshot!, "src/core.txt"));
+        AssertBackupsHidden(app);
+        _ = palette;
+    }
+
     /// <summary>Check 10 part C's files, written as a terminal would before the app starts.</summary>
     private static async Task WriteResetPartCFilesAsync(TempRepo repo)
     {

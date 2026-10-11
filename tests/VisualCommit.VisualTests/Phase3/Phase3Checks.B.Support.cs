@@ -244,6 +244,12 @@ public sealed partial class Phase3ChecksB
 
         var palette = PaletteOf(app);
         var origin = app.BoundsOf(graph).TopLeft;
+
+        // What lies over the rows in the picture: an open menu, an open tooltip.
+        var covers = app.Window.GetVisualDescendants().OfType<Control>()
+            .Where(control => control.IsEffectivelyVisible && (control is ToolTip || AutomationProperties.GetAutomationId(control) == "ContextMenu"))
+            .Select(control => app.BoundsOf(control))
+            .ToList();
         for (var row = 0; row < data.Count; row++)
         {
             var bounds = graph.RowBounds(row);
@@ -253,6 +259,11 @@ public sealed partial class Phase3ChecksB
             }
 
             var point = new Point(origin.X + graph.Columns.Message.Right - 4, origin.Y + bounds.Top + 2);
+            if (covers.Any(cover => cover.Inflate(24).Contains(point)))
+            {
+                continue;
+            }
+
             var colour = picture.PixelAt(point);
             if (rows.Contains(row))
             {
@@ -354,12 +365,17 @@ public sealed partial class Phase3ChecksB
         AssertColour(palette.Warning, picture, new Point(banner.Center.X, banner.Bottom - 0.5), "the line along the banner's bottom");
     }
 
-    /// <summary>Waits until the details panel shows the commit with this subject.</summary>
+    /// <summary>
+    /// Waits until the details panel shows the commit with this subject, and the one the graph has
+    /// selected (by its SHA: the original "Alpha one" and its pick have one subject).
+    /// </summary>
     private static async Task WaitForDetailsAsync(ShellDriver app, string subject)
     {
         await app.WaitForAsync(
-            () => Shown(app, "DetailsSubject") is SelectableTextBlock text && text.Text == subject,
-            $"the details of \"{subject}\"");
+            () => Shown(app, "DetailsSubject") is SelectableTextBlock text && text.Text == subject
+                && Shown(app, "DetailsSha") is SelectableTextBlock sha
+                && Graph(app).Selection.Shas is [var selected] && sha.Text == selected,
+            $"the details of \"{subject}\", the selected commit");
         app.Settle();
     }
 
