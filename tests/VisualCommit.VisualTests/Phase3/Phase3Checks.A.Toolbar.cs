@@ -50,6 +50,7 @@ public sealed partial class Phase3ChecksA
         AssertBranch(app, "topic/new");
         AssertStatus(app, PartA.BranchCreatedMessage);
         Assert.Equal(["▾ Local branches 5", "  ▸ feature", "  ▾ topic", "    new (head)", "  main"], LeftPanelLines(app).Take(5));
+        Assert.Equal(PaletteOf(app).Accent, await RefNameColourAsync(app, "Local branches", "topic", "new"));
         AssertToolbar(app, new Dictionary<string, string>
         {
             ["PullButton"] = PartA.TopicNoUpstream,

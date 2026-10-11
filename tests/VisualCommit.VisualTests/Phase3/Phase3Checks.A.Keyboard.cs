@@ -184,6 +184,7 @@ public sealed partial class Phase3ChecksA
         Assert.Null(app.Session.Shell.Menu.Current);
         Assert.Equal(0, app.MenuCount);
         Assert.Equal(1, app.CountLogLines(opened, mark));
+        await WaitForDetailsAsync(app, "Alpha two");
         shot = Shot(app, "05b4-right-press-outside-closes-only");
         AssertRowSelected(app, PartA.AlphaTwoRow, shot);
 
