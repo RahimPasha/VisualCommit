@@ -13,6 +13,11 @@ public sealed partial class GitRepository
     public Task ResetAsync(string commit, ResetMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
+        if (commit.StartsWith('-'))
+        {
+            // git reset refuses --end-of-options before its revision, and would take this for an option.
+            throw new ArgumentException($"'{commit}' is no commit to reset to.", nameof(commit));
+        }
 
         // "--" keeps a file of the commit's name from being taken for a path. --mixed lists the
         // files left unstaged on standard output unless it is quiet.
@@ -29,7 +34,7 @@ public sealed partial class GitRepository
     public Task<ApplyResult> CherryPickAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
-        return ApplyCommitAsync(options, "CHERRY_PICK_HEAD", cancellationToken, "cherry-pick", commit);
+        return ApplyCommitAsync(options, "CHERRY_PICK_HEAD", cancellationToken, ["cherry-pick", .. Positional(commit)]);
     }
 
     public Task<ApplyResult> RevertAsync(string commit, bool isMerge, NetworkOptions? options = null, CancellationToken cancellationToken = default)
@@ -38,8 +43,8 @@ public sealed partial class GitRepository
 
         // -m 1 undoes what the merge brought in from its second parent (D94).
         return isMerge
-            ? ApplyCommitAsync(options, "REVERT_HEAD", cancellationToken, "revert", "--no-edit", "-m", "1", commit)
-            : ApplyCommitAsync(options, "REVERT_HEAD", cancellationToken, "revert", "--no-edit", commit);
+            ? ApplyCommitAsync(options, "REVERT_HEAD", cancellationToken, ["revert", "--no-edit", "-m", "1", .. Positional(commit)])
+            : ApplyCommitAsync(options, "REVERT_HEAD", cancellationToken, ["revert", "--no-edit", .. Positional(commit)]);
     }
 
     /// <summary>

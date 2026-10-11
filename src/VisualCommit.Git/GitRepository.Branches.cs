@@ -120,10 +120,16 @@ public sealed partial class GitRepository
     public Task CheckoutBranchAsync(string branch, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+        if (branch == "-")
+        {
+            // Plumbing can make a branch "-"; switch takes it for the branch checked out before,
+            // after --end-of-options too.
+            throw new ArgumentException("A branch named '-' cannot be checked out by name: git takes '-' for the previous branch.", nameof(branch));
+        }
 
         // switch takes only branches, so a tag of the same name cannot be checked out instead,
         // and --no-guess keeps it from creating a branch out of a remote one of that name.
-        return RunWriteAsync(options, cancellationToken, "switch", "--no-guess", branch);
+        return RunWriteAsync(options, cancellationToken, ["switch", "--no-guess", .. Positional(branch)]);
     }
 
     public Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, NetworkOptions? options = null, CancellationToken cancellationToken = default)
@@ -136,7 +142,7 @@ public sealed partial class GitRepository
     public Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
-        return RunWriteAsync(options, cancellationToken, "switch", "--detach", commit);
+        return RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. Positional(commit)]);
     }
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
@@ -145,22 +151,23 @@ public sealed partial class GitRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(startPoint);
+        // --create takes the name as its value, whatever it starts with.
         return checkout
-            ? RunWriteAsync(options, cancellationToken, "switch", "--create", name, startPoint)
-            : RunWriteAsync(options, cancellationToken, "branch", name, startPoint);
+            ? RunWriteAsync(options, cancellationToken, ["switch", "--create", name, .. Positional(startPoint)])
+            : RunWriteAsync(options, cancellationToken, ["branch", .. Positional(name, startPoint)]);
     }
 
     public Task RenameBranchAsync(string branch, string newName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
-        return RunWriteAsync(null, cancellationToken, "branch", "--move", branch, newName);
+        return RunWriteAsync(null, cancellationToken, ["branch", "--move", .. Positional(branch, newName)]);
     }
 
     public Task DeleteBranchAsync(string branch, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
-        return RunWriteAsync(null, cancellationToken, "branch", "--delete", "--force", branch);
+        return RunWriteAsync(null, cancellationToken, ["branch", "--delete", "--force", .. Positional(branch)]);
     }
 
     // ---- Fast-forward a branch that is not checked out (2.7) -------------------------------------
@@ -175,7 +182,7 @@ public sealed partial class GitRepository
         return RunWriteAsync(
             null,
             cancellationToken,
-            "fetch", "--no-auto-maintenance", "--no-write-fetch-head", ".", $"{target}:{HeadsPrefix}{branch}");
+            ["fetch", "--no-auto-maintenance", "--no-write-fetch-head", .. Positional(".", $"{target}:{HeadsPrefix}{branch}")]);
     }
 
     // ---- Merge (2.8 to 2.10, D94) ----------------------------------------------------------------
@@ -208,7 +215,7 @@ public sealed partial class GitRepository
             }
         }
 
-        arguments.Add(reference);
+        arguments.AddRange(Positional(reference));
         var command = WriteCommand(options, [.. arguments]);
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded)
@@ -277,6 +284,16 @@ public sealed partial class GitRepository
     /// </summary>
     private GitCommand WriteCommand(NetworkOptions? options, params string[] arguments) =>
         new(arguments) { WorkingDirectory = WorkingDirectory, Environment = (options ?? NetworkOptions.None).Environment };
+
+    /// <summary>
+    /// <paramref name="names"/> as git's positional arguments: after <c>--end-of-options</c> when
+    /// one of them starts with "-", so that git cannot take it for an option (a branch named
+    /// "-f", which plumbing or a fetch can make, would otherwise force the call). Only then, so
+    /// that the commands the app shows stay as a user would type them. <c>git reset</c> refuses
+    /// the marker before its revision (Git 2.36): it checks its revision itself.
+    /// </summary>
+    private static string[] Positional(params string[] names) =>
+        names.Any(name => name.StartsWith('-')) ? ["--end-of-options", .. names] : names;
 
     /// <summary>Runs a call that writes; a failure throws <see cref="GitException"/> with git's own text.</summary>
     private async Task RunWriteAsync(NetworkOptions? options, CancellationToken cancellationToken, params string[] arguments)
