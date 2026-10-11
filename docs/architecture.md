@@ -344,7 +344,9 @@ out in well under a second.
   header in view with its text and real buttons (`StageHunkButton`, `DiscardHunkButton`,
   `UnstageHunkButton`); the layer is also a logical child, so the buttons get their templates.
   Selection is the view's own: a click on a number selects a row, Shift extends it, a text drag
-  counts the rows it touches; `SelectedChanges` holds their added and removed lines. AvaloniaEdit's
+  counts the rows it touches; `SelectedChanges` holds their added and removed lines. A new path
+  scrolls to the top; a new diff for the same path keeps the scroll position; a change of mode
+  keeps the line at the top of the view at the top. AvaloniaEdit's
   search panel is removed (it took Esc even while closed).
 - `DiffHighlighter`/`DiffSyntax`: TextMateSharp's registry, grammars and the Dark+ and Light+
   themes are loaded once per process; each side of a diff is tokenized on its own, in order, and

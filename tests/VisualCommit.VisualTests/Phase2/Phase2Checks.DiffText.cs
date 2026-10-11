@@ -217,8 +217,17 @@ public partial class Phase2Checks
         await app.WaitForAsync(() => DiffText(app).Rows.Count == 30_001, "the side-by-side rows", TimeSpan.FromSeconds(30));
         await SettleDiffAsync(app);
         app.MoveMouse(new Point(130, 700 - 13));
-        app.Capture().Save(Phase, "07d-large-side-by-side");
-        Assert.Equal("R 1 Line 00001 of the large file. | A 1 Row 00001 of the large file.", Rows(DiffText(app))[1]);
+        var sideBySide = app.Capture();
+        sideBySide.Save(Phase, "07d-large-side-by-side");
+        view = DiffText(app);
+        Assert.Equal("R 1 Line 00001 of the large file. | A 1 Row 00001 of the large file.", Rows(view)[1]);
+
+        // The view stays where it was (see "Changes to expected results"): the last rows, the
+        // removed line 30000 facing the added one at the body's bottom, without word highlights.
+        Assert.Equal("R 30000 Line 30000 of the large file. | A 30000 Row 30000 of the large file.", Rows(view)[30_000]);
+        Assert.Equal(app.BoundsOf(view).Height, view.RowBounds(30_000)!.Value.Bottom, 2.0);
+        AssertWordBackground(app, sideBySide, new DiffLineRef(0, 29_999), "Line", Phase2Expectations.Dark.Removed);
+        AssertWordBackground(app, sideBySide, new DiffLineRef(0, 59_999), "Row", Phase2Expectations.Dark.Added);
     }
 
     [AvaloniaFact]
