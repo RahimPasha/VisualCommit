@@ -11,6 +11,30 @@ namespace VisualCommit.App.Tests;
 public class FileLauncherTests
 {
     [Fact]
+    public void A_program_is_started_from_a_fully_qualified_folder_of_the_path_never_from_the_current_one()
+    {
+        // A cloned repository, the current folder when the app was started in it, can hold an
+        // executable named xdg-open or dbus-send: an empty or relative PATH entry names it.
+        var system = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "system-bin"));
+        var other = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "other-bin"));
+        var existing = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Path.Combine(".", "xdg-open"),
+            Path.Combine("tools", "xdg-open"),
+            "xdg-open",
+            Path.Combine(system, "xdg-open"),
+        };
+        var separator = Path.PathSeparator;
+
+        Assert.Equal(
+            Path.Combine(system, "xdg-open"),
+            FileLauncher.FindOnPath("xdg-open", string.Join(separator, string.Empty, ".", "tools", other, system), separator, existing.Contains));
+        Assert.Null(FileLauncher.FindOnPath("xdg-open", string.Join(separator, string.Empty, ".", "tools"), separator, existing.Contains));
+        Assert.Null(FileLauncher.FindOnPath("dbus-send", string.Join(separator, ".", system), separator, existing.Contains));
+        Assert.Null(FileLauncher.FindOnPath("xdg-open", null, separator, existing.Contains));
+        Assert.True(Path.IsPathFullyQualified(FileLauncher.FindOnPath("xdg-open", system, separator, existing.Contains)!));
+    }
+    [Fact]
     public void Windows_selects_the_file_in_explorer_with_its_path_quoted_after_select()
     {
         var commands = Reveal(@"C:\Users\Ann\My repo\src\a, b.txt", RevealPlatform.Windows, files: [@"C:\Users\Ann\My repo\src\a, b.txt"]);

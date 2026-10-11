@@ -68,8 +68,12 @@ public sealed partial class RepositoryOperations
         return IgnoreAsync(path, OperationTexts.IgnoreExtensionLabel(extension), () => GitignorePattern.ForExtension(extension));
     }
 
-    /// <summary>"Open file" (2.32): the working tree's version in the system's application for it.</summary>
-    public Task OpenFileAsync(string path)
+    /// <summary>
+    /// "Open file" (2.32): the working tree's version in the system's application for it. A file
+    /// that the system would run rather than show (<see cref="CanRunPrograms(string, UnixFileMode?)"/>),
+    /// as a cloned repository can hold, is opened only after the user said yes.
+    /// </summary>
+    public async Task OpenFileAsync(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
         var fullPath = FullPathOf(path);
@@ -77,10 +81,53 @@ public sealed partial class RepositoryOperations
         {
             // The menu disables the item then ("The file is not in the working tree"); it may have gone since.
             Log.Warning($"{Repository.Name}: Open file: {path} is not in the working tree.");
-            return Task.CompletedTask;
+            return;
         }
 
-        return LaunchAsync("Open file", launcher => launcher.OpenAsync(fullPath));
+        if (CanRunPrograms(fullPath, ReadUnixFileMode(fullPath)) && !await ConfirmAsync(OperationTexts.ConfirmOpenRunnable(FileNameOf(path))))
+        {
+            return;
+        }
+
+        await LaunchAsync("Open file", launcher => launcher.OpenAsync(fullPath));
+    }
+
+    /// <summary>
+    /// Whether the system's "open" of a file named <paramref name="fileName"/> runs something
+    /// (2.32): a program, a script, an installer or a shortcut by its extension (Windows, macOS
+    /// and Linux types alike), or, given its <paramref name="unixMode"/> (null on Windows), a file
+    /// with an executable bit.
+    /// </summary>
+    public static bool CanRunPrograms(string fileName, UnixFileMode? unixMode)
+    {
+        ArgumentNullException.ThrowIfNull(fileName);
+        const UnixFileMode Executable = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+        return RunnableExtensions.Contains(Path.GetExtension(fileName)) || (unixMode is { } mode && (mode & Executable) != 0);
+    }
+
+    /// <summary>The extensions <see cref="CanRunPrograms"/> takes as runnable, with their dot.</summary>
+    private static readonly HashSet<string> RunnableExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".bat", ".cmd", ".com", ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".hta", ".msi", ".scr", ".pif", ".cpl",
+        ".lnk", ".url", ".reg", ".jar", ".app", ".command", ".sh", ".desktop",
+    };
+
+    /// <summary>A file's Unix permissions, or null on Windows or when they cannot be read.</summary>
+    private static UnixFileMode? ReadUnixFileMode(string fullPath)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        try
+        {
+            return File.GetUnixFileMode(fullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>"Show in folder" (2.32): the file selected in the file manager (a missing one shows its folder), or the working tree's folder for null.</summary>
@@ -111,11 +158,14 @@ public sealed partial class RepositoryOperations
         return CopyAsync("Copy SHAs", string.Join("\n", ordered));
     }
 
-    /// <summary>"Copy path" (2.32): the repository-relative path with <c>/</c>.</summary>
+    /// <summary>
+    /// "Copy path" (2.32): the repository-relative path as git gives it, with <c>/</c>. A backslash
+    /// in it is part of a name (Linux and macOS allow one) and is kept.
+    /// </summary>
     public Task CopyPathAsync(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return CopyAsync("Copy path", path.Replace('\\', '/'));
+        return CopyAsync("Copy path", path);
     }
 
     /// <summary>"Copy branch name" and "Copy tag name" (2.32): the ref's short name.</summary>
@@ -201,8 +251,10 @@ public sealed partial class RepositoryOperations
         }
         catch (ArgumentException ex)
         {
+            // A line break in the name: the user is told, as an operation refused before git runs (D119).
             Log.Warning($"{Repository.Name}: {label}: {path} cannot be written as a .gitignore line.", ex);
-            return Task.CompletedTask;
+            var refused = OperationTexts.Ignore(label, path);
+            return GuardAsync(refused, () => RefuseAsync(refused, OperationTexts.IgnoreNameNotWritable, RefreshScope.None));
         }
 
         var text = OperationTexts.Ignore(label, line);

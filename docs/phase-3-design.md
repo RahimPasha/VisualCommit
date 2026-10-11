@@ -1055,7 +1055,10 @@ the URL as configured, because saving it must keep what is there (D103).
 - Implementation (`AppendToGitignoreAsync(pattern)`, a local operation, no git call): append to
   `<working tree>/.gitignore`, creating it; first a line feed if the file does not end with one.
   Patterns: `/<path>` with `\` put before `*`, `?`, `[`, `\`, a leading `#` or `!`, and
-  trailing spaces; or `*.<ext>` with the same escaping.
+  trailing spaces; or `*.<ext>` with the same escaping. A name with a line break in it (Linux
+  and macOS allow one) cannot be written as a line: the operation is refused before anything is
+  written (D119), error dialog "Ignoring the file failed" with "This file name cannot be written
+  to .gitignore.".
 - Confirm: no. Backup: none. Refresh: Status. Success: "Added <the line as written> to
   .gitignore" ("Added /logs/run.log to .gitignore", "Added *.log to .gitignore", "Added
   /drafts/\[wip].txt to .gitignore"). An open diff of the file closes when the file leaves the
@@ -1099,11 +1102,21 @@ the URL as configured, because saving it must keep what is there (D103).
 - "Open file": `IFileLauncher.OpenAsync(fullPath)` → Avalonia's
   `TopLevel.Launcher.LaunchFileInfoAsync`. Disabled when the file is not in the working tree
   ("The file is not in the working tree"). A commit's file opens the working tree's version.
+  A file that the system would run rather than show, as a cloned repository can hold
+  (`RepositoryOperations.CanRunPrograms`: `.exe .bat .cmd .com .ps1 .vbs .vbe .js .jse .wsf .hta
+  .msi .scr .pif .cpl .lnk .url .reg .jar .app .command .sh .desktop` on every platform, and on
+  Linux and macOS a file with an executable bit), is asked about first: title "Open <file
+  name>?", question "This file can run programs. Open it anyway?", no detail, buttons "Cancel"
+  and "Open" (not the danger style). The menu item stays enabled.
 - "Show in folder" (one label on every platform, Q6): `IFileLauncher.RevealAsync(fullPath)`:
   Windows `explorer.exe /select,"<path>"`; macOS `open -R <path>`; Linux the
   `org.freedesktop.FileManager1.ShowItems` D-Bus call through `dbus-send`, falling back to
-  `xdg-open <folder>`. A missing file reveals its folder.
-- "Copy path" (the repository-relative path with `/`), "Copy SHA", "Copy SHAs" (one per line,
+  `xdg-open <folder>`. A missing file reveals its folder. Each program is started from its
+  absolute path: Explorer from the Windows folder, the others from the first fully qualified
+  folder of PATH that holds them (`FileLauncher.FindOnPath`), never by bare name, which .NET
+  would also look up in the current folder (a cloned repository, when the app was started there).
+- "Copy path" (the repository-relative path as git gives it, with `/`; a backslash, which Linux
+  and macOS allow in a name, is kept), "Copy SHA", "Copy SHAs" (one per line,
   in the selection's row order), "Copy branch name", "Copy tag name", "Copy URL":
   `IClipboardService.SetTextAsync` → `TopLevel.Clipboard.SetTextAsync`.
 - None of these is an operation in the queue; none touches git. Both services are interfaces in

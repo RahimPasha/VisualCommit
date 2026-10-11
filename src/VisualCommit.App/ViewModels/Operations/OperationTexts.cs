@@ -559,6 +559,22 @@ public static partial class OperationTexts
 
     public static string Ignored(string line) => $"Added {line} to .gitignore";
 
+    /// <summary>2.30's refusal of a name that no .gitignore line can hold (a line break in it, as Linux and macOS allow).</summary>
+    public const string IgnoreNameNotWritable = "This file name cannot be written to .gitignore.";
+
+    // 2.32: open file.
+
+    /// <summary>
+    /// 2.32: "Open file" on a file that the system would run rather than show (a program, a
+    /// script, a shortcut, or a file with the executable bit): asked first, as a plain question.
+    /// </summary>
+    public static ConfirmationRequest ConfirmOpenRunnable(string fileName) => new(
+        $"Open {fileName}?",
+        "This file can run programs. Open it anyway?",
+        string.Empty,
+        "Open",
+        IsDestructive: false);
+
     /// <summary>1.8: the title of the dialog that lists the lock files a cancelled operation left.</summary>
     public static string Cancelled(string title) => $"{title} cancelled";
 
