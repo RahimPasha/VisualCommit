@@ -291,9 +291,10 @@ public sealed partial class Phase3ChecksA
         var head = await repo.HeadAsync();
         Assert.StartsWith(PartA.DropMergeShort, head, StringComparison.Ordinal);
         Assert.Equal("main", await GitTextAsync(repo, "symbolic-ref", "--short", "HEAD"));
-        Assert.Equal(
-            $"{PartA.DropMergeSubject}|Test Author|2026-01-02T09:00:00+00:00|{PartA.MainWorkSha} {PartA.AlphaTwoSha}",
-            await GitTextAsync(repo, "log", "-1", "--format=%s|%an|%aI|%P"));
+        var merge = await GitLinesAsync(repo, "log", "-1", "--format=%s%n%an%n%aI%n%P");
+        Assert.Equal(4, merge.Length);
+        Assert.Equal([PartA.DropMergeSubject, "Test Author", $"{PartA.MainWorkSha} {PartA.AlphaTwoSha}"], [merge[0], merge[1], merge[3]]);
+        AssertGitDate(AppCommitTime, merge[2]);
         Assert.Equal(["A\tsrc/alpha.txt"], await GitLinesAsync(repo, "diff", "--name-status", "HEAD^1", "HEAD"));
         Assert.Equal("## main...origin/main [ahead 3]", (await GitLinesAsync(repo, "status", "-sb"))[0]);
         Assert.Contains("  main (head) ↑3", LeftPanelLines(app));

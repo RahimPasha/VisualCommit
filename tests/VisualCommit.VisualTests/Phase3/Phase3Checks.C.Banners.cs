@@ -137,9 +137,11 @@ public sealed partial class Phase3ChecksC
         AssertCalled(app, calls, "git commit --file=- --cleanup=whitespace");
         var made = await repo.HeadAsync();
         Assert.Equal(copy, await RevParseAsync(repo, "HEAD^"));
-        Assert.Equal(
-            ["Conflicting change", "Test Author <author@example.com>", "2026-01-01T12:06:00+00:00", "2026-01-02T09:00:00+00:00"],
-            await GitLinesAsync(repo, "log", "-1", "--format=%s%n%an <%ae>%n%aI%n%cI", "HEAD"));
+        var picked = await GitLinesAsync(repo, "log", "-1", "--format=%s%n%an <%ae>%n%aI%n%cI", "HEAD");
+        Assert.Equal(4, picked.Count);
+        Assert.Equal(["Conflicting change", "Test Author <author@example.com>"], [picked[0], picked[1]]);
+        AssertGitDate(ScenarioTime(6), picked[2]);
+        AssertGitDate(AppCommitTime, picked[3]);
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.False(InGitDir(repo, "CHERRY_PICK_HEAD"));
         var todo = File.ReadAllText(Path.Combine(repo.Path, ".git", "sequencer", "todo")).Replace("\r\n", "\n", StringComparison.Ordinal);

@@ -15,6 +15,39 @@ namespace VisualCommit.VisualTests.Phase3;
 /// </summary>
 public sealed class Phase3SupportTests : Phase3Checks
 {
+    [Theory]
+    [InlineData("2026-01-02T09:00:00+00:00")]
+    [InlineData("2026-01-02T09:00:00Z")]
+    public void A_git_date_in_UTC_passes_whichever_way_the_git_version_writes_it(string gitText)
+    {
+        AssertGitDate(AppCommitTime, gitText);
+        AssertGitDate(AppCommitTime, gitText + "\n");
+    }
+
+    [Theory]
+    [InlineData("2026-01-02T09:00:01Z")]
+    [InlineData("2026-01-02T09:00:00+01:00")]
+    [InlineData("2026-01-02T10:00:00+01:00")]
+    [InlineData("2026-01-01T09:00:00+00:00")]
+    public void A_git_date_of_another_instant_or_another_zone_fails(string gitText)
+    {
+        Assert.ThrowsAny<Exception>(() => AssertGitDate(AppCommitTime, gitText));
+    }
+
+    [Fact]
+    public async Task The_working_tree_is_the_full_folder_git_names_without_a_trailing_separator()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        var workingTree = await WorkingTreeAsync(repo);
+
+        Assert.Equal(Path.GetFullPath(workingTree), workingTree);
+        Assert.False(Path.EndsInDirectorySeparator(workingTree), $"Ends with a separator: {workingTree}");
+        // The same folder, though the path may differ (macOS's /private/var, Windows' short names).
+        var marker = $"same-folder-{Guid.NewGuid():N}";
+        File.WriteAllText(Path.Combine(repo.Path, marker), string.Empty);
+        Assert.True(File.Exists(Path.Combine(workingTree, marker)), $"{workingTree} is not the folder {repo.Path}.");
+    }
+
     [AvaloniaFact]
     public async Task The_banner_confirmation_error_dialog_and_absence_assertions_hold_on_a_stopped_merge()
     {

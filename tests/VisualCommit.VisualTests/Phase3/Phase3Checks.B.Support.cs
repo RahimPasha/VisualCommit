@@ -396,12 +396,6 @@ public sealed partial class Phase3ChecksB
     /// <summary>A commit's author and committer as "name &lt;email&gt;", read with plain git.</summary>
     private static Task<string> PeopleAsync(TempRepo repo, string revision) => GitOutAsync(repo, "log", "-1", "--format=%an <%ae> / %cn <%ce>", revision);
 
-    /// <summary>The date the harness gives the app's commits (D72): 2026-01-02 09:00 UTC.</summary>
-    private static readonly DateTimeOffset AppCommitTime = new(2026, 1, 2, 9, 0, 0, TimeSpan.Zero);
-
-    /// <summary>The scenario's clock time of a commit made at 12:<paramref name="minute"/> on 2026-01-01 UTC.</summary>
-    private static DateTimeOffset ScenarioTime(int minute) => new(2026, 1, 1, 12, minute, 0, TimeSpan.Zero);
-
     /// <summary>
     /// Asserts the details of a commit (phase 1's panel with phase 3's "Commit date" row): its
     /// subject, author, date, committer row (none here: the harness commits as Test Author), the

@@ -17,9 +17,6 @@ namespace VisualCommit.VisualTests.Phase3;
 
 public sealed partial class Phase3ChecksD
 {
-    /// <summary>The time of the app's commits and ref updates (D72).</summary>
-    private static readonly DateTimeOffset AppCommitTime = new(2026, 1, 2, 9, 0, 0, TimeSpan.Zero);
-
     /// <summary>
     /// Check 18: a pull held at a percentage and cancelled with nothing integrated; the pull again,
     /// which merges; then the push.
