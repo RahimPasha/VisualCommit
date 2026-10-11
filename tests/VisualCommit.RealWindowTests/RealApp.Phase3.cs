@@ -6,6 +6,7 @@ using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using VisualCommit.Core.Operations;
+using VisualCommit.Testing;
 
 namespace VisualCommit.RealWindowTests;
 
@@ -28,14 +29,15 @@ public sealed partial class RealApp
     /// <c>&lt;repo&gt;: &lt;Title&gt;: &lt;outcome&gt; after &lt;N&gt; ms: …</c>, for
     /// <see cref="WaitForLogLine"/>. The repository and the title are matched as written.
     /// </summary>
-    public static Regex OperationEnded(string repository, string title, OperationOutcome outcome)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        return new Regex(
-            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: {Regex.Escape(title)}: {outcome} after \d+ ms"),
-            RegexOptions.CultureInvariant);
-    }
+    public static Regex OperationEnded(string repository, string title, OperationOutcome outcome) =>
+        AppLogFile.OperationEnded(repository, title, outcome);
+
+    /// <summary>
+    /// As <see cref="OperationEnded(string, string, OperationOutcome)"/>, with the line's message
+    /// (the status bar's text, design 1.7) matched as written to the end of the line.
+    /// </summary>
+    public static Regex OperationEnded(string repository, string title, OperationOutcome outcome, string message) =>
+        AppLogFile.OperationEnded(repository, title, outcome, message);
 
     /// <summary>
     /// Moves the real mouse to a point of the client area and clicks the left button while the
@@ -137,15 +139,8 @@ public sealed partial class RealApp
     /// <c>&lt;repo&gt;: Context menu opened: &lt;header&gt; by pointer</c> or <c>by keyboard</c>.
     /// Null <paramref name="header"/> or <paramref name="by"/> match any.
     /// </summary>
-    public static Regex MenuOpened(string repository, string? header = null, string? by = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
-        var headerPattern = header is null ? ".*" : Regex.Escape(header);
-        var byPattern = by is null ? "(pointer|keyboard)" : Regex.Escape(by);
-        return new Regex(
-            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: Context menu opened: {headerPattern} by {byPattern}$"),
-            RegexOptions.CultureInvariant);
-    }
+    public static Regex MenuOpened(string repository, string? header = null, string? by = null) =>
+        AppLogFile.MenuOpened(repository, header, by);
 
     /// <summary>
     /// Waits for the open context menu (automation id <c>ContextMenu</c>) and returns it: polls UI
@@ -255,9 +250,11 @@ public sealed partial class RealApp
         }
     }
 
-    /// <summary>The app's log so far, one entry per line (an exception's stack follows its entry on lines of its own).</summary>
-    private IEnumerable<string> LogLines() =>
-        ReadLog(DataDirectory).Split('\n').Select(line => line.TrimEnd('\r'));
+    /// <summary>
+    /// The app's log so far, one entry per line (an exception's stack follows its entry on lines of
+    /// its own), read as the scripted walk-through reads it (<see cref="AppLogFile"/>).
+    /// </summary>
+    public IReadOnlyList<string> LogLines() => AppLogFile.ReadLines(DataDirectory);
 
     /// <summary>Releases the left button if this driver holds it.</summary>
     private void ReleaseHeldButton()

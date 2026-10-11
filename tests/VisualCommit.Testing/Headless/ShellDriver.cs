@@ -38,6 +38,9 @@ public sealed partial class ShellDriver : IDisposable
         Folders = folders;
         Launcher = launcher;
         Clipboard = clipboard;
+
+        // Check 31 waits for the window to close by itself (ShellDriver.Checks.cs).
+        session.MainWindow.Closed += (_, _) => IsWindowClosed = true;
     }
 
     /// <summary>The app instance under test.</summary>
