@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Avalonia.Media;
 using TextMateSharp.Grammars;
@@ -44,9 +45,11 @@ public static class DiffHighlighter
 {
     /// <summary>
     /// The time a single line may take to tokenize; the rest of a line that takes longer is left
-    /// plain. A safety net against a pattern that runs away, not a budget: a grammar's first line
-    /// also compiles its regular expressions, which on a busy machine took more than 50 ms and left
-    /// that line plain.
+    /// plain. A safety net against a pattern that runs away, not a budget. The time also counts the
+    /// regular expressions the grammar compiles when a line is the first to need them: a grammar's
+    /// first line compiles most of them, which on a busy machine took more than a second while the
+    /// line itself takes under a millisecond. So a line that takes longer is tokenized once more
+    /// (<see cref="TokenizeLine"/>), and only a pattern that runs away stops it then.
     /// </summary>
     public static readonly TimeSpan LineTimeLimit = TimeSpan.FromSeconds(1);
 
@@ -182,7 +185,7 @@ public static class DiffHighlighter
                 ITokenizeLineResult tokenized;
                 lock (grammar)
                 {
-                    tokenized = grammar.Inner.TokenizeLine(new LineText(line.Text), state, LineTimeLimit);
+                    tokenized = TokenizeLine(grammar.Inner, line.Text, state, LineTimeLimit);
                 }
 
                 state = tokenized.RuleStack;
@@ -191,6 +194,21 @@ public static class DiffHighlighter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Tokenizes a line from <paramref name="state"/>, the state after the line before it; once
+    /// more if that took longer than <paramref name="limit"/>, since the first attempt may have
+    /// spent the time compiling regular expressions, which are ready for the second. The time is
+    /// measured here because TextMateSharp's result does not show whether it stopped early: it can
+    /// only have stopped after the limit.
+    /// </summary>
+    public static ITokenizeLineResult TokenizeLine(IGrammar grammar, string text, IStateStack? state, TimeSpan limit)
+    {
+        ArgumentNullException.ThrowIfNull(grammar);
+        var watch = Stopwatch.StartNew();
+        var tokenized = grammar.TokenizeLine(new LineText(text), state, limit);
+        return watch.Elapsed > limit ? grammar.TokenizeLine(new LineText(text), state, limit) : tokenized;
     }
 
     private static Token[] ToTokens(IToken[] tokens, int length, ScopeTable scopes)

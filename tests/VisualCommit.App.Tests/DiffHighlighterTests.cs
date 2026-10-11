@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using TextMateSharp.Grammars;
 using VisualCommit.App.Controls.Diff;
 using VisualCommit.Core.Diff;
 using Xunit;
@@ -154,6 +155,29 @@ public class DiffHighlighterTests
         Assert.Throws<OperationCanceledException>(() => DiffHighlighter.Tokenize(diffs.Calculator, "src/Calculator.cs", cancellation.Token));
     }
 
+    [Fact]
+    public void A_line_that_takes_longer_than_the_limit_is_tokenized_once_more()
+    {
+        // The first attempt stands for one that spent the time compiling the grammar's regular
+        // expressions and stopped early, as the Python docstring's line did on a busy machine.
+        var grammar = new FakeGrammar(TimeSpan.FromMilliseconds(200));
+
+        var tokenized = DiffHighlighter.TokenizeLine(grammar, "x", null, TimeSpan.FromMilliseconds(50));
+
+        Assert.Equal(2, grammar.Attempts.Count);
+        Assert.Same(grammar.Attempts[1], tokenized);
+    }
+
+    [Fact]
+    public void A_line_within_the_limit_is_tokenized_once()
+    {
+        var grammar = new FakeGrammar(TimeSpan.Zero);
+
+        var tokenized = DiffHighlighter.TokenizeLine(grammar, "x", null, TimeSpan.FromMinutes(1));
+
+        Assert.Same(Assert.Single(grammar.Attempts), tokenized);
+    }
+
     private static void AssertStyle(Color? expected, DiffSyntax syntax, DiffLineRef line, DiffVersion version, int column, bool dark, string what)
     {
         var style = syntax.StyleAt(line, version, column, dark);
@@ -161,5 +185,44 @@ public class DiffHighlighterTests
             style.Foreground == expected,
             $"'{what}' at column {column} of line {line} ({version}, {(dark ? "dark" : "light")}): expected {expected?.ToString() ?? "the main text colour"}, found {style.Foreground?.ToString() ?? "the main text colour"}.");
         Assert.False(style.Bold, $"'{what}' is bold.");
+    }
+
+    /// <summary>A grammar whose first attempt at a line takes <c>firstAttempt</c>; it keeps the result of every attempt.</summary>
+    private sealed class FakeGrammar(TimeSpan firstAttempt) : IGrammar
+    {
+        public List<ITokenizeLineResult> Attempts { get; } = [];
+
+        public bool IsCompiling => false;
+
+        public ITokenizeLineResult TokenizeLine(LineText lineText, IStateStack prevState, TimeSpan timeLimit)
+        {
+            if (Attempts.Count == 0)
+            {
+                Thread.Sleep(firstAttempt);
+            }
+
+            var result = new Result();
+            Attempts.Add(result);
+            return result;
+        }
+
+        public string GetName() => "Fake";
+
+        public string GetScopeName() => "source.fake";
+
+        public ICollection<string> GetFileTypes() => [];
+
+        public ITokenizeLineResult TokenizeLine(LineText lineText) => throw new NotSupportedException();
+
+        public ITokenizeLineResult2 TokenizeLine2(LineText lineText) => throw new NotSupportedException();
+
+        public ITokenizeLineResult2 TokenizeLine2(LineText lineText, IStateStack prevState, TimeSpan timeLimit) => throw new NotSupportedException();
+
+        private sealed class Result : ITokenizeLineResult
+        {
+            public IToken[] Tokens => [];
+
+            public IStateStack RuleStack => null!;
+        }
     }
 }
