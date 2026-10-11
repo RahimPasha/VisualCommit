@@ -174,7 +174,7 @@ public class OperationQueueTests
     }
 
     [Fact]
-    public async Task A_background_operation_is_never_pre_empted_or_cancelled_and_the_users_operation_waits_for_it()
+    public async Task A_background_operation_is_never_pre_empted_and_the_users_operation_waits_for_it()
     {
         using var queue = new TestQueue();
         var gate = new TaskCompletionSource();
@@ -194,8 +194,11 @@ public class OperationQueueTests
         var current = queue.Queue.Current;
         Assert.NotNull(current);
         Assert.True(current.IsBackground);
+
+        // While nothing waits for it, it offers no Cancel, and a cancel does nothing.
         Assert.False(current.CanCancel);
-        Assert.False(backgroundToken.CanBeCanceled);
+        queue.Queue.CancelCurrent();
+        Assert.False(backgroundToken.IsCancellationRequested);
 
         var fetch = queue.Queue.RunAsync(new GitOperation("Fetch", "Fetching…", OperationKind.Network, RefreshScope.Refs, _ =>
         {
@@ -203,7 +206,6 @@ public class OperationQueueTests
             return Task.FromResult(OperationReport.Done("Fetched"));
         })
         { DedupeKey = "fetch:*" });
-        queue.Queue.CancelCurrent();
 
         Assert.Equal(1, queue.Queue.Waiting);
         Assert.False(fetch.IsCompleted);
@@ -214,6 +216,41 @@ public class OperationQueueTests
         Assert.Equal(OperationOutcome.Succeeded, result.Outcome);
         Assert.Equal(["auto-fetch", "fetch"], order);
         Assert.Same(result, queue.Queue.LastResult);
+    }
+
+    [Fact]
+    public async Task A_stalled_background_operation_can_be_cancelled_while_the_users_operation_waits_for_it()
+    {
+        using var folder = new TempDirectory("locks");
+        var gitFolder = Directory.CreateDirectory(Path.Combine(folder.Path, ".git")).FullName;
+        var left = Path.Combine(Directory.CreateDirectory(Path.Combine(gitFolder, "refs", "remotes", "origin")).FullName, "main.lock");
+        using var queue = new TestQueue(gitDirectory: gitFolder);
+        var finished = new TaskCompletionSource<OperationResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        queue.Queue.Finished += (_, e) =>
+        {
+            if (e.Operation.IsBackground)
+            {
+                finished.TrySetResult(e.Result);
+            }
+        };
+
+        // An auto-fetch whose connection went silent: it would never end by itself.
+        Assert.True(queue.Queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.Refs, async context =>
+        {
+            File.WriteAllText(left, string.Empty);
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done(string.Empty);
+        })));
+        var staged = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done(string.Empty))));
+
+        Assert.True(queue.Queue.Current!.CanCancel, "The user's operation waits for the auto-fetch: Cancel is offered.");
+        queue.Queue.CancelCurrent();
+
+        var background = await finished.Task.WaitAsync(Patience, TestCancelled);
+        Assert.Equal((OperationOutcome.Cancelled, "Auto-fetch cancelled"), (background.Outcome, background.Message));
+        Assert.Equal([Path.GetFullPath(left)], background.StaleLockFiles);
+        Assert.Equal(OperationOutcome.Succeeded, (await staged.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Contains(queue.Log.Entries, entry => entry.Message.Contains("graph: Auto-fetch: Cancelled after ", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -559,7 +596,7 @@ public class OperationQueueTests
         gate.SetResult();
 
         Assert.Equal(OperationOutcome.Succeeded, (await finished.Task.WaitAsync(Patience, TestCancelled)).Outcome);
-        Assert.False(token.CanBeCanceled);
+        Assert.False(token.IsCancellationRequested);
     }
 
     [Fact]

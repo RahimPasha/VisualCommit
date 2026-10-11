@@ -242,6 +242,46 @@ public partial class RepositoryOperationsTests
         Assert.Equal(2, Ran(app, "Push main"));
     }
 
+    [Fact]
+    public async Task A_stalled_auto_fetch_that_an_operation_waits_for_can_be_cancelled_and_its_lock_files_removed()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        server.RequireAuth = false;
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        using var scheduler = new AutoFetchScheduler(() => app.Repository, () => false, app.Settings, TimeProvider.System, app.Log)
+        {
+            ReadEnvironment = _ => "1",
+            SinceOpening = _ => TimeSpan.FromHours(1),
+        };
+        var lockFile = Path.Combine(repo.Path, ".git", "refs", "remotes", "origin", "main.lock");
+        app.Dialogs.CloseError(clickExtra: true);
+
+        // The auto-fetch's pack never comes, as on a connection that went silent.
+        var held = server.HoldNextFetchPack();
+        scheduler.Tick(DateTimeOffset.UtcNow);
+        await held.WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+        Assert.True(app.Repository.Queue.Current?.IsBackground);
+        Assert.False(app.Repository.OperationStatus.CanCancel);
+        File.WriteAllText(lockFile, "left by the stopped auto-fetch");
+
+        var (hold, staged) = HoldQueue(app);
+        hold.SetResult();
+        Assert.Equal((OperationStatusViewModel.WaitingForAutoFetchText, true), (app.StatusText, app.Repository.OperationStatus.CanCancel));
+        app.Repository.OperationStatus.CancelCommand.Execute(null);
+        await staged.WaitAsync(QueueTimeout, TestContext.Current.CancellationToken);
+        var dialog = await app.Dialogs.WaitForAsync<ErrorDialogViewModel>(QueueTimeout);
+        server.Release();
+
+        Assert.Equal(("Auto-fetch cancelled", OperationTexts.StaleLockFilesSummary, ".git/refs/remotes/origin/main.lock"), (dialog.Title, dialog.Summary, dialog.Output));
+        await WaitUntilAsync(() => !File.Exists(lockFile), "Remove lock files");
+        Assert.Contains(
+            "git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=60 fetch --progress --no-auto-maintenance origin",
+            app.Calls.Snapshot().Select(call => call.CommandText));
+        Assert.Contains(app.Log.Messages, message => message.Contains(": Auto-fetch: Cancelled after ", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
     /// <summary>
     /// Queues an operation of the test's own that waits until the returned source is set, then
     /// runs <paramref name="then"/> (a change to the repository, as an operation ahead of the one

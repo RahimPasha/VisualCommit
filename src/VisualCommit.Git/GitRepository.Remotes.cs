@@ -551,6 +551,11 @@ public sealed partial class GitRepository
     private GitCommand RemoteCommand(string[] arguments, NetworkOptions options)
     {
         var progress = options.Progress;
+        if (options.Configuration.Count > 0)
+        {
+            arguments = [.. options.Configuration.SelectMany(setting => new[] { "-c", setting }), .. arguments];
+        }
+
         return new GitCommand(arguments)
         {
             WorkingDirectory = WorkingDirectory,

@@ -288,10 +288,16 @@ public sealed class OperationQueue : IOperationQueue
     private static string NextId() =>
         "op-" + Interlocked.Increment(ref _lastId).ToString(CultureInfo.InvariantCulture);
 
-    private static bool CanCancel(Entry entry) =>
-        entry.Cancellation is not null && entry.CancelWindowOpen && !entry.CancelRequested;
+    /// <summary>
+    /// Cancel is offered for a network operation until its cancel window ends; for a background
+    /// one (auto-fetch) only while an operation of the user waits for it, so that a fetch that
+    /// stalls never holds the user's operations without a way out. Call it under <see cref="_gate"/>.
+    /// </summary>
+    private bool CanCancel(Entry entry) =>
+        entry.Cancellation is not null && entry.CancelWindowOpen && !entry.CancelRequested
+        && (!entry.Operation.IsBackground || _waiting.Count > 0);
 
-    private static OperationSnapshot Snapshot(Entry entry) => new(
+    private OperationSnapshot Snapshot(Entry entry) => new(
         entry.Operation.Title,
         entry.Operation.RunningText,
         entry.Operation.Kind,
@@ -398,7 +404,8 @@ public sealed class OperationQueue : IOperationQueue
             result = FailedResult(operation, FailureOf(operation, "Unexpected error: " + ex.Message));
         }
 
-        if (result.Outcome == OperationOutcome.Cancelled && operation.Kind == OperationKind.Network && !operation.IsBackground)
+        // Git was stopped by the user's Cancel (or a closed tab): a background one only by the user.
+        if (result.Outcome == OperationOutcome.Cancelled && operation.Kind == OperationKind.Network && (!operation.IsBackground || entry.CancelRequested))
         {
             result = ReportStaleLocks(operation, entry.StartedAt, result);
         }
@@ -706,9 +713,9 @@ public sealed class OperationQueue : IOperationQueue
 
         public TaskCompletionSource<OperationResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>For a network operation the user started; null for a local or background one, which is never cancelled.</summary>
+        /// <summary>For a network operation; null for a local one, which is never cancelled. A background one is cancelled only by the user, while an operation waits for it.</summary>
         public CancellationTokenSource? Cancellation { get; } =
-            operation.Kind == OperationKind.Network && !operation.IsBackground ? new CancellationTokenSource() : null;
+            operation.Kind == OperationKind.Network ? new CancellationTokenSource() : null;
 
         public bool CancelWindowOpen { get; set; } = true;
 

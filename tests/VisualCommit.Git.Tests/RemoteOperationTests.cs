@@ -518,6 +518,35 @@ public class RemoteOperationTests
         Assert.Equal(["upstream"], (await clone.ReadRemotesAsync(TestCancelled)).Select(remote => remote.Name));
     }
 
+    [Fact]
+    public async Task Settings_passed_with_the_options_go_before_the_command_and_a_low_speed_limit_ends_a_silent_connection()
+    {
+        using var sync = await Scenarios.RemoteSyncAsync();
+
+        // A server that accepts the connection and never answers, as one whose network went away.
+        using var silent = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        silent.Start();
+        var accepted = new List<System.Net.Sockets.TcpClient>();
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                accepted.Add(await silent.AcceptTcpClientAsync(TestCancelled));
+            }
+        }, TestCancelled);
+        var port = ((System.Net.IPEndPoint)silent.LocalEndpoint).Port;
+        await sync.GitAsync("remote", "add", "silent", $"http://127.0.0.1:{port}/x.git");
+        var (repository, calls) = await OpenWithCallsAsync(sync);
+        var options = NoPromptsNoProxy with { Configuration = ["http.lowSpeedLimit=1", "http.lowSpeedTime=2"] };
+
+        var failure = await Assert.ThrowsAsync<GitException>(() => repository.FetchAsync("silent", options, noAutoMaintenance: true, TestCancelled))
+            .WaitAsync(StepTimeout, TestCancelled);
+
+        Assert.Equal(["git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=2 fetch --progress --no-auto-maintenance silent"], calls.Snapshot().Select(call => call.CommandText).Where(text => text.Contains(" fetch ", StringComparison.Ordinal)));
+        Assert.NotEqual(0, failure.ExitCode ?? 0);
+        accepted.ForEach(client => client.Dispose());
+    }
+
     private static async Task<(GitRepository Repository, GitCallLog Calls)> OpenWithCallsAsync(TempRepo repo)
     {
         var calls = new GitCallLog();

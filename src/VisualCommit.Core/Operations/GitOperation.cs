@@ -81,7 +81,8 @@ public sealed record GitOperation(
 
     /// <summary>
     /// Auto-fetch only: started with <see cref="IOperationQueue.TryStartInBackground"/>, never
-    /// cancelled, never pre-empted, shows no running text, progress or Cancel (1.8, D85).
+    /// pre-empted, shows no running text or progress (1.8, D85); the user can cancel it only while
+    /// an operation of theirs waits for it, which the status bar then offers.
     /// </summary>
     public bool IsBackground { get; init; }
 
