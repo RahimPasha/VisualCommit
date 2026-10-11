@@ -105,6 +105,35 @@ public class AuthenticatedRemoteTests
         Assert.All(server.Requests, request => Assert.Equal(401, request.Status));
     }
 
+    [Theory]
+    [InlineData(false, OperationOutcome.Succeeded)]
+    [InlineData(true, OperationOutcome.Cancelled)]
+    public async Task Through_the_operation_queue_a_fetch_signs_in_or_ends_cancelled_when_the_user_cancels(bool cancel, OperationOutcome outcome)
+    {
+        // The queue opens the operation's scope with the operation's id (1.3, D107); a prompt the
+        // user cancelled turns the failed git call into a cancelled operation (2.16).
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        var handler = cancel
+            ? new RecordingPromptHandler(PromptAnswer.Cancelled)
+            : new RecordingPromptHandler(PromptAnswer.Of("alice"), PromptAnswer.Of("s3cret"));
+        using var broker = new AskPassBroker(handler);
+        using var queue = new OperationQueue("auth", Path.Combine(repo.Path, ".git"), () => null, _ => Task.CompletedTask, broker, null, new ListLog());
+        string? operationId = null;
+
+        var result = await queue.RunAsync(new GitOperation("Fetch", "Fetching…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            operationId = context.OperationId;
+            var fetch = await StoppableGitAsync(repo, context.Environment, ["fetch", "origin"], null, null, context.CancellationToken);
+            fetch.EnsureSuccess(new Core.Git.GitCommand("fetch", "origin"));
+            return OperationReport.Done("Fetched");
+        })).WaitAsync(StepTimeout, RepositoryTestSupport.TestCancelled);
+
+        Assert.Equal(outcome, result.Outcome);
+        Assert.All(handler.Prompts, prompt => Assert.Equal((operationId, "Fetch", "auth"), (prompt.ScopeId, prompt.Title, prompt.RepositoryName)));
+        Assert.Equal(cancel ? 1 : 2, handler.Prompts.Count);
+    }
+
     [Fact]
     public async Task A_deny_scope_fails_the_fetch_without_asking()
     {
