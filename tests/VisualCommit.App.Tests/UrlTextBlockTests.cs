@@ -17,7 +17,7 @@ namespace VisualCommit.App.Tests;
 /// </summary>
 public class UrlTextBlockTests
 {
-    private const string WordJoiner = "⁠";
+    private static readonly string WordJoiner = UrlTextBlock.WordJoiner.ToString();
 
     [Fact]
     public void Only_urls_and_ssh_addresses_are_kept_together()

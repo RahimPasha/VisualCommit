@@ -8,21 +8,25 @@ namespace VisualCommit.App.Controls;
 /// <summary>
 /// A wrapping text block that never breaks a line inside a URL (<c>http://127.0.0.1:47391</c>,
 /// <c>https://host/x.git</c>) or an ssh address (<c>git@host:owner/x.git</c>): Unicode's line
-/// breaking allows a break after "//", which put the host on a line of its own (check 21). The
+/// breaking allows a break after "/", which put the host on a line of its own (check 21). The
 /// line breaks before the URL instead, and only a URL longer than a whole line is broken where
 /// it must be. Only the drawn text changes: <see cref="TextBlock.Text"/>, the automation name and
 /// what the tests read stay the text as given. Styled as a plain <see cref="TextBlock"/>.
 /// </summary>
 public sealed partial class UrlTextBlock : TextBlock
 {
-    /// <summary>WORD JOINER: no line break before or after it, and it is not drawn.</summary>
-    private const char WordJoiner = '⁠';
+    /// <summary>
+    /// ZERO WIDTH NO-BREAK SPACE, of the line breaking class WJ: no line break before or after it,
+    /// and it is not drawn. Not U+2060 WORD JOINER, which the app's font (Inter) lacks, so that
+    /// every platform would look for it in a font of its own.
+    /// </summary>
+    public const char WordJoiner = '﻿';
 
     protected override Type StyleKeyOverride => typeof(TextBlock);
 
     /// <summary>
-    /// <paramref name="text"/> with a word joiner between every two characters of each URL and ssh
-    /// address in it, so that no line breaks inside them; the rest unchanged.
+    /// <paramref name="text"/> with <see cref="WordJoiner"/> between every two characters of each
+    /// URL and ssh address in it, so that no line breaks inside them; the rest unchanged.
     /// </summary>
     public static string KeepUrlsTogether(string text)
     {
