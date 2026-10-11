@@ -287,7 +287,7 @@ public sealed partial class CommitGraphControl : Control
         for (var i = 0; i < placed.Length; i++)
         {
             var label = visual.Labels[i];
-            placed[i] = new PlacedLabel(label.Text, label.FullText, label.Kind, label.Bounds.Translate(new Vector(0, top)), label.IsOverflow);
+            placed[i] = new PlacedLabel(label.Text, label.FullText, label.Kind, label.Bounds.Translate(new Vector(0, top)), label.IsOverflow, label.RefName);
         }
 
         return placed;
@@ -454,26 +454,34 @@ public sealed partial class CommitGraphControl : Control
     /// </summary>
     private void OnContextRequestedHere(object? sender, ContextRequestedEventArgs e)
     {
-        if (ContextRequestedAt is not { } handler)
-        {
-            return;
-        }
-
         GraphHit hit;
         Point position;
         if (e.TryGetPosition(this, out var pointer))
         {
+            // A right-click selects what it is on, keeping a multi-selection it is part of (4b).
             (hit, position) = (HitTest(pointer), pointer);
+            if (hit.Kind != GraphHitKind.None)
+            {
+                Focus(NavigationMethod.Pointer);
+                SelectForContext(hit);
+            }
         }
         else
         {
+            // From the keyboard: the focused row, which is the selected one unless several are.
+            var focusRow = FocusRow;
             var display = ShowsWorkingRow && IsWorkingRowSelected ? 0
-                : SelectedIndex >= 0 && SelectedIndex < RowCount ? SelectedIndex + RowOffset
+                : focusRow >= 0 ? focusRow + RowOffset
                 : -1;
             var bounds = display >= 0 ? DisplayRowBounds(display) : default;
             var x = Columns.Message.IsVisible ? Columns.Message.X : 0;
             hit = display >= 0 ? HitTest(new Point(x, bounds.Center.Y)) : GraphHit.None;
             position = display >= 0 ? new Point(x, bounds.Bottom) : default;
+        }
+
+        if (ContextRequestedAt is not { } handler)
+        {
+            return;
         }
 
         var args = new GraphContextRequestedEventArgs(hit, position);
@@ -503,10 +511,33 @@ public sealed partial class CommitGraphControl : Control
         var display = DisplayRowAt(point.Position.Y);
         if (display >= 0)
         {
-            SelectDisplayRow(display);
+            // The press selects first; a branch label pressed may then be dragged (4g).
+            PressRow(display, e.KeyModifiers);
+            TryBeginDrag(point.Position, e);
+        }
+        else
+        {
+            _selectOnRelease = null;
         }
 
         e.Handled = true;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Left)
+        {
+            ReleaseRow();
+        }
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+
+        // A drag took the pointer: the press on a multi-selection keeps it (4g).
+        _selectOnRelease = null;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -537,13 +568,28 @@ public sealed partial class CommitGraphControl : Control
         base.OnKeyDown(e);
         _revealWhileLoading = -1;
         var count = DisplayCount;
-        if (count == 0 || e.KeyModifiers != KeyModifiers.None)
+        if (count == 0)
         {
             return;
         }
 
+        if (e.KeyModifiers == KeyModifiers.Shift && e.Key is Key.Down or Key.Up or Key.PageDown or Key.PageUp or Key.Home or Key.End)
+        {
+            // Shift extends from the anchor (4h); with nothing to extend from it moves as without.
+            if (ExtendWithKey(e.Key))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+        else if (e.KeyModifiers != KeyModifiers.None)
+        {
+            return;
+        }
+
+        var focusRow = FocusRow;
         var current = ShowsWorkingRow && IsWorkingRowSelected ? 0
-            : SelectedIndex >= 0 && SelectedIndex < RowCount ? SelectedIndex + RowOffset
+            : focusRow >= 0 ? focusRow + RowOffset
             : -1;
         var hasSelection = current >= 0;
         int target;
@@ -577,18 +623,24 @@ public sealed partial class CommitGraphControl : Control
         e.Handled = true;
     }
 
-    /// <summary>Selects a drawn row: the working-changes row, or a commit's.</summary>
+    /// <summary>Selects one drawn row alone: the working-changes row, or a commit's.</summary>
     private void SelectDisplayRow(int display)
     {
+        _selectOnRelease = null;
         if (ShowsWorkingRow && display == 0)
         {
+            // The working-changes row never joins a multi-selection (4h).
+            if (!Selection.IsEmpty)
+            {
+                SetCurrentValue(SelectionProperty, GraphSelection.Empty);
+            }
+
             SetCurrentValue(SelectedIndexProperty, -1);
             SetCurrentValue(IsWorkingRowSelectedProperty, true);
         }
-        else
+        else if (Data is { } data && display - RowOffset is >= 0 and var row && row < data.Count)
         {
-            SetCurrentValue(IsWorkingRowSelectedProperty, false);
-            SetCurrentValue(SelectedIndexProperty, display - RowOffset);
+            ApplySelection(GraphSelection.Of(data.CommitAt(row).Sha));
         }
     }
 
@@ -762,7 +814,8 @@ public sealed partial class CommitGraphControl : Control
 /// <param name="Kind">What the label stands for; for a "+N" label, the kind of the first label it hides.</param>
 /// <param name="Bounds">Where it is drawn, in the control's coordinates.</param>
 /// <param name="IsOverflow">The label is the "+N" label for the labels that did not fit.</param>
-public sealed record PlacedLabel(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow);
+/// <param name="RefName">The full ref name of a branch, remote branch or tag label; null for HEAD, a stash and the "+N" label.</param>
+public sealed record PlacedLabel(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, string? RefName = null);
 
 /// <summary>What a point of the graph is over (<see cref="CommitGraphControl.HitTest"/>).</summary>
 public enum GraphHitKind
