@@ -1,6 +1,7 @@
 <local:DialogView xmlns="https://github.com/avaloniaui"
                   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                   xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
                   xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
                   x:Class="VisualCommit.App.Views.Dialogs.ErrorDialogView"
                   x:DataType="vm:ErrorDialogViewModel"
@@ -18,7 +19,7 @@
                    Classes="dialogTitle"
                    Text="{Binding Title}"
                    AutomationProperties.AutomationId="ErrorTitle" />
-        <TextBlock Name="ErrorSummary"
+        <c:UrlTextBlock Name="ErrorSummary"
                    Classes="dialogText"
                    Text="{Binding Summary}"
                    AutomationProperties.AutomationId="ErrorSummary" />

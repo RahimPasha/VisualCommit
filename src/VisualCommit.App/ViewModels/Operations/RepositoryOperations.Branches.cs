@@ -404,9 +404,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     default:
                         // An empty pick stops with CHERRY_PICK_HEAD: a failure with a dialog of its
-                        // own, and the banner offers Abort (2.12).
+                        // own, with git's output and the command, and the banner offers Abort (2.12).
                         display = new FailureDisplay(OperationTexts.CherryPickStoppedTitle, OperationTexts.CherryPickEmpty(commit, current));
-                        return Failed(text, StoppedFailure(display.Summary));
+                        return Failed(text, FailureOfLastCall(context, command => IsCallOn(command, "cherry-pick", commit), display.Summary));
                 }
             },
             new RunOptions { DescribeFailure = _ => display }));
@@ -461,7 +461,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                         case ApplyResult.Empty:
                             display = new FailureDisplay(OperationTexts.CherryPickStoppedTitle, OperationTexts.CherryPickSeveralEmpty(done, count, sha, current));
-                            return Failed(text, StoppedFailure(display.Summary));
+                            return Failed(text, FailureOfLastCall(context, command => IsCallOn(command, "cherry-pick", sha), display.Summary));
                     }
                 }
 
@@ -501,7 +501,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 {
                     ApplyResult.Applied => OperationReport.Done(OperationTexts.Reverted(commit)),
                     ApplyResult.Conflicts => OperationReport.Conflicts(OperationTexts.RevertConflicts(await CountConflictedFilesAsync())),
-                    _ => Failed(text, StoppedFailure(OperationTexts.RevertEmpty(commit, current))),
+
+                    // A git that keeps REVERT_HEAD after a revert that changes nothing (D117's
+                    // other case): a stop, not a failure; the banner says so and offers Abort,
+                    // and no dialog opens (2.33, check 12 part E).
+                    _ => OperationReport.Conflicts(OperationTexts.RevertStoppedEmpty(commit, current)),
                 };
             });
         });
@@ -569,7 +573,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
                                 return OperationReport.Conflicts(OperationTexts.RevertSeveralStopped(done, count, sha, conflicts, rest));
 
                             case ApplyResult.Empty:
-                                return Failed(text, StoppedFailure(OperationTexts.RevertSeveralEmpty(done, count, sha, current)));
+                                // As one revert that changes nothing: a stop the banner shows, no dialog (D117).
+                                return OperationReport.Conflicts(OperationTexts.RevertSeveralEmpty(done, count, sha, current));
                         }
                     }
 
@@ -807,6 +812,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
             ? new FailureDisplay(Title, OperationTexts.FastForwardNotBehind(branch, target))
             : null;
     }
+
+    /// <summary>Whether <paramref name="command"/> is the call <c>git &lt;verb&gt; … &lt;sha&gt;</c> (a cherry-pick or revert of that commit).</summary>
+    private static bool IsCallOn(string command, string verb, string sha) =>
+        command.StartsWith($"git {verb} ", StringComparison.Ordinal) && command.EndsWith(" " + sha, StringComparison.Ordinal);
 
     /// <summary>Git 2.36's empty revert (D117): it fails with "nothing to commit" and leaves nothing in progress.</summary>
     private static bool ChangesNothing(GitException failure) =>

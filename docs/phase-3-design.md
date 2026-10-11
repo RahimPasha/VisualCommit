@@ -748,7 +748,9 @@ that the reflog or the stash list does not keep.
 ### 2.15 Abort an operation in progress
 
 - The banner's button (section 5). Confirm: title "Abort the <kind>?", question per section 5,
-  button "Abort <kind>" (danger).
+  button "Abort <kind>" (danger); for `git am` the title "Abort git am?" and the button "Abort
+  git am" (the banner's own button says "Abort", section 5). One function builds this question
+  for the banner and for `RepositoryOperations.AbortAsync` (`ConflictBannerViewModel.AbortConfirmation`).
 - Backup: `abort-<time>` and, when there are changed tracked files, `abort-<time>-changes`
   (same batch, same timestamp, 2.0). The backup keeps the commits a sequence started in a
   terminal already made, which `git cherry-pick --abort` and `git revert --abort` drop
@@ -1363,7 +1365,10 @@ pointer" after it (the real-window pass counts these lines, D106).
   `VcPanelBackgroundBrush`, 1 px `VcBorderBrush`, corner radius 6, padding 4, `BoxShadow`
   `VcMenuShadow` on the presenter (Fluent's presenter draws none; the shadow is drawn inside the
   window and cut where the menu is closer to the window's edge than the shadow reaches); width
-  200 to 360 (the longest label decides); an item 26 high with 10 px side padding, a separator
+  200 to 520, as wide as the longest label needs (520 holds 4b's and 4g's longest labels with
+  the scenarios' names, such as "Merge origin/feature/alpha into main (create a merge commit)");
+  a label longer still is cut with "…" and shows its whole text as its tooltip, and nothing is
+  ever clipped at the menu's edge; an item 26 high with 10 px side padding, a separator
   9 high (a 1 px line), the header 24 high. Item text `VcTextPrimaryBrush`; the highlighted item
   `VcHoverBackgroundBrush`. So a menu that fits is 8 + 24 + 26 × items + 9 × separators high.
 - **Position:** top-left at the pointer + (2, 2). If it would cross the window's right edge it
@@ -1865,9 +1870,12 @@ branch, stash and pop are one toolbar click.
   HEAD goes back to where it was before it started, and changes made to resolve conflicts are
   lost." plus, when `sequencer/` exists, " Commits this cherry-pick already made are dropped
   too."; when `AbortKeepsHead` (D110) instead "Abort the cherry-pick? The 1 commit left is not
-  picked. HEAD and the commits made so far stay as they are." / "Abort the revert? …" (as
-  cherry-pick, with "reverted") / "Abort the rebase of feature/conflict? The
-  branch goes back to where it was before it started." / "Abort git am? …". The detail is
+  picked. HEAD and the commits made so far stay as they are." (with no commit left, the
+  sentence about them is left out) / "Abort the revert? …" (as cherry-pick, with "reverted") /
+  "Abort the rebase of feature/conflict? The branch goes back to where it was before it
+  started." (without a branch: "Abort the rebase? HEAD goes back to where it was before it
+  started.") / "Abort git am? HEAD goes back to where it was before it started, and the patches
+  not applied yet are dropped.". The detail is
   always "A backup is saved first, so this can be undone." (`abort-<time>` holds HEAD before
   the abort, so dropped commits stay reachable).
 - **Conflicted files flagged:** the unstaged list's conflicted rows keep phase 2's "U" in the

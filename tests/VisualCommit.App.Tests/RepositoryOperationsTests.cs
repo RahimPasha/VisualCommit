@@ -417,14 +417,15 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
-    public async Task Dialogs_name_the_repository_only_when_asked_to()
+    public async Task Dialogs_name_the_repository_only_when_the_windows_rule_says_so()
     {
         using var repo = await Scenarios.OperationsAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         app.Dialogs.Cancel().Cancel().Cancel();
 
+        // No window here: the rule the window would set (more than one tab with a repository, 4f).
         await app.Operations.ShowDialogAsync(app.Operations.NewTagDialog("At HEAD"));
-        app.Operations.NamesRepositoryInDialogs = true;
+        app.Services.NamesRepositoryInDialogs = () => true;
         await app.Operations.ShowDialogAsync(app.Operations.NewTagDialog("At HEAD"));
         await app.Operations.ConfirmAsync(OperationTexts.ConfirmDeleteTag("v1.0"));
 

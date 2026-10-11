@@ -1,7 +1,11 @@
+using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
@@ -9,6 +13,8 @@ using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.Views.Shell;
+using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -317,6 +323,119 @@ public partial class RepositoryMenusTests
         Assert.InRange(menu.Bounds.Height, 108, 112);
         TestPictures.Save(app, "07b-drop-menu");
         app.PressKey(Key.Escape);
+    }
+
+    [AvaloniaFact]
+    public async Task A_menu_is_as_wide_as_its_longest_label_and_only_a_label_past_the_widest_menu_is_cut_with_its_whole_text_as_tooltip()
+    {
+        const string LongBranch = "topic/a-branch-name-much-too-long-for-any-context-menu-to-show-in-full";
+        using var scenario = await Scenarios.OperationsAsync();
+
+        // A merge commit for the commit menu, and a branch whose name no menu can show in full.
+        await scenario.CreateBranchAsync("release/merged", "main");
+        await scenario.CheckoutAsync("release/merged");
+        var merge = await scenario.MergeAsync("feature/ff");
+        await scenario.CheckoutAsync("main");
+        await scenario.CreateBranchAsync(LongBranch, "feature/alpha~1");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
+        var repository = await ShownAsync(app);
+        repository.MenuActions = RecordingActions.Create().Actions;
+        int Row(Func<CommitInfo, bool> match) => Enumerable.Range(0, repository.Graph.Count).Single(row => match(repository.Graph.CommitAt(row)));
+        app.Click(LeftRow(app, row => row.Key == "local:topic"));
+        app.Click(LeftRow(app, row => row.Key == "remote:origin:feature"));
+
+        foreach (var (theme, width, height) in new[] { (ThemeVariant.Dark, 1100, 700), (ThemeVariant.Light, 1100, 700), (ThemeVariant.Dark, 1400, 900), (ThemeVariant.Light, 1400, 900) })
+        {
+            app.Window.RequestedThemeVariant = theme;
+            app.Window.Width = width;
+            app.Window.Height = height;
+            app.Settle();
+            var name = string.Create(CultureInfo.InvariantCulture, $"menu-width-{(theme == ThemeVariant.Dark ? "dark" : "light")}-{width}");
+
+            // The drop menu (check 7): its longest label wider than the old 360.
+            var main = app.GraphLabelBounds(Row(commit => commit.Subject == "Main work"), "main").Center;
+            app.PressMouse(app.GraphLabelBounds(Row(commit => commit.Subject == "Alpha two"), "feature/alpha").Center);
+            app.MoveMouseHeld(main, steps: 6);
+            app.ReleaseMouse(main);
+            AssertWholeLabels(app, "Merge feature/alpha into main (create a merge commit)");
+            TestPictures.Save(app, name + "-drop");
+            app.PressKey(Key.Escape);
+
+            // A remote branch's menu: "Merge origin/feature/alpha into main (create a merge commit)".
+            app.RightClick(LeftRow(app, row => row.Key == "ref:refs/remotes/origin/feature/alpha"));
+            AssertWholeLabels(app, "Merge origin/feature/alpha into main (create a merge commit)");
+            TestPictures.Save(app, name + "-remote-branch");
+            app.PressKey(Key.Escape);
+
+            // The commit menu on a merge commit.
+            app.RightClick(app.GraphRowPoint(Row(commit => commit.Sha == merge)));
+            AssertWholeLabels(app, "Reset main to this commit…");
+            TestPictures.Save(app, name + "-merge-commit");
+            app.PressKey(Key.Escape);
+
+            // A branch whose labels are longer than the widest menu: cut with "…", the whole label as tooltip.
+            app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/" + LongBranch));
+            var menu = app.Menu();
+            TestPictures.Save(app, name + "-long-branch");
+            Assert.Equal(MenuLayer.MaxMenuWidth, menu.Bounds.Width, 1);
+            var cut = $"Merge {LongBranch} into main (create a merge commit)";
+            var label = MenuLabels(app).Single(text => text.Text == cut);
+            Assert.True(label.IsTrimmed);
+            Assert.Equal(cut, ToolTip.GetTip(label));
+            Assert.Equal(cut, menu.Items.Single(item => item.Label == cut).Label);
+            Assert.All(MenuLabels(app).Where(text => !text.IsTrimmed), text => Assert.Null(ToolTip.GetTip(text)));
+            Assert.All(MenuLabels(app), text => Assert.True(text.IsTrimmed == (NaturalWidth(text) > text.Bounds.Width + 0.5), text.Text));
+            app.PressKey(Key.Escape);
+        }
+    }
+
+    /// <summary>
+    /// The open menu shows each label whole (none cut, none clipped) and is as wide as its longest
+    /// label needs, between the narrowest and the widest menu (4a); <paramref name="longest"/> is
+    /// its longest label.
+    /// </summary>
+    private static void AssertWholeLabels(ShellDriver app, string longest)
+    {
+        var menu = app.Menu();
+        var labels = MenuLabels(app);
+        Assert.Equal(menu.Items.Count, labels.Count);
+        foreach (var label in labels)
+        {
+            Assert.False(label.IsTrimmed, label.Text);
+            Assert.True(NaturalWidth(label) <= label.Bounds.Width + 0.5, $"\"{label.Text}\" needs {NaturalWidth(label):F1} and has {label.Bounds.Width:F1}.");
+            Assert.Null(ToolTip.GetTip(label));
+        }
+
+        var widest = labels.MaxBy(NaturalWidth)!;
+        Assert.Equal(longest, widest.Text);
+        Assert.InRange(menu.Bounds.Width, MenuLayer.MinMenuWidth, MenuLayer.MaxMenuWidth - 1);
+
+        // As wide as the longest label or the header needs (its text ends within a few pixels of
+        // the padding), unless that is narrower than the narrowest menu.
+        var header = app.Window.GetVisualDescendants().OfType<Avalonia.Controls.MenuItem>()
+            .Single(item => item.IsEffectivelyVisible && item.Classes.Contains(MenuLayer.HeaderClass)).Header as TextBlock;
+        static bool Tight(TextBlock text) => text.Bounds.Width - NaturalWidth(text) is >= -0.5 and <= 2;
+
+        // The header's text starts where the labels do, however wide the menu is.
+        Assert.NotNull(header);
+        Assert.Equal(app.BoundsOf(labels[0]).X, app.BoundsOf(header).X, 1);
+        Assert.True(
+            menu.Bounds.Width <= MenuLayer.MinMenuWidth + 0.5 || Tight(widest) || (header is not null && Tight(header)),
+            $"The menu is {menu.Bounds.Width:F1} wide; its longest label needs {NaturalWidth(widest):F1} and has {widest.Bounds.Width:F1}.");
+    }
+
+    /// <summary>The labels of the open menu's items, in order.</summary>
+    private static List<TrimmedTextBlock> MenuLabels(ShellDriver app) =>
+        app.Window.GetVisualDescendants().OfType<MenuFlyoutPresenter>()
+            .Single(presenter => presenter.IsEffectivelyVisible && AutomationProperties.GetAutomationId(presenter) == MenuLayer.MenuAutomationId)
+            .GetVisualDescendants().OfType<TrimmedTextBlock>().ToList();
+
+    /// <summary>How wide <paramref name="text"/>'s whole text is in its font, on one line.</summary>
+    private static double NaturalWidth(TextBlock text)
+    {
+        using var layout = new TextLayout(text.Text, new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch), text.FontSize, null);
+        return layout.WidthIncludingTrailingWhitespace;
     }
 
     private static async Task<RepositoryViewModel> ShownAsync(ShellDriver app)

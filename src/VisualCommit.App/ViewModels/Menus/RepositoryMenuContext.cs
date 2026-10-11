@@ -66,6 +66,7 @@ public sealed record CommitMenuInfo(string Sha, string Subject, IReadOnlyList<st
 /// (<c>+refs/heads/*:refs/remotes/&lt;r&gt;/*</c>), so the branch's name on the remote is not
 /// known and the drop offers nothing but its reason (4g).
 /// </param>
+// Known issue (phase 3): nothing sets RemoteMapsBranchesDifferently yet, because no code reads remote.<r>.fetch; a drop onto a remote with another fetch refspec offers the push as for the default one.
 public sealed record DropFacts(bool TargetIsAncestorOfSource, bool RemoteMapsBranchesDifferently = false);
 
 /// <summary>

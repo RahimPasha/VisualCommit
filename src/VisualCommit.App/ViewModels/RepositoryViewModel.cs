@@ -597,7 +597,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 ? $"{WorkingChangesViewModel.FileName(changed[0])} has changed since the discard. Put back the version from before the discard?"
                 : string.Create(CultureInfo.InvariantCulture, $"{changed.Count} files have changed since the discard. Put back the versions from before the discard?");
             var request = new ConfirmationRequest("Restore discarded changes?", question, "A snapshot of the newer changes is saved first.", "Restore");
-            if (_dialogs is not null && !await _dialogs.ConfirmAsync(request))
+            if (!await AskAsync(request))
             {
                 return null;
             }
@@ -923,8 +923,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>A file's name as dialogs and messages give it; a folder's without its slash.</summary>
     private static string DisplayName(ChangedFile file) => WorkingChangesViewModel.FileName(file.Path.TrimEnd('/'));
 
-    private async Task<bool> ConfirmDiscardAsync(string question) =>
-        _dialogs is null || await _dialogs.ConfirmAsync(new ConfirmationRequest("Discard changes?", question, SnapshotNote, "Discard"));
+    private Task<bool> ConfirmDiscardAsync(string question) =>
+        AskAsync(new ConfirmationRequest("Discard changes?", question, SnapshotNote, "Discard"));
+
+    /// <summary>
+    /// Asks <paramref name="request"/> in the window's confirmation, naming this repository under
+    /// its title by the window's rule, as every dialog of an operation does (4f,
+    /// <see cref="RepositoryOperations.NamesRepositoryInDialogs"/>). True without a dialog service
+    /// (tests only: the change goes ahead unasked).
+    /// </summary>
+    private async Task<bool> AskAsync(ConfirmationRequest request) =>
+        _dialogs is null || await _dialogs.ConfirmAsync(request with { RepositoryName = Operations.NamesRepositoryInDialogs ? Name : null });
 
     /// <summary>
     /// After a discard that succeeded: keeps its snapshot for Restore, and what the files hold now,

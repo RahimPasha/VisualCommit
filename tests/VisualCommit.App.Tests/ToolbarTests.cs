@@ -180,12 +180,32 @@ public class ToolbarTests
     [Fact]
     public void Several_reasons_for_Stash_give_the_first_in_its_order()
     {
+        // 2.24's order (D119): HEAD unborn, an operation in progress, conflicts without one, nothing to stash.
         var merge = new InProgressState(InProgressKind.Merge, Older, "Conflicting change", null, null, 0, false);
+        var unborn = new HeadState("main", null);
+        var born = new HeadState("main", Main);
+        var conflicted = new WorkingTreeStatus([], [new ChangedFile("src/core.txt", FileChangeKind.Conflicted)], new HashSet<string>(StringComparer.Ordinal));
 
-        Assert.Equal("Make the first commit first", ToolbarViewModel.StashReason(new HeadState("main", null), Changed with { InProgress = merge }));
-        Assert.Equal("There are no changes to stash", ToolbarViewModel.StashReason(new HeadState("main", Main), WorkingTreeStatus.Clean with { InProgress = merge }));
-        Assert.Equal("Finish or abort the merge first", ToolbarViewModel.StashReason(new HeadState("main", Main), Changed with { InProgress = merge }));
-        Assert.Null(ToolbarViewModel.StashReason(new HeadState("main", Main), Changed));
+        Assert.Equal("Make the first commit first", ToolbarViewModel.StashReason(unborn, conflicted with { InProgress = merge }));
+        Assert.Equal("Make the first commit first", ToolbarViewModel.StashReason(unborn, WorkingTreeStatus.Clean));
+        Assert.Equal("Finish or abort the merge first", ToolbarViewModel.StashReason(born, conflicted with { InProgress = merge }));
+        Assert.Equal("Finish or abort the merge first", ToolbarViewModel.StashReason(born, WorkingTreeStatus.Clean with { InProgress = merge }));
+        Assert.Equal("Finish or abort the merge first", ToolbarViewModel.StashReason(born, Changed with { InProgress = merge }));
+        Assert.Equal("Finish or abort the git am first", ToolbarViewModel.StashReason(born, WorkingTreeStatus.Clean with { InProgress = merge with { Kind = InProgressKind.ApplyMailbox } }));
+        Assert.Equal("Resolve the conflicts first", ToolbarViewModel.StashReason(born, conflicted));
+        Assert.Equal("There are no changes to stash", ToolbarViewModel.StashReason(born, WorkingTreeStatus.Clean));
+        Assert.Null(ToolbarViewModel.StashReason(born, Changed));
+    }
+
+    [Fact]
+    public async Task An_operation_in_progress_with_nothing_to_stash_gives_Stash_the_operations_reason()
+    {
+        // A merge resolved to "ours" leaves nothing changed, and git's stash would still drop the merge (D119).
+        var status = WorkingTreeStatus.Clean with { InProgress = new InProgressState(InProgressKind.Merge, Older, "Merge branch 'feature/conflict'", null, null, 0, false) };
+        using var viewModel = await StartAsync(OpsRefs(), status);
+
+        Assert.False(viewModel.Toolbar.CanStash);
+        Assert.Equal("Finish or abort the merge first", viewModel.Toolbar.StashToolTip);
     }
 
     [Fact]

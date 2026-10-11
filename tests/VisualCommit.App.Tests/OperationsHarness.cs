@@ -34,15 +34,15 @@ namespace VisualCommit.App.Tests;
 /// </summary>
 internal sealed class OperationsHarness : IDisposable
 {
-    private static readonly IGitRunner Runner = new GitRunner(
-        GitLocator.FindExecutable(GitSearchContext.FromSystem())
-        ?? throw new InvalidOperationException("The tests need git, and no git executable was found."));
+    private static readonly string GitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem())
+        ?? throw new InvalidOperationException("The tests need git, and no git executable was found.");
 
     /// <summary>The prompt broker <see cref="OpenAsync(TempRepo, Func{DialogHostViewModel, IGitPromptHandler})"/> made, disposed with the harness.</summary>
     private IDisposable? _broker;
 
-    private OperationsHarness(TempRepo repo, RepositoryViewModel repository, DialogHostViewModel host, TabServices services, RecordingLog log, FakeClipboard clipboard, FakeFileLauncher launcher)
+    private OperationsHarness(TempRepo repo, RepositoryViewModel repository, DialogHostViewModel host, TabServices services, RecordingLog log, FakeClipboard clipboard, FakeFileLauncher launcher, GitCallLog calls)
     {
+        Calls = calls;
         Repo = repo;
         Repository = repository;
         DialogHost = host;
@@ -55,6 +55,9 @@ internal sealed class OperationsHarness : IDisposable
 
     /// <summary>The scenario repository, for git's state (<see cref="TempRepo.GitAsync"/>, <see cref="TempRepo.RefTargetAsync"/>, …).</summary>
     public TempRepo Repo { get; }
+
+    /// <summary>Every git call the repository's view model and its operations made, as the app's session records them (<see cref="TabServices.GitCalls"/>).</summary>
+    public GitCallLog Calls { get; }
 
     /// <summary>The repository's view model, started.</summary>
     public RepositoryViewModel Repository { get; }
@@ -93,6 +96,14 @@ internal sealed class OperationsHarness : IDisposable
     public static Task<OperationsHarness> OpenAsync(TempRepo repo) => OpenAsync(repo, prompts: null);
 
     /// <summary>
+    /// Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with its git calls
+    /// going through what <paramref name="wrap"/> makes of the real repository: a test that needs
+    /// a git method to answer what the installed git never answers (a revert that stops with
+    /// <c>REVERT_HEAD</c>, D117) changes that one method.
+    /// </summary>
+    public static Task<OperationsHarness> OpenWrappedAsync(TempRepo repo, Func<IGitRepository, IGitRepository> wrap) => OpenAsync(repo, prompts: null, wrap);
+
+    /// <summary>
     /// Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with the app's
     /// prompt broker (the real askpass helper, design 3.1) answering git's and ssh's prompts
     /// through the handler <paramref name="prompts"/> makes for the harness's dialog layer:
@@ -100,10 +111,12 @@ internal sealed class OperationsHarness : IDisposable
     /// <see cref="Dialogs"/> to answer; a <see cref="ScriptedPromptHandler"/> answers without any.
     /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
-        var git = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
+        var calls = new GitCallLog();
+        IGitRepository git = await GitRepository.OpenAsync(new GitRunner(GitPath, calls), repo.Path, TestContext.Current.CancellationToken);
+        git = wrap?.Invoke(git) ?? git;
         var log = new RecordingLog();
         var host = new DialogHostViewModel();
         var clipboard = new FakeClipboard();
@@ -111,9 +124,9 @@ internal sealed class OperationsHarness : IDisposable
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
         var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log);
-        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard);
+        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
-        var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher) { _broker = broker as IDisposable };
+        var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };
         await repository.StartAsync();
         return harness;
     }

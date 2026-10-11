@@ -74,8 +74,7 @@ public sealed partial class RepositoryViewModel
     {
         try
         {
-            var request = ConflictBannerViewModel.AbortConfirmation(state, HasSequencer());
-            if (_dialogs is not null && !await _dialogs.ConfirmAsync(request))
+            if (!await AskAsync(ConflictBannerViewModel.AbortConfirmation(state, HasSequencer())))
             {
                 return;
             }

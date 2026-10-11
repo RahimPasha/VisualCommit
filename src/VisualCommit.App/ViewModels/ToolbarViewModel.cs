@@ -2,6 +2,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -238,19 +239,23 @@ public sealed partial class ToolbarViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Why Stash cannot be used (2.24, 4d, D119), or null when it can: HEAD unborn; nothing to
-    /// stash; an operation in progress ("Finish or abort the merge first"), or conflicts that a
-    /// stash left without one ("Resolve the conflicts first"), because a stash during a merge drops
-    /// the merge without a word. Several reasons give the first, in this order.
+    /// Why a stash cannot be made now (2.24, 4d, D119), or null when it can: the one reason that
+    /// the toolbar's Stash, every "Stash changes…" item (4b) and the stash operation's guard
+    /// (<c>RepositoryOperations.StashAsync</c>) give. Several reasons give the first, in 2.24's
+    /// order: HEAD unborn ("Make the first commit first"); an operation in progress ("Finish or
+    /// abort the merge first", "… the git am first"), because a stash during a merge without
+    /// conflicts drops the merge without a word; conflicts without one, which a stash that did not
+    /// apply cleanly leaves ("Resolve the conflicts first"); nothing to stash ("There are no changes
+    /// to stash").
     /// </summary>
     public static string? StashReason(HeadState head, WorkingTreeStatus status)
     {
         ArgumentNullException.ThrowIfNull(head);
         ArgumentNullException.ThrowIfNull(status);
         return head.IsUnborn ? UnbornText
-            : !status.HasChanges ? NothingToStashText
-            : status.InProgress.IsActive ? $"Finish or abort the {InProgressName(status.InProgress.Kind)} first"
+            : status.InProgress.IsActive ? OperationTexts.FinishOrAbortFirst(status.InProgress.Kind)
             : HasConflicts(status) ? ResolveConflictsText
+            : !status.HasChanges ? NothingToStashText
             : null;
     }
 
@@ -299,7 +304,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
         }
         else if (status.InProgress.IsActive)
         {
-            pull = $"Finish or abort the {InProgressName(status.InProgress.Kind)} first";
+            pull = OperationTexts.FinishOrAbortFirst(status.InProgress.Kind);
         }
         else if (!hasRemotes && !current.HasLocalUpstream)
         {

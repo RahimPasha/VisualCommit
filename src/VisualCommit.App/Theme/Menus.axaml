@@ -6,7 +6,9 @@
        class vcContextMenu (Views/Shell/MenuLayer). Colours are theme tokens only.
        Sizes: a 1-pixel border and 3 of padding (the items start 4 inside the menu's edge), the
        header 24 high, an item 26, a separator 9; so a menu that fits is
-       8 + 24 + 26 × items + 9 × separators high. Width 200 to 360, set by the longest label. -->
+       8 + 24 + 26 × items + 9 × separators high. Width 200 to 520, set by the longest label; a
+       label longer still is cut with "…" and shows its whole text as its tooltip (MenuLayer's
+       MinMenuWidth and MaxMenuWidth). -->
 
   <Style Selector="MenuFlyoutPresenter.vcContextMenu">
     <Setter Property="Background" Value="{DynamicResource VcPanelBackgroundBrush}" />
@@ -15,7 +17,10 @@
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Padding" Value="3" />
     <Setter Property="MinWidth" Value="200" />
-    <Setter Property="MaxWidth" Value="360" />
+    <Setter Property="MaxWidth" Value="520" />
+    <!-- The items are measured and arranged at the menu's width, never wider: a label longer than
+         the widest menu is then cut with "…" instead of being clipped at the menu's edge. -->
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>

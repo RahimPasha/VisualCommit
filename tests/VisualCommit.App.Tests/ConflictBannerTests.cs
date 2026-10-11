@@ -157,7 +157,15 @@ public class ConflictBannerTests
         Assert.All(
             new[] { merge, pick, revert, rebase }.Select(state => ConflictBannerViewModel.AbortConfirmation(state, hasSequencer: false)),
             request => Assert.True(request.IsDestructive));
-        Assert.StartsWith("Abort git am?", ConflictBannerViewModel.AbortConfirmation(new InProgressState(InProgressKind.ApplyMailbox, null, null, null, null, 0, false), false).Question, StringComparison.Ordinal);
+
+        // git am (2.15, section 5): its own title and question, the button "Abort git am"; the
+        // banner's own button says "Abort".
+        var am = new InProgressState(InProgressKind.ApplyMailbox, null, null, null, null, 0, false);
+        Assert.Equal(
+            new ConfirmationRequest("Abort git am?", "Abort git am? HEAD goes back to where it was before it started, and the patches not applied yet are dropped.", "A backup is saved first, so this can be undone.", "Abort git am"),
+            ConflictBannerViewModel.AbortConfirmation(am, hasSequencer: false));
+        Assert.Equal("Abort", ConflictBannerViewModel.AbortButtonText(am.Kind));
+        Assert.Throws<ArgumentException>(() => ConflictBannerViewModel.AbortConfirmation(InProgressState.None, hasSequencer: false));
     }
 
     [AvaloniaFact]

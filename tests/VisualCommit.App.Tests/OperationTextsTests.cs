@@ -210,34 +210,6 @@ public class OperationTextsTests
         Assert.Equal(("Leave these commits?", "Check out", false), (leave.Title, leave.ConfirmText, leave.IsDestructive));
     }
 
-    [Fact]
-    public void The_abort_question_follows_what_is_in_progress()
-    {
-        var merge = new InProgressState(InProgressKind.Merge, Sha, "Merge branch 'feature/conflict'", null, null, 0, false);
-        var confirm = OperationTexts.ConfirmAbort(merge);
-        Assert.Equal(("Abort the merge?", "Abort merging \"Merge branch 'feature/conflict'\"? Changes made to resolve conflicts are lost.", "Abort merge"),
-            (confirm.Title, confirm.Question, confirm.ConfirmText));
-
-        var single = new InProgressState(InProgressKind.CherryPick, Sha, "Conflicting change", null, null, 0, false);
-        Assert.Equal(
-            "Abort the cherry-pick? HEAD goes back to where it was before it started, and changes made to resolve conflicts are lost.",
-            OperationTexts.AbortQuestion(single));
-
-        var sequence = single with { Remaining = 1 };
-        Assert.EndsWith(" Commits this cherry-pick already made are dropped too.", OperationTexts.AbortQuestion(sequence), StringComparison.Ordinal);
-
-        var committed = new InProgressState(InProgressKind.CherryPick, null, null, null, null, 1, false) { AbortKeepsHead = true };
-        Assert.Equal(
-            "Abort the cherry-pick? The 1 commit left is not picked. HEAD and the commits made so far stay as they are.",
-            OperationTexts.AbortQuestion(committed));
-        Assert.Equal(
-            "Abort the revert? The 2 commits left are not reverted. HEAD and the commits made so far stay as they are.",
-            OperationTexts.AbortQuestion(committed with { Kind = InProgressKind.Revert, Remaining = 2 }));
-
-        var rebase = new InProgressState(InProgressKind.Rebase, null, null, "feature/conflict", Sha, 0, false);
-        Assert.Equal("Abort the rebase of feature/conflict? The branch goes back to where it was before it started.", OperationTexts.AbortQuestion(rebase));
-        Assert.Equal("Abort rebase", OperationTexts.ConfirmAbort(rebase).ConfirmText);
-        Assert.Equal(("Abort git am?", "Abort"), (OperationTexts.ConfirmAbort(rebase with { Kind = InProgressKind.ApplyMailbox }).Title, OperationTexts.ConfirmAbort(rebase with { Kind = InProgressKind.ApplyMailbox }).ConfirmText));
-        Assert.Throws<ArgumentOutOfRangeException>(() => OperationTexts.AbortQuestion(InProgressState.None));
-    }
+    // The Abort question of 2.15 and section 5 is the banner's (ConflictBannerViewModel.AbortConfirmation,
+    // ConflictBannerTests): the one text the banner and RepositoryOperations.AbortAsync ask.
 }

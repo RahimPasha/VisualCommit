@@ -25,7 +25,8 @@ public sealed class TabServices
         IOperationLog? operations = null,
         IGitPromptBroker? prompts = null,
         IFileLauncher? launcher = null,
-        IClipboardService? clipboard = null)
+        IClipboardService? clipboard = null,
+        IGitCallLog? gitCalls = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -45,6 +46,7 @@ public sealed class TabServices
         Prompts = prompts ?? NullGitPromptBroker.Instance;
         Launcher = launcher;
         Clipboard = clipboard;
+        GitCalls = gitCalls;
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -82,6 +84,21 @@ public sealed class TabServices
 
     /// <summary>The clipboard (2.32); null where nothing may be copied (view-model tests).</summary>
     public IClipboardService? Clipboard { get; }
+
+    /// <summary>
+    /// Whether a dialog that an operation of a repository opens names that repository ("In
+    /// &lt;repo&gt;" under its title, docs/phase-3-design.md 4f): the window's one rule
+    /// (<see cref="MainWindowViewModel.NamesRepositoryInDialogs"/>, more than one tab has a
+    /// repository), which the window sets here when it is made. False without a window.
+    /// </summary>
+    public Func<bool> NamesRepositoryInDialogs { get; set; } = static () => false;
+
+    /// <summary>
+    /// The record of every git call of the session (1.7), each with its operation's id: where an
+    /// operation finds the command and the output of a failed call that its git method reported
+    /// only as an outcome (an empty cherry-pick, 2.12). Null where nothing records the calls.
+    /// </summary>
+    public IGitCallLog? GitCalls { get; }
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

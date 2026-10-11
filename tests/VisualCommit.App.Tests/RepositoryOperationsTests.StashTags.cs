@@ -130,6 +130,27 @@ public partial class RepositoryOperationsTests
     }
 
     [Fact]
+    public async Task Stash_is_refused_before_the_first_commit_with_the_toolbars_reason()
+    {
+        // The guard gives the toolbar's and the menus' reason, in 2.24's order (D119): an unborn
+        // HEAD first, although the working tree has something to stash.
+        using var repo = await TempRepo.CreateAsync("unborn");
+        repo.WriteFile("notes.txt", "Notes\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.Equal("Make the first commit first", app.Repository.Toolbar.StashToolTip);
+        app.Dialogs.CloseError();
+
+        await app.Operations.StashAsync();
+
+        Assert.Empty(app.Dialogs.Shown.OfType<StashDialogViewModel>());
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Stash failed", "Make the first commit first"), (error.Title, error.Summary));
+        Assert.Equal(("Stash failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.Equal("?? notes.txt", (await repo.GitAsync("status", "--porcelain")).StandardOutput.Trim());
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task Stash_is_refused_when_an_operation_started_while_its_dialog_was_open()
     {
         using var repo = await Scenarios.OperationsAsync();
