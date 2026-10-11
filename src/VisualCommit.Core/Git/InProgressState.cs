@@ -42,6 +42,14 @@ public sealed record InProgressState(
     /// <summary>Nothing in progress.</summary>
     public static InProgressState None { get; } = new(InProgressKind.None, null, null, null, null, 0, false);
 
+    /// <summary>
+    /// A cherry-pick or revert sequence (started in a terminal: <c>sequencer/</c> exists) whose
+    /// HEAD is no longer where the sequencer left it (<c>sequencer/abort-safety</c>), as after the
+    /// stopped pick was committed. Git's <c>--abort</c> then ends the sequence and leaves HEAD and
+    /// the commits made so far as they are, instead of going back to where it started (D110).
+    /// </summary>
+    public bool AbortKeepsHead { get; init; }
+
     /// <summary>An operation is in progress.</summary>
     public bool IsActive => Kind != InProgressKind.None;
 }
