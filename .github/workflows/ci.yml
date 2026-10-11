@@ -28,7 +28,7 @@ jobs:
   build-and-test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 12
+    timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:
@@ -55,8 +55,9 @@ jobs:
         run: dotnet build --configuration Release
 
       # The step has a time limit of its own, so that a hang cannot use up the job's whole time.
+      # Phase 3 added about 900 tests (the default run took 3.5 minutes on CI before it, 7 to 8 now).
       - name: Test
-        timeout-minutes: 5
+        timeout-minutes: 14
         run: dotnet test --configuration Release --no-build
 
       # The real-window pass is outside the solution and never runs here. Building it keeps it
@@ -85,7 +86,7 @@ jobs:
     name: bare ubuntu container, SDK from ${{ matrix.sdk.from }}
     runs-on: ubuntu-latest
     container: ubuntu:24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -131,7 +132,7 @@ jobs:
         run: dotnet build --configuration Release
 
       - name: Test
-        timeout-minutes: 5
+        timeout-minutes: 14
         run: dotnet test --configuration Release --no-build
 
       - name: Upload screenshots
