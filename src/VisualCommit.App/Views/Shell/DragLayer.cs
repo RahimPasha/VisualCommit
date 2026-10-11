@@ -15,7 +15,8 @@ namespace VisualCommit.App.Views.Shell;
 /// the pointer is still found. It makes the window's <see cref="BranchDragService"/>, puts it in
 /// the window's Esc chain, and draws what the service says: the pill with the branch's name in
 /// its label style at 85% opacity, 8 right of and 8 below the pointer, and a 2-pixel outline in
-/// <c>VcDragTargetBrush</c> around a valid target under the pointer.
+/// <c>VcDragTargetBrush</c> around a valid target under the pointer (1 pixel away from a label,
+/// inside a row).
 /// </summary>
 public class DragLayer : Canvas
 {
@@ -27,6 +28,12 @@ public class DragLayer : Canvas
 
     /// <summary>The thickness of a target's outline (4g).</summary>
     public const double OutlineThickness = 2;
+
+    /// <summary>
+    /// The space between a label and its outline: a local label is filled with its lane colour,
+    /// which for lane 0 is the accent the outline is drawn in, so the two would run together.
+    /// </summary>
+    public const double LabelOutlineGap = 1;
 
     private const double LabelCornerRadius = 4;
     private const double IconGridSize = 24;
@@ -104,8 +111,8 @@ public class DragLayer : Canvas
         {
             // Around a label, which is small; inside a row, which fills the panel's width.
             var bounds = new Rect(topLeft, target.Bounds.Size);
-            var outer = target.IsLabel ? bounds.Inflate(OutlineThickness) : bounds;
-            var radius = target.IsLabel ? LabelCornerRadius + OutlineThickness : 0;
+            var outer = target.IsLabel ? bounds.Inflate(LabelOutlineGap + OutlineThickness) : bounds;
+            var radius = target.IsLabel ? LabelCornerRadius + LabelOutlineGap + OutlineThickness : 0;
             var pen = new ImmutablePen(Brush("VcDragTargetBrush"), OutlineThickness);
             context.DrawRectangle(null, pen, new RoundedRect(outer.Deflate(OutlineThickness / 2), Math.Max(0, radius - (OutlineThickness / 2))));
             OutlineBounds = outer;
