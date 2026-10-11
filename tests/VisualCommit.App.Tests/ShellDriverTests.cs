@@ -50,6 +50,46 @@ public class ShellDriverTests
         Assert.True(finished);
     }
 
+    // The session runs what is dispatched to it one at a time: a fresh application waits for the
+    // tests ahead of it, and the hang watchdog must not count that wait against the test.
+    [Fact]
+    public async Task A_fresh_applications_wait_for_its_turn_on_the_ui_thread_does_not_count_against_the_test()
+    {
+        var assembly = typeof(ShellDriverTests).Assembly;
+        var session = Avalonia.Headless.HeadlessUnitTestSession.GetOrStartForAssembly(assembly);
+        var countedBefore = HangWatchdogAttribute.CountedTimeOfCurrentTest();
+        Assert.NotNull(countedBefore);
+        var clock = Stopwatch.StartNew();
+        using var holding = new ManualResetEventSlim();
+
+        // Another test's work holds the UI thread for 1.5 s.
+        var ahead = session.Dispatch(
+            () =>
+            {
+                holding.Set();
+                Thread.Sleep(1500);
+                return Task.FromResult(0);
+            },
+            TestContext.Current.CancellationToken);
+        Assert.True(holding.Wait(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken), "The UI thread never ran the work ahead.");
+        var startedAt = TimeSpan.Zero;
+        await FreshApplication.RunAsync(
+            assembly,
+            () =>
+            {
+                startedAt = clock.Elapsed;
+                return Task.FromResult(true);
+            },
+            TestContext.Current.CancellationToken);
+        await ahead;
+
+        var counted = HangWatchdogAttribute.CountedTimeOfCurrentTest() - countedBefore;
+        var elapsed = clock.Elapsed;
+        Assert.NotNull(counted);
+        Assert.True(startedAt >= TimeSpan.FromMilliseconds(1400), $"The fresh application ran after {startedAt.TotalMilliseconds:F0} ms, not after the work ahead.");
+        Assert.True(counted.Value <= elapsed - TimeSpan.FromMilliseconds(1000), $"Counted {counted.Value.TotalMilliseconds:F0} ms of {elapsed.TotalMilliseconds:F0} ms.");
+    }
+
     [AvaloniaFact]
     public async Task WaitForAsync_times_out_with_a_message_that_says_what_it_waited_for()
     {

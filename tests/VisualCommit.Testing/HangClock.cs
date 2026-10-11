@@ -51,15 +51,21 @@ public sealed class HangClock(Func<TimeSpan> now)
     /// Notes that <paramref name="test"/> (null outside a test, as in a class fixture) waits from
     /// now for the shared preparation <paramref name="what"/>, until the result is disposed. The
     /// wait does not count against the test; the preparation counts against the limit on its
-    /// own. Waits of one test may overlap: only the time in which it waits for none counts.
+    /// own, unless <paramref name="heldToLimit"/> is false: a wait in a queue that moves as other
+    /// tests finish (the headless UI thread), which the "nothing happens" rule watches already.
+    /// Waits of one test may overlap: only the time in which it waits for none counts.
     /// </summary>
-    public IDisposable Preparing(string? test, string what)
+    public IDisposable Preparing(string? test, string what, bool heldToLimit = true)
     {
         lock (_gate)
         {
             var id = _nextPreparation++;
             var at = now();
-            _preparations[id] = (what, at);
+            if (heldToLimit)
+            {
+                _preparations[id] = (what, at);
+            }
+
             if (test is not null && _tests.TryGetValue(test, out var entry) && entry.Waits++ == 0)
             {
                 entry.WaitStartedAt = at;

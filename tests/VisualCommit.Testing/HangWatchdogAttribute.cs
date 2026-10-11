@@ -91,6 +91,19 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
     }
 
     /// <summary>
+    /// Notes that the current test waits from now, until the result is disposed, for its turn on
+    /// something the tests share one at a time (<paramref name="what"/>: the headless UI thread,
+    /// on which every headless test runs in turn). The wait does not count against the test, and
+    /// it is not held to the limit on its own: the queue moves as other tests finish, and if it
+    /// stops, the "nothing happens" rule ends the run.
+    /// </summary>
+    public static IDisposable WaitingForTurn(string what)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        return Clock.Preparing(TestContext.Current.Test?.UniqueID, what, heldToLimit: false);
+    }
+
+    /// <summary>
     /// The time the current test has run so far, less its waits for shared preparations: what
     /// the watchdog holds to the limit. Null outside a test, or in an assembly without the watchdog.
     /// </summary>

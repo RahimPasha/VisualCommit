@@ -88,6 +88,30 @@ public class HangClockTests
     }
 
     [Fact]
+    public void A_wait_for_a_turn_in_a_shared_queue_does_not_count_and_is_left_to_the_standstill_rule()
+    {
+        var clock = new HangClock(() => _now);
+        clock.Started("t", "Waits for the UI thread");
+        var turn = clock.Preparing("t", "its turn on the headless UI thread", heldToLimit: false);
+        for (var step = 0; step < 4; step++)
+        {
+            // Other tests start and finish meanwhile: the queue moves.
+            Advance(60);
+            clock.Started("other" + step, "Other test");
+            clock.Finished("other" + step);
+            Assert.Null(clock.Check(Limit));
+        }
+
+        turn.Dispose();
+        Advance(10);
+        Assert.Equal(TimeSpan.FromSeconds(10), clock.CountedTime("t"));
+
+        // A queue that stops moving is still caught.
+        Advance(171);
+        Assert.Contains("Last event, 181 seconds ago", clock.Check(Limit), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_run_in_which_nothing_happens_stops_even_without_a_test()
     {
         var clock = new HangClock(() => _now);

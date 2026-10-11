@@ -17,13 +17,29 @@ public static class FreshApplication
     /// </summary>
     public static Task<T> RunAsync<T>(Assembly testAssembly, Func<Task<T>> action, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(action);
         var session = HeadlessUnitTestSession.GetOrStartForAssembly(testAssembly);
+
+        // The session runs what is dispatched to it one after another, the [AvaloniaFact] tests
+        // of the classes that run side by side included: the action waits for its turn behind
+        // them, which under load took the whole 3 minutes of the hang watchdog. Only the action
+        // itself counts against the test.
+        var turn = HangWatchdogAttribute.WaitingForTurn("its turn on the headless UI thread");
+        async Task<T> Run()
+        {
+            turn.Dispose();
+            return await action();
+        }
 
         // Dispatch completes its task on the UI thread, and an awaiting test would carry on
         // right there: xunit would then start the next test from the UI thread and wait for a
         // dispatch that the same thread has to run. Finishing on the thread pool avoids that.
-        return session.Dispatch(action, cancellationToken).ContinueWith(
-            task => task.GetAwaiter().GetResult(),
+        return session.Dispatch(Run, cancellationToken).ContinueWith(
+            task =>
+            {
+                turn.Dispose();
+                return task.GetAwaiter().GetResult();
+            },
             CancellationToken.None,
             TaskContinuationOptions.DenyChildAttach,
             TaskScheduler.Default);
