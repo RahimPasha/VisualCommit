@@ -459,28 +459,7 @@ public class RepositoryOperationsRebaseTests
         Assert.Empty(await merging.BackupRefsAsync());
     }
 
-    [Fact]
-    public async Task The_backups_clean_up_runs_after_an_operation_that_saved_one_and_removes_old_backups()
-    {
-        // Section 9, D139: an old backup (named as 40 days old) goes after the rebase that saved a new one.
-        using var repo = await Scenarios.RebaseAsync();
-        var old = DateTimeOffset.UtcNow.AddDays(-40).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture);
-        await repo.GitAsync("update-ref", $"refs/visualcommit/backup/reset-{old}", TopicOne);
-        using var app = await OperationsHarness.OpenAsync(repo);
-
-        await app.Operations.RebaseAsync(new RebaseTarget(MainMore, "main"));
-
-        // Nothing on screen: the status is the rebase's, and no dialog opened.
-        var backup = Assert.Single(await repo.BackupRefsAsync());
-        Assert.StartsWith("refs/visualcommit/backup/rebase-", backup.Name, StringComparison.Ordinal);
-        Assert.Equal("Rebased feature/topic onto main", app.StatusText);
-        Assert.Empty(app.Dialogs.Shown);
-
-        // An operation that saved none does not clean up: the old one, named again, stays.
-        await repo.GitAsync("update-ref", $"refs/visualcommit/backup/reset-{old}", TopicOne);
-        await app.Operations.CherryPickAsync(OtherOne);
-        Assert.Equal(2, (await repo.BackupRefsAsync()).Count);
-    }
+    // The backups' clean-up after an operation (section 9, D139): RepositoryOperationsBackupCleanupTests.
 
     /// <summary>The running texts the status bar is given, in order, each once (the queue's <c>Current</c> at each change).</summary>
     private static List<string> RecordRunningTexts(OperationsHarness app)
