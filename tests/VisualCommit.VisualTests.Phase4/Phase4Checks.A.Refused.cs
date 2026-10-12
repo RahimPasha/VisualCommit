@@ -37,7 +37,7 @@ public sealed partial class Phase4ChecksA
 
         // Step 2: the rebase is offered (uncommitted changes disable no rebase item); git refuses it.
         var (menu, _) = await RightClickRefAsync(app, "Local branches", "main");
-        AssertMenu(menu, PartA.MainBranchMenu);
+        AssertMenuAsReported(app, menu, PartA.MainBranchMenu, "Check out main", PartA.LocalBranchWithUpstreamMenuHeight);
         Assert.True(menu.Item("Rebase feature/topic onto main").IsEnabled);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
@@ -119,7 +119,8 @@ public sealed partial class Phase4ChecksA
         // Step 4: the working-changes row shows (the untracked file); git refuses the rebase.
         AssertGraph(app, PartA.R0, PartA.RebaseLanes, PartA.A5Working, showsDate: true);
         Assert.Equal(["?? docs/"], await GitLinesAsync(repo, "status", "--porcelain"));
-        await RightClickRefAsync(app, "Local branches", "main");
+        var (menu, _) = await RightClickRefAsync(app, "Local branches", "main");
+        AssertMenuAsReported(app, menu, PartA.MainBranchMenu, "Check out main", PartA.LocalBranchWithUpstreamMenuHeight);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
         app.ClickMenuItem("Rebase feature/topic onto main");

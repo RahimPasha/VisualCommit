@@ -35,7 +35,7 @@ public sealed partial class Phase4ChecksA
 
         // Step 2: "Rebase feature/topic onto main" from main's menu: no question, no dialog.
         var (menu, _) = await RightClickRefAsync(app, "Local branches", "main");
-        AssertMenu(menu, PartA.MainBranchMenu);
+        AssertMenuAsReported(app, menu, PartA.MainBranchMenu, "Check out main", PartA.LocalBranchWithUpstreamMenuHeight);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
         using (var recorder = app.RecordStatusTexts())

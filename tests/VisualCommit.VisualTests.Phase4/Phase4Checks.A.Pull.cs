@@ -204,6 +204,7 @@ public sealed partial class Phase4ChecksA
         Assert.Equal(PartA.PublishedResolved, (await repo.GitAsync("show", $"{PartA.UnpushedWorkContinuedSha}:src/published.txt")).StandardOutput);
         Assert.Equal(["## published...origin/published [ahead 1]"], await GitLinesAsync(repo, "status", "-sb"));
         AssertNoRebaseFolder(repo);
+        Assert.True(InGitDir(repo, "REBASE_HEAD"), "No stale REBASE_HEAD stayed after Continue (design 0.1).");
         Assert.Equal(
             ["rebase (continue) (finish): returning to refs/heads/published", "commit: Unpushed work", "rebase (start): checkout refs/remotes/origin/published"],
             await ReflogAsync(repo, 3));
@@ -312,6 +313,7 @@ public sealed partial class Phase4ChecksA
         Assert.Equal(["## published...origin/published [ahead 1]"], await GitLinesAsync(repo, "status", "-sb"));
         var (menu, _) = await RightClickRefAsync(app, "Local branches", "published");
         Assert.True(menu.Item("Pull from origin/published (rebase)").IsEnabled, "\"Pull from origin/published (rebase)\" is disabled.");
+        AssertMenuShape(app, menu);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
         app.ClickMenuItem("Pull from origin/published (rebase)");
