@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using VisualCommit.App.Controls.Conflicts;
 using Xunit;
 
@@ -248,6 +249,146 @@ public class ConflictPanesTests
         Assert.NotNull(panes.BarButton(1, ConflictPaneSide.Ours, ConflictChoice.UseBothOursFirst));
         Assert.NotNull(panes.BarButton(1, ConflictPaneSide.Theirs, ConflictChoice.UseBothTheirsFirst));
         TestPictures.Save(host, "conflict-panes-scrolled");
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Themes))]
+    public void A_resolved_block_s_bars_say_whether_each_side_is_used_and_its_rows_are_tinted_so(string themeName)
+    {
+        var colors = DiffColors.For(themeName);
+        var used = themeName == "Light" ? Color.Parse("#E6F6EC") : Color.Parse("#1A2E24");
+        var panes = new ConflictPanes { Parts = TwoBlocks() };
+        using var host = DiffHost.Show(panes, Width, Height, colors.Variant);
+        host.Capture();
+        var scrolled = panes.ScrollOffset;
+
+        panes.Bars = [new ConflictBlockBars(ConflictSideState.Used, ConflictSideState.NotUsed), new ConflictBlockBars(ConflictSideState.Used, ConflictSideState.Used)];
+        var shot = host.Capture();
+        TestPictures.Save(host, $"conflict-panes-used-{themeName.ToLowerInvariant()}");
+
+        // The rows stay where they were; only the bars and backgrounds change.
+        Assert.Equal(scrolled, panes.ScrollOffset);
+        var ours = panes.RowsOf(ConflictPaneSide.Ours);
+        var theirs = panes.RowsOf(ConflictPaneSide.Theirs);
+        Assert.Equal((ConflictTint.Bar, ConflictSideState.Used, "Used in the result", 0), (ours[2].Tint, ours[2].BarState!.Value, ours[2].BarText, ours[2].Block!.Value));
+        Assert.Equal((ConflictSideState.NotUsed, "Not used"), (theirs[2].BarState!.Value, theirs[2].BarText));
+        Assert.Equal(ConflictTint.Used, ours[3].Tint);
+        Assert.Equal(ConflictTint.Filler, ours[4].Tint);
+        Assert.Equal([ConflictTint.None, ConflictTint.None, ConflictTint.None], theirs.Skip(3).Take(3).Select(row => row.Tint));
+        Assert.Equal([ConflictTint.Used, ConflictTint.Used], ours.Skip(9).Take(2).Select(row => row.Tint));
+        Assert.Equal(ConflictTint.Used, theirs[9].Tint);
+        Assert.Null(ours[0].Block);
+        Assert.Null(ours[3].BarState);
+
+        Assert.Equal("Used in the result", panes.BarText(0, ConflictPaneSide.Ours));
+        Assert.Equal("Not used", panes.BarText(0, ConflictPaneSide.Theirs));
+        Assert.Null(panes.BarButton(0, ConflictPaneSide.Ours, ConflictChoice.UseOurs));
+        Assert.Null(panes.BarButton(1, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs));
+
+        // The bar's text, 8 from the text column in the secondary colour, has its own id.
+        var texts = panes.GetVisualDescendants().OfType<TextBlock>().Where(text => Avalonia.Automation.AutomationProperties.GetAutomationId(text) == "ConflictBarState").ToList();
+        Assert.Equal(4, texts.Count);
+        Assert.All(texts, text => DiffColors.AssertBrush(colors.TextSecondary, text.Foreground, "a bar's state"));
+        var first = texts.Single(text => text.Text == "Used in the result" && text.TranslatePoint(default, panes)!.Value.X < Width / 2 && text.TranslatePoint(default, panes)!.Value.Y < 60);
+        Assert.Equal(panes.TextLeft(ConflictPaneSide.Ours)!.Value + 8, first.TranslatePoint(default, panes)!.Value.X, 0.5);
+
+        foreach (var (side, row, color, what) in new[]
+        {
+            (ConflictPaneSide.Ours, 3, used, "the first block's ours line, used"),
+            (ConflictPaneSide.Theirs, 3, colors.Background, "the first block's theirs line, not used"),
+            (ConflictPaneSide.Ours, 2, colors.Hunk, "the first bar"),
+            (ConflictPaneSide.Theirs, 9, used, "the second block's theirs line, used"),
+        })
+        {
+            var bounds = panes.RowBounds(side, row)!.Value;
+            DiffColors.AssertColor(color, shot.PixelAt(host.ToWindow(panes, new Point(bounds.Right - 20, bounds.Center.Y))), what);
+        }
+
+        // Back to unresolved: the buttons and the sides' tints come back.
+        panes.Bars = [ConflictBlockBars.Open, ConflictBlockBars.Open];
+        host.Capture();
+        Assert.NotNull(panes.BarButton(0, ConflictPaneSide.Ours, ConflictChoice.UseOurs));
+        Assert.Equal(ConflictTint.Ours, panes.RowsOf(ConflictPaneSide.Ours)[3].Tint);
+    }
+
+    [AvaloniaFact]
+    public void RevealBlock_puts_a_block_s_bar_third_in_view_and_ScrollToOffset_keeps_a_place()
+    {
+        var common = Enumerable.Range(1, 40).Select(n => $"common line {n}").ToArray();
+        var panes = new ConflictPanes
+        {
+            Parts =
+            [
+                ConflictPanesPart.Common("first"),
+                ConflictPanesPart.Block(["ours 1"], ["theirs 1"]),
+                ConflictPanesPart.Common(common),
+                ConflictPanesPart.Block(["ours 2"], ["theirs 2"]),
+                ConflictPanesPart.Common(common),
+            ],
+        };
+        using var host = DiffHost.Show(panes, Width, 200, ThemeVariant.Dark);
+        host.Capture();
+
+        // Near the start there are fewer rows above: the first block's bar is row 1, nothing scrolls.
+        panes.RevealBlock(0);
+        host.Capture();
+        Assert.Equal(0, panes.ScrollOffset.Y, 0.5);
+
+        // The second block's bar (row 43) is the third row in view: rows 41 and 42 above it.
+        panes.RevealBlock(1);
+        host.Capture();
+        var bar = panes.BarRowOf(1);
+        Assert.Equal(43, bar);
+        Assert.Equal(0, panes.RowBounds(ConflictPaneSide.Ours, bar - 2)!.Value.Y, 0.5);
+        Assert.Equal(panes.RowBounds(ConflictPaneSide.Theirs, bar)!.Value.Y, panes.RowBounds(ConflictPaneSide.Ours, bar)!.Value.Y);
+        Assert.NotNull(panes.BarButton(1, ConflictPaneSide.Ours, ConflictChoice.UseOurs));
+
+        // New parts start at the top, unless a place to keep is asked for.
+        var place = panes.ScrollOffset;
+        panes.Parts = [.. panes.Parts!];
+        panes.ScrollToOffset(place);
+        host.Capture();
+        Assert.Equal(place.Y, panes.ScrollOffset.Y, 0.5);
+        panes.Parts = [.. panes.Parts!];
+        host.Capture();
+        Assert.Equal(0, panes.ScrollOffset.Y, 0.5);
+    }
+
+    [AvaloniaFact]
+    public void The_parts_of_a_parsed_file_its_sides_a_selection_s_copy_and_the_tab_stops()
+    {
+        var text = VisualCommit.Core.Conflicts.ConflictText.Parse("a\n<<<<<<< HEAD\nx\n||||||| base\nb\n=======\ny\nz\n>>>>>>> t\nc\n");
+        var parts = ConflictPanes.PartsOf(text);
+        Assert.Equal(3, parts.Count);
+        Assert.False(parts[0].IsBlock);
+        Assert.Equal(["a"], parts[0].Ours);
+        Assert.True(parts[1].IsBlock);
+        Assert.Equal(["x"], parts[1].Ours);
+        Assert.Equal(["y", "z"], parts[1].Theirs);
+        Assert.Equal(["c"], parts[2].Theirs);
+
+        var panes = new ConflictPanes { Parts = parts };
+        using var host = DiffHost.Show(panes, Width, Height, ThemeVariant.Dark);
+        host.Capture();
+        Assert.Equal(ConflictPaneSide.Ours, panes.SideOf(panes.PaneEditor(ConflictPaneSide.Ours)));
+        Assert.Equal(ConflictPaneSide.Theirs, panes.SideOf(panes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs)));
+        Assert.Null(panes.SideOf(panes));
+        Assert.False(panes.HasSelection(ConflictPaneSide.Ours));
+
+        // A drag over the ours pane's text selects text, not rows.
+        var row = panes.RowBounds(ConflictPaneSide.Ours, 0)!.Value;
+        host.Drag(panes, new Point(panes.TextLeft(ConflictPaneSide.Ours)!.Value + 1, row.Center.Y), new Point(200, panes.RowBounds(ConflictPaneSide.Ours, 3)!.Value.Center.Y));
+        Assert.True(panes.HasSelection(ConflictPaneSide.Ours));
+        Assert.False(panes.HasSelection(ConflictPaneSide.Theirs));
+
+        // The texts are no tab stops; a bar's button keeps the focus it is given.
+        var button = panes.BarButton(0, ConflictPaneSide.Ours, ConflictChoice.UseOurs)!;
+        Assert.True(button.Focus(Avalonia.Input.NavigationMethod.Tab));
+        Assert.True(button.IsFocused);
+        host.PressKey(Avalonia.Input.Key.Tab);
+        Assert.True(panes.BarButton(0, ConflictPaneSide.Ours, ConflictChoice.UseBothOursFirst)!.IsFocused);
+        host.PressKey(Avalonia.Input.Key.Tab);
+        Assert.True(panes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs)!.IsFocused);
     }
 
     [AvaloniaFact]

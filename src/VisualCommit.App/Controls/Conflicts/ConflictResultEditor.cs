@@ -15,6 +15,7 @@ using AvaloniaEdit.Document;
 using AvaloniaEdit.Editing;
 using AvaloniaEdit.Rendering;
 using VisualCommit.App.Controls.Diff;
+using VisualCommit.Core.Conflicts;
 
 namespace VisualCommit.App.Controls.Conflicts;
 
@@ -24,7 +25,8 @@ namespace VisualCommit.App.Controls.Conflicts;
 /// text: its marker lines on <c>VcConflictMarkerBrush</c> in <c>VcWarningBrush</c>, its ours
 /// section on <c>VcConflictOursBrush</c>, a <c>diff3</c> base section on <c>VcConflictBaseBrush</c>,
 /// its theirs section on <c>VcConflictTheirsBrush</c>; the blocks are found again after every
-/// change (<see cref="ConflictMarkers"/>).
+/// change, as the resolver's model finds them (<see cref="ConflictText"/>). A chosen or typed line
+/// has no tint (7.3, 14.3).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -60,7 +62,9 @@ public sealed class ConflictResultEditor : CodeTextEditor
     private readonly ResultCaretLayer _caret;
     private ConflictTint[] _tints = [];
     private DiffPalette? _palette;
-    private int _markerSize = ConflictMarkers.DefaultSize;
+    private int _markerSize = ConflictText.DefaultMarkerSize;
+    private (int Line, int RowsAbove)? _pendingReveal;
+    private Vector? _pendingOffset;
 
     static ConflictResultEditor()
     {
@@ -112,6 +116,7 @@ public sealed class ConflictResultEditor : CodeTextEditor
         DocumentChanged += (_, _) => OnDocumentShown();
         TextChanged += (_, _) => Reparse();
         ActualThemeVariantChanged += (_, _) => OnThemeChanged();
+        LayoutUpdated += (_, _) => TryRevealPending();
         OnDocumentShown();
     }
 
@@ -175,6 +180,26 @@ public sealed class ConflictResultEditor : CodeTextEditor
         }
 
         return textView.TranslatePoint(point, this);
+    }
+
+    /// <summary>
+    /// Scrolls so that line <paramref name="line"/> (from 1) is the row
+    /// <paramref name="rowsAbove"/> + 1 of the view, with fewer rows above it near the start and
+    /// the text stopping at its end (11.5: the third row). Done once the text is laid out.
+    /// </summary>
+    public void RevealLine(int line, int rowsAbove = 2)
+    {
+        _pendingReveal = (line, rowsAbove);
+        _pendingOffset = null;
+        TryRevealPending();
+    }
+
+    /// <summary>Scrolls to <paramref name="offset"/> once the text is laid out (a resolver shown again keeps its place).</summary>
+    public void ScrollToOffset(Vector offset)
+    {
+        _pendingOffset = offset;
+        _pendingReveal = null;
+        TryRevealPending();
     }
 
     /// <summary>Replaces characters [<paramref name="start"/>, <paramref name="start"/> + <paramref name="length"/>) with <paramref name="text"/> as one undo step, and puts the caret at its start.</summary>
@@ -289,12 +314,74 @@ public sealed class ConflictResultEditor : CodeTextEditor
         Reparse();
     }
 
+    /// <summary>
+    /// The tint of each of the document's lines (from 0): an unresolved block's marker lines, ours,
+    /// base and theirs sections; every other line none. The lines are the editor's own (a lone
+    /// carriage return ends one here), parsed by <see cref="ConflictText"/>.
+    /// </summary>
+    public static ConflictTint[] TintsOf(IReadOnlyList<string> lines, int markerSize = ConflictText.DefaultMarkerSize)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var tints = new ConflictTint[lines.Count];
+        var text = ConflictText.Parse(string.Join('\n', lines), markerSize);
+        foreach (var block in text.Blocks)
+        {
+            var oursEnd = block.BaseLine ?? block.SeparatorLine;
+            Fill(block.StartLine + 1, oursEnd, ConflictTint.Ours);
+            if (block.BaseLine is { } baseLine)
+            {
+                Fill(baseLine + 1, block.SeparatorLine, ConflictTint.Base);
+            }
+
+            Fill(block.SeparatorLine + 1, block.EndLine, ConflictTint.Theirs);
+            foreach (var marker in new[] { block.StartLine, block.BaseLine, block.SeparatorLine, block.EndLine })
+            {
+                if (marker is { } line && line < tints.Length)
+                {
+                    tints[line] = ConflictTint.Marker;
+                }
+            }
+        }
+
+        return tints;
+
+        void Fill(int from, int to, ConflictTint tint)
+        {
+            for (var line = from; line < to && line < tints.Length; line++)
+            {
+                tints[line] = tint;
+            }
+        }
+    }
+
+    /// <summary>Scrolls as <see cref="RevealLine"/> or <see cref="ScrollToOffset"/> asked, once the text is laid out.</summary>
+    private void TryRevealPending()
+    {
+        if ((_pendingReveal is null && _pendingOffset is null) || Document is not { } document || !(TextView.Bounds.Height > 0) || !TextView.VisualLinesValid)
+        {
+            return;
+        }
+
+        if (_pendingReveal is var (line, rowsAbove))
+        {
+            var first = Math.Clamp(line - rowsAbove, 1, Math.Max(1, document.LineCount));
+            ScrollTo(0, TextView.GetVisualTopByDocumentLine(first));
+        }
+        else if (_pendingOffset is { } offset)
+        {
+            ScrollTo(offset.X, offset.Y);
+        }
+
+        _pendingReveal = null;
+        _pendingOffset = null;
+    }
+
     /// <summary>Finds the blocks again and redraws what their tints changed.</summary>
     private void Reparse()
     {
         var document = Document;
         var lines = document is null ? [] : document.Lines.Select(document.GetText).ToList();
-        var tints = ConflictMarkers.Tints(lines.Count, ConflictMarkers.Parse(lines, _markerSize));
+        var tints = TintsOf(lines, _markerSize);
         var markersMoved = tints.Length != _tints.Length
             || tints.Where((tint, line) => (tint == ConflictTint.Marker) != (_tints[line] == ConflictTint.Marker)).Any();
         _tints = tints;
