@@ -60,11 +60,13 @@ Start:
   (phase 3 handoff, "For the next phase", steps 3 and 5). Done in WP-C13 (merged in `a6788d8`,
   D150): a bare copy of the 100k-commit repository served by `AuthRemoteServer` on 127.0.0.1:47392,
   held at 45 % (`Counting objects 45%`); checks 13 and 14 changed, recorded in phase 4's report.
-- [ ] 6. WP0: the contracts of design section 14 (types, `IGitRepository` members with stubs per
+- [x] 6. WP0: the contracts of design section 14 (types, `IGitRepository` members with stubs per
   package, the queue's `CanBeCancelled`, the app's interfaces and their test fakes, the menu
   context's facts, `EscapeOrder`, `CancelText`, the icons and tokens, the editor variables) and
   the spike of design 11.3 (an editable AvaloniaEdit result and the generalised `DiffPane`, headless,
-  phase 2's pictures unchanged).
+  phase 2's pictures unchanged). Done: the spike merged in `a7ce01f` (phase 2's 66 pictures
+  byte-identical), the contracts in `6090f8f` (the full default run passed, 1809 tests, 17 min 34 s
+  beside another build); design 14.1 says what they settled.
 - [ ] 7. Harness: phase 4's scenario repos (a plain rebase, an interactive rebase, conflicts in a
   merge, in a rebase with two conflicting commits and in a cherry-pick, the conflict kinds the
   resolver shows), pinned by tests; the project `VisualCommit.VisualTests.Phase4` in the
@@ -174,8 +176,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 6: WP0 as `docs/phase-4-design.md` section 14 lists it (the contracts and the spike), on the
-phase branch; then WP-S, WP1, WP2 and WP3 side by side in worktrees (section 14's order).
+Steps 7, 9, 10 and the Git half of 13 and 14: WP-S (scenarios, the Phase 4 project and its
+support), WP1 (rebase, interactive rebase, squash, pull with rebase), WP2 (lists, Continue and Skip,
+the in-progress read, reftable) and WP3 (conflicts, the merge tool, the backups' clean-up) side by
+side in worktrees, as `docs/phase-4-design.md` section 14 says; then step 8, the report.
 
 This always names the single next thing to do and is kept accurate in every commit.
 

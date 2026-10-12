@@ -1436,6 +1436,39 @@ confirmText)` (`DialogViewModel<string?>`), `ConfirmationRequest.CancelText`,
 `RepositoryMenuContext.TipsOnHead` and `.MergeTool`, `CommitMenuInfo.HeadLineDepth`,
 `DropFacts.SourceContainsTarget` (`bool?`).
 
+### 14.1 What WP0 settled (merged in `a7ce01f` and `6090f8f`)
+
+The code's doc comments are the reference; in short, where WP0 differs from or adds to the text
+above:
+
+- `ReadRebaseListAsync(onto, branchRef, fromCommit, …)` takes the branch (2.1's drop variant lists
+  a branch that is not checked out). Every new `IGitRepository` member takes `NetworkOptions?` and a
+  `CancellationToken`, reads included (call `CleanUpBackupsAsync` with a named token). `SkipAsync`
+  returns a `ContinueResult`. The list overloads of `CherryPickAsync` and `RevertAsync` sit beside
+  phase 3's single-commit ones.
+- `ClassifyRebaseAsync` for a call made while a rebase folder already existed (Continue, Skip): a
+  fatal exit (128 or above) or git's `You must edit all merge conflicts` throws; any other result
+  with the folder still there is `Stopped`; the conflicted count comes from `ls-files --unmerged`.
+- The app's actions take a `RebaseTarget(Sha, Name)` (the SHA read when the menu opened, the name
+  for the texts) and an `InteractiveRebaseRequest(Onto, BranchRef, FromHere, CheckoutFirst)`;
+  `ResolveConflict(ChangedFile)` returns nothing, as `OpenDiff` does. `IConflictActions.TakeSideAsync`
+  is "Keep the file" and "Keep it" too: the file git left is staged as it is and checked out from
+  that side only when it is missing (11.8). `RepositoryViewModel.ReadDropFactsAsync(source,
+  target)` reads the drop's facts, one more git call for a drop onto a remote branch.
+  `CommitGraphData.DepthOnHeadLine(sha)` fills `HeadLineDepth`. `RepositoryMenuContext.MergeTool` is
+  filled by the lead's hook (11.9).
+- The spike: `ConflictPanes`, `ConflictResultEditor` (with their test surface), the generalised
+  `DiffPane` (`IDiffPaneHost`, `CodeTextEditor`), and the five tokens. Phase 2's 66 pictures stayed
+  byte-identical. The panes' enums are the app's own (`ConflictChoice`, `ConflictPaneSide`).
+  AvaloniaEdit's `Undo()`, `Redo()`, `CanUndo` and `CanRedo` run through the routed bindings the
+  editor removes: the result's undo and redo, its menu included, call `ConflictResultEditor.Undo()`
+  and `Redo()` (or the document's `UndoStack`), never the base methods. **Typed text is undone one
+  character per step** (AvaloniaEdit 12.0.0); a choice, a whole side and Take ours or theirs are one
+  step each, and the checks undo a choice, not typing. `IsModified` compares the text with the
+  document's original (`MarkOriginal()`); a file read again is shown as a new document. Ctrl+Tab
+  and Ctrl+Shift+Tab leave the result; Shift+Tab stays AvaloniaEdit's unindent. A headless test
+  sees a `DispatcherTimer` (the caret's blink) tick only while it awaits.
+
 ## 15. Decisions
 
 Recorded in `decisions.md` with their reasons; in short:
