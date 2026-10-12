@@ -92,3 +92,17 @@ public enum PullOutcome
 /// <param name="Outcome">What it did.</param>
 /// <param name="CommitCount">The commits HEAD gained: <c>git rev-list --count &lt;HEAD before&gt;..HEAD</c>.</param>
 public sealed record PullResult(PullOutcome Outcome, int CommitCount);
+
+/// <summary>How a pull integrates its upstream (docs/phase-4-design.md section 6, D147).</summary>
+public enum PullIntegration
+{
+    /// <summary>As git is configured (<c>pull.ff</c>, <c>branch.&lt;b&gt;.rebase</c>, <c>pull.rebase</c>): the toolbar's Pull (phase 3, D84).</summary>
+    AsConfigured,
+
+    /// <summary>
+    /// "Pull from {up} (rebase)", chosen for one pull: a fast-forward when the branch has nothing
+    /// of its own, otherwise <c>git rebase</c> without arguments (onto the upstream from its fork
+    /// point, as <c>git pull --rebase</c>); git's pull settings are not read.
+    /// </summary>
+    Rebase,
+}
