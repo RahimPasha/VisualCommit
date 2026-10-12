@@ -31,39 +31,6 @@ namespace VisualCommit.VisualTests.Phase4;
 // merged, this part names the base class too, which C# accepts on several parts.
 public sealed partial class Phase4ChecksC : Phase4Checks
 {
-    /// <summary>
-    /// The report's assertions that the writer of checks C14 to C17 believes wrong (with the
-    /// evidence in its message): each is still asserted, but its failure is kept and reported when
-    /// the check ends (<see cref="ThrowIfAny"/>), so that the steps after it still run and are
-    /// asserted. Used only for those assertions, never to let an ordinary failure pass.
-    /// </summary>
-    private sealed class C14To17Deferred
-    {
-        private readonly List<string> _failures = [];
-
-        /// <summary>Runs <paramref name="assertion"/>; keeps its failure with <paramref name="why"/>.</summary>
-        public void Check(string why, Action assertion)
-        {
-            try
-            {
-                assertion();
-            }
-            catch (Exception ex) when (ex is Xunit.Sdk.XunitException or InvalidOperationException)
-            {
-                _failures.Add(why + "\n    " + ex.Message.Replace("\n", "\n    ", StringComparison.Ordinal));
-            }
-        }
-
-        /// <summary>Fails with every kept failure; does nothing when none was kept.</summary>
-        public void ThrowIfAny()
-        {
-            if (_failures.Count > 0)
-            {
-                throw new Xunit.Sdk.XunitException("The report's expected results that failed (each believed wrong in the report; see the reasons):\n" + string.Join("\n", _failures));
-            }
-        }
-    }
-
     /// <summary>What checks C14 to C17 share; see the file's header.</summary>
     internal static class C14To17
     {

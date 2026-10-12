@@ -33,7 +33,6 @@ public sealed partial class Phase4ChecksC
         using var app = await OpenAsync(data, repo);
         var start = app.LogMark();
         var unmergedAtStop = await C14To17.UnmergedAsync(repo);
-        var doubts = new C14To17Deferred();
 
         // When the app has started: GC-M, the merge's banner with its buttons below the text, git's stop.
         AssertGraph(app, PartC2.GcM, PartC2.ConflictsLanes, PartC2.WorkingRow(PartC2.WorkingConflicts(1)), showsDate: false);
@@ -87,15 +86,11 @@ public sealed partial class Phase4ChecksC
         AssertHighlighted(menu, "Undo");
         Assert.Equal(PartC2.ResultMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
         AssertMenuShape(app, menu);
-        doubts.Check(
-            "C14 step 3: the report puts the result's menu's top-left 2 right of and 2 below the pointer, but at 1100×700 line 5 of the "
-            + "result is at y 533, and 533 + 2 + 197 > 700 − 4: the menu does not fit below the pointer, so phase 3's 4a opens it above "
-            + "(its bottom edge 2 above the pointer), as the conventions' \"a menu that fits below the pointer\" implies.",
-            () => AssertMenuAtPointer(menu, pointer));
+        // At line 5 (y 533) the 197-high menu does not fit below the pointer, so phase 3's 4a
+        // opens it above: its left 2 right of the pointer, its bottom edge 2 above it (the
+        // report's expected result, corrected after the UI was built).
         Assert.Equal(pointer.X + WindowLayout.MenuPointerGap, menu.Bounds.X, 2);
-        Assert.True(
-            Math.Abs(menu.Bounds.Y - (pointer.Y + WindowLayout.MenuPointerGap)) <= 2 || Math.Abs(menu.Bounds.Bottom - (pointer.Y - WindowLayout.MenuPointerGap)) <= 2,
-            $"The result's menu at {menu.Bounds} is neither below the pointer {pointer} nor above it (4a).");
+        Assert.Equal(pointer.Y - WindowLayout.MenuPointerGap, menu.Bounds.Bottom, 2);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
         Assert.Equal(PartC2.Typed, app.ResultText);
@@ -247,7 +242,6 @@ public sealed partial class Phase4ChecksC
         AssertBanner(app, PartC2.MergeTheirsResolvedBanner, PartC2.AbortMerge, BannerButton.Continue, oneLine: false, placement: BannerButtonPlacement.OwnRow);
         Assert.False(C14To17.Logged(app, repo, PartC2.ContinueMergeTitle, beforeContinue), "A Continue the merge operation was logged.");
         AssertNoClippedText(app);
-        doubts.ThrowIfAny();
     }
 
     /// <summary>The states check C14 comes back to, asserted the same way each time.</summary>
