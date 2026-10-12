@@ -103,17 +103,12 @@ public sealed partial class RepositoryOperations
                 async context =>
                 {
                     var options = NetworkOptions.From(context);
-                    if (await RefuseWhileInProgressOrConflictedAsync(text) is { } refusal)
+
+                    // 1. Nothing in progress, and a clean working tree unless git stashes the changes itself.
+                    if (await RefuseBeforeCheckoutAsync(text) is { } refusal)
                     {
                         display = new FailureDisplay(OperationTexts.RebaseFailedTitle, refusal.Failure!.Summary);
                         return refusal;
-                    }
-
-                    // 1. A clean working tree, unless git stashes the changes itself.
-                    if (await RefuseDirtyTreeAsync(text) is { } dirty)
-                    {
-                        display = new FailureDisplay(OperationTexts.RebaseFailedTitle, OperationTexts.RebaseNeedsCleanTree);
-                        return dirty;
                     }
 
                     if (await GuardDetachedHeadAsync(text, backUpDetached) is { } detached)
@@ -392,7 +387,7 @@ public sealed partial class RepositoryOperations
                     selection.NewTip = squashed;
                     return OperationReport.Done(OperationTexts.Squashed(count, squashed));
                 },
-                new RunOptions { DescribeFailure = failure => InteractiveFailureDisplay(failure, text) });
+                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text) });
             await FinishAsync(notice, selection);
         });
     }
@@ -604,18 +599,36 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
-        var status = await Git.ReadStatusAsync();
-        var dirty = status.Staged.Count > 0 || status.Unstaged.Any(file => !status.IsUntracked(file.Path));
-        return dirty ? Refused(text, OperationTexts.RebaseNeedsCleanTree) : null;
+        return IsDirty(await Git.ReadStatusAsync()) ? Refused(text, OperationTexts.RebaseNeedsCleanTree) : null;
     }
 
     /// <summary>
-    /// Whether git's configuration has <c>rebase.autoStash</c> set (1.3, <c>git config
-    /// --type=bool --get rebase.autoStash</c>), so that git stashes the changes itself. The git
-    /// layer has no read of it yet (<see cref="IGitRepository"/> lacks one; reported to the lead),
-    /// so this answers false: the dirty tree is always refused, the safe way.
+    /// 1.3's step 1 of "Check out {A} and rebase it onto {B}", before the checkout: git's
+    /// <c>rebase.autoStash</c> (<see cref="RebaseStashesChangesAsync"/>), then one status read,
+    /// refused while an operation is in progress or files conflict, and for staged or unstaged
+    /// changes to tracked files unless git stashes them itself; null when it may go on.
     /// </summary>
-    private static Task<bool> RebaseStashesChangesAsync() => Task.FromResult(false);
+    private async Task<OperationReport?> RefuseBeforeCheckoutAsync(OperationText text)
+    {
+        var autoStash = await RebaseStashesChangesAsync();
+        var status = await Git.ReadStatusAsync();
+        if (RefusalOf(status) is { } summary)
+        {
+            return Refused(text, summary);
+        }
+
+        return !autoStash && IsDirty(status) ? Refused(text, OperationTexts.RebaseNeedsCleanTree) : null;
+    }
+
+    /// <summary>Staged or unstaged changes to tracked files (untracked files are git's to judge, 1.3).</summary>
+    private static bool IsDirty(WorkingTreeStatus status) =>
+        status.Staged.Count > 0 || status.Unstaged.Any(file => !status.IsUntracked(file.Path));
+
+    /// <summary>
+    /// Whether git's configuration has <c>rebase.autoStash</c> set (1.3, D142: <c>git config
+    /// --type=bool --get rebase.autoStash</c>), so that git stashes the changes itself.
+    /// </summary>
+    private Task<bool> RebaseStashesChangesAsync() => Git.ReadRebaseAutoStashAsync();
 
     /// <summary>
     /// Start's refusal when the branch is not where the list was read from (2.4, D124): HEAD on
@@ -715,24 +728,45 @@ public sealed partial class RepositoryOperations
             return await RebaseStopReportAsync(context, conflicts, notice);
         }
 
-        return OperationReport.Conflicts(ListStepStopped(now, conflicts));
+        var stop = ListStopOf(now, conflicts);
+        if (stop == SequenceStop.Refused)
+        {
+            // 5.1: a stop with nothing to look at opens the error dialog, as at the list's first run.
+            var summary = ConflictBannerViewModel.TextFor(now, conflicts) ?? ListStepStopped(now, conflicts, stop);
+            notice.Display = new FailureDisplay(now.Kind == InProgressKind.Revert ? OperationTexts.RevertStoppedTitle : OperationTexts.CherryPickStoppedTitle, summary);
+            notice.Failure = FailureOfLastCall(context, command => command.StartsWith($"git {(now.Kind == InProgressKind.Revert ? "revert" : "cherry-pick")} ", StringComparison.Ordinal), summary);
+        }
+
+        return OperationReport.Conflicts(ListStepStopped(now, conflicts, stop));
     }
 
     /// <summary>
-    /// The status bar's text when Continue or Skip of a list stopped at its next commit: phase 3's
-    /// "Cherry-pick stopped: {N} files have conflicts" ("Revert …"), or for a commit that changes
-    /// nothing or one git could not apply, what the banner says of it.
+    /// Where a list stopped after Continue or Skip, as the git layer tells the first run's stops
+    /// (<see cref="SequenceStop"/>): a commit that changes nothing; one git could not apply without
+    /// a conflict (git's list with no pick head and nothing to commit); else conflicts, also with no
+    /// file conflicted (rerere's <c>autoUpdate</c>, D128).
     /// </summary>
-    private static string ListStepStopped(InProgressState state, int conflicts)
-    {
-        if (conflicts > 0)
-        {
-            return state.Kind == InProgressKind.Revert ? OperationTexts.RevertConflicts(conflicts) : OperationTexts.CherryPickConflicts(conflicts);
-        }
+    private static SequenceStop ListStopOf(InProgressState state, int conflicts) =>
+        conflicts > 0 ? SequenceStop.Conflicts
+        : state.Empty ? SequenceStop.Empty
+        : state is { Sequenced: true, HasPickHead: false, AbortKeepsHead: false } ? SequenceStop.Refused
+        : SequenceStop.Conflicts;
 
-        var name = state.Kind == InProgressKind.Revert ? "Revert" : "Cherry-pick";
-        var sha = OperationTexts.Short(state.Commit ?? string.Empty);
-        return state.Empty ? $"{name} stopped: {sha} changes nothing" : $"{name} stopped at {sha}";
+    /// <summary>
+    /// The status bar's text when Continue or Skip of a list stopped again (10.2, as at its first
+    /// run): "Cherry-picked {K} of {N} commits; stopped at {short} with conflicts in {M} files",
+    /// "…; {short} changes nothing", "…; git could not pick {short}" ("Reverted …"), with K and N
+    /// from git's list as it is now (<see cref="InProgressState.Done"/>, <see cref="InProgressState.Total"/>).
+    /// </summary>
+    private static string ListStepStopped(InProgressState state, int conflicts, SequenceStop stop)
+    {
+        var sha = state.Commit ?? string.Empty;
+        return stop switch
+        {
+            SequenceStop.Empty => OperationTexts.ListStoppedEmpty(state.Kind, state.Done, state.Total, sha),
+            SequenceStop.Refused => OperationTexts.ListStoppedRefused(state.Kind, state.Done, state.Total, sha),
+            _ => OperationTexts.ListStoppedWithConflicts(state.Kind, state.Done, state.Total, sha, conflicts),
+        };
     }
 
     /// <summary>The in-progress state and the number of conflicted files as they are now (a fresh status read).</summary>
@@ -830,7 +864,18 @@ public sealed partial class RepositoryOperations
 
     /// <summary>The dialog of an interactive rebase's or a squash's failure: <paramref name="text"/>'s title, with 10.1's special summaries and D124's.</summary>
     private static FailureDisplay InteractiveFailureDisplay(GitFailure failure, OperationText text) =>
-        new(text.ErrorTitle, RebaseRefusalSummary(failure) ?? (failure.GitOutput.Contains(RebaseHeadMoved, StringComparison.Ordinal) ? OperationTexts.HeadMovedSinceList : text.FailureSummary));
+        InteractiveRefusalDisplay(failure, text) ?? new(text.ErrorTitle, text.FailureSummary);
+
+    /// <summary>
+    /// The dialog of a git refusal of an interactive rebase or a squash that has a summary of its
+    /// own (10.1's special summaries, the git layer's D124 refusal); null for anything else, so
+    /// that the app's own refusals keep their summaries ("Finish or abort the merge first",
+    /// "{b} changed while the list was open: …") and git's other failures get 2.33's default.
+    /// </summary>
+    private static FailureDisplay? InteractiveRefusalDisplay(GitFailure failure, OperationText text) =>
+        RebaseRefusalSummary(failure) is { } summary ? new FailureDisplay(text.ErrorTitle, summary)
+        : failure.GitOutput.Contains(RebaseHeadMoved, StringComparison.Ordinal) ? new FailureDisplay(text.ErrorTitle, OperationTexts.HeadMovedSinceList)
+        : null;
 
     /// <summary>The git layer's refusal of a plan whose branch moved (<c>GitRepository.RebaseHeadMovedMessage</c>).</summary>
     private const string RebaseHeadMoved = "HEAD is no longer on the branch at the commit the list was read from.";

@@ -238,7 +238,32 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal("feature/topic", await repo.CurrentBranchAsync());
         Assert.Equal(OtherOne, await repo.RefTargetAsync("refs/heads/feature/other"));
         Assert.Empty(await repo.BackupRefsAsync());
+        // A5 step 3: git's rebase.autoStash (unset: exit 1), then the status read.
+        var calls = app.Calls.Snapshot();
+        var autoStash = calls.ToList().FindIndex(call => call.CommandText == "git config --type=bool --get rebase.autoStash");
+        Assert.True(autoStash >= 0, "The app did not read rebase.autoStash.");
+        Assert.Equal(1, calls[autoStash].ExitCode);
+        Assert.Contains(calls.Skip(autoStash + 1), call => call.CommandText.StartsWith("git status ", StringComparison.Ordinal));
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Check_out_and_rebase_lets_git_stash_a_changed_file_when_rebase_autoStash_is_set()
+    {
+        // 1.3 step 1, D142: git stashes the change itself and puts it back after the rebase.
+        using var repo = await Scenarios.RebaseAsync();
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("README.md", "# Changed here\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.CheckoutAndRebaseAsync("refs/heads/feature/other", new RebaseTarget(MainMore, "main"));
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Rebased feature/other onto main", app.StatusText);
+        Assert.Equal("feature/other", await repo.CurrentBranchAsync());
+        Assert.Equal(MainMore, (await repo.GitAsync("rev-parse", "feature/other~1")).StandardOutput.Trim());
+        Assert.Equal("# Changed here\n", Read(repo, "README.md"));
+        AssertCalledInOrder(app, "git config --type=bool --get rebase.autoStash", "git switch --no-guess feature/other", $"git rebase {MainMore}");
     }
 
     [Fact]
@@ -384,6 +409,41 @@ public class RepositoryOperationsRebaseTests
         Assert.Empty(await repo.BackupRefsAsync());
         Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Squash_refused_by_the_app_shows_its_own_summary()
+    {
+        // The branch moved after the list was read (D124): main gained a commit while the squash waited.
+        using var repo = await Scenarios.InteractiveAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        var parent = await app.ShaAsync("main~1");
+        app.Dialogs.Answer<MessageDialogViewModel>(dialog => dialog.ConfirmCommand.Execute(null));
+        app.Dialogs.CloseError();
+        var (hold, ahead) = HoldQueue(app, () => repo.GitAsync("commit", "--allow-empty", "-m", "Moved"));
+        var waiting = app.Operations.SquashAsync([parent, head]);
+        hold.SetResult();
+        await ahead;
+        await waiting;
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Squash failed", "main changed while the list was open: open it again. Nothing was rebased."), (dialog.Title, dialog.Summary));
+        Assert.True(string.IsNullOrEmpty(dialog.Output), "The app's own refusal shows no git output.");
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
+
+        // A merge in progress: "Finish or abort the merge first", not "Squash 2 commits failed.".
+        using var merging = await Scenarios.ConflictsStoppedAsync(Scenarios.ConflictsStop.Merge);
+        using var other = await OperationsHarness.OpenAsync(merging);
+        other.Dialogs.Answer<MessageDialogViewModel>(dialog => dialog.ConfirmCommand.Execute(null));
+        other.Dialogs.CloseError();
+
+        await other.Operations.SquashAsync([await other.ShaAsync("main~1"), await merging.HeadAsync()]);
+
+        dialog = Assert.Single(other.Dialogs.Errors);
+        Assert.Equal(("Squash failed", "Finish or abort the merge first"), (dialog.Title, dialog.Summary));
+        Assert.Empty(await merging.BackupRefsAsync());
     }
 
     [Fact]
