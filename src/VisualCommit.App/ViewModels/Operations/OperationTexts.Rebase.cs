@@ -86,6 +86,19 @@ public static partial class OperationTexts
     /// <summary>The git layer refused a plan whose branch moved after the app's own check (D124): Start's reason "HEAD moved: open the list again" as a sentence.</summary>
     public const string HeadMovedSinceList = "HEAD moved while the list was open: open the list again. " + NothingRebased;
 
+    /// <summary>The last sentence of a squash refused because HEAD or its branch moved while it waited (section 3, D124).</summary>
+    public const string NothingSquashed = "Nothing was squashed.";
+
+    /// <summary>
+    /// A squash refused because its branch gained or lost commits after the commits were read
+    /// (section 3, D124; the review's finding 16: a squash has no list to open again): "{b}
+    /// changed while this waited: select the commits again. Nothing was squashed."
+    /// </summary>
+    public static string ChangedWhileSquashWaited(string branch) => $"{branch} changed while this waited: select the commits again. {NothingSquashed}";
+
+    /// <summary>The git layer refused a squash's plan whose branch moved after the app's own check (D124): "HEAD moved while this waited: select the commits again. Nothing was squashed."</summary>
+    public const string HeadMovedSinceSquash = "HEAD moved while this waited: select the commits again. " + NothingSquashed;
+
     /// <summary>The last sentence of a Continue refused because the state changed while it waited (5.4).</summary>
     public const string NothingContinued = "Nothing was continued.";
 

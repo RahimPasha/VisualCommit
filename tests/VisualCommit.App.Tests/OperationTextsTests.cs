@@ -204,6 +204,14 @@ public class OperationTextsTests
         Assert.Equal("Git rebases only a clean working tree: commit or stash your changes first.", OperationTexts.RebaseNeedsCleanTree);
         Assert.Equal("Untracked files are in the way: move or remove them first.", OperationTexts.RebaseUntrackedInTheWay);
         Assert.Equal("main changed while the list was open: open it again. Nothing was rebased.", OperationTexts.ChangedWhileListOpen("main"));
+        Assert.Equal("main changed while this waited: select the commits again. Nothing was squashed.", OperationTexts.ChangedWhileSquashWaited("main"));
+        Assert.Equal("HEAD moved while this waited: select the commits again. Nothing was squashed.", OperationTexts.HeadMovedSinceSquash);
+        Assert.Equal(
+            "HEAD moved while this waited: it was on main and is on other now. Nothing was squashed.",
+            OperationTexts.HeadMoved(new HeadState("main", Sha), new HeadState("other", Sha), OperationTexts.NothingSquashed));
+        Assert.Equal(
+            "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged",
+            OperationTexts.ContinueNeedsNothingUnstaged);
         Assert.Equal("The rebase changed while this waited: look at it again. Nothing was continued.", OperationTexts.StateChangedWhileWaiting(InProgressKind.Rebase, OperationTexts.NothingContinued));
     }
 

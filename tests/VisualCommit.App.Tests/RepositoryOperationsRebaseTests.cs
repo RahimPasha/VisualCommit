@@ -464,8 +464,9 @@ public class RepositoryOperationsRebaseTests
         await ahead;
         await waiting;
 
+        // A squash has no list to open again (the review's finding 16).
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Squash failed", "main changed while the list was open: open it again. Nothing was rebased."), (dialog.Title, dialog.Summary));
+        Assert.Equal(("Squash failed", "main changed while this waited: select the commits again. Nothing was squashed."), (dialog.Title, dialog.Summary));
         Assert.True(string.IsNullOrEmpty(dialog.Output), "The app's own refusal shows no git output.");
         Assert.Empty(await repo.BackupRefsAsync());
         Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));

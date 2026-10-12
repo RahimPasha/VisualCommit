@@ -372,7 +372,7 @@ public sealed partial class RepositoryOperations
                         return refusal;
                     }
 
-                    if (await RefuseIfListMovedAsync(text, plan, branch) is { } moved)
+                    if (await RefuseIfListMovedAsync(text, plan, branch, squash: true) is { } moved)
                     {
                         return moved;
                     }
@@ -392,7 +392,7 @@ public sealed partial class RepositoryOperations
                     selection.NewTip = squashed;
                     return Rebased(OperationTexts.Squashed(count, squashed), result.AutostashConflicted);
                 },
-                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text) });
+                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text, squash: true) });
             await FinishAsync(notice, selection);
         });
     }
@@ -654,19 +654,21 @@ public sealed partial class RepositoryOperations
     /// <summary>
     /// Start's refusal when the branch is not where the list was read from (2.4, D124): HEAD on
     /// another branch ("HEAD moved while this waited: …") or the branch at another commit ("{b}
-    /// changed while the list was open: open it again."); null when it is where it was.
+    /// changed while the list was open: open it again."); null when it is where it was. A
+    /// <paramref name="squash"/> has no list: "{b} changed while this waited: select the commits
+    /// again. Nothing was squashed." (the review's finding 16).
     /// </summary>
-    private async Task<OperationReport?> RefuseIfListMovedAsync(OperationText text, RebasePlan plan, string branch)
+    private async Task<OperationReport?> RefuseIfListMovedAsync(OperationText text, RebasePlan plan, string branch, bool squash = false)
     {
         var head = await Git.ReadHeadAsync();
         if (!string.Equals(HeadsPrefix + head.BranchName, plan.BranchRef, StringComparison.Ordinal))
         {
-            return Refused(text, OperationTexts.HeadMoved(new HeadState(branch, plan.ExpectedTip), head, OperationTexts.NothingRebased));
+            return Refused(text, OperationTexts.HeadMoved(new HeadState(branch, plan.ExpectedTip), head, squash ? OperationTexts.NothingSquashed : OperationTexts.NothingRebased));
         }
 
         return string.Equals(head.Sha, plan.ExpectedTip, StringComparison.OrdinalIgnoreCase)
             ? null
-            : Refused(text, OperationTexts.ChangedWhileListOpen(branch));
+            : Refused(text, squash ? OperationTexts.ChangedWhileSquashWaited(branch) : OperationTexts.ChangedWhileListOpen(branch));
     }
 
     /// <summary>A refusal the app tells itself before git runs (no git output), logged.</summary>
@@ -901,9 +903,9 @@ public sealed partial class RepositoryOperations
     /// that the app's own refusals keep their summaries ("Finish or abort the merge first",
     /// "{b} changed while the list was open: …") and git's other failures get 2.33's default.
     /// </summary>
-    private static FailureDisplay? InteractiveRefusalDisplay(GitFailure failure, OperationText text) =>
+    private static FailureDisplay? InteractiveRefusalDisplay(GitFailure failure, OperationText text, bool squash = false) =>
         RebaseRefusalSummary(failure) is { } summary ? new FailureDisplay(text.ErrorTitle, summary)
-        : failure.GitOutput.Contains(RebaseHeadMoved, StringComparison.Ordinal) ? new FailureDisplay(text.ErrorTitle, OperationTexts.HeadMovedSinceList)
+        : failure.GitOutput.Contains(RebaseHeadMoved, StringComparison.Ordinal) ? new FailureDisplay(text.ErrorTitle, squash ? OperationTexts.HeadMovedSinceSquash : OperationTexts.HeadMovedSinceList)
         : null;
 
     /// <summary>The git layer's refusal of a plan whose branch moved (<c>GitRepository.RebaseHeadMovedMessage</c>).</summary>
