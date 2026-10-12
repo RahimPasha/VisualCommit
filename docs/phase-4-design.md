@@ -1268,6 +1268,14 @@ Every file holds short lines (about 51 characters fit a resolver pane at 1100×7
 The Git-layer packages (WP1 to WP3) build their tests' repositories with `TempRepo` directly, as
 phase 3's Git tests do, so that they do not wait for these scenarios.
 
+As built by WP-S (`d64e2b7`; `Phase4ScenarioTests` pins every SHA and stopped state): feature/kinds'
+commit is `Kinds edits`; main's `Ours edits` is the conflicts scenario's newest commit (its top
+row); the interactive and conflicts scenarios have no remote; image.png is a 32×32 picture with a
+white centre, indigo at Base, green on main, red on feature/kinds; the fake merge tool is
+`mergetool.fake.cmd` = `sh "$(git rev-parse --git-common-dir)/vc-fake-merge-tool.sh" "$MERGED"`,
+writing `Resolved by the fake merge tool.` (`ConfigureFakeMergeToolAsync`). The stopped states are
+`ConflictsStoppedAsync(ConflictsStop.Merge | Rebase | CherryPicks | MergeKinds, mergeTool)`.
+
 ### 13.2 Harness additions
 
 - `TempRepo`'s environment sets `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:`; `GitIsolation` and

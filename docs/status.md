@@ -67,10 +67,11 @@ Start:
   phase 2's pictures unchanged). Done: the spike merged in `a7ce01f` (phase 2's 66 pictures
   byte-identical), the contracts in `6090f8f` (the full default run passed, 1809 tests, 17 min 34 s
   beside another build); design 14.1 says what they settled.
-- [ ] 7. Harness: phase 4's scenario repos (a plain rebase, an interactive rebase, conflicts in a
+- [x] 7. Harness: phase 4's scenario repos (a plain rebase, an interactive rebase, conflicts in a
   merge, in a rebase with two conflicting commits and in a cherry-pick, the conflict kinds the
   resolver shows), pinned by tests; the project `VisualCommit.VisualTests.Phase4` in the
-  solution, CI and `scripts/time-scripted-check.sh`; the driver helpers the checks need.
+  solution, CI and `scripts/time-scripted-check.sh`; the driver helpers the checks need. Done in
+  WP-S (merged in `d64e2b7`); the drivers of the list and the resolver come with WP5 and WP6.
 - [ ] 8. Phase 4's visual checks written into `docs/test-reports/phase-4.md`, each marked for
   the real-window pass, reviewed independently, and committed before the UI they test.
 
@@ -176,10 +177,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Steps 7, 9, 10 and the Git half of 13 and 14: WP-S (scenarios, the Phase 4 project and its
-support), WP1 (rebase, interactive rebase, squash, pull with rebase), WP2 (lists, Continue and Skip,
-the in-progress read, reftable) and WP3 (conflicts, the merge tool, the backups' clean-up) side by
-side in worktrees, as `docs/phase-4-design.md` section 14 says; then step 8, the report.
+Step 8, the report's checks (a workflow: replicas of the scenarios, four writers, a review and a
+revision per part), while WP1 (rebase, interactive rebase, squash, pull with rebase), WP2 (lists,
+Continue and Skip, the in-progress read, reftable) and WP3 (conflicts, the merge tool, the backups'
+clean-up) build in worktrees; then merge them, and step 8's report is committed before WP4 to WP6
+build UI.
 
 This always names the single next thing to do and is kept accurate in every commit.
 

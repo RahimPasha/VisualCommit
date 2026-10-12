@@ -260,9 +260,9 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
-| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phase 3's are a project of their own: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`) |
-| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3) |
-| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu"` (the phase is 3 when left out) |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`. To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
+| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3) and `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4) |
+| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 4 when left out) |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |
@@ -279,7 +279,7 @@ What to know about them:
   while the Windows machine and most CI jobs use newer ones.
 - The default tests take about 19 minutes on the Windows machine with nothing else running, up to 26
   with other load (measured on 2026-10-11 during phase 3's gate, from Git Bash, while other programs took one to three of its eight logical
-  processors). The four test projects run side by side, and the run is bound by the processors,
+  processors). The test projects (five since phase 4) run side by side, and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it. Alone, `VisualCommit.Git.Tests` takes about 7
   minutes, `VisualCommit.App.Tests` 9, the phase 3 walk-through 8 and phases 0 to 2's 2.5. CI
