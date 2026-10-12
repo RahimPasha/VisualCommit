@@ -47,6 +47,15 @@ public sealed record ToolbarMenuState(
 /// </param>
 public sealed record CommitMenuInfo(string Sha, string Subject, IReadOnlyList<string> Parents, CommitKind Kind, int Row, bool IsReachableFromHead)
 {
+    /// <summary>
+    /// Its distance from HEAD on HEAD's linear first-parent line (docs/phase-4-design.md 2.1,
+    /// <see cref="Graph.CommitGraphData.LinearLineFromHead"/>): 0 for HEAD's own commit, 1 for its
+    /// first parent, …, up to the first merge commit or the root; null when it is not on the
+    /// line, or the graph has not reached it yet. "Interactive rebase of {cur} from here…" and
+    /// "Squash {N} commits…" read it.
+    /// </summary>
+    public int? HeadLineDepth { get; init; }
+
     public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
 
     /// <summary>A merge commit: two parents or more.</summary>
@@ -67,7 +76,16 @@ public sealed record CommitMenuInfo(string Sha, string Subject, IReadOnlyList<st
 /// known and the drop offers nothing but its reason (4g).
 /// </param>
 // Known issue (phase 3): nothing sets RemoteMapsBranchesDifferently yet, because no code reads remote.<r>.fetch; a drop onto a remote with another fetch refspec offers the push as for the default one.
-public sealed record DropFacts(bool TargetIsAncestorOfSource, bool RemoteMapsBranchesDifferently = false);
+public sealed record DropFacts(bool TargetIsAncestorOfSource, bool RemoteMapsBranchesDifferently = false)
+{
+    /// <summary>
+    /// The source A already contains the target B (<c>git merge-base --is-ancestor &lt;B&gt;
+    /// &lt;A&gt;</c>, for a local or remote B; docs/phase-4-design.md 1.1): the drop's rebase
+    /// items say "{A} is up to date with {B}". Null when it was not read or the read failed: the
+    /// items stay enabled and git decides.
+    /// </summary>
+    public bool? SourceContainsTarget { get; init; }
+}
 
 /// <summary>
 /// Everything the menu builders (<see cref="RepositoryMenus"/>) read, as one immutable snapshot
@@ -95,6 +113,8 @@ public sealed record RepositoryMenuContext(
 {
     private const string HeadsPrefix = "refs/heads/";
 
+    private static readonly IReadOnlySet<string> NoTips = new HashSet<string>(StringComparer.Ordinal);
+
     /// <summary>
     /// The repository's other worktrees (linked or main, not this one) and the branch each has
     /// checked out: "&lt;b&gt; is checked out in another worktree (&lt;path&gt;)" (2.7). Empty when
@@ -104,6 +124,21 @@ public sealed record RepositoryMenuContext(
 
     /// <summary>What a drop read (4g), for <see cref="RepositoryMenus.ForDrop"/>; null otherwise.</summary>
     public DropFacts? Drop { get; init; }
+
+    /// <summary>
+    /// The SHAs of the local and remote branch tips that HEAD reaches in the loaded graph
+    /// (docs/phase-4-design.md 1.1): a rebase onto such a branch is disabled with "{b} is up to
+    /// date with {target}". A tip the graph has not reached yet counts as not on HEAD, and git
+    /// decides. Empty while detached and unborn, or when not computed.
+    /// </summary>
+    public IReadOnlySet<string> TipsOnHead { get; init; } = NoTips;
+
+    /// <summary>
+    /// The merge tool git's configuration names (<c>merge.tool</c>, 11.9), read whenever the
+    /// status shows a conflict; null when none is set or it was not read. Without one, "Open in
+    /// merge tool" is disabled.
+    /// </summary>
+    public string? MergeTool { get; init; }
 
     public HeadState Head => Refs.Head;
 

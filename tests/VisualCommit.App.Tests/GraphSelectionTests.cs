@@ -363,6 +363,53 @@ public class GraphSelectionTests
     }
 
     [Fact]
+    public void HEADs_linear_line_follows_first_parents_to_the_first_merge_over_the_rows_loaded_so_far()
+    {
+        // HEAD on "c5": c5 ← c4 ← m, a merge of c2 and b2, ← c2 ← c1 (the root).
+        var c1 = Commit("c1");
+        var c2 = Commit("c2", "c1");
+        var b2 = Commit("b2", "c1");
+        var m = Commit("m", "c2", "b2");
+        var c4 = Commit("c4", "m");
+        var c5 = Commit("c5", "c4");
+        var data = new CommitGraphData(new RepoRefs(new HeadState("main", "c5"), [new GitRef("refs/heads/main", "main", RefKind.LocalBranch, "c5", IsHead: true)], [], []));
+        var layout = new GraphLayout();
+        data.Append([c5, c4], [layout.Add(c5), layout.Add(c4)]);
+
+        // The merge is not loaded yet: the line so far.
+        Assert.Equal(["c5", "c4"], data.LinearLineFromHead());
+        Assert.Null(data.DepthOnHeadLine("m"));
+
+        data.Append([m, b2, c2, c1], [layout.Add(m), layout.Add(b2), layout.Add(c2), layout.Add(c1)]);
+        data.Complete();
+
+        // The merge commit is included and ends the line; what lies below it is off the line.
+        Assert.Equal(["c5", "c4", "m"], data.LinearLineFromHead());
+        Assert.Equal([0, 1, 2], new[] { "c5", "c4", "m" }.Select(sha => data.DepthOnHeadLine(sha)));
+        Assert.Null(data.DepthOnHeadLine("c2"));
+        Assert.Null(data.DepthOnHeadLine("b2"));
+        Assert.Null(data.DepthOnHeadLine("c1"));
+        Assert.Same(data.LinearLineFromHead(), data.LinearLineFromHead());
+
+        // A history without a merge runs to the root; a shallow one stops at its last loaded commit.
+        var linear = new CommitGraphData(new RepoRefs(new HeadState("main", "c2"), [], [], []));
+        var line = new GraphLayout();
+        linear.Append([c2, c1], [line.Add(c2), line.Add(c1)]);
+        linear.Complete();
+        Assert.Equal(["c2", "c1"], linear.LinearLineFromHead());
+
+        var shallow = new CommitGraphData(new RepoRefs(new HeadState("main", "c5"), [], [], []));
+        var cut = new GraphLayout();
+        shallow.Append([c5], [cut.Add(c5)]);
+        shallow.Complete();
+        Assert.Equal(["c5"], shallow.LinearLineFromHead());
+
+        var unborn = new CommitGraphData(new RepoRefs(new HeadState("main", null), [], [], []));
+        Assert.Empty(unborn.LinearLineFromHead());
+        Assert.Null(unborn.DepthOnHeadLine("c1"));
+    }
+
+    [Fact]
     public void A_multi_selection_lists_its_commits_with_the_title_of_their_count()
     {
         var model = new MultiSelectionViewModel([new MultiSelectionItem("88d6b91e", "88d6b91", "Main work"), new MultiSelectionItem("ce5ea6ab", "ce5ea6a", "Alpha two"), new MultiSelectionItem("dff8fbf0", "dff8fbf", "Alpha one")]);
