@@ -49,12 +49,7 @@ public sealed partial class Phase4ChecksB : Phase4Checks
         var commitMenu = Shot(app, "b6a-commit-menu");
         AssertGraph(app, GI, Lanes, showsDate: true, picture: commitMenu);
         AssertSelectedRows(app, commitMenu, 6);
-        AssertMenu(menu, [.. BaseCommitMenu]);
-        AssertHighlighted(menu, BaseCommitMenuHighlighted);
-        AssertMenuShape(app, menu);
-        Assert.Equal(BaseCommitMenuHeight, menu.Bounds.Height, 2);
-        AssertMenuAtPointer(menu, pointer);
-        AssertMenuColours(app, menu);
+        AssertBaseCommitMenu(app, menu, pointer);
         Assert.Equal(1, app.CountLogLines(AppLogFile.MenuOpened(Repository)));
         Assert.Equal(1, app.CountLogLines(AppLogFile.MenuOpened(Repository, "4b4622c Base", "pointer")));
 

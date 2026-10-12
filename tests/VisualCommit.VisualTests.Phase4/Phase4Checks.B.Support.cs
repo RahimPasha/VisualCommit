@@ -41,13 +41,28 @@ public sealed partial class Phase4ChecksB
         var point = GraphRowPoint(6);
         Assert.Equal(point, app.GraphRowPoint(6));
         app.RightClick(point);
-        AssertMenu(app.Menu(), [.. BaseCommitMenu]);
+        AssertBaseCommitMenu(app, app.Menu(), point);
         app.ClickMenuItem(InteractiveFromHereItem);
         await app.WaitForIdleAsync();
         await app.WaitForRebaseListAsync();
         await AssertNoMenuAsync(app, logMark: null);
         await WaitForListFocusAsync(app, "Five");
         AssertList(app, L0, L0BaseTop, selected: "Five", canStart: false, startToolTip: UnchangedReason);
+    }
+
+    /// <summary>
+    /// Base's commit menu as "Texts these checks rely on" gives it: its lines, "Check out this
+    /// commit" highlighted, 284 high and 4 px inside the window, its top-left 2 right of and 2
+    /// below the pointer, the items' text colours.
+    /// </summary>
+    private static void AssertBaseCommitMenu(ShellDriver app, MenuSnapshot menu, Point pointer)
+    {
+        AssertMenu(menu, [.. BaseCommitMenu]);
+        AssertHighlighted(menu, BaseCommitMenuHighlighted);
+        AssertMenuShape(app, menu);
+        Assert.Equal(BaseCommitMenuHeight, menu.Bounds.Height, 2);
+        AssertMenuAtPointer(menu, pointer);
+        AssertMenuColours(app, menu);
     }
 
     /// <summary>Waits until the list's row <paramref name="subject"/> is selected and has the keyboard focus (the view gives it the focus once the layout has made the row).</summary>
@@ -445,13 +460,14 @@ public sealed partial class Phase4ChecksB
 
     /// <summary>
     /// "No write call has run" since <paramref name="callMark"/> and <paramref name="logMark"/>:
-    /// no call that writes (rebase, update-ref, commit, reset, checkout, switch, cherry-pick,
-    /// revert, branch, tag, stash) and no operation of the queue ended, other than the backups'
-    /// background clean-up.
+    /// no call that writes what a rebase writes (rebase, update-ref, commit, reset, checkout,
+    /// switch, cherry-pick, revert, merge, a stash's push, pop, apply, drop or store; the reads
+    /// of a refresh, such as <c>git stash list</c>, may run) and no operation of the queue ended,
+    /// other than the backups' background clean-up.
     /// </summary>
     private static void AssertNoWriteSince(ShellDriver app, int callMark, int logMark)
     {
-        string[] writes = ["git rebase", "git update-ref", "git commit", "git reset", "git checkout", "git switch", "git cherry-pick", "git revert", "git branch", "git tag", "git stash"];
+        string[] writes = ["git rebase", "git update-ref", "git commit", "git reset", "git checkout", "git switch", "git cherry-pick", "git revert", "git merge", "git stash push", "git stash pop", "git stash apply", "git stash drop", "git stash store"];
         var written = CallsSince(app, callMark).Where(call => writes.Any(write => call.StartsWith(write, StringComparison.Ordinal))).ToList();
         Assert.True(written.Count == 0, "The app ran a write call:\n" + string.Join('\n', written));
         var ended = app.LogLinesSince(logMark)

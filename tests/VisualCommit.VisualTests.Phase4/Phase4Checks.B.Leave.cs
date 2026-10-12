@@ -104,6 +104,7 @@ public sealed partial class Phase4ChecksB
         // Step 8: the list opened again and closed by Esc at once: nothing was changed, so no question.
         var pointer = GraphRowPoint(6);
         app.RightClick(pointer);
+        AssertBaseCommitMenu(app, app.Menu(), pointer);
         app.ClickMenuItem(InteractiveFromHereItem);
         await app.WaitForIdleAsync();
         await app.WaitForRebaseListAsync();
