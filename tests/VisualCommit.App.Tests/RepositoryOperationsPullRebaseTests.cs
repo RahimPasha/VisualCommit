@@ -64,6 +64,34 @@ public class RepositoryOperationsPullRebaseTests
     }
 
     [Fact]
+    public async Task A_pull_whose_rebase_stops_without_a_conflicted_file_opens_the_Rebase_stopped_dialog()
+    {
+        // The review's finding 23 (section 6, 5.1): the branch's first pick is rescheduled because
+        // an untracked in.txt is in the way; the pull's status is the rebase's stop, not "Pull
+        // stopped: 0 files have conflicts", and the dialog shows git's output.
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/other.txt", "other\n", "Other work");
+        var addIn = await repo.CommitFileAsync("in.txt", "tracked\n", "Add in");
+        repo.DeleteFile("in.txt");
+        await repo.CommitAsync("Remove in");
+        repo.WriteFile("in.txt", "untracked\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.PullRebaseAsync();
+
+        Assert.Equal(($"Rebase stopped at {addIn[..7]} \"Add in\"", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        var state = app.Operations.Status.InProgress;
+        Assert.Equal((InProgressKind.Rebase, RebaseStopKind.Rescheduled, addIn), (state.Kind, state.StopKind!.Value, state.Commit));
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Rebase stopped", app.Repository.Banner.Text, "git rebase"), (dialog.Title, dialog.Summary, dialog.Command));
+        Assert.StartsWith("Rebasing main onto origin/main: git could not apply", dialog.Summary, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(dialog.Output), "The dialog shows git's output.");
+        Assert.Single(await repo.BackupRefsAsync());
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_pull_whose_rebase_stops_also_says_what_the_fork_point_left_out()
     {
         // The review's finding 20: origin's main was rewritten by a force push after main took

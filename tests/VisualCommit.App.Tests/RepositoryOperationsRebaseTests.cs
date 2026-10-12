@@ -198,6 +198,39 @@ public class RepositoryOperationsRebaseTests
     }
 
     [Fact]
+    public async Task A_rebase_that_stops_with_nothing_to_look_at_opens_the_Rebase_stopped_dialog_with_gits_output()
+    {
+        // The review's finding 23 (design 5.1, amending D95): the second pick is rescheduled
+        // because an untracked in.txt is in the way; no file conflicts, so the error dialog
+        // "Rebase stopped" says what the banner says, with git's output and command.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("README.md", "readme\n", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        var main = await repo.CommitFileAsync("main.txt", "main\n", "Main work");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("x.txt", "x\n", "X first");
+        var addIn = await repo.CommitFileAsync("in.txt", "tracked\n", "Add in");
+        repo.DeleteFile("in.txt");
+        await repo.CommitAsync("Remove in");
+        repo.WriteFile("in.txt", "untracked\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.RebaseAsync(new RebaseTarget(main, "main"));
+
+        Assert.Equal(($"Rebase stopped at {addIn[..7]} \"Add in\"", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        var state = app.Operations.Status.InProgress;
+        Assert.Equal((RebaseStopKind.Rescheduled, addIn), (state.StopKind!.Value, state.Commit));
+        var banner = $"Rebasing topic onto main: git could not apply {addIn[..7]} \"Add in\" (2 of 3): an untracked file is in the way. Move or remove it, then continue.";
+        Assert.Equal(banner, app.Repository.Banner.Text);
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Rebase stopped", banner, $"git rebase {main}"), (dialog.Title, dialog.Summary, dialog.Command));
+        Assert.False(string.IsNullOrWhiteSpace(dialog.Output), "The dialog shows git's output.");
+        Assert.Equal("untracked\n", Read(repo, "in.txt"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task Check_out_and_rebase_checks_the_branch_out_rebases_it_and_selects_its_new_tip()
     {
         using var repo = await Scenarios.RebaseAsync();

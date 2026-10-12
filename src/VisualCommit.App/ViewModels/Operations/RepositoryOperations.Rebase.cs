@@ -559,16 +559,23 @@ public sealed partial class RepositoryOperations
     public string? OntoName(InProgressState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (state is not { Kind: InProgressKind.Rebase, Onto: { } onto })
-        {
-            return null;
-        }
-
-        var refs = Refs?.Refs ?? [];
-        return refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.LocalBranch && gitRef.TargetSha == onto)?.Name
-            ?? refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.RemoteBranch && gitRef.TargetSha == onto)?.Name
-            ?? OperationTexts.Short(onto);
+        return state is { Kind: InProgressKind.Rebase, Onto: { } onto } ? OntoNameIn(Refs?.Refs ?? [], onto) : null;
     }
+
+    /// <summary>
+    /// <see cref="OntoName"/> from the refs as they are now, read again: inside an operation that
+    /// fetched (a pull's rebase), the refs as last read do not have the new base yet, and the
+    /// dialog of a stop would name it by its short SHA where the banner, after the refresh, names
+    /// the branch (found by the review's finding 23's test).
+    /// </summary>
+    private async Task<string?> FreshOntoNameAsync(InProgressState state) =>
+        state is { Kind: InProgressKind.Rebase, Onto: { } onto } ? OntoNameIn((await Git.ReadRefsAsync()).Refs, onto) : null;
+
+    /// <summary>A local branch at <paramref name="onto"/>, else a remote branch, each in git's order; else its short SHA (5.2, 14.3).</summary>
+    private static string OntoNameIn(IReadOnlyList<GitRef> refs, string onto) =>
+        refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.LocalBranch && gitRef.TargetSha == onto)?.Name
+        ?? refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.RemoteBranch && gitRef.TargetSha == onto)?.Name
+        ?? OperationTexts.Short(onto);
 
     /// <summary>Saves <c>rebase-&lt;time&gt;/&lt;b&gt;</c> → <paramref name="tip"/>, the branch's old tip (1.2).</summary>
     private Task SaveRebaseBackupAsync(string branch, string tip) =>
@@ -730,7 +737,7 @@ public sealed partial class RepositoryOperations
         var state = (await Git.ReadStatusAsync()).InProgress;
         if (state.StopKind is RebaseStopKind.Rescheduled or RebaseStopKind.ExecFailed or RebaseStopKind.OwnAmendFailed)
         {
-            var summary = ConflictBannerViewModel.TextFor(state, 0, OntoName(state)) ?? OperationTexts.RebaseStoppedAt(state.Commit ?? string.Empty, state.Subject);
+            var summary = ConflictBannerViewModel.TextFor(state, 0, await FreshOntoNameAsync(state)) ?? OperationTexts.RebaseStoppedAt(state.Commit ?? string.Empty, state.Subject);
             notice.Display = new FailureDisplay(OperationTexts.RebaseStoppedTitle, summary);
             notice.Failure = FailureOfLastCall(context, command => command.StartsWith("git rebase", StringComparison.Ordinal) || command.StartsWith("git commit", StringComparison.Ordinal), summary);
         }
