@@ -806,6 +806,31 @@ public class ConflictResolverViewModelTests
         Assert.Empty(actions.Writes);
     }
 
+    [AvaloniaFact]
+    public async Task The_file_position_the_file_arrows_and_moving_on_follow_the_stage_list_s_order_as_shown()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("a.txt", Notes);
+        actions.SetText("src/b.txt", Notes);
+        actions.SetText("z.txt", Notes);
+
+        // The stage panel shows a tree: the folder src/ first, then the files.
+        actions.StageListOrder = paths => [.. paths.OrderBy(path => path.Contains('/', StringComparison.Ordinal) ? 0 : 1).ThenBy(path => path, StringComparer.Ordinal)];
+        var resolver = Resolver(actions, new ManualDelays(), Status(Merge(), Entry("a.txt"), Entry("src/b.txt"), Entry("z.txt")));
+
+        await resolver.OpenAsync("src/b.txt");
+        Assert.Equal("File 1 of 3", resolver.FilePositionText);
+        await resolver.NextFileCommand.ExecuteAsync(null);
+        Assert.Equal(("a.txt", "File 2 of 3"), (resolver.Path, resolver.FilePositionText));
+
+        // Mark resolved on a.txt moves on to the next file in that order: z.txt.
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        resolver.Choose(1, ConflictChoice.UseOurs);
+        actions.BeforeWriteEnds = _ => resolver.Update(Status(Merge(), Entry("src/b.txt"), Entry("z.txt")), "main", null);
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Equal(("z.txt", "File 2 of 2"), (resolver.Path, resolver.FilePositionText));
+    }
+
     // --- The cards (11.8; C15) ---------------------------------------------------------------------
 
     [AvaloniaFact]

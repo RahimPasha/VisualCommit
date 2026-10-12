@@ -79,6 +79,13 @@ public interface IConflictActions
     /// <c>&lt;remote&gt;/&lt;branch&gt;</c> at <paramref name="mergeHead"/>; null when neither is.
     /// </summary>
     string? MergedRemoteBranch(string branch, string? mergeHead);
+
+    /// <summary>
+    /// The conflicted <paramref name="paths"/> (as the status gives them, by path) in the order
+    /// the stage panel's unstaged list shows them in its mode (11.2): flat, or as a tree with its
+    /// folders first and every folder open.
+    /// </summary>
+    IReadOnlyList<string> InStageListOrder(IReadOnlyList<string> paths);
 }
 
 /// <summary>A merge tool that runs (<see cref="IConflictActions.RunningMergeTool"/>, 11.9).</summary>

@@ -183,6 +183,21 @@ public sealed partial class RepositoryOperations : IConflictActions
     public MergeToolRun? RunningMergeTool => _runningMergeTool;
 
     /// <inheritdoc/>
+    public IReadOnlyList<string> InStageListOrder(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        // Rows built as the stage panel builds its own in its mode, every folder open (flat, the
+        // list keeps git's order by path, as the status gives the conflicts).
+        var list = new ChangedFileList();
+        list.SetMode(Repository.Changes.FileList);
+        list.Show([.. paths.Distinct(StringComparer.Ordinal).Select(path => new ChangedFile(path, FileChangeKind.Conflicted))]);
+        var ordered = list.Rows.Where(row => row.IsFile).Select(row => row.Key).ToList();
+        var listed = ordered.ToHashSet(StringComparer.Ordinal);
+        return [.. ordered, .. paths.Where(path => !listed.Contains(path))];
+    }
+
+    /// <inheritdoc/>
     public string? MergedRemoteBranch(string branch, string? mergeHead)
     {
         ArgumentNullException.ThrowIfNull(branch);

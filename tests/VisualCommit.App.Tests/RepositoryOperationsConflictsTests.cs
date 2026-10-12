@@ -317,6 +317,39 @@ public class RepositoryOperationsConflictsTests
         Assert.Equal(("Ours: main", "Theirs: origin/main"), (repository.Resolver.OursTitle, repository.Resolver.TheirsTitle));
     }
 
+    [AvaloniaFact]
+    public async Task With_the_stage_panel_as_a_tree_the_resolver_counts_and_goes_through_the_files_in_the_tree_s_order()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("a.txt", "line\n").WriteFile("src/b.txt", "line\n");
+        await repo.CommitAsync("Base");
+        await repo.CreateBranchAsync("feature");
+        repo.WriteFile("a.txt", "ours\n").WriteFile("src/b.txt", "ours\n");
+        await repo.CommitAsync("Ours");
+        await repo.CheckoutAsync("feature");
+        repo.WriteFile("a.txt", "theirs\n").WriteFile("src/b.txt", "theirs\n");
+        await repo.CommitAsync("Theirs");
+        await repo.CheckoutAsync("main");
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("merge", "--no-edit", "feature")).ExitCode);
+
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 2, "the conflicts read", TimeSpan.FromSeconds(30));
+        repository.Changes.ShowTreeCommand.Execute(null);
+
+        // The tree shows src/ > b.txt above a.txt (11.2: the stage list's order).
+        Assert.Equal(["src/b.txt", "a.txt"], repository.Changes.Unstaged.Rows.Where(row => row.IsFile).Select(row => row.Key));
+        repository.OpenResolver(repository.Status.Unstaged.Single(file => file.Path == "src/b.txt"));
+        await app.WaitForResolverAsync("b.txt");
+        var resolver = repository.Resolver;
+        Assert.Equal("File 1 of 2", resolver.FilePositionText);
+
+        await resolver.NextFileCommand.ExecuteAsync(null);
+        Assert.Equal(("a.txt", "File 2 of 2"), (resolver.Path, resolver.FilePositionText));
+    }
+
     [Fact]
     public async Task Without_merge_tool_in_gits_configuration_nothing_runs()
     {

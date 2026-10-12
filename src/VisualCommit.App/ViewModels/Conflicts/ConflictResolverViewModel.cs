@@ -310,7 +310,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         ArgumentNullException.ThrowIfNull(currentName);
         var wasInProgress = _inProgress.IsActive;
         var oldOrder = _conflicts.Select(conflict => conflict.Path).ToList();
-        _conflicts = status.Conflicts;
+        _conflicts = InStageListOrder(status.Conflicts);
         _inProgress = status.InProgress;
         _statusPaths = new HashSet<string>(status.Staged.Select(file => file.Path).Concat(status.Unstaged.Select(file => file.Path)), StringComparer.Ordinal);
         _currentName = currentName;
@@ -1451,6 +1451,23 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
     private void UpdateModified() =>
         IsModified = Body == ConflictResolverBody.Text && Document is { } document && !string.Equals(document.Text, _original, StringComparison.Ordinal);
+
+    /// <summary>The conflicted files in the stage list's order (11.2: the position, the file arrows and moving on follow it, in the tree view too).</summary>
+    private IReadOnlyList<ConflictEntry> InStageListOrder(IReadOnlyList<ConflictEntry> conflicts)
+    {
+        if (conflicts.Count < 2)
+        {
+            return conflicts;
+        }
+
+        var byPath = conflicts.ToDictionary(conflict => conflict.Path, StringComparer.Ordinal);
+        var ordered = _actions.InStageListOrder([.. conflicts.Select(conflict => conflict.Path)])
+            .Where(byPath.ContainsKey)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => byPath[path])
+            .ToList();
+        return ordered.Count == conflicts.Count ? ordered : conflicts;
+    }
 
     private void UpdateFilePosition()
     {

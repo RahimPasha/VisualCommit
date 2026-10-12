@@ -135,6 +135,11 @@ internal sealed class RecordingConflictActions : IConflictActions
         return WriteAsync(path);
     }
 
+    /// <summary>The stage list's order of the conflicted paths, as the test sets it; unset: as given (the flat list).</summary>
+    public Func<IReadOnlyList<string>, IReadOnlyList<string>>? StageListOrder { get; set; }
+
+    public IReadOnlyList<string> InStageListOrder(IReadOnlyList<string> paths) => StageListOrder?.Invoke(paths) ?? paths;
+
     /// <summary>What <see cref="MergedRemoteBranch"/> answers for a branch and MERGE_HEAD; null: none.</summary>
     public Func<string, string?, string?>? RemoteBranches { get; set; }
 

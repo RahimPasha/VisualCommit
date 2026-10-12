@@ -161,6 +161,8 @@ public class ConflictResolverRealGitTests
 
         public string? MergedRemoteBranch(string branch, string? mergeHead) => null;
 
+        public IReadOnlyList<string> InStageListOrder(IReadOnlyList<string> paths) => paths;
+
         public event EventHandler<MergeToolRun>? MergeToolStarted
         {
             add { }
