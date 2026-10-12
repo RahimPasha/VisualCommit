@@ -143,11 +143,15 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         var selected = graph.Selection.Shas.Select(sha => sha[..7]).Order(StringComparer.Ordinal).ToList();
         Assert.Equal(shortShas.Order(StringComparer.Ordinal).ToList(), selected);
         var origin = app.BoundsOf(graph).TopLeft;
+
+        // An open menu lies over the Message column (C13 step 9's drop menu): then the row's
+        // left end, where no label starts, shows the selection.
+        var x = app.IsMenuOpen ? 2 : graph.Columns.Message.Right - 4;
         foreach (var sha in graph.Selection.Shas)
         {
             var row = data.IndexOf(sha);
             Assert.True(row >= 0, $"The selected commit {sha} is not in the graph.");
-            var point = new Point(origin.X + graph.Columns.Message.Right - 4, origin.Y + graph.RowBounds(row).Top + 4);
+            var point = new Point(origin.X + x, origin.Y + graph.RowBounds(row).Top + 4);
             AssertColour(PaletteOf(app).Selection, shot, point, $"the background of the selected row {row}");
         }
     }
