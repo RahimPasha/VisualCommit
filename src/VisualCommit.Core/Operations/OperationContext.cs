@@ -11,7 +11,7 @@ public sealed class OperationContext
     private volatile bool _cancelWindowOpen = true;
 
     /// <param name="operationId">The operation's id, <c>op-&lt;n&gt;</c>.</param>
-    /// <param name="cancellationToken">Cancelled when the user cancels a network operation; <see cref="CancellationToken.None"/> for a local one.</param>
+    /// <param name="cancellationToken">Cancelled when the user cancels a network operation or a local one that can be cancelled (<see cref="GitOperation.CanBeCancelled"/>); <see cref="CancellationToken.None"/> for any other local one.</param>
     /// <param name="environment">The prompt scope's variables for every git call of the operation; empty for <see cref="PromptMode.None"/>.</param>
     /// <param name="progress">Where git's progress goes; null discards it.</param>
     /// <param name="endCancelWindow">
@@ -47,8 +47,9 @@ public sealed class OperationContext
     public string OperationId { get; }
 
     /// <summary>
-    /// The token to pass to git: cancelled when the user cancels a network operation.
-    /// <see cref="CancellationToken.None"/> for a local operation, and after
+    /// The token to pass to git: cancelled when the user cancels a network operation, or a local
+    /// one that can be cancelled (<see cref="GitOperation.CanBeCancelled"/>, the merge tool).
+    /// <see cref="CancellationToken.None"/> for any other local operation, and after
     /// <see cref="EndCancelWindow"/>.
     /// </summary>
     public CancellationToken CancellationToken => _cancelWindowOpen ? _cancellationToken : CancellationToken.None;

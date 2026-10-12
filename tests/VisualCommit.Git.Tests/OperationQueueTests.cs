@@ -699,6 +699,68 @@ public class OperationQueueTests
     }
 
     [Fact]
+    public async Task A_local_operation_that_can_be_cancelled_gets_a_token_and_its_cancel_reports_the_lock_files()
+    {
+        // Phase 4's merge tool (docs/phase-4-design.md 11.9, D149): local, but it only waits for
+        // another program, so Cancel is offered and stops it as it stops a network operation.
+        using var folder = new TempDirectory("locks");
+        var gitFolder = Directory.CreateDirectory(Path.Combine(folder.Path, ".git")).FullName;
+        using var queue = new TestQueue(gitDirectory: gitFolder);
+        var started = new TaskCompletionSource();
+        var left = Path.Combine(gitFolder, "config.lock");
+        CancellationToken token = default;
+
+        var tool = queue.Queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for fake to close…", OperationKind.Local, RefreshScope.Status, async context =>
+        {
+            token = context.CancellationToken;
+            File.WriteAllText(left, string.Empty);
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done(string.Empty);
+        })
+        { CanBeCancelled = true });
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        Assert.True(token.CanBeCanceled);
+        Assert.Equal(OperationKind.Local, queue.Queue.Current!.Kind);
+        Assert.True(queue.Queue.Current.CanCancel);
+        queue.Queue.CancelCurrent();
+        var result = await tool.WaitAsync(Patience, TestCancelled);
+
+        Assert.Equal(OperationOutcome.Cancelled, result.Outcome);
+        Assert.Equal("Merge tool for notes.txt cancelled", result.Message);
+        Assert.Equal([Path.GetFullPath(left)], result.StaleLockFiles);
+        Assert.Equal([RefreshScope.Status], queue.Refreshes);
+    }
+
+    [Fact]
+    public async Task Closing_the_tab_leaves_a_local_operation_that_can_be_cancelled_to_finish()
+    {
+        var queue = new TestQueue();
+        var started = new TaskCompletionSource();
+        var gate = new TaskCompletionSource();
+        CancellationToken token = default;
+        var tool = queue.Queue.RunAsync(new GitOperation("Merge tool for notes.txt", string.Empty, OperationKind.Local, RefreshScope.Status, async context =>
+        {
+            token = context.CancellationToken;
+            started.SetResult();
+            await gate.Task;
+            return OperationReport.Done("Resolved notes.txt in fake");
+        })
+        { CanBeCancelled = true });
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        queue.Dispose();
+        Assert.False(token.IsCancellationRequested);
+        gate.SetResult();
+
+        var result = await tool.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(OperationOutcome.Succeeded, result.Outcome);
+        Assert.False(token.IsCancellationRequested);
+        Assert.Empty(queue.Refreshes);
+    }
+
+    [Fact]
     public async Task Progress_shows_in_the_running_operation_at_most_ten_times_a_second()
     {
         using var queue = new TestQueue();

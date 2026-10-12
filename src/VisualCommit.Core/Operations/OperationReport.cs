@@ -55,7 +55,7 @@ public sealed record OperationResult(OperationOutcome Outcome, string Message, G
 /// <param name="IsBackground">Auto-fetch: nothing of it is shown.</param>
 /// <param name="Errors">Where its failure would be shown; a stage-panel operation leaves no message in the status bar (1.9).</param>
 /// <param name="Progress">Git's last progress line, or null before one came.</param>
-/// <param name="CanCancel">Cancel is offered: a network operation that is not in the background, before <see cref="OperationContext.EndCancelWindow"/>, and not cancelled yet.</param>
+/// <param name="CanCancel">Cancel is offered: a network operation (or a local one that can be cancelled, <see cref="GitOperation.CanBeCancelled"/>) that is not in the background, before <see cref="OperationContext.EndCancelWindow"/>, and not cancelled yet.</param>
 /// <param name="HasSeveralSteps">The operation's <see cref="GitOperation.HasSeveralSteps"/>, for the "Finishing operations" dialog (1.8).</param>
 public sealed record OperationSnapshot(
     string Title,

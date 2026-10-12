@@ -243,8 +243,9 @@ public sealed class OperationQueue : IOperationQueue
     /// <summary>
     /// Closing the tab (1.8): the waiting operations end as cancelled without running; a running
     /// network operation that the user started is cancelled; a running local one goes on to its
-    /// end, every step of it, without the refresh; a background one is left to finish. Every
-    /// prompt scope of the queue is closed.
+    /// end, every step of it, without the refresh, also one that can be cancelled
+    /// (<see cref="GitOperation.CanBeCancelled"/>: the merge tool, docs/phase-4-design.md 11.9);
+    /// a background one is left to finish. Every prompt scope of the queue is closed.
     /// </summary>
     public void Dispose()
     {
@@ -275,7 +276,7 @@ public sealed class OperationQueue : IOperationQueue
             {
                 idle = TakeIdleWaiters();
             }
-            else if (running.Cancellation is not null && !running.Operation.IsBackground)
+            else if (running.Cancellation is not null && running.Operation.Kind == OperationKind.Network && !running.Operation.IsBackground)
             {
                 running.CancelRequested = true;
                 cancel = running.Cancellation;
@@ -297,7 +298,8 @@ public sealed class OperationQueue : IOperationQueue
         "op-" + Interlocked.Increment(ref _lastId).ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// Cancel is offered for a network operation until its cancel window ends; for a background
+    /// Cancel is offered for a network operation, or a local one that can be cancelled
+    /// (<see cref="GitOperation.CanBeCancelled"/>), until its cancel window ends; for a background
     /// one (auto-fetch) only while an operation of the user waits for it, so that a fetch that
     /// stalls never holds the user's operations without a way out. Call it under <see cref="_gate"/>.
     /// </summary>
@@ -423,8 +425,12 @@ public sealed class OperationQueue : IOperationQueue
             result = FailedResult(operation, FailureOf(operation, "Unexpected error: " + ex.Message));
         }
 
-        // Git was stopped by the user's Cancel (or a closed tab): a background one only by the user.
-        if (result.Outcome == OperationOutcome.Cancelled && operation.Kind == OperationKind.Network && (!operation.IsBackground || entry.CancelRequested))
+        // Git was stopped by the user's Cancel (or a closed tab): a background one only by the
+        // user. A local operation that can be cancelled (the merge tool) is looked at as a
+        // network one: its git may have been stopped while it held a lock (11.9).
+        if (result.Outcome == OperationOutcome.Cancelled
+            && (operation.Kind == OperationKind.Network || operation.CanBeCancelled)
+            && (!operation.IsBackground || entry.CancelRequested))
         {
             result = await ReportStaleLocksAsync(operation, entry.StartedAt, result);
         }
@@ -734,9 +740,13 @@ public sealed class OperationQueue : IOperationQueue
 
         public TaskCompletionSource<OperationResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>For a network operation; null for a local one, which is never cancelled. A background one is cancelled only by the user, while an operation waits for it.</summary>
+        /// <summary>
+        /// For a network operation and a local one that can be cancelled (<see cref="GitOperation.CanBeCancelled"/>);
+        /// null for any other local one, which is never cancelled. A background one is cancelled
+        /// only by the user, while an operation waits for it.
+        /// </summary>
         public CancellationTokenSource? Cancellation { get; } =
-            operation.Kind == OperationKind.Network ? new CancellationTokenSource() : null;
+            operation.Kind == OperationKind.Network || operation.CanBeCancelled ? new CancellationTokenSource() : null;
 
         public bool CancelWindowOpen { get; set; } = true;
 
