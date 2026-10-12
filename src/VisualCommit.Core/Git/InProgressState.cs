@@ -88,11 +88,20 @@ public sealed record InProgressState(
     /// For a rebase, the commands that apply a commit (<c>pick</c>, <c>reword</c>, <c>edit</c>,
     /// <c>squash</c>, <c>fixup</c>, <c>merge</c> and their letters) in <c>done</c>, a rescheduled
     /// pick counted as the current one: the banner's <c>{k}</c> of <c>{k} of {n}</c> (5.2).
-    /// <c>label</c> and <c>exec</c> lines do not count. 0 for any other operation.
+    /// <c>label</c> and <c>exec</c> lines do not count. For a list of picks or reverts
+    /// (<see cref="Sequenced"/>), the commits it has made so far, the stopped one not counted until
+    /// it is committed: the <c>{K}</c> of 10.2's "Cherry-picked {K} of {N} commits". 0 for any
+    /// other operation.
     /// </summary>
     public int Done { get; init; }
 
-    /// <summary>For a rebase, <see cref="Done"/> plus the same commands left in <c>git-rebase-todo</c>: the banner's <c>{n}</c>. 0 for any other operation.</summary>
+    /// <summary>
+    /// For a rebase, <see cref="Done"/> plus the same commands left in <c>git-rebase-todo</c>: the
+    /// banner's <c>{n}</c>. For a list, <see cref="Done"/> plus the commits left in
+    /// <c>sequencer/todo</c> (the stopped one included until it is committed): 10.2's <c>{N}</c>;
+    /// git keeps no record of a skipped commit, so one that was skipped is not counted. 0 for any
+    /// other operation.
+    /// </summary>
     public int Total { get; init; }
 
     /// <summary>An operation is in progress.</summary>

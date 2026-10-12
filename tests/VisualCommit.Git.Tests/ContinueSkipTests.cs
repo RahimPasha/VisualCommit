@@ -195,6 +195,45 @@ public class ContinueSkipTests
         Assert.Equal(["UU f.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
         var again = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
         Assert.Equal((second, true, true, 0), (again.Commit, again.Sequenced, again.HasPickHead, again.Remaining));
+
+        // 10.2's "Cherry-picked 1 of 2 commits": Side one is made, Side two stopped.
+        Assert.Equal((1, 2), (again.Done, again.Total));
+    }
+
+    [Fact]
+    public async Task A_lists_progress_counts_the_commits_made_and_those_left_not_those_skipped()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+        await repo.CreateBranchAsync("side");
+        await repo.CommitFileAsync("f.txt", "main\n", "Main edit");
+        await repo.CheckoutAsync("side");
+        var first = await repo.CommitFileAsync("f.txt", "side 1\n", "Side one");
+        var second = await repo.CommitFileAsync("f.txt", "side 2\n", "Side two");
+        var third = await repo.CommitFileAsync("f.txt", "side 3\n", "Side three");
+        await repo.CheckoutAsync("main");
+        var repository = await OpenAsync(repo);
+        Assert.Equal(new SequenceResult(SequenceStop.Conflicts, 0, 3), await repository.CherryPickAsync([first, second, third], cancellationToken: TestCancelled));
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((first, 0, 3), (state.Commit, state.Done, state.Total));
+
+        // Skip: git keeps no record of the skipped commit, so the list is now Side two and Side three.
+        Assert.Equal(ContinueOutcome.Stopped, (await repository.SkipAsync(state, cancellationToken: TestCancelled)).Outcome);
+        state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((second, 0, 2), (state.Commit, state.Done, state.Total));
+
+        // Continue commits Side two and stops at Side three: 1 of 2.
+        repo.WriteFile("f.txt", "resolved\n");
+        await repo.GitAsync("add", "f.txt");
+        Assert.Equal(ContinueOutcome.Stopped, (await repository.ContinueAsync(state, null, cancellationToken: TestCancelled)).Outcome);
+        state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((third, 1, 2), (state.Commit, state.Done, state.Total));
+
+        // A single pick has no list: 0 and 0, as for a merge.
+        await repository.AbortAsync(InProgressKind.CherryPick, cancellationToken: TestCancelled);
+        Assert.False((await repo.GitAllowingFailureAsync("cherry-pick", first)).Succeeded);
+        state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((false, 0, 0), (state.Sequenced, state.Done, state.Total));
     }
 
     [Fact]
