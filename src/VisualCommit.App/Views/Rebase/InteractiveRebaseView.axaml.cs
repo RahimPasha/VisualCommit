@@ -367,7 +367,7 @@ public partial class InteractiveRebaseView : UserControl
                 layer.Open(viewModel.MenuFor(row), new MenuPosition(pointer.X, pointer.Y), MenuOpenedBy.Pointer);
             }
         }
-        else if (viewModel.SelectedRow is { } selected && ActionButtonCorner(selected, topLevel) is { } corner)
+        else if (IsInRows(e.Source) && viewModel.SelectedRow is { } selected && ActionButtonCorner(selected, topLevel) is { } corner)
         {
             layer.Open(viewModel.MenuFor(selected), new MenuPosition(corner.X, corner.Y), MenuOpenedBy.Keyboard);
         }

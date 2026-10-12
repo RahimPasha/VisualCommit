@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Rebase;
@@ -51,9 +52,17 @@ internal sealed class RecordingRebaseHost(DialogHostViewModel? dialogs = null) :
     /// <summary>Called when the list asks to be closed.</summary>
     public Action? OnClose { get; set; }
 
+    /// <summary>When set, Start runs the plan with it (a test hands it to the real git layer) and answers what it returns.</summary>
+    public Func<RebasePlan, Task<bool>>? OnStart { get; set; }
+
     public async Task<bool> StartAsync(RebasePlan plan)
     {
         Plans.Add(plan);
+        if (OnStart is { } run)
+        {
+            return await run(plan);
+        }
+
         if (HeldStart is { } held)
         {
             return await held.Task;
@@ -148,15 +157,19 @@ internal static class InteractiveList
 /// </summary>
 internal sealed class RebaseListHarness : IDisposable
 {
-    private RebaseListHarness(ShellDriver app, InteractiveRebaseView view, InteractiveRebaseViewModel viewModel, RecordingRebaseHost host)
+    private RebaseListHarness(ShellDriver app, InteractiveRebaseView view, InteractiveRebaseViewModel viewModel, RecordingRebaseHost host, RepositoryViewModel? repository)
     {
         App = app;
         View = view;
         ViewModel = viewModel;
         Host = host;
+        Repository = repository;
     }
 
     public ShellDriver App { get; }
+
+    /// <summary>The repository open in the tab, or null for an empty tab.</summary>
+    public RepositoryViewModel? Repository { get; }
 
     public InteractiveRebaseView View { get; }
 
@@ -167,7 +180,9 @@ internal sealed class RebaseListHarness : IDisposable
     /// <summary>
     /// Starts the app on <paramref name="dataDirectory"/> (an empty tab, unless
     /// <paramref name="repository"/> names one to open) and shows the list for
-    /// <paramref name="list"/> (the scenario's list from Base when null) over its graph area.
+    /// <paramref name="list"/> over its graph area: with a repository and no list, the list its
+    /// git layer reads for <paramref name="request"/>, and each selected row is selected in its
+    /// graph so that the right panel shows it; without either, the scenario's list from Base.
     /// </summary>
     public static async Task<RebaseListHarness> StartAsync(
         string dataDirectory,
@@ -181,13 +196,28 @@ internal sealed class RebaseListHarness : IDisposable
             ? ShellDriver.Start(dataDirectory, width, height)
             : ShellDriver.StartWithTabs(dataDirectory, [repository], width: width, height: height);
         await app.WaitUntilReadyAsync();
+        RepositoryViewModel? opened = null;
+        request ??= InteractiveList.FromHere();
         if (repository is not null)
         {
-            await app.WaitForRepositoryAsync();
+            opened = await app.WaitForRepositoryAsync();
+            await app.WaitForIdleAsync(opened);
+            list ??= await opened.Repository.ReadRebaseListAsync(request.Onto.Sha, request.BranchRef, request.FromHere);
         }
 
         var host = new RecordingRebaseHost(app.Session.Services.DialogHost);
-        var viewModel = new InteractiveRebaseViewModel(request ?? InteractiveList.FromHere(), list ?? InteractiveList.FromBase(), "Base", host);
+        if (opened is not null)
+        {
+            host.OnShowDetails = sha =>
+            {
+                if (sha is not null)
+                {
+                    opened.Select(sha, reveal: false);
+                }
+            };
+        }
+
+        var viewModel = new InteractiveRebaseViewModel(request, list ?? InteractiveList.FromBase(), "Base", host);
         var view = new InteractiveRebaseView { DataContext = viewModel };
         var graphArea = (CommitGraphView)app.FindByAutomationId("CommitGraph");
         var panel = (Panel)graphArea.Content!;
@@ -195,7 +225,7 @@ internal sealed class RebaseListHarness : IDisposable
         host.OnClose = () => view.IsVisible = false;
         app.Settle();
         await app.WaitForAsync(() => view.Rows.Count == 0 || view.Rows[0].Bounds is not null, "the list's rows to be laid out");
-        return new RebaseListHarness(app, view, viewModel, host);
+        return new RebaseListHarness(app, view, viewModel, host, opened);
     }
 
     /// <summary>The list as drawn, in the window's coordinates.</summary>

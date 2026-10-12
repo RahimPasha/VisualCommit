@@ -162,6 +162,13 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.Escape);
         Assert.False(app.IsMenuOpen);
         Assert.True(FocusIsOn(app, "Three"));
+
+        // The Menu key opens it at the same place.
+        app.PressKey(Key.Apps);
+        Assert.Equal(menu.Bounds, app.Menu().Bounds);
+        Assert.Equal(2, app.CountLogLines(new Regex(@"Context menu opened: ff42e7f Three by keyboard$"), mark));
+        app.PressKey(Key.Escape);
+        Assert.True(FocusIsOn(app, "Three"));
         Assert.False(harness.ViewModel.IsChanged);
     }
 
@@ -397,6 +404,78 @@ public class InteractiveRebaseViewTests
             ],
             plan.StepsOldestFirst.Select(step => (step.Sha, step.Action, step.Message)));
         Assert.False(app.IsRebaseListOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task On_the_interactive_scenario_B7s_edits_hand_git_a_plan_that_makes_the_reports_commits()
+    {
+        using var repo = await Scenarios.InteractiveAsync();
+        using var data = new TempDirectory("data");
+        using var harness = await RebaseListHarness.StartAsync(data.Path, repository: repo.Path);
+        var app = harness.App;
+        var repository = harness.Repository!;
+        await app.WaitForRebaseListAsync();
+
+        // The list the git layer read is L0, and the graph behind it selected Five.
+        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseList().Subjects);
+        Assert.Equal(InteractiveList.Five, repository.Selection.Single);
+        app.MoveToNeutral();
+        app.WaitForCommitDetails();
+        TestPictures.Save(app, "rebase-list-on-repository");
+
+        // B7 steps 2 to 9.
+        app.PressKey(Key.Down);
+        app.PressKey(Key.Down);
+        app.PressKey(Key.Down);
+        Assert.Equal(InteractiveList.FixOne, repository.Selection.Single);
+        app.DragRebaseRow("Fix one", new Point(600, 270));
+        app.ChooseRebaseAction("Fix one", "Fixup");
+        app.ClickRebaseRow("Four");
+        app.RightClickRebaseRow("Four");
+        app.ClickMenuItem("Squash");
+        app.ClickRebaseEditMessage("Three");
+        app.PressKey(Key.A, Raw(app.CommandModifier));
+        app.PressKey(Key.Delete);
+        app.Type("Three and four");
+        app.Click(app.MessageDialog().DescriptionBounds.Center);
+        app.PressKey(Key.A, Raw(app.CommandModifier));
+        app.Type("#42 is the issue");
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        app.ClickRebaseRow("Two");
+        app.PressKey(Key.R);
+        app.PressKey(Key.A, Raw(app.CommandModifier));
+        app.Type("Two reworded");
+        app.PressKey(Key.Enter);
+        app.ClickRebaseRow("Five");
+        app.PressKey(Key.D);
+        app.MoveToNeutral();
+        Assert.Equal(InteractiveList.Five, repository.Selection.Single);
+        app.WaitForCommitDetails();
+        TestPictures.Save(app, "rebase-list-on-repository-l7");
+        Assert.Equal(["Drop", "Squash", "Pick", "Reword", "Fixup", "Pick"], app.RebaseList().Rows.Select(row => row.ActionText));
+
+        // Start: the plan goes to the real git layer, as the repository's operation hands it over.
+        harness.Host.OnStart = async plan =>
+        {
+            var result = await repository.Repository.InteractiveRebaseAsync(plan);
+            return result.Outcome == RebaseOutcome.Rebased;
+        };
+        app.ClickRebaseRow("Three");
+        app.ClickRebaseStart();
+        await app.WaitForAsync(() => harness.Host.Closed == 1, "the rebase to end and the list to close", TimeSpan.FromSeconds(60));
+
+        var log = await repo.GitAsync("log", "--format=%H", "main");
+        Assert.Equal(
+            [
+                "a081bffd034ab3d4fda4e1c073fe510a24f7c0d7",
+                "b3507d37adfe56baf58cf29ec0912ff444225b8c",
+                "ab4b49d005eb36535c58e54b01db091946b74b2e",
+                InteractiveList.BaseSha,
+                "da32da349cff2210ec951624b25f62825dd435ec",
+            ],
+            log.StandardOutput.TrimEnd('\n').Split('\n'));
+        var squashed = await repo.GitAsync("cat-file", "commit", "a081bffd034ab3d4fda4e1c073fe510a24f7c0d7");
+        Assert.EndsWith("\n\nThree and four\n\n#42 is the issue\n", squashed.StandardOutput, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
