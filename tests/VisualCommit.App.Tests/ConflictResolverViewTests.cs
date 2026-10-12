@@ -465,7 +465,10 @@ public class ConflictResolverViewTests
     [AvaloniaFact]
     public async Task A_double_click_s_second_press_within_500_ms_of_opening_changes_nothing_and_after_500_ms_the_same_press_chooses()
     {
-        using var host = await ResolverHost.OpenMergeAsync();
+        // The guard's clock moves only when the test moves it, so a slow machine cannot run past
+        // the 500 ms between the reopening and the press.
+        var time = new ManualTime();
+        using var host = await ResolverHost.OpenMergeAsync(time: time);
         var button = host.View.ConflictPanes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs)!;
         var left = host.BoundsOf(button).TopLeft;
         var point = left + new Point(3, 11);
@@ -481,7 +484,17 @@ public class ConflictResolverViewTests
         await host.Resolver.OpenAsync("notes.txt");
         ResolverFixtures.Settle();
         Assert.True(host.Resolver.IsInDoubleClickGuard);
-        Assert.Same(host.View.ConflictPanes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs), (host.Host.Window.InputHitTest(point) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
+
+        // The panes are laid out again for the reopened file; wait until the button is under the point.
+        Button? Hit() => (host.Host.Window.InputHitTest(point) as Visual)?.FindAncestorOfType<Button>(includeSelf: true);
+        for (var tries = 0; tries < 200 && !ReferenceEquals(Hit(), host.View.ConflictPanes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs)); tries++)
+        {
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+            ResolverFixtures.Settle();
+        }
+
+        Assert.Same(host.View.ConflictPanes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs), Hit());
+        Assert.True(host.Resolver.IsInDoubleClickGuard);
         var counts = new List<int>();
         host.View.AddHandler(InputElement.PointerPressedEvent, (_, e) => counts.Add(e.ClickCount), RoutingStrategies.Tunnel, handledEventsToo: true);
         host.Host.Window.MouseDown(point, MouseButton.Left);
@@ -495,7 +508,7 @@ public class ConflictResolverViewTests
 
         // After 500 ms the same press, the second of a double-click whose first press was on the bar
         // beside the button, chooses.
-        await Task.Delay(ConflictResolverViewModel.DoubleClickGuard + TimeSpan.FromMilliseconds(50));
+        time.Advance(ConflictResolverViewModel.DoubleClickGuard + TimeSpan.FromMilliseconds(50));
         ResolverFixtures.Settle();
         Assert.False(host.Resolver.IsInDoubleClickGuard);
         var beside = left + new Point(-1, 11);
@@ -563,16 +576,16 @@ public class ConflictResolverViewTests
 
         public Avalonia.Input.Platform.PlatformHotkeyConfiguration Keys => Host.Window.GetPlatformSettings()!.HotkeyConfiguration;
 
-        public static Task<ResolverHost> OpenMergeAsync(double height = Height)
+        public static Task<ResolverHost> OpenMergeAsync(double height = Height, TimeProvider? time = null)
         {
             var actions = new RecordingConflictActions();
             actions.SetText("notes.txt", Notes);
-            return OpenAsync(actions, Status(Merge(), Entry("notes.txt")), "notes.txt", height: height);
+            return OpenAsync(actions, Status(Merge(), Entry("notes.txt")), "notes.txt", height: height, time: time);
         }
 
-        public static async Task<ResolverHost> OpenAsync(RecordingConflictActions actions, WorkingTreeStatus status, string path, string? mergeTool = null, double height = Height)
+        public static async Task<ResolverHost> OpenAsync(RecordingConflictActions actions, WorkingTreeStatus status, string path, string? mergeTool = null, double height = Height, TimeProvider? time = null)
         {
-            var resolver = Resolver(actions, new ManualDelays(), status);
+            var resolver = Resolver(actions, new ManualDelays(), status, time: time);
             resolver.MergeTool = mergeTool;
             await resolver.OpenAsync(path);
             var shell = new MainWindowViewModel(new MainWindowViewModelTests.FakeSettings(), new MainWindowViewModelTests.FakeThemes(), _ => Task.FromResult(new GitDetection(GitAvailability.Available, "git", new GitVersion(2, 36, 0), null)));

@@ -597,6 +597,19 @@ public interface IGitRepository
         IReadOnlySet<string> keep,
         NetworkOptions? options = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The read half of <see cref="CleanUpBackupsAsync"/>, which deletes nothing: the names of the
+    /// backups (<c>&lt;kind&gt;-&lt;time&gt;[-&lt;n&gt;]</c>) the clean-up would remove now, oldest
+    /// first; empty while an operation is in progress in any worktree. The app reads it when a
+    /// repository has opened and queues the clean-up only when it is not empty (section 9 (b)).
+    /// A read: <c>GIT_OPTIONAL_LOCKS=0</c>.
+    /// </summary>
+    Task<IReadOnlyList<string>> FindBackupsToRemoveAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>A snapshot taken before a discard (D67).</summary>

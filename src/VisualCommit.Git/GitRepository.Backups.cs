@@ -517,36 +517,7 @@ public sealed partial class GitRepository
         ArgumentOutOfRangeException.ThrowIfNegative(retention.Days);
         ArgumentOutOfRangeException.ThrowIfNegative(retention.Count);
 
-        // The backup of an operation still in progress is never deleted: while any worktree has
-        // one, the whole clean-up waits for another time.
-        if (await OperationInProgressAnywhereAsync(cancellationToken).ConfigureAwait(false) is { } inProgress)
-        {
-            _log.Debug($"{Name}: The backups' clean-up waits: {inProgress}.");
-            return [];
-        }
-
-        var output = await ReadOutputAsync(cancellationToken, "for-each-ref", "--format=%(refname) %(objectname)", BackupRefPrefix).ConfigureAwait(false);
-        var now = BackupClock.GetUtcNow();
-        var backups = new Dictionary<string, Backup>(StringComparer.Ordinal);
-        foreach (var line in SplitLines(output))
-        {
-            var space = line.IndexOf(' ', StringComparison.Ordinal);
-            if (space < 0 || ParseBackupName(line[..space]) is not { } name)
-            {
-                // A ref under the prefix that fits no scheme is never deleted, and not counted.
-                continue;
-            }
-
-            if (!backups.TryGetValue(name.Backup, out var backup))
-            {
-                backup = new Backup(name.Backup, name.Kind, name.Number, name.When > now ? now : name.When);
-                backups.Add(name.Backup, backup);
-            }
-
-            backup.Refs.Add((line[..space], line[(space + 1)..]));
-        }
-
-        var removed = ChooseBackupsToRemove(backups.Values, retention, keep, now);
+        var removed = await ChooseBackupsToCleanUpAsync(retention, keep, cancellationToken).ConfigureAwait(false);
         if (removed.Count == 0)
         {
             return [];
@@ -592,6 +563,62 @@ public sealed partial class GitRepository
         }
 
         return removedBackups;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<string>> FindBackupsToRemoveAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(retention);
+        ArgumentNullException.ThrowIfNull(keep);
+        ArgumentOutOfRangeException.ThrowIfNegative(retention.Days);
+        ArgumentOutOfRangeException.ThrowIfNegative(retention.Count);
+        var removed = await ChooseBackupsToCleanUpAsync(retention, keep, cancellationToken).ConfigureAwait(false);
+        return [.. removed.Select(entry => entry.Backup.Name)];
+    }
+
+    /// <summary>
+    /// The read half of <see cref="CleanUpBackupsAsync"/>: nothing while an operation is in
+    /// progress in any worktree; otherwise the backups that go, by 9's rules, oldest first.
+    /// </summary>
+    private async Task<List<(Backup Backup, BackupRemovalReason Reason)>> ChooseBackupsToCleanUpAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        CancellationToken cancellationToken)
+    {
+        // The backup of an operation still in progress is never deleted: while any worktree has
+        // one, the whole clean-up waits for another time.
+        if (await OperationInProgressAnywhereAsync(cancellationToken).ConfigureAwait(false) is { } inProgress)
+        {
+            _log.Debug($"{Name}: The backups' clean-up waits: {inProgress}.");
+            return [];
+        }
+
+        var output = await ReadOutputAsync(cancellationToken, "for-each-ref", "--format=%(refname) %(objectname)", BackupRefPrefix).ConfigureAwait(false);
+        var now = BackupClock.GetUtcNow();
+        var backups = new Dictionary<string, Backup>(StringComparer.Ordinal);
+        foreach (var line in SplitLines(output))
+        {
+            var space = line.IndexOf(' ', StringComparison.Ordinal);
+            if (space < 0 || ParseBackupName(line[..space]) is not { } name)
+            {
+                // A ref under the prefix that fits no scheme is never deleted, and not counted.
+                continue;
+            }
+
+            if (!backups.TryGetValue(name.Backup, out var backup))
+            {
+                backup = new Backup(name.Backup, name.Kind, name.Number, name.When > now ? now : name.When);
+                backups.Add(name.Backup, backup);
+            }
+
+            backup.Refs.Add((line[..space], line[(space + 1)..]));
+        }
+
+        return ChooseBackupsToRemove(backups.Values, retention, keep, now);
     }
 
     /// <summary>

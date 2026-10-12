@@ -255,4 +255,11 @@ public abstract class FakeRepositoryBase : IGitRepository
         NetworkOptions? options = null,
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<RemovedBackup>>([]);
+
+    public virtual Task<IReadOnlyList<string>> FindBackupsToRemoveAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
 }

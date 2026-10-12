@@ -124,6 +124,18 @@ internal sealed class RecordingConflictActions : IConflictActions
 }
 
 /// <summary>Delays a test lets end one by one: the resolver's parse of typed text (11.5).</summary>
+/// <summary>A clock that moves only when the test moves it, for the double-click guard (11.1).</summary>
+internal sealed class ManualTime : TimeProvider
+{
+    private long _ticks = TimeSpan.FromHours(1).Ticks;
+
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    public override long GetTimestamp() => _ticks;
+
+    public void Advance(TimeSpan by) => _ticks += by.Ticks;
+}
+
 internal sealed class ManualDelays
 {
     private readonly List<(TaskCompletionSource Done, CancellationToken Token)> _waiting = [];
@@ -211,9 +223,9 @@ internal static class ResolverFixtures
     }
 
     /// <summary>A resolver over <paramref name="actions"/> with delays the test ends, fed with <paramref name="status"/>.</summary>
-    public static ConflictResolverViewModel Resolver(RecordingConflictActions actions, ManualDelays delays, WorkingTreeStatus status, string currentName = "main", string? ontoName = null)
+    public static ConflictResolverViewModel Resolver(RecordingConflictActions actions, ManualDelays delays, WorkingTreeStatus status, string currentName = "main", string? ontoName = null, TimeProvider? time = null)
     {
-        var resolver = new ConflictResolverViewModel(actions, delay: delays.Delay);
+        var resolver = new ConflictResolverViewModel(actions, delay: delays.Delay, time: time);
         resolver.Update(status, currentName, ontoName);
         return resolver;
     }

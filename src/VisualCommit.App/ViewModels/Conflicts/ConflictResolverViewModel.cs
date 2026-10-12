@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -68,6 +67,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private readonly IConflictActions _actions;
     private readonly IAppLog _log;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly TimeProvider _time;
 
     private IReadOnlyList<ConflictEntry> _conflicts = [];
     private InProgressState _inProgress = InProgressState.None;
@@ -91,12 +91,14 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     /// <param name="actions">The reads and writes of a conflicted file: the repository's operations.</param>
     /// <param name="log">Where failures are logged.</param>
     /// <param name="delay">Waits before a typed change is parsed (<see cref="Task.Delay(TimeSpan, CancellationToken)"/> unless a test holds it).</param>
-    public ConflictResolverViewModel(IConflictActions actions, IAppLog? log = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
+    /// <param name="time">The clock of the double-click guard (the system's unless a test holds it).</param>
+    public ConflictResolverViewModel(IConflictActions actions, IAppLog? log = null, Func<TimeSpan, CancellationToken, Task>? delay = null, TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(actions);
         _actions = actions;
         _log = log ?? NullAppLog.Instance;
         _delay = delay ?? Task.Delay;
+        _time = time ?? TimeProvider.System;
     }
 
     /// <summary>The resolver closed: every file is resolved, the operation ended, or the user left it. The repository hides it.</summary>
@@ -249,11 +251,11 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     [ObservableProperty]
     public partial IReadOnlyList<ConflictCardButton> CardButtons { get; private set; } = [];
 
-    /// <summary>When the resolver was last opened on a file from outside (<see cref="Stopwatch.GetTimestamp"/>), for the double-click guard (11.1).</summary>
+    /// <summary>When the resolver was last opened on a file from outside (the clock's <see cref="TimeProvider.GetTimestamp"/>), for the double-click guard (11.1).</summary>
     public long OpenedAt { get; private set; }
 
     /// <summary>Whether a press with a click count of 2 or more is still ignored: within <see cref="DoubleClickGuard"/> of opening (11.1).</summary>
-    public bool IsInDoubleClickGuard => OpenedAt != 0 && Stopwatch.GetElapsedTime(OpenedAt) < DoubleClickGuard;
+    public bool IsInDoubleClickGuard => OpenedAt != 0 && _time.GetElapsedTime(OpenedAt) < DoubleClickGuard;
 
     /// <summary>The result's caret, kept while another tab's resolver is shown.</summary>
     public int CaretOffset { get; set; }
@@ -351,7 +353,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     public Task OpenAsync(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        OpenedAt = Stopwatch.GetTimestamp();
+        OpenedAt = _time.GetTimestamp();
         return OpenFileAsync(path);
     }
 

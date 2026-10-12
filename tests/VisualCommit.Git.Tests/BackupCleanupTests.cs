@@ -250,6 +250,34 @@ public class BackupCleanupTests
         Assert.Single(await BackupNamesAsync(repo));
     }
 
+    [Fact]
+    public async Task Finding_the_backups_to_remove_names_what_the_clean_up_would_remove_and_deletes_nothing()
+    {
+        using var repo = await RepoAsync();
+        var old = Stamp(Now.AddDays(-31));
+        var older = Stamp(Now.AddDays(-40));
+        var recent = Stamp(Now.AddDays(-1));
+        await CreateRefsAsync(repo, $"reset-{old}", $"reset-{old}-changes", $"discard-{older}", $"branch-{recent}/feature/x");
+        var repository = await OpenAtNowAsync(repo, new ListLog());
+        var before = await BackupNamesAsync(repo);
+
+        var due = await repository.FindBackupsToRemoveAsync(BackupRetention.Default, NoKeep, cancellationToken: TestCancelled);
+
+        Assert.Equal([$"discard-{older}", $"reset-{old}"], due);
+        Assert.Equal(before, await BackupNamesAsync(repo));
+        Assert.Empty(await repository.FindBackupsToRemoveAsync(BackupRetention.Default, new HashSet<string>(StringComparer.Ordinal) { $"refs/visualcommit/backup/discard-{older}", $"refs/visualcommit/backup/reset-{old}" }, cancellationToken: TestCancelled));
+    }
+
+    [Fact]
+    public async Task Finding_the_backups_to_remove_finds_none_while_an_operation_is_in_progress()
+    {
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.Merge);
+        await CreateRefsAsync(repo, $"abort-{Stamp(Now.AddDays(-40))}");
+        var repository = await OpenAtNowAsync(repo, new ListLog());
+
+        Assert.Empty(await repository.FindBackupsToRemoveAsync(BackupRetention.Default, NoKeep, cancellationToken: TestCancelled));
+    }
+
     [Theory]
     [InlineData(Scenarios.InProgressKind.Merge)]
     [InlineData(Scenarios.InProgressKind.CherryPick)]

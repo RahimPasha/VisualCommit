@@ -265,17 +265,42 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     private string CurrentName() => Refs?.Head.BranchName ?? "HEAD";
 
     /// <summary>
-    /// The repository has opened and its first load is done (section 9 (b), D139): the backups'
-    /// clean-up runs as a background operation of the queue, <c>Clean up backups</c>, which shows
-    /// nothing and never fails; when the queue is busy now, the next backup or opening does it.
+    /// The repository has opened and its first load is done (section 9 (b), D139): the backups
+    /// the clean-up would remove are read outside the queue (a read), and only when there are any
+    /// does the clean-up run, as a background operation of the queue, <c>Clean up backups</c>,
+    /// which shows nothing and never fails; when the queue is busy then, the next backup or
+    /// opening does it. A repository with nothing to clean up never sees the operation.
     /// </summary>
-    private void OnFirstLoadCompleted()
-    {
-        if (_disposed)
-        {
-            return;
-        }
+    private void OnFirstLoadCompleted() => _ = CleanUpBackupsAtOpeningAsync();
 
+    private async Task CleanUpBackupsAtOpeningAsync()
+    {
+        try
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var due = await Repository.FindBackupsToRemoveAsync(BackupRetention.Default, BackupsToKeep, cancellationToken: _lifetime.Token);
+            if (due.Count == 0 || _disposed)
+            {
+                return;
+            }
+
+            StartBackupCleanUp();
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        catch (Exception ex)
+        {
+            _log.Warning($"{Name}: the backups to clean up could not be read; they stay.", ex);
+        }
+    }
+
+    private void StartBackupCleanUp()
+    {
         var cleanUp = new GitOperation(
             CleanUpBackupsTitle,
             string.Empty,
