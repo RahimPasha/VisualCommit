@@ -49,72 +49,80 @@ Start:
   nothing else running) is taken before the gate.
 - [x] 3. Phase 3's leftovers removed: the 29 `worktree-*` branches (all merged, deleted with
   `-d`) and seven git file-system monitor daemons of deleted worktrees.
-- [ ] 4. Open points decided and recorded: the owner's answers of 2026-10-12 (50 backups kept
+- [x] 4. Open points decided and recorded: the owner's answers of 2026-10-12 (50 backups kept
   besides the 30 days, the clean-up says nothing on screen, the resolver with ours and theirs
   above the result across the graph and right-panel area, the interactive rebase's list in the
   graph area with the newest commit on top); the design in `docs/phase-4-design.md`, its git
-  facts derived with Git 2.36, reviewed independently; decisions from D139 on.
-- [ ] 5. Phase 1's `Check_13_clone_with_progress` made deterministic (a clone held at a
+  facts derived with Git 2.36, reviewed independently; decisions from D139 on. Done: the design
+  (`74dda42`) after four reviews (git safety, UI and harnesses, coverage, code fit), D139 to D151.
+- [x] 5. Phase 1's `Check_13_clone_with_progress` made deterministic (a clone held at a
   percentage instead of a race), and the real-window project's comment on its duration corrected
-  (phase 3 handoff, "For the next phase", steps 3 and 5).
-- [ ] 6. Harness: phase 4's scenario repos (a plain rebase, an interactive rebase, conflicts in a
+  (phase 3 handoff, "For the next phase", steps 3 and 5). Done in WP-C13 (merged in `a6788d8`,
+  D150): a bare copy of the 100k-commit repository served by `AuthRemoteServer` on 127.0.0.1:47392,
+  held at 45 % (`Counting objects 45%`); checks 13 and 14 changed, recorded in phase 4's report.
+- [ ] 6. WP0: the contracts of design section 14 (types, `IGitRepository` members with stubs per
+  package, the queue's `CanBeCancelled`, the app's interfaces and their test fakes, the menu
+  context's facts, `EscapeOrder`, `CancelText`, the icons and tokens, the editor variables) and
+  the spike of design 11.3 (an editable AvaloniaEdit result and the generalised `DiffPane`, headless,
+  phase 2's pictures unchanged).
+- [ ] 7. Harness: phase 4's scenario repos (a plain rebase, an interactive rebase, conflicts in a
   merge, in a rebase with two conflicting commits and in a cherry-pick, the conflict kinds the
   resolver shows), pinned by tests; the project `VisualCommit.VisualTests.Phase4` in the
   solution, CI and `scripts/time-scripted-check.sh`; the driver helpers the checks need.
-- [ ] 7. Phase 4's visual checks written into `docs/test-reports/phase-4.md`, each marked for
+- [ ] 8. Phase 4's visual checks written into `docs/test-reports/phase-4.md`, each marked for
   the real-window pass, reviewed independently, and committed before the UI they test.
 
 Git layer:
 
-- [ ] 8. Rebase a branch onto a commit or branch (the current branch or another), with a backup
+- [ ] 9. Rebase a branch onto a commit or branch (the current branch or another), with a backup
   of the old tip first and no confirmation (D135); the rebase's stopped state read fully; Continue,
   Skip and Abort for a rebase. Tests.
-- [ ] 9. Interactive rebase with the app's own sequence editor: reorder, squash, fixup, reword,
+- [ ] 10. Interactive rebase with the app's own sequence editor: reorder, squash, fixup, reword,
   drop; squash of several selected commits. Tests.
-- [ ] 10. Several commits picked and reverted with one git command (D136); Continue and Skip for
+- [ ] 11. Several commits picked and reverted with one git command (D136); Continue and Skip for
   a merge, a cherry-pick and a revert, one or a list, also one started in a terminal; the
   in-progress state read so that the reftable ref format works too (D128). Tests.
-- [ ] 11. Pull with rebase chosen for one pull, whatever git's configuration says; Continue and
+- [ ] 12. Pull with rebase chosen for one pull, whatever git's configuration says; Continue and
   Skip after a pull's rebase. Tests, with `PullParityTests`.
-- [ ] 12. Conflicts: per file the base, ours and theirs, the kind of conflict and its hunks;
+- [ ] 13. Conflicts: per file the base, ours and theirs, the kind of conflict and its hunks;
   taking a whole file from one side; writing a result and marking it resolved; the external merge
   tool. Tests for every conflict kind.
-- [ ] 13. Backups cleaned up automatically (D137): after 30 days or beyond 50, the oldest first,
+- [ ] 14. Backups cleaned up automatically (D137): after 30 days or beyond 50, the oldest first,
   never one an operation in progress needs, when a repository is opened and after every new
   backup; logged, nothing on screen. Tests.
 
 App:
 
-- [ ] 14. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
+- [ ] 15. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
   the drop menu, squash on a multi-selection, pull with rebase, interactive rebase from a commit.
-- [ ] 15. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
+- [ ] 16. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
   (its message, and its button for a rebase or a list of picks).
-- [ ] 16. The interactive rebase list in the graph area, newest on top: an action per commit,
+- [ ] 17. The interactive rebase list in the graph area, newest on top: an action per commit,
   drag to reorder, the new message of a reword or squash, Start and Cancel.
-- [ ] 17. The conflict resolver across the graph and right-panel area: ours and theirs above the
+- [ ] 18. The conflict resolver across the graph and right-panel area: ours and theirs above the
   editable result, ours, theirs or both per conflict, a whole file from one side, mark resolved,
   the next and previous conflicted file, the external merge tool.
-- [ ] 18. Phases 0 to 3's checks updated for anything phase 4 changes on purpose, recorded under
+- [ ] 19. Phases 0 to 3's checks updated for anything phase 4 changes on purpose, recorded under
   "Changes to expected results" in the phase 4 report.
 
 Visual checks:
 
-- [ ] 19. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase4`,
+- [ ] 20. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase4`,
   screenshots under `artifacts/visual/phase-4/scripted/`.
-- [ ] 20. Real-window pass for the checks marked for it (`Phase4RealWindowPass`).
+- [ ] 21. Real-window pass for the checks marked for it (`Phase4RealWindowPass`).
 
 Closing:
 
-- [ ] 21. An independent review of the code before the gate; what it finds fixed, with tests.
-- [ ] 22. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+- [ ] 22. An independent review of the code before the gate; what it finds fixed, with tests.
+- [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed.
-- [ ] 23. CI run of the gate's commit read, every job.
-- [ ] 24. `architecture.md` describes what is built.
-- [ ] 25. `plan.md`: anything not delivered moved, risks updated.
-- [ ] 26. Handoff `docs/handoffs/phase-4.md`.
-- [ ] 27. Cold-read check by a fresh agent; gaps fixed.
-- [ ] 28. `status.md`: links, CI, gate commit, waiting on the owner, state.
-- [ ] 29. Owner told what passed, what did not, and what needs a decision.
+- [ ] 24. CI run of the gate's commit read, every job.
+- [ ] 25. `architecture.md` describes what is built.
+- [ ] 26. `plan.md`: anything not delivered moved, risks updated.
+- [ ] 27. Handoff `docs/handoffs/phase-4.md`.
+- [ ] 28. Cold-read check by a fresh agent; gaps fixed.
+- [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [ ] 30. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -166,9 +174,8 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 4: write `docs/phase-4-design.md` from the owner's answers of 2026-10-12, the phase 3
-handoff's open points ("For the next phase") and git facts derived with Git 2.36, have it reviewed
-independently, and record its decisions from D139 on. Step 2's run on `master` was started first.
+Step 6: WP0 as `docs/phase-4-design.md` section 14 lists it (the contracts and the spike), on the
+phase branch; then WP-S, WP1, WP2 and WP3 side by side in worktrees (section 14's order).
 
 This always names the single next thing to do and is kept accurate in every commit.
 
