@@ -102,6 +102,33 @@ public class InteractiveRebaseTests
     }
 
     [Fact]
+    public async Task A_fixup_target_stored_in_latin_1_keeps_its_letters()
+    {
+        // The review's finding 15: a commit made with i18n.commitEncoding=ISO-8859-1 stores its
+        // message in Latin-1 under an encoding header; its own message, which the group's amend
+        // commits, is read re-encoded to UTF-8 (git's own fixup re-encodes it too).
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("README.md", "readme\n");
+        await repo.CommitAsync("Initial commit");
+        await repo.CreateBranchAsync("topic");
+        await repo.CheckoutAsync("topic");
+        repo.WriteFile("cafe.txt", "cafe\n");
+        await repo.GitAsync("add", "cafe.txt");
+        var messageFile = Sibling(repo, "latin-1-message");
+        File.WriteAllBytes(messageFile, [.. "Caf"u8, 0xE9, .. " fix\n\n#2 "u8, 0xE9, (byte)'t', 0xE9, (byte)'\n']);
+        await repo.GitAsync("-c", "i18n.commitEncoding=ISO-8859-1", "commit", "--quiet", "--cleanup=verbatim", "--file", messageFile);
+        Assert.Contains("encoding ISO-8859-1", (await repo.GitAsync("cat-file", "commit", "HEAD")).StandardOutput, StringComparison.Ordinal);
+        await repo.CommitFileAsync("cafe.txt", "café\n", "Fix the cafe");
+        var (repository, list) = await OpenListAsync(repo);
+
+        var result = await repository.InteractiveRebaseAsync(Plan(list, Topic, Pick, Fixup), cancellationToken: TestCancelled);
+
+        Assert.Equal(RebaseOutcome.Rebased, result.Outcome);
+        Assert.Equal("Café fix\n\n#2 été\n", await MessageAsync(repo, "HEAD"));
+        Assert.Equal(["Café fix"], await SubjectsAsync(repo, $"{list.Onto}..HEAD"));
+    }
+
+    [Fact]
     public async Task A_reworded_commit_gets_the_new_message_exactly_and_keeps_its_author_and_date()
     {
         using var repo = await LineAsync();

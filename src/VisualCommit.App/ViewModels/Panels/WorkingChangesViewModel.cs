@@ -212,7 +212,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         : null;
 
     /// <summary>Why the banner's Continue is disabled for the state shown (5.1), or null.</summary>
-    private string? ContinueReason => ConflictBannerViewModel.ContinueFor(_status.InProgress, _conflicts).DisabledReason;
+    private string? ContinueReason => ConflictBannerViewModel.ContinueFor(_status.InProgress, _conflicts, _status.HasUnstagedTrackedChanges).DisabledReason;
 
     /// <summary>The label of the commit button that records a merge with nothing staged.</summary>
     public const string MergeCommitText = "Commit merge";
@@ -550,6 +550,20 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(run);
         var mark = MarkContinue();
         await run(ContinueMessage);
+        await AfterContinueAsync(mark);
+    }
+
+    /// <summary>
+    /// The banner's Skip (5.4): <paramref name="run"/> asks and skips; afterwards, when the
+    /// operation went on (another stopped commit, or nothing in progress), a message the user
+    /// typed for the skipped commit is cleared, as after a Continue, and the next stop's message
+    /// is filled in from the operation (the review's finding 17: it was committed at the next stop).
+    /// </summary>
+    public async Task SkipClearingMessageAsync(Func<Task> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var mark = MarkContinue();
+        await run();
         await AfterContinueAsync(mark);
     }
 

@@ -103,6 +103,13 @@ public sealed record PullResult(PullOutcome Outcome, int CommitCount)
     /// rebase that stopped (<see cref="PullOutcome.Conflicts"/>).
     /// </summary>
     public int LeftOutByForkPoint { get; init; }
+
+    /// <summary>
+    /// A pull's rebase that ended rebased, whose changes git stashed at its start
+    /// (<c>rebase.autoStash</c>) conflicted when put back: they are also kept in the stash
+    /// (docs/phase-4-design.md 1.4, <see cref="RebaseResult.AutostashConflicted"/>).
+    /// </summary>
+    public bool AutostashConflicted { get; init; }
 }
 
 /// <summary>How a pull integrates its upstream (docs/phase-4-design.md section 6, D147).</summary>

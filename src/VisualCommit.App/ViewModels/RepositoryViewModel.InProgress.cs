@@ -119,7 +119,7 @@ public sealed partial class RepositoryViewModel : IConflictMarkerQuestions
         var conflicts = status.Unstaged.Count(file => file.Kind == FileChangeKind.Conflicted);
         WorkingRowText = WorkingRowTextFor(conflicts);
         Operations.NoteStatus(status);
-        Banner.Show(status.InProgress, conflicts, OntoNameOf(status.InProgress), Refs?.Head.BranchName ?? "HEAD");
+        Banner.Show(status.InProgress, conflicts, OntoNameOf(status.InProgress), Refs?.Head.BranchName ?? "HEAD", status.HasUnstagedTrackedChanges);
     }
 
     /// <summary>
@@ -194,7 +194,9 @@ public sealed partial class RepositoryViewModel : IConflictMarkerQuestions
 
     /// <summary>
     /// The banner's Skip (5.4): asks 7.2's question ("Skip {short}?", D144), as Abort asks its own,
-    /// then hands it to <see cref="InProgressActions"/>, which saves the backup and skips.
+    /// then hands it to <see cref="InProgressActions"/>, which saves the backup and skips. A
+    /// message the user typed in the stage panel for the skipped commit goes with it
+    /// (<see cref="WorkingChangesViewModel.SkipClearingMessageAsync"/>).
     /// </summary>
     private async Task SkipInProgressAsync(InProgressState state)
     {
@@ -211,7 +213,7 @@ public sealed partial class RepositoryViewModel : IConflictMarkerQuestions
                 return;
             }
 
-            await actions.SkipAsync(state);
+            await Changes.SkipClearingMessageAsync(() => actions.SkipAsync(state));
         }
         catch (Exception ex)
         {

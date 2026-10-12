@@ -192,6 +192,55 @@ public class ConflictBannerTests
     }
 
     [Fact]
+    public void A_rebases_Continue_is_disabled_while_other_tracked_files_are_unstaged()
+    {
+        // The review's finding 1: git's --continue refuses while a tracked file that is not
+        // conflicted has unstaged changes, so Continue is disabled with its reason, after the
+        // conflicts' reason; a merge's or a pick's commit is not concerned.
+        const string reason = "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged";
+        var rebase = new InProgressState(InProgressKind.Rebase, Conflicting, "Conflicting change", "feature/x", MainWork, 0, false) { StopKind = RebaseStopKind.Pick, Done = 1, Total = 1 };
+        var merge = new InProgressState(InProgressKind.Merge, Conflicting, "Merge branch 'feature/conflict'", null, null, 0, false);
+        var inList = new InProgressState(InProgressKind.CherryPick, Conflicting, "Conflicting change", null, null, 1, false) { HasPickHead = true, Sequenced = true };
+
+        Assert.Equal(reason, OperationTexts.ContinueNeedsNothingUnstaged);
+        Assert.Equal((true, reason), ConflictBannerViewModel.ContinueFor(rebase, 0, otherUnstaged: true));
+        foreach (var kind in Enum.GetValues<RebaseStopKind>())
+        {
+            Assert.Equal((true, reason), ConflictBannerViewModel.ContinueFor(rebase with { StopKind = kind }, 0, otherUnstaged: true));
+        }
+
+        Assert.Equal((true, "Resolve the conflicts first (1 file)"), ConflictBannerViewModel.ContinueFor(rebase, 1, otherUnstaged: true));
+        Assert.Equal((true, (string?)null), ConflictBannerViewModel.ContinueFor(merge, 0, otherUnstaged: true));
+        Assert.Equal((true, (string?)null), ConflictBannerViewModel.ContinueFor(inList, 0, otherUnstaged: true));
+
+        var banner = new ConflictBannerViewModel(_ => Task.CompletedTask, _ => Task.CompletedTask, _ => Task.CompletedTask);
+        banner.Show(rebase, 0, "main", "HEAD", otherUnstaged: true);
+        Assert.Equal((true, false, reason), (banner.HasContinue, banner.CanContinue, banner.ContinueToolTip));
+        Assert.False(banner.ContinueCommand.CanExecute(null));
+        banner.Show(rebase, 0, "main", "HEAD");
+        Assert.Equal((true, true, (string?)null), (banner.HasContinue, banner.CanContinue, banner.ContinueToolTip));
+    }
+
+    [Fact]
+    public void Which_unstaged_changes_stop_a_rebases_Continue()
+    {
+        // Tracked, not conflicted, not a submodule (git's --continue runs diff-files with
+        // --ignore-submodules); untracked files and staged changes do not count.
+        static WorkingTreeStatus Status(IReadOnlyList<ChangedFile> unstaged, IReadOnlySet<string>? untracked = null, IReadOnlySet<string>? submodules = null) =>
+            new([new ChangedFile("staged.txt", FileChangeKind.Modified)], unstaged, untracked ?? new HashSet<string>(StringComparer.Ordinal))
+            {
+                Submodules = submodules ?? new HashSet<string>(StringComparer.Ordinal),
+            };
+
+        Assert.False(Status([]).HasUnstagedTrackedChanges);
+        Assert.True(Status([new ChangedFile("g.txt", FileChangeKind.Modified)]).HasUnstagedTrackedChanges);
+        Assert.True(Status([new ChangedFile("gone.txt", FileChangeKind.Deleted)]).HasUnstagedTrackedChanges);
+        Assert.False(Status([new ChangedFile("f.txt", FileChangeKind.Conflicted)]).HasUnstagedTrackedChanges);
+        Assert.False(Status([new ChangedFile("new.txt", FileChangeKind.Added)], untracked: new HashSet<string>(["new.txt"], StringComparer.Ordinal)).HasUnstagedTrackedChanges);
+        Assert.False(Status([new ChangedFile("sub", FileChangeKind.Modified)], submodules: new HashSet<string>(["sub"], StringComparer.Ordinal)).HasUnstagedTrackedChanges);
+    }
+
+    [Fact]
     public void The_icon_and_text_tooltip_says_what_each_button_does()
     {
         // docs/phase-4-design.md 10.3.

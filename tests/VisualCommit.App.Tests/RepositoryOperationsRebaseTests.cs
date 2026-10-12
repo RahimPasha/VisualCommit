@@ -198,6 +198,39 @@ public class RepositoryOperationsRebaseTests
     }
 
     [Fact]
+    public async Task A_rebase_that_stops_with_nothing_to_look_at_opens_the_Rebase_stopped_dialog_with_gits_output()
+    {
+        // The review's finding 23 (design 5.1, amending D95): the second pick is rescheduled
+        // because an untracked in.txt is in the way; no file conflicts, so the error dialog
+        // "Rebase stopped" says what the banner says, with git's output and command.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("README.md", "readme\n", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        var main = await repo.CommitFileAsync("main.txt", "main\n", "Main work");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("x.txt", "x\n", "X first");
+        var addIn = await repo.CommitFileAsync("in.txt", "tracked\n", "Add in");
+        repo.DeleteFile("in.txt");
+        await repo.CommitAsync("Remove in");
+        repo.WriteFile("in.txt", "untracked\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.RebaseAsync(new RebaseTarget(main, "main"));
+
+        Assert.Equal(($"Rebase stopped at {addIn[..7]} \"Add in\"", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        var state = app.Operations.Status.InProgress;
+        Assert.Equal((RebaseStopKind.Rescheduled, addIn), (state.StopKind!.Value, state.Commit));
+        var banner = $"Rebasing topic onto main: git could not apply {addIn[..7]} \"Add in\" (2 of 3): an untracked file is in the way. Move or remove it, then continue.";
+        Assert.Equal(banner, app.Repository.Banner.Text);
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Rebase stopped", banner, $"git rebase {main}"), (dialog.Title, dialog.Summary, dialog.Command));
+        Assert.False(string.IsNullOrWhiteSpace(dialog.Output), "The dialog shows git's output.");
+        Assert.Equal("untracked\n", Read(repo, "in.txt"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task Check_out_and_rebase_checks_the_branch_out_rebases_it_and_selects_its_new_tip()
     {
         using var repo = await Scenarios.RebaseAsync();
@@ -248,6 +281,36 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal(1, calls[autoStash].ExitCode);
         Assert.Contains(calls.Skip(autoStash + 1), call => call.CommandText.StartsWith("git status ", StringComparison.Ordinal));
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Check_out_and_rebase_goes_on_over_a_moved_submodule_as_git_rebase_does()
+    {
+        // The review's finding 21: git's rebase leaves submodules out of its clean-tree check
+        // (1 .M SC.. sub: the submodule is at another commit), so the app's own check does too.
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("README.md", "readme\n");
+        await repo.GitAsync("init", "--quiet", "sub");
+        await repo.GitAsync("-C", "sub", "commit", "--quiet", "--allow-empty", "-m", "One");
+        var one = (await repo.GitAsync("-C", "sub", "rev-parse", "HEAD")).StandardOutput.Trim();
+        await repo.GitAsync("add", "README.md");
+        await repo.GitAsync("update-index", "--add", "--cacheinfo", $"160000,{one},sub");
+        await repo.GitAsync("commit", "--quiet", "-m", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        var main = await repo.CommitFileAsync("main.txt", "main\n", "Main work");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("topic.txt", "topic\n", "Topic work");
+        await repo.CheckoutAsync("main");
+        await repo.GitAsync("-C", "sub", "commit", "--quiet", "--allow-empty", "-m", "Two");
+        Assert.StartsWith("1 .M S", (await repo.GitAsync("status", "--porcelain=v2")).StandardOutput, StringComparison.Ordinal);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.CheckoutAndRebaseAsync("refs/heads/topic", new RebaseTarget(main, "main"));
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Rebased topic onto main", app.StatusText);
+        Assert.Equal("topic", await repo.CurrentBranchAsync());
+        Assert.Equal(main, (await repo.GitAsync("rev-parse", "topic~1")).StandardOutput.Trim());
     }
 
     [Fact]
@@ -331,6 +394,30 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal(("Interactive rebase failed", "feature/topic changed while the list was open: open it again. Nothing was rebased."), (dialog.Title, dialog.Summary));
         Assert.Single(await repo.BackupRefsAsync());
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task An_interactive_rebase_whose_stashed_changes_conflict_when_put_back_says_so_in_the_warning_colour()
+    {
+        // The review's findings 12 and 19: rebase.autoStash stashes the change of src/core.txt,
+        // which main changed too; git rebases, puts it back with conflicts and exits 0 (1.4).
+        using var repo = await Scenarios.RebaseAsync();
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("src/core.txt", "mine\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var list = await app.Repository.Repository.ReadRebaseListAsync(MainMore, "refs/heads/feature/topic", fromCommit: false, options: null, TestContext.Current.CancellationToken);
+        var request = new InteractiveRebaseRequest(new RebaseTarget(MainMore, "main"), "refs/heads/feature/topic", FromHere: false, CheckoutFirst: false);
+        var plan = new RebasePlan(list.Onto, list.BranchTip, "refs/heads/feature/topic", [new RebaseStep(TopicOne, RebaseAction.Drop, null), new RebaseStep(TopicTwo, RebaseAction.Pick, null)]);
+
+        Assert.True(await app.Operations.RunInteractiveRebaseAsync(plan, request));
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(
+            ("Rebased feature/topic: 1 commit; your changes conflicted when put back: they are also kept in the stash", OperationStatusTone.Warning),
+            (app.StatusText, app.StatusTone));
+        Assert.Equal(["Topic two", "Main more", "Main work", "Add core", "Initial commit"], await SubjectsAsync(repo, "feature/topic"));
+        Assert.Equal("1 file has conflicts. Resolve it, then stage it.", app.Repository.Banner.Text);
+        Assert.Single(await repo.StashListAsync());
     }
 
     [Fact]
@@ -440,8 +527,9 @@ public class RepositoryOperationsRebaseTests
         await ahead;
         await waiting;
 
+        // A squash has no list to open again (the review's finding 16).
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Squash failed", "main changed while the list was open: open it again. Nothing was rebased."), (dialog.Title, dialog.Summary));
+        Assert.Equal(("Squash failed", "main changed while this waited: select the commits again. Nothing was squashed."), (dialog.Title, dialog.Summary));
         Assert.True(string.IsNullOrEmpty(dialog.Output), "The app's own refusal shows no git output.");
         Assert.Empty(await repo.BackupRefsAsync());
         Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));

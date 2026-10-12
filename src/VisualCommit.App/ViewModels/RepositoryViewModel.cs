@@ -613,6 +613,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 var snapshot = await Repository.SaveSnapshotAsync(paths, cancellationToken);
                 await Repository.DiscardAsync(paths, untracked, cancellationToken);
                 await RememberDiscardAsync(snapshot, cancellationToken);
+
+                // The snapshot is a backup (design 9, D139): the clean-up follows, keeping it as
+                // the restore bar's (the review's finding 22).
+                await Operations.CleanUpBackupsAsync();
             });
     }
 
@@ -652,6 +656,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 _lastSnapshot = null;
                 _afterDiscard = null;
                 Changes.HideRestore();
+                if (changed.Count > 0)
+                {
+                    // The newer changes' snapshot is a backup too (D139).
+                    await Operations.CleanUpBackupsAsync();
+                }
             });
     }
 
@@ -748,6 +757,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 if (snapshot is not null)
                 {
                     await RememberDiscardAsync(snapshot, cancellationToken);
+                    await Operations.CleanUpBackupsAsync(); // As after a discard (D139).
                 }
             });
     }

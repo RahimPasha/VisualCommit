@@ -198,6 +198,33 @@ public class WorkingChangesInProgressTests
     }
 
     [Fact]
+    public async Task A_message_typed_for_a_skipped_commit_goes_with_it_and_the_next_stop_fills_its_own()
+    {
+        // The review's finding 17: the message typed for X stayed after the banner's Skip and was
+        // committed at the next stop, with Y's own message lost.
+        var host = new FakeHost { OperationMessage = "First change\n" };
+        var panel = Panel(host);
+        panel.Update(Status([], [Conflicted], RebaseStop), hasHead: true);
+        panel.Summary = "First change, corrected";
+        panel.Description = "#3 typed";
+
+        await panel.SkipClearingMessageAsync(() =>
+        {
+            host.OperationMessage = "Second change\n";
+            panel.Update(Status([], [Conflicted], RebaseStop with { Commit = new string('5', 40), Done = 2 }), hasHead: true);
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal(("Second change", string.Empty), (panel.Summary, panel.Description));
+        Assert.Null(panel.ContinueMessage);
+
+        // A Skip that did not go on (cancelled at its question, refused) keeps what was typed.
+        panel.Summary = "Typed for the second";
+        await panel.SkipClearingMessageAsync(() => Task.CompletedTask);
+        Assert.Equal("Typed for the second", panel.Summary);
+    }
+
+    [Fact]
     public void The_message_is_filled_once_per_stopped_commit_with_its_own_hash_lines_and_cleared_when_it_goes_on()
     {
         // The git layer leaves out git's comment block (ReadOperationMessageAsync); a commit's own

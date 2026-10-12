@@ -241,7 +241,8 @@ public sealed partial class GitRepository
     /// <paramref name="arguments"/> (<c>git rebase</c>, with <c>--rebase-merges</c> for
     /// <c>pull.rebase=merges</c>) and classifies it (1.4): any stop is
     /// <see cref="PullOutcome.Conflicts"/>, a refusal throws, HEAD where it was is
-    /// <see cref="PullOutcome.UpToDate"/>.
+    /// <see cref="PullOutcome.UpToDate"/>. Changes <c>rebase.autoStash</c> put back with
+    /// conflicts are told by <see cref="PullResult.AutostashConflicted"/>.
     /// </summary>
     private async Task<PullResult> PullRebaseAsync(
         string upstreamRef,
@@ -269,11 +270,11 @@ public sealed partial class GitRepository
         var after = await ReadPullHeadAsync(cancellationToken).ConfigureAwait(false);
         if (after is null || after == before)
         {
-            return new PullResult(PullOutcome.UpToDate, 0) { LeftOutByForkPoint = leftOut };
+            return new PullResult(PullOutcome.UpToDate, 0) { LeftOutByForkPoint = leftOut, AutostashConflicted = rebase.AutostashConflicted };
         }
 
         var count = await CountPulledCommitsAsync(before, cancellationToken).ConfigureAwait(false);
-        return new PullResult(PullOutcome.Rebased, count) { LeftOutByForkPoint = leftOut };
+        return new PullResult(PullOutcome.Rebased, count) { LeftOutByForkPoint = leftOut, AutostashConflicted = rebase.AutostashConflicted };
     }
 
     /// <summary>

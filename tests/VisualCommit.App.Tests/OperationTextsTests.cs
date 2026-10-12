@@ -204,6 +204,14 @@ public class OperationTextsTests
         Assert.Equal("Git rebases only a clean working tree: commit or stash your changes first.", OperationTexts.RebaseNeedsCleanTree);
         Assert.Equal("Untracked files are in the way: move or remove them first.", OperationTexts.RebaseUntrackedInTheWay);
         Assert.Equal("main changed while the list was open: open it again. Nothing was rebased.", OperationTexts.ChangedWhileListOpen("main"));
+        Assert.Equal("main changed while this waited: select the commits again. Nothing was squashed.", OperationTexts.ChangedWhileSquashWaited("main"));
+        Assert.Equal("HEAD moved while this waited: select the commits again. Nothing was squashed.", OperationTexts.HeadMovedSinceSquash);
+        Assert.Equal(
+            "HEAD moved while this waited: it was on main and is on other now. Nothing was squashed.",
+            OperationTexts.HeadMoved(new HeadState("main", Sha), new HeadState("other", Sha), OperationTexts.NothingSquashed));
+        Assert.Equal(
+            "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged",
+            OperationTexts.ContinueNeedsNothingUnstaged);
         Assert.Equal("The rebase changed while this waited: look at it again. Nothing was continued.", OperationTexts.StateChangedWhileWaiting(InProgressKind.Rebase, OperationTexts.NothingContinued));
     }
 
@@ -215,6 +223,15 @@ public class OperationTextsTests
         Assert.Equal(
             "Rebased feature/topic onto main; your changes conflicted when put back: they are also kept in the stash",
             OperationTexts.RebasedAutostashConflicted("feature/topic", "main"));
+        Assert.Equal(
+            "Rebased main: 2 commits; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.InteractiveRebased("main", 2)));
+        Assert.Equal(
+            "Squashed 2 commits into a1b2c3d; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.Squashed(2, Sha)));
+        Assert.Equal(
+            "Pulled and rebased main onto origin/main; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.PulledRebased("main", "origin/main")));
         Assert.Equal("Rebased main: 1 commit", OperationTexts.InteractiveRebased("main", 1));
         Assert.Equal("Rebased main: 4 commits", OperationTexts.InteractiveRebased("main", 4));
         Assert.Equal("Squashed 2 commits into a1b2c3d", OperationTexts.Squashed(2, Sha));
@@ -229,6 +246,9 @@ public class OperationTextsTests
         Assert.Equal(
             "Pulled and rebased main onto origin/main; git left out 1 commit that origin/main once had",
             OperationTexts.PulledRebasedLeftOut("main", "origin/main", 1));
+        Assert.Equal(
+            "Pull stopped: 1 file has conflicts; git left out 2 commits that origin/main once had",
+            OperationTexts.WithLeftOutByForkPoint(OperationTexts.PullConflicts(1), "origin/main", 2));
         Assert.Equal("Resolved notes.txt", OperationTexts.Resolved("notes.txt"));
         Assert.Equal("Resolved notes.txt in meld", OperationTexts.ResolvedInTool("notes.txt", "meld"));
         Assert.Equal("meld closed without resolving notes.txt", OperationTexts.ToolClosedWithoutResolving("meld", "notes.txt"));
@@ -243,6 +263,21 @@ public class OperationTextsTests
             ("Skip a1b2c3d?", "\"Add core\" is left out of the rebase, and changes made to resolve its conflicts are lost.", "A backup is saved first, so this can be undone.", "Skip", true),
             (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
         Assert.Contains("left out of the cherry-pick", OperationTexts.ConfirmSkip(new InProgressState(InProgressKind.CherryPick, Sha, "Add core", null, null, 0, false)).Question, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Skip_at_the_apps_failed_amend_asks_about_the_new_message_not_the_commit()
+    {
+        // The review's finding 18: Skip there keeps the commit with its old message (5.2's banner:
+        // "Skip goes on without it").
+        var state = new InProgressState(InProgressKind.Rebase, Sha, "Add login", "main", Sha, 0, false) { StopKind = RebaseStopKind.OwnAmendFailed, Group = 1 };
+
+        var question = OperationTexts.ConfirmSkip(state);
+
+        Assert.Equal(
+            ("Skip the new message of a1b2c3d?", "\"Add login\" keeps its old message, and the rebase goes on.", "A backup is saved first, so this can be undone.", "Skip", true),
+            (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
+        Assert.Contains("is left out of the rebase", OperationTexts.ConfirmSkip(state with { StopKind = RebaseStopKind.Pick }).Question, StringComparison.Ordinal);
     }
 
     [Fact]

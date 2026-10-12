@@ -206,6 +206,15 @@ public sealed partial class GitRepository
         {
             kind = RebaseStopKind.Rescheduled;
         }
+        else if (stoppedSha is null && pickHead is null && lastDone is { IsCommitCommand: true } && firstTodo is { } waiting && MessageGroup(waiting) is { } rescheduledGroup)
+        {
+            // The app's amend failed and git rescheduled it (rebase.rescheduleFailedExec): it is
+            // the first line of git-rebase-todo again, and Git 2.36 ends done with the commit
+            // command before it a second time. Nothing else stops before the amend without a
+            // stopped-sha or a pick head (the review's finding 13).
+            group = rescheduledGroup;
+            kind = RebaseStopKind.OwnAmendFailed;
+        }
         else if (lastDone is { Command: "exec" } exec)
         {
             group = MessageGroup(exec);

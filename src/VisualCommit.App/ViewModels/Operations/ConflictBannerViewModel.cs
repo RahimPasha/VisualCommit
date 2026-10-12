@@ -133,9 +133,11 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
     /// conflicted files, for a rebase <paramref name="ontoName"/>, the name of a branch that
     /// points at its new base (null when none does; docs/phase-4-design.md 5.2, 14.3), and
     /// <paramref name="currentName"/>, what HEAD is on as the menus name it (<c>{cur}</c> of the
-    /// tooltip, 10.3; "HEAD" when null).
+    /// tooltip, 10.3; "HEAD" when null), and whether <paramref name="otherUnstaged"/> tracked files
+    /// that are not conflicted have unstaged changes (<see cref="WorkingTreeStatus.HasUnstagedTrackedChanges"/>:
+    /// a rebase's Continue is disabled then).
     /// </summary>
-    public void Show(InProgressState state, int conflicts, string? ontoName, string? currentName = null)
+    public void Show(InProgressState state, int conflicts, string? ontoName, string? currentName = null, bool otherUnstaged = false)
     {
         ArgumentNullException.ThrowIfNull(state);
         State = state;
@@ -147,7 +149,7 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
         AbortText = state.IsActive ? AbortButtonText(state.Kind) : string.Empty;
         ToolTip = ToolTipFor(state, conflicts, currentName ?? "HEAD");
 
-        var (hasContinue, continueReason) = ContinueFor(state, conflicts);
+        var (hasContinue, continueReason) = ContinueFor(state, conflicts, otherUnstaged);
         (HasContinue, CanContinue, ContinueToolTip) = (hasContinue, hasContinue && continueReason is null, continueReason);
         var (hasSkip, skipReason) = SkipFor(state);
         (HasSkip, CanSkip, SkipToolTip) = (hasSkip, hasSkip && skipReason is null, skipReason);
@@ -218,14 +220,24 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
     /// <summary>
     /// Whether the banner offers Continue for <paramref name="state"/> with
     /// <paramref name="conflicts"/> conflicted files (5.1), and why it is disabled (10.4; null
-    /// while it is enabled). The stage panel's "Continue …" button follows it (5.3).
+    /// while it is enabled). The stage panel's "Continue …" button follows it (5.3). At a rebase
+    /// stop, <paramref name="otherUnstaged"/> (a tracked file that is not conflicted has unstaged
+    /// changes, <see cref="WorkingTreeStatus.HasUnstagedTrackedChanges"/>) disables it after the
+    /// conflicts' reason: git's <c>--continue</c> refuses then
+    /// (<see cref="OperationTexts.ContinueNeedsNothingUnstaged"/>).
     /// </summary>
-    public static (bool Shown, string? DisabledReason) ContinueFor(InProgressState state, int conflicts)
+    public static (bool Shown, string? DisabledReason) ContinueFor(InProgressState state, int conflicts, bool otherUnstaged = false)
     {
         ArgumentNullException.ThrowIfNull(state);
         var resolveFirst = conflicts > 0 ? ResolveConflictsFirst(conflicts) : null;
         var shortSha = Short(state.Commit ?? string.Empty);
-        switch (StopOf(state, conflicts))
+        var stop = StopOf(state, conflicts);
+        if (stop == Stop.Rebase && resolveFirst is null && otherUnstaged)
+        {
+            return (true, OperationTexts.ContinueNeedsNothingUnstaged);
+        }
+
+        switch (stop)
         {
             case Stop.Merge or Stop.Single or Stop.InList:
                 return (true, resolveFirst);

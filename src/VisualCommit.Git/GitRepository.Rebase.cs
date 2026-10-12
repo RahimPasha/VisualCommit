@@ -56,11 +56,14 @@ public sealed partial class GitRepository
     /// The commits an interactive rebase of <paramref name="branch"/> would replay (2.3), read from
     /// the branch's tip as it is now, which the list keeps as <see cref="RebaseList.BranchTip"/>.
     /// "From here": <c>git log --reverse --topo-order &lt;onto&gt;..&lt;tip&gt;</c>; otherwise the commits
-    /// git's own todo holds, <c>git log --reverse --topo-order --no-merges --right-only
-    /// --cherry-pick &lt;onto&gt;...&lt;tip&gt;</c> (commits whose patch is already upstream left
-    /// out; commits that start empty kept, as git keeps them). Each with its subject, author name
-    /// and whole message (<c>%B</c>, re-encoded to UTF-8). The merge count is
-    /// <c>git rev-list --merges --count &lt;onto&gt;..&lt;tip&gt;</c> in both cases.
+    /// git's own todo holds, as git's sequencer chooses them: <c>git log --reverse --topo-order
+    /// --no-merges --right-only --cherry-mark &lt;onto&gt;...&lt;tip&gt;</c>, less the commits
+    /// marked <c>=</c> (their patch is already upstream) that do not start empty. A commit that
+    /// starts empty (its tree is its first parent's) is kept even when marked, as git keeps it:
+    /// every empty commit has the same patch id, so <c>--cherry-pick</c> would drop a branch's
+    /// empty commit whenever the target side has one too (the review's findings 2 and 3). Each
+    /// with its subject, author name and whole message (<c>%B</c>, re-encoded to UTF-8). The merge
+    /// count is <c>git rev-list --merges --count &lt;onto&gt;..&lt;tip&gt;</c> in both cases.
     /// </summary>
     /// <exception cref="GitException"><paramref name="onto"/> or <paramref name="branch"/> names no commit.</exception>
     public async Task<RebaseList> ReadRebaseListAsync(string onto, string branch, bool fromCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default)
@@ -72,13 +75,47 @@ public sealed partial class GitRepository
 
         string[] range = fromCommit
             ? [$"{ontoSha}..{tip}"]
-            : ["--no-merges", "--right-only", "--cherry-pick", $"{ontoSha}...{tip}"];
+            : ["--no-merges", "--right-only", "--cherry-mark", $"{ontoSha}...{tip}"];
         var log = await ReadOutputAsync(
             cancellationToken,
-            ["log", "--no-show-signature", "--no-color", "--encoding=UTF-8", "-z", "--format=%H%x00%an%x00%s%x00%B", "--reverse", "--topo-order", .. range, "--"])
+            ["log", "--no-show-signature", "--no-color", "--encoding=UTF-8", "-z", $"--format={RebaseText.ListFormat}", "--reverse", "--topo-order", .. range, "--"])
             .ConfigureAwait(false);
+        var commits = RebaseText.ParseListCommits(log);
+        if (!fromCommit)
+        {
+            commits = await WithoutPatchesUpstreamAsync(commits, cancellationToken).ConfigureAwait(false);
+        }
+
         var merges = ParseCount(await ReadOutputAsync(cancellationToken, "rev-list", "--merges", "--count", $"{ontoSha}..{tip}", "--").ConfigureAwait(false));
-        return new RebaseList(ontoSha, tip, RebaseText.ParseListEntries(log), merges);
+        return new RebaseList(ontoSha, tip, [.. commits.Select(commit => commit.Entry)], merges);
+    }
+
+    /// <summary>
+    /// <paramref name="commits"/> without those whose patch is upstream (<c>--cherry-mark</c>'s
+    /// <c>=</c>) and that do not start empty, as git's sequencer leaves them out of its todo
+    /// (<c>if (!is_empty &amp;&amp; (flags &amp; PATCHSAME)) continue;</c>): a commit starts empty when its
+    /// tree is its first parent's, or the empty tree for a root commit. The parents' trees of the
+    /// marked commits are read with one <c>git rev-parse</c>.
+    /// </summary>
+    private async Task<IReadOnlyList<RebaseText.ListCommit>> WithoutPatchesUpstreamAsync(IReadOnlyList<RebaseText.ListCommit> commits, CancellationToken cancellationToken)
+    {
+        var marked = commits.Where(commit => commit.PatchUpstream && commit.FirstParent is not null).ToList();
+        var parentTrees = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (marked.Count > 0)
+        {
+            var trees = (await ReadOutputAsync(cancellationToken, ["rev-parse", .. marked.Select(commit => commit.FirstParent + "^{tree}")]).ConfigureAwait(false))
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            for (var i = 0; i < marked.Count && i < trees.Length; i++)
+            {
+                parentTrees[marked[i].Entry.Sha] = trees[i];
+            }
+        }
+
+        return [.. commits.Where(commit => !commit.PatchUpstream || StartsEmpty(commit))];
+
+        bool StartsEmpty(RebaseText.ListCommit commit) => commit.FirstParent is null
+            ? RebaseText.EmptyTrees.Contains(commit.Tree, StringComparer.OrdinalIgnoreCase)
+            : parentTrees.TryGetValue(commit.Entry.Sha, out var parentTree) && string.Equals(parentTree, commit.Tree, StringComparison.OrdinalIgnoreCase);
     }
 
     public Task<RebaseResult> InteractiveRebaseAsync(RebasePlan plan, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
@@ -92,7 +129,7 @@ public sealed partial class GitRepository
     /// <item>Refuses (<see cref="RebaseHeadMovedMessage"/>) unless HEAD is on
     /// <see cref="RebasePlan.BranchRef"/> at <see cref="RebasePlan.ExpectedTip"/>.</item>
     /// <item>Builds the todo and its message files (<see cref="RebaseTodo"/>), reading the own
-    /// messages it needs exactly (<c>git cat-file commit</c>, after the header), and writes them
+    /// messages it needs exactly (<see cref="ReadOwnMessageAsync"/>, in UTF-8), and writes them
     /// as UTF-8 without a byte order mark into <c>&lt;tempRoot&gt;/visualcommit-rebase-&lt;guid&gt;</c>.</item>
     /// <item>Runs <c>git rebase -i &lt;onto&gt;</c> with <c>GIT_SEQUENCE_EDITOR</c> set for this
     /// call to a shell function that copies each message file next to git's todo and the todo
@@ -179,14 +216,17 @@ public sealed partial class GitRepository
             || result.StandardError.Contains("may have been dropped accidentally", StringComparison.Ordinal));
 
     /// <summary>
-    /// A commit's message exactly as git keeps it: the part of <c>git cat-file commit</c> after the
-    /// header's first empty line, its <c>#</c> lines and white space included (2.5).
+    /// A commit's message exactly as git keeps it, its <c>#</c> lines and white space included
+    /// (2.5), in UTF-8: <c>git log -1 --encoding=UTF-8 -z --format=%B &lt;sha&gt;</c>, which gives the
+    /// raw message re-encoded from the commit's <c>encoding</c> header and ends it with a NUL
+    /// (taken off). The raw <c>git cat-file commit</c> would hand a commit made with
+    /// <c>i18n.commitEncoding=ISO-8859-1</c> to the UTF-8 decoder, and every non-ASCII letter
+    /// would become U+FFFD in the rewritten commit (the review's finding 15).
     /// </summary>
     private async Task<string> ReadOwnMessageAsync(string commit, CancellationToken cancellationToken)
     {
-        var raw = await ReadOutputAsync(cancellationToken, "cat-file", "commit", commit).ConfigureAwait(false);
-        var end = raw.IndexOf("\n\n", StringComparison.Ordinal);
-        return end < 0 ? string.Empty : raw[(end + 2)..];
+        var raw = await ReadOutputAsync(cancellationToken, "log", "-1", "--no-show-signature", "--no-color", "--encoding=UTF-8", "-z", "--format=%B", commit, "--").ConfigureAwait(false);
+        return raw.EndsWith('\0') ? raw[..^1] : raw;
     }
 
     /// <summary>The full id of the commit <paramref name="revision"/> names, or a <see cref="GitException"/> with git's text.</summary>
@@ -251,26 +291,52 @@ public sealed partial class GitRepository
         public static string Quote(string path) => "'" + path.Replace('\\', '/').Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
         /// <summary>
-        /// The entries of <c>git log -z --format=%H%x00%an%x00%s%x00%B</c>: four fields per commit,
-        /// each commit ended by a NUL. The message keeps its line feeds; a carriage return git did
-        /// not write is not added.
+        /// The list's <c>git log</c> format (2.3): the mark (<c>=</c> for a commit whose patch is
+        /// upstream under <c>--cherry-mark</c>), the SHA, its tree, its parents, the author's name,
+        /// the subject and the whole message, NUL-separated (with <c>-z</c>, each commit ended by a NUL).
         /// </summary>
-        public static IReadOnlyList<RebaseListEntry> ParseListEntries(string output)
+        public const string ListFormat = "%m%x00%H%x00%T%x00%P%x00%an%x00%s%x00%B";
+
+        /// <summary>The empty tree's id, SHA-1 and SHA-256: a root commit with it starts empty.</summary>
+        public static readonly string[] EmptyTrees =
+        [
+            "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+            "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+        ];
+
+        /// <summary>One commit of <see cref="ListFormat"/>'s output.</summary>
+        /// <param name="Entry">What the list shows of it.</param>
+        /// <param name="PatchUpstream">Marked <c>=</c>: its patch is already upstream.</param>
+        /// <param name="Tree">Its tree.</param>
+        /// <param name="FirstParent">Its first parent, or null for a root commit.</param>
+        public sealed record ListCommit(RebaseListEntry Entry, bool PatchUpstream, string Tree, string? FirstParent);
+
+        /// <summary>
+        /// The commits of <c>git log -z --format=</c><see cref="ListFormat"/>: seven fields per
+        /// commit, each commit ended by a NUL. The message keeps its line feeds; a carriage return
+        /// git did not write is not added.
+        /// </summary>
+        public static IReadOnlyList<ListCommit> ParseListCommits(string output)
         {
             var fields = output.Split('\0');
-            var entries = new List<RebaseListEntry>();
-            for (var i = 0; i + 3 < fields.Length; i += 4)
+            var commits = new List<ListCommit>();
+            for (var i = 0; i + 6 < fields.Length; i += 7)
             {
-                var sha = fields[i].Trim();
+                var sha = fields[i + 1].Trim();
                 if (sha.Length == 0)
                 {
                     break;
                 }
 
-                entries.Add(new RebaseListEntry(sha, fields[i + 2], fields[i + 1], fields[i + 3]));
+                var parents = fields[i + 3].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                commits.Add(new ListCommit(
+                    new RebaseListEntry(sha, fields[i + 5], fields[i + 4], fields[i + 6]),
+                    fields[i].Trim() == "=",
+                    fields[i + 2].Trim(),
+                    parents.Length > 0 ? parents[0] : null));
             }
 
-            return entries;
+            return commits;
         }
     }
 }

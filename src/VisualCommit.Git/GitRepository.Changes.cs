@@ -35,13 +35,15 @@ public sealed partial class GitRepository
     /// against the index; <c>.</c> means unchanged. An unmerged entry is an unstaged
     /// <see cref="FileChangeKind.Conflicted"/> file and a <see cref="ConflictEntry"/> of
     /// <see cref="WorkingTreeStatus.Conflicts"/> with its kind, modes and stage ids as git prints
-    /// them (docs/phase-4-design.md 0.4).
+    /// them (docs/phase-4-design.md 0.4). An ordinary or renamed entry whose <c>sub</c> field
+    /// starts with <c>S</c> is a submodule: its path is also in <see cref="WorkingTreeStatus.Submodules"/>.
     /// </summary>
     internal static WorkingTreeStatus ParseStatus(string output)
     {
         var staged = new List<ChangedFile>();
         var unstaged = new List<ChangedFile>();
         var untracked = new HashSet<string>(StringComparer.Ordinal);
+        var submodules = new HashSet<string>(StringComparer.Ordinal);
         var conflicts = new List<ConflictEntry>();
         var entries = output.Split('\0');
         for (var i = 0; i < entries.Length; i++)
@@ -63,7 +65,7 @@ public sealed partial class GitRepository
                         continue;
                     }
 
-                    AddEntry(fields[1], fields[8], oldPath: null);
+                    AddEntry(fields[1], fields[2], fields[8], oldPath: null);
                     break;
                 }
 
@@ -77,7 +79,7 @@ public sealed partial class GitRepository
                         continue;
                     }
 
-                    AddEntry(fields[1], fields[9], oldPath);
+                    AddEntry(fields[1], fields[2], fields[9], oldPath);
                     break;
                 }
 
@@ -120,10 +122,18 @@ public sealed partial class GitRepository
         staged.Sort(ByPath);
         unstaged.Sort(ByPath);
         conflicts.Sort((x, y) => string.CompareOrdinal(x.Path, y.Path));
-        return new WorkingTreeStatus(staged, unstaged, untracked) { Conflicts = conflicts };
+        return submodules.Count > 0
+            ? new WorkingTreeStatus(staged, unstaged, untracked) { Conflicts = conflicts, Submodules = submodules }
+            : new WorkingTreeStatus(staged, unstaged, untracked) { Conflicts = conflicts };
 
-        void AddEntry(string xy, string path, string? oldPath)
+        // sub is "N..." for a file, "S<c><m><u>" for a submodule.
+        void AddEntry(string xy, string sub, string path, string? oldPath)
         {
+            if (sub.StartsWith('S'))
+            {
+                submodules.Add(path);
+            }
+
             if (xy[0] != '.')
             {
                 var kind = KindOf(xy[0]);

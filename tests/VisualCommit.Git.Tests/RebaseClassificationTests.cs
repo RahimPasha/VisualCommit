@@ -40,6 +40,44 @@ public class RebaseClassificationTests
         Assert.Equal(tip, await RevAsync(repo, "HEAD"));
     }
 
+    [Theory]
+    [InlineData("apply")]
+    [InlineData("merge")]
+    public async Task A_rebase_that_prints_a_subject_saying_is_up_to_date_is_still_rebased(string backend)
+    {
+        // The review's finding 11: the apply backend prints "Applying: <subject>", the merge
+        // backend "dropping <sha> <subject> -- patch contents already upstream" for a commit that
+        // becomes empty; neither is git's own "is up to date" line.
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("README.md", "readme\n").WriteFile("f.txt", "base\n");
+        await repo.CommitAsync("Initial commit");
+        await repo.CreateBranchAsync("topic");
+        repo.WriteFile("f.txt", "cached\n").WriteFile("main.txt", "main\n");
+        await repo.CommitAsync("Main caches and works");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("f.txt", "cached\n", "Make sure the cache is up to date");
+        await repo.CommitFileAsync("topic.txt", "topic\n", "Check the index is up to date");
+        var oldTip = await RevAsync(repo, "HEAD");
+        var repository = await OpenAsync(repo);
+
+        var result = await RebaseAsync(repo, repository, "-c", $"rebase.backend={backend}", "rebase", "main");
+
+        Assert.NotEqual(oldTip, await RevAsync(repo, "HEAD"));
+        Assert.Equal(new RebaseResult(RebaseOutcome.Rebased, await RevAsync(repo, "HEAD"), 0), result);
+        Assert.Equal(await RevAsync(repo, "main"), await RevAsync(repo, "HEAD~1"));
+    }
+
+    [Fact]
+    public async Task A_detached_head_that_already_contains_the_target_is_up_to_date()
+    {
+        using var repo = await DivergedAsync(conflicting: false);
+        await repo.GitAsync("rebase", "main");
+        await repo.GitAsync("checkout", "--detach");
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(new RebaseResult(RebaseOutcome.UpToDate, null, 0), await RebaseAsync(repo, repository, "rebase", "main"));
+    }
+
     [Fact]
     public async Task A_conflict_stops_the_rebase_with_its_conflicted_files_and_continue_finishes_it()
     {

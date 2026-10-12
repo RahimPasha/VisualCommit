@@ -14,6 +14,7 @@ using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Git;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -310,7 +311,7 @@ public sealed partial class RepositoryOperations
 
                         var tip = result.NewTip ?? await Git.ResolveAsync("HEAD") ?? plan.ExpectedTip;
                         selection.NewTip = tip;
-                        return OperationReport.Done(OperationTexts.InteractiveRebased(branch, await Git.CountCommitsAsync(plan.Onto, tip)));
+                        return Rebased(OperationTexts.InteractiveRebased(branch, await Git.CountCommitsAsync(plan.Onto, tip)), result.AutostashConflicted);
                     },
                     new RunOptions { HasSeveralSteps = request.CheckoutFirst, DescribeFailure = _ => display });
                 await FinishAsync(notice, selection);
@@ -371,7 +372,7 @@ public sealed partial class RepositoryOperations
                         return refusal;
                     }
 
-                    if (await RefuseIfListMovedAsync(text, plan, branch) is { } moved)
+                    if (await RefuseIfListMovedAsync(text, plan, branch, squash: true) is { } moved)
                     {
                         return moved;
                     }
@@ -389,9 +390,9 @@ public sealed partial class RepositoryOperations
                     var squashed = after == 0 ? tip : await Git.ResolveAsync($"{tip}~{after}") ?? tip;
                     selection.Follows = true;
                     selection.NewTip = squashed;
-                    return OperationReport.Done(OperationTexts.Squashed(count, squashed));
+                    return Rebased(OperationTexts.Squashed(count, squashed), result.AutostashConflicted);
                 },
-                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text) });
+                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text, squash: true) });
             await FinishAsync(notice, selection);
         });
     }
@@ -428,8 +429,13 @@ public sealed partial class RepositoryOperations
                 RefreshScope.Refs,
                 async context =>
                 {
-                    var (now, conflicts) = await FreshStateAsync();
-                    if (RefuseChangedState(text, state, now, conflicts, ConflictBannerViewModel.ContinueFor(now, conflicts), OperationTexts.NothingContinued) is { } refusal)
+                    // A rebase's Continue is also refused while other tracked files are unstaged
+                    // (git's --continue would refuse after the app's commit, the review's finding 1).
+                    var status = await Git.ReadStatusAsync();
+                    var now = status.InProgress;
+                    var conflicts = status.Unstaged.Count(file => file.Kind == FileChangeKind.Conflicted);
+                    var button = ConflictBannerViewModel.ContinueFor(now, conflicts, status.HasUnstagedTrackedChanges);
+                    if (RefuseChangedState(text, state, now, conflicts, button, OperationTexts.NothingContinued) is { } refusal)
                     {
                         return refusal;
                     }
@@ -438,10 +444,21 @@ public sealed partial class RepositoryOperations
                     var result = await Git.ContinueAsync(now, message, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: false, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
             await FinishAsync(notice, selection);
         });
     }
+
+    /// <summary>
+    /// The dialog of the git layer's refusal of a rebase's Continue while other tracked files are
+    /// unstaged (<see cref="GitRepository.RebaseUnstagedChangesMessage"/>): "Continue failed" with
+    /// <see cref="OperationTexts.ContinueNeedsNothingUnstaged"/> as its summary; null for any other
+    /// failure (2.33's default).
+    /// </summary>
+    private static FailureDisplay? ContinueRefusalDisplay(GitFailure failure, OperationText text) =>
+        failure.GitOutput.Contains(GitRepository.RebaseUnstagedChangesMessage, StringComparison.Ordinal)
+            ? new FailureDisplay(text.ErrorTitle, OperationTexts.ContinueNeedsNothingUnstaged + ".")
+            : null;
 
     /// <inheritdoc cref="IInProgressActions.SkipAsync"/>
     public Task SkipAsync(InProgressState state)
@@ -478,7 +495,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.SkipAsync(now, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: true, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
             await FinishAsync(notice, selection);
         });
     }
@@ -542,16 +559,23 @@ public sealed partial class RepositoryOperations
     public string? OntoName(InProgressState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (state is not { Kind: InProgressKind.Rebase, Onto: { } onto })
-        {
-            return null;
-        }
-
-        var refs = Refs?.Refs ?? [];
-        return refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.LocalBranch && gitRef.TargetSha == onto)?.Name
-            ?? refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.RemoteBranch && gitRef.TargetSha == onto)?.Name
-            ?? OperationTexts.Short(onto);
+        return state is { Kind: InProgressKind.Rebase, Onto: { } onto } ? OntoNameIn(Refs?.Refs ?? [], onto) : null;
     }
+
+    /// <summary>
+    /// <see cref="OntoName"/> from the refs as they are now, read again: inside an operation that
+    /// fetched (a pull's rebase), the refs as last read do not have the new base yet, and the
+    /// dialog of a stop would name it by its short SHA where the banner, after the refresh, names
+    /// the branch (found by the review's finding 23's test).
+    /// </summary>
+    private async Task<string?> FreshOntoNameAsync(InProgressState state) =>
+        state is { Kind: InProgressKind.Rebase, Onto: { } onto } ? OntoNameIn((await Git.ReadRefsAsync()).Refs, onto) : null;
+
+    /// <summary>A local branch at <paramref name="onto"/>, else a remote branch, each in git's order; else its short SHA (5.2, 14.3).</summary>
+    private static string OntoNameIn(IReadOnlyList<GitRef> refs, string onto) =>
+        refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.LocalBranch && gitRef.TargetSha == onto)?.Name
+        ?? refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.RemoteBranch && gitRef.TargetSha == onto)?.Name
+        ?? OperationTexts.Short(onto);
 
     /// <summary>Saves <c>rebase-&lt;time&gt;/&lt;b&gt;</c> → <paramref name="tip"/>, the branch's old tip (1.2).</summary>
     private Task SaveRebaseBackupAsync(string branch, string tip) =>
@@ -624,9 +648,15 @@ public sealed partial class RepositoryOperations
         return !autoStash && IsDirty(status) ? Refused(text, OperationTexts.RebaseNeedsCleanTree) : null;
     }
 
-    /// <summary>Staged or unstaged changes to tracked files (untracked files are git's to judge, 1.3).</summary>
+    /// <summary>
+    /// Staged or unstaged changes to tracked files (untracked files are git's to judge, 1.3).
+    /// Submodules are left out, as git's rebase leaves them out of its own clean-tree check
+    /// (<c>--ignore-submodules</c>): a moved submodule does not stop git's rebase, so it does not
+    /// stop the app's (the review's finding 21).
+    /// </summary>
     private static bool IsDirty(WorkingTreeStatus status) =>
-        status.Staged.Count > 0 || status.Unstaged.Any(file => !status.IsUntracked(file.Path));
+        status.Staged.Any(file => !status.IsSubmodule(file.Path))
+        || status.Unstaged.Any(file => !status.IsUntracked(file.Path) && !status.IsSubmodule(file.Path));
 
     /// <summary>
     /// Whether git's configuration has <c>rebase.autoStash</c> set (1.3, D142: <c>git config
@@ -637,19 +667,21 @@ public sealed partial class RepositoryOperations
     /// <summary>
     /// Start's refusal when the branch is not where the list was read from (2.4, D124): HEAD on
     /// another branch ("HEAD moved while this waited: …") or the branch at another commit ("{b}
-    /// changed while the list was open: open it again."); null when it is where it was.
+    /// changed while the list was open: open it again."); null when it is where it was. A
+    /// <paramref name="squash"/> has no list: "{b} changed while this waited: select the commits
+    /// again. Nothing was squashed." (the review's finding 16).
     /// </summary>
-    private async Task<OperationReport?> RefuseIfListMovedAsync(OperationText text, RebasePlan plan, string branch)
+    private async Task<OperationReport?> RefuseIfListMovedAsync(OperationText text, RebasePlan plan, string branch, bool squash = false)
     {
         var head = await Git.ReadHeadAsync();
         if (!string.Equals(HeadsPrefix + head.BranchName, plan.BranchRef, StringComparison.Ordinal))
         {
-            return Refused(text, OperationTexts.HeadMoved(new HeadState(branch, plan.ExpectedTip), head, OperationTexts.NothingRebased));
+            return Refused(text, OperationTexts.HeadMoved(new HeadState(branch, plan.ExpectedTip), head, squash ? OperationTexts.NothingSquashed : OperationTexts.NothingRebased));
         }
 
         return string.Equals(head.Sha, plan.ExpectedTip, StringComparison.OrdinalIgnoreCase)
             ? null
-            : Refused(text, OperationTexts.ChangedWhileListOpen(branch));
+            : Refused(text, squash ? OperationTexts.ChangedWhileSquashWaited(branch) : OperationTexts.ChangedWhileListOpen(branch));
     }
 
     /// <summary>A refusal the app tells itself before git runs (no git output), logged.</summary>
@@ -672,14 +704,22 @@ public sealed partial class RepositoryOperations
 
             case RebaseOutcome.Rebased:
                 selection.NewTip = result.NewTip ?? await Git.ResolveAsync("HEAD");
-                return result.AutostashConflicted
-                    ? OperationReport.Conflicts(OperationTexts.RebasedAutostashConflicted(branch, target))
-                    : OperationReport.Done(OperationTexts.Rebased(branch, target));
+                return Rebased(OperationTexts.Rebased(branch, target), result.AutostashConflicted);
 
             default:
                 return await RebaseStopReportAsync(context, result.ConflictedFiles, notice);
         }
     }
+
+    /// <summary>
+    /// A rebase that ended rebased (1.4): <paramref name="done"/> as a success, or, when the
+    /// changes <c>rebase.autoStash</c> put back conflicted, as <see cref="OperationReport.Conflicts"/>
+    /// with 1.4's warning after it (<see cref="OperationTexts.WithAutostashConflicted"/>), so that
+    /// the status bar says the changes are also kept in the stash and the banner shows the
+    /// conflicted files: for every rebase the app runs (the review's findings 12 and 19).
+    /// </summary>
+    private static OperationReport Rebased(string done, bool autostashConflicted) =>
+        autostashConflicted ? OperationReport.Conflicts(OperationTexts.WithAutostashConflicted(done)) : OperationReport.Done(done);
 
     /// <summary>
     /// A rebase that stopped (1.4, 5.1): "Rebase stopped: {N} files have conflicts", or with none
@@ -697,7 +737,7 @@ public sealed partial class RepositoryOperations
         var state = (await Git.ReadStatusAsync()).InProgress;
         if (state.StopKind is RebaseStopKind.Rescheduled or RebaseStopKind.ExecFailed or RebaseStopKind.OwnAmendFailed)
         {
-            var summary = ConflictBannerViewModel.TextFor(state, 0, OntoName(state)) ?? OperationTexts.RebaseStoppedAt(state.Commit ?? string.Empty, state.Subject);
+            var summary = ConflictBannerViewModel.TextFor(state, 0, await FreshOntoNameAsync(state)) ?? OperationTexts.RebaseStoppedAt(state.Commit ?? string.Empty, state.Subject);
             notice.Display = new FailureDisplay(OperationTexts.RebaseStoppedTitle, summary);
             notice.Failure = FailureOfLastCall(context, command => command.StartsWith("git rebase", StringComparison.Ordinal) || command.StartsWith("git commit", StringComparison.Ordinal), summary);
         }
@@ -722,9 +762,9 @@ public sealed partial class RepositoryOperations
             }
 
             var single = !ConflictBannerViewModel.InList(state) && state.Kind is InProgressKind.CherryPick or InProgressKind.Revert;
-            return OperationReport.Done(skipped && single
-                ? OperationTexts.Skipped(state.Commit ?? string.Empty)
-                : OperationTexts.ContinueDone(state.Kind, state.Branch, onto ?? string.Empty));
+            return Rebased(
+                skipped && single ? OperationTexts.Skipped(state.Commit ?? string.Empty) : OperationTexts.ContinueDone(state.Kind, state.Branch, onto ?? string.Empty),
+                result.AutostashConflicted);
         }
 
         if (now.Kind == InProgressKind.Rebase)
@@ -876,9 +916,9 @@ public sealed partial class RepositoryOperations
     /// that the app's own refusals keep their summaries ("Finish or abort the merge first",
     /// "{b} changed while the list was open: …") and git's other failures get 2.33's default.
     /// </summary>
-    private static FailureDisplay? InteractiveRefusalDisplay(GitFailure failure, OperationText text) =>
+    private static FailureDisplay? InteractiveRefusalDisplay(GitFailure failure, OperationText text, bool squash = false) =>
         RebaseRefusalSummary(failure) is { } summary ? new FailureDisplay(text.ErrorTitle, summary)
-        : failure.GitOutput.Contains(RebaseHeadMoved, StringComparison.Ordinal) ? new FailureDisplay(text.ErrorTitle, OperationTexts.HeadMovedSinceList)
+        : failure.GitOutput.Contains(RebaseHeadMoved, StringComparison.Ordinal) ? new FailureDisplay(text.ErrorTitle, squash ? OperationTexts.HeadMovedSinceSquash : OperationTexts.HeadMovedSinceList)
         : null;
 
     /// <summary>The git layer's refusal of a plan whose branch moved (<c>GitRepository.RebaseHeadMovedMessage</c>).</summary>
