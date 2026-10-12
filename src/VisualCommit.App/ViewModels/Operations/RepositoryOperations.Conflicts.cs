@@ -166,6 +166,12 @@ public sealed partial class RepositoryOperations : IConflictActions
     public async Task<bool> ConfirmStagedMarkersAsync(InProgressState state)
     {
         ArgumentNullException.ThrowIfNull(state);
+        if (Status.Unstaged.Any(file => file.Kind == FileChangeKind.Conflicted))
+        {
+            // Files still conflict: Continue is refused with its reason, and nothing is committed.
+            return true;
+        }
+
         var paths = StopKey(state) == _stopKey && _conflictedAtStop.Count > 0
             ? [.. _conflictedAtStop.Order(StringComparer.Ordinal)]
             : Status.Staged.Select(file => file.Path).Distinct(StringComparer.Ordinal).ToList();

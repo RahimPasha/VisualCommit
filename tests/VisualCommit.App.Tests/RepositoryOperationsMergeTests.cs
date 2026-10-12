@@ -414,7 +414,9 @@ public class RepositoryOperationsMergeTests
         app.Click(app.FindByAutomationId("ConfirmButton"));
         await pick;
         await app.WaitForIdleAsync();
-        Assert.Equal($"Cherry-picking {alphaOne[..7]} \"Alpha one\" changes nothing: its changes are already here. Abort to go on.", TextOf(app, "BannerText"));
+        // Phase 4 (design 5.2, 5.1): the banner says to skip it, and offers Skip.
+        Assert.Equal($"Cherry-picking {alphaOne[..7]} \"Alpha one\" changes nothing: its changes are already here. Skip it to go on.", TextOf(app, "BannerText"));
+        Assert.True(app.FindByAutomationId("BannerSkipButton").IsEffectivelyEnabled);
         TestPictures.Save(app, "wp7-25b-empty-pick-banner");
     }
 }

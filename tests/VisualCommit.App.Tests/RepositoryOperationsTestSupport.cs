@@ -38,6 +38,9 @@ internal static class RepositoryOperationsTestSupport
     /// <summary>The helpers every operation shares, and operations that wait in the queue.</summary>
     public const string SharedCollection = "RepositoryOperations: shared helpers and the queue";
 
+    /// <summary>Phase 4's rebases, lists, Continue and Skip, pulls with rebase and conflicts (WP4).</summary>
+    public const string RebaseCollection = "RepositoryOperations: rebase, sequences and conflicts";
+
     /// <summary>The time stamp in a backup ref's name, as a regular expression.</summary>
     public const string BackupTime = "[0-9]{8}T[0-9]{9}Z";
 
