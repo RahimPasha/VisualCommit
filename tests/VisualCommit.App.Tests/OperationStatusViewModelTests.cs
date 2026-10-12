@@ -47,6 +47,12 @@ public class OperationStatusViewModelTests
             Task.FromResult(OperationReport.Conflicts("Merge stopped: 1 file has conflicts"))));
         Assert.Equal(("Merge stopped: 1 file has conflicts", OperationStatusTone.Warning), (status.Text, status.Tone));
 
+        // A success said in the warning colour (docs/phase-4-design.md 10.2): no conflict.
+        await queue.RunAsync(new GitOperation("Pull (rebase)", "Pulling…", OperationKind.Local, RefreshScope.None, _ =>
+            Task.FromResult(OperationReport.Warning("Pulled and rebased main onto origin/main; git left out 1 commit that origin/main once had"))));
+        Assert.Equal(("Pulled and rebased main onto origin/main; git left out 1 commit that origin/main once had", OperationStatusTone.Warning), (status.Text, status.Tone));
+        Assert.Equal((OperationOutcome.Succeeded, true), (queue.LastResult!.Outcome, queue.LastResult.IsWarning));
+
         await queue.RunAsync(new GitOperation("Push main", "Pushing…", OperationKind.Network, RefreshScope.None, _ =>
             throw new GitException("git push", 1, " ! [rejected]        main -> main (fetch first)")));
         Assert.Equal(("Push main failed", OperationStatusTone.Danger), (status.Text, status.Tone));

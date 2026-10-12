@@ -527,7 +527,7 @@ public sealed class OperationQueue : IOperationQueue
                     report.Message.Length > 0 ? report.Message : $"{operation.Title} failed",
                     report.Failure ?? FailureOf(operation, report.Message)),
                 OperationOutcome.Cancelled => CancelledResult(operation),
-                _ => new OperationResult(report.Outcome, report.Message, null),
+                _ => new OperationResult(report.Outcome, report.Message, null) { IsWarning = report.IsWarning && report.Outcome == OperationOutcome.Succeeded },
             };
         }
         catch (OperationCanceledException)

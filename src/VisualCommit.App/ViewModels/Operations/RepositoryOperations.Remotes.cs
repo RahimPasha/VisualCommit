@@ -188,9 +188,9 @@ public sealed partial class RepositoryOperations
             case PullOutcome.Merged:
                 return OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name));
             case PullOutcome.Rebased:
-                // Git's fork point left out commits the upstream once had (0.1): said in the warning colour.
+                // Git's fork point left out commits the upstream once had (0.1): a success said in the warning colour (auto-fetch counts it as a fetch).
                 return pulled.LeftOutByForkPoint > 0
-                    ? OperationReport.Conflicts(OperationTexts.PulledRebasedLeftOut(branch.Name, upstream, pulled.LeftOutByForkPoint))
+                    ? OperationReport.Warning(OperationTexts.PulledRebasedLeftOut(branch.Name, upstream, pulled.LeftOutByForkPoint))
                     : OperationReport.Done(OperationTexts.PulledRebased(branch.Name, upstream));
             case PullOutcome.Conflicts:
                 var conflicts = await CountConflictedFilesAsync();

@@ -178,6 +178,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
         _resultTone = result.Outcome switch
         {
             OperationOutcome.Conflicts => OperationStatusTone.Warning,
+            OperationOutcome.Succeeded when result.IsWarning => OperationStatusTone.Warning,
             OperationOutcome.Failed => OperationStatusTone.Danger,
             _ => OperationStatusTone.Secondary,
         };

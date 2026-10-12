@@ -24,7 +24,20 @@ public sealed record OperationReport(OperationOutcome Outcome, string Message)
     /// </summary>
     public GitFailure? Failure { get; init; }
 
+    /// <summary>
+    /// A success that the status bar shows in the warning colour (<see cref="Warning(string)"/>):
+    /// something the user should know happened, though nothing failed and nothing conflicts.
+    /// </summary>
+    public bool IsWarning { get; init; }
+
     public static OperationReport Done(string message) => new(OperationOutcome.Succeeded, message);
+
+    /// <summary>
+    /// <see cref="OperationOutcome.Succeeded"/> with a message in the warning colour
+    /// (docs/phase-4-design.md 10.2: a pull whose rebase left out commits the upstream once had):
+    /// logged as a success, and a success for whatever counts successes (auto-fetch, D85).
+    /// </summary>
+    public static OperationReport Warning(string message) => new(OperationOutcome.Succeeded, message) { IsWarning = true };
 
     public static OperationReport Conflicts(string message) => new(OperationOutcome.Conflicts, message);
 
@@ -46,6 +59,9 @@ public sealed record OperationResult(OperationOutcome Outcome, string Message, G
     /// updated refs, left behind (1.8). Empty otherwise.
     /// </summary>
     public IReadOnlyList<string> StaleLockFiles { get; init; } = [];
+
+    /// <summary>A success whose message the status bar shows in the warning colour (<see cref="OperationReport.Warning"/>).</summary>
+    public bool IsWarning { get; init; }
 }
 
 /// <summary>What the status bar shows of the running operation.</summary>
