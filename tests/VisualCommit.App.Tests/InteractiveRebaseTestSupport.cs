@@ -55,7 +55,7 @@ internal sealed class RecordingRebaseHost(DialogHostViewModel? dialogs = null) :
     /// <summary>When set, Start runs the plan with it (a test hands it to the real git layer) and answers what it returns.</summary>
     public Func<RebasePlan, Task<bool>>? OnStart { get; set; }
 
-    public async Task<bool> StartAsync(RebasePlan plan)
+    public async Task<bool> StartAsync(InteractiveRebaseViewModel list, RebasePlan plan)
     {
         Plans.Add(plan);
         if (OnStart is { } run)
@@ -91,7 +91,7 @@ internal sealed class RecordingRebaseHost(DialogHostViewModel? dialogs = null) :
             : Task.FromResult(MessageAnswers.Count > 0 ? MessageAnswers.Dequeue() : null);
     }
 
-    public void Close()
+    public void Close(InteractiveRebaseViewModel list)
     {
         Closed++;
         OnClose?.Invoke();
