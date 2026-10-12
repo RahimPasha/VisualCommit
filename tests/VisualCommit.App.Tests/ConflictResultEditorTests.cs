@@ -387,6 +387,73 @@ public class ConflictResultEditorTests
         Assert.Equal("line 1y", Line(editor, 1));
     }
 
+    [Fact]
+    public void The_tints_are_ConflictText_s_blocks_on_the_editor_s_own_lines()
+    {
+        Assert.Equal(
+            [ConflictTint.None, ConflictTint.Marker, ConflictTint.Ours, ConflictTint.Marker, ConflictTint.Theirs, ConflictTint.Marker, ConflictTint.None, ConflictTint.None],
+            ConflictResultEditor.TintsOf(OneBlock.Split('\n')));
+
+        // A block that is not whole, a marker of another size, and a second = line are text (git's rerere reading).
+        Assert.All(ConflictResultEditor.TintsOf(["<<<<<<< HEAD", "x", "=======", "y"]), tint => Assert.Equal(ConflictTint.None, tint));
+        Assert.All(ConflictResultEditor.TintsOf(["<<<<<<<< HEAD", "x", "========", "y", ">>>>>>>> t"]), tint => Assert.Equal(ConflictTint.None, tint));
+        Assert.All(ConflictResultEditor.TintsOf(["<<<<<<< HEAD", "x", "=======", "y", "=======", "z", ">>>>>>> t"]), tint => Assert.Equal(ConflictTint.None, tint));
+        Assert.Equal(ConflictTint.Marker, ConflictResultEditor.TintsOf(["<<<<<<<< HEAD", "x", "========", "y", ">>>>>>>> t"], 8)[0]);
+
+        // Two blocks, a diff3 base section in the second; line ends of either kind.
+        Assert.Equal(
+            [ConflictTint.Marker, ConflictTint.Ours, ConflictTint.Marker, ConflictTint.Theirs, ConflictTint.Marker, ConflictTint.None, ConflictTint.Marker, ConflictTint.Ours, ConflictTint.Marker, ConflictTint.Base, ConflictTint.Marker, ConflictTint.Theirs, ConflictTint.Marker],
+            ConflictResultEditor.TintsOf(["<<<<<<< a", "1", "=======", "2", ">>>>>>> b", "mid", "<<<<<<< a", "3", "||||||| base", "4", "=======", "5", ">>>>>>> b"]));
+    }
+
+    [AvaloniaFact]
+    public void RevealLine_puts_a_line_third_in_view_and_ScrollToOffset_keeps_a_place()
+    {
+        var text = string.Concat(Enumerable.Range(1, 60).Select(n => $"line {n}\n"));
+        var editor = Editor(text);
+        using var host = DiffHost.Show(editor, Width, Height, ThemeVariant.Dark);
+        host.Capture();
+
+        editor.RevealLine(2);
+        host.Capture();
+        Assert.Equal(0, editor.ScrollOffset.Y, 0.5);
+
+        editor.RevealLine(30);
+        host.Capture();
+        Assert.Equal(27 * 15.84, editor.ScrollOffset.Y, 1.0);
+        Assert.Equal(2.5 * 15.84, editor.PointAt(30, 1)!.Value.Y, 1.5);
+
+        // The text stops at its end.
+        editor.RevealLine(60);
+        host.Capture();
+        Assert.Equal((61 * 15.84) - Height, editor.ScrollOffset.Y, 2.0);
+
+        editor.ScrollToOffset(new Vector(0, 100));
+        host.Capture();
+        Assert.Equal(100, editor.ScrollOffset.Y, 0.5);
+
+        // Asked before the text is laid out, it waits for the layout.
+        var later = Editor(text);
+        later.RevealLine(40);
+        using var other = DiffHost.Show(later, Width, Height, ThemeVariant.Dark);
+        other.Capture();
+        Assert.Equal(37 * 15.84, later.ScrollOffset.Y, 1.0);
+    }
+
+    [AvaloniaFact]
+    public void A_read_only_result_takes_no_typing()
+    {
+        var editor = Editor(OneBlock);
+        using var host = DiffHost.Show(editor, Width, Height, ThemeVariant.Dark);
+        host.Click(editor, editor.PointAt(1, 7)!.Value);
+
+        editor.IsReadOnly = true;
+        host.Window.KeyTextInput("abc");
+        DiffHost.Settle();
+
+        Assert.Equal(OneBlock, editor.Text);
+    }
+
     /// <summary>An editor showing <paramref name="text"/> as its document's original.</summary>
     private static ConflictResultEditor Editor(string text) => new() { Document = new AvaloniaEdit.Document.TextDocument(text) };
 

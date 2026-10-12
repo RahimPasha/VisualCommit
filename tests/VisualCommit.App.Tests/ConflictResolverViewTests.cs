@@ -397,6 +397,7 @@ public class ConflictResolverViewTests
         TestPictures.Save(host.Host, "resolver-card-dark");
 
         var card = host.BoundsOf(host.Find("ConflictCard"));
+        Assert.True(ControlAutomationPeer.CreatePeerForElement(host.Find("ConflictCard")).IsControlElement());
         Assert.Equal(420, card.Center.X, 1.0);
         Assert.Equal(72 + ((Height - 72) / 2), card.Center.Y, 1.0);
         Assert.Equal("main changed other.txt; feature/kinds deleted it.", Text(host, "ConflictCardText"));

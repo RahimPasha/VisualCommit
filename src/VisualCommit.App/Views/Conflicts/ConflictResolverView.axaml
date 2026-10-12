@@ -3,6 +3,7 @@
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:cc="using:VisualCommit.App.Controls.Conflicts"
              xmlns:vm="using:VisualCommit.App.ViewModels.Conflicts"
+             xmlns:local="using:VisualCommit.App.Views.Conflicts"
              x:Class="VisualCommit.App.Views.Conflicts.ConflictResolverView"
              x:DataType="vm:ConflictResolverViewModel"
              AutomationProperties.AutomationId="ConflictResolver"
@@ -229,7 +230,7 @@
       </Grid>
 
       <!-- A conflict without text: what happened, and buttons that resolve it at once (11.8). -->
-      <Border Name="ConflictCard"
+      <local:ConflictCardBorder Name="ConflictCard"
               IsVisible="{Binding ShowsCard}"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
@@ -264,7 +265,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
-      </Border>
+      </local:ConflictCardBorder>
     </Panel>
   </Grid>
 </UserControl>

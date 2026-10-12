@@ -347,3 +347,23 @@ public partial class ConflictResolverView : UserControl
         protected override bool IsControlElementCore() => true;
     }
 }
+
+/// <summary>
+/// The card of a conflict without text (<c>ConflictCard</c>, docs/phase-4-design.md 11.8): a border
+/// that is a control element of its own in UI Automation, so that the real-window pass finds it.
+/// </summary>
+public class ConflictCardBorder : Border
+{
+    protected override Type StyleKeyOverride => typeof(Border);
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new CardAutomationPeer(this);
+
+    private sealed class CardAutomationPeer(ConflictCardBorder owner) : ControlAutomationPeer(owner)
+    {
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Group;
+
+        protected override bool IsContentElementCore() => true;
+
+        protected override bool IsControlElementCore() => true;
+    }
+}

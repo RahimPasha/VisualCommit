@@ -209,7 +209,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     /// <summary>A write of the resolver runs (Mark resolved, a card's button, the merge tool): the result is read-only and the buttons disabled (11.7).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle), nameof(CanUndo), nameof(CanRedo))]
-    [NotifyCanExecuteChangedFor(nameof(TakeOursCommand), nameof(TakeTheirsCommand), nameof(MarkResolvedCommand), nameof(RunMergeToolCommand), nameof(PreviousFileCommand), nameof(NextFileCommand), nameof(PreviousConflictCommand), nameof(NextConflictCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TakeOursCommand), nameof(TakeTheirsCommand), nameof(MarkResolvedCommand), nameof(RunMergeToolCommand), nameof(PreviousFileCommand), nameof(NextFileCommand), nameof(PreviousConflictCommand), nameof(NextConflictCommand), nameof(CloseResolverCommand))]
     public partial bool IsBusy { get; private set; }
 
     public bool IsIdle => !IsBusy;
@@ -440,8 +440,8 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     [RelayCommand(CanExecute = nameof(CanGoToOtherFile))]
     private Task NextFile() => GoToFileAsync(1);
 
-    /// <summary>The close button and Esc outside the result (11.10): asks first when the result is modified.</summary>
-    [RelayCommand]
+    /// <summary>The close button and Esc outside the result (11.10): asks first when the result is modified. Not while a write of the resolver runs (11.7).</summary>
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task CloseResolver()
     {
         if (await TryLeaveAsync())
