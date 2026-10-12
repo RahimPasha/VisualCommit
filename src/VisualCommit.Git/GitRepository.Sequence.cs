@@ -16,6 +16,14 @@ public sealed partial class GitRepository
 {
     private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>
+    /// The first line of the standard error of the <see cref="GitException"/> that Continue of a
+    /// rebase throws, before anything runs, while a tracked file that is not conflicted has
+    /// unstaged changes (git's own <c>--continue</c> refuses then, after the app would already have
+    /// committed); the files follow, one per line.
+    /// </summary>
+    public const string RebaseUnstagedChangesMessage = "Tracked files have unstaged changes, and git continues a rebase only when nothing else is unstaged:";
+
     public async Task<ContinueResult> ContinueAsync(InProgressState state, string? message, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -56,18 +64,27 @@ public sealed partial class GitRepository
         }
     }
 
-    public Task<ContinueResult> SkipAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<ContinueResult> SkipAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return state.Kind switch
+        switch (state.Kind)
         {
-            InProgressKind.CherryPick or InProgressKind.Revert => RunSequenceAsync(state.Kind, "--skip", options, cancellationToken),
+            case InProgressKind.CherryPick or InProgressKind.Revert:
+                return await RunSequenceAsync(state.Kind, "--skip", options, cancellationToken).ConfigureAwait(false);
 
-            // The app's amend failed: going on without the new message is git's --continue, which
-            // does not run a failed exec again (no-reschedule-failed-exec, 0.1).
-            InProgressKind.Rebase => RebaseStepAsync(state.StopKind == RebaseStopKind.OwnAmendFailed ? "--continue" : "--skip", options, cancellationToken),
-            _ => throw new ArgumentOutOfRangeException(nameof(state), state.Kind, "There is no skip for this operation."),
-        };
+            case InProgressKind.Rebase when state.StopKind == RebaseStopKind.OwnAmendFailed:
+                // The app's amend failed: going on without the new message is git's --continue,
+                // which does not run a failed exec again (no-reschedule-failed-exec, 0.1); it
+                // refuses as Continue does while other files are unstaged.
+                await RefuseUnstagedChangesAsync(options, cancellationToken).ConfigureAwait(false);
+                return await RebaseStepAsync("--continue", options, cancellationToken).ConfigureAwait(false);
+
+            case InProgressKind.Rebase:
+                return await RebaseStepAsync("--skip", options, cancellationToken).ConfigureAwait(false);
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(state), state.Kind, "There is no skip for this operation.");
+        }
     }
 
     public async Task<string?> ReadOperationMessageAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default)
@@ -195,9 +212,13 @@ public sealed partial class GitRepository
     /// </list>
     /// How it ended is <see cref="ClassifyRebaseAsync"/>'s: still a rebase folder,
     /// <see cref="ContinueOutcome.Stopped"/>; git's refusal (unresolved files, no rebase) throws.
+    /// Before any of it, git's own check of <c>--continue</c> (<see cref="RefuseUnstagedChangesAsync"/>):
+    /// a tracked file that is not conflicted with unstaged changes refuses the whole Continue, so
+    /// that the app's own commit is never made for a <c>--continue</c> git then refuses.
     /// </summary>
     private async Task<ContinueResult> ContinueRebaseAsync(InProgressState state, string? message, NetworkOptions? options, CancellationToken cancellationToken)
     {
+        await RefuseUnstagedChangesAsync(options, cancellationToken).ConfigureAwait(false);
         var merging = Directory.Exists(Path.Combine(GitDirectory, "rebase-merge"));
         if (merging && state.Group is { } group && message is not null)
         {
@@ -228,6 +249,37 @@ public sealed partial class GitRepository
         }
 
         return await RebaseStepAsync("--continue", options, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The check <c>git rebase --continue</c> makes before anything (builtin/rebase.c: it refreshes
+    /// the index, then refuses with "You must edit all merge conflicts…" while
+    /// <c>git diff-files --ignore-submodules</c> reports a change), made before the app's own
+    /// commit: <c>git update-index -q --refresh</c> (its exit code ignored, as git ignores it: it is
+    /// 1 while paths are unmerged), then <c>git diff-files --name-only -z --ignore-submodules</c>.
+    /// A changed path that is not conflicted throws <see cref="GitException"/> with
+    /// <see cref="RebaseUnstagedChangesMessage"/> and the paths, and nothing is written; conflicted
+    /// paths alone are left to git's own refusal, which also changes nothing (0.1).
+    /// </summary>
+    private async Task RefuseUnstagedChangesAsync(NetworkOptions? options, CancellationToken cancellationToken)
+    {
+        await _runner.RunAsync(WriteCommand(options, "update-index", "-q", "--refresh"), cancellationToken).ConfigureAwait(false);
+        var changed = (await ReadOutputAsync(cancellationToken, "diff-files", "--name-only", "-z", "--ignore-submodules").ConfigureAwait(false))
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (changed.Length == 0)
+        {
+            return;
+        }
+
+        var unmerged = (await ReadOutputAsync(cancellationToken, "ls-files", "--unmerged", "-z").ConfigureAwait(false))
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(entry => entry.IndexOf('\t', StringComparison.Ordinal) is var tab and >= 0 ? entry[(tab + 1)..] : entry)
+            .ToHashSet(StringComparer.Ordinal);
+        var others = changed.Where(path => !unmerged.Contains(path)).Distinct(StringComparer.Ordinal).ToList();
+        if (others.Count > 0)
+        {
+            throw new GitException("git rebase --continue", 1, RebaseUnstagedChangesMessage + "\n" + string.Join("\n", others) + "\n");
+        }
     }
 
     /// <summary><c>git rebase &lt;flag&gt;</c> (<c>--continue</c>, <c>--skip</c>), classified by <see cref="ClassifyRebaseAsync"/>.</summary>

@@ -14,6 +14,7 @@ using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Git;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -428,8 +429,13 @@ public sealed partial class RepositoryOperations
                 RefreshScope.Refs,
                 async context =>
                 {
-                    var (now, conflicts) = await FreshStateAsync();
-                    if (RefuseChangedState(text, state, now, conflicts, ConflictBannerViewModel.ContinueFor(now, conflicts), OperationTexts.NothingContinued) is { } refusal)
+                    // A rebase's Continue is also refused while other tracked files are unstaged
+                    // (git's --continue would refuse after the app's commit, the review's finding 1).
+                    var status = await Git.ReadStatusAsync();
+                    var now = status.InProgress;
+                    var conflicts = status.Unstaged.Count(file => file.Kind == FileChangeKind.Conflicted);
+                    var button = ConflictBannerViewModel.ContinueFor(now, conflicts, status.HasUnstagedTrackedChanges);
+                    if (RefuseChangedState(text, state, now, conflicts, button, OperationTexts.NothingContinued) is { } refusal)
                     {
                         return refusal;
                     }
@@ -438,10 +444,21 @@ public sealed partial class RepositoryOperations
                     var result = await Git.ContinueAsync(now, message, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: false, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
             await FinishAsync(notice, selection);
         });
     }
+
+    /// <summary>
+    /// The dialog of the git layer's refusal of a rebase's Continue while other tracked files are
+    /// unstaged (<see cref="GitRepository.RebaseUnstagedChangesMessage"/>): "Continue failed" with
+    /// <see cref="OperationTexts.ContinueNeedsNothingUnstaged"/> as its summary; null for any other
+    /// failure (2.33's default).
+    /// </summary>
+    private static FailureDisplay? ContinueRefusalDisplay(GitFailure failure, OperationText text) =>
+        failure.GitOutput.Contains(GitRepository.RebaseUnstagedChangesMessage, StringComparison.Ordinal)
+            ? new FailureDisplay(text.ErrorTitle, OperationTexts.ContinueNeedsNothingUnstaged + ".")
+            : null;
 
     /// <inheritdoc cref="IInProgressActions.SkipAsync"/>
     public Task SkipAsync(InProgressState state)
@@ -478,7 +495,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.SkipAsync(now, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: true, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
             await FinishAsync(notice, selection);
         });
     }

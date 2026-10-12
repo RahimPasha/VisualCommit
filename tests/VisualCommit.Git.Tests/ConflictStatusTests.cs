@@ -128,6 +128,29 @@ public class ConflictStatusTests
     }
 
     [Fact]
+    public void The_parser_marks_the_ordinary_and_renamed_entries_of_submodules()
+    {
+        const string Head = "1111111111111111111111111111111111111111";
+        const string Index = "2222222222222222222222222222222222222222";
+        var output =
+            $"1 .M SC.. 160000 160000 160000 {Head} {Head} moved sub\0"
+            + $"1 M. S... 160000 160000 160000 {Head} {Index} staged sub\0"
+            + $"1 .M N... 100644 100644 100644 {Head} {Head} file.txt\0"
+            + $"2 R. N... 100644 100644 100644 {Head} {Head} R100 new.txt\0old.txt\0";
+
+        var status = GitRepository.ParseStatus(output);
+
+        Assert.Equal(["moved sub", "staged sub"], status.Submodules.Order(StringComparer.Ordinal));
+        Assert.True(status.IsSubmodule("moved sub"));
+        Assert.False(status.IsSubmodule("file.txt"));
+        Assert.Equal(["file.txt", "moved sub"], status.Unstaged.Select(file => file.Path));
+        Assert.Equal(["new.txt", "staged sub"], status.Staged.Select(file => file.Path));
+        Assert.True(status.HasUnstagedTrackedChanges);
+        Assert.False((status with { Unstaged = [status.Unstaged[1]] }).HasUnstagedTrackedChanges);
+        Assert.Empty(GitRepository.ParseStatus($"1 .M N... 100644 100644 100644 {Head} {Head} file.txt\0").Submodules);
+    }
+
+    [Fact]
     public void Two_statuses_with_other_conflict_stages_are_not_the_same()
     {
         var entry = new ConflictEntry("f.txt", ConflictKind.BothModified, false, "100644", "100644", "100644", "a", "b", "c");

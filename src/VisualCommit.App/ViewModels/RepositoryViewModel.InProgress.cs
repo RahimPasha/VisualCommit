@@ -119,7 +119,7 @@ public sealed partial class RepositoryViewModel : IConflictMarkerQuestions
         var conflicts = status.Unstaged.Count(file => file.Kind == FileChangeKind.Conflicted);
         WorkingRowText = WorkingRowTextFor(conflicts);
         Operations.NoteStatus(status);
-        Banner.Show(status.InProgress, conflicts, OntoNameOf(status.InProgress), Refs?.Head.BranchName ?? "HEAD");
+        Banner.Show(status.InProgress, conflicts, OntoNameOf(status.InProgress), Refs?.Head.BranchName ?? "HEAD", status.HasUnstagedTrackedChanges);
     }
 
     /// <summary>

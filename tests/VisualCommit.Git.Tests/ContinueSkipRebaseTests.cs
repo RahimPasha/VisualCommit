@@ -120,6 +120,37 @@ public class ContinueSkipRebaseTests
     }
 
     [Fact]
+    public async Task Continue_with_an_unrelated_unstaged_change_is_refused_before_anything_is_committed()
+    {
+        var (repo, _, commits) = await TopicAsync(("g.txt", "G adds g"), ("f.txt", "T conflicts"));
+        using var _repo = repo;
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("rebase", "main")).ExitCode);
+        repo.WriteFile("f.txt", "resolved\n");
+        await repo.GitAsync("add", "f.txt");
+        repo.WriteFile("g.txt", "an editor touched it\n");
+        var head = await repo.HeadAsync();
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((RebaseStopKind.Pick, commits[1]), (state.StopKind!.Value, state.Commit));
+
+        var refused = await Assert.ThrowsAsync<GitException>(() => repository.ContinueAsync(state, "Typed\n", cancellationToken: TestCancelled));
+
+        // Git's own --continue would refuse after the app's commit (finding 1): the app refuses
+        // first, names the file, and nothing is committed; the stop is still the resolved pick.
+        Assert.Equal(GitRepository.RebaseUnstagedChangesMessage + "\ng.txt\n", refused.StandardError);
+        Assert.DoesNotContain(calls.Snapshot(), call => call.CommandText.StartsWith("git commit", StringComparison.Ordinal) || call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(state, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+        Assert.Equal(["M  f.txt", " M g.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+
+        // Stashed (here: put back), the same Continue goes on.
+        await repo.GitAsync("checkout", "--", "g.txt");
+        Assert.Equal(ContinueOutcome.Done, (await repository.ContinueAsync(state, "Typed\n", cancellationToken: TestCancelled)).Outcome);
+        Assert.Equal(["Typed", "G adds g", "Main edit"], await GitLinesAsync(repo, "log", "--format=%s", "-3"));
+    }
+
+    [Fact]
     public async Task Continue_after_another_stop_goes_on_to_the_next_conflict()
     {
         var (repo, main, commits) = await TopicAsync(("f.txt", "T1 conflicts"), ("g.txt", "T2 adds g"), ("f.txt", "T3 conflicts again"));

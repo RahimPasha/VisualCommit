@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.RegularExpressions;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
@@ -264,6 +266,101 @@ public class RepositoryOperationsSequenceTests
         await other.Operations.ContinueAsync(other.Operations.Status.InProgress, null);
         Assert.Equal("Resolve the conflicts first (1 file). Nothing was continued.", Assert.Single(other.Dialogs.Errors).Summary);
         Assert.True(File.Exists(Path.Combine(stopped.Path, ".git", "MERGE_HEAD")));
+    }
+
+    [Fact]
+    public async Task A_rebases_Continue_is_disabled_and_refused_while_another_tracked_file_is_unstaged()
+    {
+        // The review's finding 1: the resolution staged and README.md changed but not staged; git's
+        // --continue would refuse after the app's commit, so the banner's and the stage panel's
+        // Continue are disabled with the reason, and a Continue that waited is refused unrun.
+        const string reason = "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged";
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Rebase);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        repo.WriteFile("notes.txt", Scenarios.ConflictsFiles.NotesRebaseFirstResolved);
+        await repo.GitAsync("add", "notes.txt");
+        repo.WriteFile("README.md", "touched by an editor\n");
+        await app.Repository.RefreshAsync();
+        var state = app.Operations.Status.InProgress;
+
+        Assert.Equal((true, false, reason), (app.Repository.Banner.HasContinue, app.Repository.Banner.CanContinue, app.Repository.Banner.ContinueToolTip));
+        Assert.Equal((false, reason), (app.Repository.Changes.CanCommit, app.Repository.Changes.CommitToolTip));
+        app.Dialogs.CloseError();
+
+        await app.Operations.ContinueAsync(state, "Typed\n");
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Continue failed", reason + ". Nothing was continued."), (dialog.Title, dialog.Summary));
+        Assert.Equal(("Continue the rebase failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git commit", StringComparison.Ordinal) || call.CommandText == "git rebase --continue");
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(state, app.Operations.Status.InProgress);
+
+        // Once README.md is put back, Continue is enabled again and goes on.
+        await repo.GitAsync("checkout", "--", "README.md");
+        await app.Repository.RefreshAsync();
+        Assert.Equal((true, (string?)null), (app.Repository.Banner.CanContinue, app.Repository.Banner.ContinueToolTip));
+    }
+
+    [Fact]
+    public async Task The_git_layers_refusal_of_a_rebases_Continue_over_unstaged_files_says_what_to_do()
+    {
+        // When the status the app read did not show the change (the wrapper hides it), the git
+        // layer's own check refuses (finding 1, part b): "Continue failed", the same sentence.
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Rebase);
+        using var app = await OperationsHarness.OpenWrappedAsync(repo, HidingUnstaged.Wrap);
+        var head = await repo.HeadAsync();
+        repo.WriteFile("notes.txt", Scenarios.ConflictsFiles.NotesRebaseFirstResolved);
+        await repo.GitAsync("add", "notes.txt");
+        repo.WriteFile("README.md", "touched by an editor\n");
+        await app.Repository.RefreshAsync();
+        Assert.True(app.Repository.Banner.CanContinue);
+        app.Dialogs.CloseError();
+
+        await app.Operations.ContinueAsync(app.Operations.Status.InProgress, null);
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Continue failed", "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged."),
+            (dialog.Title, dialog.Summary));
+        Assert.Contains("README.md", dialog.Output ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git commit", StringComparison.Ordinal));
+    }
+
+    /// <summary>An <see cref="IGitRepository"/> whose status reads show no unstaged change other than conflicted files.</summary>
+    public class HidingUnstaged : DispatchProxy
+    {
+        private IGitRepository _inner = null!;
+
+        public static IGitRepository Wrap(IGitRepository inner)
+        {
+            var proxy = Create<IGitRepository, HidingUnstaged>();
+            ((HidingUnstaged)(object)proxy)._inner = inner;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            ArgumentNullException.ThrowIfNull(targetMethod);
+            try
+            {
+                var result = targetMethod.Invoke(_inner, args);
+                return targetMethod.Name == nameof(IGitRepository.ReadStatusAsync) && result is Task<WorkingTreeStatus> status ? HideAsync(status) : result;
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Throw(ex.InnerException);
+                throw;
+            }
+
+            static async Task<WorkingTreeStatus> HideAsync(Task<WorkingTreeStatus> read)
+            {
+                var status = await read;
+                return status with { Unstaged = [.. status.Unstaged.Where(file => file.Kind == FileChangeKind.Conflicted || status.IsUntracked(file.Path))] };
+            }
+        }
     }
 
     [Fact]

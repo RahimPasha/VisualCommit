@@ -89,6 +89,13 @@ public static partial class OperationTexts
     /// <summary>The last sentence of a Continue refused because the state changed while it waited (5.4).</summary>
     public const string NothingContinued = "Nothing was continued.";
 
+    /// <summary>
+    /// Continue's disabled reason at a rebase stop while a tracked file that is not conflicted has
+    /// unstaged changes (submodules left out): git's <c>--continue</c> refuses then (the review's
+    /// finding 1). With a period, the summary of "Continue failed" when the git layer refuses.
+    /// </summary>
+    public const string ContinueNeedsNothingUnstaged = "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged";
+
     /// <summary>The last sentence of a Skip refused because the state changed while it waited (5.4).</summary>
     public const string NothingSkipped = "Nothing was skipped.";
 

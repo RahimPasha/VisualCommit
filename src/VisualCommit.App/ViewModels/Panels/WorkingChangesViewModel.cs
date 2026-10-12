@@ -212,7 +212,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         : null;
 
     /// <summary>Why the banner's Continue is disabled for the state shown (5.1), or null.</summary>
-    private string? ContinueReason => ConflictBannerViewModel.ContinueFor(_status.InProgress, _conflicts).DisabledReason;
+    private string? ContinueReason => ConflictBannerViewModel.ContinueFor(_status.InProgress, _conflicts, _status.HasUnstagedTrackedChanges).DisabledReason;
 
     /// <summary>The label of the commit button that records a merge with nothing staged.</summary>
     public const string MergeCommitText = "Commit merge";
