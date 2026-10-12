@@ -31,10 +31,12 @@
                      TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="{Binding Remote}"
                      AutomationProperties.AutomationId="PushRemote" />
+          <!-- Not clipped: a radio button's focus frame reaches outside it (VcRadioButton). -->
           <ItemsControl Name="PushRemotes"
                         Grid.Column="1"
                         ItemsSource="{Binding Remotes}"
-                        IsVisible="{Binding !HasOneRemote}">
+                        IsVisible="{Binding !HasOneRemote}"
+                        ClipToBounds="False">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <StackPanel Spacing="8" />

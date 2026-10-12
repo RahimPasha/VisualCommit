@@ -31,7 +31,8 @@
 // - Pictures are saved only through Shot(app, "<check><step>-<what>"), with exactly the names of
 //   the report's Screenshots column ("01a-commit-menu"); the real-window pass saves its picture of
 //   the same step under the same name. Shot moves the pointer to the neutral point first unless a
-//   menu is open, a drag runs, or the capture is about a hover (keepPointer: true).
+//   menu is open, a drag runs, or the capture is about a hover (keepPointer: true), and waits
+//   until the details panel has read the selected commit's details (ShellDriver.WaitForCommitDetails).
 // - Every wait is on a condition (ShellDriver.WaitForAsync, WaitForIdleAsync, WaitForLogLineAsync,
 //   WaitForToolTipAsync, WaitForDialogAsync), never a fixed time; a change made outside the app is
 //   waited for with OutsideChangeTimeout.
@@ -185,7 +186,10 @@ public abstract partial class Phase3Checks
     /// Before the capture the pointer moves to the neutral point, as both harnesses do before a
     /// capture that is not about a hover, unless <paramref name="keepPointer"/> is true (a hover or
     /// tooltip capture), a menu is open (the pointer stays where it opened it) or a drag runs (the
-    /// pointer stays where the drag is). The step's time is noted for design 7.7's budget
+    /// pointer stays where the drag is). Before that it waits until the details panel is not
+    /// reading a commit's details (<see cref="ShellDriver.WaitForCommitDetails"/>): an input that
+    /// selected a row (a right-click that opens a menu, too) is pictured with that row's details,
+    /// never with the commit selected before. The step's time is noted for design 7.7's budget
     /// (artifacts/visual/phase-3/timings/).
     /// </summary>
     protected static Screenshot Shot(ShellDriver app, string name, bool keepPointer = false)
@@ -196,6 +200,7 @@ public abstract partial class Phase3Checks
             throw new ArgumentException($"\"{name}\" is not a picture name of the report: <check><step>-<what>, such as 01a-commit-menu.", nameof(name));
         }
 
+        app.WaitForCommitDetails();
         if (!keepPointer && !app.IsMenuOpen && !IsDragging(app))
         {
             app.MoveToNeutral();

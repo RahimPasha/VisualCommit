@@ -9,7 +9,8 @@
                   AutomationProperties.Name="{Binding Title}">
 
   <!-- The error dialog (docs/phase-3-design.md 1.6, 4f, C11): what happened, the repository,
-       git's own output in the code font (read-only, selectable, scrolling past 220), the command,
+       git's own output in the code font (read-only, selectable, scrolling past 13 lines: the
+       style dialogCode), the command,
        and "Copy output", the extra action and "Close". Without git output it shows the summary
        alone (D114). Close takes the focus. -->
   <Panel Classes="dialogBackdrop">
