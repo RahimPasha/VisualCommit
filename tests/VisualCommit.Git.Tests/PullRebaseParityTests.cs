@@ -9,10 +9,12 @@ namespace VisualCommit.Git.Tests;
 /// with <see cref="PullIntegration.Rebase"/>, docs/phase-4-design.md section 6, D147) against
 /// <c>git pull --rebase</c> on copies of one template (<see cref="PullParity"/>): git's pull
 /// settings are not read, a branch with nothing of its own is fast-forwarded, a stop is
-/// conflicts, and the backup's callback runs before every rebase. Here the settings;
-/// <see cref="PullRebaseForkPointParityTests"/> has an upstream rewritten by a force push, the
-/// fork point of a local upstream and a local upstream that only diverged. Runs on Git 2.36 and
-/// CI's git.
+/// conflicts, and the backup's callback runs before every rebase. Here each state of the branch
+/// against its upstream with nothing set, and a stop without a conflicted file;
+/// <see cref="PullRebaseSettingsParityTests"/> has git's pull settings, and
+/// <see cref="PullRebaseForkPointParityTests"/> an upstream rewritten by a force push, the fork
+/// point of a local upstream and a local upstream that only diverged. Classes of their own, so
+/// that they run side by side. Runs on Git 2.36 and CI's git.
 /// </summary>
 public class PullRebaseParityTests
 {
@@ -23,6 +25,39 @@ public class PullRebaseParityTests
         { "none", PullState.LocalAhead },
         { "none", PullState.Same },
         { "none", PullState.Conflicting },
+    };
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task The_chosen_rebase_ends_where_git_pull_rebase_ends(string settings, PullState state) =>
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings, PullIntegration.Rebase, leftOutByForkPoint: 0);
+
+    [Theory]
+    [InlineData(PullIntegration.Rebase, "none")]
+    [InlineData(PullIntegration.AsConfigured, "pull.rebase=true")]
+    public async Task A_rebase_that_stops_without_a_conflicted_file_is_a_stop_as_git_pull_leaves_it(PullIntegration integration, string settings)
+    {
+        // An untracked file is in the way of the branch's first pick, which git reschedules (0.1);
+        // phase 3 took only unmerged paths for a stop.
+        using var template = await Scenarios.RemoteSyncAsync();
+        await template.GitAsync("remote", "set-url", "origin", "../origin.git");
+        await Scenarios.PushFromElsewhereAsync(template, "main", "src/other.txt", "other\n", "Other work");
+        await template.CommitFileAsync("in.txt", "tracked\n", "Add in");
+        template.DeleteFile("in.txt");
+        await template.CommitAsync("Remove in");
+        template.WriteFile("in.txt", "untracked\n");
+
+        var result = await PullParity.CompareAsync(template, settings, integration, leftOutByForkPoint: 0);
+
+        Assert.Equal(new PullResult(PullOutcome.Conflicts, 0), result);
+    }
+}
+
+/// <summary><see cref="PullRebaseParityTests"/> for git's pull settings, which the chosen rebase does not read (an invalid value included), and the configured pull's callback.</summary>
+public class PullRebaseSettingsParityTests
+{
+    public static TheoryData<string, PullState> Cases => new()
+    {
         { "pull.ff=only", PullState.Diverged },
         { "pull.rebase=false", PullState.Diverged },
         { "pull.rebase=merges", PullState.DivergedWithMerge },
@@ -73,8 +108,10 @@ public class PullRebaseForkPointParityTests
     {
         // The upstream gained a commit that holds the branch's own change and more (not the same
         // patch): the rebase drops the branch's commit because it became empty, which is not the
-        // fork point's doing.
-        await PullParity.CompareAsync(await ForkPointTemplates.UpstreamHoldsTheChangeAsync(), "none", PullIntegration.Rebase, leftOutByForkPoint: 0);
+        // fork point's doing. HEAD gains only the upstream's commit.
+        var result = await PullParity.CompareAsync(await ForkPointTemplates.UpstreamHoldsTheChangeAsync(), "none", PullIntegration.Rebase, leftOutByForkPoint: 0);
+
+        Assert.Equal(new PullResult(PullOutcome.Rebased, 1), result);
     }
 }
 

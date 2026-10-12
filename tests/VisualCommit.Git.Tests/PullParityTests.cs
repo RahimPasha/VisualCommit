@@ -296,7 +296,8 @@ internal static class PullParity
     public static Task CompareAsync(TempRepo template, string settings) =>
         CompareAsync(template, settings, PullIntegration.AsConfigured, leftOutByForkPoint: 0);
 
-    public static async Task CompareAsync(TempRepo template, string settings, PullIntegration integration, int leftOutByForkPoint)
+    /// <returns>The app's result, or null when the app's pull failed as git pull did.</returns>
+    public static async Task<PullResult?> CompareAsync(TempRepo template, string settings, PullIntegration integration, int leftOutByForkPoint)
     {
         using var appCopy = await template.CopyAsync();
         using var gitCopy = await template.CopyAsync();
@@ -353,7 +354,7 @@ internal static class PullParity
             Assert.Equal(
                 GitFailureClassifier.Classify(pull.StandardError, pull.StandardOutput, pull.ExitCode),
                 GitFailureClassifier.Classify(failure.StandardError, failure.StandardOutput, failure.ExitCode));
-            return;
+            return null;
         }
 
         Assert.True(failure is null, $"The app's pull failed: {failure?.Message}");
@@ -369,6 +370,7 @@ internal static class PullParity
         }
 
         Assert.Equal(expected, result);
+        return result;
     }
 
     /// <summary>Runs git in <paramref name="repo"/> as the app's calls run: the test process's environment and the runner's defaults.</summary>
