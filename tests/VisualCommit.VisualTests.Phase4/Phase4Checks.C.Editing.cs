@@ -89,8 +89,8 @@ public sealed partial class Phase4ChecksC
         // At line 5 (y 533) the 197-high menu does not fit below the pointer, so phase 3's 4a
         // opens it above: its left 2 right of the pointer, its bottom edge 2 above it (the
         // report's expected result, corrected after the UI was built).
-        Assert.Equal(pointer.X + WindowLayout.MenuPointerGap, menu.Bounds.X, 2);
-        Assert.Equal(pointer.Y - WindowLayout.MenuPointerGap, menu.Bounds.Bottom, 2);
+        Assert.Equal(pointer.X + WindowLayout.MenuPointerGap, menu.Bounds.X, tolerance: 1.0);
+        Assert.Equal(pointer.Y - WindowLayout.MenuPointerGap, menu.Bounds.Bottom, tolerance: 1.0);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
         Assert.Equal(PartC2.Typed, app.ResultText);

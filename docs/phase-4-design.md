@@ -1614,8 +1614,19 @@ The code's doc comments are the reference; where the build differs from or adds 
   `HasSequencer` is gone. `Operations.CleanUpBackupsAsync()` runs after every operation that saved a
   backup (phase 3's aborts and resets included); the resolver's own snapshots (`Delete it`, a binary
   side) are saved inside the git layer and trigger no clean-up, which the next backup or opening
-  makes up for. Its review's findings and the lead's decisions on them are being fixed (status
-  "Next step").
+  makes up for. After its review (`f68ece9`): a list's `Done` and `Total` are read for a sequenced
+  list (`git rev-list --count <sequencer/head>..HEAD` and the lines left in `sequencer/todo`), so a
+  list's status after Continue or Skip says 10.2's `{K} of {N}`; git keeps no record of a skipped
+  commit, so a Skip makes N smaller. The banner's Continue commits the stage panel's message when
+  the user changed it, as the panel's own Continue does (`WorkingChangesViewModel.ContinueMessage`;
+  an empty summary means the operation's own message). `IGitRepository.ReadRebaseAutoStashAsync`
+  is read before "Check out and rebase"'s status read. `OperationContext.SetRunningText` lets an
+  operation of several steps name the step it is at ("Checking out {A}…", then "Rebasing {A} onto
+  {B}…"). `OperationReport.Warning` is a success in the warning colour, logged `Succeeded` (the
+  fork point's text; an autostash that conflicted stays `Conflicts`). The empty pick's dialog ends
+  `Skip it to go on.`. "Open in merge tool" on the file the resolver shows runs the resolver's own
+  `Merge tool…`, which asks first for a modified result. A menu without an enabled item keeps the
+  focus on its presenter and gives it back on Esc (found by check C14).
 - **The lead's hooks** (`d7b3c20`, `f184e95`, `51fb51f`): `RepositoryViewModel` implements
   `IInteractiveRebaseHost`; `ShowsGraph`, `ShowsInteractiveRebase` and `ShowsDiff` say what the
   graph area shows; `GraphFocusRequested` (`Graph` or `ContinueFirst`) gives the focus back when the

@@ -1622,6 +1622,14 @@ commit as the code that changes them.
   commit --no-edit` through `TempRepo`); the check then shows the paused banner, Continue enabled,
   Skip disabled with its reason and the Abort that keeps HEAD; a new step on a fresh copy shows the
   stage panel's `Continue cherry-pick` (step 2's button text, "Stage files to commit" before).
+- **Phase 3's check 25 step 7, the empty pick's dialog** (added on 2026-10-12, after WP4's review):
+  the dialog `Cherry-pick stopped` (`25m-empty-pick-dialog`) agrees with the banner, which now
+  offers Skip (5.2): its summary reads `dff8fbf changes nothing on main: its changes are already
+  there. Skip it to go on.` where phase 3 had "Abort the cherry-pick to go on."
+  (`Phase3Expectations.C.cs` `Check25EmptySummary`; `OperationTextsTests`, and the empty picks of
+  `RepositoryOperationsHistoryTests` and `RepositoryOperationsMergeTests`). The revert's dialog
+  does not change: on Git 2.36 `Revert failed` opens only when nothing is in progress (D117), so
+  there is nothing to skip.
 - **Phase 2's conflicted-file diff body** ("This file has a merge conflict") is replaced by the
   resolver; no phase 2 check shows it, and phase 2's pictures do not change (the spike kept all 66
   byte-identical, `a7ce01f`).
