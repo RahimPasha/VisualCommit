@@ -119,7 +119,7 @@ public class InteractiveRebaseTests
     }
 
     [Fact]
-    public async Task The_todo_and_two_message_files_reach_git_from_a_folder_whose_path_has_a_space_and_an_apostrophe_which_is_deleted_after()
+    public async Task The_todo_and_its_message_files_reach_git_from_a_folder_whose_path_has_a_space_and_an_apostrophe_which_is_deleted_after()
     {
         using var repo = await LineAsync();
         var (repository, list) = await OpenListAsync(repo);
@@ -127,7 +127,7 @@ public class InteractiveRebaseTests
         Directory.CreateDirectory(tempRoot);
 
         var result = await repository.InteractiveRebaseAsync(
-            Plan(list, Topic, Reword("One reworded\n"), Target("Two and three\n\n#1 kept\n"), Squash, Pick),
+            Plan(list, Topic, Reword("One reworded\n"), Target("Two and three\n\n#1 kept\n"), Squash, Reword("Four reworded\n")),
             tempRoot,
             null,
             TestCancelled);
@@ -135,6 +135,16 @@ public class InteractiveRebaseTests
         Assert.Equal(RebaseOutcome.Rebased, result.Outcome);
         Assert.Equal("One reworded\n", await MessageAsync(repo, "HEAD~2"));
         Assert.Equal("Two and three\n\n#1 kept\n", await MessageAsync(repo, "HEAD~1"));
+        Assert.Equal("Four reworded\n", await MessageAsync(repo, "HEAD"));
         Assert.Empty(Directory.EnumerateFileSystemEntries(tempRoot));
+    }
+
+    [Fact]
+    public void The_sequence_editor_is_a_shell_function_with_single_quoted_forward_slash_paths()
+    {
+        Assert.Equal(
+            "vc() { cp 'C:/t/it'\\''s here/visualcommit-rebase-1/'vc-message-* \"$(dirname \"$1\")/\" && cp 'C:/t/it'\\''s here/visualcommit-rebase-1/todo' \"$1\"; }; vc",
+            GitRepository.RebaseText.SequenceEditor(@"C:\t\it's here\visualcommit-rebase-1\todo", @"C:\t\it's here\visualcommit-rebase-1"));
+        Assert.Equal("vc() { cp '/tmp/x/todo' \"$1\"; }; vc", GitRepository.RebaseText.SequenceEditor("/tmp/x/todo", null));
     }
 }

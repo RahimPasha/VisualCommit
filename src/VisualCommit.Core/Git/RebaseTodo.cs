@@ -31,8 +31,11 @@ public static class RebaseTodo
     /// </summary>
     public static Encoding FileEncoding { get; } = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>What every message file's name starts with: the sequence editor copies them all with one pattern.</summary>
+    public const string MessageFilePrefix = "vc-message-";
+
     /// <summary>The message file of group <paramref name="group"/> (1, 2, …), as it lies in <c>rebase-merge/</c>: <c>vc-message-&lt;n&gt;</c>.</summary>
-    public static string MessageFileName(int group) => "vc-message-" + GroupNumber(group);
+    public static string MessageFileName(int group) => MessageFilePrefix + GroupNumber(group);
 
     /// <summary>The label written before group <paramref name="group"/>'s pick: <c>vc-&lt;n&gt;</c> (git keeps it as <c>refs/rewritten/vc-&lt;n&gt;</c> while the rebase runs).</summary>
     public static string Label(int group) => "vc-" + GroupNumber(group);

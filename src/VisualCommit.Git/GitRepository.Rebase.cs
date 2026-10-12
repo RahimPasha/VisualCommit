@@ -118,15 +118,13 @@ public sealed partial class GitRepository
         {
             var todoPath = Path.Combine(folder, RebaseTodo.TodoFileName);
             await File.WriteAllTextAsync(todoPath, files.Todo, RebaseTodo.FileEncoding, cancellationToken).ConfigureAwait(false);
-            var messages = new List<(string Source, string Name)>();
             foreach (var message in files.Messages)
             {
-                var path = Path.Combine(folder, message.FileName);
-                await File.WriteAllTextAsync(path, message.Text, RebaseTodo.FileEncoding, cancellationToken).ConfigureAwait(false);
-                messages.Add((path, message.FileName));
+                await File.WriteAllTextAsync(Path.Combine(folder, message.FileName), message.Text, RebaseTodo.FileEncoding, cancellationToken).ConfigureAwait(false);
             }
 
-            var environment = new Dictionary<string, string?> { ["GIT_SEQUENCE_EDITOR"] = RebaseText.SequenceEditor(todoPath, messages) };
+            var editor = RebaseText.SequenceEditor(todoPath, files.Messages.Count > 0 ? folder : null);
+            var environment = new Dictionary<string, string?> { ["GIT_SEQUENCE_EDITOR"] = editor };
             var folderBefore = RebaseFolderExists();
             var command = WriteCommand(options, environment, ["rebase", "-i", .. Positional(plan.Onto)]);
             var result = RebaseText.WithoutEraseLine(await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false));
@@ -212,19 +210,23 @@ public sealed partial class GitRepository
         /// <summary>
         /// The <c>GIT_SEQUENCE_EDITOR</c> that hands git the app's todo (2.5): git runs it as
         /// <c>sh -c '&lt;editor&gt; "$@"' '&lt;editor&gt;' &lt;todo&gt;</c>, so it is a shell function
-        /// whose arguments the appended <c>"$@"</c> becomes, <c>vc() { cp '&lt;message 1&gt;'
-        /// "$(dirname "$1")/vc-message-1" &amp;&amp; … &amp;&amp; cp '&lt;todo&gt;' "$1"; }; vc</c> (a plain
-        /// chain of <c>cp</c>s would give the last one three operands, 0.2). Paths in forward
-        /// slashes, single-quoted, a <c>'</c> written <c>'\''</c>.
+        /// whose arguments the appended <c>"$@"</c> becomes (a plain chain of <c>cp</c>s would give
+        /// the last one three operands, 0.2): <c>vc() { cp '&lt;folder&gt;/'vc-message-*
+        /// "$(dirname "$1")/" &amp;&amp; cp '&lt;todo&gt;' "$1"; }; vc</c>, the message files' copy left
+        /// out when <paramref name="messagesFolder"/> is null (the pattern would match nothing and
+        /// <c>cp</c> fail). One <c>cp</c> for every message file, not one per file, so that the
+        /// command stays short however many groups the todo has: Windows limits a variable and a
+        /// command line to 32,767 characters, which some 200 copies of a temp path would pass.
+        /// Paths in forward slashes, single-quoted, a <c>'</c> written <c>'\''</c>.
         /// </summary>
-        public static string SequenceEditor(string todoPath, IReadOnlyList<(string Source, string Name)> messages)
+        public static string SequenceEditor(string todoPath, string? messagesFolder)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(todoPath);
-            ArgumentNullException.ThrowIfNull(messages);
-            var copies = messages
-                .Select(message => $"cp {Quote(message.Source)} \"$(dirname \"$1\")/{message.Name}\"")
-                .Append($"cp {Quote(todoPath)} \"$1\"");
-            return "vc() { " + string.Join(" && ", copies) + "; }; vc";
+            var copyTodo = $"cp {Quote(todoPath)} \"$1\"";
+            var body = messagesFolder is null
+                ? copyTodo
+                : $"cp {Quote(messagesFolder.TrimEnd('/', '\\') + "/")}{RebaseTodo.MessageFilePrefix}* \"$(dirname \"$1\")/\" && {copyTodo}";
+            return "vc() { " + body + "; }; vc";
         }
 
         /// <summary><paramref name="path"/> in forward slashes, as one single-quoted word for <c>sh</c>.</summary>
