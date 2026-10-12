@@ -135,7 +135,9 @@ public sealed partial class GitRepository
                 : ["commit-tree", tree];
             var commit = (await RunAsync(SnapshotIdentity, message, cancellationToken, commitArguments).ConfigureAwait(false)).Trim();
 
-            var name = SnapshotRefPrefix + DateTimeOffset.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+            // The backups' clock, as every backup's (docs/phase-4-design.md section 9): a test's fixed
+            // clock then orders the snapshots with the other backups for the clean-up.
+            var name = SnapshotRefPrefix + BackupClock.GetUtcNow().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
             var refName = name;
             for (var attempt = 2; ; attempt++)
             {
