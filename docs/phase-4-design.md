@@ -260,9 +260,12 @@ after the call is this call's own:
 
 ### 1.5 After the rebase
 
-The graph reloads (refs changed). The rewritten branch's new tip is selected when the selection
-was on a commit the rebase replaced (the old SHAs are gone; phase 3's `OnGraphSwapped` would drop
-the selection). The working-changes row is unaffected.
+The graph reloads (refs changed). When a rebase the app runs ends rebased (started from a menu, the
+list or a squash, or finished by Continue or Skip), the rewritten branch's new tip is selected if
+the selected commit was one of the branch's commits before the rebase, whether or not that old
+commit is still drawn (another ref may still reach it), or was dropped; otherwise the selection
+stays as it was. The working-changes row is unaffected; when it was selected and the working tree
+becomes clean, phase 2's rule applies (nothing is selected, 14.3).
 
 ## 2. Interactive rebase
 
@@ -323,9 +326,10 @@ view is; the banner, the left panel and the right panel stay. Opening it closes 
   `VcActionButton`, 84 × 22, at x 28: the action's name and `IconChevronDown` 10 × 10 on its
   right; not focusable); the short SHA at x 120, 64 wide, code font 12, secondary colour; the
   subject from x 192, cut with "…" and its whole text as tooltip; the author 140 wide at the right,
-  shown only when the list is at least 520 wide. A squash or fixup row's button, SHA and subject
-  move 16 right; a 2-px line in `VcLane0Brush` at x 12 joins its vertical centre to its target
-  row's. The selected row has `VcSelectionBrush`, a hovered one `VcRowHoverBrush`.
+  shown only when the list is at least 520 wide. A squash or fixup row's whole content (its grip,
+  button, SHA and subject) moves 16 right; a 2-px line in `VcLane0Brush` at x 12 runs from its
+  vertical centre to the top edge of its target row. The selected row has `VcSelectionBrush`, a
+  hovered one `VcRowHoverBrush`.
 - **Second line** (22, `RebaseRowSecondLine`) under a row whose message will change: `New message:
   {subject}` for a reworded row, `Message: {subject}` for the target of a group with a squash; an
   `Edit…` button (`RebaseEditMessageButton`) at its right opens the message dialog (7.2).
@@ -700,7 +704,7 @@ Mark resolved. The new disabled reasons are in 10.4.
 | Skip | `Skip {short}?` / `"{subject}" is left out of the {rebase, cherry-pick, revert}, and changes made to resolve its conflicts are lost.` / `A backup is saved first, so this can be undone.` / `Skip` (danger), `Cancel` |
 | Leaving a changed interactive list | `Discard the changes to this list?` / — / — / `Discard` (danger), `Keep editing` |
 | Staging or marking resolved with markers left | `{file} still has conflict markers.` (several: `{N} files still have conflict markers.`) / `Mark it resolved anyway? The markers are committed with it.` / — / `Mark resolved` (primary), `Cancel` |
-| Continue with markers staged | `{N} files still have conflict markers.` / `Continue anyway? The markers are committed with them.` / — / `Continue` (primary), `Cancel` |
+| Continue (or the stage panel's commit that concludes an operation) with markers staged | `{N} files still have conflict markers.` / `Continue anyway? The markers are committed with them.` (one file: `1 file still has conflict markers.` / `Continue anyway? The markers are committed with it.`) / — / `Continue` (primary), `Cancel` |
 | Leaving the resolver with a modified result (11.1) | `Discard your changes to {file}?` / `The result has not been marked resolved.` / — / `Discard` (danger), `Keep editing` |
 | The merge tool with a modified result | `Discard your changes to {file}?` / `The merge tool starts from the file as it is on disk.` / — / `Discard` (danger), `Keep editing` (the tool does not start) |
 | Mark resolved over a file changed on disk | `{file} changed on disk.` / `Overwrite it with the result?` / — / `Overwrite` (danger), `Cancel` |
@@ -716,7 +720,7 @@ Every question is the app's own dialog on the window's dialog layer (D69, D104);
 | `VcConflictTheirsBrush` | `#2C2140` | `#F0E6FA` | The theirs side, likewise |
 | `VcConflictBaseBrush` | `#24272F` | `#EEF0F3` | A `diff3` base section in the result |
 | `VcConflictMarkerBrush` | `#3A2E16` | `#FCEFD2` | The marker lines of an unresolved block in the result (their text in `VcWarningBrush`) |
-| `VcConflictUsedBrush` | `#1A2E24` | `#E6F6EC` | A block's side once it is used in the result (the colours of `VcDiffAddedBrush`) |
+| `VcConflictUsedBrush` | `#1A2E24` | `#E6F6EC` | In the ours and theirs panes, a block's side once it is used in the result (the colours of `VcDiffAddedBrush`); the result tints no chosen line |
 
 Icons (Lucide, added to `Icons.axaml` and `THIRD-PARTY-NOTICES.md`): `IconGrip` (grip-vertical),
 `IconChevronLeft`, `IconChevronUp` (Right and Down exist).
@@ -859,8 +863,8 @@ while the list was open: open it again. Nothing was rebased.`
 | A rebase stopped | `Rebase stopped: {N} files have conflicts` (warning); with none `Rebase stopped at {short} "{subject}"` (warning) |
 | A list stopped | `Cherry-picked {K} of {N} commits; stopped at {short} with conflicts in {M} files` (warning); on an empty pick `Cherry-picked {K} of {N} commits; {short} changes nothing` (warning); on a refused commit `Cherry-picked {K} of {N} commits; git could not pick {short}` (warning); `Reverted …` likewise |
 | Continue done | `Merge committed`, `Cherry-pick finished`, `Revert finished`, `Rebased {b} onto {onto}`; at a new stop as the stops above |
-| Skip done | `Skipped {short}`; at the end of the operation as Continue's |
-| A pull with rebase that left commits out | `Pulled {up} into {b} with rebase; git left out {k} commits that {up} once had` (warning) |
+| Skip done | at a new stop, that stop's text; when the operation ends, Continue's done text (`Rebased {b} onto {onto}`, `Cherry-pick finished`, `Revert finished`); `Skipped {short}` only when a single pick or revert was skipped (nothing follows) |
+| A pull with rebase | phase 3's `Pulled and rebased {b} onto {up}`; when the fork point left commits out: `Pulled and rebased {b} onto {up}; git left out {k} commits that {up} once had` (warning) |
 | Resolved | `Resolved {file}` |
 | Merge tool | `Resolved {file} in {tool}`; `{tool} closed without resolving {file}` (secondary) |
 
@@ -920,18 +924,20 @@ in the list, not as reasons.
   `IsResolverOpen`), like the diff; its document, undo stack, caret and scroll live in the view
   model, so a tab switch keeps them (one view serves every tab, as for the diff).
 - **Modified** means: the result differs from the file as the resolver last read or wrote it.
-- **Leaving.** While the resolver or the interactive list is open, every path that would show
-  something else in the graph area (`OpenDiff`, `OpenCommitDiff`, `Select` from the left panel or
-  the details' parent link, `OpenResolver`, `OpenInteractiveRebaseAsync`) first awaits
-  `RepositoryViewModel.TryLeaveGraphAreaAsync()`, which asks 7.2's question when the result is
-  modified (or the list changed) and returns false on "Keep editing"; it closes nothing itself. A
-  `Select` that comes from a refresh (a pending selection, after an operation) never closes the
-  resolver or the list: it moves the graph's selection behind them.
+- **Leaving.** While the resolver or the interactive list is open, every path that would replace
+  it in the graph area (`OpenDiff` of a file of the stage panel, `OpenResolver`,
+  `OpenInteractiveRebaseAsync`) first awaits `RepositoryViewModel.TryLeaveGraphAreaAsync()`, which
+  asks 7.2's question when the result is modified (or the list changed) and returns false on "Keep
+  editing"; it closes nothing itself. A diff of a commit's file (`OpenCommitDiff`, from the right
+  panel beside the list) opens over the list without asking, and closing it returns to the list. A
+  `Select` (from the left panel, a parent link, or a refresh) never closes the resolver or the
+  list: it moves the graph's selection behind them.
 - **Closing**: its close button (`ResolverCloseButton`) or Esc (11.10), asking first when the
   result is modified; when the conflicted files are all resolved (11.7); when the operation ends
   (Abort, or a refresh that leaves no conflict), without asking; when the tab closes, without asking
   (the work is in memory only, as an unsent stage-panel message is). When it closes the focus goes
-  to the stage panel's unstaged list, with no row selected.
+  to the banner's Continue button when it is shown and enabled (the next step after the last file
+  is resolved), otherwise to the graph.
 
 ### 11.2 Layout (owner's answer 5)
 
@@ -1068,8 +1074,9 @@ is the user's own commit.
   and `.Redo` (Ctrl+Z and Ctrl+Y on Windows and Linux; the platform's own on macOS), taken at the
   resolver's root in the tunnel phase while the focus is anywhere in it, and applied to the result's
   document; they replace AvaloniaEdit's own (0.6). The checks say "the platform's undo".
-- **Reaching a block** (opening, the conflict arrows, Alt+Up and Alt+Down, after a choice) moves the
-  caret to the result's block and scrolls each top pane so that the block's bar is the third
+- **Reaching a block** (opening, the conflict arrows, Alt+Up and Alt+Down; a choice does not move
+  on: the caret stays at the start of the replaced text) moves the caret to the start of the
+  block's `<` line and scrolls each top pane so that the block's bar is the third
   visible row (fewer rows above it near the start), and the result so that the block's `<` line is
   the third visible row; a pane stops at its end. The first block is reached when the resolver
   opens, with the keyboard focus in the result.
@@ -1512,6 +1519,55 @@ above:
   `<p>` a folder in the index (git also reports it as modify/delete). The merge tool: an unknown
   tool or one that is not installed throws `GitException` (it did not run); a tool that fails
   leaves the file as it was. New member `ReadStagedConflictMarkersAsync`.
+
+### 14.3 Decided while the checks were written (step 8)
+
+The report's writers derived every check with Git 2.36 on replicas of the scenarios and listed what
+the design left open; the lead decided (the sections above are corrected where they said otherwise):
+
+- **Rebase (part A).** `{onto}` in the banner is a local branch at `onto` if there is one, else a
+  remote branch, else the short SHA. "Check out {A} and rebase it…" items are not disabled while
+  HEAD is detached (they check a branch out first, with phase 3's question when leaving commits
+  behind); the other rebase items keep 1.1's order, the object's own facts first. A chosen rebase
+  pull's success is phase 3's `Pulled and rebased {b} onto {up}`. The app's own dirty-tree refusal of
+  "Check out {A} and rebase it" opens "Rebase failed" with 10.1's dirty-tree summary and no git
+  output; the status says `Check out {A} and rebase it onto {B} failed`. The backup is saved before
+  git runs, so a rebase git refuses leaves one (the clean-up takes it in time). After Continue or Skip
+  with the working-changes row selected and the tree clean, nothing is selected (phase 2's rule;
+  1.5).
+- **The list (part B).** A click or a right-click on a row selects it (a right-click then opens the
+  row's menu); a click on a row's action button selects the row and opens its menu, with the menu's
+  top-left at the button's bottom-left corner; Shift+F10 and the Menu key open it at the same place.
+  While a diff is open over the list, the list's Esc handler declines (the diff's closes it). `{N}
+  commits` counts the listed rows, whatever their actions. The action button of a reworded row says
+  `Reword`. `Cancel` asks as Esc does. "Changed" means the rows' actions or order differ from the
+  list's first state; a list moved back to it is not changed. A click on the base row changes
+  nothing. When a diff over the list closes, the focus goes back to the list's selected row.
+- **The resolver and the stops (part C).** The banner's buttons say `Continue` and `Skip`. The
+  Abort question of a rebase that began with a checkout ends `…before it started, and {branch} is
+  checked out again.`; `rebase-merge/visualcommit-return` holds the full ref name and a line feed.
+  `Conflict {k} of {m}`: `m` is the number of blocks as the file was read, `k` the block last
+  reached; with no block left the toolbar says `No conflicts left`. A choice does not move to the
+  next block. A block's bars keep showing its choice after the user types inside the chosen text,
+  until an undo brings its markers back; a block whose markers were removed by typing alone shows
+  `Not used` on both bars. The result tints no chosen line. The stage panel's message is joined as
+  `{summary}
+
+{description}`. The ours pane's common text is the working-tree file's, so it can
+  hold lines git merged in cleanly from theirs (11.3). The view model exposes `IsParsePending`, true
+  from a typed change until its parse is applied, for the checks to wait on. A merge's or a single
+  pick's stage-panel Commit asks the marker question too (it concludes the operation). The result's
+  menu has the header `{file} (result)`, `Undo` and `Redo` disabled with `Nothing to undo` and
+  `Nothing to redo`, `Cut` and `Copy` disabled with `Select some text first`, `Paste` and `Select
+  all` always enabled; a pane's menu has the header of its title and `Copy` likewise. A snapshot a
+  card saves is not offered by the stage panel's restore bar (that bar is for discards). A card
+  that offers nothing in the toolbar keeps the toolbar row, empty. `ResolverFolder` is empty for a
+  file at the root. `{file}` in the questions is the file's name. `Resolved {file}` and `Resolved
+  {file} in {tool}` are secondary. The toolbar keeps `Merge tool…`, the file menu `Open in merge
+  tool`.
+- **Earlier checks.** Phase 3's checks whose menus change also include 5b, 19, 25, 29 and 32; in
+  check 12 step 7 the two selected commits form a chain on main's line, so `Squash 2 commits…` is
+  enabled there and highlighted first.
 
 ## 15. Decisions
 
