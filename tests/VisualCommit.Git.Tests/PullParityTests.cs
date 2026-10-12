@@ -36,8 +36,8 @@ public enum PullState
 /// <see cref="PullFfOnlyParityTests"/> and <see cref="PullFfParityTests"/> have <c>pull.ff</c>,
 /// <see cref="PullLocalUpstreamParityTests"/> a local upstream, and
 /// <see cref="PullFailureParityTests"/> what fails. <see cref="PullParity"/> says how they are
-/// compared; <see cref="PullRebaseParityTests"/> and the classes beside it have the settings that
-/// rebase.
+/// compared; <see cref="PullRebaseTrueParityTests"/> and the classes beside it have the settings
+/// that rebase, and <see cref="PullRebaseParityTests"/> (phase 4) the rebase chosen for one pull.
 /// <para>
 /// Each group of settings is a class of its own, because xunit runs the tests of one class (the
 /// rows of a theory included) one after another and different classes side by side: as two
@@ -198,9 +198,10 @@ public class PullFailureParityTests
 /// <see cref="PullRebaseModesParityTests"/> has its other modes and <c>branch.&lt;b&gt;.rebase</c>,
 /// <see cref="PullRebaseFfParityTests"/> <c>pull.ff</c> with it, and
 /// <see cref="PullRebaseValuesParityTests"/> values git reads its own way. Classes of their own,
-/// so that they run side by side.
+/// so that they run side by side. (Phase 3's <c>PullRebaseParityTests</c>: the name went to the
+/// rebase chosen for one pull, docs/phase-4-design.md section 6.)
 /// </summary>
-public class PullRebaseParityTests
+public class PullRebaseTrueParityTests
 {
     public static TheoryData<string, PullState> Cases => new()
     {
@@ -218,7 +219,7 @@ public class PullRebaseParityTests
         await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
 }
 
-/// <summary><see cref="PullRebaseParityTests"/> for <c>pull.rebase</c>'s other modes and <c>branch.&lt;b&gt;.rebase</c>.</summary>
+/// <summary><see cref="PullRebaseTrueParityTests"/> for <c>pull.rebase</c>'s other modes and <c>branch.&lt;b&gt;.rebase</c>.</summary>
 public class PullRebaseModesParityTests
 {
     public static TheoryData<string, PullState> Cases => new()
@@ -236,7 +237,7 @@ public class PullRebaseModesParityTests
         await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
 }
 
-/// <summary><see cref="PullRebaseParityTests"/> with <c>pull.ff</c>.</summary>
+/// <summary><see cref="PullRebaseTrueParityTests"/> with <c>pull.ff</c>.</summary>
 public class PullRebaseFfParityTests
 {
     public static TheoryData<string, PullState> Cases => new()
@@ -253,7 +254,7 @@ public class PullRebaseFfParityTests
         await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings);
 }
 
-/// <summary><see cref="PullRebaseParityTests"/> for values that git reads its own way.</summary>
+/// <summary><see cref="PullRebaseTrueParityTests"/> for values that git reads its own way.</summary>
 public class PullRebaseValuesParityTests
 {
     public static TheoryData<string, PullState> Cases => new()
@@ -281,10 +282,21 @@ public class PullRebaseValuesParityTests
 /// relative path <c>../origin.git</c>, so that a merge's message ("Merge branch 'main' of
 /// ../origin") is the same in both. Every call runs with the test process's dates (D72), so
 /// commits made on both sides get the same ids. CI runs these on its git too (design 7.7, risk 4).
+/// <para>
+/// The app's pull is given the callback that saves a backup before a rebase
+/// (docs/phase-4-design.md section 6): it must be called once, with the old tip, when the pull
+/// rebased (the result says rebased, or git left a rebase in progress), and never when it
+/// fast-forwarded or merged. With <see cref="PullIntegration.Rebase"/> the command compared is
+/// <c>git pull --rebase</c>, and the result's <see cref="PullResult.LeftOutByForkPoint"/> must
+/// be the count the case expects.
+/// </para>
 /// </summary>
 internal static class PullParity
 {
-    public static async Task CompareAsync(TempRepo template, string settings)
+    public static Task CompareAsync(TempRepo template, string settings) =>
+        CompareAsync(template, settings, PullIntegration.AsConfigured, leftOutByForkPoint: 0);
+
+    public static async Task CompareAsync(TempRepo template, string settings, PullIntegration integration, int leftOutByForkPoint)
     {
         using var appCopy = await template.CopyAsync();
         using var gitCopy = await template.CopyAsync();
@@ -309,22 +321,33 @@ internal static class PullParity
 
         PullResult? result = null;
         GitException? failure = null;
+        var backups = new List<string>();
         try
         {
-            result = await repository.IntegratePullAsync(branch, cancellationToken: TestCancelled);
+            result = await repository.IntegratePullAsync(
+                branch,
+                integration,
+                async oldTip =>
+                {
+                    // The callback runs before the rebase: HEAD is still the old tip.
+                    Assert.Equal(oldTip, await appCopy.HeadAsync());
+                    backups.Add(oldTip);
+                },
+                cancellationToken: TestCancelled);
         }
         catch (GitException exception)
         {
             failure = exception;
         }
 
-        // git pull, with --no-rebase when nothing is configured (D78).
-        var pull = await RunGitAsync(gitCopy, pairs.Count == 0 ? ["pull", "--no-rebase"] : ["pull"]);
+        // git pull, with --no-rebase when nothing is configured (D78); git pull --rebase for the chosen rebase.
+        string[] gitPull = integration == PullIntegration.Rebase ? ["pull", "--rebase"] : pairs.Count == 0 ? ["pull", "--no-rebase"] : ["pull"];
+        var pull = await RunGitAsync(gitCopy, gitPull);
 
         var gitState = await DescribeAsync(gitCopy);
         Assert.Equal(gitState.Text, (await DescribeAsync(appCopy)).Text);
 
-        if (!pull.Succeeded && !gitState.Conflicts)
+        if (!pull.Succeeded && !gitState.Conflicts && !gitState.Rebasing)
         {
             Assert.True(failure is not null, $"git pull failed ({pull.StandardError.Trim()}), the app's pull did not.");
             Assert.Equal(
@@ -334,7 +357,18 @@ internal static class PullParity
         }
 
         Assert.True(failure is null, $"The app's pull failed: {failure?.Message}");
-        Assert.Equal(await ExpectedResultAsync(gitCopy, before, gitState), result);
+        var expected = await ExpectedResultAsync(gitCopy, before, gitState);
+        if (expected.Outcome == PullOutcome.Rebased || gitState.Rebasing)
+        {
+            expected = expected with { LeftOutByForkPoint = leftOutByForkPoint };
+            Assert.Equal([before], backups);
+        }
+        else if (expected.Outcome is PullOutcome.FastForward or PullOutcome.Merged || gitState.Conflicts)
+        {
+            Assert.Empty(backups);
+        }
+
+        Assert.Equal(expected, result);
     }
 
     /// <summary>Runs git in <paramref name="repo"/> as the app's calls run: the test process's environment and the runner's defaults.</summary>
@@ -342,9 +376,9 @@ internal static class PullParity
         NewRunner().RunAsync(new GitCommand(arguments) { WorkingDirectory = repo.Path }, TestCancelled);
 
     /// <summary>What the app should report, read from where git pull left <paramref name="repo"/>.</summary>
-    private static async Task<PullResult> ExpectedResultAsync(TempRepo repo, string before, (string Text, string Head, bool Conflicts) state)
+    private static async Task<PullResult> ExpectedResultAsync(TempRepo repo, string before, (string Text, string Head, bool Conflicts, bool Rebasing) state)
     {
-        if (state.Conflicts)
+        if (state.Conflicts || state.Rebasing)
         {
             return new PullResult(PullOutcome.Conflicts, 0);
         }
@@ -373,7 +407,7 @@ internal static class PullParity
     /// (<c>git status --porcelain=v2 --branch</c>), every branch's commit, the working tree's
     /// differences, and what is in progress.
     /// </summary>
-    private static async Task<(string Text, string Head, bool Conflicts)> DescribeAsync(TempRepo repo)
+    private static async Task<(string Text, string Head, bool Conflicts, bool Rebasing)> DescribeAsync(TempRepo repo)
     {
         var status = (await repo.GitAsync("status", "--porcelain=v2", "--branch")).StandardOutput;
         var branches = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/remotes")).StandardOutput;
@@ -387,7 +421,8 @@ internal static class PullParity
         const string OidPrefix = "# branch.oid ";
         var head = lines.Single(line => line.StartsWith(OidPrefix, StringComparison.Ordinal))[OidPrefix.Length..].Trim();
         var conflicts = lines.Any(line => line.StartsWith("u ", StringComparison.Ordinal));
-        return ($"status:\n{status}\nbranches:\n{branches}\ndiff:\n{diff}\nin progress: {inProgress}\n{mergeMessage}", head, conflicts);
+        var rebasing = Directory.Exists(Path.Combine(gitFolder, "rebase-merge")) || Directory.Exists(Path.Combine(gitFolder, "rebase-apply"));
+        return ($"status:\n{status}\nbranches:\n{branches}\ndiff:\n{diff}\nin progress: {inProgress}\n{mergeMessage}", head, conflicts, rebasing);
     }
 }
 
