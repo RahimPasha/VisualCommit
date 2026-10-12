@@ -355,7 +355,7 @@ public class RepositoryOperationsCheckoutTests
         run = operations.CheckoutAsync("refs/heads/feature/clash");
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
         app.Click(app.FindByAutomationId("ErrorExtraButton"));
-        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is ErrorDialogViewModel { Title: "Changes re-applied with conflicts" }, "the information dialog");
+        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is ErrorDialogViewModel { Title: "Changes re-applied with conflicts" }, "the information dialog", OperationChainTimeout);
         Assert.Equal(
             "Checked out feature/clash. Re-applying your changes stopped with conflicts in 1 file. Your changes are kept in the stash \"VisualCommit: before checking out feature/clash\".",
             TextOf(app, "ErrorSummary"));
