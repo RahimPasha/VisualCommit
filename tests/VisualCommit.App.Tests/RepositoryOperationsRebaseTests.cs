@@ -334,6 +334,30 @@ public class RepositoryOperationsRebaseTests
     }
 
     [Fact]
+    public async Task An_interactive_rebase_whose_stashed_changes_conflict_when_put_back_says_so_in_the_warning_colour()
+    {
+        // The review's findings 12 and 19: rebase.autoStash stashes the change of src/core.txt,
+        // which main changed too; git rebases, puts it back with conflicts and exits 0 (1.4).
+        using var repo = await Scenarios.RebaseAsync();
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("src/core.txt", "mine\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var list = await app.Repository.Repository.ReadRebaseListAsync(MainMore, "refs/heads/feature/topic", fromCommit: false, options: null, TestContext.Current.CancellationToken);
+        var request = new InteractiveRebaseRequest(new RebaseTarget(MainMore, "main"), "refs/heads/feature/topic", FromHere: false, CheckoutFirst: false);
+        var plan = new RebasePlan(list.Onto, list.BranchTip, "refs/heads/feature/topic", [new RebaseStep(TopicOne, RebaseAction.Drop, null), new RebaseStep(TopicTwo, RebaseAction.Pick, null)]);
+
+        Assert.True(await app.Operations.RunInteractiveRebaseAsync(plan, request));
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(
+            ("Rebased feature/topic: 1 commit; your changes conflicted when put back: they are also kept in the stash", OperationStatusTone.Warning),
+            (app.StatusText, app.StatusTone));
+        Assert.Equal(["Topic two", "Main more", "Main work", "Add core", "Initial commit"], await SubjectsAsync(repo, "feature/topic"));
+        Assert.Equal("1 file has conflicts. Resolve it, then stage it.", app.Repository.Banner.Text);
+        Assert.Single(await repo.StashListAsync());
+    }
+
+    [Fact]
     public async Task Start_of_a_drops_list_checks_the_branch_out_first()
     {
         using var repo = await Scenarios.RebaseAsync();

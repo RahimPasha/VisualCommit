@@ -291,7 +291,10 @@ public sealed partial class GitRepository
         var outcome = await ClassifyRebaseAsync(command, result, folderBefore, cancellationToken).ConfigureAwait(false);
         return outcome.Outcome == RebaseOutcome.Stopped
             ? new ContinueResult(ContinueOutcome.Stopped, await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false))
-            : new ContinueResult(ContinueOutcome.Done, outcome.NewTip ?? await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false));
+            : new ContinueResult(ContinueOutcome.Done, outcome.NewTip ?? await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false))
+            {
+                AutostashConflicted = outcome.AutostashConflicted,
+            };
     }
 
     /// <summary>The last line of <c>rebase-merge/done</c>: the command the rebase stopped at (or after), or null.</summary>

@@ -51,6 +51,32 @@ public class PullRebaseParityTests
 
         Assert.Equal(new PullResult(PullOutcome.Conflicts, 0), result);
     }
+
+    [Fact]
+    public async Task A_rebase_whose_stashed_changes_conflict_when_put_back_is_rebased_and_says_so()
+    {
+        // The review's findings 12 and 19: with rebase.autoStash git stashes the user's change of
+        // src/shared.txt, rebases, and putting it back conflicts with the upstream's change of
+        // that file; git exits 0 and keeps the stash, as git pull --rebase does.
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/shared.txt", "shared elsewhere\n", "Shared elsewhere");
+        await repo.CommitFileAsync("src/local.txt", "local\n", "Local work");
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("src/shared.txt", "shared mine\n");
+        using var plain = await repo.CopyAsync();
+        var repository = await RepositoryTestSupport.OpenAsync(repo);
+        var branch = (await repository.ReadRefsAsync(RepositoryTestSupport.TestCancelled)).Refs.Single(gitRef => gitRef.IsHead);
+        await repository.FetchAsync(branch.UpstreamRemote, NetworkOptions.None, cancellationToken: RepositoryTestSupport.TestCancelled);
+
+        var result = await repository.IntegratePullAsync(branch, PullIntegration.Rebase, beforeRebase: null, cancellationToken: RepositoryTestSupport.TestCancelled);
+
+        var pull = await PullParity.RunGitAsync(plain, "pull", "--rebase");
+        var seen = $"git pull --rebase: exit {pull.ExitCode}; stdout <{pull.StandardOutput}>; stderr <{pull.StandardError}>; status <{(await plain.GitAsync("status", "--porcelain")).StandardOutput}>; app {result}";
+        Assert.True(result is { Outcome: PullOutcome.Rebased, AutostashConflicted: true }, seen);
+        Assert.Equal("UU src/shared.txt", (await repo.GitAsync("status", "--porcelain")).StandardOutput.TrimEnd());
+        Assert.Equal((await plain.GitAsync("status", "--porcelain")).StandardOutput, (await repo.GitAsync("status", "--porcelain")).StandardOutput);
+        Assert.Single(await repo.StashListAsync());
+    }
 }
 
 /// <summary><see cref="PullRebaseParityTests"/> for git's pull settings, which the chosen rebase does not read (an invalid value included), and the configured pull's callback.</summary>

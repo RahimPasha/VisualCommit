@@ -188,10 +188,15 @@ public sealed partial class RepositoryOperations
             case PullOutcome.Merged:
                 return OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name));
             case PullOutcome.Rebased:
-                // Git's fork point left out commits the upstream once had (0.1): a success said in the warning colour (auto-fetch counts it as a fetch).
-                return pulled.LeftOutByForkPoint > 0
-                    ? OperationReport.Warning(OperationTexts.PulledRebasedLeftOut(branch.Name, upstream, pulled.LeftOutByForkPoint))
-                    : OperationReport.Done(OperationTexts.PulledRebased(branch.Name, upstream));
+                // Git's fork point left out commits the upstream once had (0.1): a success said in
+                // the warning colour (auto-fetch counts it as a fetch). Changes rebase.autoStash put
+                // back with conflicts make it 1.4's warning (the review's findings 12 and 19).
+                var rebased = pulled.LeftOutByForkPoint > 0
+                    ? OperationTexts.PulledRebasedLeftOut(branch.Name, upstream, pulled.LeftOutByForkPoint)
+                    : OperationTexts.PulledRebased(branch.Name, upstream);
+                return pulled.AutostashConflicted ? OperationReport.Conflicts(OperationTexts.WithAutostashConflicted(rebased))
+                    : pulled.LeftOutByForkPoint > 0 ? OperationReport.Warning(rebased)
+                    : OperationReport.Done(rebased);
             case PullOutcome.Conflicts:
                 var conflicts = await CountConflictedFilesAsync();
                 if (conflicts > 0 || (await Git.ReadStatusAsync()).InProgress.Kind != InProgressKind.Rebase)

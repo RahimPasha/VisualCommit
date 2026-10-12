@@ -42,4 +42,12 @@ public enum ContinueOutcome
 /// <summary>What Continue or Skip did (5.4); a refusal throws <see cref="GitException"/>.</summary>
 /// <param name="Outcome">Done, or stopped again.</param>
 /// <param name="NewTip">HEAD after it, or null when it could not be read (unborn).</param>
-public sealed record ContinueResult(ContinueOutcome Outcome, string? NewTip);
+public sealed record ContinueResult(ContinueOutcome Outcome, string? NewTip)
+{
+    /// <summary>
+    /// A rebase that Continue or Skip finished, whose changes git stashed at its start
+    /// (<c>rebase.autoStash</c>) conflicted when put back: they are also kept in the stash (1.4,
+    /// <see cref="RebaseResult.AutostashConflicted"/>). Only with <see cref="ContinueOutcome.Done"/>.
+    /// </summary>
+    public bool AutostashConflicted { get; init; }
+}

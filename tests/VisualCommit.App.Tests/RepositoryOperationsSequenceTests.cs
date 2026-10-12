@@ -304,6 +304,40 @@ public class RepositoryOperationsSequenceTests
     }
 
     [Fact]
+    public async Task Continue_that_finishes_a_rebase_whose_stashed_changes_conflict_when_put_back_says_so()
+    {
+        // The review's findings 12 and 19: git stashed g.txt's change at the start
+        // (rebase.autoStash); main changed g.txt too, so putting it back after the last commit
+        // conflicts. Continue says so in 1.4's words, and the banner shows the conflicted file.
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("f.txt", "base\n").WriteFile("g.txt", "g base\n");
+        await repo.CommitAsync("Initial commit");
+        await repo.CreateBranchAsync("topic");
+        repo.WriteFile("f.txt", "main\n").WriteFile("g.txt", "g main\n");
+        await repo.CommitAsync("Main edits f and g");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("f.txt", "topic\n", "T conflicts");
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("g.txt", "g mine\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        await app.Operations.RebaseAsync(new RebaseTarget(await app.ShaAsync("main"), "main"));
+        Assert.Equal("Rebase stopped: 1 file has conflicts", app.StatusText);
+        repo.WriteFile("f.txt", "resolved\n");
+        await repo.GitAsync("add", "f.txt");
+        await app.Repository.RefreshAsync();
+
+        await app.Operations.ContinueAsync(app.Operations.Status.InProgress, null);
+
+        Assert.Equal(
+            ("Rebased topic onto main; your changes conflicted when put back: they are also kept in the stash", OperationStatusTone.Warning),
+            (app.StatusText, app.StatusTone));
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.False(app.Operations.Status.InProgress.IsActive);
+        Assert.Equal("1 file has conflicts. Resolve it, then stage it.", app.Repository.Banner.Text);
+        Assert.Single(await repo.StashListAsync());
+    }
+
+    [Fact]
     public async Task The_git_layers_refusal_of_a_rebases_Continue_over_unstaged_files_says_what_to_do()
     {
         // When the status the app read did not show the change (the wrapper hides it), the git

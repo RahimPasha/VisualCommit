@@ -311,7 +311,7 @@ public sealed partial class RepositoryOperations
 
                         var tip = result.NewTip ?? await Git.ResolveAsync("HEAD") ?? plan.ExpectedTip;
                         selection.NewTip = tip;
-                        return OperationReport.Done(OperationTexts.InteractiveRebased(branch, await Git.CountCommitsAsync(plan.Onto, tip)));
+                        return Rebased(OperationTexts.InteractiveRebased(branch, await Git.CountCommitsAsync(plan.Onto, tip)), result.AutostashConflicted);
                     },
                     new RunOptions { HasSeveralSteps = request.CheckoutFirst, DescribeFailure = _ => display });
                 await FinishAsync(notice, selection);
@@ -390,7 +390,7 @@ public sealed partial class RepositoryOperations
                     var squashed = after == 0 ? tip : await Git.ResolveAsync($"{tip}~{after}") ?? tip;
                     selection.Follows = true;
                     selection.NewTip = squashed;
-                    return OperationReport.Done(OperationTexts.Squashed(count, squashed));
+                    return Rebased(OperationTexts.Squashed(count, squashed), result.AutostashConflicted);
                 },
                 new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text) });
             await FinishAsync(notice, selection);
@@ -689,14 +689,22 @@ public sealed partial class RepositoryOperations
 
             case RebaseOutcome.Rebased:
                 selection.NewTip = result.NewTip ?? await Git.ResolveAsync("HEAD");
-                return result.AutostashConflicted
-                    ? OperationReport.Conflicts(OperationTexts.RebasedAutostashConflicted(branch, target))
-                    : OperationReport.Done(OperationTexts.Rebased(branch, target));
+                return Rebased(OperationTexts.Rebased(branch, target), result.AutostashConflicted);
 
             default:
                 return await RebaseStopReportAsync(context, result.ConflictedFiles, notice);
         }
     }
+
+    /// <summary>
+    /// A rebase that ended rebased (1.4): <paramref name="done"/> as a success, or, when the
+    /// changes <c>rebase.autoStash</c> put back conflicted, as <see cref="OperationReport.Conflicts"/>
+    /// with 1.4's warning after it (<see cref="OperationTexts.WithAutostashConflicted"/>), so that
+    /// the status bar says the changes are also kept in the stash and the banner shows the
+    /// conflicted files: for every rebase the app runs (the review's findings 12 and 19).
+    /// </summary>
+    private static OperationReport Rebased(string done, bool autostashConflicted) =>
+        autostashConflicted ? OperationReport.Conflicts(OperationTexts.WithAutostashConflicted(done)) : OperationReport.Done(done);
 
     /// <summary>
     /// A rebase that stopped (1.4, 5.1): "Rebase stopped: {N} files have conflicts", or with none
@@ -739,9 +747,9 @@ public sealed partial class RepositoryOperations
             }
 
             var single = !ConflictBannerViewModel.InList(state) && state.Kind is InProgressKind.CherryPick or InProgressKind.Revert;
-            return OperationReport.Done(skipped && single
-                ? OperationTexts.Skipped(state.Commit ?? string.Empty)
-                : OperationTexts.ContinueDone(state.Kind, state.Branch, onto ?? string.Empty));
+            return Rebased(
+                skipped && single ? OperationTexts.Skipped(state.Commit ?? string.Empty) : OperationTexts.ContinueDone(state.Kind, state.Branch, onto ?? string.Empty),
+                result.AutostashConflicted);
         }
 
         if (now.Kind == InProgressKind.Rebase)

@@ -41,6 +41,29 @@ public class RepositoryOperationsPullRebaseTests
     }
 
     [Fact]
+    public async Task A_pull_whose_rebase_puts_back_stashed_changes_with_conflicts_says_so_in_the_warning_colour()
+    {
+        // The review's findings 12 and 19: rebase.autoStash stashes the change of src/shared.txt,
+        // which the upstream changed too; the rebase ends rebased and the put-back conflicts (1.4).
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/shared.txt", "shared elsewhere\n", "Shared elsewhere");
+        await repo.CommitFileAsync("src/local.txt", "local\n", "Local work");
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("src/shared.txt", "shared mine\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.PullRebaseAsync();
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(
+            ("Pulled and rebased main onto origin/main; your changes conflicted when put back: they are also kept in the stash", OperationStatusTone.Warning),
+            (app.StatusText, app.StatusTone));
+        Assert.Equal("Local work", (await repo.GitAsync("log", "-1", "--format=%s", "main")).StandardOutput.Trim());
+        Assert.Equal("1 file has conflicts. Resolve it, then stage it.", app.Repository.Banner.Text);
+        Assert.Single(await repo.StashListAsync());
+    }
+
+    [Fact]
     public async Task A_pull_with_rebase_that_stops_is_continued_with_the_stopped_commits_author()
     {
         using var repo = await Scenarios.RemoteSyncAsync();

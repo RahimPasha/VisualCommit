@@ -151,6 +151,37 @@ public class ContinueSkipRebaseTests
     }
 
     [Fact]
+    public async Task Continue_that_finishes_a_rebase_whose_stashed_changes_conflict_when_put_back_says_so()
+    {
+        // The review's findings 12 and 19: git stashed g.txt's change at the start
+        // (rebase.autoStash); main changed g.txt too, so putting it back after the last commit
+        // conflicts, and git still exits 0 with the stash kept (1.4).
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("f.txt", "base\n").WriteFile("g.txt", "g base\n");
+        await repo.CommitAsync("Initial commit");
+        await repo.CreateBranchAsync("topic");
+        repo.WriteFile("f.txt", "main\n").WriteFile("g.txt", "g main\n");
+        var main = await repo.CommitAsync("Main edits f and g");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("f.txt", "topic\n", "T conflicts");
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("g.txt", "g mine\n");
+        var repository = await OpenAsync(repo);
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("rebase", "main")).ExitCode);
+        repo.WriteFile("f.txt", "resolved\n");
+        await repo.GitAsync("add", "f.txt");
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        var result = await repository.ContinueAsync(state, null, cancellationToken: TestCancelled);
+
+        Assert.Equal(new ContinueResult(ContinueOutcome.Done, await repo.HeadAsync()) { AutostashConflicted = true }, result);
+        Assert.Equal(main, await RevAsync(repo, "HEAD~1"));
+        Assert.False(repository.RebaseFolderExists());
+        Assert.Equal(["UU g.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Single(await repo.StashListAsync());
+    }
+
+    [Fact]
     public async Task Continue_after_another_stop_goes_on_to_the_next_conflict()
     {
         var (repo, main, commits) = await TopicAsync(("f.txt", "T1 conflicts"), ("g.txt", "T2 adds g"), ("f.txt", "T3 conflicts again"));

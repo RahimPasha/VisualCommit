@@ -138,8 +138,19 @@ public static partial class OperationTexts
     public static string RebaseUpToDate(string branch, string target) => $"{branch} is already up to date with {target}";
 
     /// <summary>Rebased, but the changes <c>rebase.autoStash</c> put back conflicted (1.4; warning).</summary>
-    public static string RebasedAutostashConflicted(string branch, string target) =>
-        $"Rebased {branch} onto {target}; your changes conflicted when put back: they are also kept in the stash";
+    public static string RebasedAutostashConflicted(string branch, string target) => WithAutostashConflicted(Rebased(branch, target));
+
+    /// <summary>
+    /// 1.4's warning for any rebase that ended rebased while the changes <c>rebase.autoStash</c>
+    /// put back conflicted (the review's findings 12 and 19): the operation's own result followed
+    /// by "; your changes conflicted when put back: they are also kept in the stash" ("Rebased
+    /// {b}: {N} commits; …", "Squashed {N} commits into {short}; …", "Pulled and rebased {b} onto
+    /// {up}; …", Continue's and Skip's "Rebased {b} onto {onto}; …").
+    /// </summary>
+    public static string WithAutostashConflicted(string result) => $"{result}; {AutostashConflictedClause}";
+
+    /// <summary>1.4's clause for changes <c>rebase.autoStash</c> put back with conflicts.</summary>
+    private const string AutostashConflictedClause = "your changes conflicted when put back: they are also kept in the stash";
 
     /// <summary>"Rebased {b}: {N} commits", the commits on the branch after its base (2.4).</summary>
     public static string InteractiveRebased(string branch, int commits) => $"Rebased {branch}: {Count(commits, "commit")}";

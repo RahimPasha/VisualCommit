@@ -215,6 +215,15 @@ public class OperationTextsTests
         Assert.Equal(
             "Rebased feature/topic onto main; your changes conflicted when put back: they are also kept in the stash",
             OperationTexts.RebasedAutostashConflicted("feature/topic", "main"));
+        Assert.Equal(
+            "Rebased main: 2 commits; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.InteractiveRebased("main", 2)));
+        Assert.Equal(
+            "Squashed 2 commits into a1b2c3d; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.Squashed(2, Sha)));
+        Assert.Equal(
+            "Pulled and rebased main onto origin/main; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.PulledRebased("main", "origin/main")));
         Assert.Equal("Rebased main: 1 commit", OperationTexts.InteractiveRebased("main", 1));
         Assert.Equal("Rebased main: 4 commits", OperationTexts.InteractiveRebased("main", 4));
         Assert.Equal("Squashed 2 commits into a1b2c3d", OperationTexts.Squashed(2, Sha));
