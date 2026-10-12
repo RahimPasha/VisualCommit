@@ -86,6 +86,35 @@ internal static class SequenceTestSupport
         return lines.Append(GuardedAmend(group)).Append('\n').ToString();
     }
 
+    /// <summary>
+    /// main and topic from "Initial commit" (f.txt "base\n"): main changes f.txt ("Main edit"),
+    /// topic makes one commit per file and subject given, each file "&lt;subject&gt;\n" (so a
+    /// commit to f.txt conflicts with main); HEAD on topic. Returns main's tip and topic's commits.
+    /// </summary>
+    public static async Task<(TempRepo Repo, string Main, IReadOnlyList<string> Commits)> TopicAsync(params (string File, string Subject)[] commits)
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+            await repo.CreateBranchAsync("topic");
+            var main = await repo.CommitFileAsync("f.txt", "main\n", "Main edit");
+            await repo.CheckoutAsync("topic");
+            var made = new List<string>();
+            foreach (var (file, subject) in commits)
+            {
+                made.Add(await repo.CommitFileAsync(file, subject + "\n", subject));
+            }
+
+            return (repo, main, made);
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>A path as one word for <c>sh</c>: forward slashes, in single quotes, a <c>'</c> written <c>'\''</c>.</summary>
     public static string ShellQuote(string path) => "'" + path.Replace('\\', '/').Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
@@ -115,7 +144,4 @@ internal static class SequenceTestSupport
         Assert.True(GitVersion.TryParse(output, out var version), output);
         return version;
     }
-
-    /// <summary>A file of the repository's git folder exists (<c>rebase-merge/amend</c>, <c>CHERRY_PICK_HEAD</c>).</summary>
-    public static bool InGitDir(TempRepo repo, string relativePath) => OperationTestSupport.GitFileExists(repo, relativePath);
 }

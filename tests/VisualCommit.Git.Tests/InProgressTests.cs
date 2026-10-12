@@ -546,33 +546,4 @@ public class InProgressTests
         var reword = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
         Assert.Equal((RebaseStopKind.Pick, (int?)1, false, 1, 2), (reword.StopKind!.Value, reword.Group, reword.NextIsSquash, reword.Done, reword.Total));
     }
-
-    /// <summary>
-    /// main and topic from "Initial commit" (f.txt "base\n"): main changes f.txt ("Main edit"),
-    /// topic makes one commit per file and subject given, each file "&lt;subject&gt;\n" (so a
-    /// commit to f.txt conflicts with main); HEAD on topic. Returns main's tip and topic's commits.
-    /// </summary>
-    private static async Task<(TempRepo Repo, string Main, IReadOnlyList<string> Commits)> TopicAsync(params (string File, string Subject)[] commits)
-    {
-        var repo = await TempRepo.CreateAsync();
-        try
-        {
-            await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
-            await repo.CreateBranchAsync("topic");
-            var main = await repo.CommitFileAsync("f.txt", "main\n", "Main edit");
-            await repo.CheckoutAsync("topic");
-            var made = new List<string>();
-            foreach (var (file, subject) in commits)
-            {
-                made.Add(await repo.CommitFileAsync(file, subject + "\n", subject));
-            }
-
-            return (repo, main, made);
-        }
-        catch
-        {
-            repo.Dispose();
-            throw;
-        }
-    }
 }
