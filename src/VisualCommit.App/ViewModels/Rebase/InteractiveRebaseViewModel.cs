@@ -551,8 +551,12 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
         }
     }
 
-    /// <summary>Cancel (<c>RebaseCancelButton</c>), and Esc: closes the list, asking first when it was changed (7.2, 14.3).</summary>
-    [RelayCommand(CanExecute = nameof(IsInteractive))]
+    /// <summary>
+    /// Cancel (<c>RebaseCancelButton</c>), and Esc: closes the list, asking first when it was
+    /// changed (7.2, 14.3). The button stays enabled while its question is open (a second press
+    /// asks nothing more: <see cref="TryLeaveAsync"/> declines while a question is open).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsInteractive), AllowConcurrentExecutions = true)]
     private async Task CancelAsync()
     {
         if (await TryLeaveAsync())

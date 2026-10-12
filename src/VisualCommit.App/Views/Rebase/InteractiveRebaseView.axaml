@@ -17,6 +17,12 @@
        520 wide; a squash or fixup row's content stands 16 further right, and the 2-px join line
        at x 12 runs from its centre to its target's top edge. Colours are tokens only. -->
   <UserControl.Styles>
+    <!-- No focus frame: the selected row has the focus and shows the selection background (the
+         theme sets a frame on every control by a style, which this one overrides). -->
+    <Style Selector="local|RebaseListRow">
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+
     <!-- A commit row: the selection background, the hover background under the pointer. -->
     <Style Selector="local|RebaseListRow.commit">
       <Setter Property="Background" Value="Transparent" />

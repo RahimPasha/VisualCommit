@@ -492,7 +492,7 @@ public partial class InteractiveRebaseView : UserControl
             return;
         }
 
-        RowsList.ScrollIntoView(index);
+        ScrollIntoView(index);
         if (RowPart(index) is { } part && part.Focus(method))
         {
             return;
@@ -504,11 +504,22 @@ public partial class InteractiveRebaseView : UserControl
             {
                 if (_viewModel?.IndexOf(row) is { } now and >= 0)
                 {
-                    RowsList.ScrollIntoView(now);
+                    ScrollIntoView(now);
                     RowPart(now)?.Focus(method);
                 }
             },
             DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Scrolls the row at <paramref name="index"/> into view; the bottom commit row with the base row under it.</summary>
+    private void ScrollIntoView(int index)
+    {
+        if (_viewModel is { } viewModel && index == viewModel.Rows.Count - 1)
+        {
+            RowsList.ScrollIntoView(index + 1);
+        }
+
+        RowsList.ScrollIntoView(index);
     }
 
     /// <summary>The bottom-left corner of <paramref name="row"/>'s action button in <paramref name="topLevel"/>'s coordinates, where its keyboard menu opens.</summary>
