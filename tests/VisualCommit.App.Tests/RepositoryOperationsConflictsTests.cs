@@ -315,6 +315,10 @@ public class RepositoryOperationsConflictsTests
         await app.WaitForResolverAsync("notes.txt");
 
         Assert.Equal(("Ours: main", "Theirs: origin/main"), (repository.Resolver.OursTitle, repository.Resolver.TheirsTitle));
+
+        // Another branch of that URL: no remote branch of its name at MERGE_HEAD, and not the upstream.
+        IConflictActions actions = repository.Operations;
+        Assert.Null(actions.MergedRemoteBranch("feature", repository.Status.InProgress.Commit));
     }
 
     [AvaloniaFact]

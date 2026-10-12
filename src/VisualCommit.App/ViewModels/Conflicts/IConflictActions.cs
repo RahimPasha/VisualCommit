@@ -74,9 +74,10 @@ public interface IConflictActions
     /// <summary>
     /// For a merge whose message names <paramref name="branch"/> of a URL (<c>Merge branch
     /// '&lt;x&gt;' of &lt;url&gt;</c>: a pull's merge of <c>FETCH_HEAD</c>, 11.4), the
-    /// remote-tracking branch it came from, as the refs last read have it: the current branch's
-    /// upstream when that is <paramref name="branch"/> on its remote, else a remote branch
-    /// <c>&lt;remote&gt;/&lt;branch&gt;</c> at <paramref name="mergeHead"/>; null when neither is.
+    /// remote-tracking branch it came from, as the refs last read have it: a remote branch
+    /// <c>&lt;remote&gt;/&lt;branch&gt;</c> at <paramref name="mergeHead"/> (the current branch's
+    /// upstream first, when it is one of them), else the current branch's upstream when that is
+    /// <paramref name="branch"/> on its remote; null when neither is.
     /// </summary>
     string? MergedRemoteBranch(string branch, string? mergeHead);
 

@@ -206,19 +206,22 @@ public sealed partial class RepositoryOperations : IConflictActions
             return null;
         }
 
-        // The app's pull merges the current branch's upstream (D147's FETCH_HEAD).
-        if (refs.Refs.FirstOrDefault(gitRef => gitRef is { Kind: RefKind.LocalBranch, IsHead: true }) is { Upstream: { } upstream, UpstreamRemoteRef: { } remoteRef } head
+        // The app's pull merges the current branch's upstream (FETCH_HEAD after its fetch, which
+        // moved the remote-tracking branch to MERGE_HEAD); a pull from a terminal may name another
+        // remote, whose branch the fetch moved there too.
+        var upstream = refs.Refs.FirstOrDefault(gitRef => gitRef is { Kind: RefKind.LocalBranch, IsHead: true }) is { Upstream: { } name, UpstreamRemoteRef: { } remoteRef } head
             && !head.HasLocalUpstream
-            && string.Equals(remoteRef, "refs/heads/" + branch, StringComparison.Ordinal))
-        {
-            return upstream;
-        }
-
-        return mergeHead is null
-            ? null
-            : refs.Refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.RemoteBranch
-                && string.Equals(gitRef.TargetSha, mergeHead, StringComparison.Ordinal)
-                && string.Equals(gitRef.Name, $"{gitRef.RemoteName}/{branch}", StringComparison.Ordinal))?.Name;
+            && string.Equals(remoteRef, "refs/heads/" + branch, StringComparison.Ordinal)
+            ? name
+            : null;
+        List<string> atMergeHead = mergeHead is null
+            ? []
+            : refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch
+                    && string.Equals(gitRef.TargetSha, mergeHead, StringComparison.Ordinal)
+                    && string.Equals(gitRef.Name, $"{gitRef.RemoteName}/{branch}", StringComparison.Ordinal))
+                .Select(gitRef => gitRef.Name)
+                .ToList();
+        return upstream is not null && atMergeHead.Contains(upstream, StringComparer.Ordinal) ? upstream : atMergeHead.FirstOrDefault() ?? upstream;
     }
 
     /// <inheritdoc/>
