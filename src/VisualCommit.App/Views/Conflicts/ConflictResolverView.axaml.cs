@@ -155,7 +155,10 @@ public partial class ConflictResolverView : UserControl
             Result.RevealLine(document.GetLineByOffset(Result.CaretOffset).LineNumber);
         }
 
-        RequestFocus();
+        if (viewModel.ResultFocusPending)
+        {
+            RequestFocus();
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -215,7 +218,10 @@ public partial class ConflictResolverView : UserControl
         }
 
         _focusPending = false;
-        Result.TextArea.Focus(NavigationMethod.Unspecified);
+        if (Result.TextArea.Focus(NavigationMethod.Unspecified) && _viewModel is { } viewModel)
+        {
+            viewModel.ResultFocusPending = false;
+        }
     }
 
     /// <summary>The platform's undo and redo (Avalonia's <c>HotkeyConfiguration</c>), taken before the editor sees them, wherever the focus is in the resolver (11.5).</summary>

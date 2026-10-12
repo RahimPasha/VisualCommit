@@ -258,6 +258,9 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     /// <summary>The result's caret, kept while another tab's resolver is shown.</summary>
     public int CaretOffset { get; set; }
 
+    /// <summary>The result is to take the keyboard focus (on opening, after a choice) and the view has not given it yet: a view shown later gives it.</summary>
+    public bool ResultFocusPending { get; set; }
+
     /// <summary>The result's scroll offset, kept while another tab's resolver is shown.</summary>
     public (double X, double Y)? ResultScroll { get; set; }
 
@@ -412,7 +415,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         var choices = (BlockChoice?[])_choices.Clone();
         choices[block] = blockChoice;
         Change(document, target.Offset, target.Length, target.TextFor(blockChoice), choices);
-        NavigationRequested?.Invoke(this, new ConflictNavigation(target.Offset, null, null, FocusResult: true));
+        Navigate(new ConflictNavigation(target.Offset, null, null, FocusResult: true));
     }
 
     /// <summary>Undoes the result's last change (the platform's undo, the result's menu), updating the bars and counts at once.</summary>
@@ -618,7 +621,8 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     /// <summary>Reads the open file again after a refresh, and shows it only when git or another program changed it (11.11).</summary>
     private async Task ReadAgainAsync(ConflictEntry entry)
     {
-        var version = ++_version;
+        // Not a new version: a choice or a whole side being read goes on; any of them makes the result modified, which drops this read.
+        var version = _version;
         ConflictContent content;
         try
         {
@@ -641,11 +645,11 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return;
         }
 
-        Show(entry, content);
+        Show(entry, content, focus: false);
     }
 
     /// <summary>Shows a file as read: a text conflict's panes and result with its first block reached, or a card.</summary>
-    private void Show(ConflictEntry entry, ConflictContent content)
+    private void Show(ConflictEntry entry, ConflictContent content, bool focus = true)
     {
         DetachDocument();
         Entry = entry;
@@ -688,11 +692,11 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         if (FirstUnresolved() is { } first)
         {
-            Reach(first, focus: true);
+            Reach(first, focus);
         }
         else
         {
-            NavigationRequested?.Invoke(this, new ConflictNavigation(0, null, 1, FocusResult: true));
+            Navigate(new ConflictNavigation(0, null, 1, focus));
         }
     }
 
@@ -764,6 +768,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     {
         DetachDocument();
         Entry = null;
+        ResultFocusPending = false;
         _read = null;
         _current = null;
         _choices = [];
@@ -923,7 +928,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         var offset = current.Blocks[_matched[block]].Offset;
         var line = document.GetLineByOffset(offset).LineNumber;
         CaretOffset = offset;
-        NavigationRequested?.Invoke(this, new ConflictNavigation(offset, block, line, focus));
+        Navigate(new ConflictNavigation(offset, block, line, focus));
     }
 
     /// <summary>Take ours or Take theirs (11.6): reads that side's file in its working-tree form and makes it the whole result, every block as if that side had been chosen.</summary>
@@ -955,7 +960,19 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         var text = ConflictText.Decode(bytes).Text;
         var choices = Enumerable.Repeat<BlockChoice?>(side == ConflictSide.Ours ? BlockChoice.Ours : BlockChoice.Theirs, _choices.Length).ToArray();
         Change(document, 0, document.TextLength, text, choices);
-        NavigationRequested?.Invoke(this, new ConflictNavigation(0, null, 1, FocusResult: true));
+        Navigate(new ConflictNavigation(0, null, 1, FocusResult: true));
+    }
+
+    /// <summary>Tells the view where the caret goes; a navigation that gives the result the focus is kept until the view has given it (a view shown later still does).</summary>
+    private void Navigate(ConflictNavigation navigation)
+    {
+        CaretOffset = navigation.CaretOffset;
+        if (navigation.FocusResult)
+        {
+            ResultFocusPending = true;
+        }
+
+        NavigationRequested?.Invoke(this, navigation);
     }
 
     /// <summary>One change of the resolver's own as one undo step: the text replaced and the choices it records.</summary>

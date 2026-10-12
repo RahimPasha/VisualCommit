@@ -771,9 +771,16 @@ public class ConflictResolverViewModelTests
         Assert.True(resolver.CanRedo);
 
         actions.SetText("notes.txt", R1);
+        resolver.ResultFocusPending = false;
+        var navigations = new List<ConflictNavigation>();
+        resolver.NavigationRequested += (_, navigation) => navigations.Add(navigation);
         resolver.Update(Status(Merge(), Entry("notes.txt")), "main", null);
         Settle();
         Assert.NotSame(document, resolver.Document);
+
+        // Read again on a refresh, the file's first block is reached without taking the focus.
+        Assert.False(Assert.Single(navigations).FocusResult);
+        Assert.False(resolver.ResultFocusPending);
         Assert.Equal(R1, Text(resolver));
         Assert.False(resolver.CanUndo);
         Assert.Equal("1 conflict left", resolver.ResultCountText);
