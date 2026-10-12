@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls.Diff;
@@ -192,10 +193,18 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         ApplyAutomationIds();
 
         // The texts are read and selected with the mouse; the keyboard goes from bar to bar.
+        // AvaloniaEdit's text area keeps Tab to itself (it types a tab): here it lets the
+        // keyboard's navigation through to the bars' buttons.
         foreach (var pane in new[] { _ours, _theirs })
         {
             pane.Editor.IsTabStop = false;
             pane.Editor.TextArea.IsTabStop = false;
+            KeyboardNavigation.SetTabNavigation(pane.Editor, KeyboardNavigationMode.Continue);
+            KeyboardNavigation.SetTabNavigation(pane.Editor.TextArea, KeyboardNavigationMode.Continue);
+
+            // The text area takes the focus itself whenever an element inside it gets it: a bar's
+            // button keeps it (the event stops at the bars' layer, below the text area).
+            pane.Headers.AddHandler(GotFocusEvent, (_, e) => e.Handled = true);
         }
 
         ActualThemeVariantChanged += (_, _) => OnThemeChanged();
