@@ -8,10 +8,11 @@
                   AutomationProperties.Name="{Binding Title}">
 
   <!-- The message dialog (docs/phase-4-design.md 7.2, 7.4) on the wide card (460): the summary
-       with the counter of what is left of 72, the description (wrapping, taking Return), Cancel
-       and the confirm button, disabled with its reason while the summary is blank. The summary
-       takes the focus with the caret at its end; Enter there confirms (DialogView's rule). A
-       plain first version: work package WP5 gives it its look. -->
+       (32 high) with the counter of what is left of 72, the description (120 high, wrapping,
+       taking Return), Cancel and the confirm button, disabled with its reason while the summary
+       is blank. The boxes look as the stage panel's summary and description do. The summary takes
+       the focus with the caret at its end; Enter there confirms (DialogView's rule), Enter in the
+       description starts a new line, Esc cancels (the window's). -->
   <Panel Classes="dialogBackdrop">
     <Border Name="MessageDialogCard" Classes="dialogCard wide">
       <StackPanel>

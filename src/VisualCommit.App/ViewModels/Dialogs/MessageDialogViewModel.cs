@@ -88,12 +88,16 @@ public sealed partial class MessageDialogViewModel : DialogViewModel<string?>
         return (lines[0], string.Join('\n', lines.Skip(1)).Trim('\n'));
     }
 
-    /// <summary>The message a summary and a description make (7.2): <c>{summary}\n\n{description}</c>, or the summary alone when the description is empty.</summary>
+    /// <summary>
+    /// The message a summary and a description make (7.2): <c>{summary}\n\n{description}</c>, or
+    /// the summary alone when the description is blank. The description's line ends become line
+    /// feeds: a text box types the platform's (<c>\r\n</c> on Windows), git keeps line feeds.
+    /// </summary>
     public static string Join(string summary, string description)
     {
         ArgumentNullException.ThrowIfNull(summary);
         ArgumentNullException.ThrowIfNull(description);
-        return string.IsNullOrWhiteSpace(description) ? summary : $"{summary}\n\n{description}";
+        return string.IsNullOrWhiteSpace(description) ? summary : $"{summary}\n\n{description.ReplaceLineEndings("\n")}";
     }
 
     [RelayCommand(CanExecute = nameof(CanConfirm))]
