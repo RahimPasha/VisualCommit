@@ -166,6 +166,14 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         }
     }
 
+    /// <summary>No row of the left panel is selected (D114: a right-click there selects nothing).</summary>
+    private static void AssertNoLeftPanelSelected(ShellDriver app)
+    {
+        app.Settle();
+        var selected = app.Session.Shell.ActiveTab.LeftPanel.Rows.OfType<RefItemRow>().Where(row => row.IsSelected).Select(row => row.Text).ToList();
+        Assert.True(selected.Count == 0, "Selected in the left panel: " + string.Join(", ", selected));
+    }
+
     /// <summary>Clicks commit row <paramref name="row"/> in its Message column and waits for its details.</summary>
     private static async Task ClickCommitRowAsync(ShellDriver app, int row, string subject)
     {
