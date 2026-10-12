@@ -30,6 +30,7 @@ public sealed partial class Phase3ChecksC
         var pointer = app.GraphRowPoint(4);
         app.RightClick(pointer);
         var menu = app.Menu();
+        await WaitForDetailsAsync(app, "Alpha two");
         var shot = Shot(app, "16a-commit-menu");
         AssertSelection(app, shot, 4);
         AssertMenuAt(app, menu, shot, pointer, "Check out this commit", PartC.Check16CommitMenu);

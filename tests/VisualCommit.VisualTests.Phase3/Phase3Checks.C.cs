@@ -97,6 +97,7 @@ public sealed partial class Phase3ChecksC : Phase3Checks
         pointer = app.GraphLabelBounds(1, "feature/conflict").Center;
         app.RightClick(pointer);
         menu = app.Menu();
+        await WaitForDetailsAsync(app, "Conflicting change");
         shot = Shot(app, "13f-branch-menu");
         AssertSelection(app, shot, 1);
         AssertMenuAt(app, menu, shot, pointer, "Check out feature/conflict", PartC.Check13BranchMenu);

@@ -21,7 +21,8 @@
                    Text="{Binding RepositoryText}"
                    IsVisible="{Binding ShowsRepository}"
                    AutomationProperties.AutomationId="DialogRepository" />
-        <ItemsControl Name="ChoiceOptions" ItemsSource="{Binding Options}" Margin="0,14,0,0">
+        <!-- Not clipped: a radio button's focus frame reaches outside it (VcRadioButton). -->
+        <ItemsControl Name="ChoiceOptions" ItemsSource="{Binding Options}" Margin="0,14,0,0" ClipToBounds="False">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Spacing="10" />

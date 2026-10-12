@@ -82,6 +82,7 @@ public sealed partial class Phase3ChecksA : Phase3Checks
         var addCore = app.GraphRowPoint(PartA.AddCoreRow);
         app.RightClick(addCore);
         menu = app.Menu();
+        await WaitForDetailsAsync(app, "Add core");
         var tip = await app.RestPointerOnMenuItemAsync("Cherry-pick onto main");
         shot = Shot(app, "01c-cherry-pick-disabled-tooltip", keepPointer: true);
         Assert.Equal(PartA.AlreadyOnMain, tip);

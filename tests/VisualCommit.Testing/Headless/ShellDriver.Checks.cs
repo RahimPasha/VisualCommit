@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Automation;
@@ -271,6 +273,41 @@ public sealed partial class ShellDriver
             "the status bar to show a percentage",
             timeout);
         return status.Percent!.Value;
+    }
+
+    /// <summary>
+    /// Waits until the active tab's details panel is not reading a commit's details
+    /// (<see cref="CommitDetailsViewModel.IsLoading"/> false), without leaving the UI thread, for a
+    /// picture taken right after an input that selected a commit (a click, a right-click, a key):
+    /// the panel reads the details on the thread pool and, until they arrive, still shows the
+    /// commit selected before, or the placeholder, beside the newly selected row (phase 3's gate:
+    /// 01c, 13f, 16a). A selection that reads nothing ends the wait at once: nothing selected, the
+    /// working-changes row, several commits, a tab without a repository. A read that fails ends it
+    /// too (the panel then shows why). Between looks the UI thread runs what was posted to it, as
+    /// in <see cref="WaitForAsync"/>; this one is synchronous, for a synchronous capture.
+    /// </summary>
+    /// <exception cref="TimeoutException">The details were still being read when the time was up.</exception>
+    public void WaitForCommitDetails(TimeSpan? timeout = null)
+    {
+        var limit = timeout ?? DefaultWaitTimeout;
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            Settle();
+            if (Session.Shell.ActiveTab.Repository?.Details is not { IsLoading: true })
+            {
+                return;
+            }
+
+            if (clock.Elapsed >= limit)
+            {
+                throw new TimeoutException(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"Timed out after {limit.TotalSeconds:0.###} s waiting for the details panel to show the selected commit."));
+            }
+
+            Thread.Sleep(PollInterval);
+        }
     }
 
     /// <summary>
