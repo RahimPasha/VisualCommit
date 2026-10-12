@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -13,7 +13,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 1. Repos and commit graph | Done | `phase/1-graph` | [phase-1](handoffs/phase-1.md) | [phase-1](test-reports/phase-1.md) |
 | 2. Diff and commit workflow | Done | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
 | 3. Branch, remote, stash and tag operations | Done | `phase/3-operations` | [phase-3](handoffs/phase-3.md) | [phase-3](test-reports/phase-3.md) |
-| 4. Rebase and conflict resolution | Not started | `phase/4-rebase-conflicts` | | |
+| 4. Rebase and conflict resolution | In progress | `phase/4-rebase-conflicts` | | |
 | 5. History, traceability and undo | Not started | `phase/5-history` | | |
 | 6. Multi-repo and productivity | Not started | `phase/6-multi-repo` | | |
 | 7. Hosting | Not started | `phase/7-hosting` | | |
@@ -25,10 +25,9 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 3 was accepted by the owner on 2026-10-11 and merged into `master`
-(merge commit `8b33745`); its gate ran on `594f9fb`. Phase 2 was accepted on 2026-10-10 (merge
-commit `e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge
-commit `b5f4723`). The next phase to start is phase 4.
+Phase 4, rebase and conflict resolution, is in progress on `phase/4-rebase-conflicts`, started
+on 2026-10-12 on the Windows machine from `master` at `3731b31`. Phase 3 was accepted on
+2026-10-11 and merged into `master` (merge commit `8b33745`); its gate ran on `594f9fb`.
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
@@ -36,11 +35,82 @@ after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for the CI result that each phase's "Done when" asks for. Each
-item is ticked in the commit that completes it. Number the steps plainly; do not label them C1,
-C2 and so on, which are requirement numbers.
+Each item is ticked in the commit that completes it. The numbers are plain step numbers, not
+requirement numbers.
+
+Start:
+
+- [x] 1. Phase branch created, phase set to "In progress", this checklist.
+- [ ] 2. Baseline: the default run on `master` (`3731b31`) passes, timed after the owner's
+  virus-scanner exclusion and compared with phase 3's 19 min 15 s.
+- [x] 3. Phase 3's leftovers removed: the 29 `worktree-*` branches (all merged, deleted with
+  `-d`) and seven git file-system monitor daemons of deleted worktrees.
+- [ ] 4. Open points decided and recorded: the owner's answers of 2026-10-12 (50 backups kept
+  besides the 30 days, the clean-up says nothing on screen, the resolver with ours and theirs
+  above the result across the graph and right-panel area, the interactive rebase's list in the
+  graph area with the newest commit on top); the design in `docs/phase-4-design.md`, its git
+  facts derived with Git 2.36, reviewed independently; decisions from D139 on.
+- [ ] 5. Phase 1's `Check_13_clone_with_progress` made deterministic (a clone held at a
+  percentage instead of a race), and the real-window project's comment on its duration corrected
+  (phase 3 handoff, "For the next phase", steps 3 and 5).
+- [ ] 6. Harness: phase 4's scenario repos (a plain rebase, an interactive rebase, conflicts in a
+  merge, in a rebase with two conflicting commits and in a cherry-pick, the conflict kinds the
+  resolver shows), pinned by tests; the project `VisualCommit.VisualTests.Phase4` in the
+  solution, CI and `scripts/time-scripted-check.sh`; the driver helpers the checks need.
+- [ ] 7. Phase 4's visual checks written into `docs/test-reports/phase-4.md`, each marked for
+  the real-window pass, reviewed independently, and committed before the UI they test.
+
+Git layer:
+
+- [ ] 8. Rebase a branch onto a commit or branch (the current branch or another), with a backup
+  of the old tip first and no confirmation (D135); the rebase's stopped state read fully; Continue,
+  Skip and Abort for a rebase. Tests.
+- [ ] 9. Interactive rebase with the app's own sequence editor: reorder, squash, fixup, reword,
+  drop; squash of several selected commits. Tests.
+- [ ] 10. Several commits picked and reverted with one git command (D136); Continue and Skip for
+  a merge, a cherry-pick and a revert, one or a list, also one started in a terminal; the
+  in-progress state read so that the reftable ref format works too (D128). Tests.
+- [ ] 11. Pull with rebase chosen for one pull, whatever git's configuration says; Continue and
+  Skip after a pull's rebase. Tests, with `PullParityTests`.
+- [ ] 12. Conflicts: per file the base, ours and theirs, the kind of conflict and its hunks;
+  taking a whole file from one side; writing a result and marking it resolved; the external merge
+  tool. Tests for every conflict kind.
+- [ ] 13. Backups cleaned up automatically (D137): after 30 days or beyond 50, the oldest first,
+  never one an operation in progress needs, when a repository is opened and after every new
+  backup; logged, nothing on screen. Tests.
+
+App:
+
+- [ ] 14. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
+  the drop menu, squash on a multi-selection, pull with rebase, interactive rebase from a commit.
+- [ ] 15. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
+  (its message, and its button for a rebase or a list of picks).
+- [ ] 16. The interactive rebase list in the graph area, newest on top: an action per commit,
+  drag to reorder, the new message of a reword or squash, Start and Cancel.
+- [ ] 17. The conflict resolver across the graph and right-panel area: ours and theirs above the
+  editable result, ours, theirs or both per conflict, a whole file from one side, mark resolved,
+  the next and previous conflicted file, the external merge tool.
+- [ ] 18. Phases 0 to 3's checks updated for anything phase 4 changes on purpose, recorded under
+  "Changes to expected results" in the phase 4 report.
+
+Visual checks:
+
+- [ ] 19. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase4`,
+  screenshots under `artifacts/visual/phase-4/scripted/`.
+- [ ] 20. Real-window pass for the checks marked for it (`Phase4RealWindowPass`).
+
+Closing:
+
+- [ ] 21. An independent review of the code before the gate; what it finds fixed, with tests.
+- [ ] 22. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed.
+- [ ] 23. CI run of the gate's commit read, every job.
+- [ ] 24. `architecture.md` describes what is built.
+- [ ] 25. `plan.md`: anything not delivered moved, risks updated.
+- [ ] 26. Handoff `docs/handoffs/phase-4.md`.
+- [ ] 27. Cold-read check by a fresh agent; gaps fixed.
+- [ ] 28. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [ ] 29. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -92,19 +162,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 4". Its first steps, and the open points to settle before
-its checks are written, are in the [phase 3 handoff](handoffs/phase-3.md) under "For the next
-phase".
+Step 4: write `docs/phase-4-design.md` from the owner's answers of 2026-10-12, the phase 3
+handoff's open points ("For the next phase") and git facts derived with Git 2.36, have it reviewed
+independently, and record its decisions from D139 on. Step 2's run on `master` was started first.
 
-Once a phase is running, this always names the single next thing to do and is kept accurate in
-every commit.
+This always names the single next thing to do and is kept accurate in every commit.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean when phase 3 was
-  merged. Left on the Windows machine: 29 local branches `worktree-wf_*` that the worktree tool
-  made, all at `d3814bd` and merged; delete them with `git branch -d` (the phase 3 handoff, "For
-  the next phase", step 2).
+- Phase 4 started on 2026-10-12. The research for its design (code maps and git experiments
+  with Git 2.36) was done by sub-agents into the session's scratch folder, which a new session
+  does not have; what the design relies on goes into `docs/phase-4-design.md` section 0.
 - Phases 1 to 3 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
   (git-ignored); the phase 3 handoff's "Things that cost time" says what to watch for: a worktree
   starts from `master` and its agent must create its branch from the phase branch first; merged
@@ -135,12 +203,16 @@ every commit.
 
 ## Waiting on the owner
 
-- Answered on 2026-10-12, for phase 4 to build: git's own list of commits for several picks
-  (D136, replacing a sentence of D88); automatic cleanup of the backups after 30 days or when
-  more than a set number exist (D137): phase 4 proposes the number and the moment.
+- Nothing waits on the owner for phase 4 now. Answered on 2026-10-12, before its design: git's
+  own list of commits for several picks (D136, replacing a sentence of D88); automatic cleanup of
+  the backups after 30 days or when more than a set number exist (D137); then, asked at the start
+  of phase 4: 50 backups are kept besides the 30 days, the clean-up says nothing on screen (the
+  log records it), the conflict resolver shows ours and theirs side by side above the editable
+  result across the graph and right-panel area, and the interactive rebase's list replaces the
+  graph with the newest commit on top.
 - The virus-scanner exclusion on the development machine (the repository folder and
   `C:\Users\rpkha\AppData\Local\Temp\VisualCommit.Tests`) was set up by the owner on
-  2026-10-12. Time the next full default run and compare it with the 19 minutes of phase 3's gate.
+  2026-10-12. Phase 4's step 2 times the default run with it (phase 3's gate: 19 minutes).
 - Settled on 2026-10-12: the working-changes row's dashed line crossing another branch's node
   (06f) is left for now; case-only branch renames on Windows and macOS stay refused (D131);
   auto-fetch gets no ssh timeout, only Cancel by hand (D125).
@@ -153,9 +225,8 @@ every commit.
   [phase 1 test report](test-reports/phase-1.md) and the eight-step one at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner will do them at the end, when a Mac
   is at hand (2026-10-11).
-- Whether to make phase 1's `Check_13_clone_with_progress` deterministic (see "CI"): recommended
-  as one of phase 4's first commits, so that no phase starts from a `master` whose CI can fail by
-  chance. Without an answer, "Start phase 4" does it.
+- Phase 1's `Check_13_clone_with_progress` (see "CI") is made deterministic in phase 4's step 5,
+  as the phase 3 handoff recommended; no answer came, so "Start phase 4" does it.
 - When the project is over: whether a CI run of 30 minutes or more is reasonable or needs another
   solution (D134).
 
