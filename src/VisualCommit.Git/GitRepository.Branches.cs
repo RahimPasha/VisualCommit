@@ -292,6 +292,26 @@ public sealed partial class GitRepository
         new(arguments) { WorkingDirectory = WorkingDirectory, Environment = (options ?? NetworkOptions.None).Environment };
 
     /// <summary>
+    /// A call that writes, as <see cref="WriteCommand(NetworkOptions?, string[])"/>, with
+    /// <paramref name="environment"/> added for this call only: the app's sequence editor
+    /// (<c>GIT_SEQUENCE_EDITOR</c>, docs/phase-4-design.md 2.5) or a stopped commit's author
+    /// (<c>GIT_AUTHOR_NAME</c>, <c>GIT_AUTHOR_EMAIL</c>, <c>GIT_AUTHOR_DATE</c>, 5.4). They come
+    /// after the prompt variables and, like any command's own, override the runner's defaults
+    /// (0.2); a null value removes a variable.
+    /// </summary>
+    private GitCommand WriteCommand(NetworkOptions? options, IReadOnlyDictionary<string, string?> environment, params string[] arguments)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        var merged = new Dictionary<string, string?>((options ?? NetworkOptions.None).Environment);
+        foreach (var (name, value) in environment)
+        {
+            merged[name] = value;
+        }
+
+        return new(arguments) { WorkingDirectory = WorkingDirectory, Environment = merged };
+    }
+
+    /// <summary>
     /// <paramref name="names"/> as git's positional arguments: after <c>--end-of-options</c> when
     /// one of them starts with "-", so that git cannot take it for an option (a branch named
     /// "-f", which plumbing or a fetch can make, would otherwise force the call). Only then, so
@@ -317,6 +337,152 @@ public sealed partial class GitRepository
 
     private static int ParseCount(string output) =>
         int.Parse(output.Trim(), NumberStyles.None, CultureInfo.InvariantCulture);
+
+    // ---- Shared by phase 4's rebase and sequence files (WP1, WP2) ------------------------------
+
+    /// <summary>
+    /// Whether a rebase is in progress in this worktree: <c>rebase-merge/</c> or
+    /// <c>rebase-apply/</c> exists in <see cref="GitDirectory"/> (docs/phase-4-design.md 0.1:
+    /// only these folders mean "in progress", also after an exit 0). Read before a rebase command
+    /// for <see cref="ClassifyRebaseAsync"/>.
+    /// </summary>
+    internal bool RebaseFolderExists() =>
+        Directory.Exists(Path.Combine(GitDirectory, "rebase-merge")) || Directory.Exists(Path.Combine(GitDirectory, "rebase-apply"));
+
+    /// <summary>
+    /// How a rebase command ended (docs/phase-4-design.md 1.4), shared by every rebase command of
+    /// sections 1, 2, 3, 5 and 6, from its <paramref name="result"/> and whether a rebase folder
+    /// existed before it ran (<paramref name="rebaseFolderBefore"/>, <see cref="RebaseFolderExists"/>):
+    /// <list type="bullet">
+    /// <item>A rebase folder after the call: <see cref="RebaseOutcome.Stopped"/> with the
+    /// conflicted files of the index, whatever the exit code (an <c>edit</c> stop exits 0). When a
+    /// folder was there before (Continue, Skip), a fatal exit (128 and above: "No rebase in
+    /// progress?", another rebase's folder) and git's refusal to continue with unresolved files
+    /// (<c>You must edit all merge conflicts</c>, exit 1, nothing changed) throw instead: the call
+    /// changed nothing. A rebase onto refuses to run while a folder is there (1.3), so for it a
+    /// folder after the call is always its own.</item>
+    /// <item>No folder, exit 0, and git said <c>is up to date</c> (<c>Current branch &lt;b&gt; is
+    /// up to date.</c>, <c>HEAD is up to date.</c>): <see cref="RebaseOutcome.UpToDate"/>.</item>
+    /// <item>No folder, exit 0: <see cref="RebaseOutcome.Rebased"/> with HEAD as the new tip, and
+    /// <see cref="RebaseResult.AutostashConflicted"/> with the conflicted files when standard error
+    /// says <c>Applying autostash resulted in conflicts</c>.</item>
+    /// <item>No folder, non-zero: git refused and nothing changed: <see cref="GitException"/> with
+    /// git's own text.</item>
+    /// </list>
+    /// The texts are matched by their classifying part only, the same on Git 2.36 and 2.55.
+    /// </summary>
+    internal async Task<RebaseResult> ClassifyRebaseAsync(GitCommand command, GitResult result, bool rebaseFolderBefore, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(result);
+        if (RebaseFolderExists())
+        {
+            if (rebaseFolderBefore && (result.ExitCode >= 128 || (result.ExitCode != 0 && RefusedToContinue(result))))
+            {
+                result.EnsureSuccess(command);
+            }
+
+            return new RebaseResult(RebaseOutcome.Stopped, null, await CountConflictedFilesAsync(cancellationToken).ConfigureAwait(false));
+        }
+
+        result.EnsureSuccess(command);
+        if (Says(result, "is up to date"))
+        {
+            return new RebaseResult(RebaseOutcome.UpToDate, null, 0);
+        }
+
+        var newTip = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
+        if (result.StandardError.Contains("Applying autostash resulted in conflicts", StringComparison.Ordinal))
+        {
+            return new RebaseResult(RebaseOutcome.Rebased, newTip, await CountConflictedFilesAsync(cancellationToken).ConfigureAwait(false))
+            {
+                AutostashConflicted = true,
+            };
+        }
+
+        return new RebaseResult(RebaseOutcome.Rebased, newTip, 0);
+
+        // "f.txt: needs merge" / "You must edit all merge conflicts and then mark them as resolved
+        // using git add": git rebase --continue with unresolved files changed nothing (0.1).
+        static bool RefusedToContinue(GitResult result) => Says(result, "You must edit all merge conflicts");
+
+        static bool Says(GitResult result, string text) =>
+            result.StandardOutput.Contains(text, StringComparison.Ordinal) || result.StandardError.Contains(text, StringComparison.Ordinal);
+    }
+
+    /// <summary>The number of conflicted paths in the index: the distinct paths of <c>git ls-files --unmerged -z</c> (one line per stage).</summary>
+    private async Task<int> CountConflictedFilesAsync(CancellationToken cancellationToken)
+    {
+        var output = await ReadOutputAsync(cancellationToken, "ls-files", "--unmerged", "-z").ConfigureAwait(false);
+        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(entry => entry.IndexOf('\t', StringComparison.Ordinal) is var tab and >= 0 ? entry[(tab + 1)..] : entry)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+    }
+
+    /// <summary>Whether the repository stores its refs in the reftable format (null: not asked yet), asked once per <see cref="GitRepository"/> (8.1).</summary>
+    private bool? _usesReftable;
+
+    /// <summary>
+    /// Reads a pseudo-ref that tells a pick or revert in progress, <c>CHERRY_PICK_HEAD</c> or
+    /// <c>REVERT_HEAD</c> (docs/phase-4-design.md 8.1, D128, D146): the one place that reads them.
+    /// First the file <c>&lt;git folder&gt;/&lt;name&gt;</c>, as git writes it under the files ref
+    /// format. When there is none, and only while <c>MERGE_MSG</c> or <c>sequencer/</c> exists
+    /// (every stopped pick or revert writes one of them, 0.3) in a repository whose
+    /// <c>extensions.refStorage</c> is <c>reftable</c> (Git 2.45+, where these are refs), through
+    /// git: <c>git rev-parse --verify --quiet --symbolic-full-name &lt;name&gt;</c> must print
+    /// exactly <paramref name="name"/> (or nothing, with git's <c>ambiguous</c> warning, when a
+    /// branch of that name exists too), so that a branch named <c>CHERRY_PICK_HEAD</c> alone does
+    /// not answer; then <c>git rev-parse --verify --quiet &lt;name&gt;</c> gives its commit. The
+    /// ref format is read lazily with <c>git config --get extensions.refStorage</c> and kept: a
+    /// files repository with nothing in progress makes no git call. Returns the full SHA, or null.
+    /// </summary>
+    internal async Task<string?> ReadPseudoRefAsync(string name, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (FirstLine(ReadGitFile(name)) is { } fromFile)
+        {
+            return fromFile;
+        }
+
+        if (!File.Exists(Path.Combine(GitDirectory, "MERGE_MSG")) && !Directory.Exists(Path.Combine(GitDirectory, "sequencer")))
+        {
+            return null;
+        }
+
+        if (!await UsesReftableAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var symbolic = Read("rev-parse", "--verify", "--quiet", "--symbolic-full-name", name);
+        var named = await _runner.RunAsync(symbolic, cancellationToken).ConfigureAwait(false);
+        var printed = named.StandardOutput.Trim();
+        var isPseudoRef = named.Succeeded
+            && (string.Equals(printed, name, StringComparison.Ordinal)
+                || (printed.Length == 0 && named.StandardError.Contains("ambiguous", StringComparison.Ordinal)));
+        return isPseudoRef ? await ResolveAsync(name, cancellationToken).ConfigureAwait(false) : null;
+    }
+
+    /// <summary>Whether <c>extensions.refStorage</c> is <c>reftable</c>: <c>git config --get</c>, exit 1 when unset (the files format).</summary>
+    private async Task<bool> UsesReftableAsync(CancellationToken cancellationToken)
+    {
+        if (_usesReftable is { } known)
+        {
+            return known;
+        }
+
+        var command = Read("config", "--get", "extensions.refStorage");
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        var reftable = result.ExitCode switch
+        {
+            0 => string.Equals(result.StandardOutput.Trim(), "reftable", StringComparison.OrdinalIgnoreCase),
+            1 => false,
+            _ => throw new GitException(command.DisplayText, result.ExitCode, result.StandardError, standardOutput: result.StandardOutput),
+        };
+        _usesReftable = reftable;
+        return reftable;
+    }
 
     private static void RequirePrefix(string fullName, string prefix, string parameterName)
     {
