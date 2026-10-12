@@ -70,8 +70,17 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
-    /// Pull's second step (2.18, D84): what <c>git pull</c> runs after its fetch, chosen as it
-    /// chooses from <c>pull.ff</c>, <c>branch.&lt;b&gt;.rebase</c> and <c>pull.rebase</c>:
+    /// Pull's second step (2.18, D84) as git is configured: the same as
+    /// <see cref="IntegratePullAsync(GitRef, PullIntegration, Func{string, Task}?, NetworkOptions?, CancellationToken)"/>
+    /// with <see cref="PullIntegration.AsConfigured"/> and no callback.
+    /// </summary>
+    public Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        IntegratePullAsync(branch, PullIntegration.AsConfigured, null, options, cancellationToken);
+
+    /// <summary>
+    /// Pull's second step (2.18, D84; docs/phase-4-design.md section 6, D147): what <c>git pull</c>
+    /// runs after its fetch. With <see cref="PullIntegration.AsConfigured"/> it is chosen as git
+    /// pull chooses from <c>pull.ff</c>, <c>branch.&lt;b&gt;.rebase</c> and <c>pull.rebase</c>:
     /// <list type="bullet">
     /// <item><c>pull.ff = only</c> wins over a rebase setting: <c>git merge --ff-only &lt;head&gt;</c>.</item>
     /// <item>A rebase (<c>branch.&lt;b&gt;.rebase</c>, or when unset <c>pull.rebase</c>, is true,
@@ -84,6 +93,18 @@ public sealed partial class GitRepository
     /// <item>Otherwise <c>git merge --no-edit [--ff | --no-ff] &lt;head&gt;</c>, also when nothing is
     /// set (D78), where Git 2.33.1 and later would refuse diverged branches.</item>
     /// </list>
+    /// <see cref="PullIntegration.Rebase"/> ("Pull from {up} (rebase)") reads none of these
+    /// settings, as <c>git pull --rebase</c> ignores them (an invalid value included): the
+    /// fast-forward when the branch has nothing of its own, otherwise <c>git rebase</c> without
+    /// arguments.
+    /// <para>
+    /// Before either pull rebases, <paramref name="beforeRebase"/> is called with the branch's old
+    /// tip (the app saves the rebase's backup there, 1.2); not before a fast-forward or a merge.
+    /// A rebase is classified by 1.4's rules (<see cref="ClassifyRebaseAsync"/>): every stop,
+    /// with or without conflicted files, is <see cref="PullOutcome.Conflicts"/>, and a refusal
+    /// throws. The commits that git's fork point leaves out are counted before the rebase
+    /// (<see cref="PullResult.LeftOutByForkPoint"/>, <see cref="CountLeftOutByForkPointAsync"/>).
+    /// </para>
     /// <c>&lt;head&gt;</c> is <c>FETCH_HEAD</c>, which the fetch of the upstream's remote has just
     /// written, so a merge gets git pull's message ("Merge branch 'main' of &lt;url&gt;"). For a
     /// local upstream (no fetch) it is <see cref="GitRef.UpstreamRef"/>, and a merge commit gets
@@ -91,14 +112,19 @@ public sealed partial class GitRepository
     /// A value of <c>pull.ff</c> or of a rebase setting that git would refuse (<c>preserve</c>,
     /// removed in Git 2.34, or a typo) throws <see cref="GitException"/> with the sentence
     /// "&lt;key&gt; is set to &lt;value&gt;, which this app does not understand." as its standard
-    /// error, before anything changes. Conflicts are returned, not thrown: git failed and the
-    /// index then has conflicted files (it had none before). When the fetch marked nothing for
+    /// error, before anything changes. A merge's conflicts are returned, not thrown: git failed
+    /// and the index then has conflicted files (it had none before). When the fetch marked nothing for
     /// merge, because the upstream was deleted on its remote (<c>FETCH_HEAD</c> has only
     /// <c>not-for-merge</c> lines, while the remote branch stays without a prune, D99), nothing runs
     /// and <see cref="PullOutcome.UpstreamGone"/> is returned: git pull fails there with "no such
     /// ref was fetched", and a merge of <c>FETCH_HEAD</c> would only say "Already up to date".
     /// </summary>
-    public async Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<PullResult> IntegratePullAsync(
+        GitRef branch,
+        PullIntegration integration,
+        Func<string, Task>? beforeRebase,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(branch);
         if (branch.Kind != RefKind.LocalBranch || branch.UpstreamRef is null)
@@ -107,8 +133,23 @@ public sealed partial class GitRepository
         }
 
         options ??= NetworkOptions.None;
-        var ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
-        var rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+        PullFastForward ff;
+        PullRebase rebase;
+        switch (integration)
+        {
+            case PullIntegration.AsConfigured:
+                ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
+                rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                break;
+            case PullIntegration.Rebase:
+                // git pull --rebase reads neither pull.ff nor a rebase setting (an invalid one included).
+                ff = PullFastForward.Unset;
+                rebase = PullRebase.Rebase;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(integration), integration, "Unknown pull integration.");
+        }
+
         if (!branch.HasLocalUpstream && FetchMarkedNothingForMerge())
         {
             // The upstream was deleted on its remote: git merge FETCH_HEAD would say "Already up
@@ -118,7 +159,6 @@ public sealed partial class GitRepository
 
         var head = branch.HasLocalUpstream ? branch.UpstreamRef : "FETCH_HEAD";
         var before = await ReadPullHeadAsync(cancellationToken).ConfigureAwait(false);
-        var conflictsBefore = await HasUnmergedEntriesAsync(cancellationToken).ConfigureAwait(false);
 
         string[] arguments;
         var rebased = false;
@@ -160,6 +200,12 @@ public sealed partial class GitRepository
             arguments = [.. merge];
         }
 
+        if (rebased)
+        {
+            return await PullRebaseAsync(branch.UpstreamRef, before!, arguments, beforeRebase, options, cancellationToken).ConfigureAwait(false);
+        }
+
+        var conflictsBefore = await HasUnmergedEntriesAsync(cancellationToken).ConfigureAwait(false);
         var command = RemoteCommand(arguments, options);
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded)
@@ -179,10 +225,6 @@ public sealed partial class GitRepository
         }
 
         var count = await CountPulledCommitsAsync(before, cancellationToken).ConfigureAwait(false);
-        if (rebased)
-        {
-            return new PullResult(PullOutcome.Rebased, count);
-        }
 
         // A merge commit has the old HEAD as its first parent and a second one; anything else that
         // moved HEAD forward was a fast-forward.
@@ -191,6 +233,71 @@ public sealed partial class GitRepository
             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var merged = parents.Length > 2 && parents[1] == before;
         return new PullResult(merged ? PullOutcome.Merged : PullOutcome.FastForward, count);
+    }
+
+    /// <summary>
+    /// A pull's rebase (section 6): counts what the fork point leaves out, calls
+    /// <paramref name="beforeRebase"/> with the old tip <paramref name="before"/>, runs
+    /// <paramref name="arguments"/> (<c>git rebase</c>, with <c>--rebase-merges</c> for
+    /// <c>pull.rebase=merges</c>) and classifies it (1.4): any stop is
+    /// <see cref="PullOutcome.Conflicts"/>, a refusal throws, HEAD where it was is
+    /// <see cref="PullOutcome.UpToDate"/>.
+    /// </summary>
+    private async Task<PullResult> PullRebaseAsync(
+        string upstreamRef,
+        string before,
+        string[] arguments,
+        Func<string, Task>? beforeRebase,
+        NetworkOptions options,
+        CancellationToken cancellationToken)
+    {
+        var leftOut = await CountLeftOutByForkPointAsync(upstreamRef, cancellationToken).ConfigureAwait(false);
+        if (beforeRebase is not null)
+        {
+            await beforeRebase(before).ConfigureAwait(false);
+        }
+
+        var folderBefore = RebaseFolderExists();
+        var command = RemoteCommand(arguments, options);
+        var result = RebaseText.WithoutEraseLine(await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false));
+        var rebase = await ClassifyRebaseAsync(command, result, folderBefore, cancellationToken).ConfigureAwait(false);
+        if (rebase.Outcome == RebaseOutcome.Stopped)
+        {
+            return new PullResult(PullOutcome.Conflicts, 0) { LeftOutByForkPoint = leftOut };
+        }
+
+        var after = await ReadPullHeadAsync(cancellationToken).ConfigureAwait(false);
+        if (after is null || after == before)
+        {
+            return new PullResult(PullOutcome.UpToDate, 0) { LeftOutByForkPoint = leftOut };
+        }
+
+        var count = await CountPulledCommitsAsync(before, cancellationToken).ConfigureAwait(false);
+        return new PullResult(PullOutcome.Rebased, count) { LeftOutByForkPoint = leftOut };
+    }
+
+    /// <summary>
+    /// The branch's own commits that <c>git rebase</c> without arguments leaves out because
+    /// <paramref name="upstreamRef"/> once held them (0.1, section 6): git replays
+    /// <c>&lt;upstream&gt;...HEAD</c> (the right side, no merges, patches already upstream left
+    /// out) restricted to the commits not reachable from the fork point, <c>git merge-base
+    /// --fork-point &lt;upstream&gt; HEAD</c> (found in the upstream's reflog). The difference of the
+    /// two counts, read before the rebase, so that a commit the rebase drops because it became
+    /// empty is not taken for one the fork point left out; 0 when git finds no fork point.
+    /// </summary>
+    private async Task<int> CountLeftOutByForkPointAsync(string upstreamRef, CancellationToken cancellationToken)
+    {
+        var forkPoint = await _runner.RunAsync(Read("merge-base", "--fork-point", upstreamRef, "HEAD"), cancellationToken).ConfigureAwait(false);
+        var fork = forkPoint.StandardOutput.Trim();
+        if (!forkPoint.Succeeded || fork.Length == 0)
+        {
+            return 0;
+        }
+
+        var range = $"{upstreamRef}...HEAD";
+        var all = ParseCount(await ReadOutputAsync(cancellationToken, "rev-list", "--count", "--no-merges", "--right-only", "--cherry-pick", range, "--").ConfigureAwait(false));
+        var replayed = ParseCount(await ReadOutputAsync(cancellationToken, "rev-list", "--count", "--no-merges", "--right-only", "--cherry-pick", range, "^" + fork, "--").ConfigureAwait(false));
+        return Math.Max(0, all - replayed);
     }
 
     /// <summary>
