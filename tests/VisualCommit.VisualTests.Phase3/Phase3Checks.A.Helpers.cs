@@ -368,13 +368,33 @@ public sealed partial class Phase3ChecksA
     /// Waits until the open diff of <paramref name="path"/> shows its text rows laid out. Loading a
     /// diff runs git, so the wait is the outside-change bound, not one step's 10 s: on CI's bare
     /// container, with five test processes side by side, it took longer (run 38256873492).
+    /// When it times out on CI (Linux, run 38258811117) it says what the app showed instead, saves
+    /// the picture <c>04z-diff-timeout</c> and the log lines written meanwhile, then fails.
     /// </summary>
-    private static Task WaitForTextDiffAsync(ShellDriver app, string path) =>
-        app.WaitForAsync(
-            () => Repo(app).Diff is { ShowsText: true } diff && diff.Target.Path == path
-                && app.Window.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.Name == "DiffText" && view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null),
-            $"the text diff of {path}",
-            OutsideChangeTimeout);
+    private static async Task WaitForTextDiffAsync(ShellDriver app, string path)
+    {
+        var mark = app.LogMark();
+        try
+        {
+            await app.WaitForAsync(
+                () => Repo(app).Diff is { ShowsText: true } diff && diff.Target.Path == path
+                    && app.Window.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.Name == "DiffText" && view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null),
+                $"the text diff of {path}",
+                OutsideChangeTimeout);
+        }
+        catch (TimeoutException ex)
+        {
+            var diff = Repo(app).Diff;
+            var views = app.Window.GetVisualDescendants().OfType<DiffTextView>()
+                .Select(view => $"{view.Name} visible={view.IsEffectivelyVisible} rows={view.Rows.Count} row0={view.RowBounds(0)?.ToString() ?? "none"}");
+            var lines = app.LogLinesSince(mark);
+            app.Capture().Save(Phase, "04z-diff-timeout");
+            throw new TimeoutException(
+                $"{ex.Message} The app showed: diff open={Repo(app).IsDiffOpen}, target={diff?.Target.Path ?? "none"}, body={diff?.Body.ToString() ?? "none"}; views: {string.Join("; ", views)}; "
+                + $"{lines.Count(line => line.Contains("working tree:", StringComparison.Ordinal))} working-tree reads and {lines.Count} log lines since the click, the last: {string.Join(" || ", lines.TakeLast(12))}",
+                ex);
+        }
+    }
 
     /// <summary>
     /// The diff's rows as phase 2's checks write them: "K old/new text" inline (K the kind's letter,
