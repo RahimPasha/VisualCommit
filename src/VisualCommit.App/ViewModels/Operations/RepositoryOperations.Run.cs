@@ -676,14 +676,6 @@ public sealed partial class RepositoryOperations
             : relative.Replace(Path.DirectorySeparatorChar, '/');
     }
 
-    /// <summary>A stub left by WP7-core for a sub-package to replace: a task that fails with "WP7: &lt;package&gt;: &lt;method&gt;". The last sub-package deletes it.</summary>
-    private static Task NotBuilt(string package, [CallerMemberName] string method = "") =>
-        Task.FromException(new NotImplementedException($"WP7: {package}: {method}"));
-
-    /// <summary>As <see cref="NotBuilt(string, string)"/> for a method with a result.</summary>
-    private static Task<T> NotBuilt<T>(string package, [CallerMemberName] string method = "") =>
-        Task.FromException<T>(new NotImplementedException($"WP7: {package}: {method}"));
-
     private IReadOnlyList<string> NamesOf(RefKind kind) =>
         Refs?.Refs.Where(gitRef => gitRef.Kind == kind).Select(gitRef => gitRef.Name).ToList() ?? [];
 

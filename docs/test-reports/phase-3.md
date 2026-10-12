@@ -1084,7 +1084,7 @@ Phase 3 changes these expected results of earlier phases on purpose (design 6.5)
 
 - **Tooltips are drawn on the window's overlay layer everywhere** (D105, design 6.5 item 6): a real-window picture of phases 0 to 2 that showed a tooltip as a window of its own now shows it inside the window, as the scripted pictures always did.
 - **A started write runs to its end** (design 1.4, 6.5 item 4): a phase 2 test that closed a tab during a write and expected the write to stop now sees it finish.
-- **Filled in at the gate:** which pictures listed in `phase-0-pictures.sha256` to `phase-2-pictures.sha256` differ from the new run, and why (phase 0's `06c` and phase 1's `11a`, `13b`, `14a` and `14b` already differed before phase 3), and phase 1's `08d` and `08e` (design 6.5 item 2).
+- **Filled in at the gate:** which pictures listed in `phase-1-pictures.sha256` and `phase-2-pictures.sha256` (phase 0 has no list) differ from the new run, and why (phase 0's `06c` and phase 1's `11a`, `13b`, `14a` and `14b` already differed before phase 3), and phase 1's `08d` and `08e` (design 6.5 item 2).
 - **Phase 2's check helpers** (`Phase2Checks.Discard.cs`, `Phase2Checks.Diff.cs`): the scripted checks look for a visible `ConfirmationDialog` instead of its presence in the tree, because the dialog layer now keeps a stack (D104) and a closed dialog's view leaves the window; and `OpenDiffAsync` waits for the side of the list that was clicked (a macOS CI run saw the unstaged header after a click on the staged row). No expected result of phases 0 to 2 changes by these.
 
 ## How the expected git states were derived
