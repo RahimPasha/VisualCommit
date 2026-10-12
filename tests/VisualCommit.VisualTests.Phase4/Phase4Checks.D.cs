@@ -253,7 +253,9 @@ public sealed partial class Phase4ChecksD : Phase4Checks
             var baseTexts = TextsIn(app.FindByAutomationId(app.RebaseListView, "RebaseBaseRow"));
             Assert.Equal([PartD.BaseLabel, PartD.BaseSha, PartD.BaseSubject], baseTexts);
             Assert.True(list.StartShown && list.CanStart, "Start rebase is not shown and enabled.");
-            Assert.Equal(PartD.StartRebase, ((Button)app.FindByAutomationId(app.RebaseListView, "RebaseStartButton")).Content);
+            var start = (Button)app.FindByAutomationId(app.RebaseListView, "RebaseStartButton");
+            Assert.Equal(PartD.StartRebase, start.Content);
+            Assert.Equal(PartD.PrimaryLabel, (start.Foreground as ISolidColorBrush)?.Color);
             Assert.Equal(PartD.Cancel, ((Button)app.FindByAutomationId(app.RebaseListView, "RebaseCancelButton")).Content);
         }
 

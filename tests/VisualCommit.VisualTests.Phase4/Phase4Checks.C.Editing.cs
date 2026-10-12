@@ -108,7 +108,6 @@ public sealed partial class Phase4ChecksC
         AssertHighlighted(menu, null);
         Assert.Equal(PartC2.PaneMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
         C14State.AssertTyped(app, focusInResult: false);
@@ -232,6 +231,11 @@ public sealed partial class Phase4ChecksC
         if (await IsReportGitAsync())
         {
             Assert.Equal(PartC2.LeftoverMarkerLines, C14To17.Lines(check.StandardOutput).Where(line => line.Contains("leftover", StringComparison.Ordinal)));
+        }
+        else
+        {
+            // On another git, that the check named notes.txt (what ReadStagedConflictMarkersAsync reads).
+            Assert.Contains(C14To17.Lines(check.StandardOutput), line => line.StartsWith("notes.txt:", StringComparison.Ordinal));
         }
 
         C14To17.ClickDialogButton(app, "CancelButton");

@@ -102,6 +102,7 @@ public sealed partial class Phase4ChecksC
         AssertStatus(app, PartC2.Resolved("image.png"));
         var snapshot = Assert.Single(await BackupsAsync(repo));
         await C15Kinds.AssertImageSnapshotAsync(repo, snapshot);
+        C15Kinds.AssertSnapshotFirst(app, calls, snapshot.Name);
         Assert.StartsWith(PartC2.ImageKindsBlob, (await repo.GitAsync("hash-object", "--", "image.png")).StandardOutput.Trim(), StringComparison.Ordinal);
         Assert.Equal(C14To17.WorkingFile(repo, "image.png"), Scenarios.ConflictsFiles.ImageKinds);
         Assert.Equal(["M  image.png", "AA new.txt"], await C14To17.PorcelainAsync(repo));
@@ -209,6 +210,15 @@ public sealed partial class Phase4ChecksC
             var bodyTop = app.BoundsOf(app.ResolverView.FindControl<Border>("ResolverToolbar")!).Bottom;
             Assert.Equal(resolverBounds.Center.X, card.Center.X, 1.0);
             Assert.Equal((bodyTop + resolverBounds.Bottom) / 2, card.Center.Y, 1.0);
+        }
+
+        /// <summary>The snapshot's ref was written before git checked theirs out over the picture (11.8: "a snapshot is saved first").</summary>
+        public static void AssertSnapshotFirst(ShellDriver app, int mark, string snapshotRef)
+        {
+            var calls = CallsSince(app, mark);
+            var saved = calls.FindIndex(call => call.Contains(snapshotRef, StringComparison.Ordinal));
+            var checkout = calls.IndexOf(PartC2.CheckoutTheirsImage);
+            Assert.True(saved >= 0 && saved < checkout, $"The snapshot {snapshotRef} was not written before \"{PartC2.CheckoutTheirsImage}\". The app ran:\n" + string.Join('\n', calls));
         }
 
         /// <summary>
