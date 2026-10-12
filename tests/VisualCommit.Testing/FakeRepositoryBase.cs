@@ -243,6 +243,9 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<MergeToolResult> RunMergeToolAsync(string path, string tool, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public virtual Task<IReadOnlyList<string>> ReadStagedConflictMarkersAsync(IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
     public virtual Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync(
         BackupRetention retention,
         IReadOnlySet<string> keep,

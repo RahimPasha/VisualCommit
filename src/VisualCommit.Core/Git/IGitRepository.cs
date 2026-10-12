@@ -492,33 +492,50 @@ public interface IGitRepository
     // Conflicts, the merge tool and the backups' clean-up (sections 9, 11; work package WP3).
 
     /// <summary>
-    /// What the resolver reads of a conflicted file (11.3, 11.8): the working-tree file's bytes,
-    /// its marker size (<c>git check-attr conflict-marker-size -- &lt;p&gt;</c>, default 7),
-    /// whether a side is binary (a NUL in its first 8000 bytes) or a symbolic link.
+    /// What the resolver reads of a conflicted file (11.3, 11.8): the working-tree file's bytes (a
+    /// symbolic link's target; none for a missing file or a folder), its marker size (<c>git
+    /// check-attr -z conflict-marker-size -- &lt;p&gt;</c>, a positive number or the default 7),
+    /// whether a side's blob is binary (a NUL in its first 8000 bytes, streamed with <c>git cat-file
+    /// blob</c>; a missing side, a link and a submodule are not), and whether a side is a symbolic
+    /// link (mode <c>120000</c>). Reads only.
     /// </summary>
     Task<ConflictContent> ReadConflictAsync(ConflictEntry entry, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// One side of a conflicted file in its working-tree form (11.6): <c>git cat-file --filters
-    /// --path=&lt;p&gt; &lt;stage id&gt;</c>, which writes nothing; null when that side has no file.
+    /// --path=&lt;p&gt; &lt;stage id&gt;</c>, byte for byte (D66), which writes nothing; null when
+    /// that side has no file or is a submodule.
     /// </summary>
     Task<byte[]?> ReadConflictSideAsync(ConflictEntry entry, ConflictSide side, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Marks a text conflict resolved with the resolver's result (11.7): writes
-    /// <paramref name="content"/> to the working-tree file <paramref name="path"/>, then
-    /// <c>git add -- &lt;p&gt;</c>.
+    /// <paramref name="content"/> byte for byte to the working-tree file <paramref name="path"/>,
+    /// then <c>git add -- &lt;p&gt;</c>. A symbolic link at the path is refused
+    /// (<see cref="IOException"/>): nothing is written through it.
     /// </summary>
     Task WriteResolutionAsync(string path, byte[] content, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Resolves a conflict with one side's whole file (11.8: a binary file, a symbolic link, or
-    /// "Keep the file" when git's file is missing): <c>git checkout --ours|--theirs -- &lt;p&gt;</c>,
-    /// then <c>git add -- &lt;p&gt;</c>. Never <c>git restore --ours</c> (0.4).
+    /// Resolves a conflict with one side (11.8), from the path's unmerged stages
+    /// (<c>git ls-files --unmerged</c>). When both sides have the file (both modified, both added:
+    /// a binary file or a symbolic link), <c>git checkout --ours|--theirs -- &lt;p&gt;</c>, then
+    /// <c>git add -- &lt;p&gt;</c>; a working-tree file that differs from that side (<c>git
+    /// hash-object</c>) is saved first in a discard snapshot (D67's <c>discard-&lt;time&gt;</c>), so
+    /// an edit is never lost. When one side has it ("Keep the file", "Keep it", a file moved aside
+    /// by a file/folder clash), the file git left is staged as it is (<c>git add</c>), and checked
+    /// out from <paramref name="side"/> first only when it is missing (git refuses a side that lacks
+    /// it). A path that is not unmerged, or a submodule, is refused with <see cref="IOException"/>
+    /// and nothing changes. Never <c>git restore --ours</c> (0.4).
     /// </summary>
     Task TakeSideAsync(string path, ConflictSide side, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Resolves a conflict by deleting the file (11.8: "Delete it", both deleted): <c>git rm -- &lt;p&gt;</c>.</summary>
+    /// <summary>
+    /// Resolves a conflict by deleting the file (11.8: "Delete it", both deleted): <c>git rm --
+    /// &lt;p&gt;</c>. Git deletes the working-tree file whatever it holds, so one that matches none of
+    /// the path's stages (the user edited it) is saved first in a discard snapshot (D67). A path
+    /// that is not unmerged, or a submodule, is refused with <see cref="IOException"/>.
+    /// </summary>
     Task RemoveConflictedAsync(string path, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>The merge tool git's configuration names (<c>git config --get merge.tool</c>), or null when none (11.9).</summary>
@@ -527,19 +544,44 @@ public interface IGitRepository
     /// <summary>
     /// Runs the external merge tool on one conflicted file and waits for it (11.9, D149):
     /// <c>git -c mergetool.keepBackup=false mergetool --tool=&lt;tool&gt; --no-prompt -- &lt;p&gt;</c>.
-    /// Cancelling stops git and the tool. Afterwards (also after a cancel) the files git leaves
-    /// beside the file on its failure paths are deleted when they did not exist before.
+    /// <see cref="MergeToolResult.Staged"/> when the path is no longer unmerged afterwards. A tool
+    /// that ran and did not resolve the file (git's <c>merge of &lt;p&gt; failed</c>, after which git
+    /// puts the file back) is not staged; a tool that did not run (unknown to git, or not found:
+    /// <c>The merge tool &lt;t&gt; is not available as …</c>) throws <see cref="GitException"/>.
+    /// Cancelling stops git and the tool. Afterwards (also after a cancel or a failure) the files
+    /// git leaves beside the file (<c>&lt;name&gt;_BACKUP_&lt;n&gt;&lt;.ext&gt;</c>, <c>_BASE_</c>,
+    /// <c>_LOCAL_</c>, <c>_REMOTE_</c>) are deleted when they did not exist before. A path that is
+    /// not unmerged, or a submodule, is refused with <see cref="IOException"/> before git runs.
     /// </summary>
     Task<MergeToolResult> RunMergeToolAsync(string path, string tool, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Which of <paramref name="paths"/> have conflict markers in their staged content
+    /// (docs/phase-4-design.md 5.1 "Markers", 7.2): <c>git diff --cached --check -- &lt;paths&gt;</c>,
+    /// read from its <c>&lt;path&gt;:&lt;line&gt;: leftover conflict marker</c> lines with the
+    /// marker size of each path's <c>conflict-marker-size</c>; exit 2 (a problem found) is a result,
+    /// and whitespace errors are not reported. Continue asks first when any of the paths that were
+    /// conflicted at the stop is returned. No path gives an empty list without a git call. In the
+    /// order given. A read: <c>GIT_OPTIONAL_LOCKS=0</c>.
+    /// </summary>
+    Task<IReadOnlyList<string>> ReadStagedConflictMarkersAsync(IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The backups' clean-up (section 9, D139): reads <c>refs/visualcommit/backup/</c> with one
-    /// <c>git for-each-ref</c>, groups the refs into backups by 9's pattern, and deletes those
-    /// older than <see cref="BackupRetention.Days"/>, then the oldest beyond
-    /// <see cref="BackupRetention.Count"/>, in one <c>git update-ref --stdin</c> transaction of
-    /// <c>delete &lt;ref&gt; &lt;old value&gt;</c> lines. Nothing goes while an operation is in
-    /// progress in any worktree, nor a ref of <paramref name="keep"/> (the restore bar's snapshot),
-    /// nor a ref that fits no scheme. Returns what it removed.
+    /// <c>git for-each-ref</c>, groups the refs into backups by 9's pattern (the refs that share
+    /// kind, time and number), and deletes those older than <see cref="BackupRetention.Days"/>
+    /// (by the time in the name, a time later than now counting as now), then, while more than
+    /// <see cref="BackupRetention.Count"/> remain, the oldest, in one <c>git update-ref --stdin</c>
+    /// transaction of <c>delete &lt;ref&gt; &lt;old value&gt;</c> lines. "Now" is the backups' clock.
+    /// Nothing goes while an operation is in progress in any worktree (the main git folder and every
+    /// <c>&lt;common&gt;/worktrees/*/</c>: <c>rebase-merge/</c>, <c>rebase-apply/</c>,
+    /// <c>MERGE_HEAD</c>, <c>sequencer/</c>, a pick head; a Debug log line says why it waits), nor a
+    /// backup with a ref in <paramref name="keep"/> (full ref names: the restore bar's snapshot,
+    /// which still counts), nor a ref that fits no scheme (not counted either). A ref changed since
+    /// the read fails the transaction: nothing is deleted, a Warning is logged and the list is
+    /// empty. One Info line per backup removed: <c>&lt;repo&gt;: Removed backup
+    /// &lt;kind&gt;-&lt;time&gt;[-&lt;n&gt;] (older than 30 days)</c> or <c>(more than 50
+    /// backups)</c>. Returns what it removed, oldest first.
     /// </summary>
     Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync(
         BackupRetention retention,
