@@ -15,8 +15,9 @@ namespace VisualCommit.App.Tests;
 /// or a dialog of its own and an extra button, a conflict, a cancel and its lock files, a closed
 /// tab, an <see cref="IOException"/>, confirmations with a backup, names, lookups) and that the
 /// toolbar and the Remotes dialog reach the operations of the same meaning. The WP7
-/// sub-packages' tests are classes of their own, by subject, so that xunit runs them side by
-/// side: <see cref="RepositoryOperationsCheckoutTests"/>, <see cref="RepositoryOperationsBranchesTests"/>,
+/// sub-packages' tests are classes of their own, by subject, in one xunit collection per
+/// sub-package (<see cref="RepositoryOperationsTestSupport"/> says why):
+/// <see cref="RepositoryOperationsCheckoutTests"/>, <see cref="RepositoryOperationsBranchesTests"/>,
 /// <see cref="RepositoryOperationsMergeTests"/> and <see cref="RepositoryOperationsHistoryTests"/>
 /// (WP7-branches); <see cref="RepositoryOperationsFetchTests"/>, <see cref="RepositoryOperationsPullTests"/>,
 /// <see cref="RepositoryOperationsPushTests"/> and <see cref="RepositoryOperationsRemotesTests"/>
@@ -25,6 +26,7 @@ namespace VisualCommit.App.Tests;
 /// <see cref="RepositoryOperationsQueueTests"/> for operations that wait in the queue. The helpers
 /// they share are in <see cref="RepositoryOperationsTestSupport"/>.
 /// </summary>
+[Collection(RepositoryOperationsTestSupport.SharedCollection)]
 public class RepositoryOperationsTests
 {
     [Fact]

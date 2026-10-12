@@ -17,6 +17,7 @@ namespace VisualCommit.App.Tests;
 /// not name. Each test holds the queue with an operation of its own, queues the operation under
 /// test behind it, changes the repository, then lets the queue go on.
 /// </summary>
+[Collection(RepositoryOperationsTestSupport.SharedCollection)]
 public class RepositoryOperationsQueueTests
 {
     private static readonly TimeSpan QueueTimeout = TimeSpan.FromSeconds(60);

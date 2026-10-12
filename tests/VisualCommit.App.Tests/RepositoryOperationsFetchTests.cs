@@ -24,11 +24,12 @@ namespace VisualCommit.App.Tests;
 /// confirmation, the backup it saves, what git holds afterwards, the status bar's text, its
 /// failure dialog with git's own output and its extra button, its cancel, and that a second
 /// click runs nothing more. Folder remotes serve most of them. WP7-remotes' tests are four
-/// classes, so that xunit runs them side by side:
-/// <see cref="RepositoryOperationsFetchTests"/>, <see cref="RepositoryOperationsPullTests"/>,
+/// classes in one xunit collection, which runs beside those of the other sub-packages
+/// (<see cref="RepositoryOperationsTestSupport"/> says why): <see cref="RepositoryOperationsFetchTests"/>, <see cref="RepositoryOperationsPullTests"/>,
 /// <see cref="RepositoryOperationsPushTests"/> and <see cref="RepositoryOperationsRemotesTests"/>;
 /// the helpers they share are in <see cref="RepositoryOperationsTestSupport"/>.
 /// </summary>
+[Collection(RepositoryOperationsTestSupport.RemotesCollection)]
 public class RepositoryOperationsFetchTests
 {
     // 2.16: fetch.

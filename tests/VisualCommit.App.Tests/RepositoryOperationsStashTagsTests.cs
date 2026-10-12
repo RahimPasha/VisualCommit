@@ -15,6 +15,7 @@ namespace VisualCommit.App.Tests;
 /// plain git, the status bar, the failure dialogs, a cancel, a closed tab, and that each
 /// operation runs once.
 /// </summary>
+[Collection(RepositoryOperationsTestSupport.StashTagsCollection)]
 public class RepositoryOperationsStashTagsTests
 {
     private const string Experiment = "On main: Experiment";

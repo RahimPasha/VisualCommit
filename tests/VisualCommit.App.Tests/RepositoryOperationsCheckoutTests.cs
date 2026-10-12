@@ -23,11 +23,13 @@ namespace VisualCommit.App.Tests;
 /// against real git and the scenario repos, through <see cref="OperationsHarness"/>: each
 /// operation's confirmation, the backup refs it saves and what they hold, what git holds after it,
 /// the status bar's text and colour, the error dialog with git's output and its extra button,
-/// cancel, and that each ran once. WP7-branches' tests are four classes, so that xunit runs them
-/// side by side: <see cref="RepositoryOperationsCheckoutTests"/>, <see cref="RepositoryOperationsBranchesTests"/>,
+/// cancel, and that each ran once. WP7-branches' tests are four classes in one xunit collection,
+/// which runs beside those of the other sub-packages (<see cref="RepositoryOperationsTestSupport"/>
+/// says why): <see cref="RepositoryOperationsCheckoutTests"/>, <see cref="RepositoryOperationsBranchesTests"/>,
 /// <see cref="RepositoryOperationsMergeTests"/> and <see cref="RepositoryOperationsHistoryTests"/>;
 /// the helpers they share are in <see cref="RepositoryOperationsTestSupport"/>.
 /// </summary>
+[Collection(RepositoryOperationsTestSupport.BranchesCollection)]
 public class RepositoryOperationsCheckoutTests
 {
     // ---- 2.1: check out a local branch ---------------------------------------------------------

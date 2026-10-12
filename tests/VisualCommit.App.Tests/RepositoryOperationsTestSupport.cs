@@ -13,12 +13,31 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// What the test classes of <see cref="RepositoryOperations"/> share
 /// (<see cref="RepositoryOperationsTests"/> and the classes of the WP7 sub-packages beside it).
-/// They were one partial class, whose tests xunit ran one after another; as classes of their own
-/// they run side by side, and reach these helpers with
+/// They were one partial class, whose tests xunit ran one after another; they are now classes by
+/// subject in four collections that run side by side (below), and reach these helpers with
 /// <c>using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;</c>.
 /// </summary>
 internal static class RepositoryOperationsTestSupport
 {
+    // The classes run in four xunit collections, one per WP7 sub-package: the classes of a
+    // collection one after another, the collections side by side. Not for safety (the tests share
+    // nothing but the scenario templates, built once per process behind a lock): every test runs
+    // git many times, and the default run is bound by the machine's processors (git's processes
+    // and the virus scanner). Twelve classes side by side made every git call of the run slower,
+    // so that a 10-second wait of a headless test timed out, and the run was no shorter.
+
+    /// <summary>Checkout, branches, merge and reset, cherry-pick, revert and abort (WP7-branches).</summary>
+    public const string BranchesCollection = "RepositoryOperations: branches";
+
+    /// <summary>Fetch, pull, push, remotes and tags on a remote (WP7-remotes).</summary>
+    public const string RemotesCollection = "RepositoryOperations: remotes";
+
+    /// <summary>Stashes, tags and the file actions (WP7-stashtags).</summary>
+    public const string StashTagsCollection = "RepositoryOperations: stashes, tags and files";
+
+    /// <summary>The helpers every operation shares, and operations that wait in the queue.</summary>
+    public const string SharedCollection = "RepositoryOperations: shared helpers and the queue";
+
     /// <summary>The time stamp in a backup ref's name, as a regular expression.</summary>
     public const string BackupTime = "[0-9]{8}T[0-9]{9}Z";
 
