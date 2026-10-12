@@ -15,12 +15,17 @@ namespace VisualCommit.App.ViewModels.Conflicts;
 public interface IConflictActions
 {
     /// <summary>
-    /// Mark resolved (11.7): writes <paramref name="content"/> (the result, in the encoding the
-    /// file was read in) to the working-tree file <paramref name="path"/> and stages it
-    /// (<see cref="IGitRepository.WriteResolutionAsync"/>). The questions of 7.2 (blocks left, the
-    /// file changed on disk) are the resolver's, before it calls this.
+    /// Mark resolved (11.7): one operation "Resolve {file}" that, just before it writes, reads the
+    /// working-tree file of <paramref name="entry"/> as <see cref="ReadAsync"/> does and compares
+    /// it with <paramref name="expected"/> (the bytes the resolver read; null: there was no file).
+    /// When they are the same, it writes <paramref name="content"/> (the result) to the file and
+    /// stages it (<see cref="IGitRepository.WriteResolutionAsync"/>). When they differ (a terminal
+    /// or a tool changed the file, perhaps while the operation waited in the queue), it writes
+    /// nothing and ends without failing, with <see cref="MarkResolvedOutcome.ChangedOnDisk"/> and
+    /// the bytes it found, which the resolver's <c>{file} changed on disk.</c> question (7.2) may
+    /// then expect. The markers question is the resolver's, before it calls this.
     /// </summary>
-    Task<bool> MarkResolvedAsync(string path, byte[] content);
+    Task<MarkResolvedResult> MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected);
 
     /// <summary>
     /// Resolves <paramref name="path"/> with one side's whole file at once (11.8). Both sides
@@ -44,6 +49,16 @@ public interface IConflictActions
     Task<bool> RunMergeToolAsync(string path);
 
     /// <summary>
+    /// The merge tool that runs now: the queue's current operation is "Merge tool for {file}"
+    /// (11.9), however it was started (the resolver's <c>Merge tool…</c> or the file menu's
+    /// <c>Open in merge tool</c>); null while none runs.
+    /// </summary>
+    MergeToolRun? RunningMergeTool { get; }
+
+    /// <summary>Raised on the UI thread when a merge tool starts running (<see cref="RunningMergeTool"/> becomes it).</summary>
+    event EventHandler<MergeToolRun>? MergeToolStarted;
+
+    /// <summary>
     /// One side of <paramref name="entry"/> in its working-tree form, for Take ours or Take theirs
     /// (11.6, <see cref="IGitRepository.ReadConflictSideAsync"/>): null when that side has no file
     /// or the read failed.
@@ -55,4 +70,45 @@ public interface IConflictActions
 
     /// <summary>Asks a question on the window's dialog layer (7.2); true when the user goes ahead.</summary>
     Task<bool> ConfirmAsync(ConfirmationRequest request);
+
+    /// <summary>
+    /// For a merge whose message names <paramref name="branch"/> of a URL (<c>Merge branch
+    /// '&lt;x&gt;' of &lt;url&gt;</c>: a pull's merge of <c>FETCH_HEAD</c>, 11.4), the
+    /// remote-tracking branch it came from, as the refs last read have it: a remote branch
+    /// <c>&lt;remote&gt;/&lt;branch&gt;</c> at <paramref name="mergeHead"/> (the current branch's
+    /// upstream first, when it is one of them), else the current branch's upstream when that is
+    /// <paramref name="branch"/> on its remote; null when neither is.
+    /// </summary>
+    string? MergedRemoteBranch(string branch, string? mergeHead);
+
+    /// <summary>
+    /// The conflicted <paramref name="paths"/> (as the status gives them, by path) in the order
+    /// the stage panel's unstaged list shows them in its mode (11.2): flat, or as a tree with its
+    /// folders first and every folder open.
+    /// </summary>
+    IReadOnlyList<string> InStageListOrder(IReadOnlyList<string> paths);
 }
+
+/// <summary>A merge tool that runs (<see cref="IConflictActions.RunningMergeTool"/>, 11.9).</summary>
+/// <param name="Path">The file it runs on, repository-relative with <c>/</c>.</param>
+/// <param name="Tool">The tool (<c>merge.tool</c>), for <c>Waiting for {tool} to close…</c>.</param>
+/// <param name="Staged">Completes when its operation has ended, its refresh included: true when git staged the file.</param>
+public sealed record MergeToolRun(string Path, string Tool, Task<bool> Staged);
+
+/// <summary>How Mark resolved's operation ended (<see cref="IConflictActions.MarkResolvedAsync"/>, 11.7).</summary>
+public enum MarkResolvedOutcome
+{
+    /// <summary>The result was written and staged.</summary>
+    Resolved,
+
+    /// <summary>The operation failed (the error dialog showed it) or did not run: nothing to go on with.</summary>
+    Failed,
+
+    /// <summary>The file on disk was not the bytes the resolver expected: nothing was written.</summary>
+    ChangedOnDisk,
+}
+
+/// <summary>What Mark resolved's operation ended with.</summary>
+/// <param name="Outcome">How it ended.</param>
+/// <param name="OnDisk">For <see cref="MarkResolvedOutcome.ChangedOnDisk"/>, the working-tree file's bytes the operation found (null: there was no file); otherwise null.</param>
+public sealed record MarkResolvedResult(MarkResolvedOutcome Outcome, byte[]? OnDisk = null);

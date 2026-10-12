@@ -195,6 +195,23 @@ public class ConflictTextTests
         Assert.False(ConflictText.IsMarker("<<<<<<< HEAD", '<', 9));
     }
 
+    [Theory]
+    [InlineData("a\n<<<<<<< HEAD\nb\n", 7, true)]
+    [InlineData("a\n=======\nb\n", 7, true)]
+    [InlineData("a\n>>>>>>> feature\r\nb\n", 7, true)]
+    [InlineData("a\n||||||| base", 7, true)]
+    [InlineData("a\n<<<<<<<<< HEAD\nb\n", 9, true)]
+    [InlineData("a\n<<<<<<< HEAD\nb\n", 9, false)]
+    [InlineData("a\n<<<<<<<< HEAD\n<<<<<<HEAD\n b\n", 7, false)]
+    [InlineData("", 7, false)]
+    public void Any_single_marker_line_counts_as_a_marker_left_whole_block_or_not(string text, int markerSize, bool expected)
+    {
+        Assert.Equal(expected, ConflictText.HasMarkerLines(text, markerSize));
+
+        // A lone marker line forms no block: the count says none is left.
+        Assert.False(ConflictText.Parse(text, markerSize).HasMarkers);
+    }
+
     [Fact]
     public void With_marker_size_9_seven_character_markers_are_text()
     {

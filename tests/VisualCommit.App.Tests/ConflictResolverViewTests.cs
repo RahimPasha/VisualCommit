@@ -460,6 +460,59 @@ public class ConflictResolverViewTests
         await marking;
     }
 
+    [AvaloniaFact]
+    public async Task Esc_does_nothing_while_mark_resolved_or_the_merge_tool_runs()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("a.txt", Notes);
+        actions.SetText("b.txt", Notes);
+        using var host = await ResolverHost.OpenAsync(actions, Status(Merge(), Entry("a.txt"), Entry("b.txt")), "a.txt", mergeTool: "fake");
+        var closed = 0;
+        host.Resolver.Closed += (_, _) => closed++;
+
+        // 14.4: while a write runs, Esc is disabled as the close button is; the focus is outside the result.
+        host.Find("ResolverTakeOurs").Focus();
+        actions.Hold = new TaskCompletionSource();
+        actions.Answer(true);
+        var marking = host.Resolver.MarkResolvedCommand.ExecuteAsync(null);
+        ResolverFixtures.Settle();
+        Assert.True(host.Resolver.IsBusy);
+        Assert.False(host.View.ResultEditor.TextArea.IsKeyboardFocusWithin);
+
+        host.Host.PressKey(Key.Escape);
+        ResolverFixtures.Settle();
+        Assert.True(host.Esc[^1]);
+        Assert.Equal((0, "a.txt"), (closed, host.Resolver.Path));
+        await host.Resolver.CloseResolverCommand.ExecuteAsync(null);
+        Assert.Equal(0, closed);
+
+        // The write ends: the resolver moves on to b.txt as it would have.
+        actions.BeforeWriteEnds = _ => host.Resolver.Update(Status(Merge(), Entry("b.txt")), "main", null);
+        actions.Release();
+        await marking;
+        Assert.Equal((0, "b.txt"), (closed, host.Resolver.Path));
+
+        // The merge tool likewise: Esc leaves the resolver waiting for the tool.
+        actions.Hold = new TaskCompletionSource();
+        actions.WritesResolve = false;
+        var tool = host.Resolver.RunMergeToolCommand.ExecuteAsync(null);
+        ResolverFixtures.Settle();
+        Assert.Equal("Waiting for fake to close…", host.Resolver.ResultTitle);
+        host.Host.PressKey(Key.Escape);
+        ResolverFixtures.Settle();
+        Assert.Equal((0, "b.txt", true), (closed, host.Resolver.Path, host.Resolver.IsBusy));
+
+        actions.Release();
+        await tool;
+        Assert.Equal(("Result", false), (host.Resolver.ResultTitle, host.Resolver.IsBusy));
+
+        // Idle again, Esc outside the result closes it.
+        host.Find("ResolverTakeOurs").Focus();
+        host.Host.PressKey(Key.Escape);
+        ResolverFixtures.Settle();
+        Assert.Equal(1, closed);
+    }
+
     // --- The double-click guard (11.1) ---------------------------------------------------------------------
 
     [AvaloniaFact]

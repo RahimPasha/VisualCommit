@@ -69,6 +69,9 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly TimeProvider _time;
 
+    /// <summary>The whole sides Take ours and Take theirs took for the open file: their text and their bytes as read (11.6).</summary>
+    private readonly List<(string Text, byte[] Bytes)> _takenSides = [];
+
     private IReadOnlyList<ConflictEntry> _conflicts = [];
     private InProgressState _inProgress = InProgressState.None;
     private IReadOnlySet<string> _statusPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -77,6 +80,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
     private ConflictText? _read;
     private byte[] _readBytes = [];
+    private bool _readExists;
     private bool _isUtf8 = true;
     private int _markerSize = ConflictText.DefaultMarkerSize;
     private string _original = string.Empty;
@@ -87,6 +91,12 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private bool _changing;
     private int _version;
     private bool _disposed;
+
+    /// <summary>A Mark resolved runs, from its click to its end: a refresh does not replace the result meanwhile (11.7).</summary>
+    private bool _marking;
+
+    /// <summary>A refresh while <see cref="_marking"/> would have read the unmodified result again: it is read when Mark resolved ends without moving on.</summary>
+    private bool _readAgainAfterMarking;
 
     /// <param name="actions">The reads and writes of a conflicted file: the repository's operations.</param>
     /// <param name="log">Where failures are logged.</param>
@@ -99,6 +109,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         _log = log ?? NullAppLog.Instance;
         _delay = delay ?? Task.Delay;
         _time = time ?? TimeProvider.System;
+        _actions.MergeToolStarted += OnMergeToolStarted;
     }
 
     /// <summary>The resolver closed: every file is resolved, the operation ended, or the user left it. The repository hides it.</summary>
@@ -299,7 +310,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         ArgumentNullException.ThrowIfNull(currentName);
         var wasInProgress = _inProgress.IsActive;
         var oldOrder = _conflicts.Select(conflict => conflict.Path).ToList();
-        _conflicts = status.Conflicts;
+        _conflicts = InStageListOrder(status.Conflicts);
         _inProgress = status.InProgress;
         _statusPaths = new HashSet<string>(status.Staged.Select(file => file.Path).Concat(status.Unstaged.Select(file => file.Path)), StringComparer.Ordinal);
         _currentName = currentName;
@@ -323,7 +334,12 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         {
             IsResolvedElsewhere = false;
             UpdateResultTitle();
-            if (!IsModified)
+            if (!IsModified && _marking)
+            {
+                // Mark resolved's questions are about the text and the bytes its click took.
+                _readAgainAfterMarking = true;
+            }
+            else if (!IsModified)
             {
                 _ = ReadAgainAsync(now);
             }
@@ -435,6 +451,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         _disposed = true;
         _version++;
+        _actions.MergeToolStarted -= OnMergeToolStarted;
         CancelParse();
         DetachDocument();
     }
@@ -445,11 +462,16 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     [RelayCommand(CanExecute = nameof(CanGoToOtherFile))]
     private Task NextFile() => GoToFileAsync(1);
 
-    /// <summary>The close button and Esc outside the result (11.10): asks first when the result is modified. Not while a write of the resolver runs (11.7).</summary>
+    /// <summary>The close button and Esc outside the result (11.10): asks first when the result is modified. Nothing while a write of the resolver or the merge tool runs (11.7, 14.4), however it is called.</summary>
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task CloseResolver()
     {
-        if (await TryLeaveAsync())
+        if (IsBusy)
+        {
+            return;
+        }
+
+        if (await TryLeaveAsync() && !IsBusy)
         {
             Close();
         }
@@ -470,47 +492,87 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private Task TakeTheirs() => TakeSideAsync(ConflictSide.Theirs);
 
     /// <summary>
-    /// Mark resolved (11.7): the result's text at the click; asks when blocks are left, and when the
-    /// file on disk changed since it was read; then writes it and stages it in one operation, and
-    /// moves on to the next conflicted file or closes.
+    /// Mark resolved (11.7): the result's text at the click, and the bytes the resolver read; asks
+    /// first when a conflict-marker line is left (7.2). Then one operation writes the text and
+    /// stages it, after checking, just before it writes, that the file on disk is still the bytes
+    /// the resolver read. When it is not (a terminal or a tool changed it, also while the operation
+    /// waited in the queue), nothing is written and the resolver asks <c>{file} changed on
+    /// disk.</c> (7.2): Overwrite writes the click's text over the file as the operation found it
+    /// (asking again if it changes once more), Cancel keeps the result (an unmodified one is read
+    /// again). Then it moves on to the next conflicted file or closes. From the click to the end,
+    /// a refresh does not replace the result, so that the questions are about what the click took.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanMarkResolved))]
     private async Task MarkResolved()
     {
-        if (Entry is not { } entry || Document is not { } document || IsBusy)
+        if (Entry is not { } entry || Document is not { } document || IsBusy || _marking)
         {
             return;
         }
 
         var text = document.Text;
+        var content = BytesToWrite(text);
+        var expected = _readExists ? _readBytes : null;
         var version = _version;
-        if (ConflictText.Parse(text, _markerSize).HasMarkers && !await _actions.ConfirmAsync(ConflictResolverTexts.MarkersQuestion(FileName)))
+        _marking = true;
+        _readAgainAfterMarking = false;
+        try
+        {
+            if (ConflictText.HasMarkerLines(text, _markerSize) && !await _actions.ConfirmAsync(ConflictResolverTexts.MarkersQuestion(FileName)))
+            {
+                return;
+            }
+
+            while (version == _version && !_disposed && Entry?.Path == entry.Path)
+            {
+                var result = await ResolveAsync(entry, () => _actions.MarkResolvedAsync(entry, content, expected), () =>
+                {
+                    _original = text;
+                    _readBytes = content;
+                    _readExists = true;
+                    UpdateModified();
+                });
+                if (result is not { Outcome: MarkResolvedOutcome.ChangedOnDisk } changed)
+                {
+                    return;
+                }
+
+                // Nothing was written. The question is about the click's text and the file as the
+                // operation found it; Overwrite expects that file.
+                version = _version;
+                _readAgainAfterMarking = true;
+                if (!await _actions.ConfirmAsync(ConflictResolverTexts.ChangedOnDiskQuestion(FileName)))
+                {
+                    return;
+                }
+
+                expected = changed.OnDisk;
+            }
+        }
+        finally
+        {
+            _marking = false;
+            ReadAgainAfterMarking(entry.Path);
+        }
+    }
+
+    /// <summary>
+    /// After Mark resolved left the resolver on <paramref name="path"/>, its unmodified result is
+    /// read again when the file may have changed meanwhile (a refresh came while the questions
+    /// were open, or the operation found it changed, 11.11).
+    /// </summary>
+    private void ReadAgainAfterMarking(string path)
+    {
+        if (!_readAgainAfterMarking)
         {
             return;
         }
 
-        if (version != _version || Entry is null)
+        _readAgainAfterMarking = false;
+        if (!_disposed && !IsBusy && !IsModified && Body == ConflictResolverBody.Text && Entry is { } entry && entry.Path == path)
         {
-            return;
+            _ = ReadAgainAsync(_conflicts.FirstOrDefault(conflict => conflict.Path == path) ?? entry);
         }
-
-        if (!await IsAsReadAsync(entry) && !await _actions.ConfirmAsync(ConflictResolverTexts.ChangedOnDiskQuestion(FileName)))
-        {
-            return;
-        }
-
-        if (version != _version || Entry is null)
-        {
-            return;
-        }
-
-        var content = ConflictText.Encode(text, _isUtf8);
-        await ResolveAsync(entry, () => _actions.MarkResolvedAsync(entry.Path, content), resolved =>
-        {
-            _original = text;
-            _readBytes = content;
-            UpdateModified();
-        });
     }
 
     /// <summary>
@@ -537,14 +599,28 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return;
         }
 
+        await WaitForMergeToolAsync(entry, tool, () => _actions.RunMergeToolAsync(entry.Path), discardsResult: true);
+    }
+
+    /// <summary>
+    /// While the merge tool runs on the open file (11.9), the result is read-only with
+    /// <c>Waiting for {tool} to close…</c> in its title. Then, when git staged the file, the
+    /// resolver moves on (11.7); otherwise the result is read again from the file (the tool may
+    /// have written it). A tool the resolver did not start itself (<paramref name="discardsResult"/>
+    /// false: the file menu's, queued before the resolver opened) leaves a modified result as it
+    /// is, as a refresh does (11.11).
+    /// </summary>
+    private async Task WaitForMergeToolAsync(ConflictEntry entry, string tool, Func<Task<bool>> run, bool discardsResult)
+    {
         var order = _conflicts.Select(conflict => conflict.Path).ToList();
         var version = ++_version;
+        CancelParse();
         IsBusy = true;
         ResultTitle = ConflictResolverTexts.WaitingForTool(tool);
         bool staged;
         try
         {
-            staged = await _actions.RunMergeToolAsync(entry.Path);
+            staged = await run();
         }
         catch (Exception ex)
         {
@@ -562,7 +638,12 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         }
 
         UpdateResultTitle();
-        if (staged)
+        if (!discardsResult && IsModified)
+        {
+            IsResolvedElsewhere = staged;
+            UpdateResultTitle();
+        }
+        else if (staged)
         {
             await MoveOnAsync(order, entry.Path);
         }
@@ -571,6 +652,20 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             // The tool may have written the file: the result is read again from it.
             await OpenFileAsync(entry.Path);
         }
+    }
+
+    /// <summary>A merge tool started (from the file menu too): the resolver open on its file waits for it (11.9).</summary>
+    private void OnMergeToolStarted(object? sender, MergeToolRun run) => FollowMergeTool(run);
+
+    /// <summary>Waits for <paramref name="run"/> when it runs on the open file and the resolver is not already waiting for a write or a tool of its own.</summary>
+    private void FollowMergeTool(MergeToolRun? run)
+    {
+        if (run is null || _disposed || IsBusy || Entry is not { } entry || entry.Path != run.Path || Body == ConflictResolverBody.None)
+        {
+            return;
+        }
+
+        _ = WaitForMergeToolAsync(entry, run.Tool, () => run.Staged, discardsResult: false);
     }
 
     private bool CanGoToOtherFile() => HasOtherFiles && !IsBusy;
@@ -641,6 +736,13 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return;
         }
 
+        if (_marking)
+        {
+            // Mark resolved's questions are about what its click took: read again when it ends.
+            _readAgainAfterMarking = true;
+            return;
+        }
+
         if (content.WorkingTree.AsSpan().SequenceEqual(_readBytes) && content.MarkerSize == _markerSize && KindOf(entry, content) == KindOf(Entry, null))
         {
             Entry = entry;
@@ -656,13 +758,16 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         DetachDocument();
         Entry = entry;
         IsResolvedElsewhere = false;
+        _takenSides.Clear();
         _readBytes = content.WorkingTree;
+        _readExists = content.WorkingTreeExists;
         _markerSize = content.MarkerSize > 0 ? content.MarkerSize : ConflictText.DefaultMarkerSize;
         UpdateFilePosition();
 
         if (KindOf(entry, content) is { } card)
         {
             ShowCard(entry, card, focus);
+            FollowMergeTool(_actions.RunningMergeTool);
             return;
         }
 
@@ -700,6 +805,9 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         {
             Navigate(new ConflictNavigation(0, null, 1, focus));
         }
+
+        // A merge tool started from the file menu may already run on the file (11.9).
+        FollowMergeTool(_actions.RunningMergeTool);
     }
 
     /// <summary>The card of a conflict without text (11.8) and its buttons.</summary>
@@ -725,7 +833,8 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         string? folder = null;
         if (kind == ConflictCardKind.MovedAside)
         {
-            otherName = entry.Kind == ConflictKind.AddedByUs ? theirsName : oursName;
+            // The file is the side's that has it (added by us, or deleted by them: ours); the other side has the folder.
+            otherName = entry.Kind is ConflictKind.AddedByUs or ConflictKind.DeletedByThem ? theirsName : oursName;
             var moved = MovedAsideFolder(path) ?? path;
             folder = WorkingChangesViewModel.FileName(moved);
         }
@@ -763,7 +872,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         NotifyToolbar();
 
         ConflictCardButton Button(string label, string id, Func<Task<bool>> resolve) =>
-            new(label, id, () => ResolveAsync(entry, resolve, null));
+            new(label, id, () => ResolveAsync(entry, async () => new MarkResolvedResult(await resolve() ? MarkResolvedOutcome.Resolved : MarkResolvedOutcome.Failed), null));
     }
 
     /// <summary>Clears the resolver: nothing open.</summary>
@@ -772,12 +881,14 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         DetachDocument();
         Entry = null;
         ResultFocusPending = false;
+        _takenSides.Clear();
         _read = null;
         _current = null;
         _choices = [];
         _matched = [];
         _original = string.Empty;
         _readBytes = [];
+        _readExists = false;
         Parts = [];
         Bars = [];
         CardKind = null;
@@ -799,29 +910,30 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
     /// <summary>
     /// Runs one write that resolves the open file (Mark resolved, a card's button), with the result
-    /// read-only and the buttons disabled while it runs; then moves on to the next conflicted file,
-    /// or closes when none is left (11.7).
+    /// read-only and the buttons disabled while it runs; when it resolved the file, moves on to the
+    /// next conflicted file, or closes when none is left (11.7). Returns how it ended, or null when
+    /// it did not run or the resolver was closed or showed another file meanwhile.
     /// </summary>
-    private async Task ResolveAsync(ConflictEntry entry, Func<Task<bool>> resolve, Action<bool>? written)
+    private async Task<MarkResolvedResult?> ResolveAsync(ConflictEntry entry, Func<Task<MarkResolvedResult>> resolve, Action? written)
     {
         if (IsBusy || Entry?.Path != entry.Path)
         {
-            return;
+            return null;
         }
 
         var order = _conflicts.Select(conflict => conflict.Path).ToList();
         var version = ++_version;
         CancelParse();
         IsBusy = true;
-        bool resolved;
+        MarkResolvedResult result;
         try
         {
-            resolved = await resolve();
+            result = await resolve();
         }
         catch (Exception ex)
         {
             _log.Error($"Resolving {entry.Path} failed.", ex);
-            resolved = false;
+            result = new MarkResolvedResult(MarkResolvedOutcome.Failed);
         }
         finally
         {
@@ -830,16 +942,16 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         if (version != _version || _disposed)
         {
-            return;
+            return null;
         }
 
-        if (!resolved)
+        if (result.Outcome == MarkResolvedOutcome.Resolved)
         {
-            return;
+            written?.Invoke();
+            await MoveOnAsync(order, entry.Path);
         }
 
-        written?.Invoke(resolved);
-        await MoveOnAsync(order, entry.Path);
+        return result;
     }
 
     /// <summary>
@@ -961,9 +1073,31 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         FlushParse();
         var text = ConflictText.Decode(bytes).Text;
+
+        // Mark resolved writes the side's own bytes while the result is exactly this text (11.6).
+        _takenSides.Add((text, bytes));
         var choices = Enumerable.Repeat<BlockChoice?>(side == ConflictSide.Ours ? BlockChoice.Ours : BlockChoice.Theirs, _choices.Length).ToArray();
         Change(document, 0, document.TextLength, text, choices);
         Navigate(new ConflictNavigation(0, null, 1, FocusResult: true));
+    }
+
+    /// <summary>
+    /// The bytes Mark resolved writes for the result <paramref name="text"/> (11.6, 11.7): a whole
+    /// side's bytes as they were read, byte for byte, when the result is exactly that side's text
+    /// as Take ours or Take theirs took it (the side may be in another encoding than the file with
+    /// markers); otherwise the text in the encoding the file was read in.
+    /// </summary>
+    private byte[] BytesToWrite(string text)
+    {
+        for (var i = _takenSides.Count - 1; i >= 0; i--)
+        {
+            if (string.Equals(_takenSides[i].Text, text, StringComparison.Ordinal))
+            {
+                return _takenSides[i].Bytes;
+            }
+        }
+
+        return ConflictText.Encode(text, _isUtf8);
     }
 
     /// <summary>Tells the view where the caret goes; a navigation that gives the result the focus is kept until the view has given it (a view shown later still does).</summary>
@@ -1092,8 +1226,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     }
 
     /// <summary>
-    /// Parses the result and matches its blocks to the panes' (11.5): a result block to the first
-    /// panes' block not yet matched whose ours and theirs lines it holds, then, by order, the rest.
+    /// Parses the result and matches its blocks to the panes' (<see cref="MatchBlocks"/>, 11.5).
     /// A panes' block whose markers are in the result shows its buttons; one whose markers are gone
     /// shows the choice that took it out, or <c>Not used</c> on both bars when typing did.
     /// </summary>
@@ -1106,32 +1239,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         }
 
         var current = ConflictText.Parse(document.Text, _markerSize);
-        var matched = Enumerable.Repeat(-1, read.BlockCount).ToArray();
-        var owner = Enumerable.Repeat(-1, current.BlockCount).ToArray();
-        for (var r = 0; r < current.BlockCount; r++)
-        {
-            for (var p = 0; p < read.BlockCount; p++)
-            {
-                if (matched[p] < 0 && read.Blocks[p].HasSameSides(current.Blocks[r]))
-                {
-                    matched[p] = r;
-                    owner[r] = p;
-                    break;
-                }
-            }
-        }
-
-        var free = new Queue<int>(Enumerable.Range(0, read.BlockCount).Where(p => matched[p] < 0));
-        for (var r = 0; r < current.BlockCount && free.Count > 0; r++)
-        {
-            if (owner[r] < 0)
-            {
-                var p = free.Dequeue();
-                matched[p] = r;
-                owner[r] = p;
-            }
-        }
-
+        var matched = MatchBlocks(read, current, _choices);
         _current = current;
         _matched = matched;
         var bars = new ConflictBlockBars[read.BlockCount];
@@ -1152,6 +1260,172 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
     }
+
+    /// <summary>
+    /// Matches the result's blocks to the panes' blocks (11.5), keeping their order: of the
+    /// matchings that keep both in order, the one with the most evidence, where a pair's evidence
+    /// is, first, the same ours and theirs lines, then the same line before the block and the same
+    /// line after it; among matchings with as much evidence, the one whose blocks stand nearer
+    /// their places in the file (counted from the top or from the bottom, whichever is nearer). A
+    /// panes' block that a recorded choice took out of the result is matched only by its sides,
+    /// and only where no other block can be. The result's blocks left between two matched pairs
+    /// take, by order, the panes' blocks left there that no choice took out. So two identical
+    /// blocks keep their own bars, and a block chosen earlier is never handed the block still in
+    /// the result. Returns, for each panes' block, its result block or -1.
+    /// </summary>
+    internal static int[] MatchBlocks(ConflictText read, ConflictText current, IReadOnlyList<BlockChoice?> choices)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(choices);
+        var panes = read.BlockCount;
+        var result = current.BlockCount;
+        var matched = Enumerable.Repeat(-1, panes).ToArray();
+        if (panes == 0 || result == 0)
+        {
+            return matched;
+        }
+
+        var keys = new Dictionary<string, int>(StringComparer.Ordinal);
+        var paneSides = read.Blocks.Select(block => SidesKey(block, keys)).ToArray();
+        var resultSides = current.Blocks.Select(block => SidesKey(block, keys)).ToArray();
+        var anchors = new List<(int Result, int Pane)>();
+        if ((long)panes * result <= MaxWeighedPairs)
+        {
+            anchors = WeighedAnchors();
+        }
+        else
+        {
+            // Too many blocks to weigh every pair: each result block, in order, to the next panes'
+            // block with its sides that no choice took out.
+            var last = -1;
+            for (var r = 0; r < result; r++)
+            {
+                for (var p = last + 1; p < panes; p++)
+                {
+                    if (!IsChosen(p) && paneSides[p] == resultSides[r])
+                    {
+                        anchors.Add((r, p));
+                        last = p;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // The blocks between two matched pairs (and before the first, after the last), by order.
+        var previous = (Result: -1, Pane: -1);
+        foreach (var anchor in anchors.Append((result, panes)))
+        {
+            var free = Enumerable.Range(previous.Pane + 1, anchor.Item2 - previous.Pane - 1).Where(p => !IsChosen(p)).ToList();
+            for (int r = previous.Result + 1, i = 0; r < anchor.Item1 && i < free.Count; r++, i++)
+            {
+                matched[free[i]] = r;
+            }
+
+            if (anchor.Item1 < result)
+            {
+                matched[anchor.Item2] = anchor.Item1;
+            }
+
+            previous = anchor;
+        }
+
+        return matched;
+
+        bool IsChosen(int pane) => pane < choices.Count && choices[pane] is not null;
+
+        // The pairs of the matching with the most evidence, by dynamic programming over both orders.
+        List<(int Result, int Pane)> WeighedAnchors()
+        {
+            var best = new (long Evidence, long Closeness)[result + 1, panes + 1];
+            var step = new byte[result + 1, panes + 1];
+            for (var r = 1; r <= result; r++)
+            {
+                for (var p = 1; p <= panes; p++)
+                {
+                    var (score, from) = best[r - 1, p].CompareTo(best[r, p - 1]) >= 0 ? (best[r - 1, p], (byte)1) : (best[r, p - 1], (byte)2);
+                    if (Weigh(r - 1, p - 1) is { } pair)
+                    {
+                        var diagonal = (best[r - 1, p - 1].Evidence + pair.Evidence, best[r - 1, p - 1].Closeness + pair.Closeness);
+                        if (diagonal.CompareTo(score) > 0)
+                        {
+                            (score, from) = (diagonal, 3);
+                        }
+                    }
+
+                    best[r, p] = score;
+                    step[r, p] = from;
+                }
+            }
+
+            var pairs = new List<(int Result, int Pane)>();
+            for (int r = result, p = panes; r > 0 && p > 0;)
+            {
+                switch (step[r, p])
+                {
+                    case 3:
+                        pairs.Add((r - 1, p - 1));
+                        r--;
+                        p--;
+                        break;
+                    case 1:
+                        r--;
+                        break;
+                    default:
+                        p--;
+                        break;
+                }
+            }
+
+            pairs.Reverse();
+            return pairs;
+        }
+
+        // A pair's evidence and closeness, or null without evidence.
+        (long Evidence, long Closeness)? Weigh(int r, int p)
+        {
+            var sameSides = paneSides[p] == resultSides[r];
+            if (IsChosen(p))
+            {
+                return sameSides ? (1, 0) : null;
+            }
+
+            var paneBlock = read.Blocks[p];
+            var resultBlock = current.Blocks[r];
+            var evidence = (sameSides ? 1_000_000L : 0)
+                + (string.Equals(LineBefore(read, paneBlock), LineBefore(current, resultBlock), StringComparison.Ordinal) ? 1_000 : 0)
+                + (string.Equals(LineAfter(read, paneBlock), LineAfter(current, resultBlock), StringComparison.Ordinal) ? 1_000 : 0);
+            if (evidence == 0)
+            {
+                return null;
+            }
+
+            var fromTop = Math.Abs(paneBlock.StartLine - resultBlock.StartLine);
+            var fromBottom = Math.Abs((read.Lines.Count - paneBlock.EndLine) - (current.Lines.Count - resultBlock.EndLine));
+            return (evidence, -Math.Min(fromTop, fromBottom));
+        }
+
+        static string? LineBefore(ConflictText text, ConflictBlock block) => block.StartLine > 0 ? text.Lines[block.StartLine - 1].Text : null;
+
+        static string? LineAfter(ConflictText text, ConflictBlock block) => block.EndLine + 1 < text.Lines.Count ? text.Lines[block.EndLine + 1].Text : null;
+
+        // One number per distinct pair of sides, compared without line ends (as HasSameSides).
+        static int SidesKey(ConflictBlock block, Dictionary<string, int> keys)
+        {
+            var key = string.Join('\n', [block.Ours.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), .. block.Ours.Select(line => line.Text), .. block.Theirs.Select(line => line.Text)]);
+            if (!keys.TryGetValue(key, out var id))
+            {
+                id = keys.Count;
+                keys.Add(key, id);
+            }
+
+            return id;
+        }
+    }
+
+    /// <summary>Up to how many pairs of blocks <see cref="MatchBlocks"/> weighs (a file of 500 blocks); beyond it, it matches by sides and order only.</summary>
+    private const long MaxWeighedPairs = 250_000;
 
     private static ConflictBlockBars BarsOf(BlockChoice? choice) => choice switch
     {
@@ -1178,6 +1452,23 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private void UpdateModified() =>
         IsModified = Body == ConflictResolverBody.Text && Document is { } document && !string.Equals(document.Text, _original, StringComparison.Ordinal);
 
+    /// <summary>The conflicted files in the stage list's order (11.2: the position, the file arrows and moving on follow it, in the tree view too).</summary>
+    private IReadOnlyList<ConflictEntry> InStageListOrder(IReadOnlyList<ConflictEntry> conflicts)
+    {
+        if (conflicts.Count < 2)
+        {
+            return conflicts;
+        }
+
+        var byPath = conflicts.ToDictionary(conflict => conflict.Path, StringComparer.Ordinal);
+        var ordered = _actions.InStageListOrder([.. conflicts.Select(conflict => conflict.Path)])
+            .Where(byPath.ContainsKey)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => byPath[path])
+            .ToList();
+        return ordered.Count == conflicts.Count ? ordered : conflicts;
+    }
+
     private void UpdateFilePosition()
     {
         var paths = _conflicts.Select(conflict => conflict.Path).ToList();
@@ -1200,7 +1491,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     }
 
     private (string Ours, string Theirs) SideNames(string? theirsLabel) =>
-        ConflictResolverTexts.SideNames(_inProgress, _currentName, _ontoName, theirsLabel);
+        ConflictResolverTexts.SideNames(_inProgress, _currentName, _ontoName, theirsLabel, branch => _actions.MergedRemoteBranch(branch, _inProgress.Commit));
 
     private void NotifyToolbar()
     {
@@ -1229,21 +1520,6 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         return null;
     }
 
-    /// <summary>Whether the working-tree file is still the bytes the resolver read (11.7); a failed read counts as changed.</summary>
-    private async Task<bool> IsAsReadAsync(ConflictEntry entry)
-    {
-        try
-        {
-            var now = await _actions.ReadAsync(entry);
-            return now.WorkingTreeExists && now.WorkingTree.AsSpan().SequenceEqual(_readBytes);
-        }
-        catch (Exception ex)
-        {
-            _log.Warning($"Reading {entry.Path} before marking it resolved failed: {ex.Message}");
-            return false;
-        }
-    }
-
     /// <summary>
     /// The card a conflict shows instead of the panes (11.8), or null for a text conflict: a
     /// submodule; a deletion or a one-sided file (a file moved aside by a file/folder clash too);
@@ -1261,12 +1537,13 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return ConflictCardKind.Submodule;
         }
 
+        // A file/folder clash is any kind on <p>~<label> (14.2): git also reports it as modify/delete.
         switch (entry.Kind)
         {
             case ConflictKind.DeletedByThem:
-                return ConflictCardKind.DeletedByThem;
+                return MovedAsideFolder(entry.Path) is not null ? ConflictCardKind.MovedAside : ConflictCardKind.DeletedByThem;
             case ConflictKind.DeletedByUs:
-                return ConflictCardKind.DeletedByUs;
+                return MovedAsideFolder(entry.Path) is not null ? ConflictCardKind.MovedAside : ConflictCardKind.DeletedByUs;
             case ConflictKind.AddedByUs:
                 return MovedAsideFolder(entry.Path) is not null ? ConflictCardKind.MovedAside : ConflictCardKind.AddedByUs;
             case ConflictKind.AddedByThem:

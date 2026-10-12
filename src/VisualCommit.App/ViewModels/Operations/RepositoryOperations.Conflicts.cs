@@ -17,6 +17,7 @@ public sealed partial class RepositoryOperations : IConflictActions
 {
     private readonly HashSet<string> _conflictedAtStop = new(StringComparer.Ordinal);
     private string? _stopKey;
+    private MergeToolRun? _runningMergeTool;
 
     /// <inheritdoc cref="IRepositoryActions.ResolveConflict"/>
     public void ResolveConflict(ChangedFile file)
@@ -57,15 +58,42 @@ public sealed partial class RepositoryOperations : IConflictActions
     }
 
     /// <summary>
-    /// Mark resolved (11.7): one operation "Resolve {file}" that writes the result to the
-    /// working-tree file and stages it (<see cref="IGitRepository.WriteResolutionAsync"/>); "Resolved
-    /// {file}" in the status bar, a failure in the error dialog "Resolving failed".
+    /// Mark resolved (11.7): one operation "Resolve {file}" that reads the working-tree file
+    /// (<see cref="IGitRepository.ReadConflictAsync"/>) and, when it is still the bytes the
+    /// resolver expected, writes the result and stages it (<see cref="IGitRepository.WriteResolutionAsync"/>):
+    /// "Resolved {file}" in the status bar, a failure in the error dialog "Resolving failed". The
+    /// check runs inside the operation, just before the write, so a change made while the
+    /// operation waited in the queue (when the watcher is paused, D81) is caught too. When the file
+    /// changed, nothing is written, no dialog opens and the status bar says
+    /// <c>{file} changed on disk: nothing was written</c> in the warning colour; the resolver asks
+    /// next.
     /// </summary>
-    Task<bool> IConflictActions.MarkResolvedAsync(string path, byte[] content)
+    async Task<MarkResolvedResult> IConflictActions.MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(content);
-        return ResolveAsync(path, options => Git.WriteResolutionAsync(path, content, options));
+        var path = entry.Path;
+        var file = WorkingChangesViewModel.FileName(path);
+        byte[]? onDisk = null;
+        var changed = false;
+        var resolved = await ResolveAsync(path, async options =>
+        {
+            var now = await Git.ReadConflictAsync(entry, options);
+            onDisk = now.WorkingTreeExists ? now.WorkingTree : null;
+            if (expected is null ? onDisk is not null : onDisk is null || !onDisk.AsSpan().SequenceEqual(expected))
+            {
+                changed = true;
+                Log.Info($"{Repository.Name}: {path} changed on disk since the resolver read it: its result was not written.");
+                return OperationReport.Warning(ConflictResolverTexts.ChangedOnDiskNotWritten(file));
+            }
+
+            await Git.WriteResolutionAsync(path, content, options);
+            return null;
+        });
+
+        return changed
+            ? new MarkResolvedResult(MarkResolvedOutcome.ChangedOnDisk, onDisk)
+            : new MarkResolvedResult(resolved ? MarkResolvedOutcome.Resolved : MarkResolvedOutcome.Failed);
     }
 
     /// <summary>A whole file from one side, "Keep the file", "Keep it" (11.8): one operation "Resolve {file}" (<see cref="IGitRepository.TakeSideAsync"/>).</summary>
@@ -117,19 +145,87 @@ public sealed partial class RepositoryOperations : IConflictActions
 
         var text = OperationTexts.MergeTool(file, tool);
         var staged = false;
-        await GuardAsync(text, () => RunAsync(
-            text,
-            OperationKind.Local,
-            RefreshScope.Status,
-            async context =>
-            {
-                var result = await Git.RunMergeToolAsync(path, tool, NetworkOptions.From(context), context.CancellationToken);
-                staged = result.Staged;
-                return OperationReport.Done(staged ? OperationTexts.ResolvedInTool(file, tool) : OperationTexts.ToolClosedWithoutResolving(tool, file));
-            },
-            new RunOptions { CanBeCancelled = true }));
+        var ended = new TaskCompletionSource<bool>();
+        try
+        {
+            await GuardAsync(text, () => RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Status,
+                async context =>
+                {
+                    // While it runs, a resolver on the file is read-only, waiting for the tool (11.9).
+                    var run = new MergeToolRun(path, tool, ended.Task);
+                    _runningMergeTool = run;
+                    try
+                    {
+                        MergeToolStarted?.Invoke(this, run);
+                        var result = await Git.RunMergeToolAsync(path, tool, NetworkOptions.From(context), context.CancellationToken);
+                        staged = result.Staged;
+                        return OperationReport.Done(staged ? OperationTexts.ResolvedInTool(file, tool) : OperationTexts.ToolClosedWithoutResolving(tool, file));
+                    }
+                    finally
+                    {
+                        _runningMergeTool = null;
+                    }
+                },
+                new RunOptions { CanBeCancelled = true }));
+        }
+        finally
+        {
+            ended.TrySetResult(staged);
+        }
+
         return staged;
     }
+
+    /// <inheritdoc/>
+    public MergeToolRun? RunningMergeTool => _runningMergeTool;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> InStageListOrder(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        // Rows built as the stage panel builds its own in its mode, every folder open (flat, the
+        // list keeps git's order by path, as the status gives the conflicts).
+        var list = new ChangedFileList();
+        list.SetMode(Repository.Changes.FileList);
+        list.Show([.. paths.Distinct(StringComparer.Ordinal).Select(path => new ChangedFile(path, FileChangeKind.Conflicted))]);
+        var ordered = list.Rows.Where(row => row.IsFile).Select(row => row.Key).ToList();
+        var listed = ordered.ToHashSet(StringComparer.Ordinal);
+        return [.. ordered, .. paths.Where(path => !listed.Contains(path))];
+    }
+
+    /// <inheritdoc/>
+    public string? MergedRemoteBranch(string branch, string? mergeHead)
+    {
+        ArgumentNullException.ThrowIfNull(branch);
+        if (Refs is not { } refs)
+        {
+            return null;
+        }
+
+        // The app's pull merges the current branch's upstream (FETCH_HEAD after its fetch, which
+        // moved the remote-tracking branch to MERGE_HEAD); a pull from a terminal may name another
+        // remote, whose branch the fetch moved there too.
+        var upstream = refs.Refs.FirstOrDefault(gitRef => gitRef is { Kind: RefKind.LocalBranch, IsHead: true }) is { Upstream: { } name, UpstreamRemoteRef: { } remoteRef } head
+            && !head.HasLocalUpstream
+            && string.Equals(remoteRef, "refs/heads/" + branch, StringComparison.Ordinal)
+            ? name
+            : null;
+        List<string> atMergeHead = mergeHead is null
+            ? []
+            : refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch
+                    && string.Equals(gitRef.TargetSha, mergeHead, StringComparison.Ordinal)
+                    && string.Equals(gitRef.Name, $"{gitRef.RemoteName}/{branch}", StringComparison.Ordinal))
+                .Select(gitRef => gitRef.Name)
+                .ToList();
+        return upstream is not null && atMergeHead.Contains(upstream, StringComparer.Ordinal) ? upstream : atMergeHead.FirstOrDefault() ?? upstream;
+    }
+
+    /// <inheritdoc/>
+    public event EventHandler<MergeToolRun>? MergeToolStarted;
 
     /// <summary>One side in its working-tree form (11.6); null when that side has no file or the read failed (logged).</summary>
     async Task<byte[]?> IConflictActions.ReadSideAsync(ConflictEntry entry, ConflictSide side)
@@ -263,12 +359,7 @@ public sealed partial class RepositoryOperations : IConflictActions
                 return false;
             }
 
-            var text = ConflictText.Decode(content.WorkingTree).Text;
-            return ConflictText.SplitLines(text).Any(line =>
-                ConflictText.IsMarker(line.Text, '<', content.MarkerSize)
-                || ConflictText.IsMarker(line.Text, '=', content.MarkerSize)
-                || ConflictText.IsMarker(line.Text, '>', content.MarkerSize)
-                || ConflictText.IsMarker(line.Text, '|', content.MarkerSize));
+            return ConflictText.HasMarkerLines(ConflictText.Decode(content.WorkingTree).Text, content.MarkerSize);
         }
         catch (Exception ex) when (ex is GitException or IOException)
         {
@@ -282,7 +373,15 @@ public sealed partial class RepositoryOperations : IConflictActions
     /// {file}" in the status bar (secondary, 14.3), a failure in the error dialog "Resolving
     /// failed" with git's output. True when it succeeded.
     /// </summary>
-    private async Task<bool> ResolveAsync(string path, Func<NetworkOptions, Task> resolve)
+    private Task<bool> ResolveAsync(string path, Func<NetworkOptions, Task> resolve) =>
+        ResolveAsync(path, async options =>
+        {
+            await resolve(options);
+            return (OperationReport?)null;
+        });
+
+    /// <summary>As <see cref="ResolveAsync(string, Func{NetworkOptions, Task})"/>, where <paramref name="resolve"/> may end the operation with a report of its own (null: "Resolved {file}").</summary>
+    private async Task<bool> ResolveAsync(string path, Func<NetworkOptions, Task<OperationReport?>> resolve)
     {
         var file = WorkingChangesViewModel.FileName(path);
         var text = OperationTexts.Resolve(file);
@@ -292,11 +391,7 @@ public sealed partial class RepositoryOperations : IConflictActions
                 text,
                 OperationKind.Local,
                 RefreshScope.Status,
-                async context =>
-                {
-                    await resolve(NetworkOptions.From(context));
-                    return OperationReport.Done(OperationTexts.Resolved(file));
-                }),
+                async context => await resolve(NetworkOptions.From(context)) ?? OperationReport.Done(OperationTexts.Resolved(file))),
             fallback: null);
         return result?.Outcome == OperationOutcome.Succeeded;
     }

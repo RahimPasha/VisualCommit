@@ -116,6 +116,42 @@ public class ConflictResolverViewModelTests
         Assert.Equal((ours, theirs), (ConflictResolverTexts.OursTitle(oursName), ConflictResolverTexts.TheirsTitle(theirsName)));
     }
 
+    [Theory]
+    [InlineData("Merge branch 'main' of C:/repos/up", "main", "origin/main", "Theirs: origin/main")]
+    [InlineData("Merge branch 'main' of https://example.com/r.git into topic", "main", "upstream/main", "Theirs: upstream/main")]
+    [InlineData("Merge branch 'feature' of https://example.com/r.git into topic", "feature", null, "Theirs: feature of https://example.com/r.git")]
+    [InlineData("Merge branch 'main' into topic", null, null, "Theirs: main")]
+    public void A_pull_s_merge_names_theirs_after_the_remote_tracking_branch_it_came_from(string subject, string? asked, string? remoteBranch, string theirs)
+    {
+        // 11.4: a pull merges FETCH_HEAD, whose MERGE_MSG names the branch of the remote's URL.
+        var state = new InProgressState(InProgressKind.Merge, "5c77ffb0ec78abf986d121f42013eee14422e5a5", subject, null, null, 0, false);
+        var questions = new List<string>();
+
+        var (ours, theirsName) = ConflictResolverTexts.SideNames(state, "main", null, "6cca2620f6a3", branch =>
+        {
+            questions.Add(branch);
+            return remoteBranch;
+        });
+
+        Assert.Equal(("main", theirs), (ours, ConflictResolverTexts.TheirsTitle(theirsName)));
+        string[] expected = asked is null ? [] : [asked];
+        Assert.Equal(expected, questions);
+    }
+
+    [AvaloniaFact]
+    public async Task After_a_pull_s_merge_the_panes_are_ours_and_the_upstream_s()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("notes.txt", Notes);
+        actions.RemoteBranches = (branch, mergeHead) => branch == "main" && mergeHead == "5c77ffb0ec78abf986d121f42013eee14422e5a5" ? "origin/main" : null;
+        var state = new InProgressState(InProgressKind.Merge, "5c77ffb0ec78abf986d121f42013eee14422e5a5", "Merge branch 'main' of C:/repos/up", null, null, 0, false);
+        var resolver = Resolver(actions, new ManualDelays(), Status(state, Entry("notes.txt")));
+
+        await resolver.OpenAsync("notes.txt");
+
+        Assert.Equal(("Ours: main", "Theirs: origin/main"), (resolver.OursTitle, resolver.TheirsTitle));
+    }
+
     [Fact]
     public void A_rebase_names_its_new_base_and_the_user_s_own_commit()
     {
@@ -336,6 +372,81 @@ public class ConflictResolverViewModelTests
         Assert.Equal([OursUsed, Open], resolver.Bars);
     }
 
+    [AvaloniaFact]
+    public async Task Two_identical_blocks_keep_their_own_bars_when_they_are_chosen_one_after_the_other()
+    {
+        var (_, _, resolver) = TwinStop();
+        await resolver.OpenAsync("version.txt");
+        var navigations = new List<ConflictNavigation>();
+        resolver.NavigationRequested += (_, navigation) => navigations.Add(navigation);
+
+        // Use ours on block 1: block 2's markers are still in the result, and its bars keep their buttons.
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.Equal("x = 2\na\nb\nc\n" + Twin + "d\n", Text(resolver));
+        Assert.Equal([OursUsed, Open], resolver.Bars);
+
+        // The next conflict reaches block 2 in the panes and in the result.
+        resolver.NextConflictCommand.Execute(null);
+        Assert.Equal(new ConflictNavigation(LineStart(resolver, 5), 1, 5, FocusResult: false), navigations[^1]);
+
+        // Use theirs on block 2 replaces block 2 and records it against block 2.
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal("x = 2\na\nb\nc\nx = 3\nd\n", Text(resolver));
+        Assert.Equal([OursUsed, TheirsUsed], resolver.Bars);
+
+        // A choice on block 1, whose markers are gone, does nothing.
+        resolver.Choose(0, ConflictChoice.UseTheirs);
+        Assert.Equal("x = 2\na\nb\nc\nx = 3\nd\n", Text(resolver));
+
+        // Bottom to top: the same.
+        Assert.True(resolver.Undo());
+        Assert.True(resolver.Undo());
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal(Twin + "a\nb\nc\nx = 3\nd\n", Text(resolver));
+        Assert.Equal([Open, TheirsUsed], resolver.Bars);
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.Equal([OursUsed, TheirsUsed], resolver.Bars);
+    }
+
+    [AvaloniaFact]
+    public async Task Typing_away_the_first_of_two_identical_blocks_leaves_the_second_its_bars()
+    {
+        var (_, delays, resolver) = TwinStop();
+        await resolver.OpenAsync("version.txt");
+        var document = resolver.Document!;
+
+        document.Replace(0, Twin.Length, "x = 2\n");
+        delays.Elapse();
+
+        Assert.Equal([NoneUsed, Open], resolver.Bars);
+        Assert.Equal("1 conflict left", resolver.ResultCountText);
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal("x = 2\na\nb\nc\nx = 3\nd\n", Text(resolver));
+        Assert.Equal([NoneUsed, TheirsUsed], resolver.Bars);
+    }
+
+    [AvaloniaFact]
+    public async Task Typing_in_a_block_after_another_was_chosen_keeps_both_blocks_bars()
+    {
+        var (_, delays, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(0, ConflictChoice.UseOurs);
+
+        // Block 2's ours line (line 11 of R1) edited by hand.
+        var document = resolver.Document!;
+        Assert.Equal("line 10 ours", document.GetText(document.GetLineByNumber(11)));
+        document.Insert(document.GetLineByNumber(11).EndOffset, " and more");
+        delays.Elapse();
+
+        Assert.Equal([OursUsed, Open], resolver.Bars);
+        Assert.Equal(("1 conflict left", "Conflict 1 of 2"), (resolver.ResultCountText, resolver.ConflictPositionText));
+
+        // Its bar acts on it: the second block of the result is replaced.
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal(R2, Text(resolver));
+        Assert.Equal([OursUsed, TheirsUsed], resolver.Bars);
+    }
+
     // --- A whole side (11.6; C14 step 7) --------------------------------------------------------
 
     [AvaloniaFact]
@@ -429,6 +540,27 @@ public class ConflictResolverViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task Mark_resolved_asks_when_a_single_marker_line_is_left_as_staging_does()
+    {
+        var (actions, delays, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+
+        // Block 1's =, theirs and > lines deleted by hand: its < line is left.
+        var document = resolver.Document!;
+        Assert.Equal("=======", document.GetText(document.GetLineByNumber(4)));
+        document.Remove(document.GetLineByNumber(4).Offset, document.GetLineByNumber(7).Offset - document.GetLineByNumber(4).Offset);
+        delays.Elapse();
+        Assert.Equal("No conflicts left", resolver.ResultCountText);
+        actions.Answer(false);
+
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        Assert.Equal("notes.txt still has conflict markers.", Assert.Single(actions.Questions).Title);
+        Assert.Empty(actions.Writes);
+    }
+
+    [AvaloniaFact]
     public async Task Mark_resolved_over_a_file_changed_on_disk_asks_and_overwrites_only_when_told()
     {
         var (actions, _, resolver) = MergeStop();
@@ -451,6 +583,81 @@ public class ConflictResolverViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task A_refresh_while_the_markers_question_is_open_neither_replaces_the_result_nor_skips_the_changed_on_disk_question()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        var document = resolver.Document;
+
+        // While the markers question is open, an editor saves the file and a refresh comes.
+        actions.WhileAsking = question =>
+        {
+            if (question.Title == "notes.txt still has conflict markers.")
+            {
+                actions.SetText("notes.txt", "resolved in an editor\n");
+                resolver.Update(Status(Merge(), Entry("notes.txt")), "main", null);
+                Settle();
+                Assert.Same(document, resolver.Document);
+            }
+        };
+        actions.Answer(true, false);
+
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        // The operation found the file changed and wrote nothing; Cancel: the unmodified result is read again.
+        Assert.Equal(["notes.txt still has conflict markers.", "notes.txt changed on disk."], actions.Questions.Select(question => question.Title));
+        Assert.Empty(actions.Writes);
+        Assert.Contains("Refused notes.txt: changed on disk", actions.Calls);
+        Settle();
+        Assert.Equal("resolved in an editor\n", Text(resolver));
+        Assert.False(resolver.IsModified);
+        Assert.False(resolver.IsBusy);
+    }
+
+    [AvaloniaFact]
+    public async Task Overwrite_after_a_change_on_disk_writes_the_click_s_text_over_the_file_as_the_operation_found_it()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        resolver.Choose(1, ConflictChoice.UseBothOursFirst);
+        var closed = false;
+        resolver.Closed += (_, _) => closed = true;
+
+        // The write waits in the queue; meanwhile a terminal changes the file.
+        var hold = actions.Hold = new TaskCompletionSource();
+        var marking = resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Settle();
+        Assert.True(resolver.IsBusy);
+        actions.SetText("notes.txt", "changed by a terminal\n");
+        actions.Hold = null;
+        actions.BeforeWriteEnds = _ => resolver.Update(Status(Merge()), "main", null);
+        actions.Answer(true);
+        hold.SetResult();
+        await marking;
+
+        Assert.Equal("notes.txt changed on disk.", Assert.Single(actions.Questions).Title);
+        Assert.Equal(["Refused notes.txt: changed on disk", "MarkResolved notes.txt"], actions.Calls.Where(call => call.StartsWith("Refused", StringComparison.Ordinal) || call.StartsWith("MarkResolved", StringComparison.Ordinal)));
+        Assert.Equal(Encoding.UTF8.GetBytes(R3), actions.Written["notes.txt"]);
+        Assert.True(closed);
+    }
+
+    [AvaloniaFact]
+    public async Task A_file_that_was_missing_when_read_and_is_still_missing_is_written_without_asking()
+    {
+        var actions = new RecordingConflictActions();
+        actions.Contents["gone.txt"] = new ConflictContent([], 7, false, false, false, WorkingTreeExists: false);
+        var resolver = Resolver(actions, new ManualDelays(), Status(Merge(), Entry("gone.txt")));
+        await resolver.OpenAsync("gone.txt");
+        resolver.Document!.Insert(0, "written\n");
+
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        Assert.Empty(actions.Questions);
+        Assert.Equal("written\n"u8.ToArray(), actions.Written["gone.txt"]);
+    }
+
+    [AvaloniaFact]
     public async Task The_file_is_written_in_the_encoding_and_with_the_line_ends_it_was_read_with()
     {
         var actions = new RecordingConflictActions();
@@ -463,6 +670,56 @@ public class ConflictResolverViewModelTests
         await resolver.MarkResolvedCommand.ExecuteAsync(null);
 
         Assert.Equal(Encoding.Latin1.GetBytes("café\r\nours é\r\nend\r\n"), actions.Written["latin.txt"]);
+    }
+
+    [AvaloniaFact]
+    public async Task A_side_taken_whole_is_written_byte_for_byte_whatever_encoding_the_file_with_markers_was_read_in()
+    {
+        // Ours is Latin-1 ("café" as E9), theirs UTF-8 with an arrow: the file with markers mixes
+        // them, is not valid UTF-8 and is read as Latin-1.
+        var ours = Encoding.Latin1.GetBytes("café\nours\n");
+        var theirs = Encoding.UTF8.GetBytes("café → done\ntheirs\n");
+        var marked = (byte[])[.. "<<<<<<< HEAD\n"u8, .. ours, .. "=======\n"u8, .. theirs, .. ">>>>>>> feature\n"u8];
+        var actions = new RecordingConflictActions();
+        actions.Contents["mixed.txt"] = new ConflictContent(marked, 7, false, false, false, true);
+        actions.Sides[("mixed.txt", ConflictSide.Ours)] = ours;
+        actions.Sides[("mixed.txt", ConflictSide.Theirs)] = theirs;
+        var resolver = Resolver(actions, new ManualDelays(), Status(Merge(), Entry("mixed.txt")));
+        await resolver.OpenAsync("mixed.txt");
+
+        await resolver.TakeTheirsCommand.ExecuteAsync(null);
+        Assert.Equal("café → done\ntheirs\n", Text(resolver));
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Equal(theirs, actions.Written["mixed.txt"]);
+
+        // A file with markers that is valid UTF-8, and a side that is not: the side's bytes too.
+        var utf8 = new RecordingConflictActions();
+        utf8.SetText("other.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\ncafé\n");
+        var latin = Encoding.Latin1.GetBytes("ours\ncafé\n");
+        utf8.Sides[("other.txt", ConflictSide.Ours)] = latin;
+        var other = Resolver(utf8, new ManualDelays(), Status(Merge(), Entry("other.txt")));
+        await other.OpenAsync("other.txt");
+        await other.TakeOursCommand.ExecuteAsync(null);
+        await other.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Equal(latin, utf8.Written["other.txt"]);
+    }
+
+    [AvaloniaFact]
+    public async Task A_side_taken_whole_and_then_edited_is_written_in_the_encoding_the_file_was_read_in()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("other.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\ncafé\n");
+        actions.Sides[("other.txt", ConflictSide.Ours)] = Encoding.Latin1.GetBytes("ours\ncafé\n");
+        var delays = new ManualDelays();
+        var resolver = Resolver(actions, delays, Status(Merge(), Entry("other.txt")));
+        await resolver.OpenAsync("other.txt");
+        await resolver.TakeOursCommand.ExecuteAsync(null);
+
+        resolver.Document!.Insert(0, "top\n");
+        delays.Elapse();
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        Assert.Equal(Encoding.UTF8.GetBytes("top\nours\ncafé\n"), actions.Written["other.txt"]);
     }
 
     [AvaloniaFact]
@@ -547,6 +804,31 @@ public class ConflictResolverViewModelTests
         await resolver.NextFileCommand.ExecuteAsync(null);
         Assert.Equal(("b.txt", false), (resolver.Path, resolver.IsModified));
         Assert.Empty(actions.Writes);
+    }
+
+    [AvaloniaFact]
+    public async Task The_file_position_the_file_arrows_and_moving_on_follow_the_stage_list_s_order_as_shown()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("a.txt", Notes);
+        actions.SetText("src/b.txt", Notes);
+        actions.SetText("z.txt", Notes);
+
+        // The stage panel shows a tree: the folder src/ first, then the files.
+        actions.StageListOrder = paths => [.. paths.OrderBy(path => path.Contains('/', StringComparison.Ordinal) ? 0 : 1).ThenBy(path => path, StringComparer.Ordinal)];
+        var resolver = Resolver(actions, new ManualDelays(), Status(Merge(), Entry("a.txt"), Entry("src/b.txt"), Entry("z.txt")));
+
+        await resolver.OpenAsync("src/b.txt");
+        Assert.Equal("File 1 of 3", resolver.FilePositionText);
+        await resolver.NextFileCommand.ExecuteAsync(null);
+        Assert.Equal(("a.txt", "File 2 of 3"), (resolver.Path, resolver.FilePositionText));
+
+        // Mark resolved on a.txt moves on to the next file in that order: z.txt.
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        resolver.Choose(1, ConflictChoice.UseOurs);
+        actions.BeforeWriteEnds = _ => resolver.Update(Status(Merge(), Entry("src/b.txt"), Entry("z.txt")), "main", null);
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Equal(("z.txt", "File 2 of 2"), (resolver.Path, resolver.FilePositionText));
     }
 
     // --- The cards (11.8; C15) ---------------------------------------------------------------------
@@ -662,6 +944,35 @@ public class ConflictResolverViewModelTests
         Assert.Equal(["TakeSide p~HEAD Ours"], actions.Writes);
     }
 
+    [AvaloniaTheory]
+    [InlineData("p~HEAD", ConflictKind.DeletedByThem, "Git moved p~HEAD aside because feature/theirs has a folder named p: rename or remove it, then mark it resolved.", "TakeSide p~HEAD Ours")]
+    [InlineData("p~feature_theirs", ConflictKind.DeletedByUs, "Git moved p~feature_theirs aside because main has a folder named p: rename or remove it, then mark it resolved.", "TakeSide p~feature_theirs Theirs")]
+    public async Task A_file_moved_aside_that_git_reports_as_modify_delete_has_the_moved_aside_card(string path, ConflictKind kind, string text, string write)
+    {
+        // Git 2.36: ours modified p, theirs replaced it with the folder p/: "UD p~HEAD" (14.2); the
+        // label of a branch has its slashes made underscores.
+        var actions = new RecordingConflictActions();
+        actions.SetText(path, "file content\n");
+        var status = Status(Merge(), Entry(path, kind)) with
+        {
+            Staged = [new ChangedFile("p/x", FileChangeKind.Added)],
+        };
+        var resolver = Resolver(actions, new ManualDelays(), status);
+
+        await resolver.OpenAsync(path);
+
+        Assert.Equal((ConflictCardKind.MovedAside, text), (resolver.CardKind, resolver.CardText));
+        var button = Assert.Single(resolver.CardButtons);
+        Assert.Equal(("Mark resolved", "ConflictCardMarkResolved"), (button.Label, button.AutomationId));
+        await button.RunCommand.ExecuteAsync(null);
+        Assert.Equal([write], actions.Writes);
+
+        // Without a folder of that name it is the deletion's card.
+        var plain = Resolver(actions, new ManualDelays(), Status(Merge(), Entry(path, kind)));
+        await plain.OpenAsync(path);
+        Assert.Equal(kind == ConflictKind.DeletedByThem ? ConflictCardKind.DeletedByThem : ConflictCardKind.DeletedByUs, plain.CardKind);
+    }
+
     // --- The merge tool (11.9; C16) ------------------------------------------------------------
 
     [AvaloniaFact]
@@ -725,6 +1036,79 @@ public class ConflictResolverViewModelTests
         Assert.Equal("written by the tool\n<<<<<<< HEAD\na\n=======\nb\n>>>>>>> x\n", Text(resolver));
         Assert.False(resolver.IsModified);
         Assert.Equal(("Result", "1 conflict left"), (resolver.ResultTitle, resolver.ResultCountText));
+    }
+
+    [AvaloniaFact]
+    public async Task A_resolver_opened_while_the_file_menu_s_merge_tool_runs_on_the_file_waits_for_it_read_only()
+    {
+        var (actions, _, resolver) = MergeStop();
+        resolver.MergeTool = "fake";
+        var tool = new TaskCompletionSource<bool>();
+        actions.RunningMergeTool = new MergeToolRun("notes.txt", "meld", tool.Task);
+        var closed = false;
+        resolver.Closed += (_, _) => closed = true;
+
+        await resolver.OpenAsync("notes.txt");
+
+        // 11.9: read-only, waiting for the tool, as when the resolver started it itself.
+        Assert.Equal((true, "Waiting for meld to close…"), (resolver.IsBusy, resolver.ResultTitle));
+        Assert.False(resolver.MarkResolvedCommand.CanExecute(null));
+        Assert.False(resolver.RunMergeToolCommand.CanExecute(null));
+        Assert.False(resolver.CloseResolverCommand.CanExecute(null));
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.Equal(Notes, Text(resolver));
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Empty(actions.Writes);
+
+        // The tool staged the file: the resolver moves on, here closes.
+        actions.RunningMergeTool = null;
+        resolver.Update(Status(Merge()), "main", null);
+        tool.SetResult(true);
+        Settle();
+        Assert.True(closed);
+    }
+
+    [AvaloniaFact]
+    public async Task A_merge_tool_that_starts_on_the_open_file_makes_it_wait_and_a_tool_that_did_not_resolve_leaves_it_read_again()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        Assert.False(resolver.IsBusy);
+
+        // The file menu's tool, queued before the resolver opened, starts now.
+        var tool = new TaskCompletionSource<bool>();
+        actions.StartMergeTool("notes.txt", "meld", tool.Task);
+        Assert.Equal((true, "Waiting for meld to close…"), (resolver.IsBusy, resolver.ResultTitle));
+
+        // It closes without resolving, having written the file: the result is read from it.
+        actions.RunningMergeTool = null;
+        actions.SetText("notes.txt", "written by the tool\n");
+        tool.SetResult(false);
+        Settle();
+        Assert.Equal((false, "Result", "written by the tool\n"), (resolver.IsBusy, resolver.ResultTitle, Text(resolver)));
+        Assert.Empty(actions.Writes);
+
+        // A tool on another file leaves the resolver as it is.
+        actions.StartMergeTool("other.txt", "meld", new TaskCompletionSource<bool>().Task);
+        Assert.False(resolver.IsBusy);
+    }
+
+    [AvaloniaFact]
+    public async Task A_modified_result_is_kept_when_a_tool_the_resolver_did_not_start_ends()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(0, ConflictChoice.UseOurs);
+
+        var tool = new TaskCompletionSource<bool>();
+        actions.StartMergeTool("notes.txt", "meld", tool.Task);
+        Assert.True(resolver.IsBusy);
+        actions.RunningMergeTool = null;
+        actions.SetText("notes.txt", "written by the tool\n");
+        tool.SetResult(false);
+        Settle();
+
+        Assert.Equal((false, R1, true), (resolver.IsBusy, Text(resolver), resolver.IsModified));
     }
 
     // --- Leaving and closing (11.1, 11.10) -----------------------------------------------------------
@@ -895,6 +1279,18 @@ public class ConflictResolverViewModelTests
     private static string Scenarios_NotesTheirs => Testing.Scenarios.ConflictsFiles.NotesTheirs;
 
     private static string Scenarios_NotesOurs => Testing.Scenarios.ConflictsFiles.NotesOurs;
+
+    /// <summary>One of the two identical blocks git writes when both sides changed <c>x = 1</c> in two places alike (checked with Git 2.36).</summary>
+    private const string Twin = "<<<<<<< HEAD\nx = 2\n=======\nx = 3\n>>>>>>> feature\n";
+
+    /// <summary>A merge's stop on version.txt: two identical blocks with three common lines between them.</summary>
+    private static (RecordingConflictActions Actions, ManualDelays Delays, ConflictResolverViewModel Resolver) TwinStop()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("version.txt", Twin + "a\nb\nc\n" + Twin + "d\n");
+        var delays = new ManualDelays();
+        return (actions, delays, Resolver(actions, delays, Status(ResolverFixtures.Merge("feature"), Entry("version.txt"))));
+    }
 
     /// <summary>The merge's stop: notes.txt both modified with two blocks (FM).</summary>
     private static (RecordingConflictActions Actions, ManualDelays Delays, ConflictResolverViewModel Resolver) MergeStop()

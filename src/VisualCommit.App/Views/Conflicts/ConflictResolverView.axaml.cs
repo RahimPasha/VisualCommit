@@ -51,14 +51,21 @@ public partial class ConflictResolverView : UserControl
 
     /// <summary>
     /// Esc (11.10; <see cref="EscapeOrder.Resolver"/>): while the focus is in the result, the
-    /// resolver takes Esc and does nothing, so a slip never loses work; otherwise it closes,
-    /// asking first when the result is modified. Declines while the resolver is not shown.
+    /// resolver takes Esc and does nothing, so a slip never loses work; while a write of the
+    /// resolver or the merge tool runs, it takes Esc and does nothing too (14.4: Esc is disabled
+    /// then, as the close button is); otherwise it closes, asking first when the result is
+    /// modified. Declines while the resolver is not shown.
     /// </summary>
     public bool HandleEscape()
     {
         if (_viewModel is not { IsOpen: true } viewModel || !IsEffectivelyVisible)
         {
             return false;
+        }
+
+        if (viewModel.IsBusy)
+        {
+            return true;
         }
 
         if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Visual focused

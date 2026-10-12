@@ -74,8 +74,11 @@ public static partial class ConflictResolverTexts
     /// The sides' names (11.4) for what is in progress: <paramref name="currentName"/> is
     /// <c>{cur}</c>, <paramref name="ontoName"/> a branch at a rebase's new base (null: its short
     /// SHA), <paramref name="theirsLabel"/> the label of the file's first theirs marker, or null.
+    /// <paramref name="remoteBranch"/> names the remote-tracking branch of a branch a merge took
+    /// from a URL (<c>MERGE_MSG</c>'s <c>Merge branch '&lt;x&gt;' of &lt;url&gt;</c>: a pull's
+    /// merge), or null when none is known.
     /// </summary>
-    public static (string Ours, string Theirs) SideNames(InProgressState inProgress, string currentName, string? ontoName, string? theirsLabel)
+    public static (string Ours, string Theirs) SideNames(InProgressState inProgress, string currentName, string? ontoName, string? theirsLabel, Func<string, string?>? remoteBranch = null)
     {
         ArgumentNullException.ThrowIfNull(inProgress);
         ArgumentNullException.ThrowIfNull(currentName);
@@ -84,7 +87,7 @@ public static partial class ConflictResolverTexts
         var picked = string.IsNullOrEmpty(subject) ? commit : $"{commit} {subject}";
         return inProgress.Kind switch
         {
-            InProgressKind.Merge => (currentName, MergedName(inProgress, theirsLabel)),
+            InProgressKind.Merge => (currentName, MergedName(inProgress, theirsLabel, remoteBranch)),
             InProgressKind.CherryPick => (currentName, picked),
             InProgressKind.Revert => (currentName, $"the revert of {picked}"),
             InProgressKind.Rebase => ($"{ontoName ?? Short(inProgress.Onto)} (the new base)", $"{picked} (your commit)"),
@@ -127,25 +130,37 @@ public static partial class ConflictResolverTexts
     public static ConfirmationRequest ChangedOnDiskQuestion(string file) =>
         new($"{file} changed on disk.", "Overwrite it with the result?", string.Empty, "Overwrite", IsDestructive: true);
 
+    /// <summary>
+    /// The status bar, in the warning colour, after Mark resolved's operation found the file
+    /// changed on disk and wrote nothing (11.7); the resolver then asks
+    /// <see cref="ChangedOnDiskQuestion"/>.
+    /// </summary>
+    public static string ChangedOnDiskNotWritten(string file) => $"{file} changed on disk: nothing was written";
+
     /// <summary>A commit's short SHA (its first 7 characters), or empty.</summary>
     public static string Short(string? sha) => sha is null ? string.Empty : sha[..Math.Min(7, sha.Length)];
 
     /// <summary>
     /// A merge's theirs name (11.4): the branch of <c>MERGE_MSG</c>'s <c>Merge branch '&lt;x&gt;'</c>
-    /// (or <c>remote-tracking branch '&lt;x&gt;'</c>), else the theirs marker's label, else
-    /// <c>MERGE_HEAD</c>'s short SHA.
+    /// (or <c>remote-tracking branch '&lt;x&gt;'</c>); for <c>Merge branch '&lt;x&gt;' of
+    /// &lt;url&gt;</c> (a pull's merge of <c>FETCH_HEAD</c>), the remote-tracking branch of
+    /// <c>&lt;x&gt;</c> (<paramref name="remoteBranch"/>: <c>origin/main</c>), else <c>&lt;x&gt; of
+    /// &lt;url&gt;</c>; else the theirs marker's label, else <c>MERGE_HEAD</c>'s short SHA.
     /// </summary>
-    private static string MergedName(InProgressState inProgress, string? theirsLabel)
+    private static string MergedName(InProgressState inProgress, string? theirsLabel, Func<string, string?>? remoteBranch)
     {
         if (inProgress.Subject is { } subject && MergedBranch().Match(subject) is { Success: true } match)
         {
-            return match.Groups["name"].Value;
+            var name = match.Groups["name"].Value;
+            return match.Groups["url"] is { Success: true } url
+                ? remoteBranch?.Invoke(name) ?? $"{name} of {url.Value}"
+                : name;
         }
 
         return !string.IsNullOrEmpty(theirsLabel) ? theirsLabel : Short(inProgress.Commit);
     }
 
-    [GeneratedRegex(@"^Merge (?:remote-tracking )?branch '(?<name>[^']+)'", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^Merge (?:remote-tracking )?branch '(?<name>[^']+)'(?: of (?<url>.+?)(?: into .+)?$)?", RegexOptions.CultureInvariant)]
     private static partial Regex MergedBranch();
 }
 
@@ -164,7 +179,7 @@ public enum ConflictCardKind
     /// <summary><c>UA</c>: only theirs has the file.</summary>
     AddedByThem,
 
-    /// <summary><c>AU</c> or <c>UA</c> on <c>&lt;p&gt;~&lt;label&gt;</c>, <c>&lt;p&gt;</c> being a folder: a file/folder clash.</summary>
+    /// <summary>A one-sided file (<c>AU</c>, <c>UA</c>, <c>UD</c>, <c>DU</c>) on <c>&lt;p&gt;~&lt;label&gt;</c>, <c>&lt;p&gt;</c> being a folder: a file/folder clash (14.2).</summary>
     MovedAside,
 
     /// <summary><c>DD</c>: both sides deleted it.</summary>
