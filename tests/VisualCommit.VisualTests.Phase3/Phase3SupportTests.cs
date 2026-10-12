@@ -58,8 +58,19 @@ public sealed class Phase3SupportTests : Phase3Checks
         await AssertNoDialogAsync(app);
         await AssertNoMenuAsync(app, logMark: 0);
 
-        // Check 9b step 2: the banner of a merge stopped in a terminal; two lines at 1100×700.
-        AssertBanner(app, "Merging: \"Merge branch 'feature/conflict'\". 1 file has conflicts.", "Abort merge", oneLine: false);
+        // Check 9b step 2: the banner of a merge stopped in a terminal: phase 4's Continue, disabled
+        // while the file conflicts, and Abort on a row of their own under the text at 1100×700, so
+        // more than one line; a merge has no Skip.
+        var mergeText = "Merging: \"Merge branch 'feature/conflict'\". 1 file has conflicts.";
+        var resolveFirst = BannerButton.Disabled("Resolve the conflicts first (1 file)");
+        AssertBanner(app, mergeText, "Abort merge", oneLine: false, continueButton: resolveFirst, buttonsBelow: true);
+
+        // The banner's assertion fails on another state of its buttons or layout.
+        Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge", continueButton: BannerButton.Enabled));
+        Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge", continueButton: resolveFirst, skipButton: BannerButton.Enabled));
+        Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge"));
+        Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge", continueButton: resolveFirst, buttonsBelow: false));
+        Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge", oneLine: true, continueButton: resolveFirst));
 
         // Check 9 step 7: a checkout git refuses during the merge.
         var repository = app.Session.Shell.ActiveTab.Repository!;

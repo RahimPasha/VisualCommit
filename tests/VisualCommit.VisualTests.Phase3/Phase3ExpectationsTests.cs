@@ -39,4 +39,35 @@ public class Phase3ExpectationsTests
         Assert.Equal(232, Phase3Expectations.MenuHeight(7, 2));
         Assert.Equal(84, Phase3Expectations.MenuHeight(2, 0));
     }
+
+    /// <summary>
+    /// The heights phase 4's report gives phase 3's menus ("Phase 3's menus after phase 4") are
+    /// 4a's formula for their lists: the constants and the lists agree.
+    /// </summary>
+    [Fact]
+    public void Phase_4s_heights_of_phase_3s_menus_are_4as_formula_for_their_lists()
+    {
+        static double HeightOf(string[] lines) =>
+            Phase3Expectations.MenuHeight(lines.Skip(1).Count(line => line != "—"), lines.Count(line => line == "—"));
+
+        Assert.Equal(Phase3Expectations.PartA.CommitMenuHeight, HeightOf(Phase3Expectations.PartA.AlphaTwoCommitMenu));
+        Assert.Equal(284, Phase3Expectations.PartA.CommitMenuHeight);
+        Assert.Equal(Phase3Expectations.PartA.FeatureAlphaMenuHeight, HeightOf(Phase3Expectations.PartA.FeatureAlphaMenu));
+        Assert.Equal(458, Phase3Expectations.PartA.FeatureAlphaMenuHeight);
+        Assert.Equal(Phase3Expectations.PartA.OriginFeatureAlphaMenuHeight, HeightOf(Phase3Expectations.PartA.OriginFeatureAlphaMenu));
+        Assert.Equal(293, Phase3Expectations.PartA.OriginFeatureAlphaMenuHeight);
+        Assert.Equal(Phase3Expectations.PartA.DropMenuHeight, HeightOf(Phase3Expectations.PartA.AlphaOntoMainDropMenu));
+        Assert.Equal(171, Phase3Expectations.PartA.DropMenuHeight);
+        Assert.Equal(Phase3Expectations.PartD.AlphaTwoMenuHeight, HeightOf(Phase3Expectations.PartD.AlphaTwoMenu));
+        Assert.Equal(284, Phase3Expectations.PartD.AlphaTwoMenuHeight);
+        Assert.Equal(354, HeightOf(Phase3Expectations.PartA.MainMenu));
+        Assert.Equal(380, HeightOf(Phase3Expectations.PartA.FeatureFfMenu));
+        Assert.Equal(293, HeightOf(Phase3Expectations.PartA.LocMenu));
+        Assert.Equal(145, HeightOf(Phase3Expectations.PartA.AlphaOntoConflictDropMenu));
+        Assert.Equal(145, HeightOf(Phase3Expectations.PartB.ThreeCommitsMenu));
+        Assert.Equal(284, HeightOf(Phase3Expectations.PartB.ConflictedFileMenu));
+        Assert.Equal(458, HeightOf(Phase3Expectations.PartB.MainMenuWhileDetached));
+        Assert.Equal(458, HeightOf(Phase3Expectations.PartC.Check13MainMenu));
+        Assert.Equal(145, HeightOf(Phase3Expectations.PartD.WorktreeDropMenu("x")));
+    }
 }

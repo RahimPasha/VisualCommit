@@ -323,15 +323,18 @@ public sealed partial class Phase3ChecksC
     /// <summary>
     /// Asserts a menu as every check of this part does: its lines in the report's notation, the
     /// highlighted item, its height by 4a's formula and place inside the window, its top-left at
-    /// the pointer + (2, 2), the items' text colours by brush and the highlight's background by
-    /// pixel on <paramref name="screenshot"/>.
+    /// the pointer + (2, 2) or where 4a's rule moves a menu that does not fit there
+    /// (<see cref="Phase3Checks.AssertMenuPlaced"/>), the items' text colours by brush and the
+    /// highlight's background by pixel on <paramref name="screenshot"/>.
     /// </summary>
     private static void AssertMenuAt(ShellDriver app, MenuSnapshot menu, Screenshot screenshot, Point pointer, string? highlighted, params string[] lines)
     {
         AssertMenu(menu, lines);
         AssertHighlighted(menu, highlighted);
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+
+        // At the pointer when it fits below it; phase 4's taller menus may open above it (4a's rule).
+        AssertMenuPlaced(app, menu, pointer);
         var palette = PaletteOf(app);
         foreach (var item in menu.Items)
         {

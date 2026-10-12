@@ -30,12 +30,10 @@ public partial class Phase3RealWindowPass
         using var repo = await Scenarios.OperationsAsync();
         using var app = Launch(repo);
 
-        // Check 13, steps 1 to 3.
+        // Check 13, steps 1 to 3 (the commit menu with phase 4's rebase items: phase 4's OC3).
         var mainWork = RowPoint(app, 3, lanes: 3);
         app.RightClickAt(mainWork.X, mainWork.Y);
-        Assert.Equal(
-            ["Check out this commit", "Create branch here…", "Create tag here…", "Cherry-pick onto main", "Revert this commit", "Reset main to this commit…", "Copy SHA"],
-            app.MenuItemNames());
+        Assert.Equal(ItemLabels(PartC.Check13CommitMenu), app.MenuItemNames());
         app.ClickMenuItem("Create branch here…");
         WaitForName(app, "NameDialogTitle", "Create branch");
         app.ClickWithMouse(app.Find("NameBox"));

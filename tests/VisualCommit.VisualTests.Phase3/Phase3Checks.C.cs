@@ -46,7 +46,7 @@ public sealed partial class Phase3ChecksC : Phase3Checks
         var shot = Shot(app, "13a-commit-menu");
         AssertSelection(app, shot, 3);
         AssertMenuAt(app, menu, shot, pointer, "Check out this commit", PartC.Check13CommitMenu);
-        Assert.Equal(232, menu.Bounds.Height, 2.0);
+        Assert.Equal(284, menu.Bounds.Height, 2.0);
 
         // Step 2: the empty name dialog.
         app.ClickMenuItem("Create branch here…");

@@ -1,7 +1,9 @@
-// Part C, check 25 (docs/test-reports/phase-3.md): the in-progress banners of states started
-// outside the app: a cherry-pick sequence (aborted; then committed in the stage panel and aborted
-// with HEAD kept, D110), a revert, a rebase started while the app is open, an empty cherry-pick,
-// and stash conflicts. One test method per app start (each numbered step that names a scenario).
+// Part C, check 25 (docs/test-reports/phase-3.md, with phase 4's changes: docs/test-reports/
+// phase-4.md, "Changes to expected results"): the in-progress banners of states started outside
+// the app: a cherry-pick sequence (aborted; then committed in a terminal and aborted with HEAD
+// kept, D110; then, on a fresh copy, resolved and staged with the stage panel's "Continue
+// cherry-pick"), a revert, a rebase started while the app is open, an empty cherry-pick, and
+// stash conflicts. One test method per app start (each numbered step that names a scenario).
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
@@ -23,8 +25,9 @@ public sealed partial class Phase3ChecksC
 
     /// <summary>
     /// Check 25, steps 1 to 3: a cherry-pick of three commits stopped at the second, started in a
-    /// terminal: the four-line banner, the toolbar, the stage panel's prefill, and the abort with
-    /// its sequencer sentence and its two backup refs.
+    /// terminal: the banner of a pick in git's list (phase 4's text, Continue, Skip and Abort on a
+    /// row of their own under it), the toolbar, the stage panel's prefill and its "Continue
+    /// cherry-pick", and the abort with its sequencer sentence and its two backup refs.
     /// </summary>
     [AvaloniaFact]
     public async Task Check_25_cherry_pick_sequence_and_abort()
@@ -33,21 +36,30 @@ public sealed partial class Phase3ChecksC
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo);
 
-        // Step 1: the banner and the graph.
+        // Step 1: the banner and the graph. At 1100×700 the buttons stand under the text, so the
+        // banner takes more than one line (phase 4's report, "Phase 3's banner"); nothing is cut.
         var shot = Shot(app, "25a-cherry-pick-sequence");
-        AssertConflictsBanner(app, shot, PartC.Check25SequenceBanner, PartC.Check25PickBannerTip, "Abort cherry-pick");
+        AssertConflictsBanner(
+            app,
+            shot,
+            PartC.Check25SequenceBanner,
+            PartC.Check25PickBannerTip,
+            "Abort cherry-pick",
+            continueButton: BannerButton.Disabled(PartC.ResolveConflictsFirstOneFile),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: true);
         var text = app.Find<TextBlock>("BannerText");
-        Assert.Equal(4, text.TextLayout.TextLines.Count);
         Assert.Equal(Avalonia.Media.TextTrimming.None, text.TextTrimming);
         var abort = app.Find<Button>("BannerAbortButton");
-        Assert.True(app.BoundsOf(abort).Right > app.BoundsOf(text).Right, "Abort is not right of the banner's text.");
         AssertGraph(app, shot, PartC.Check25Sequence, lanes: 4, PartC.WorkingConflict);
         Assert.StartsWith(PartC.PickedAlphaOneShort, Graph(app).Data!.CommitAt(0).Sha, StringComparison.Ordinal);
         await AssertBranchRowAsync(app, ["Local branches", "main"], head: true, ahead: 1);
         AssertToolbar(app, "PullButton", enabled: false, "Finish or abort the cherry-pick first");
         AssertToolbar(app, "StashButton", enabled: false, "Finish or abort the cherry-pick first");
 
-        // Step 2: the stage panel.
+        // Step 2: the stage panel. The commit button of a pick in a list is phase 4's "Continue
+        // cherry-pick", disabled as the banner's Continue is, with its reason ("Stage files to
+        // commit" before phase 4).
         app.Click(app.WorkingRowPoint());
         await WaitForStagePanelAsync(app, "Unstaged files (1, 1 with conflicts)", "Staged files (0)");
         Shot(app, "25b-cherry-pick-stage-panel");
@@ -57,8 +69,9 @@ public sealed partial class Phase3ChecksC
         Assert.Equal("Conflicting change", CommitBoxText(app, "CommitSummary"));
         Assert.Equal(string.Empty, CommitBoxText(app, "CommitDescription"));
         var commit = app.Find<Button>("CommitButton");
-        Assert.Equal("Stage files to commit", commit.Content);
+        Assert.Equal(PartC.ContinueCherryPick, commit.Content);
         Assert.False(commit.IsEffectivelyEnabled);
+        AssertTip(commit, PartC.ResolveConflictsFirstOneFile);
 
         // Step 3: Abort, its question, then confirmed.
         var before = await repo.HeadAsync();
@@ -95,9 +108,11 @@ public sealed partial class Phase3ChecksC
     }
 
     /// <summary>
-    /// Check 25, step 4: a new stopped cherry-pick sequence resolved outside the app, staged and
-    /// committed in the stage panel ("Conflicts resolved", then "stopped with 1 commit left", D110),
-    /// and the Abort that keeps HEAD and the commits made.
+    /// Check 25, step 4, as phase 4 changes it (phase 4's report, "Phase 3's check 25 step 4"): a
+    /// new stopped cherry-pick sequence resolved outside the app and committed in a terminal (the
+    /// stage panel's button no longer commits a pick of a list: it continues the list, D136), the
+    /// paused banner with Continue enabled and Skip disabled with its reason (D110: the todo's
+    /// lines less one wait), and the Abort that keeps HEAD and the commits made.
     /// </summary>
     [AvaloniaFact]
     public async Task Check_25_cherry_pick_committed_and_abort_keeps_head()
@@ -107,55 +122,44 @@ public sealed partial class Phase3ChecksC
         using var app = await OpenAsync(data, repo);
         var copy = await repo.HeadAsync();
 
-        // Step 4: the file resolved outside the app, then staged in the stage panel.
-        var reads = app.CountLogLines(AppLogFile.WorkingTreeRead(OpsRepo));
+        // Step 4: in a terminal, the file resolved, staged and committed with git's own message.
         repo.WriteFile("src/core.txt", "core\nmain work\nconflict\n");
-        await app.WaitForAsync(() => app.CountLogLines(AppLogFile.WorkingTreeRead(OpsRepo)) > reads, "the app to read the working tree again", OutsideChangeTimeout);
+        await repo.GitAsync("add", "src/core.txt");
+        var committed = repo.ClockTime;
+        await repo.GitAsync("commit", "--no-edit");
+        await app.WaitForAsync(
+            () => app.BannerBounds is not null && app.Find<TextBlock>("BannerText").Text == PartC.Check25PausedBanner
+                && Graph(app).Data is { IsComplete: true } data && data.Count == 10 && !Graph(app).ShowsWorkingRow,
+            "the paused banner and the new commit in the graph",
+            OutsideChangeTimeout);
         await app.WaitForIdleAsync();
-        app.Click(app.WorkingRowPoint());
-        await WaitForStagePanelAsync(app, "Unstaged files (1, 1 with conflicts)", "Staged files (0)");
-        await ClickFileRowButtonAsync(app, "UnstagedFileList", "src/core.txt", "RowStageButton");
-        await WaitForStagePanelAsync(app, "Unstaged files (0)", "Staged files (1)");
-        await app.WaitForAsync(() => app.Find<TextBlock>("BannerText").Text == PartC.Check25ResolvedBanner, "the banner to say the conflicts are resolved");
-        var shot = Shot(app, "25e-resolved-staged");
-        Assert.Equal(["M  src/core.txt"], await StatusAsync(repo));
-        AssertConflictsBanner(app, shot, PartC.Check25ResolvedBanner, null, "Abort cherry-pick");
-        Assert.Equal(PartC.WorkingChanges, Graph(app).WorkingRowText ?? PartC.WorkingChanges);
-        var commit = app.Find<Button>("CommitButton");
-        Assert.Equal("Commit 1 file", commit.Content);
-        Assert.True(commit.IsEffectivelyEnabled);
-        Assert.Equal("Conflicting change", CommitBoxText(app, "CommitSummary"));
-
-        // The commit.
-        var calls = app.GitCalls().Count;
-        app.Click(commit);
-        await app.WaitForAsync(() => Graph(app).Data is { IsComplete: true } data && data.Count == 10, "the new commit in the graph", TimeSpan.FromSeconds(30));
-        await app.WaitForIdleAsync();
-        await app.WaitForAsync(() => app.Find<TextBlock>("BannerText").Text == PartC.Check25StoppedBanner, "the banner of the stopped sequence");
-        await WaitForDetailsAsync(app, "Conflicting change");
-        shot = Shot(app, "25f-stopped-between-commits");
-        AssertCalled(app, calls, "git commit --file=- --cleanup=whitespace");
+        var shot = Shot(app, "25f-stopped-between-commits");
         var made = await repo.HeadAsync();
         Assert.Equal(copy, await RevParseAsync(repo, "HEAD^"));
         var picked = await GitLinesAsync(repo, "log", "-1", "--format=%s%n%an <%ae>%n%aI%n%cI", "HEAD");
         Assert.Equal(4, picked.Count);
         Assert.Equal(["Conflicting change", "Test Author <author@example.com>"], [picked[0], picked[1]]);
         AssertGitDate(ScenarioTime(6), picked[2]);
-        AssertGitDate(AppCommitTime, picked[3]);
+        AssertGitDate(committed, picked[3]);
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.False(InGitDir(repo, "CHERRY_PICK_HEAD"));
         var todo = File.ReadAllText(Path.Combine(repo.Path, ".git", "sequencer", "todo")).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains("pick 078ef05 Conflicting change", todo, StringComparison.Ordinal);
         Assert.Contains("pick ce5ea6a Alpha two", todo, StringComparison.Ordinal);
         Assert.Equal(copy, File.ReadAllText(Path.Combine(repo.Path, ".git", "sequencer", "abort-safety")).Trim());
-        AssertConflictsBanner(app, shot, PartC.Check25StoppedBanner, null, "Abort cherry-pick");
+
+        // The paused banner: Continue picks the rest; there is nothing to skip.
+        AssertConflictsBanner(
+            app,
+            shot,
+            PartC.Check25PausedBanner,
+            null,
+            "Abort cherry-pick",
+            continueButton: BannerButton.Enabled,
+            skipButton: BannerButton.Disabled(PartC.NothingToSkip),
+            buttonsBelow: true);
         Assert.False(Graph(app).ShowsWorkingRow);
-        AssertSelection(app, shot, 0);
-        Assert.Equal("2026-01-01 12:06", RightPanelText(app, "DetailsDate"));
-        Assert.Equal("2026-01-02 09:00", RightPanelText(app, "DetailsCommitDate"));
-        Assert.Equal([PartC.PickedAlphaOneShort], ParentLinks(app));
-        Assert.Equal("Changed files (1)", RightPanelText(app, "ChangedFilesTitle"));
-        Assert.Equal(["M core.txt src"], FileRows(app, "FileList"));
+        AssertSelection(app, shot, null);
         AssertGraph(app, shot, PartC.Check25Committed, lanes: 4);
         await AssertBranchRowAsync(app, ["Local branches", "main"], head: true, ahead: 2);
         AssertStatus(app, "Ready");
@@ -164,7 +168,7 @@ public sealed partial class Phase3ChecksC
         app.Click(app.Find<Button>("BannerAbortButton"));
         await AssertConfirmationAsync(app, PartC.AbortPickTitle, PartC.AbortPickKeepsHeadQuestion, PartC.BackupDetail, "Abort cherry-pick");
         Shot(app, "25g-abort-keeps-head-question");
-        calls = app.GitCalls().Count;
+        var calls = app.GitCalls().Count;
         var mark = app.LogMark();
         ClickDialogButton(app, "ConfirmButton");
         await WaitForOperationAsync(app, repo, "Abort the cherry-pick", mark);
@@ -187,8 +191,61 @@ public sealed partial class Phase3ChecksC
         Assert.Equal(["Conflicting change", "Alpha one", "Main work"], await GitLinesAsync(repo, "log", "-3", "--format=%s", "main"));
         Assert.Null(app.BannerBounds);
         AssertGraph(app, shot, PartC.Check25Committed, lanes: 4);
-        AssertSelection(app, shot, 0);
+        AssertSelection(app, shot, null);
         AssertStatus(app, "Aborted the cherry-pick");
+    }
+
+    /// <summary>
+    /// Check 25, the new step of phase 4's report ("Phase 3's check 25 step 4": "a new step on a
+    /// fresh copy shows the stage panel's Continue cherry-pick"): a new stopped cherry-pick
+    /// sequence, the file resolved outside the app and staged in the stage panel (no question: no
+    /// conflict markers are left, design 7.1). The banner says the conflicts are resolved, with
+    /// Continue, Skip and Abort; the stage panel's commit button is "Continue cherry-pick",
+    /// enabled, and Amend is disabled with its reason (design 5.3). Nothing is clicked further.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_25_cherry_pick_resolved_and_staged()
+    {
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.CherryPick);
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+        var copy = await repo.HeadAsync();
+
+        // The file resolved outside the app, then staged in the stage panel.
+        var reads = app.CountLogLines(AppLogFile.WorkingTreeRead(OpsRepo));
+        repo.WriteFile("src/core.txt", "core\nmain work\nconflict\n");
+        await app.WaitForAsync(() => app.CountLogLines(AppLogFile.WorkingTreeRead(OpsRepo)) > reads, "the app to read the working tree again", OutsideChangeTimeout);
+        await app.WaitForIdleAsync();
+        app.Click(app.WorkingRowPoint());
+        await WaitForStagePanelAsync(app, "Unstaged files (1, 1 with conflicts)", "Staged files (0)");
+        await ClickFileRowButtonAsync(app, "UnstagedFileList", "src/core.txt", "RowStageButton");
+        await WaitForStagePanelAsync(app, "Unstaged files (0)", "Staged files (1)");
+        await app.WaitForAsync(() => app.Find<TextBlock>("BannerText").Text == PartC.Check25ResolvedBanner, "the banner to say the conflicts are resolved");
+        await app.WaitForIdleAsync();
+        var shot = Shot(app, "25e-resolved-staged");
+        await AssertNoDialogAsync(app);
+        Assert.Equal(["M  src/core.txt"], await StatusAsync(repo));
+        Assert.True(InGitDir(repo, "CHERRY_PICK_HEAD"));
+        Assert.Equal(copy, await repo.HeadAsync());
+        AssertConflictsBanner(
+            app,
+            shot,
+            PartC.Check25ResolvedBanner,
+            null,
+            "Abort cherry-pick",
+            continueButton: BannerButton.Enabled,
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: true);
+        Assert.Equal(PartC.WorkingChanges, Graph(app).WorkingRowText ?? PartC.WorkingChanges);
+        var commit = app.Find<Button>("CommitButton");
+        Assert.Equal(PartC.ContinueCherryPick, commit.Content);
+        Assert.True(commit.IsEffectivelyEnabled);
+        AssertTip(commit, null);
+        var amend = (CheckBox)app.FindByAutomationId("AmendCheckBox");
+        Assert.False(amend.IsEffectivelyEnabled);
+        AssertTip(amend, PartC.FinishCherryPickFirst);
+        Assert.Equal("Conflicting change", CommitBoxText(app, "CommitSummary"));
+        AssertStatus(app, "Ready");
     }
 
     /// <summary>Check 25, step 5: a revert stopped by a conflict, started in a terminal: its banner, the toolbar's Stash and the stage panel's prefill.</summary>
@@ -199,8 +256,18 @@ public sealed partial class Phase3ChecksC
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo);
 
+        // A single revert: Continue (disabled while the file conflicts), Skip and Abort under the
+        // text at 1100×700; its text is phase 3's.
         var shot = Shot(app, "25i-revert");
-        AssertConflictsBanner(app, shot, PartC.Check25RevertBanner, null, "Abort revert");
+        AssertConflictsBanner(
+            app,
+            shot,
+            PartC.Check25RevertBanner,
+            null,
+            "Abort revert",
+            continueButton: BannerButton.Disabled(PartC.ResolveConflictsFirstOneFile),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: true);
         AssertGraph(app, shot, PartC.Check25Revert, lanes: 4, PartC.WorkingConflict);
         Assert.Equal(PartC.MainWorkSha, (await File.ReadAllTextAsync(Path.Combine(repo.Path, ".git", "REVERT_HEAD"))).Trim());
         Assert.False(InGitDir(repo, "sequencer"));
@@ -231,7 +298,18 @@ public sealed partial class Phase3ChecksC
         await app.WaitForAsync(() => Graph(app).ShowsWorkingRow && ((TextBlock)app.FindByAutomationId("CurrentBranch")).Text == "Detached at 88d6b91", "the detached HEAD and its working-changes row", OutsideChangeTimeout);
         await app.WaitForIdleAsync();
         var shot = Shot(app, "25k-rebase-from-terminal");
-        AssertConflictsBanner(app, shot, PartC.Check25RebaseBanner, null, "Abort rebase");
+
+        // Phase 4's rebase text, with Continue (disabled while the file conflicts), Skip and Abort
+        // under it at 1100×700.
+        AssertConflictsBanner(
+            app,
+            shot,
+            PartC.Check25RebaseBanner,
+            null,
+            "Abort rebase",
+            continueButton: BannerButton.Disabled(PartC.ResolveConflictsFirstOneFile),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: true);
         AssertBranch(app, "Detached at 88d6b91");
         AssertGraph(app, shot, PartC.Check25Rebase, lanes: 3, PartC.WorkingConflict);
         AssertWorkingRowCutWithToolTip(app);
@@ -295,11 +373,20 @@ public sealed partial class Phase3ChecksC
         Assert.Equal(0, (await repo.GitAllowingFailureAsync("diff", "--cached", "--quiet", "HEAD")).ExitCode);
         Assert.Empty(await StatusAsync(repo));
 
-        // Close: the banner of the empty pick.
+        // Close: the banner of the empty pick in phase 4's words: Continue disabled ("skip it"),
+        // Skip and Abort under the text.
         ClickDialogButton(app, "ConfirmButton");
         await AssertNoDialogAsync(app);
         shot = Shot(app, "25n-empty-pick-banner");
-        AssertConflictsBanner(app, shot, PartC.Check25EmptyBanner, null, "Abort cherry-pick");
+        AssertConflictsBanner(
+            app,
+            shot,
+            PartC.Check25EmptyBanner,
+            null,
+            "Abort cherry-pick",
+            continueButton: BannerButton.Disabled(PartC.PickChangesNothing),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: true);
         Assert.False(Graph(app).ShowsWorkingRow);
 
         // Abort: it ends only the empty pick.
@@ -354,12 +441,6 @@ public sealed partial class Phase3ChecksC
         Assert.Equal(string.Empty, CommitBoxText(app, "CommitSummary"));
         Assert.Equal(string.Empty, CommitBoxText(app, "CommitDescription"));
     }
-
-    /// <summary>The short SHAs of the details panel's parent links.</summary>
-    private static List<string> ParentLinks(ShellDriver app) =>
-        [.. app.FindByAutomationId("RightPanel").GetVisualDescendants().OfType<Button>()
-            .Where(button => button.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(button) == "ParentLink")
-            .Select(button => button.GetVisualDescendants().OfType<TextBlock>().First().Text ?? string.Empty)];
 
     /// <summary>
     /// Moves the pointer onto a file's row in a stage list, so that its buttons show, and clicks

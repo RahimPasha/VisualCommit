@@ -335,13 +335,24 @@ public sealed partial class Phase3ChecksC
     }
 
     /// <summary>
-    /// The conflicts banner without an operation (section 5, D122): its text, no Abort, its
-    /// tooltip, above the column headers, at least 36 high, its background and its bottom line in
-    /// the warning colour, and the warning icon, by pixel.
+    /// The in-progress banner (section 5, D122) as part C's steps state it: its text, its buttons
+    /// (phase 4's Continue and Skip as design 5.1 shows them, null: not shown; Abort, null: none),
+    /// whether the buttons stand on a row of their own under the text (phase 4's design 5.2: at
+    /// 1100×700 they do, so the banner takes more than one line), its tooltip, above the column
+    /// headers, at least 36 high, its background and its bottom line in the warning colour, and
+    /// the warning icon, by pixel.
     /// </summary>
-    private static Rect AssertConflictsBanner(ShellDriver app, Screenshot screenshot, string text, string? toolTip, string? abort = null)
+    private static Rect AssertConflictsBanner(
+        ShellDriver app,
+        Screenshot screenshot,
+        string text,
+        string? toolTip,
+        string? abort = null,
+        BannerButton? continueButton = null,
+        BannerButton? skipButton = null,
+        bool? buttonsBelow = null)
     {
-        var banner = AssertBanner(app, text, abort);
+        var banner = AssertBanner(app, text, abort, buttonsBelow == true ? false : null, continueButton, skipButton, buttonsBelow);
         if (toolTip is not null)
         {
             // Asserted where the report states it; null: the step names none.

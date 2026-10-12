@@ -213,10 +213,14 @@ public sealed class AutoFetchScheduler : IDisposable
         _tracked.Clear();
     }
 
-    /// <summary>Whether a finished operation fetched: a fetch, a pull or an auto-fetch, by its title (2.33) or its dedupe key (1.2).</summary>
+    /// <summary>
+    /// Whether a finished operation fetched: a fetch, a pull (a pull with rebase too,
+    /// docs/phase-4-design.md section 6) or an auto-fetch, by its title (2.33, 10.1) or its dedupe
+    /// key (1.2; <c>pull:&lt;ref&gt;:rebase</c>).
+    /// </summary>
     public static bool Fetched(GitOperation operation, OperationResult result) =>
         result.Outcome == OperationOutcome.Succeeded
-        && (operation.Title is "Fetch" or "Pull" or Title
+        && (operation.Title is "Fetch" or "Pull" or OperationTexts.PullRebaseTitle or Title
             || operation.Title.StartsWith("Fetch ", StringComparison.Ordinal)
             || operation.DedupeKey?.StartsWith("fetch:", StringComparison.Ordinal) == true
             || operation.DedupeKey?.StartsWith("pull:", StringComparison.Ordinal) == true);

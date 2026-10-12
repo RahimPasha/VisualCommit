@@ -103,17 +103,20 @@ public class RepositoryOperationsHistoryTests
         Assert.Equal(($"Revert stopped: {mainWork[..7]} changes nothing on main: it is already undone.", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
         Assert.Equal(OperationOutcome.Conflicts, app.LastResult?.Outcome);
         Assert.Equal((InProgressKind.Revert, true), (app.Operations.Status.InProgress.Kind, app.Operations.Status.InProgress.Empty));
-        Assert.Equal(($"Reverting {mainWork[..7]} \"Main work\" changes nothing: it is already undone. Abort to go on.", "Abort revert"), (app.Repository.Banner.Text, app.Repository.Banner.AbortText));
+        Assert.Equal(($"Reverting {mainWork[..7]} \"Main work\" changes nothing: it is already undone. Skip it to go on.", "Abort revert"), (app.Repository.Banner.Text, app.Repository.Banner.AbortText));
+        Assert.Equal((true, "This revert changes nothing: skip it", true), (app.Repository.Banner.HasContinue, app.Repository.Banner.ContinueToolTip, app.Repository.Banner.CanSkip));
         Assert.Equal(head, await repo.HeadAsync());
 
-        // Several: the count so far, then the same sentence; still no dialog.
+        // Several, with git's list (phase 4, D136): an empty revert of a list stops without
+        // REVERT_HEAD (section 4); the count so far, in the warning colour, still no dialog.
         File.Delete(Path.Combine(repo.Path, ".git", "REVERT_HEAD"));
         await app.Repository.RefreshAsync();
         var addCore = await app.ShaAsync("main~2");
         await app.Operations.RevertSeveralAsync([addCore, mainWork]);
 
         Assert.Empty(app.Dialogs.Shown);
-        Assert.Equal(($"Reverted 0 of 2 commits. {mainWork[..7]} changes nothing on main: it is already undone.", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        Assert.Equal(($"Reverted 0 of 2 commits; {mainWork[..7]} changes nothing", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        Assert.Equal((InProgressKind.Revert, true, true), (app.Operations.Status.InProgress.Kind, app.Operations.Status.InProgress.Sequenced, app.Operations.Status.InProgress.Empty));
         app.AssertScriptFollowed();
     }
 
@@ -136,7 +139,8 @@ public class RepositoryOperationsHistoryTests
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             ArgumentNullException.ThrowIfNull(targetMethod);
-            if (targetMethod.Name == nameof(IGitRepository.RevertAsync))
+            // The single revert only; a list of reverts (phase 4, D136) goes to git.
+            if (targetMethod.Name == nameof(IGitRepository.RevertAsync) && args is [string, ..])
             {
                 File.WriteAllText(Path.Combine(_inner.GitDirectory, "REVERT_HEAD"), (string)args![0]! + "\n");
                 return Task.FromResult(ApplyResult.Empty);
@@ -156,7 +160,7 @@ public class RepositoryOperationsHistoryTests
 
 
     [Fact]
-    public async Task Several_commits_are_picked_one_at_a_time_oldest_first()
+    public async Task Several_commits_are_picked_with_one_git_call_oldest_first()
     {
         using var repo = await Scenarios.OperationsAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
@@ -165,6 +169,9 @@ public class RepositoryOperationsHistoryTests
 
         await app.Operations.CherryPickSeveralAsync([alphaTwo, alphaOne]);
 
+        // Phase 4 (D136): git's list, oldest first by the graph's rows.
+        Assert.Single(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git cherry-pick ", StringComparison.Ordinal));
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == $"git cherry-pick {alphaOne} {alphaTwo}");
         Assert.Equal("Cherry-picked 2 commits onto main", app.StatusText);
         Assert.Equal("Alpha two\nAlpha one\nMain work", (await repo.GitAsync("log", "-3", "--format=%s")).StandardOutput.Trim().ReplaceLineEndings("\n"));
         Assert.Equal(Scenarios.OperationsFiles.AlphaTwo, Read(repo, "src/alpha.txt"));
@@ -175,7 +182,7 @@ public class RepositoryOperationsHistoryTests
     }
 
     [Fact]
-    public async Task Picking_several_stops_at_the_first_conflict_and_names_what_was_not_picked()
+    public async Task Picking_several_stops_at_the_first_conflict_and_leaves_the_rest_in_gits_list()
     {
         using var repo = await Scenarios.OperationsAsync();
         await repo.CreateBranchAsync("later");
@@ -186,51 +193,55 @@ public class RepositoryOperationsHistoryTests
         var conflicting = await app.ShaAsync("refs/heads/feature/conflict");
         var alphaOne = await app.ShaAsync("refs/heads/feature/alpha~1");
 
+        // Phase 4 (section 4, D136): the status names the stop; the commits that wait are git's.
         await app.Operations.CherryPickSeveralAsync([later, conflicting]);
 
-        Assert.Equal(($"Cherry-picked 0 of 2 commits. {conflicting[..7]} stopped with conflicts in 1 file; not picked: {later[..7]} \"Later work\".", OperationStatusTone.Warning),
+        Assert.Equal(($"Cherry-picked 0 of 2 commits; stopped at {conflicting[..7]} with conflicts in 1 file", OperationStatusTone.Warning),
             (app.StatusText, app.StatusTone));
-        Assert.Equal(InProgressKind.CherryPick, app.Operations.Status.InProgress.Kind);
-        Assert.False(Directory.Exists(Path.Combine(repo.Path, ".git", "sequencer")));
+        Assert.Equal((InProgressKind.CherryPick, 1), (app.Operations.Status.InProgress.Kind, app.Operations.Status.InProgress.Remaining));
+        Assert.True(Directory.Exists(Path.Combine(repo.Path, ".git", "sequencer")));
         Assert.Empty(app.Dialogs.Shown);
 
         await repo.GitAsync("cherry-pick", "--abort");
         await app.Repository.RefreshAsync();
         await app.Operations.CherryPickSeveralAsync([conflicting, alphaOne]);
 
-        Assert.Equal($"Cherry-picked 1 of 2 commits. {conflicting[..7]} stopped with conflicts in 1 file.", app.StatusText);
+        Assert.Equal($"Cherry-picked 1 of 2 commits; stopped at {conflicting[..7]} with conflicts in 1 file", app.StatusText);
         Assert.Equal("Alpha one", (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
         Assert.Equal(conflicting, File.ReadAllText(Path.Combine(repo.Path, ".git", "CHERRY_PICK_HEAD")).Trim());
     }
 
     [Fact]
-    public async Task Picking_several_reports_an_empty_pick_or_a_failed_one_with_the_count_so_far()
+    public async Task Picking_several_reports_an_empty_pick_or_a_refused_one_with_the_count_so_far()
     {
         using var repo = await Scenarios.OperationsAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         var alphaTwo = await app.ShaAsync("refs/heads/feature/alpha");
         var alphaOne = await app.ShaAsync("refs/heads/feature/alpha~1");
         var ff = await app.ShaAsync("refs/heads/feature/ff");
-        app.Dialogs.CloseError().CloseError();
+        app.Dialogs.CloseError();
 
+        // An empty pick of a list is a stop the banner offers Skip for: no dialog (5.1).
         await app.Operations.CherryPickAsync(alphaOne);
         await app.Operations.CherryPickSeveralAsync([alphaTwo, alphaOne]);
 
-        Assert.Equal(("Cherry-pick stopped", $"Cherry-picked 0 of 2 commits. {alphaOne[..7]} changes nothing on main: its changes are already there. Abort the cherry-pick to go on."),
-            (app.Dialogs.Errors[0].Title, app.Dialogs.Errors[0].Summary));
-        AssertOutputOfFailedCall(app, app.Dialogs.Errors[0], $"git cherry-pick {alphaOne}");
-        Assert.Equal("Cherry-pick 2 commits failed", app.StatusText);
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(($"Cherry-picked 0 of 2 commits; {alphaOne[..7]} changes nothing", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        Assert.True(app.Operations.Status.InProgress.Empty);
 
         await repo.GitAsync("cherry-pick", "--abort");
         repo.WriteFile("docs/ff.txt", "in the way\n");
         await app.Repository.RefreshAsync();
         await app.Operations.CherryPickSeveralAsync([ff, alphaTwo]);
 
-        // Alpha two (older) is picked first; Fast-forward me then finds an untracked file in its way.
-        Assert.Equal(("Cherry-pick failed", $"Cherry-picked 1 of 2 commits. Git could not cherry-pick {ff[..7]}."), (app.Dialogs.Errors[1].Title, app.Dialogs.Errors[1].Summary));
-        Assert.Contains("docs/ff.txt", app.Dialogs.Errors[1].Output, StringComparison.Ordinal);
-        Assert.Equal(("Cherry-pick 2 commits failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        // Alpha two (older) is picked first; git cannot pick Fast-forward me for an untracked file
+        // in its way: a stop with nothing to look at, so the error dialog shows git's output (5.1).
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Cherry-pick stopped", $"Cherry-pick stopped at {ff[..7]} \"Fast-forward me\": git could not pick it. Skip it, or abort."), (dialog.Title, dialog.Summary));
+        Assert.Contains("docs/ff.txt", dialog.Output, StringComparison.Ordinal);
+        Assert.Equal(($"Cherry-picked 1 of 2 commits; git could not pick {ff[..7]}", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
         Assert.Equal("Alpha two", (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
+        Assert.Equal((true, $"Git would leave {ff[..7]} out without a word: skip it or abort"), (app.Repository.Banner.HasContinue, app.Repository.Banner.ContinueToolTip));
         app.AssertScriptFollowed();
     }
 
@@ -306,10 +317,10 @@ public class RepositoryOperationsHistoryTests
         await app.Repository.RefreshAsync();
         await app.Operations.RevertSeveralAsync([addCore, mainWork]);
 
-        Assert.Equal(($"Reverted 0 of 2 commits. {mainWork[..7]} stopped with conflicts in 1 file; not reverted: {addCore[..7]} \"Add core\".", OperationStatusTone.Warning),
+        Assert.Equal(($"Reverted 0 of 2 commits; stopped at {mainWork[..7]} with conflicts in 1 file", OperationStatusTone.Warning),
             (app.StatusText, app.StatusTone));
         Assert.Equal(InProgressKind.Revert, app.Operations.Status.InProgress.Kind);
-        Assert.False(Directory.Exists(Path.Combine(repo.Path, ".git", "sequencer")));
+        Assert.True(Directory.Exists(Path.Combine(repo.Path, ".git", "sequencer")));
 
         await repo.GitAsync("revert", "--abort");
         await app.Repository.RefreshAsync();

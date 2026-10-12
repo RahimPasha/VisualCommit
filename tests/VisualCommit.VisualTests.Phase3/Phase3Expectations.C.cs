@@ -97,6 +97,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 13 ----
 
+        /// <summary>Check 13 step 1: HEAD's own commit, with phase 4's rebase items (phase 4's OC3; 284 high).</summary>
         public static readonly string[] Check13CommitMenu =
         [
             "88d6b91 Main work",
@@ -106,6 +107,8 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main (disabled: \"This commit is already on main\")",
             "Revert this commit",
+            "Rebase main onto this commit (disabled: \"This commit is already on main\")",
+            "Interactive rebase of main from here… (disabled: \"main has no commits after this one\")",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
@@ -142,12 +145,15 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
+        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items; 380 high.</summary>
         public static readonly string[] Check13BranchMenu =
         [
             "feature/conflict",
             "Check out feature/conflict",
             "Merge feature/conflict into hotfix",
             "Merge feature/conflict into hotfix (create a merge commit)",
+            "Rebase hotfix onto feature/conflict",
+            "Interactive rebase of hotfix onto feature/conflict…",
             "—",
             "Push feature/conflict…",
             "—",
@@ -161,12 +167,15 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
+        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items; 458 high.</summary>
         public static readonly string[] Check13MainMenu =
         [
             "main",
             "Check out main",
             "Merge main into hotfix",
             "Merge main into hotfix (create a merge commit)",
+            "Rebase hotfix onto main (disabled: \"hotfix is up to date with main\")",
+            "Interactive rebase of hotfix onto main…",
             "Fast-forward main to origin/main (disabled: \"main is up to date with origin/main\")",
             "—",
             "Push main to origin/main",
@@ -202,12 +211,15 @@ public static partial class Phase3Expectations
 
         // ---- Check 13b ----
 
+        /// <summary>Check 13b step 1: check 2 step 4's list, with phase 4's rebase items; 293 high.</summary>
         public static readonly string[] Check13bRemoteMenu =
         [
             "origin/feature/alpha",
             "Check out origin/feature/alpha",
             "Merge origin/feature/alpha into main",
             "Merge origin/feature/alpha into main (create a merge commit)",
+            "Rebase main onto origin/feature/alpha",
+            "Interactive rebase of main onto origin/feature/alpha…",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -312,9 +324,14 @@ public static partial class Phase3Expectations
 
         public const string ConflictsBanner = "1 file has conflicts. Resolve it, then stage it.";
 
-        public const string ConflictsBannerTip = "The conflict resolver comes in a later version. Resolve the files in your editor and stage them.";
+        /// <summary>The banner's tooltip of conflicts without an operation (phase 4's design 10.3).</summary>
+        public const string ConflictsBannerTip = "Click a conflicted file to resolve it, then mark it resolved.";
 
-        public const string ConflictRowTip = "Conflict: resolve it in your editor, then stage it";
+        /// <summary>The tooltip of a conflicted file's row in the stage panel (phase 4's design 5.3).</summary>
+        public const string ConflictRowTip = "Conflict: click to resolve it";
+
+        /// <summary>The banner's Continue, and the stage panel's "Continue cherry-pick", while one file conflicts (phase 4's design 10.4).</summary>
+        public const string ResolveConflictsFirstOneFile = "Resolve the conflicts first (1 file)";
 
         public const string ResolveFirst = "Resolve the conflicts first";
 
@@ -385,6 +402,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 16 ----
 
+        /// <summary>Check 16 step 1: phase 4's OC1 for "Alpha two" (284 high).</summary>
         public static readonly string[] Check16CommitMenu =
         [
             "ce5ea6a Alpha two",
@@ -394,6 +412,8 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main",
             "Revert this commit",
+            "Rebase main onto this commit",
+            "Interactive rebase of main from here… (disabled: \"This commit is not on main\")",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
@@ -452,16 +472,32 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
+        /// <summary>Check 25 step 1: a pick of git's list stopped by a conflict, one commit waiting (phase 4's design 5.2, "a pick in a list").</summary>
         public const string Check25SequenceBanner =
-            "Cherry-picking 078ef05 \"Conflicting change\". 1 file has conflicts. 1 more commit waits: continue it in a terminal (git cherry-pick --continue).";
+            "Cherry-picking 078ef05 \"Conflicting change\". 1 file has conflicts. 1 more commit waits: Continue picks it.";
 
+        /// <summary>Check 25 step 1: the banner's tooltip for a pick in a list (phase 4's design 10.3).</summary>
         public const string Check25PickBannerTip =
-            "Continue and Skip, and the conflict resolver, come in a later version. Resolve the files in your editor and stage them, or abort.";
+            "Continue commits the resolved files and goes on with the commits that wait. Skip leaves this commit out and goes on. Abort puts main back where it was before the cherry-pick: the commits it already made are dropped too.";
 
+        /// <summary>Check 25 step 4 (the new step on a fresh copy): the stopped pick's file resolved and staged (phase 4's design 5.2).</summary>
         public const string Check25ResolvedBanner =
-            "Cherry-picking 078ef05 \"Conflicting change\". Conflicts resolved: commit to finish the cherry-pick. 1 more commit waits: continue it in a terminal (git cherry-pick --continue).";
+            "Cherry-picking 078ef05 \"Conflicting change\". Conflicts resolved: continue to commit it. 1 more commit waits: Continue picks it.";
 
-        public const string Check25StoppedBanner = "Cherry-pick stopped with 1 commit left: continue in a terminal, or abort.";
+        /// <summary>Check 25 step 4: the list paused after the stopped pick was committed in a terminal (phase 4's design 5.2, "a list paused").</summary>
+        public const string Check25PausedBanner = "Cherry-pick paused: 1 more commit waits. Continue picks it.";
+
+        /// <summary>Check 25 step 4: Skip's reason on the paused list (phase 4's design 10.4).</summary>
+        public const string NothingToSkip = "There is nothing to skip: the stopped commit was committed";
+
+        /// <summary>The stage panel's commit button during a stop of a list of picks (phase 4's design 5.3).</summary>
+        public const string ContinueCherryPick = "Continue cherry-pick";
+
+        /// <summary>Amend's reason during a stop of a list of picks (phase 4's design 5.3).</summary>
+        public const string FinishCherryPickFirst = "Finish or abort the cherry-pick first";
+
+        /// <summary>Check 25 step 7: the banner's Continue on the empty pick (phase 4's design 10.4).</summary>
+        public const string PickChangesNothing = "This cherry-pick changes nothing: skip it";
 
         public const string AbortPickTitle = "Abort the cherry-pick?";
 
@@ -498,7 +534,11 @@ public static partial class Phase3Expectations
         /// <summary>Check 25 step 6's graph: G0 with HEAD detached at Main work by the rebase.</summary>
         public static readonly IReadOnlyList<Row> Check25Rebase = WithLabels(G0, 3, "HEAD", "main", "origin/main", "v1.1");
 
-        public const string Check25RebaseBanner = "Rebasing feature/conflict onto 88d6b91. 1 file has conflicts.";
+        /// <summary>
+        /// Check 25 step 6: phase 4's rebase text (design 5.2, 14.3): <c>{onto}</c> is main, the local
+        /// branch at the rebase's onto; the stopped commit and where it is in the rebase.
+        /// </summary>
+        public const string Check25RebaseBanner = "Rebasing feature/conflict onto main: stopped at 078ef05 \"Conflicting change\" (1 of 1). 1 file has conflicts.";
 
         public static readonly string[] T7 =
         [
@@ -512,7 +552,8 @@ public static partial class Phase3Expectations
 
         public const string Check25EmptySummary = "dff8fbf changes nothing on main: its changes are already there. Abort the cherry-pick to go on.";
 
-        public const string Check25EmptyBanner = "Cherry-picking dff8fbf \"Alpha one\" changes nothing: its changes are already here. Abort to go on.";
+        /// <summary>Check 25 step 7: phase 4's empty pick text (design 5.2: "Skip it to go on.").</summary>
+        public const string Check25EmptyBanner = "Cherry-picking dff8fbf \"Alpha one\" changes nothing: its changes are already here. Skip it to go on.";
 
         /// <summary>Check 25 step 8's graph (five lanes), below the working-changes row.</summary>
         public static readonly IReadOnlyList<Row> Check25StashConflicts =

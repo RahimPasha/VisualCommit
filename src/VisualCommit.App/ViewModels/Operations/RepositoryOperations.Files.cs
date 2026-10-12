@@ -18,11 +18,18 @@ namespace VisualCommit.App.ViewModels.Operations;
 
 public sealed partial class RepositoryOperations
 {
-    /// <summary>"Stage" and "Mark as resolved": phase 2's stage, its failure in the stage panel.</summary>
-    public Task StageFilesAsync(IReadOnlyList<ChangedFile> files)
+    /// <summary>
+    /// "Stage" and "Mark as resolved": phase 2's stage, its failure in the stage panel. A conflicted
+    /// file whose working-tree file still has conflict markers asks first (docs/phase-4-design.md
+    /// 7.1, 7.2, D148).
+    /// </summary>
+    public async Task StageFilesAsync(IReadOnlyList<ChangedFile> files)
     {
         ArgumentNullException.ThrowIfNull(files);
-        return StagePanelWriteAsync(() => Repository.StageAsync(files));
+        if (!IsClosed && await ConfirmStagingWithMarkersAsync(files))
+        {
+            await StagePanelWriteAsync(() => Repository.StageAsync(files));
+        }
     }
 
     /// <summary>"Unstage": phase 2's unstage (a rename unstages both its paths).</summary>
@@ -39,8 +46,8 @@ public sealed partial class RepositoryOperations
         return StagePanelWriteAsync(() => Repository.DiscardAsync(files));
     }
 
-    /// <summary>The working-changes row's "Stage all": the unstaged list's header button of phase 2.</summary>
-    public Task StageAllAsync() => StagePanelWriteAsync(() => Repository.StageAsync(Status.Unstaged));
+    /// <summary>The working-changes row's "Stage all": the unstaged list's header button of phase 2, asking first about conflict markers (7.1).</summary>
+    public Task StageAllAsync() => StageFilesAsync(Status.Unstaged);
 
     /// <summary>The working-changes row's "Unstage all": the staged list's header button of phase 2.</summary>
     public Task UnstageAllAsync() => StagePanelWriteAsync(() => Repository.UnstageAsync(Status.Staged));

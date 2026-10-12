@@ -43,8 +43,18 @@ public partial class Phase3RealWindowPass
         WaitForDetails(app, "Conflicting change");
         Assert.Equal(MergeBanner, app.Find("BannerText").Name);
         Assert.Equal("Abort merge", app.Find("BannerAbortButton").Name);
+
+        // Phase 4's Continue, disabled while the file conflicts, and no Skip for a merge; at
+        // 1100×700 the buttons stand under the text, so the banner takes more than one line
+        // (phase 4's report, "Phase 3's banner").
+        var resume = app.Find("BannerContinueButton");
+        Assert.Equal("Continue", resume.Name);
+        Assert.False(resume.IsEnabled, "The banner's Continue is enabled while a file conflicts.");
+        Assert.Empty(app.FindAll("BannerSkipButton"));
         var banner = app.BannerBounds()!.Value;
-        Assert.True(banner.Height > WindowLayout.BannerMinHeight + 0.5, $"The banner is {banner.Height} high: its text is on one line at 1100×700 (D122).");
+        Assert.True(banner.Height > WindowLayout.BannerMinHeight + 0.5, $"The banner is {banner.Height} high: one line at 1100×700 (D122, phase 4's design 5.2).");
+        var text = app.BoundsOf(app.Find("BannerText"));
+        Assert.True(app.BoundsOf(resume).Top >= text.Bottom - 0.5, $"The banner's buttons at {app.BoundsOf(resume)} are not under its text at {text}.");
         Assert.Empty(app.FindAll("ErrorDialog"));
         Assert.Empty(app.FindAll("ConfirmationDialog"));
         Assert.Equal(StatusMergeStopped, app.OperationStatusText());
@@ -157,9 +167,11 @@ public partial class Phase3RealWindowPass
         WaitForMultiSelection(app, "2 commits selected");
 
         // Step 10: a right-click on a selected row keeps the selection and opens the
-        // several-commits menu; the pointer stays where it opened it.
+        // several-commits menu, with phase 4's squash (disabled: neither commit is on main); the
+        // pointer stays where it opened it.
         app.RightClickAt(alphaOne.X, alphaOne.Y);
-        Assert.Equal(["Cherry-pick 2 commits onto main", "Revert 2 commits", "Copy SHAs"], app.MenuItemNames());
+        Assert.Equal(ItemLabels(TwoCommitsMenu), app.MenuItemNames());
+        Assert.False(app.FindAll("ContextMenuItem").Single(item => item.Name == "Squash 2 commits…").IsEnabled, "\"Squash 2 commits…\" is enabled.");
         Assert.Equal("2 commits selected", app.Find("MultiSelectionTitle").Name);
         Compare(app, "11g-multi-menu", keepPointer: true);
 
