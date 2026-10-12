@@ -336,6 +336,81 @@ public class ConflictResolverViewModelTests
         Assert.Equal([OursUsed, Open], resolver.Bars);
     }
 
+    [AvaloniaFact]
+    public async Task Two_identical_blocks_keep_their_own_bars_when_they_are_chosen_one_after_the_other()
+    {
+        var (_, _, resolver) = TwinStop();
+        await resolver.OpenAsync("version.txt");
+        var navigations = new List<ConflictNavigation>();
+        resolver.NavigationRequested += (_, navigation) => navigations.Add(navigation);
+
+        // Use ours on block 1: block 2's markers are still in the result, and its bars keep their buttons.
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.Equal("x = 2\na\nb\nc\n" + Twin + "d\n", Text(resolver));
+        Assert.Equal([OursUsed, Open], resolver.Bars);
+
+        // The next conflict reaches block 2 in the panes and in the result.
+        resolver.NextConflictCommand.Execute(null);
+        Assert.Equal(new ConflictNavigation(LineStart(resolver, 5), 1, 5, FocusResult: false), navigations[^1]);
+
+        // Use theirs on block 2 replaces block 2 and records it against block 2.
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal("x = 2\na\nb\nc\nx = 3\nd\n", Text(resolver));
+        Assert.Equal([OursUsed, TheirsUsed], resolver.Bars);
+
+        // A choice on block 1, whose markers are gone, does nothing.
+        resolver.Choose(0, ConflictChoice.UseTheirs);
+        Assert.Equal("x = 2\na\nb\nc\nx = 3\nd\n", Text(resolver));
+
+        // Bottom to top: the same.
+        Assert.True(resolver.Undo());
+        Assert.True(resolver.Undo());
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal(Twin + "a\nb\nc\nx = 3\nd\n", Text(resolver));
+        Assert.Equal([Open, TheirsUsed], resolver.Bars);
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.Equal([OursUsed, TheirsUsed], resolver.Bars);
+    }
+
+    [AvaloniaFact]
+    public async Task Typing_away_the_first_of_two_identical_blocks_leaves_the_second_its_bars()
+    {
+        var (_, delays, resolver) = TwinStop();
+        await resolver.OpenAsync("version.txt");
+        var document = resolver.Document!;
+
+        document.Replace(0, Twin.Length, "x = 2\n");
+        delays.Elapse();
+
+        Assert.Equal([NoneUsed, Open], resolver.Bars);
+        Assert.Equal("1 conflict left", resolver.ResultCountText);
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal("x = 2\na\nb\nc\nx = 3\nd\n", Text(resolver));
+        Assert.Equal([NoneUsed, TheirsUsed], resolver.Bars);
+    }
+
+    [AvaloniaFact]
+    public async Task Typing_in_a_block_after_another_was_chosen_keeps_both_blocks_bars()
+    {
+        var (_, delays, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(0, ConflictChoice.UseOurs);
+
+        // Block 2's ours line (line 11 of R1) edited by hand.
+        var document = resolver.Document!;
+        Assert.Equal("line 10 ours", document.GetText(document.GetLineByNumber(11)));
+        document.Insert(document.GetLineByNumber(11).EndOffset, " and more");
+        delays.Elapse();
+
+        Assert.Equal([OursUsed, Open], resolver.Bars);
+        Assert.Equal(("1 conflict left", "Conflict 1 of 2"), (resolver.ResultCountText, resolver.ConflictPositionText));
+
+        // Its bar acts on it: the second block of the result is replaced.
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+        Assert.Equal(R2, Text(resolver));
+        Assert.Equal([OursUsed, TheirsUsed], resolver.Bars);
+    }
+
     // --- A whole side (11.6; C14 step 7) --------------------------------------------------------
 
     [AvaloniaFact]
@@ -895,6 +970,18 @@ public class ConflictResolverViewModelTests
     private static string Scenarios_NotesTheirs => Testing.Scenarios.ConflictsFiles.NotesTheirs;
 
     private static string Scenarios_NotesOurs => Testing.Scenarios.ConflictsFiles.NotesOurs;
+
+    /// <summary>One of the two identical blocks git writes when both sides changed <c>x = 1</c> in two places alike (checked with Git 2.36).</summary>
+    private const string Twin = "<<<<<<< HEAD\nx = 2\n=======\nx = 3\n>>>>>>> feature\n";
+
+    /// <summary>A merge's stop on version.txt: two identical blocks with three common lines between them.</summary>
+    private static (RecordingConflictActions Actions, ManualDelays Delays, ConflictResolverViewModel Resolver) TwinStop()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("version.txt", Twin + "a\nb\nc\n" + Twin + "d\n");
+        var delays = new ManualDelays();
+        return (actions, delays, Resolver(actions, delays, Status(ResolverFixtures.Merge("feature"), Entry("version.txt"))));
+    }
 
     /// <summary>The merge's stop: notes.txt both modified with two blocks (FM).</summary>
     private static (RecordingConflictActions Actions, ManualDelays Delays, ConflictResolverViewModel Resolver) MergeStop()

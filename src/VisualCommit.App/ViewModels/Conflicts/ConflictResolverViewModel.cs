@@ -1092,8 +1092,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     }
 
     /// <summary>
-    /// Parses the result and matches its blocks to the panes' (11.5): a result block to the first
-    /// panes' block not yet matched whose ours and theirs lines it holds, then, by order, the rest.
+    /// Parses the result and matches its blocks to the panes' (<see cref="MatchBlocks"/>, 11.5).
     /// A panes' block whose markers are in the result shows its buttons; one whose markers are gone
     /// shows the choice that took it out, or <c>Not used</c> on both bars when typing did.
     /// </summary>
@@ -1106,32 +1105,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         }
 
         var current = ConflictText.Parse(document.Text, _markerSize);
-        var matched = Enumerable.Repeat(-1, read.BlockCount).ToArray();
-        var owner = Enumerable.Repeat(-1, current.BlockCount).ToArray();
-        for (var r = 0; r < current.BlockCount; r++)
-        {
-            for (var p = 0; p < read.BlockCount; p++)
-            {
-                if (matched[p] < 0 && read.Blocks[p].HasSameSides(current.Blocks[r]))
-                {
-                    matched[p] = r;
-                    owner[r] = p;
-                    break;
-                }
-            }
-        }
-
-        var free = new Queue<int>(Enumerable.Range(0, read.BlockCount).Where(p => matched[p] < 0));
-        for (var r = 0; r < current.BlockCount && free.Count > 0; r++)
-        {
-            if (owner[r] < 0)
-            {
-                var p = free.Dequeue();
-                matched[p] = r;
-                owner[r] = p;
-            }
-        }
-
+        var matched = MatchBlocks(read, current, _choices);
         _current = current;
         _matched = matched;
         var bars = new ConflictBlockBars[read.BlockCount];
@@ -1152,6 +1126,172 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
     }
+
+    /// <summary>
+    /// Matches the result's blocks to the panes' blocks (11.5), keeping their order: of the
+    /// matchings that keep both in order, the one with the most evidence, where a pair's evidence
+    /// is, first, the same ours and theirs lines, then the same line before the block and the same
+    /// line after it; among matchings with as much evidence, the one whose blocks stand nearer
+    /// their places in the file (counted from the top or from the bottom, whichever is nearer). A
+    /// panes' block that a recorded choice took out of the result is matched only by its sides,
+    /// and only where no other block can be. The result's blocks left between two matched pairs
+    /// take, by order, the panes' blocks left there that no choice took out. So two identical
+    /// blocks keep their own bars, and a block chosen earlier is never handed the block still in
+    /// the result. Returns, for each panes' block, its result block or -1.
+    /// </summary>
+    internal static int[] MatchBlocks(ConflictText read, ConflictText current, IReadOnlyList<BlockChoice?> choices)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(choices);
+        var panes = read.BlockCount;
+        var result = current.BlockCount;
+        var matched = Enumerable.Repeat(-1, panes).ToArray();
+        if (panes == 0 || result == 0)
+        {
+            return matched;
+        }
+
+        var keys = new Dictionary<string, int>(StringComparer.Ordinal);
+        var paneSides = read.Blocks.Select(block => SidesKey(block, keys)).ToArray();
+        var resultSides = current.Blocks.Select(block => SidesKey(block, keys)).ToArray();
+        var anchors = new List<(int Result, int Pane)>();
+        if ((long)panes * result <= MaxWeighedPairs)
+        {
+            anchors = WeighedAnchors();
+        }
+        else
+        {
+            // Too many blocks to weigh every pair: each result block, in order, to the next panes'
+            // block with its sides that no choice took out.
+            var last = -1;
+            for (var r = 0; r < result; r++)
+            {
+                for (var p = last + 1; p < panes; p++)
+                {
+                    if (!IsChosen(p) && paneSides[p] == resultSides[r])
+                    {
+                        anchors.Add((r, p));
+                        last = p;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // The blocks between two matched pairs (and before the first, after the last), by order.
+        var previous = (Result: -1, Pane: -1);
+        foreach (var anchor in anchors.Append((result, panes)))
+        {
+            var free = Enumerable.Range(previous.Pane + 1, anchor.Item2 - previous.Pane - 1).Where(p => !IsChosen(p)).ToList();
+            for (int r = previous.Result + 1, i = 0; r < anchor.Item1 && i < free.Count; r++, i++)
+            {
+                matched[free[i]] = r;
+            }
+
+            if (anchor.Item1 < result)
+            {
+                matched[anchor.Item2] = anchor.Item1;
+            }
+
+            previous = anchor;
+        }
+
+        return matched;
+
+        bool IsChosen(int pane) => pane < choices.Count && choices[pane] is not null;
+
+        // The pairs of the matching with the most evidence, by dynamic programming over both orders.
+        List<(int Result, int Pane)> WeighedAnchors()
+        {
+            var best = new (long Evidence, long Closeness)[result + 1, panes + 1];
+            var step = new byte[result + 1, panes + 1];
+            for (var r = 1; r <= result; r++)
+            {
+                for (var p = 1; p <= panes; p++)
+                {
+                    var (score, from) = best[r - 1, p].CompareTo(best[r, p - 1]) >= 0 ? (best[r - 1, p], (byte)1) : (best[r, p - 1], (byte)2);
+                    if (Weigh(r - 1, p - 1) is { } pair)
+                    {
+                        var diagonal = (best[r - 1, p - 1].Evidence + pair.Evidence, best[r - 1, p - 1].Closeness + pair.Closeness);
+                        if (diagonal.CompareTo(score) > 0)
+                        {
+                            (score, from) = (diagonal, 3);
+                        }
+                    }
+
+                    best[r, p] = score;
+                    step[r, p] = from;
+                }
+            }
+
+            var pairs = new List<(int Result, int Pane)>();
+            for (int r = result, p = panes; r > 0 && p > 0;)
+            {
+                switch (step[r, p])
+                {
+                    case 3:
+                        pairs.Add((r - 1, p - 1));
+                        r--;
+                        p--;
+                        break;
+                    case 1:
+                        r--;
+                        break;
+                    default:
+                        p--;
+                        break;
+                }
+            }
+
+            pairs.Reverse();
+            return pairs;
+        }
+
+        // A pair's evidence and closeness, or null without evidence.
+        (long Evidence, long Closeness)? Weigh(int r, int p)
+        {
+            var sameSides = paneSides[p] == resultSides[r];
+            if (IsChosen(p))
+            {
+                return sameSides ? (1, 0) : null;
+            }
+
+            var paneBlock = read.Blocks[p];
+            var resultBlock = current.Blocks[r];
+            var evidence = (sameSides ? 1_000_000L : 0)
+                + (string.Equals(LineBefore(read, paneBlock), LineBefore(current, resultBlock), StringComparison.Ordinal) ? 1_000 : 0)
+                + (string.Equals(LineAfter(read, paneBlock), LineAfter(current, resultBlock), StringComparison.Ordinal) ? 1_000 : 0);
+            if (evidence == 0)
+            {
+                return null;
+            }
+
+            var fromTop = Math.Abs(paneBlock.StartLine - resultBlock.StartLine);
+            var fromBottom = Math.Abs((read.Lines.Count - paneBlock.EndLine) - (current.Lines.Count - resultBlock.EndLine));
+            return (evidence, -Math.Min(fromTop, fromBottom));
+        }
+
+        static string? LineBefore(ConflictText text, ConflictBlock block) => block.StartLine > 0 ? text.Lines[block.StartLine - 1].Text : null;
+
+        static string? LineAfter(ConflictText text, ConflictBlock block) => block.EndLine + 1 < text.Lines.Count ? text.Lines[block.EndLine + 1].Text : null;
+
+        // One number per distinct pair of sides, compared without line ends (as HasSameSides).
+        static int SidesKey(ConflictBlock block, Dictionary<string, int> keys)
+        {
+            var key = string.Join('\n', [block.Ours.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), .. block.Ours.Select(line => line.Text), .. block.Theirs.Select(line => line.Text)]);
+            if (!keys.TryGetValue(key, out var id))
+            {
+                id = keys.Count;
+                keys.Add(key, id);
+            }
+
+            return id;
+        }
+    }
+
+    /// <summary>Up to how many pairs of blocks <see cref="MatchBlocks"/> weighs (a file of 500 blocks); beyond it, it matches by sides and order only.</summary>
+    private const long MaxWeighedPairs = 250_000;
 
     private static ConflictBlockBars BarsOf(BlockChoice? choice) => choice switch
     {
