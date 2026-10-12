@@ -106,15 +106,20 @@ App:
 
 - [ ] 15. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
   the drop menu, squash on a multi-selection, pull with rebase, interactive rebase from a commit.
+  Built in WP4 (merged in `9242ed8`); its review's findings are being fixed.
 - [ ] 16. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
-  (its message, and its button for a rebase or a list of picks).
-- [ ] 17. The interactive rebase list in the graph area, newest on top: an action per commit,
-  drag to reorder, the new message of a reword or squash, Start and Cancel.
-- [ ] 18. The conflict resolver across the graph and right-panel area: ours and theirs above the
+  (its message, and its button for a rebase or a list of picks). Built in WP4; being fixed as 15.
+- [x] 17. The interactive rebase list in the graph area, newest on top: an action per commit,
+  drag to reorder, the new message of a reword or squash, Start and Cancel. WP5 (`2e9b722`) and
+  the lead's hooks (`d7b3c20`); design 14.4.
+- [x] 18. The conflict resolver across the graph and right-panel area: ours and theirs above the
   editable result, ours, theirs or both per conflict, a whole file from one side, mark resolved,
-  the next and previous conflicted file, the external merge tool.
+  the next and previous conflicted file, the external merge tool. WP6 (`60cf77a`) and the lead's
+  hooks (`f184e95`, the clean-up at opening `51fb51f`); design 14.4.
 - [ ] 19. Phases 0 to 3's checks updated for anything phase 4 changes on purpose, recorded under
-  "Changes to expected results" in the phase 4 report.
+  "Changes to expected results" in the phase 4 report. Phase 3's walk-through and real-window
+  files updated in WP4 (81 of 81 and phases 0 to 2's 50 of 50 pass on `51fb51f`); what WP4's fixes
+  change is still to be recorded.
 
 Visual checks:
 
@@ -185,11 +190,15 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Steps 15 to 18: WP4 (the operations, menus, banner, stage panel and texts, and phase 3's
-expectations that change), WP5 (the interactive rebase's list and the message dialog, with their
-drivers) and WP6 (the resolver, the diff view's `Conflict` body removed, with its drivers) build in
-worktrees side by side from the commit that holds the report (design 14); then the lead's hooks in
-`RepositoryViewModel`, `MainWindow` and `RepoTabViewModel`, and step 19.
+WP4 is fixing its review's findings and the lead's decisions on them (squash refusal texts, a
+list's refused stop after Continue or Skip, 10.2's list statuses, the banner's Continue with the
+stage panel's changed message, `rebase.autoStash` read, a running text that changes mid-operation,
+a warning outcome for the fork point, the empty pick's dialog text, the merge tool through the
+resolver's question, `RepositoryOperationsBackupCleanupTests`) on `wip/p4-wp4`. Beside it, step 20
+is written by four agents in worktrees (WP7: part A, part B, C10 to C13, C14 to C17 with D18), each
+recording where the app differs from the report. Then: merge them, triage what they found (fix the
+app, or change an expected result with its reason in the report), record WP4's changes to earlier
+expectations (step 19), WP8 (the real-window pass's code), the review (step 22) and the gate.
 
 This always names the single next thing to do and is kept accurate in every commit.
 

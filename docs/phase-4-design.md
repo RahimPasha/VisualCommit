@@ -1580,6 +1580,53 @@ the design left open; the lead decided (the sections above are corrected where t
   check 12 step 7 the two selected commits form a chain on main's line, so `Squash 2 commits…` is
   enabled there and highlighted first.
 
+### 14.4 What WP4 to WP6 and the lead's hooks settled (merged in `9242ed8`, `2e9b722`, `60cf77a`)
+
+The code's doc comments are the reference; where the build differs from or adds to the text above:
+
+- **WP5** (the list, `2e9b722`): `InteractiveRebaseViewModel(request, list, baseSubject, host)`
+  takes the base commit's subject, which `RebaseList` lacks. Squash and Fixup are also disabled on
+  a row whose rows below are all dropped (`Every commit below it is dropped: there is nothing to
+  join`). A click on a row's action button selects the row and focuses it (the button itself takes
+  no focus), and its menu is logged as opened by pointer; `Edit…` takes no focus and leaves the
+  selection; `r` on a reworded row does nothing (Edit… changes its message). An edited group
+  message is dropped once no squash joins its target. Unfixed by the design and settled so: the
+  header and footer on the chrome background with a border; the second line's text at x 120 and
+  `Edit…` 12 from the right; `Base` at x 36; the selection colour on the 30-px row only; the count
+  hidden while the list shows a message; rows without the theme's focus frame (the selection marks
+  the focused row); a drag held within 20 px of the top or bottom scrolls the rows; End brings the
+  base row into view. `MessageDialogViewModel` joins the description with line feeds.
+- **WP6** (the resolver, `60cf77a`): the result shows the empty line after the file's last line
+  feed (AvaloniaEdit's model), so its line count is one more than the file's lines. 11.12's menus
+  are built in `ConflictMenus` (`RepositoryMenus` has no partial parts); the header's menu is
+  `RepositoryMenus.ForUnstagedFile` through `ConflictResolverViewModel.FileMenu`. A file moved aside
+  by a file/folder clash is recognised from the status's paths under `<p>/`. The bars' buttons keep
+  the focus (the panes' text areas are no tab stops). With one conflicted file the file arrows are
+  disabled; `Delete it` asks nothing; a card's first button takes the focus without an outline.
+  While a write runs, the bars, the close button and Esc are disabled, and Undo, Redo and Cut too.
+  A refresh closes the resolver for "the operation ended" only when an operation was in progress
+  before; with conflicts left by a stash and a modified result it stays (`Marked resolved
+  elsewhere`). `Take ours` and `Take theirs` decode the side as UTF-8, else Latin-1; Mark resolved
+  writes in the encoding the file was read in. The diff view's `Conflict` body is gone.
+- **WP4** (operations, menus, banner, stage panel, `9242ed8`): `ConflictBannerViewModel.Show(state,
+  conflicts, ontoName, currentName)`; the banner's layout is `BannerLayoutPanel` (buttons below when
+  the text would keep less than 240 px). Several picks and reverts are one call as section 4 says;
+  `HasSequencer` is gone. `Operations.CleanUpBackupsAsync()` runs after every operation that saved a
+  backup (phase 3's aborts and resets included); the resolver's own snapshots (`Delete it`, a binary
+  side) are saved inside the git layer and trigger no clean-up, which the next backup or opening
+  makes up for. Its review's findings and the lead's decisions on them are being fixed (status
+  "Next step").
+- **The lead's hooks** (`d7b3c20`, `f184e95`, `51fb51f`): `RepositoryViewModel` implements
+  `IInteractiveRebaseHost`; `ShowsGraph`, `ShowsInteractiveRebase` and `ShowsDiff` say what the
+  graph area shows; `GraphFocusRequested` (`Graph` or `ContinueFirst`) gives the focus back when the
+  list or the resolver closes, and a diff closed over the list gives it to the list. `OpenDiff` of a
+  conflicted unstaged file opens the resolver; an open diff whose file became conflicted closes.
+  `RepoTabViewModel.ShowsRightPanel`, `ShowsDetailsPanel`, `ShowsStagePanel` and `GraphColumnSpan`
+  carry 11.2. `merge.tool` is read after a status read that shows conflicts and kept in
+  `RepositoryMenuContext.MergeTool` and the resolver. The background clean-up after the first load
+  is the operation `Clean up backups` (section 9 (b)). A confirmation with no question hides its
+  question line (the list's `Discard the changes to this list?`).
+
 ## 15. Decisions
 
 Recorded in `decisions.md` with their reasons; in short:
