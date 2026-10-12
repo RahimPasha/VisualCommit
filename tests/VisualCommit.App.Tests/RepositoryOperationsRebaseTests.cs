@@ -203,10 +203,13 @@ public class RepositoryOperationsRebaseTests
         using var repo = await Scenarios.RebaseAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         app.Select(OtherOne);
+        var texts = RecordRunningTexts(app);
 
         // A3 step 5.
         await app.Operations.CheckoutAndRebaseAsync("refs/heads/feature/other", new RebaseTarget(MainMore, "main"));
 
+        // 10.1: the status bar names the step: the checkout, then the rebase.
+        Assert.Equal(["Checking out feature/other…", "Rebasing feature/other onto main…"], texts);
         Assert.Empty(app.Dialogs.Shown);
         Assert.Equal("Rebased feature/other onto main", app.StatusText);
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
@@ -338,9 +341,11 @@ public class RepositoryOperationsRebaseTests
         var list = await app.Repository.Repository.ReadRebaseListAsync(MainMore, "refs/heads/feature/other", fromCommit: false, options: null, TestContext.Current.CancellationToken);
         var request = new InteractiveRebaseRequest(new RebaseTarget(MainMore, "main"), "refs/heads/feature/other", FromHere: false, CheckoutFirst: true);
         var plan = new RebasePlan(list.Onto, list.BranchTip, "refs/heads/feature/other", [new RebaseStep(OtherOne, RebaseAction.Reword, "Other one, reworded\n\n#1 kept")]);
+        var texts = RecordRunningTexts(app);
 
         Assert.True(await app.Operations.RunInteractiveRebaseAsync(plan, request));
 
+        Assert.Equal(["Checking out feature/other…", "Rebasing feature/other…"], texts);
         Assert.Equal("Rebased feature/other: 1 commit", app.StatusText);
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
         Assert.Equal("Other one, reworded\n\n#1 kept", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.TrimEnd());
@@ -423,6 +428,14 @@ public class RepositoryOperationsRebaseTests
         app.Dialogs.CloseError();
         var (hold, ahead) = HoldQueue(app, () => repo.GitAsync("commit", "--allow-empty", "-m", "Moved"));
         var waiting = app.Operations.SquashAsync([parent, head]);
+
+        // The squash read its list and waits in the queue; then main moves ahead of it.
+        for (var tries = 0; app.Repository.Queue.Waiting == 0; tries++)
+        {
+            Assert.True(tries < 500, "The squash did not reach the queue.");
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+
         hold.SetResult();
         await ahead;
         await waiting;
@@ -467,6 +480,23 @@ public class RepositoryOperationsRebaseTests
         await repo.GitAsync("update-ref", $"refs/visualcommit/backup/reset-{old}", TopicOne);
         await app.Operations.CherryPickAsync(OtherOne);
         Assert.Equal(2, (await repo.BackupRefsAsync()).Count);
+    }
+
+    /// <summary>The running texts the status bar is given, in order, each once (the queue's <c>Current</c> at each change).</summary>
+    private static List<string> RecordRunningTexts(OperationsHarness app)
+    {
+        var texts = new List<string>();
+        app.Repository.Queue.Changed += (_, _) =>
+        {
+            lock (texts)
+            {
+                if (app.Repository.Queue.Current?.RunningText is { } text && (texts.Count == 0 || texts[^1] != text))
+                {
+                    texts.Add(text);
+                }
+            }
+        };
+        return texts;
     }
 
     /// <summary>The subjects of <paramref name="branch"/>'s history, newest first.</summary>

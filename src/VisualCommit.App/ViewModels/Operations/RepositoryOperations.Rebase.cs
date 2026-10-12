@@ -130,7 +130,8 @@ public sealed partial class RepositoryOperations
                         return Failed(text, failure with { Summary = display.Summary });
                     }
 
-                    // 3. The backup and the rebase.
+                    // 3. The backup and the rebase, which the status bar now names (10.1).
+                    context.SetRunningText(OperationTexts.RebaseOnto(branch, onto.Name).RunningText);
                     var tip = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
                     selection.Follows = await SelectedCommitIsRebasedAsync(tip, onto.Sha);
                     await SaveRebaseBackupAsync(branch, tip);
@@ -273,6 +274,9 @@ public sealed partial class RepositoryOperations
                                     ?? new FailureDisplay(OperationTexts.CheckOut(branch).ErrorTitle, failure.Summary);
                                 return Failed(text, failure with { Summary = display.Summary });
                             }
+
+                            // The checkout's step is done: the status bar names the rebase (10.1).
+                            context.SetRunningText(OperationTexts.InteractiveRebase(branch).RunningText);
                         }
                         else if (await RefuseIfListMovedAsync(text, plan, branch) is { } moved)
                         {

@@ -53,6 +53,48 @@ public class OperationStatusViewModelTests
     });
 
     [Fact]
+    public Task An_operation_of_several_steps_names_the_step_it_is_at() => WithoutContext(async () =>
+    {
+        // docs/phase-4-design.md 10.1: "Checking out {A}…", then "Rebasing {A} onto {B}…".
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        var checkingOut = new TaskCompletionSource();
+        var rebasing = new TaskCompletionSource();
+        var next = new TaskCompletionSource();
+        var finish = new TaskCompletionSource();
+        GitOperation? finished = null;
+        queue.Finished += (_, e) => finished = e.Operation;
+
+        var run = queue.RunAsync(new GitOperation("Check out feature/other and rebase it onto main", "Checking out feature/other…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            context.Progress.Report(new OperationProgress("Updating files", 50, "Updating files:  50% (1/2)"));
+            checkingOut.SetResult();
+            await next.Task;
+            context.SetRunningText("Rebasing feature/other onto main…");
+            rebasing.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Rebased feature/other onto main");
+        }));
+        await checkingOut.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.Percent == 50);
+        Assert.Equal("Checking out feature/other… Updating files 50%", status.Text);
+
+        // The new step's text, without the step before's progress.
+        next.SetResult();
+        await rebasing.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.Text == "Rebasing feature/other onto main…");
+        Assert.Equal(("Rebasing feature/other onto main…", true), (queue.Current!.RunningText, status.IsRunning));
+        Assert.Null(status.Percent);
+
+        finish.SetResult();
+        await run.WaitAsync(Patience, TestCancelled);
+        Assert.Equal("Rebased feature/other onto main", status.Text);
+
+        // The operation itself keeps its texts: its title and the first running text.
+        Assert.Equal(("Check out feature/other and rebase it onto main", "Checking out feature/other…"), (finished!.Title, finished.RunningText));
+    });
+
+    [Fact]
     public Task Cancel_stops_the_running_network_operation() => WithoutContext(async () =>
     {
         using var queue = NewQueue();
