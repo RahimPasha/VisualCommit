@@ -168,7 +168,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         await AssertDetailsAsync(app, "Merge remote-tracking branch 'origin/feature/alpha'", AppDate, null, [Sha.MainWork, Sha.AlphaTwo], "A alpha.txt src");
 
         // Step 9: merging feature/alpha, already in main, changes nothing.
-        OpenMenu(app, LabelPoint(app, 5, "feature/alpha"), AlphaMenu("main"), "Check out feature/alpha");
+        OpenMenu(app, LabelPoint(app, 5, "feature/alpha"), AlphaMenu("main", upToDate: true), "Check out feature/alpha");
         await RunOperationAsync(app, "Merge feature/alpha", () => app.ClickMenuItem("Merge feature/alpha into main"));
         var upToDate = Shot(app, "08i-up-to-date");
         AssertGraph(app, G3, upToDate);
@@ -190,8 +190,11 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         using var app = await OpenAsync(data, repo);
         var palette = PaletteOf(app);
 
-        // Step 2: the merge stops; no dialog, the banner on two lines. The label's centre is the
-        // point the real-window pass right-clicks.
+        // Step 2: the merge stops; no dialog, the banner on more than one line: phase 4's Continue
+        // (disabled while the file conflicts; a merge has no Skip) and Abort stand on a row of their
+        // own under the text, because beside them the 440-wide banner would leave its text less than
+        // 240 px (phase 4's report, "Phase 3's banner"). The label's centre is the point the
+        // real-window pass right-clicks.
         var label = LabelPoint(app, 1, "feature/conflict");
         Assert.True(
             Math.Abs(label.X - FeatureConflictLabelCentre.X) <= 1 && Math.Abs(label.Y - FeatureConflictLabelCentre.Y) <= 1,
@@ -202,9 +205,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         await WaitForDetailsAsync(app, "Conflicting change");
         var stopped = Shot(app, "09a-banner");
         await AssertNoDialogAsync(app);
-        var banner = AssertBanner(app, MergeBanner, "Abort merge", oneLine: false);
+        var banner = AssertBanner(app, MergeBanner, "Abort merge", oneLine: false, continueButton: BannerButton.Disabled(ResolveConflictsFirst), buttonsBelow: true);
         AssertBannerLook(app, banner, stopped);
-        Assert.False(((TextBlock)app.FindByAutomationId("BannerText")).TextLayout.TextLines.Count < 2, "The merge banner's text is on one line at 1100×700.");
         AssertGraph(app, G0, stopped);
         AssertWorkingRow(app, WorkingChangesOneConflict, stopped);
         AssertSelected(app, stopped, 1);
@@ -219,7 +221,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.Equal(Sha.MainWorkFull, await RevAsync(repo, "HEAD"));
         await AssertNoBackupsAsync(repo);
 
-        // Step 3: the banner's tooltip under the pointer.
+        // Step 3: the banner's tooltip under the pointer (phase 4's design 10.3 for a merge).
         var tip = await RestOnAsync(app, app.FindByAutomationId("BannerText"));
         Shot(app, "09b-banner-tooltip", keepPointer: true);
         Assert.Equal(BannerToolTip, tip);
@@ -317,9 +319,10 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         using var app = await OpenAsync(data, repo);
         var palette = PaletteOf(app);
 
-        // Step 2: the banner of the terminal's merge.
+        // Step 2: the banner of the terminal's merge, Continue disabled and Abort under the text
+        // (phase 4's report, "Phase 3's banner").
         var start = Shot(app, "09b1-terminal-merge");
-        var banner = AssertBanner(app, MergeBanner, "Abort merge", oneLine: false);
+        var banner = AssertBanner(app, MergeBanner, "Abort merge", oneLine: false, continueButton: BannerButton.Disabled(ResolveConflictsFirst), buttonsBelow: true);
         AssertBannerLook(app, banner, start);
         AssertGraph(app, G0, start);
         AssertWorkingRow(app, WorkingChangesOneConflict, start);
@@ -328,23 +331,26 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertNoClippedText(app);
 
         // Step 3: the conflicted file's menu; the right-click selects no row and opens no diff (4b).
+        // Phase 4's "Resolve conflict" comes first and takes the highlight from "Mark as resolved".
         app.Click(app.WorkingRowPoint());
         await WaitForStagePanelAsync(app, "Unstaged files (1, 1 with conflicts)", "Staged files (0)");
         var fileRow = await app.FileRowAsync("UnstagedFileList", "src/core.txt");
-        OpenMenu(app, app.BoundsOf(fileRow).Center, ConflictedFileMenu, "Mark as resolved");
+        OpenMenu(app, app.BoundsOf(fileRow).Center, ConflictedFileMenu, "Resolve conflict");
         var menu = Shot(app, "09b2-conflicted-file-menu");
         AssertConflictedStagePanel(app, palette);
         Assert.False(((VisualCommit.App.ViewModels.Panels.ChangedFileRow)fileRow.DataContext!).IsSelected, "The right-click selected the file's row.");
         Assert.False(app.Session.Shell.ActiveTab.Repository!.IsDiffOpen, "The right-click opened the diff.");
         _ = menu;
 
-        // Step 4: "Mark as resolved" stages the file; the merge waits for its commit.
+        // Step 4: "Mark as resolved" stages the file; the merge waits for its commit. The file has
+        // no conflict markers left, so phase 4 asks nothing first (design 7.1, 7.2).
         app.ClickMenuItem("Mark as resolved");
         await WaitForStagePanelAsync(app, "Unstaged files (0)", "Staged files (1)");
         await app.WaitForIdleAsync();
         await app.WaitForAsync(() => ((TextBlock)app.FindByAutomationId("BannerText")).Text == MergeResolvedBanner, "the banner to say the conflicts are resolved");
         var resolved = Shot(app, "09b3-resolved");
-        AssertBanner(app, MergeResolvedBanner, "Abort merge");
+        await AssertNoDialogAsync(app);
+        AssertBanner(app, MergeResolvedBanner, "Abort merge", continueButton: BannerButton.Enabled, buttonsBelow: true);
         AssertWorkingRow(app, WorkingChanges, resolved);
         Assert.True(app.Find<TextBlock>("NoUnstaged").IsEffectivelyVisible, "\"No unstaged changes\" does not show.");
         Assert.Equal(["M core.txt src"], StageRows(app, "StagedFileList"));
@@ -551,8 +557,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
 
-        // Step 2: "Main work" is already on main.
-        OpenMenu(app, app.GraphRowPoint(3), CommitMenuOnMain(Sha.MainWork, "Main work"), "Check out this commit");
+        // Step 2: "Main work" is already on main (HEAD's own commit: phase 4's OC3).
+        OpenMenu(app, app.GraphRowPoint(3), CommitMenuOnMain(Sha.MainWork, "Main work", headsOwn: true), "Check out this commit");
         await WaitForDetailsAsync(app, "Main work");
         var tip = await RestOnMenuItemAsync(app, "Cherry-pick onto main");
         var disabled = Shot(app, "11a-already-on-main", keepPointer: true);
@@ -610,7 +616,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
         AssertNoClippedText(app);
 
-        // Step 6: a third commit, on main: its pick is disabled.
+        // Step 6: a third commit, on main: its pick is disabled, and so is phase 4's squash. The
+        // pointer reaches the pick crossing only the disabled squash.
         app.Click(app.GraphRowPoint(3), command);
         OpenMenu(app, app.GraphRowPoint(3), ThreeCommitsMenu, "Revert 3 commits");
         var tip = await RestOnMenuItemAsync(app, "Cherry-pick 3 commits onto main");
@@ -619,7 +626,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertHighlighted(app.Menu(), "Revert 3 commits");
         AssertSelected(app, three, 3, 4, 5);
         AssertMultiSelection(app, "88d6b91 Main work", "ce5ea6a Alpha two", "dff8fbf Alpha one");
-        Assert.DoesNotContain(app.Menu().Items, item => item.Label.Contains("Squash", StringComparison.Ordinal) || item.Label.Contains("Compare", StringComparison.Ordinal));
+        Assert.DoesNotContain(app.Menu().Items, item => item.Label.Contains("Compare", StringComparison.Ordinal));
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, null);
 
@@ -644,10 +651,11 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         app.PressKey(Key.Up, RawInputModifiers.Shift);
         AssertSelected(app, null, 4, 5);
 
-        // Step 10: a right-click on a selected row keeps the selection.
+        // Step 10: a right-click on a selected row keeps the selection. Every item is enabled but
+        // phase 4's squash (no longer "all enabled": neither commit is on main).
         OpenMenu(app, app.GraphRowPoint(5), TwoCommitsMenu, "Cherry-pick 2 commits onto main");
         var menu = Shot(app, "11g-multi-menu");
-        Assert.All(app.Menu().Items, item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
+        Assert.All(app.Menu().Items.Where(item => item.Label != "Squash 2 commits…"), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertSelected(app, menu, 4, 5);
 
         // Step 11: the pick of two, oldest first.
@@ -676,25 +684,42 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.Null(Shown(app, "MultiSelectionView"));
     }
 
-    /// <summary>Check 11b (steps 1 to 5): a pick of two that stops at the second, its banner and status, and an Abort that keeps the first pick.</summary>
+    /// <summary>
+    /// Check 11b (steps 1 to 5): a pick of two that stops at the second, its banner and status, and
+    /// an Abort. Phase 4 picks the two with one git call, so the stop is git's list
+    /// (<c>sequencer/</c>), the banner offers Continue and Skip, and Abort drops the first pick too
+    /// (phase 4's report, "Changes to expected results": phase 3's check 11b).
+    /// </summary>
     [AvaloniaFact]
     public async Task Check_11b_cherry_pick_of_two_stops_at_the_second()
     {
         using var repo = await Scenarios.OperationsAsync();
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
-        var palette = PaletteOf(app);
+        var alphaOne = await RevAsync(repo, Sha.AlphaOne);
+        var conflicting = await RevAsync(repo, Sha.Conflicting);
 
-        // Step 2: "Alpha one" is picked, "Conflicting change" stops.
+        // Step 2: "Alpha one" is picked, "Conflicting change" stops. The menu is check 11 step
+        // 10's (145 high); the app runs one git call with both commits, oldest first.
         app.Click(app.GraphRowPoint(1));
         app.Click(app.GraphRowPoint(5), app.CommandModifier);
-        app.RightClick(app.GraphRowPoint(5));
+        OpenMenu(app, app.GraphRowPoint(5), TwoCommitsMenu, "Cherry-pick 2 commits onto main");
+        var calls = app.GitCalls().Count;
         await RunOperationAsync(app, "Cherry-pick 2 commits", () => app.ClickMenuItem("Cherry-pick 2 commits onto main"));
         await app.WaitForAsync(() => app.BannerBounds is not null && Graph(app).ShowsWorkingRow, "the banner and the working-changes row");
         await WaitForGraphAsync(app, 9, "d1f9fb5");
         var stopped = Shot(app, "11b1-pick-stopped");
         await AssertNoDialogAsync(app);
-        var banner = AssertBanner(app, CherryPickBanner, "Abort cherry-pick");
+
+        // At 1400×900 the 740-wide banner keeps more than 240 px for its text: the buttons stand
+        // beside it; no commit waits, so the text is phase 3's.
+        var banner = AssertBanner(
+            app,
+            CherryPickBanner,
+            "Abort cherry-pick",
+            continueButton: BannerButton.Disabled(ResolveConflictsFirst),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: false);
         AssertBannerLook(app, banner, stopped);
         AssertGraph(app, G7, stopped);
         AssertWorkingRow(app, WorkingChangesOneConflict, stopped);
@@ -702,10 +727,14 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertMultiSelection(app, "078ef05 Conflicting change", "dff8fbf Alpha one");
         AssertStatus(app, StatusPickStopped, OperationStatusTone.Warning);
         AssertNoClippedText(app);
+        var picks = app.GitCalls().Skip(calls).Where(call => call.CommandText.StartsWith("git cherry-pick ", StringComparison.Ordinal)).ToList();
+        var pick = Assert.Single(picks);
+        Assert.Equal($"git cherry-pick {alphaOne} {conflicting}", pick.CommandText);
+        Assert.Equal(1, pick.ExitCode);
         Assert.Equal(Sha.PickedAlphaOne, await RevAsync(repo, "refs/heads/main"));
         Assert.Equal([Sha.MainWorkFull], await ParentsAsync(repo, "refs/heads/main"));
         Assert.StartsWith(Sha.Conflicting, GitDirFile(repo, "CHERRY_PICK_HEAD"), StringComparison.Ordinal);
-        Assert.False(HasSequencer(repo), "git's folder has a sequencer folder.");
+        Assert.True(HasSequencer(repo), "git's folder has no sequencer folder: the two picks were not one list.");
         Assert.Equal("Conflicting change\n\n# Conflicts:\n#\tsrc/core.txt\n", GitDirFile(repo, "MERGE_MSG"));
         Assert.Equal("UU src/core.txt", await GitOutAsync(repo, "status", "--short"));
         Assert.Equal(CoreCherryPickConflict, WorkingFile(repo, "src/core.txt"));
@@ -715,36 +744,47 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Shot(app, "11b2-status-tooltip", keepPointer: true);
         Assert.Equal(StatusPickStopped, tip);
 
-        // Step 4: the banner's Abort asks first.
+        // Step 4: the banner's Abort asks first; the list's commits already made are dropped too.
         app.MoveToNeutral();
         app.Click(app.FindByAutomationId("BannerAbortButton"));
-        await AssertConfirmationAsync(app, AbortCherryPickTitle, AbortCherryPickQuestion, BackupDetail, "Abort cherry-pick");
+        await AssertConfirmationAsync(app, AbortCherryPickTitle, AbortCherryPickListQuestion, BackupDetail, "Abort cherry-pick");
         var confirmation = Shot(app, "11b3-abort-confirmation");
         AssertBackdrop(app, confirmation);
         AssertNoClippedText(app);
+        AssertBanner(
+            app,
+            CherryPickBanner,
+            "Abort cherry-pick",
+            continueButton: BannerButton.Disabled(ResolveConflictsFirst),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: false);
 
-        // Step 5: Abort undoes only the stopped pick.
+        // Step 5: Abort undoes the whole list: main goes back to where it was before the first
+        // pick (G0), and the backup keeps the pick of "Alpha one" with the conflicted file.
         await RunOperationAsync(app, "Abort the cherry-pick", () => app.Click(app.FindByAutomationId("ConfirmButton")));
         await app.WaitForAsync(() => app.BannerBounds is null && !Graph(app).ShowsWorkingRow, "the banner and the working-changes row to go");
+        await WaitForGraphAsync(app, 8, Sha.Stash);
         var aborted = Shot(app, "11b4-aborted");
         await AssertNoDialogAsync(app);
         AssertNoBanner(app);
         AssertNoWorkingRow(app);
-        AssertGraph(app, G7, aborted);
-        AssertSelected(app, aborted, 2, 6);
+        AssertGraph(app, G0, aborted);
+        AssertSelected(app, aborted, 1, 5);
+        AssertMultiSelection(app, "078ef05 Conflicting change", "dff8fbf Alpha one");
         AssertStatus(app, StatusAbortedPick);
-        await AssertLocalBranchAsync(app, "main", 1, 0, head: true);
+        await AssertLocalBranchAsync(app, "main", 0, 0, head: true);
         AssertNoClippedText(app);
-        Assert.Equal(Sha.PickedAlphaOne, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal(Sha.MainWorkFull, await RevAsync(repo, "refs/heads/main"));
+        Assert.Equal(["## main...origin/main"], await StatusAsync(repo));
         Assert.Equal(Scenarios.OperationsFiles.CoreMainWork, WorkingFile(repo, "src/core.txt"));
-        Assert.Equal(Scenarios.OperationsFiles.AlphaOne, WorkingFile(repo, "src/alpha.txt"));
+        Assert.False(File.Exists(Path.Combine(repo.Path, "src", "alpha.txt")), "src/alpha.txt, which only the pick of \"Alpha one\" added, is still there.");
         Assert.Null(GitDirFile(repo, "CHERRY_PICK_HEAD"));
         Assert.Null(GitDirFile(repo, "MERGE_MSG"));
+        Assert.False(HasSequencer(repo), "git's folder still has a sequencer folder.");
         var snapshot = await AssertBackupsAsync(repo, "abort", Sha.PickedAlphaOne, changes: true);
         Assert.Equal([Sha.PickedAlphaOne], await ParentsAsync(repo, snapshot!));
         Assert.Equal(CoreCherryPickConflict, await ShowAsync(repo, snapshot!, "src/core.txt"));
         AssertBackupsHidden(app);
-        _ = palette;
     }
 
     // ---------------------------------------------------------------------------------------
@@ -823,7 +863,10 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.Equal("D\tsrc/alpha.txt", await GitOutAsync(repo, "diff", "--name-status", "HEAD^", "HEAD"));
     }
 
-    /// <summary>Check 12 part C (step 7): "Revert 2 commits", newest first.</summary>
+    /// <summary>
+    /// Check 12 part C (step 7): "Revert 2 commits", newest first: phase 4's one git call with the
+    /// whole list (design section 4, D136), which makes the same two commits.
+    /// </summary>
     [AvaloniaFact]
     public async Task Check_12_revert_two_commits()
     {
@@ -831,11 +874,19 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo, LargeSize.Width, LargeSize.Height);
 
+        // The two commits are a chain on main's line: phase 4's squash is enabled and highlighted
+        // first; the step still clicks "Revert 2 commits".
         app.Click(app.GraphRowPoint(3));
         app.Click(app.GraphRowPoint(6), app.CommandModifier);
-        app.RightClick(app.GraphRowPoint(6));
+        OpenMenu(app, app.GraphRowPoint(6), TwoCommitsOnMainMenu, "Squash 2 commits…");
+        var calls = app.GitCalls().Count;
         await RunOperationAsync(app, "Revert 2 commits", () => app.ClickMenuItem("Revert 2 commits"));
         await WaitForGraphAsync(app, 10, "123d13b");
+        var reverts = app.GitCalls().Skip(calls).Where(call => call.CommandText.StartsWith("git revert ", StringComparison.Ordinal)).ToList();
+        var revert = Assert.Single(reverts);
+        Assert.Equal(RevertTwoCommand, revert.CommandText);
+        Assert.Equal(0, revert.ExitCode);
+        Assert.False(HasSequencer(repo), "git's folder still has a sequencer folder.");
         var reverted = Shot(app, "12e-two-reverted");
         AssertGraph(app, G11, reverted);
         AssertSelected(app, reverted, 5, 8);
@@ -870,7 +921,16 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         await WaitForDetailsAsync(app, "Main work");
         var stopped = Shot(app, "12f-revert-stopped");
         await AssertNoDialogAsync(app);
-        var banner = AssertBanner(app, RevertBanner, "Abort revert");
+
+        // A single revert: Continue (disabled while the file conflicts), Skip and Abort beside the
+        // 740-wide banner's text (phase 4's report, "Phase 3's banner").
+        var banner = AssertBanner(
+            app,
+            RevertBanner,
+            "Abort revert",
+            continueButton: BannerButton.Disabled(ResolveConflictsFirst),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: false);
         AssertBannerLook(app, banner, stopped);
         AssertGraph(app, G12, stopped);
         AssertWorkingRow(app, WorkingChangesOneConflict, stopped);
@@ -889,6 +949,13 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         var confirmation = Shot(app, "12g-abort-revert-confirmation");
         AssertBackdrop(app, confirmation);
         AssertNoClippedText(app);
+        AssertBanner(
+            app,
+            RevertBanner,
+            "Abort revert",
+            continueButton: BannerButton.Disabled(ResolveConflictsFirst),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: false);
         await RunOperationAsync(app, "Abort the revert", () => app.Click(app.FindByAutomationId("ConfirmButton")));
         await app.WaitForAsync(() => app.BannerBounds is null && !Graph(app).ShowsWorkingRow, "the banner and the working-changes row to go");
         var aborted = Shot(app, "12h-revert-aborted");
@@ -953,12 +1020,19 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         }
 
         // A git that keeps REVERT_HEAD after an empty revert (D117's other case): the banner of an
-        // empty revert, and Abort leaves HEAD where it was.
+        // empty revert in phase 4's words, Continue disabled ("skip it"), Skip and Abort beside the
+        // text, and Abort leaves HEAD where it was.
         Assert.False(await IsReportGitAsync(), "Git 2.36 kept REVERT_HEAD after an empty revert.");
         await AssertNoDialogAsync(app);
         await app.WaitForAsync(() => app.BannerBounds is not null, "the banner of the empty revert");
         Shot(app, "12i-revert-changes-nothing");
-        AssertBanner(app, EmptyRevertBanner, "Abort revert");
+        AssertBanner(
+            app,
+            EmptyRevertBanner,
+            "Abort revert",
+            continueButton: BannerButton.Disabled(RevertChangesNothing),
+            skipButton: BannerButton.Enabled,
+            buttonsBelow: false);
         Assert.StartsWith("Revert stopped", app.Session.Shell.ActiveTab.OperationStatus.Text, StringComparison.Ordinal);
         app.Click(app.FindByAutomationId("BannerAbortButton"));
         await app.WaitForDialogAsync<ConfirmationViewModel>();
@@ -1173,13 +1247,19 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         Assert.True(close, $"The graph area under the dialog is {actual}, not the window's colour under the backdrop.");
     }
 
-    /// <summary>The label feature/conflict's menu with HEAD on main, nothing in progress.</summary>
+    /// <summary>
+    /// The label feature/conflict's menu with HEAD on main, nothing in progress, with phase 4's
+    /// rebase items: phase 4's report gives this list for check 27 step 3 ("check 13 step 6's list
+    /// with main for hotfix"; 380 high).
+    /// </summary>
     private static readonly string[] FeatureConflictMenu =
     [
         "feature/conflict",
         "Check out feature/conflict",
         "Merge feature/conflict into main",
         "Merge feature/conflict into main (create a merge commit)",
+        "Rebase main onto feature/conflict",
+        "Interactive rebase of main onto feature/conflict…",
         "—",
         "Push feature/conflict…",
         "—",
@@ -1202,13 +1282,20 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         return app.GraphLabelBounds(row, label.Text).Center;
     }
 
-    /// <summary>The local branch feature/alpha's menu with HEAD on <paramref name="current"/>, nothing in progress (check 2 step 1's).</summary>
-    private static string[] AlphaMenu(string current) =>
+    /// <summary>
+    /// The local branch feature/alpha's menu with HEAD on <paramref name="current"/>, nothing in
+    /// progress (check 2 step 1's), with phase 4's rebase items: "Rebase {cur} onto feature/alpha"
+    /// disabled with <c>{cur} is up to date with feature/alpha</c> when HEAD already reaches it
+    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha).
+    /// </summary>
+    private static string[] AlphaMenu(string current, bool upToDate = false) =>
     [
         "feature/alpha",
         "Check out feature/alpha",
         $"Merge feature/alpha into {current}",
         $"Merge feature/alpha into {current} (create a merge commit)",
+        upToDate ? $"Rebase {current} onto feature/alpha (disabled: \"{current} is up to date with feature/alpha\")" : $"Rebase {current} onto feature/alpha",
+        $"Interactive rebase of {current} onto feature/alpha…",
         "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")",
         "—",
         "Push feature/alpha to origin/feature/alpha",

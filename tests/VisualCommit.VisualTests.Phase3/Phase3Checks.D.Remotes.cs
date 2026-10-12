@@ -441,7 +441,8 @@ public sealed partial class Phase3ChecksD
 
     /// <summary>
     /// Check 30, step 6: on edges, main dragged onto side, which is checked out in the linked
-    /// worktree: both drop entries are disabled with the worktree's reason.
+    /// worktree: phase 3's two drop entries are disabled with the worktree's reason; of phase 4's
+    /// two, the rebase is disabled (main is up to date with side) and the interactive one is enabled.
     /// </summary>
     [AvaloniaFact]
     public async Task Check_30_drop_refused_for_a_branch_in_another_worktree()
@@ -466,10 +467,12 @@ public sealed partial class Phase3ChecksD
         app.MoveMouseHeld(from + new Point(0, 8), steps: 2);
         app.MoveMouseHeld(to, steps: 4);
         app.ReleaseMouse(to);
+        // Phase 4's group "Check out main and rebase it" follows phase 3's; its interactive item is
+        // the only enabled one, so it has the highlight (145 high; 84 before phase 4).
         var menu = app.Menu();
         AssertMenu(menu, PartD.WorktreeDropMenu(worktree));
-        AssertHighlighted(menu, null);
-        Assert.Equal(MenuHeight(items: 2, separators: 0), menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
+        AssertHighlighted(menu, "Check out main and rebase it onto side interactively…");
+        Assert.Equal(MenuHeight(items: 4, separators: 1), menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
         AssertMenuShape(app, menu);
         AssertMenuAtPointer(menu, to);
         var tip = await app.RestPointerOnMenuItemAsync("Fast-forward side to main");

@@ -77,7 +77,10 @@ public static partial class Phase3Expectations
 
         // ---- Check 1: the commit menu. ----
 
-        /// <summary>Check 1 step 1: the commit menu of "Alpha two", as the report writes it (232 high).</summary>
+        /// <summary>
+        /// Check 1 step 1: the commit menu of "Alpha two", as the report writes it, with phase 4's
+        /// rebase items (phase 4's report, "Phase 3's menus after phase 4": OC1, 284 high).
+        /// </summary>
         public static readonly string[] AlphaTwoCommitMenu =
         [
             "ce5ea6a Alpha two",
@@ -87,18 +90,20 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main",
             "Revert this commit",
+            "Rebase main onto this commit",
+            "Interactive rebase of main from here… (disabled: \"This commit is not on main\")",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
         ];
 
-        /// <summary>Check 1 step 1: the commit menu is 232 high (7 items, 2 separators).</summary>
-        public const double CommitMenuHeight = 232;
+        /// <summary>Check 1 step 1: the commit menu is 284 high (9 items, 2 separators; 232 before phase 4).</summary>
+        public const double CommitMenuHeight = 284;
 
         /// <summary>Check 1 step 3 and check 5 step 2: the branch dialog from "Alpha two"'s menu.</summary>
         public const string AlphaTwoBranchContext = "From ce5ea6a \"Alpha two\"";
 
-        /// <summary>Check 1 step 4: "Add core"'s commit menu, "Cherry-pick onto main" disabled.</summary>
+        /// <summary>Check 1 step 4: "Add core"'s commit menu, "Cherry-pick onto main" disabled (phase 4's OC2).</summary>
         public static readonly string[] AddCoreCommitMenu =
         [
             "8beca34 Add core",
@@ -108,6 +113,8 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main (disabled: \"This commit is already on main\")",
             "Revert this commit",
+            "Rebase main onto this commit (disabled: \"This commit is already on main\")",
+            "Interactive rebase of main from here…",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
@@ -135,6 +142,8 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto HEAD (disabled: \"This commit is already on HEAD\")",
             "Revert this commit",
+            "Rebase HEAD onto this commit (disabled: \"This commit is already on HEAD\")",
+            "Interactive rebase of HEAD from here… (disabled: \"HEAD has no commits after this one\")",
             "Reset HEAD to this commit…",
             "—",
             "Copy SHA",
@@ -153,6 +162,8 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main (disabled: \"Merge commits cannot be cherry-picked here\")",
             "Revert this merge commit",
+            "Rebase main onto this commit (disabled: \"This commit is already on main\")",
+            "Interactive rebase of main from here…",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
@@ -160,13 +171,15 @@ public static partial class Phase3Expectations
 
         // ---- Check 2: branch menus. ----
 
-        /// <summary>Check 2 step 1: <c>feature/alpha</c>'s menu (406 high).</summary>
+        /// <summary>Check 2 step 1: <c>feature/alpha</c>'s menu with phase 4's rebase items (458 high).</summary>
         public static readonly string[] FeatureAlphaMenu =
         [
             "feature/alpha",
             "Check out feature/alpha",
             "Merge feature/alpha into main",
             "Merge feature/alpha into main (create a merge commit)",
+            "Rebase main onto feature/alpha",
+            "Interactive rebase of main onto feature/alpha…",
             "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")",
             "—",
             "Push feature/alpha to origin/feature/alpha",
@@ -183,16 +196,18 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 2 step 1: the menu is 406 high.</summary>
-        public const double FeatureAlphaMenuHeight = 406;
+        /// <summary>Check 2 step 1: the menu is 458 high (406 before phase 4).</summary>
+        public const double FeatureAlphaMenuHeight = 458;
 
-        /// <summary>Check 2 step 2: <c>feature/ff</c>'s menu (no upstream).</summary>
+        /// <summary>Check 2 step 2: <c>feature/ff</c>'s menu (no upstream; 380 high with phase 4's items).</summary>
         public static readonly string[] FeatureFfMenu =
         [
             "feature/ff",
             "Check out feature/ff",
             "Merge feature/ff into main",
             "Merge feature/ff into main (create a merge commit)",
+            "Rebase main onto feature/ff",
+            "Interactive rebase of main onto feature/ff…",
             "—",
             "Push feature/ff…",
             "—",
@@ -206,11 +221,12 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 2 step 3 (and check 5 step 5): the current branch's menu.</summary>
+        /// <summary>Check 2 step 3 (and check 5 step 5): the current branch's menu, with phase 4's pull with rebase (354 high).</summary>
         public static readonly string[] MainMenu =
         [
             "main",
             "Pull from origin/main",
+            "Pull from origin/main (rebase)",
             "—",
             "Push main to origin/main",
             "Force push main… (danger)",
@@ -236,6 +252,8 @@ public static partial class Phase3Expectations
             "Check out origin/feature/alpha",
             "Merge origin/feature/alpha into main",
             "Merge origin/feature/alpha into main (create a merge commit)",
+            "Rebase main onto origin/feature/alpha",
+            "Interactive rebase of main onto origin/feature/alpha…",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -245,8 +263,8 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 6 step 5: the remote-branch menu is 241 high.</summary>
-        public const double OriginFeatureAlphaMenuHeight = 241;
+        /// <summary>Check 6 step 5: the remote-branch menu is 293 high (241 before phase 4).</summary>
+        public const double OriginFeatureAlphaMenuHeight = 293;
 
         /// <summary>Check 2 step 5: <c>origin/main</c>'s menu while <c>main</c> is checked out.</summary>
         public static readonly string[] OriginMainCheckedOutMenu =
@@ -255,6 +273,8 @@ public static partial class Phase3Expectations
             "Check out origin/main (disabled: \"main is already checked out\")",
             "Merge origin/main into main",
             "Merge origin/main into main (create a merge commit)",
+            "Rebase main onto origin/main (disabled: \"main is up to date with origin/main\")",
+            "Interactive rebase of main onto origin/main…",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -291,6 +311,7 @@ public static partial class Phase3Expectations
         [
             "loc",
             "Pull from main",
+            "Pull from main (rebase)",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -310,6 +331,8 @@ public static partial class Phase3Expectations
             "Check out side",
             "Merge side into loc",
             "Merge side into loc (create a merge commit)",
+            "Rebase loc onto side (disabled: \"loc is up to date with side\")",
+            "Interactive rebase of loc onto side…",
             "—",
             "Push side…",
             "—",
@@ -330,6 +353,8 @@ public static partial class Phase3Expectations
             "Check out origin/main",
             "Merge origin/main into loc",
             "Merge origin/main into loc (create a merge commit)",
+            "Rebase loc onto origin/main (disabled: \"loc is up to date with origin/main\")",
+            "Interactive rebase of loc onto origin/main…",
             "—",
             "Push origin/main…",
             "—",
@@ -350,6 +375,8 @@ public static partial class Phase3Expectations
             "Check out origin/main",
             "Merge origin/main into loc",
             "Merge origin/main into loc (create a merge commit)",
+            "Rebase loc onto origin/main",
+            "Interactive rebase of loc onto origin/main…",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -638,6 +665,7 @@ public static partial class Phase3Expectations
         /// <summary>Check 5 step 1: the keyboard menu's top-left, the bottom-left of "Alpha two"'s message cell (116 + 5 × 26).</summary>
         public static readonly (double X, double Y) AlphaTwoMessageCellBottomLeft = (454, 246);
 
+        /// <summary>Check 5 step 4: HEAD's own commit (phase 4's OC3).</summary>
         public static readonly string[] MainWorkCommitMenu =
         [
             "88d6b91 Main work",
@@ -647,6 +675,8 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main (disabled: \"This commit is already on main\")",
             "Revert this commit",
+            "Rebase main onto this commit (disabled: \"This commit is already on main\")",
+            "Interactive rebase of main from here… (disabled: \"main has no commits after this one\")",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
@@ -725,36 +755,53 @@ public static partial class Phase3Expectations
         /// <summary>Check 7 step 1: the pill is this far right of and below the pointer (4g).</summary>
         public const double PillOffset = 8;
 
+        /// <summary>Check 7 steps 2 and 7: phase 3's drop menu with phase 4's group "Check out … and rebase it" (171 high).</summary>
         public static readonly string[] AlphaOntoMainDropMenu =
         [
             "feature/alpha → main",
             "Merge feature/alpha into main",
             "Merge feature/alpha into main (create a merge commit)",
             "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")",
+            "—",
+            "Check out feature/alpha and rebase it onto main",
+            "Check out feature/alpha and rebase it onto main interactively…",
         ];
 
-        public const double DropMenuHeight = 110;
+        /// <summary>Check 7: a local branch's drop onto the current branch makes a menu 171 high (110 before phase 4).</summary>
+        public const double DropMenuHeight = 171;
 
+        /// <summary>Check 7 step 3 (171 high).</summary>
         public static readonly string[] FfOntoMainDropMenu =
         [
             "feature/ff → main",
             "Merge feature/ff into main",
             "Merge feature/ff into main (create a merge commit)",
             "Fast-forward main to feature/ff",
+            "—",
+            "Check out feature/ff and rebase it onto main (disabled: \"feature/ff is up to date with main\")",
+            "Check out feature/ff and rebase it onto main interactively…",
         ];
 
+        /// <summary>Check 7 step 4 (145 high).</summary>
         public static readonly string[] AlphaOntoConflictDropMenu =
         [
             "feature/alpha → feature/conflict",
             "Fast-forward feature/conflict to feature/alpha (disabled: \"feature/conflict has commits that feature/alpha does not have\")",
             "Check out feature/conflict and merge feature/alpha into it",
+            "—",
+            "Check out feature/alpha and rebase it onto feature/conflict",
+            "Check out feature/alpha and rebase it onto feature/conflict interactively…",
         ];
 
+        /// <summary>Check 7 step 5 (145 high).</summary>
         public static readonly string[] MainOntoOriginAlphaDropMenu =
         [
             "main → origin/feature/alpha",
             "Push main to origin/feature/alpha",
             "Push main to origin/feature/alpha and track it",
+            "—",
+            "Rebase main onto origin/feature/alpha",
+            "Interactive rebase of main onto origin/feature/alpha…",
         ];
 
         /// <summary>Check 7 step 7: the merge commit plain git gives for the same merge.</summary>

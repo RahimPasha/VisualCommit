@@ -171,13 +171,15 @@ public static partial class Phase3Expectations
 
         // ---- Check 18b -----------------------------------------------------------------------
 
-        /// <summary>The menu of <c>main</c> under Remotes › origin while HEAD is on main (check 18b step 1).</summary>
+        /// <summary>The menu of <c>main</c> under Remotes › origin while HEAD is on main (check 18b step 1), with phase 4's rebase items; 293 high.</summary>
         public static readonly string[] RemoteMainMenu =
         [
             "origin/main",
             "Check out origin/main (disabled: \"main is already checked out\")",
             "Merge origin/main into main",
             "Merge origin/main into main (create a merge commit)",
+            "Rebase main onto origin/main (disabled: \"main is up to date with origin/main\")",
+            "Interactive rebase of main onto origin/main…",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -187,11 +189,12 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>The menu of the current branch <c>main</c> under Local branches (check 18b step 1).</summary>
+        /// <summary>The menu of the current branch <c>main</c> under Local branches (check 18b step 1), with phase 4's pull with rebase; 354 high.</summary>
         public static readonly string[] CurrentMainMenu =
         [
             "main",
             "Pull from origin/main",
+            "Pull from origin/main (rebase)",
             "—",
             "Push main to origin/main",
             "Force push main… (danger)",
@@ -309,13 +312,15 @@ public static partial class Phase3Expectations
             new("Initial commit", 0, 0, []),
         ];
 
-        /// <summary>The menu of <c>published</c> when it has diverged from its upstream (check 20 step 2).</summary>
+        /// <summary>The menu of <c>published</c> when it has diverged from its upstream (check 20 step 2), with phase 4's rebase items; 458 high.</summary>
         public static readonly string[] DivergedPublishedMenu =
         [
             "published",
             "Check out published",
             "Merge published into main",
             "Merge published into main (create a merge commit)",
+            "Rebase main onto published",
+            "Interactive rebase of main onto published…",
             "Fast-forward published to origin/published (disabled: \"published has commits that origin/published does not have\")",
             "—",
             "Push published to origin/published",
@@ -486,7 +491,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 27 ------------------------------------------------------------------------
 
-        /// <summary>The commit menu of "Alpha two" (check 27 step 1): 7 items, 2 separators, 232 high.</summary>
+        /// <summary>The commit menu of "Alpha two" (check 27 step 1): phase 4's OC1, 9 items, 2 separators, 284 high.</summary>
         public static readonly string[] AlphaTwoMenu =
         [
             "ce5ea6a Alpha two",
@@ -496,12 +501,18 @@ public static partial class Phase3Expectations
             "—",
             "Cherry-pick onto main",
             "Revert this commit",
+            "Rebase main onto this commit",
+            "Interactive rebase of main from here… (disabled: \"This commit is not on main\")",
             "Reset main to this commit…",
             "—",
             "Copy SHA",
         ];
 
-        public const double AlphaTwoMenuHeight = 232;
+        /// <summary>Check 27 step 1: 284 high (232 before phase 4).</summary>
+        public const double AlphaTwoMenuHeight = 284;
+
+        /// <summary>Check 27 step 3: the banner's Continue while the merge's one file conflicts (phase 4's design 10.4).</summary>
+        public const string ResolveConflictsFirst = "Resolve the conflicts first (1 file)";
 
         public const string ResetTitle = "Reset main to 8beca34?";
 
@@ -535,13 +546,15 @@ public static partial class Phase3Expectations
 
         // ---- Check 28 ------------------------------------------------------------------------
 
-        /// <summary>The menu of <c>topic</c>, which has no upstream (check 28 step 1).</summary>
+        /// <summary>The menu of <c>topic</c>, which has no upstream (check 28 step 1), with phase 4's rebase items; 380 high.</summary>
         public static readonly string[] TopicMenu =
         [
             "topic",
             "Check out topic",
             "Merge topic into main",
             "Merge topic into main (create a merge commit)",
+            "Rebase main onto topic",
+            "Interactive rebase of main onto topic…",
             "—",
             "Push topic…",
             "—",
@@ -555,13 +568,15 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>The menu of <c>topic</c> tracking origin/published (check 28 step 4).</summary>
+        /// <summary>The menu of <c>topic</c> tracking origin/published (check 28 step 4), with phase 4's rebase items; 458 high.</summary>
         public static readonly string[] TopicTrackingMenu =
         [
             "topic",
             "Check out topic",
             "Merge topic into main",
             "Merge topic into main (create a merge commit)",
+            "Rebase main onto topic",
+            "Interactive rebase of main onto topic…",
             "Fast-forward topic to origin/published (disabled: \"topic has commits that origin/published does not have\")",
             "—",
             "Push topic to origin/published",
@@ -620,13 +635,15 @@ public static partial class Phase3Expectations
 
         public const string PushedPublished = "Pushed published to origin/published";
 
-        /// <summary>The menu of <c>published</c> behind its upstream (check 30 step 3).</summary>
+        /// <summary>The menu of <c>published</c> behind its upstream (check 30 step 3), with phase 4's rebase items; 458 high.</summary>
         public static readonly string[] BehindPublishedMenu =
         [
             "published",
             "Check out published",
             "Merge published into main",
             "Merge published into main (create a merge commit)",
+            "Rebase main onto published",
+            "Interactive rebase of main onto published…",
             "Fast-forward published to origin/published",
             "—",
             "Push published to origin/published",
@@ -656,13 +673,15 @@ public static partial class Phase3Expectations
             new("Initial commit", 0, 0, []),
         ];
 
-        /// <summary>The menu of <c>published</c> under Remotes › origin (check 30 step 4).</summary>
+        /// <summary>The menu of <c>published</c> under Remotes › origin (check 30 step 4), with phase 4's rebase items; 293 high.</summary>
         public static readonly string[] RemotePublishedMenu =
         [
             "origin/published",
             "Check out origin/published",
             "Merge origin/published into main",
             "Merge origin/published into main (create a merge commit)",
+            "Rebase main onto origin/published",
+            "Interactive rebase of main onto origin/published…",
             "—",
             "Create branch here…",
             "Create tag here…",
@@ -678,13 +697,15 @@ public static partial class Phase3Expectations
 
         public const string DeletedBranch = "Deleted published on origin";
 
-        /// <summary>The menu of <c>published</c> after its upstream was deleted (check 30 step 5).</summary>
+        /// <summary>The menu of <c>published</c> after its upstream was deleted (check 30 step 5), with phase 4's rebase items; 458 high.</summary>
         public static readonly string[] GonePublishedMenu =
         [
             "published",
             "Check out published",
             "Merge published into main",
             "Merge published into main (create a merge commit)",
+            "Rebase main onto published",
+            "Interactive rebase of main onto published…",
             "Fast-forward published to origin/published (disabled: \"origin/published no longer exists\")",
             "—",
             "Push published to origin/published",
@@ -703,12 +724,21 @@ public static partial class Phase3Expectations
 
         public const string GoneForcePushTip = "origin/published no longer exists: push normally";
 
-        /// <summary>The drop menu of main onto side, side checked out in the worktree at <paramref name="worktree"/> (check 30 step 6).</summary>
+        /// <summary>
+        /// The drop menu of main onto side, side checked out in the worktree at
+        /// <paramref name="worktree"/> (check 30 step 6), with phase 4's group "Check out main and
+        /// rebase it": the rebase disabled because main already contains side, the interactive one
+        /// the only enabled item (a detached HEAD does not disable the items that check a branch out
+        /// first, phase 4's design 14.3); 145 high.
+        /// </summary>
         public static string[] WorktreeDropMenu(string worktree) =>
         [
             "main → side",
             $"Fast-forward side to main (disabled: \"side is checked out in another worktree ({worktree})\")",
             $"Check out side and merge main into it (disabled: \"side is checked out in another worktree ({worktree})\")",
+            "—",
+            "Check out main and rebase it onto side (disabled: \"main is up to date with side\")",
+            "Check out main and rebase it onto side interactively…",
         ];
 
         public static string WorktreeReason(string worktree) => $"side is checked out in another worktree ({worktree})";

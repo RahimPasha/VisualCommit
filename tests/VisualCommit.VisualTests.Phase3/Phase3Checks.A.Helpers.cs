@@ -209,28 +209,6 @@ public sealed partial class Phase3ChecksA
         }
     }
 
-    /// <summary>
-    /// Asserts where a menu opened by the pointer at <paramref name="pointer"/> is, by 4a's placement
-    /// rule ("The menu", Placement), for a step that gives no position of its own: its top-left 2
-    /// right of and 2 below the pointer; flipped to the left of the pointer (its right edge 2 left of
-    /// it) when it would cross the window's right edge, above it when it would cross the bottom;
-    /// then kept 4 inside the window (±2).
-    /// </summary>
-    private static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
-    {
-        var window = app.Window.ClientSize;
-        var size = menu.Bounds.Size;
-        var gap = WindowLayout.MenuPointerGap;
-        var inset = WindowLayout.MenuEdgeInset;
-        var x = pointer.X + gap + size.Width > window.Width ? pointer.X - gap - size.Width : pointer.X + gap;
-        var y = pointer.Y + gap + size.Height > window.Height ? pointer.Y - gap - size.Height : pointer.Y + gap;
-        x = Math.Max(Math.Min(x, window.Width - inset - size.Width), inset);
-        y = Math.Max(Math.Min(y, window.Height - inset - size.Height), inset);
-        Assert.True(
-            Math.Abs(menu.Bounds.X - x) <= 2 && Math.Abs(menu.Bounds.Y - y) <= 2,
-            $"The menu's top-left is {menu.Bounds.TopLeft}; 4a places a {size} menu opened at {pointer} at ({x}, {y}).");
-    }
-
     /// <summary>The name dialog as the report gives it (title, context, the boxes, the option, the buttons).</summary>
     private sealed record NameDialogExpected(
         string Title,
