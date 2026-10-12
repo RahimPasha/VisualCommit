@@ -48,7 +48,8 @@ in the phase that first needs it. Package versions are pinned centrally in
 | `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, helpers that drive the app in headless mode. Not a test project | Built |
 | `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos | Built |
 | `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, and headless UI tests of behaviour | Built |
-| `tests/VisualCommit.VisualTests` | Scripted walk-throughs in headless mode with screenshots, for the visual test gate. Part of the default test run and CI | Built |
+| `tests/VisualCommit.VisualTests` | Scripted walk-throughs of phases 0 to 2 in headless mode with screenshots, for the visual test gate. Part of the default test run and CI | Built |
+| `tests/VisualCommit.VisualTests.Phase3` | Phase 3's scripted walk-through, a project of its own so that it runs beside phases 0 to 2's with a headless UI thread of its own. Part of the default test run and CI | Built |
 | `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI). Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25) | Built |
 
 All projects target `net10.0`, except `VisualCommit.RealWindowTests` (`net10.0-windows`).
@@ -536,14 +537,29 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | `FreshApplication` | same | Runs part of a test with a new Avalonia application object: how a scripted check crosses a restart (D32) |
 | `HangWatchdogAttribute` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process. `VISUALCOMMIT_TEST_HANG_SECONDS` changes the limit |
 
-- `VisualCommit.VisualTests` has a folder per phase. `PhaseNChecks` holds a test for every
+- `VisualCommit.VisualTests` has a folder per phase for phases 0 to 2. `PhaseNChecks` holds a test for every
   numbered check of the phase's test report (phase 1's are split over `Phase1Checks.Shell.cs` and
   `Phase1Checks.Graph.cs`, phase 2's over `Phase2Checks.*.cs` by subject); each saves its screenshots as
-  `artifacts/visual/phase-N/scripted/<check><step>-<what>.png` and asserts the expected result.
+  `artifacts/visual/phase-N/scripted/<check><step>-<what>.png` (`VisualRun`, in
+  `tests/VisualCommit.Testing/Headless`) and asserts the expected result.
   The first screenshot of a run empties the phase's folder. Expected values are copied from the
   report into the tests (`Phase0/ShellExpectations.cs`, `Phase1/Phase1Expectations.cs`,
   `Phase2/Phase2Expectations.cs`), not read from the app. Phase 0's checks expect the empty shell
   as phase 1 changed it (the welcome page, "New tab").
+- Phase 3's walk-through is the project `VisualCommit.VisualTests.Phase3` (`Phase3ChecksA` to
+  `Phase3ChecksD`, `Phase3Expectations*.cs`, which the real-window pass compiles too, and their
+  support), with the same pictures folder rule. Every headless test of an assembly runs on that
+  assembly's one UI thread, one at a time, whatever its class; a second project is a second test
+  process with its own UI thread, which `dotnet test` runs beside the first. What the two share
+  (`VisualRun`, `VisibleTexts`) is in `VisualCommit.Testing`.
+- xunit runs the tests of one class (or of one `[Collection]`) one after another and different
+  ones side by side, so big test classes are split by subject: `ScenarioTests` and
+  `Phase3ScenarioTests`, the pull parity classes by group of settings, and
+  `RepositoryOperations*Tests` (helpers in `RepositoryOperationsTestSupport`), whose twelve
+  classes run in four collections, one per WP7 sub-package. The default run is bound by the
+  processors (git's processes and the virus scanner): more git-heavy tests side by side only make
+  every git call slower, and the waits of the headless tests (10 seconds by default) closer to
+  their limit.
 - `GitIsolation` also sets `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` to 2026-01-02 09:00 UTC for
   the app under test, and `RealApp.Launch` hands it the same (D72): a commit the app makes gets
   the same id in both passes and on every machine.

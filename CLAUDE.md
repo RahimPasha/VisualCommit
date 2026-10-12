@@ -260,8 +260,8 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
-| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); for phase 3, whose checks are in the classes `Phase3ChecksA` to `Phase3ChecksD`, `--filter-class "*Phase3Checks*"` (without the last `*` it finds no test) |
-| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phase 3's are a project of their own: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`) |
+| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3) |
 | Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu"` (the phase is 3 when left out) |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
@@ -277,9 +277,14 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 5 to 6 minutes on the Windows machine (the three test projects
-  run side by side; the scripted walk-through takes longest), up to a third longer when the
-  laptop is hot, and about 3.5 minutes on CI. Phase 1's checks load and clone a 100k-commit repo,
+- The default tests take 21 to 26 minutes on the Windows machine (measured on 2026-10-11 during
+  phase 3, from Git Bash, while other programs took one to three of its eight logical
+  processors). The four test projects run side by side, and the run is bound by the processors,
+  which git's processes and the virus scanner keep busy: more tests side by side do not shorten
+  it, and other load or a hot laptop lengthens it. Alone, `VisualCommit.Git.Tests` takes about 7
+  minutes, `VisualCommit.App.Tests` 9, the phase 3 walk-through 8 and phases 0 to 2's 2.5. CI
+  took about 10 minutes per job before phase 3's walk-through had a project of its own; not
+  measured since. Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
