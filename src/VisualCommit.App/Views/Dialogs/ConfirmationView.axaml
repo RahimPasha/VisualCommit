@@ -27,6 +27,7 @@
                    AutomationProperties.AutomationId="DialogRepository" />
         <c:UrlTextBlock Name="ConfirmQuestion"
                    Text="{Binding Question}"
+                   IsVisible="{Binding HasQuestion}"
                    Margin="0,12,0,0"
                    TextWrapping="Wrap"
                    AutomationProperties.AutomationId="ConfirmQuestion" />

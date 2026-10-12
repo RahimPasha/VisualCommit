@@ -205,6 +205,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>The diff open in place of the graph, or null (D63).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDiffOpen))]
+    [NotifyPropertyChangedFor(nameof(ShowsGraph))]
+    [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
     public partial DiffViewModel? Diff { get; private set; }
 
     public bool IsDiffOpen => Diff is not null;
@@ -425,7 +427,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>Selects the commit <paramref name="sha"/> in the graph; with <paramref name="reveal"/>, scrolls it into the middle of the view. An open diff closes.</summary>
     public void Select(string sha, bool reveal)
     {
-        CloseDiff();
+        CloseDiff(returnFocus: false);
         var index = Graph.IndexOf(sha);
         if (index < 0)
         {
@@ -477,13 +479,22 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Changes.ShowSelection(file.Path, staged);
     }
 
-    /// <summary>Closes the diff view and shows the graph again; the file row loses its selection.</summary>
-    public void CloseDiff()
+    /// <summary>
+    /// Closes the diff view and shows the graph again, or the interactive rebase's list it was
+    /// opened over, which takes the keyboard focus back (2.2); the file row loses its selection.
+    /// </summary>
+    public void CloseDiff() => CloseDiff(returnFocus: true);
+
+    private void CloseDiff(bool returnFocus)
     {
         if (Diff is { } diff)
         {
             Diff = null;
             diff.Dispose();
+            if (returnFocus)
+            {
+                InteractiveRebase?.RequestFocus();
+            }
         }
 
         Changes.ShowSelection(null, staged: false);
@@ -1104,6 +1115,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         };
         LeftPanel.Update(refs);
         Refs = refs;
+        InteractiveRebase?.ObserveRefs(refs);
     }
 
     private void SwapGraph(CommitGraphData data)

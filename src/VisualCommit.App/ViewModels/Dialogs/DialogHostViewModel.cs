@@ -41,6 +41,9 @@ public sealed partial class ConfirmationViewModel : DialogViewModel<bool>
 
     public string Question => Request.Question;
 
+    /// <summary>The question line is shown (the interactive list's question has none, 7.2).</summary>
+    public bool HasQuestion => Request.Question.Length > 0;
+
     public string Detail => Request.Detail;
 
     public bool HasDetail => Request.Detail.Length > 0;

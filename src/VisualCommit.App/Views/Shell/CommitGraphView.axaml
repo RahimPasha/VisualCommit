@@ -4,6 +4,7 @@
              xmlns:graph="using:VisualCommit.App.Views.Graph"
              xmlns:shell="using:VisualCommit.App.Views.Shell"
              xmlns:diff="using:VisualCommit.App.Views.Diff"
+             xmlns:rebase="using:VisualCommit.App.Views.Rebase"
              x:Class="VisualCommit.App.Views.Shell.CommitGraphView"
              x:DataType="vm:RepoTabViewModel"
              AutomationProperties.AutomationId="CommitGraph">
@@ -21,10 +22,14 @@
       <Panel DockPanel.Dock="Top" IsVisible="{Binding Repository.Banner.IsVisible, FallbackValue=False}">
         <shell:ConflictBanner DataContext="{Binding Repository.Banner}" />
       </Panel>
-      <!-- The graph, or the open diff in its place (D63). -->
+      <!-- The graph, or in its place the open diff (D63) or the interactive rebase's list
+           (docs/phase-4-design.md 2.2), a commit's diff over the list. -->
       <Panel>
-        <Panel IsVisible="{Binding !Repository.IsDiffOpen}">
+        <Panel IsVisible="{Binding Repository.ShowsGraph, FallbackValue=True}">
           <graph:RepositoryGraphView DataContext="{Binding Repository}" />
+        </Panel>
+        <Panel IsVisible="{Binding Repository.ShowsInteractiveRebase, FallbackValue=False}">
+          <rebase:InteractiveRebaseView DataContext="{Binding Repository.InteractiveRebase}" />
         </Panel>
         <Panel IsVisible="{Binding Repository.IsDiffOpen}">
           <diff:DiffView DataContext="{Binding Repository.Diff}" />
