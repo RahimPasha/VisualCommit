@@ -157,6 +157,14 @@ public class ConflictResolverRealGitTests
 
         public Task<MarkResolvedResult> MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected) => throw new NotSupportedException();
 
+        public MergeToolRun? RunningMergeTool => null;
+
+        public event EventHandler<MergeToolRun>? MergeToolStarted
+        {
+            add { }
+            remove { }
+        }
+
         public Task<bool> TakeSideAsync(string path, ConflictSide side) => throw new NotSupportedException();
 
         public Task<bool> RemoveAsync(string path) => throw new NotSupportedException();

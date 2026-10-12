@@ -977,6 +977,79 @@ public class ConflictResolverViewModelTests
         Assert.Equal(("Result", "1 conflict left"), (resolver.ResultTitle, resolver.ResultCountText));
     }
 
+    [AvaloniaFact]
+    public async Task A_resolver_opened_while_the_file_menu_s_merge_tool_runs_on_the_file_waits_for_it_read_only()
+    {
+        var (actions, _, resolver) = MergeStop();
+        resolver.MergeTool = "fake";
+        var tool = new TaskCompletionSource<bool>();
+        actions.RunningMergeTool = new MergeToolRun("notes.txt", "meld", tool.Task);
+        var closed = false;
+        resolver.Closed += (_, _) => closed = true;
+
+        await resolver.OpenAsync("notes.txt");
+
+        // 11.9: read-only, waiting for the tool, as when the resolver started it itself.
+        Assert.Equal((true, "Waiting for meld to close…"), (resolver.IsBusy, resolver.ResultTitle));
+        Assert.False(resolver.MarkResolvedCommand.CanExecute(null));
+        Assert.False(resolver.RunMergeToolCommand.CanExecute(null));
+        Assert.False(resolver.CloseResolverCommand.CanExecute(null));
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.Equal(Notes, Text(resolver));
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Empty(actions.Writes);
+
+        // The tool staged the file: the resolver moves on, here closes.
+        actions.RunningMergeTool = null;
+        resolver.Update(Status(Merge()), "main", null);
+        tool.SetResult(true);
+        Settle();
+        Assert.True(closed);
+    }
+
+    [AvaloniaFact]
+    public async Task A_merge_tool_that_starts_on_the_open_file_makes_it_wait_and_a_tool_that_did_not_resolve_leaves_it_read_again()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        Assert.False(resolver.IsBusy);
+
+        // The file menu's tool, queued before the resolver opened, starts now.
+        var tool = new TaskCompletionSource<bool>();
+        actions.StartMergeTool("notes.txt", "meld", tool.Task);
+        Assert.Equal((true, "Waiting for meld to close…"), (resolver.IsBusy, resolver.ResultTitle));
+
+        // It closes without resolving, having written the file: the result is read from it.
+        actions.RunningMergeTool = null;
+        actions.SetText("notes.txt", "written by the tool\n");
+        tool.SetResult(false);
+        Settle();
+        Assert.Equal((false, "Result", "written by the tool\n"), (resolver.IsBusy, resolver.ResultTitle, Text(resolver)));
+        Assert.Empty(actions.Writes);
+
+        // A tool on another file leaves the resolver as it is.
+        actions.StartMergeTool("other.txt", "meld", new TaskCompletionSource<bool>().Task);
+        Assert.False(resolver.IsBusy);
+    }
+
+    [AvaloniaFact]
+    public async Task A_modified_result_is_kept_when_a_tool_the_resolver_did_not_start_ends()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(0, ConflictChoice.UseOurs);
+
+        var tool = new TaskCompletionSource<bool>();
+        actions.StartMergeTool("notes.txt", "meld", tool.Task);
+        Assert.True(resolver.IsBusy);
+        actions.RunningMergeTool = null;
+        actions.SetText("notes.txt", "written by the tool\n");
+        tool.SetResult(false);
+        Settle();
+
+        Assert.Equal((false, R1, true), (resolver.IsBusy, Text(resolver), resolver.IsModified));
+    }
+
     // --- Leaving and closing (11.1, 11.10) -----------------------------------------------------------
 
     [AvaloniaFact]

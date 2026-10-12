@@ -17,6 +17,7 @@ public sealed partial class RepositoryOperations : IConflictActions
 {
     private readonly HashSet<string> _conflictedAtStop = new(StringComparer.Ordinal);
     private string? _stopKey;
+    private MergeToolRun? _runningMergeTool;
 
     /// <inheritdoc cref="IRepositoryActions.ResolveConflict"/>
     public void ResolveConflict(ChangedFile file)
@@ -144,19 +145,45 @@ public sealed partial class RepositoryOperations : IConflictActions
 
         var text = OperationTexts.MergeTool(file, tool);
         var staged = false;
-        await GuardAsync(text, () => RunAsync(
-            text,
-            OperationKind.Local,
-            RefreshScope.Status,
-            async context =>
-            {
-                var result = await Git.RunMergeToolAsync(path, tool, NetworkOptions.From(context), context.CancellationToken);
-                staged = result.Staged;
-                return OperationReport.Done(staged ? OperationTexts.ResolvedInTool(file, tool) : OperationTexts.ToolClosedWithoutResolving(tool, file));
-            },
-            new RunOptions { CanBeCancelled = true }));
+        var ended = new TaskCompletionSource<bool>();
+        try
+        {
+            await GuardAsync(text, () => RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Status,
+                async context =>
+                {
+                    // While it runs, a resolver on the file is read-only, waiting for the tool (11.9).
+                    var run = new MergeToolRun(path, tool, ended.Task);
+                    _runningMergeTool = run;
+                    try
+                    {
+                        MergeToolStarted?.Invoke(this, run);
+                        var result = await Git.RunMergeToolAsync(path, tool, NetworkOptions.From(context), context.CancellationToken);
+                        staged = result.Staged;
+                        return OperationReport.Done(staged ? OperationTexts.ResolvedInTool(file, tool) : OperationTexts.ToolClosedWithoutResolving(tool, file));
+                    }
+                    finally
+                    {
+                        _runningMergeTool = null;
+                    }
+                },
+                new RunOptions { CanBeCancelled = true }));
+        }
+        finally
+        {
+            ended.TrySetResult(staged);
+        }
+
         return staged;
     }
+
+    /// <inheritdoc/>
+    public MergeToolRun? RunningMergeTool => _runningMergeTool;
+
+    /// <inheritdoc/>
+    public event EventHandler<MergeToolRun>? MergeToolStarted;
 
     /// <summary>One side in its working-tree form (11.6); null when that side has no file or the read failed (logged).</summary>
     async Task<byte[]?> IConflictActions.ReadSideAsync(ConflictEntry entry, ConflictSide side)

@@ -109,6 +109,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         _log = log ?? NullAppLog.Instance;
         _delay = delay ?? Task.Delay;
         _time = time ?? TimeProvider.System;
+        _actions.MergeToolStarted += OnMergeToolStarted;
     }
 
     /// <summary>The resolver closed: every file is resolved, the operation ended, or the user left it. The repository hides it.</summary>
@@ -450,6 +451,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         _disposed = true;
         _version++;
+        _actions.MergeToolStarted -= OnMergeToolStarted;
         CancelParse();
         DetachDocument();
     }
@@ -597,14 +599,28 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return;
         }
 
+        await WaitForMergeToolAsync(entry, tool, () => _actions.RunMergeToolAsync(entry.Path), discardsResult: true);
+    }
+
+    /// <summary>
+    /// While the merge tool runs on the open file (11.9), the result is read-only with
+    /// <c>Waiting for {tool} to close…</c> in its title. Then, when git staged the file, the
+    /// resolver moves on (11.7); otherwise the result is read again from the file (the tool may
+    /// have written it). A tool the resolver did not start itself (<paramref name="discardsResult"/>
+    /// false: the file menu's, queued before the resolver opened) leaves a modified result as it
+    /// is, as a refresh does (11.11).
+    /// </summary>
+    private async Task WaitForMergeToolAsync(ConflictEntry entry, string tool, Func<Task<bool>> run, bool discardsResult)
+    {
         var order = _conflicts.Select(conflict => conflict.Path).ToList();
         var version = ++_version;
+        CancelParse();
         IsBusy = true;
         ResultTitle = ConflictResolverTexts.WaitingForTool(tool);
         bool staged;
         try
         {
-            staged = await _actions.RunMergeToolAsync(entry.Path);
+            staged = await run();
         }
         catch (Exception ex)
         {
@@ -622,7 +638,12 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         }
 
         UpdateResultTitle();
-        if (staged)
+        if (!discardsResult && IsModified)
+        {
+            IsResolvedElsewhere = staged;
+            UpdateResultTitle();
+        }
+        else if (staged)
         {
             await MoveOnAsync(order, entry.Path);
         }
@@ -631,6 +652,20 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             // The tool may have written the file: the result is read again from it.
             await OpenFileAsync(entry.Path);
         }
+    }
+
+    /// <summary>A merge tool started (from the file menu too): the resolver open on its file waits for it (11.9).</summary>
+    private void OnMergeToolStarted(object? sender, MergeToolRun run) => FollowMergeTool(run);
+
+    /// <summary>Waits for <paramref name="run"/> when it runs on the open file and the resolver is not already waiting for a write or a tool of its own.</summary>
+    private void FollowMergeTool(MergeToolRun? run)
+    {
+        if (run is null || _disposed || IsBusy || Entry is not { } entry || entry.Path != run.Path || Body == ConflictResolverBody.None)
+        {
+            return;
+        }
+
+        _ = WaitForMergeToolAsync(entry, run.Tool, () => run.Staged, discardsResult: false);
     }
 
     private bool CanGoToOtherFile() => HasOtherFiles && !IsBusy;
@@ -732,6 +767,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         if (KindOf(entry, content) is { } card)
         {
             ShowCard(entry, card, focus);
+            FollowMergeTool(_actions.RunningMergeTool);
             return;
         }
 
@@ -769,6 +805,9 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         {
             Navigate(new ConflictNavigation(0, null, 1, focus));
         }
+
+        // A merge tool started from the file menu may already run on the file (11.9).
+        FollowMergeTool(_actions.RunningMergeTool);
     }
 
     /// <summary>The card of a conflict without text (11.8) and its buttons.</summary>

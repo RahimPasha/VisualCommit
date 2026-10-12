@@ -244,6 +244,50 @@ public class RepositoryOperationsConflictsTests
         Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
     }
 
+    [AvaloniaFact]
+    public async Task A_resolver_opened_on_a_file_whose_merge_tool_the_file_menu_started_waits_for_the_tool_read_only()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge, mergeTool: true);
+        var started = repo.SiblingPath("tool-started");
+        var release = repo.SiblingPath("tool-release");
+
+        // A tool that waits to be released (at the latest after a minute), then resolves the file.
+        await repo.ConfigAsync("mergetool.fake.cmd", "touch ../tool-started; i=0; while [ ! -f ../tool-release ] && [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done; printf 'resolved by the tool\\n' > \"$MERGED\"");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        try
+        {
+            await app.WaitForRepositoryAsync();
+            var repository = app.Session.Shell.ActiveTab.Repository!;
+            await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+            var notes = Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted);
+
+            // The file menu's "Open in merge tool" with the resolver closed; then a click on the file.
+            var tool = repository.Operations.OpenMergeToolAsync("notes.txt");
+            await app.WaitForAsync(() => File.Exists(started), "the merge tool to start", TimeSpan.FromSeconds(60));
+            repository.OpenResolver(notes);
+            await app.WaitForResolverAsync("notes.txt");
+            var resolver = repository.Resolver;
+
+            // 11.9: read-only, waiting for the tool; nothing can be marked resolved over it.
+            await app.WaitForAsync(() => resolver.IsBusy, "the resolver to wait for the tool", TimeSpan.FromSeconds(10));
+            Assert.Equal("Waiting for fake to close…", resolver.ResultTitle);
+            Assert.True(app.ResultEditor.IsReadOnly);
+            Assert.False(resolver.MarkResolvedCommand.CanExecute(null));
+
+            // The tool resolves the file: the resolver closes, the tool's result staged.
+            File.WriteAllText(release, string.Empty);
+            await tool;
+            await app.WaitForResolverClosedAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal("resolved by the tool\n", Read(repo, "notes.txt"));
+            Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
+        }
+        finally
+        {
+            File.WriteAllText(release, string.Empty);
+        }
+    }
+
     [Fact]
     public async Task Without_merge_tool_in_gits_configuration_nothing_runs()
     {

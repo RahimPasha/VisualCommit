@@ -49,6 +49,16 @@ public interface IConflictActions
     Task<bool> RunMergeToolAsync(string path);
 
     /// <summary>
+    /// The merge tool that runs now: the queue's current operation is "Merge tool for {file}"
+    /// (11.9), however it was started (the resolver's <c>Merge tool…</c> or the file menu's
+    /// <c>Open in merge tool</c>); null while none runs.
+    /// </summary>
+    MergeToolRun? RunningMergeTool { get; }
+
+    /// <summary>Raised on the UI thread when a merge tool starts running (<see cref="RunningMergeTool"/> becomes it).</summary>
+    event EventHandler<MergeToolRun>? MergeToolStarted;
+
+    /// <summary>
     /// One side of <paramref name="entry"/> in its working-tree form, for Take ours or Take theirs
     /// (11.6, <see cref="IGitRepository.ReadConflictSideAsync"/>): null when that side has no file
     /// or the read failed.
@@ -61,6 +71,12 @@ public interface IConflictActions
     /// <summary>Asks a question on the window's dialog layer (7.2); true when the user goes ahead.</summary>
     Task<bool> ConfirmAsync(ConfirmationRequest request);
 }
+
+/// <summary>A merge tool that runs (<see cref="IConflictActions.RunningMergeTool"/>, 11.9).</summary>
+/// <param name="Path">The file it runs on, repository-relative with <c>/</c>.</param>
+/// <param name="Tool">The tool (<c>merge.tool</c>), for <c>Waiting for {tool} to close…</c>.</param>
+/// <param name="Staged">Completes when its operation has ended, its refresh included: true when git staged the file.</param>
+public sealed record MergeToolRun(string Path, string Tool, Task<bool> Staged);
 
 /// <summary>How Mark resolved's operation ended (<see cref="IConflictActions.MarkResolvedAsync"/>, 11.7).</summary>
 public enum MarkResolvedOutcome

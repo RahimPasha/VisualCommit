@@ -135,6 +135,20 @@ internal sealed class RecordingConflictActions : IConflictActions
         return WriteAsync(path);
     }
 
+    /// <summary>The merge tool that runs now, as the test sets it (the file menu's, for instance).</summary>
+    public MergeToolRun? RunningMergeTool { get; set; }
+
+    public event EventHandler<MergeToolRun>? MergeToolStarted;
+
+    /// <summary>A merge tool starts on <paramref name="path"/> as the file menu starts it: running until <paramref name="staged"/> completes.</summary>
+    public MergeToolRun StartMergeTool(string path, string tool, Task<bool> staged)
+    {
+        var run = new MergeToolRun(path, tool, staged);
+        RunningMergeTool = run;
+        MergeToolStarted?.Invoke(this, run);
+        return run;
+    }
+
     /// <summary>The writes recorded, without the reads and questions.</summary>
     public IReadOnlyList<string> Writes => Calls.Where(call => !call.StartsWith("Read", StringComparison.Ordinal) && !call.StartsWith("Confirm", StringComparison.Ordinal) && !call.StartsWith("Refused", StringComparison.Ordinal)).ToList();
 
