@@ -4,7 +4,9 @@ using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using VisualCommit.App.Controls.Diff;
+using VisualCommit.Core.Conflicts;
 using VisualCommit.Core.Diff;
 
 namespace VisualCommit.App.Controls.Conflicts;
@@ -68,7 +70,43 @@ public sealed record ConflictPanesPart(IReadOnlyList<string> Ours, IReadOnlyList
 /// <param name="Tint">The row's background.</param>
 /// <param name="IsBar">The row is a block's bar.</param>
 /// <param name="Number">The line's number in the pane's own file, or null for a bar or a filler.</param>
-public sealed record ConflictPaneRow(string Text, ConflictTint Tint, bool IsBar, int? Number);
+public sealed record ConflictPaneRow(string Text, ConflictTint Tint, bool IsBar, int? Number)
+{
+    /// <summary>The block the row belongs to (its bar, its lines, its fillers), from 0; null for a common line.</summary>
+    public int? Block { get; init; }
+
+    /// <summary>A bar's state on this pane's side: its buttons, or the text that says whether the side is used; null for any other row.</summary>
+    public ConflictSideState? BarState { get; init; }
+
+    /// <summary>What a bar shows instead of its buttons (<c>Used in the result</c>, <c>Not used</c>); null while it shows its buttons, and for any other row.</summary>
+    public string? BarText { get; init; }
+}
+
+/// <summary>
+/// What one side of a block shows (docs/phase-4-design.md 11.5, 11.6): while the block's markers
+/// are in the result, its bar's buttons and the side's tint; once a choice took the block out of
+/// the result, whether this side is in what replaced it.
+/// </summary>
+public enum ConflictSideState
+{
+    /// <summary>The block is unresolved: the bar shows its buttons and the side's rows its ours or theirs tint.</summary>
+    Choose,
+
+    /// <summary>The side is in the result: the bar says <c>Used in the result</c>, its rows take <c>VcConflictUsedBrush</c>.</summary>
+    Used,
+
+    /// <summary>The side is not in the result: the bar says <c>Not used</c>, its rows lose their tint.</summary>
+    NotUsed,
+}
+
+/// <summary>The state of both sides of one block (<see cref="ConflictPanes.Bars"/>).</summary>
+/// <param name="Ours">The ours pane's side.</param>
+/// <param name="Theirs">The theirs pane's side.</param>
+public readonly record struct ConflictBlockBars(ConflictSideState Ours, ConflictSideState Theirs)
+{
+    /// <summary>An unresolved block: both bars show their buttons.</summary>
+    public static ConflictBlockBars Open { get; } = new(ConflictSideState.Choose, ConflictSideState.Choose);
+}
 
 /// <summary>
 /// The conflict resolver's top half (docs/phase-4-design.md 11.2, 11.3, 11.5): the ours pane on
@@ -87,12 +125,27 @@ public sealed record ConflictPaneRow(string Text, ConflictTint Tint, bool IsBar,
 /// synthetic one-hunk diff: a common line is a context line, a block's ours lines removed lines
 /// and its theirs lines added lines, so that <see cref="DiffHighlighter"/> and
 /// <see cref="DiffPane"/> work on it unchanged. A block's bar is a header row whose hunk number
-/// is the block's.
+/// is the block's. <see cref="Bars"/> says, per block, what each side's bar shows and how its
+/// rows are tinted; a change of it redraws the bars and the backgrounds without moving the view.
+/// The panes' texts are no tab stops: Tab goes from the bars' buttons of the ours pane to those
+/// of the theirs pane (11.10).
 /// </remarks>
 public sealed class ConflictPanes : UserControl, IDiffPaneHost
 {
+    /// <summary>A bar's text once its side is in the result (11.5).</summary>
+    public const string UsedText = "Used in the result";
+
+    /// <summary>A bar's text once its side is not in the result (11.5).</summary>
+    public const string NotUsedText = "Not used";
+
+    /// <summary>The automation id of a bar's text (7.4).</summary>
+    public const string BarStateAutomationId = "ConflictBarState";
+
     public static readonly StyledProperty<IReadOnlyList<ConflictPanesPart>?> PartsProperty =
         AvaloniaProperty.Register<ConflictPanes, IReadOnlyList<ConflictPanesPart>?>(nameof(Parts));
+
+    public static readonly StyledProperty<IReadOnlyList<ConflictBlockBars>?> BarsProperty =
+        AvaloniaProperty.Register<ConflictPanes, IReadOnlyList<ConflictBlockBars>?>(nameof(Bars));
 
     public static readonly StyledProperty<string?> FilePathProperty =
         AvaloniaProperty.Register<ConflictPanes, string?>(nameof(FilePath));
@@ -115,6 +168,8 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
     private DiffPalette? _palette;
     private bool _dirty = true;
     private bool _pendingTop;
+    private int? _pendingReveal;
+    private Vector? _pendingOffset;
     private bool _syncingScroll;
 
     public ConflictPanes()
@@ -136,6 +191,13 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         AutomationProperties.SetName(_theirs.Editor, "Theirs");
         ApplyAutomationIds();
 
+        // The texts are read and selected with the mouse; the keyboard goes from bar to bar.
+        foreach (var pane in new[] { _ours, _theirs })
+        {
+            pane.Editor.IsTabStop = false;
+            pane.Editor.TextArea.IsTabStop = false;
+        }
+
         ActualThemeVariantChanged += (_, _) => OnThemeChanged();
         LayoutUpdated += (_, _) => OnLayoutUpdated();
     }
@@ -149,6 +211,19 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         get => GetValue(PartsProperty);
         set => SetValue(PartsProperty, value);
     }
+
+    /// <summary>
+    /// What each block's bars show and how its sides are tinted, by block (11.5); a block past
+    /// the list's end, or a null list, is unresolved (<see cref="ConflictBlockBars.Open"/>).
+    /// </summary>
+    public IReadOnlyList<ConflictBlockBars>? Bars
+    {
+        get => GetValue(BarsProperty);
+        set => SetValue(BarsProperty, value);
+    }
+
+    /// <summary>The panes' scroll offset (both scroll together), for keeping it while another tab's resolver is shown.</summary>
+    public Vector ScrollOffset => _theirs.Editor.ScrollOffset;
 
     /// <summary>The file's repository-relative path: its extension picks the grammar.</summary>
     public string? FilePath
@@ -198,6 +273,24 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         _ => null,
     };
 
+    /// <summary>The panes' pieces for a parsed conflicted file (11.3): its common segments and blocks, each line without its line end.</summary>
+    public static IReadOnlyList<ConflictPanesPart> PartsOf(ConflictText text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var parts = new List<ConflictPanesPart>(text.Segments.Count);
+        foreach (var segment in text.Segments)
+        {
+            parts.Add(segment switch
+            {
+                ConflictBlock block => ConflictPanesPart.Block([.. block.Ours.Select(line => line.Text)], [.. block.Theirs.Select(line => line.Text)]),
+                CommonSegment common => ConflictPanesPart.Common([.. common.Lines.Select(line => line.Text)]),
+                _ => throw new InvalidOperationException($"Unknown segment {segment.GetType().Name}."),
+            });
+        }
+
+        return parts;
+    }
+
     /// <summary>The rows a pane shows, top to bottom; the two panes have as many.</summary>
     public IReadOnlyList<ConflictPaneRow> RowsOf(ConflictPaneSide side)
     {
@@ -207,11 +300,72 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         {
             var cell = side == ConflictPaneSide.Ours ? row.Left : row.Right;
             var isBar = row.Kind == DiffRowKind.HunkHeader;
-            rows.Add(new ConflictPaneRow(cell?.Text ?? string.Empty, TintOf(row, cell), isBar, cell?.OldNumber ?? cell?.NewNumber));
+            var state = isBar ? StateOf(row.Hunk, side) : (ConflictSideState?)null;
+            rows.Add(new ConflictPaneRow(cell?.Text ?? string.Empty, TintOf(row, cell, side), isBar, cell?.OldNumber ?? cell?.NewNumber)
+            {
+                Block = row.Hunk >= 0 ? row.Hunk : null,
+                BarState = state,
+                BarText = state is { } shown ? BarTextOf(shown) : null,
+            });
         }
 
         return rows;
     }
+
+    /// <summary>What block <paramref name="block"/>'s bar shows in <paramref name="side"/>'s pane instead of its buttons, or null while it shows them (or there is no such block).</summary>
+    public string? BarText(int block, ConflictPaneSide side)
+    {
+        EnsureBuilt();
+        return block >= 0 && block < _barRows.Length ? BarTextOf(StateOf(block, side)) : null;
+    }
+
+    /// <summary>
+    /// Scrolls both panes so that block <paramref name="block"/>'s bar is the third row in view,
+    /// with fewer rows above it near the start and the panes stopping at their end (11.5); done
+    /// once the panes are laid out with their bars' heights known.
+    /// </summary>
+    public void RevealBlock(int block)
+    {
+        _pendingReveal = block;
+        _pendingOffset = null;
+        TryScrollPending();
+    }
+
+    /// <summary>Scrolls both panes to <paramref name="offset"/> once they are laid out (a resolver shown again keeps its place).</summary>
+    public void ScrollToOffset(Vector offset)
+    {
+        _pendingOffset = offset;
+        _pendingReveal = null;
+        TryScrollPending();
+    }
+
+    /// <summary>The pane <paramref name="source"/> (a control, or something inside it) is in, or null outside both panes.</summary>
+    public ConflictPaneSide? SideOf(object? source)
+    {
+        for (var visual = source as Visual; visual is not null && visual != this; visual = visual.GetVisualParent())
+        {
+            if (visual == _ours.Editor)
+            {
+                return ConflictPaneSide.Ours;
+            }
+
+            if (visual == _theirs.Editor)
+            {
+                return ConflictPaneSide.Theirs;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether text is selected in <paramref name="side"/>'s pane.</summary>
+    public bool HasSelection(ConflictPaneSide side) => !PaneOf(side).Editor.TextArea.Selection.IsEmpty;
+
+    /// <summary>Copies the text selected in <paramref name="side"/>'s pane to the clipboard, as the editor's own Copy does.</summary>
+    public void Copy(ConflictPaneSide side) => PaneOf(side).Editor.Copy();
+
+    /// <summary>The editor of <paramref name="side"/>'s pane: its text area takes a click and a selection.</summary>
+    public Control PaneEditor(ConflictPaneSide side) => PaneOf(side).Editor;
 
     /// <summary>The button of block <paramref name="block"/>'s bar in <paramref name="side"/>'s pane that asks for <paramref name="choice"/>; null when that bar is not in view or the pane has no such button.</summary>
     public Button? BarButton(int block, ConflictPaneSide side, ConflictChoice choice)
@@ -254,8 +408,12 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         return block >= 0 && block < _barRows.Length ? _barRows[block] : -1;
     }
 
-    /// <summary>A block bar's background is a hunk header's; a block's sides are tinted ours and theirs; a filler is the diff's filler; common lines have none.</summary>
-    IImmutableBrush IDiffPaneHost.RowBackground(DiffPane pane, DiffDisplayRow row, DiffCell? cell) => TintOf(row, cell) switch
+    /// <summary>
+    /// A block bar's background is a hunk header's; an unresolved block's sides are tinted ours
+    /// and theirs, a side used in the result the used tint and a side not used none; a filler is
+    /// the diff's filler; common lines have none.
+    /// </summary>
+    IImmutableBrush IDiffPaneHost.RowBackground(DiffPane pane, DiffDisplayRow row, DiffCell? cell) => TintOf(row, cell, pane == _ours ? ConflictPaneSide.Ours : ConflictPaneSide.Theirs) switch
     {
         ConflictTint.Bar => Palette.Hunk,
         ConflictTint.Filler => Palette.Filler,
@@ -265,10 +423,20 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         _ => Palette.Background,
     };
 
-    /// <summary>A block's bar: "Use ours" and "Use both" in the ours pane, "Use theirs" and "Use both" in the theirs pane, at the bar's start.</summary>
+    /// <summary>
+    /// A block's bar: while the block is unresolved, "Use ours" and "Use both" in the ours pane,
+    /// "Use theirs" and "Use both" in the theirs pane, at the bar's start; once it is resolved,
+    /// <see cref="UsedText"/> or <see cref="NotUsedText"/> in the secondary colour (11.5).
+    /// </summary>
     HeaderBarContent IDiffPaneHost.HeaderOf(DiffPane pane, DiffDisplayRow header)
     {
         var block = header.Hunk;
+        var side = pane == _ours ? ConflictPaneSide.Ours : ConflictPaneSide.Theirs;
+        if (BarTextOf(StateOf(block, side)) is { } text)
+        {
+            return new HeaderBarContent(text, null, ButtonsFirst: true, TextInCodeFont: false, TextAutomationId: BarStateAutomationId);
+        }
+
         IReadOnlyList<HeaderBarButton> buttons = pane == _ours
             ?
             [
@@ -328,6 +496,15 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
             _dirty = true;
             InvalidateMeasure();
         }
+        else if (change.Property == BarsProperty)
+        {
+            // The rows stay where they are: only their backgrounds and the bars change.
+            foreach (var pane in new[] { _ours, _theirs })
+            {
+                pane.RedrawBackgrounds();
+                pane.Headers.Rebuild();
+            }
+        }
         else if (change.Property == OursAutomationIdProperty || change.Property == TheirsAutomationIdProperty)
         {
             ApplyAutomationIds();
@@ -346,20 +523,47 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         OnThemeChanged();
     }
 
+    /// <summary>What a bar shows in place of its buttons, or null while it shows them.</summary>
+    private static string? BarTextOf(ConflictSideState state) => state switch
+    {
+        ConflictSideState.Used => UsedText,
+        ConflictSideState.NotUsed => NotUsedText,
+        _ => null,
+    };
+
+    /// <summary>The state of block <paramref name="block"/>'s <paramref name="side"/>: <see cref="ConflictSideState.Choose"/> unless <see cref="Bars"/> says otherwise.</summary>
+    private ConflictSideState StateOf(int block, ConflictPaneSide side)
+    {
+        var bars = Bars is { } list && block >= 0 && block < list.Count ? list[block] : ConflictBlockBars.Open;
+        return side == ConflictPaneSide.Ours ? bars.Ours : bars.Theirs;
+    }
+
     /// <summary>The background of a row on a pane's side.</summary>
-    private static ConflictTint TintOf(DiffDisplayRow row, DiffCell? cell)
+    private ConflictTint TintOf(DiffDisplayRow row, DiffCell? cell, ConflictPaneSide side)
     {
         if (row.Kind == DiffRowKind.HunkHeader)
         {
             return ConflictTint.Bar;
         }
 
-        return cell?.Kind switch
+        var sided = cell?.Kind switch
         {
             null => ConflictTint.Filler,
             DiffLineKind.Removed => ConflictTint.Ours,
             DiffLineKind.Added => ConflictTint.Theirs,
             _ => ConflictTint.None,
+        };
+
+        if (sided is not (ConflictTint.Ours or ConflictTint.Theirs))
+        {
+            return sided;
+        }
+
+        return StateOf(row.Hunk, side) switch
+        {
+            ConflictSideState.Used => ConflictTint.Used,
+            ConflictSideState.NotUsed => ConflictTint.None,
+            _ => sided,
         };
     }
 
@@ -496,11 +700,49 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
             }
         }
 
-        if (!builtHeaders && _pendingTop && _ours.TextView.Bounds.Height > 0 && _ours.TextView.VisualLinesValid)
+        if (!builtHeaders)
         {
-            _pendingTop = false;
-            _ours.Editor.ScrollTo(0, 0);
-            _theirs.Editor.ScrollTo(0, 0);
+            TryScrollPending();
+        }
+    }
+
+    /// <summary>
+    /// Scrolls as asked once the panes are laid out and their bars' heights are known: to a block
+    /// (<see cref="RevealBlock"/>), to an offset (<see cref="ScrollToOffset"/>), or, after new
+    /// rows, to the top.
+    /// </summary>
+    private void TryScrollPending()
+    {
+        if (_dirty || _ours.HeadersPending || _theirs.HeadersPending
+            || !(_ours.TextView.Bounds.Height > 0) || !_ours.TextView.VisualLinesValid
+            || !(_theirs.TextView.Bounds.Height > 0) || !_theirs.TextView.VisualLinesValid)
+        {
+            return;
+        }
+
+        Vector? target = null;
+        if (_pendingReveal is { } block)
+        {
+            var row = BarRowOf(block);
+            var top = row < 0 ? 0 : _ours.TextView.GetVisualTopByDocumentLine(Math.Max(0, row - 2) + 1);
+            target = new Vector(0, top);
+        }
+        else if (_pendingOffset is { } offset)
+        {
+            target = offset;
+        }
+        else if (_pendingTop)
+        {
+            target = default(Vector);
+        }
+
+        _pendingTop = false;
+        _pendingReveal = null;
+        _pendingOffset = null;
+        if (target is { } to)
+        {
+            _ours.Editor.ScrollTo(to.X, to.Y);
+            _theirs.Editor.ScrollTo(to.X, to.Y);
         }
     }
 

@@ -218,11 +218,6 @@
                  IsVisible="{Binding ShowsEmpty}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-      <StackPanel Classes="message" IsVisible="{Binding ShowsConflict}" VerticalAlignment="Center" Spacing="8" Margin="24,0">
-        <TextBlock Classes="title" Text="This file has a merge conflict" />
-        <TextBlock Classes="secondary" Text="Resolve it in an editor, then stage it." TextWrapping="Wrap" TextAlignment="Center" />
-      </StackPanel>
-
       <TextBlock Name="DiffError"
                  Classes="error"
                  Text="{Binding ErrorText}"
