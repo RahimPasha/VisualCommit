@@ -39,8 +39,8 @@ public partial class InteractiveRebaseView : UserControl
     /// <summary>How far the pointer moves from the press with the button held before a row drag starts (D87's threshold).</summary>
     public const double DragThreshold = BranchDragService.Threshold;
 
-    /// <summary>The class of a commit row's part (<c>RebaseRow</c>).</summary>
-    private const string CommitRowClass = "commit";
+    /// <summary>How near the rows' top or bottom edge a dragged row's pointer scrolls the rows (<see cref="ScrollNearEdge"/>).</summary>
+    public const double DragScrollEdge = 20;
 
     private InteractiveRebaseViewModel? _viewModel;
     private IDisposable? _escape;
@@ -295,7 +295,9 @@ public partial class InteractiveRebaseView : UserControl
         {
             if (ReferenceEquals(e.Pointer, drag.Pointer))
             {
-                ShowGap(e.GetPosition(RowsArea).Y);
+                var y = e.GetPosition(RowsArea).Y;
+                ScrollNearEdge(y);
+                ShowGap(y);
                 e.Handled = true;
             }
 
@@ -444,6 +446,30 @@ public partial class InteractiveRebaseView : UserControl
             RebaseDragLine.Width = RowsArea.Bounds.Width;
             Canvas.SetLeft(RebaseDragLine, 0);
             Canvas.SetTop(RebaseDragLine, nearestY - 1);
+        }
+    }
+
+    /// <summary>
+    /// During a drag, a pointer within <see cref="DragScrollEdge"/> of the rows' top or bottom
+    /// edge (or past it) scrolls the rows by as much as it is inside that band, at each move, so
+    /// that a row can be dragged past the rows in view of a long list.
+    /// </summary>
+    private void ScrollNearEdge(double y)
+    {
+        var height = RowsScroller.Bounds.Height;
+        var step = y < DragScrollEdge ? y - DragScrollEdge
+            : y > height - DragScrollEdge ? y - (height - DragScrollEdge)
+            : 0;
+        if (step == 0)
+        {
+            return;
+        }
+
+        var offset = Math.Clamp(RowsScroller.Offset.Y + step, 0, Math.Max(0, RowsScroller.Extent.Height - RowsScroller.Viewport.Height));
+        if (offset != RowsScroller.Offset.Y)
+        {
+            RowsScroller.Offset = RowsScroller.Offset.WithY(offset);
+            RowsScroller.UpdateLayout();
         }
     }
 

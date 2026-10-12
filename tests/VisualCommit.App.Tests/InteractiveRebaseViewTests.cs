@@ -637,6 +637,20 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.Home);
         Assert.True(app.RebaseList().Rows[0].HasKeyboardFocus);
         Assert.Equal(new Rect(260, 124, 440, 30), app.RebaseList().Rows[0].Bounds);
+
+        // A drag held near the rows' bottom edge scrolls them, so a row goes past the rows in view.
+        app.PressMouse(new Point(600, 139));
+        app.MoveMouseHeld(new Point(600, 600), steps: 5);
+        for (var move = 0; move < 20; move++)
+        {
+            app.MoveMouseHeld(new Point(600, 625 + (move % 2)));
+        }
+
+        Assert.True(app.RebaseList().Rows[0].Bounds is null || app.RebaseList().Rows[0].Bounds!.Value.Y < 124);
+        app.ReleaseMouse(new Point(600, 626));
+        var moved = harness.ViewModel.IndexOf(harness.ViewModel.Rows.Single(row => row.Subject == "Commit 300"));
+        Assert.InRange(moved, 20, 299);
+        Assert.True(app.RebaseList().Rows[moved].HasKeyboardFocus);
     }
 
     [AvaloniaFact]
