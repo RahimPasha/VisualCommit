@@ -254,7 +254,8 @@ public partial class Phase4RealWindowPass
         Assert.True(
             Math.Abs(resolver.Left - ResolverPlace.Left) <= 1 && Math.Abs(resolver.Width - ResolverPlace.Width) <= 1,
             $"The resolver is at {resolver}; the report puts it at x {ResolverPlace.Left}, {ResolverPlace.Width} wide.");
-        Assert.Empty(app.ShownElements("StagePanel"));
+        Assert.True(app.ShownElements("StagePanel").Count == 0, "The stage panel shows beside the resolver.");
+        Assert.True(app.ShownElements("RightPanel").Count == 0, "The details panel shows beside the resolver.");
         Assert.Equal("U", app.ResolverText("ResolverFileStatus"));
         Assert.Equal(file, app.ResolverText("ResolverFileName"));
         Assert.All(app.NamesOnScreen("ResolverFolder"), folder => Assert.True(string.IsNullOrEmpty(folder), $"ResolverFolder reads \"{folder}\" for a file at the working tree's top."));
