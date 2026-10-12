@@ -337,40 +337,62 @@ public partial class RepositoryMenusTests
         await scenario.GitAsync("branch", "--quiet", "--set-upstream-to=origin/main", "behind");
         using var data = new TempDirectory("data");
         using var app = ShellDriver.StartWithTabs(data.Path, [scenario.Path]);
+        await ShownAsync(app);
+        var shell = app.Session.Shell;
+
+        // The tab shows the repository again with the menus' reads held until the test releases
+        // them: each event below comes while the read still runs, as on a slow machine (CI's
+        // fastest runner could finish git's read while the input was being delivered).
+        var (git, reads) = HeldReads.Wrap(shell.ActiveTab.Repository!.Repository);
+        await shell.ActiveTab.ShowAsync(git, remember: false);
         var repository = await ShownAsync(app);
         var (actions, recorder) = RecordingActions.Create();
         repository.MenuActions = actions;
-        var shell = app.Session.Shell;
         var at = new MenuPosition(400, 200);
 
         // Esc while the drop's read runs.
+        reads.Hold();
         var drop = repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at);
         app.PressKey(Key.Escape);
+        Assert.Equal((1, false), (reads.Waiting, drop.IsCompleted));
+        reads.Release();
         Assert.False(await drop);
         Assert.False(app.IsMenuOpen);
 
         // Another menu opened meanwhile stays the open one.
+        reads.Hold();
         drop = repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at);
         app.RightClick(app.GraphRowPoint(AlphaTwoRow));
+        Assert.Equal((1, false), (reads.Waiting, drop.IsCompleted));
+        reads.Release();
         Assert.False(await drop);
         Assert.Equal("ce5ea6a Alpha two", app.Menu().Header);
         app.PressKey(Key.Escape);
 
         // A dialog opened meanwhile, by an operation running in the background: no menu over it.
+        reads.Hold();
         drop = repository.OpenDropMenuAsync(shell.Menu, "refs/heads/feature/alpha", "refs/heads/main", at);
         var failed = shell.Dialogs.ShowAsync(new ErrorDialogViewModel("Push failed", "Git could not push.", repository.Name));
+        app.Settle();
+        Assert.Equal((1, false), (reads.Waiting, drop.IsCompleted));
+        reads.Release();
         Assert.False(await drop);
         Assert.False(app.IsMenuOpen);
         Assert.True(shell.Dialogs.CancelCurrent());
         await failed;
 
         // The local branch's menu, and another tab before its read ends.
+        reads.Hold();
         app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/behind"));
+        var branchMenu = repository.PendingMenu;
         shell.NewTabCommand.Execute(null);
-        Assert.False(await repository.PendingMenu);
+        app.Settle();
+        Assert.Equal((1, false), (reads.Waiting, branchMenu.IsCompleted));
+        reads.Release();
+        Assert.False(await branchMenu);
         Assert.False(app.IsMenuOpen);
 
-        // Nothing came between: the menus open.
+        // Nothing came between: the menus open, their reads not held.
         shell.ActivateTabCommand.Execute(shell.Tabs[0]);
         app.Settle();
         app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/behind"));
