@@ -298,7 +298,7 @@ public class ContinueSkipTests
     }
 
     [Fact]
-    public async Task An_empty_revert_in_a_list_is_left_out_by_Continue_and_by_Skip()
+    public async Task An_empty_revert_in_a_list_is_left_out_by_Skip_and_without_a_pick_head_by_Continue()
     {
         using var repo = await TempRepo.CreateAsync();
         await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
@@ -310,14 +310,23 @@ public class ContinueSkipTests
         Assert.Equal(new SequenceResult(SequenceStop.Empty, 1, 3), await repository.RevertAsync([c, b, a], cancellationToken: TestCancelled));
         using var copy = await repo.CopyAsync();
         var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
-        Assert.Equal((b, true, false, true), (state.Commit, state.Sequenced, state.HasPickHead, state.Empty));
-
-        // The stage panel fills nothing: no pick head (8).
-        Assert.Null(await repository.ReadOperationMessageAsync(state, cancellationToken: TestCancelled));
-
+        var pickHead = GitFileExists(repo, "REVERT_HEAD");
+        Assert.Equal((b, true, pickHead, true), (state.Commit, state.Sequenced, state.HasPickHead, state.Empty));
         string[] expected = ["Revert \"A adds a\"", "Revert \"C adds c\"", "Revert \"B adds b\"", "C adds c"];
-        Assert.Equal(ContinueOutcome.Done, (await repository.ContinueAsync(state, null, cancellationToken: TestCancelled)).Outcome);
-        Assert.Equal(expected, await GitLinesAsync(repo, "log", "--format=%s", "-4"));
+
+        if (!pickHead)
+        {
+            // Git 2.36: no REVERT_HEAD (D117). The stage panel fills nothing (8), and git's
+            // --continue leaves the empty revert out (0.3).
+            Assert.Null(await repository.ReadOperationMessageAsync(state, cancellationToken: TestCancelled));
+            Assert.Equal(ContinueOutcome.Done, (await repository.ContinueAsync(state, null, cancellationToken: TestCancelled)).Outcome);
+            Assert.Equal(expected, await GitLinesAsync(repo, "log", "--format=%s", "-4"));
+        }
+        else
+        {
+            // A git that keeps REVERT_HEAD stops as an empty pick does: committing it is refused.
+            await Assert.ThrowsAsync<GitException>(() => repository.ContinueAsync(state, null, cancellationToken: TestCancelled));
+        }
 
         var copied = await OpenAsync(copy);
         Assert.Equal(ContinueOutcome.Done, (await copied.SkipAsync(state, cancellationToken: TestCancelled)).Outcome);

@@ -3,6 +3,7 @@ using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.Git.Tests.OperationTestSupport;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
+using static VisualCommit.Git.Tests.SequenceTestSupport;
 
 namespace VisualCommit.Git.Tests;
 
@@ -548,7 +549,7 @@ public class HistoryOperationTests
     }
 
     [Fact]
-    public async Task An_empty_revert_in_a_list_stops_without_REVERT_HEAD()
+    public async Task An_empty_revert_in_a_list_stops_empty_with_or_without_REVERT_HEAD()
     {
         var (repo, commits) = await ThreeCommitsAsync();
         using var _repo = repo;
@@ -558,14 +559,20 @@ public class HistoryOperationTests
 
         var result = await repository.RevertAsync([c, b, a], cancellationToken: TestCancelled);
 
-        // C reverted; B's revert changes nothing: no pick head, the list and MERGE_MSG kept: Empty.
+        // C reverted; B's revert changes nothing: Empty. Git 2.36 keeps the list and MERGE_MSG but
+        // writes no REVERT_HEAD (0.3, D117); a git that keeps REVERT_HEAD stops as an empty pick does.
         Assert.Equal(new SequenceResult(SequenceStop.Empty, 1, 3), result);
-        Assert.False(GitFileExists(repo, "REVERT_HEAD"));
-        Assert.StartsWith($"Revert \"B adds b\"", ReadGitFile(repo, "MERGE_MSG"), StringComparison.Ordinal);
+        var pickHead = GitFileExists(repo, "REVERT_HEAD");
+        if (await GitVersionAsync(repo) == new GitVersion(2, 36, 0))
+        {
+            Assert.False(pickHead);
+        }
+
+        Assert.StartsWith("Revert \"B adds b\"", ReadGitFile(repo, "MERGE_MSG"), StringComparison.Ordinal);
         Assert.StartsWith($"revert {b[..7]}", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
         Assert.Equal(["Revert \"C adds c\"", "Revert \"B adds b\""], await GitLinesAsync(repo, "log", "--format=%s", "-2"));
         Assert.Equal(
-            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true },
+            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true, HasPickHead = pickHead },
             (await repository.ReadStatusAsync(TestCancelled)).InProgress);
     }
 
@@ -588,7 +595,9 @@ public class HistoryOperationTests
         Assert.Equal(head, ReadGitFile(repo, "sequencer/abort-safety").Trim());
         Assert.True(GitFileExists(repo, "MERGE_MSG"));
         var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
-        Assert.Equal(new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true }, state);
+        Assert.Equal(
+            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true, HasPickHead = GitFileExists(repo, "REVERT_HEAD") },
+            state);
     }
 
     [Fact]
