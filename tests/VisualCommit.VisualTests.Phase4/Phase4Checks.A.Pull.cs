@@ -205,9 +205,13 @@ public sealed partial class Phase4ChecksA
         Assert.Equal(["## published...origin/published [ahead 1]"], await GitLinesAsync(repo, "status", "-sb"));
         AssertNoRebaseFolder(repo);
         Assert.True(InGitDir(repo, "REBASE_HEAD"), "No stale REBASE_HEAD stayed after Continue (design 0.1).");
+        // Git 2.36 names the step that finished the rebase ("rebase (continue) (finish)"); a newer
+        // git (CI's 2.55) writes "rebase (finish)": git's words are compared on 2.36 only.
+        var continuedReflog = await ReflogAsync(repo, 3);
         Assert.Equal(
-            ["rebase (continue) (finish): returning to refs/heads/published", "commit: Unpushed work", "rebase (start): checkout refs/remotes/origin/published"],
-            await ReflogAsync(repo, 3));
+            [await IsReportGitAsync() ? "rebase (continue) (finish): returning to refs/heads/published" : continuedReflog[0], "commit: Unpushed work", "rebase (start): checkout refs/remotes/origin/published"],
+            continuedReflog);
+        Assert.Matches(@"^rebase (\(continue\) )?\(finish\): returning to refs/heads/published$", continuedReflog[0]);
         await AssertOneRebaseBackupAsync(repo, "published", PartA.UnpushedWorkSha);
         AssertNoClippedText(app);
     }
@@ -266,7 +270,15 @@ public sealed partial class Phase4ChecksA
         Assert.Equal(PartA.PublishedElsewhereSha, await RevParseAsync(repo, "refs/remotes/origin/published"));
         Assert.Equal(["## published...origin/published"], await GitLinesAsync(repo, "status", "-sb"));
         Assert.Equal("published\nelsewhere\n", WorkingFile(repo, "src/published.txt"));
-        Assert.Equal("rebase (skip) (finish): returning to refs/heads/published", (await ReflogAsync(repo, 1))[0]);
+        var skippedReflog = (await ReflogAsync(repo, 1))[0];
+        if (await IsReportGitAsync())
+        {
+            Assert.Equal("rebase (skip) (finish): returning to refs/heads/published", skippedReflog);
+        }
+        else
+        {
+            Assert.Matches(@"^rebase (\(skip\) )?\(finish\): returning to refs/heads/published$", skippedReflog);
+        }
         AssertNoRebaseFolder(repo);
         var backups = await BackupsAsync(repo);
         Assert.Equal(3, backups.Count);
