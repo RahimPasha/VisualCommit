@@ -106,9 +106,10 @@ App:
 
 - [ ] 15. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
   the drop menu, squash on a multi-selection, pull with rebase, interactive rebase from a commit.
-  Built in WP4 (merged in `9242ed8`); its review's findings are being fixed.
+  Built in WP4 (merged in `9242ed8`, its review's fixes in `f68ece9`).
 - [ ] 16. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
-  (its message, and its button for a rebase or a list of picks). Built in WP4; being fixed as 15.
+  (its message, and its button for a rebase or a list of picks). Built in WP4 (`9242ed8`,
+  `f68ece9`).
 - [x] 17. The interactive rebase list in the graph area, newest on top: an action per commit,
   drag to reorder, the new message of a reword or squash, Start and Cancel. WP5 (`2e9b722`) and
   the lead's hooks (`d7b3c20`); design 14.4.
@@ -190,15 +191,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP4 is fixing its review's findings and the lead's decisions on them (squash refusal texts, a
-list's refused stop after Continue or Skip, 10.2's list statuses, the banner's Continue with the
-stage panel's changed message, `rebase.autoStash` read, a running text that changes mid-operation,
-a warning outcome for the fork point, the empty pick's dialog text, the merge tool through the
-resolver's question, `RepositoryOperationsBackupCleanupTests`) on `wip/p4-wp4`. Beside it, step 20
-is written by four agents in worktrees (WP7: part A, part B, C10 to C13, C14 to C17 with D18), each
-recording where the app differs from the report. Then: merge them, triage what they found (fix the
-app, or change an expected result with its reason in the report), record WP4's changes to earlier
-expectations (step 19), WP8 (the real-window pass's code), the review (step 22) and the gate.
+WP4's fixes are merged (`f68ece9`), and with them parts A, B, C14 to C17 and D of step 20 (80 of 80
+tests of the Phase 4 project pass on `112e376`). Still running: WP7-C1 (checks C10 to C13) in a
+worktree, and the independent review of step 22 (a workflow: five reviewers, each finding verified
+adversarially, read-only). Then: merge C1, fix what the review confirms, WP8 (the real-window
+pass's code for the RW-marked steps), steps 15, 16 and 19 ticked, and the gate.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
