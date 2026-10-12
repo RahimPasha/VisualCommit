@@ -97,21 +97,24 @@ public class ConflictBannerTests
     public void The_view_model_shows_hides_and_offers_Abort_only_while_an_operation_is_in_progress()
     {
         var aborted = new List<InProgressState>();
-        var banner = new ConflictBannerViewModel(state =>
-        {
-            aborted.Add(state);
-            return Task.CompletedTask;
-        });
+        var banner = new ConflictBannerViewModel(
+            state =>
+            {
+                aborted.Add(state);
+                return Task.CompletedTask;
+            },
+            _ => Task.CompletedTask,
+            _ => Task.CompletedTask);
         Assert.False(banner.IsVisible);
 
-        banner.Show(InProgressState.None, 1);
+        banner.Show(InProgressState.None, 1, null);
         Assert.True(banner.IsVisible);
         Assert.False(banner.HasAbort);
         Assert.False(banner.AbortCommand.CanExecute(null));
         Assert.Equal(ConflictBannerViewModel.ConflictsToolTip, banner.ToolTip);
 
         var merge = new InProgressState(InProgressKind.Merge, Conflicting, "Merge branch 'feature/conflict'", null, null, 0, false);
-        banner.Show(merge, 1);
+        banner.Show(merge, 1, null);
         Assert.Equal("Abort merge", banner.AbortText);
         Assert.Equal(
             "Continue and Skip, and the conflict resolver, come in a later version. Resolve the files in your editor and stage them, or abort.",
@@ -119,9 +122,40 @@ public class ConflictBannerTests
         banner.AbortCommand.Execute(null);
         Assert.Equal([merge], aborted);
 
-        banner.Show(InProgressState.None, 0);
+        banner.Show(InProgressState.None, 0, null);
         Assert.False(banner.IsVisible);
         Assert.False(banner.HasAbort);
+    }
+
+    [Fact]
+    public void Continue_and_Skip_go_to_their_delegates_with_the_state_shown_and_a_rebases_onto_name_is_kept()
+    {
+        // Phase 4's contract (docs/phase-4-design.md 5.2, 5.4): no button shows them yet.
+        var calls = new List<string>();
+        var banner = new ConflictBannerViewModel(
+            _ => Task.CompletedTask,
+            state =>
+            {
+                calls.Add($"continue {state.Kind}");
+                return Task.CompletedTask;
+            },
+            state =>
+            {
+                calls.Add($"skip {state.Kind}");
+                return Task.CompletedTask;
+            });
+        var rebase = new InProgressState(InProgressKind.Rebase, null, null, "feature/rebase", Conflicting, 1, false);
+
+        banner.ContinueCommand.Execute(null);
+        banner.Show(rebase, 1, "main");
+        banner.ContinueCommand.Execute(null);
+        banner.SkipCommand.Execute(null);
+
+        Assert.Equal(["continue Rebase", "skip Rebase"], calls);
+        Assert.Equal("main", banner.OntoName);
+        Assert.Equal(ConflictBannerViewModel.TextFor(rebase, 1), banner.Text);
+        banner.Show(InProgressState.None, 0, null);
+        Assert.Null(banner.OntoName);
     }
 
     [Fact]
@@ -251,6 +285,31 @@ public class ConflictBannerTests
         await app.WaitForAsync(() => actions.Aborted.Count == 1, "the abort");
         Assert.Equal(InProgressKind.Merge, actions.Aborted[0].Kind);
         Assert.Equal("Merge branch 'feature/conflict'", actions.Aborted[0].Subject);
+    }
+
+    [AvaloniaFact]
+    public async Task A_rebases_banner_knows_the_branch_at_its_new_base_and_hands_Continue_and_Skip_to_the_actions()
+    {
+        // Phase 4's contract (docs/phase-4-design.md 5.2, 5.4): the repository names the branch
+        // at onto, and the banner's Continue and Skip reach IInProgressActions; no button shows
+        // them yet, and the banner's text is phase 3's.
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.Rebase);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await BannerShownAsync(app);
+        var actions = new RecordingActions();
+        repository.InProgressActions = actions;
+
+        Assert.Equal("main", repository.Banner.OntoName);
+        Assert.Equal("Rebasing feature/conflict onto 88d6b91. 1 file has conflicts.", ((TextBlock)app.FindByAutomationId("BannerText")).Text);
+        repository.Banner.ContinueCommand.Execute(null);
+        repository.Banner.SkipCommand.Execute(null);
+
+        await app.WaitForAsync(() => actions.Continued.Count == 1 && actions.Skipped.Count == 1, "Continue and Skip");
+        Assert.Equal((InProgressKind.Rebase, "feature/conflict", (string?)null), (actions.Continued[0].State.Kind, actions.Continued[0].State.Branch, actions.Continued[0].Message));
+        Assert.Equal(InProgressKind.Rebase, actions.Skipped[0].Kind);
+        Assert.Empty(actions.Aborted);
     }
 
     [AvaloniaFact]
@@ -403,9 +462,25 @@ public class ConflictBannerTests
     {
         public List<InProgressState> Aborted { get; } = [];
 
+        public List<(InProgressState State, string? Message)> Continued { get; } = [];
+
+        public List<InProgressState> Skipped { get; } = [];
+
         public Task AbortAsync(InProgressState state)
         {
             Aborted.Add(state);
+            return Task.CompletedTask;
+        }
+
+        public Task ContinueAsync(InProgressState state, string? message)
+        {
+            Continued.Add((state, message));
+            return Task.CompletedTask;
+        }
+
+        public Task SkipAsync(InProgressState state)
+        {
+            Skipped.Add(state);
             return Task.CompletedTask;
         }
     }

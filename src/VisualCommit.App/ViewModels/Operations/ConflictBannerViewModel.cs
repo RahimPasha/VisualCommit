@@ -28,12 +28,20 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
     public const string AbortDetail = "A backup is saved first, so this can be undone.";
 
     private readonly Func<InProgressState, Task> _abort;
+    private readonly Func<InProgressState, Task> _continue;
+    private readonly Func<InProgressState, Task> _skip;
 
     /// <param name="abort">Asks the Abort question and aborts: <see cref="RepositoryViewModel"/>'s.</param>
-    public ConflictBannerViewModel(Func<InProgressState, Task> abort)
+    /// <param name="continue">Continue (docs/phase-4-design.md 5.4): <see cref="RepositoryViewModel"/>'s, which hands it to <see cref="IInProgressActions.ContinueAsync"/>.</param>
+    /// <param name="skip">Skip (5.4): <see cref="RepositoryViewModel"/>'s, which asks 7.2's question and hands it to <see cref="IInProgressActions.SkipAsync"/>.</param>
+    public ConflictBannerViewModel(Func<InProgressState, Task> abort, Func<InProgressState, Task> @continue, Func<InProgressState, Task> skip)
     {
         ArgumentNullException.ThrowIfNull(abort);
+        ArgumentNullException.ThrowIfNull(@continue);
+        ArgumentNullException.ThrowIfNull(skip);
         _abort = abort;
+        _continue = @continue;
+        _skip = skip;
     }
 
     /// <summary>The banner is shown: an operation is in progress, or files have conflicts.</summary>
@@ -63,12 +71,20 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
     /// <summary>How many files have conflicts.</summary>
     public int Conflicts { get; private set; }
 
-    /// <summary>Shows a newly read status: <paramref name="state"/> and its <paramref name="conflicts"/> conflicted files.</summary>
-    public void Show(InProgressState state, int conflicts)
+    /// <summary>The name of a branch that points at a rebase's new base (<see cref="InProgressState.Onto"/>), from the refs; null when none does (docs/phase-4-design.md 5.2).</summary>
+    public string? OntoName { get; private set; }
+
+    /// <summary>
+    /// Shows a newly read status: <paramref name="state"/>, its <paramref name="conflicts"/>
+    /// conflicted files, and for a rebase <paramref name="ontoName"/>, the name of a branch that
+    /// points at its new base (null when none does; docs/phase-4-design.md 5.2).
+    /// </summary>
+    public void Show(InProgressState state, int conflicts, string? ontoName)
     {
         ArgumentNullException.ThrowIfNull(state);
         State = state;
         Conflicts = conflicts;
+        OntoName = ontoName;
         var text = TextFor(state, conflicts);
         IsVisible = text is not null;
         Text = text ?? string.Empty;
@@ -204,6 +220,14 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
     /// <summary>The Abort button: asks section 5's question, then aborts. Disabled while it runs.</summary>
     [RelayCommand(CanExecute = nameof(HasAbort))]
     private Task Abort() => State.IsActive ? _abort(State) : Task.CompletedTask;
+
+    /// <summary>Continue (docs/phase-4-design.md 5.1, 5.4) for the state shown. No button shows it yet (work package WP4 adds them, 5.2).</summary>
+    [RelayCommand]
+    private Task Continue() => State.IsActive ? _continue(State) : Task.CompletedTask;
+
+    /// <summary>Skip (5.1, 5.4) for the state shown. No button shows it yet (WP4).</summary>
+    [RelayCommand]
+    private Task Skip() => State.IsActive ? _skip(State) : Task.CompletedTask;
 
     private static string PickText(InProgressState state, int conflicts, string conflictText)
     {
