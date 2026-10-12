@@ -80,6 +80,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
     private ConflictText? _read;
     private byte[] _readBytes = [];
+    private bool _readExists;
     private bool _isUtf8 = true;
     private int _markerSize = ConflictText.DefaultMarkerSize;
     private string _original = string.Empty;
@@ -90,6 +91,12 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private bool _changing;
     private int _version;
     private bool _disposed;
+
+    /// <summary>A Mark resolved runs, from its click to its end: a refresh does not replace the result meanwhile (11.7).</summary>
+    private bool _marking;
+
+    /// <summary>A refresh while <see cref="_marking"/> would have read the unmodified result again: it is read when Mark resolved ends without moving on.</summary>
+    private bool _readAgainAfterMarking;
 
     /// <param name="actions">The reads and writes of a conflicted file: the repository's operations.</param>
     /// <param name="log">Where failures are logged.</param>
@@ -326,7 +333,12 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         {
             IsResolvedElsewhere = false;
             UpdateResultTitle();
-            if (!IsModified)
+            if (!IsModified && _marking)
+            {
+                // Mark resolved's questions are about the text and the bytes its click took.
+                _readAgainAfterMarking = true;
+            }
+            else if (!IsModified)
             {
                 _ = ReadAgainAsync(now);
             }
@@ -478,47 +490,87 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private Task TakeTheirs() => TakeSideAsync(ConflictSide.Theirs);
 
     /// <summary>
-    /// Mark resolved (11.7): the result's text at the click; asks when blocks are left, and when the
-    /// file on disk changed since it was read; then writes it and stages it in one operation, and
-    /// moves on to the next conflicted file or closes.
+    /// Mark resolved (11.7): the result's text at the click, and the bytes the resolver read; asks
+    /// first when a conflict-marker line is left (7.2). Then one operation writes the text and
+    /// stages it, after checking, just before it writes, that the file on disk is still the bytes
+    /// the resolver read. When it is not (a terminal or a tool changed it, also while the operation
+    /// waited in the queue), nothing is written and the resolver asks <c>{file} changed on
+    /// disk.</c> (7.2): Overwrite writes the click's text over the file as the operation found it
+    /// (asking again if it changes once more), Cancel keeps the result (an unmodified one is read
+    /// again). Then it moves on to the next conflicted file or closes. From the click to the end,
+    /// a refresh does not replace the result, so that the questions are about what the click took.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanMarkResolved))]
     private async Task MarkResolved()
     {
-        if (Entry is not { } entry || Document is not { } document || IsBusy)
+        if (Entry is not { } entry || Document is not { } document || IsBusy || _marking)
         {
             return;
         }
 
         var text = document.Text;
-        var version = _version;
-        if (ConflictText.HasMarkerLines(text, _markerSize) && !await _actions.ConfirmAsync(ConflictResolverTexts.MarkersQuestion(FileName)))
-        {
-            return;
-        }
-
-        if (version != _version || Entry is null)
-        {
-            return;
-        }
-
-        if (!await IsAsReadAsync(entry) && !await _actions.ConfirmAsync(ConflictResolverTexts.ChangedOnDiskQuestion(FileName)))
-        {
-            return;
-        }
-
-        if (version != _version || Entry is null)
-        {
-            return;
-        }
-
         var content = BytesToWrite(text);
-        await ResolveAsync(entry, () => _actions.MarkResolvedAsync(entry.Path, content), resolved =>
+        var expected = _readExists ? _readBytes : null;
+        var version = _version;
+        _marking = true;
+        _readAgainAfterMarking = false;
+        try
         {
-            _original = text;
-            _readBytes = content;
-            UpdateModified();
-        });
+            if (ConflictText.HasMarkerLines(text, _markerSize) && !await _actions.ConfirmAsync(ConflictResolverTexts.MarkersQuestion(FileName)))
+            {
+                return;
+            }
+
+            while (version == _version && !_disposed && Entry?.Path == entry.Path)
+            {
+                var result = await ResolveAsync(entry, () => _actions.MarkResolvedAsync(entry, content, expected), () =>
+                {
+                    _original = text;
+                    _readBytes = content;
+                    _readExists = true;
+                    UpdateModified();
+                });
+                if (result is not { Outcome: MarkResolvedOutcome.ChangedOnDisk } changed)
+                {
+                    return;
+                }
+
+                // Nothing was written. The question is about the click's text and the file as the
+                // operation found it; Overwrite expects that file.
+                version = _version;
+                _readAgainAfterMarking = true;
+                if (!await _actions.ConfirmAsync(ConflictResolverTexts.ChangedOnDiskQuestion(FileName)))
+                {
+                    return;
+                }
+
+                expected = changed.OnDisk;
+            }
+        }
+        finally
+        {
+            _marking = false;
+            ReadAgainAfterMarking(entry.Path);
+        }
+    }
+
+    /// <summary>
+    /// After Mark resolved left the resolver on <paramref name="path"/>, its unmodified result is
+    /// read again when the file may have changed meanwhile (a refresh came while the questions
+    /// were open, or the operation found it changed, 11.11).
+    /// </summary>
+    private void ReadAgainAfterMarking(string path)
+    {
+        if (!_readAgainAfterMarking)
+        {
+            return;
+        }
+
+        _readAgainAfterMarking = false;
+        if (!_disposed && !IsBusy && !IsModified && Body == ConflictResolverBody.Text && Entry is { } entry && entry.Path == path)
+        {
+            _ = ReadAgainAsync(_conflicts.FirstOrDefault(conflict => conflict.Path == path) ?? entry);
+        }
     }
 
     /// <summary>
@@ -649,6 +701,13 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return;
         }
 
+        if (_marking)
+        {
+            // Mark resolved's questions are about what its click took: read again when it ends.
+            _readAgainAfterMarking = true;
+            return;
+        }
+
         if (content.WorkingTree.AsSpan().SequenceEqual(_readBytes) && content.MarkerSize == _markerSize && KindOf(entry, content) == KindOf(Entry, null))
         {
             Entry = entry;
@@ -666,6 +725,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         IsResolvedElsewhere = false;
         _takenSides.Clear();
         _readBytes = content.WorkingTree;
+        _readExists = content.WorkingTreeExists;
         _markerSize = content.MarkerSize > 0 ? content.MarkerSize : ConflictText.DefaultMarkerSize;
         UpdateFilePosition();
 
@@ -773,7 +833,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         NotifyToolbar();
 
         ConflictCardButton Button(string label, string id, Func<Task<bool>> resolve) =>
-            new(label, id, () => ResolveAsync(entry, resolve, null));
+            new(label, id, () => ResolveAsync(entry, async () => new MarkResolvedResult(await resolve() ? MarkResolvedOutcome.Resolved : MarkResolvedOutcome.Failed), null));
     }
 
     /// <summary>Clears the resolver: nothing open.</summary>
@@ -789,6 +849,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         _matched = [];
         _original = string.Empty;
         _readBytes = [];
+        _readExists = false;
         Parts = [];
         Bars = [];
         CardKind = null;
@@ -810,29 +871,30 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
     /// <summary>
     /// Runs one write that resolves the open file (Mark resolved, a card's button), with the result
-    /// read-only and the buttons disabled while it runs; then moves on to the next conflicted file,
-    /// or closes when none is left (11.7).
+    /// read-only and the buttons disabled while it runs; when it resolved the file, moves on to the
+    /// next conflicted file, or closes when none is left (11.7). Returns how it ended, or null when
+    /// it did not run or the resolver was closed or showed another file meanwhile.
     /// </summary>
-    private async Task ResolveAsync(ConflictEntry entry, Func<Task<bool>> resolve, Action<bool>? written)
+    private async Task<MarkResolvedResult?> ResolveAsync(ConflictEntry entry, Func<Task<MarkResolvedResult>> resolve, Action? written)
     {
         if (IsBusy || Entry?.Path != entry.Path)
         {
-            return;
+            return null;
         }
 
         var order = _conflicts.Select(conflict => conflict.Path).ToList();
         var version = ++_version;
         CancelParse();
         IsBusy = true;
-        bool resolved;
+        MarkResolvedResult result;
         try
         {
-            resolved = await resolve();
+            result = await resolve();
         }
         catch (Exception ex)
         {
             _log.Error($"Resolving {entry.Path} failed.", ex);
-            resolved = false;
+            result = new MarkResolvedResult(MarkResolvedOutcome.Failed);
         }
         finally
         {
@@ -841,16 +903,16 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         if (version != _version || _disposed)
         {
-            return;
+            return null;
         }
 
-        if (!resolved)
+        if (result.Outcome == MarkResolvedOutcome.Resolved)
         {
-            return;
+            written?.Invoke();
+            await MoveOnAsync(order, entry.Path);
         }
 
-        written?.Invoke(resolved);
-        await MoveOnAsync(order, entry.Path);
+        return result;
     }
 
     /// <summary>
@@ -1400,21 +1462,6 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         }
 
         return null;
-    }
-
-    /// <summary>Whether the working-tree file is still the bytes the resolver read (11.7); a failed read counts as changed.</summary>
-    private async Task<bool> IsAsReadAsync(ConflictEntry entry)
-    {
-        try
-        {
-            var now = await _actions.ReadAsync(entry);
-            return now.WorkingTreeExists && now.WorkingTree.AsSpan().SequenceEqual(_readBytes);
-        }
-        catch (Exception ex)
-        {
-            _log.Warning($"Reading {entry.Path} before marking it resolved failed: {ex.Message}");
-            return false;
-        }
     }
 
     /// <summary>

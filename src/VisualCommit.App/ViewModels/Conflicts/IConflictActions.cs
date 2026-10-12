@@ -15,12 +15,17 @@ namespace VisualCommit.App.ViewModels.Conflicts;
 public interface IConflictActions
 {
     /// <summary>
-    /// Mark resolved (11.7): writes <paramref name="content"/> (the result, in the encoding the
-    /// file was read in) to the working-tree file <paramref name="path"/> and stages it
-    /// (<see cref="IGitRepository.WriteResolutionAsync"/>). The questions of 7.2 (blocks left, the
-    /// file changed on disk) are the resolver's, before it calls this.
+    /// Mark resolved (11.7): one operation "Resolve {file}" that, just before it writes, reads the
+    /// working-tree file of <paramref name="entry"/> as <see cref="ReadAsync"/> does and compares
+    /// it with <paramref name="expected"/> (the bytes the resolver read; null: there was no file).
+    /// When they are the same, it writes <paramref name="content"/> (the result) to the file and
+    /// stages it (<see cref="IGitRepository.WriteResolutionAsync"/>). When they differ (a terminal
+    /// or a tool changed the file, perhaps while the operation waited in the queue), it writes
+    /// nothing and ends without failing, with <see cref="MarkResolvedOutcome.ChangedOnDisk"/> and
+    /// the bytes it found, which the resolver's <c>{file} changed on disk.</c> question (7.2) may
+    /// then expect. The markers question is the resolver's, before it calls this.
     /// </summary>
-    Task<bool> MarkResolvedAsync(string path, byte[] content);
+    Task<MarkResolvedResult> MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected);
 
     /// <summary>
     /// Resolves <paramref name="path"/> with one side's whole file at once (11.8). Both sides
@@ -56,3 +61,21 @@ public interface IConflictActions
     /// <summary>Asks a question on the window's dialog layer (7.2); true when the user goes ahead.</summary>
     Task<bool> ConfirmAsync(ConfirmationRequest request);
 }
+
+/// <summary>How Mark resolved's operation ended (<see cref="IConflictActions.MarkResolvedAsync"/>, 11.7).</summary>
+public enum MarkResolvedOutcome
+{
+    /// <summary>The result was written and staged.</summary>
+    Resolved,
+
+    /// <summary>The operation failed (the error dialog showed it) or did not run: nothing to go on with.</summary>
+    Failed,
+
+    /// <summary>The file on disk was not the bytes the resolver expected: nothing was written.</summary>
+    ChangedOnDisk,
+}
+
+/// <summary>What Mark resolved's operation ended with.</summary>
+/// <param name="Outcome">How it ended.</param>
+/// <param name="OnDisk">For <see cref="MarkResolvedOutcome.ChangedOnDisk"/>, the working-tree file's bytes the operation found (null: there was no file); otherwise null.</param>
+public sealed record MarkResolvedResult(MarkResolvedOutcome Outcome, byte[]? OnDisk = null);

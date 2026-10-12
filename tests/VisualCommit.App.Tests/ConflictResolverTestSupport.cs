@@ -72,18 +72,49 @@ internal sealed class RecordingConflictActions : IConflictActions
         return Task.FromResult(Sides.TryGetValue((entry.Path, side), out var bytes) ? bytes : null);
     }
 
+    /// <summary>Run while a question is open, before it is answered: what happens meanwhile (a refresh).</summary>
+    public Action<ConfirmationRequest>? WhileAsking { get; set; }
+
     public Task<bool> ConfirmAsync(ConfirmationRequest request)
     {
         Calls.Add($"Confirm {request.Title}");
         Questions.Add(request);
+        WhileAsking?.Invoke(request);
         return Task.FromResult(_answers.Count == 0 || _answers.Dequeue());
     }
 
-    public Task<bool> MarkResolvedAsync(string path, byte[] content)
+    /// <summary>
+    /// Mark resolved's operation, recorded as <c>MarkResolved {path}</c> when it is called: waits
+    /// while <see cref="Hold"/> is set, then, as the queued operation does just before it writes,
+    /// compares the file (<see cref="Contents"/>) with the bytes the resolver expected. The same:
+    /// the bytes go to <see cref="Written"/> and to <see cref="Contents"/> (when the write
+    /// resolves). Different: nothing is written and the call is recorded as
+    /// <c>Refused {path}: changed on disk</c> instead.
+    /// </summary>
+    public async Task<MarkResolvedResult> MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected)
     {
+        var path = entry.Path;
+        var call = Calls.Count;
         Calls.Add($"MarkResolved {path}");
+        if (Hold is { } hold)
+        {
+            await hold.Task;
+        }
+
+        var onDisk = Contents.TryGetValue(path, out var now) && now.WorkingTreeExists ? now.WorkingTree : null;
+        if (expected is null ? onDisk is not null : onDisk is null || !onDisk.AsSpan().SequenceEqual(expected))
+        {
+            Calls[call] = $"Refused {path}: changed on disk";
+            return new MarkResolvedResult(MarkResolvedOutcome.ChangedOnDisk, onDisk);
+        }
+
         Written[path] = content;
-        return WriteAsync(path);
+        if (WritesResolve && Contents.TryGetValue(path, out var read))
+        {
+            Contents[path] = read with { WorkingTree = content, WorkingTreeExists = true };
+        }
+
+        return new MarkResolvedResult(await WriteAsync(path) ? MarkResolvedOutcome.Resolved : MarkResolvedOutcome.Failed);
     }
 
     public Task<bool> TakeSideAsync(string path, ConflictSide side)
@@ -105,7 +136,7 @@ internal sealed class RecordingConflictActions : IConflictActions
     }
 
     /// <summary>The writes recorded, without the reads and questions.</summary>
-    public IReadOnlyList<string> Writes => Calls.Where(call => !call.StartsWith("Read", StringComparison.Ordinal) && !call.StartsWith("Confirm", StringComparison.Ordinal)).ToList();
+    public IReadOnlyList<string> Writes => Calls.Where(call => !call.StartsWith("Read", StringComparison.Ordinal) && !call.StartsWith("Confirm", StringComparison.Ordinal) && !call.StartsWith("Refused", StringComparison.Ordinal)).ToList();
 
     private async Task<bool> WriteAsync(string path)
     {

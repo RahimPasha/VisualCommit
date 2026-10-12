@@ -155,7 +155,7 @@ public class ConflictResolverRealGitTests
 
         public Task<bool> ConfirmAsync(ConfirmationRequest request) => Task.FromResult(false);
 
-        public Task<bool> MarkResolvedAsync(string path, byte[] content) => throw new NotSupportedException();
+        public Task<MarkResolvedResult> MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected) => throw new NotSupportedException();
 
         public Task<bool> TakeSideAsync(string path, ConflictSide side) => throw new NotSupportedException();
 

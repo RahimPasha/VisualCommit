@@ -30,8 +30,10 @@ public class RepositoryOperationsConflictsTests
         using var app = await OperationsHarness.OpenAsync(repo);
         IConflictActions actions = app.Operations;
         var result = "line 1\nline 2 ours\nresolved\n"u8.ToArray();
+        var entry = app.Operations.Status.FindConflict("notes.txt")!;
+        var read = File.ReadAllBytes(Path.Combine(repo.Path, "notes.txt"));
 
-        Assert.True(await actions.MarkResolvedAsync("notes.txt", result));
+        Assert.Equal(new MarkResolvedResult(MarkResolvedOutcome.Resolved), await actions.MarkResolvedAsync(entry, result, read));
 
         Assert.Equal(("Resolved notes.txt", OperationStatusTone.Secondary), (app.StatusText, app.StatusTone));
         AssertRanOnce(app, "Resolve notes.txt");
@@ -39,6 +41,114 @@ public class RepositoryOperationsConflictsTests
         Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
         Assert.Empty(app.Dialogs.Shown);
         Assert.Equal("Merging: \"Merge branch 'feature/theirs'\". Conflicts resolved: commit to finish the merge.", app.Repository.Banner.Text);
+    }
+
+    [Fact]
+    public async Task Mark_resolved_over_a_file_changed_since_it_was_read_writes_nothing_and_says_so_without_a_dialog()
+    {
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        IConflictActions actions = app.Operations;
+        var entry = app.Operations.Status.FindConflict("notes.txt")!;
+        var read = File.ReadAllBytes(Path.Combine(repo.Path, "notes.txt"));
+        repo.WriteFile("notes.txt", "resolved in an editor\n");
+
+        // 11.7: the check runs inside "Resolve notes.txt", just before the write.
+        var outcome = await actions.MarkResolvedAsync(entry, "the resolver's result\n"u8.ToArray(), read);
+
+        Assert.Equal(MarkResolvedOutcome.ChangedOnDisk, outcome.Outcome);
+        Assert.Equal("resolved in an editor\n"u8.ToArray(), outcome.OnDisk);
+        Assert.Equal("resolved in an editor\n", Read(repo, "notes.txt"));
+        Assert.Equal(["UU notes.txt"], await PorcelainAsync(repo));
+        Assert.Equal(("notes.txt changed on disk: nothing was written", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        AssertRanOnce(app, "Resolve notes.txt");
+        Assert.Empty(app.Dialogs.Shown);
+
+        // Expecting the file as it is now, the result is written and staged.
+        Assert.Equal(MarkResolvedOutcome.Resolved, (await actions.MarkResolvedAsync(entry, "the resolver's result\n"u8.ToArray(), outcome.OnDisk)).Outcome);
+        Assert.Equal("the resolver's result\n", Read(repo, "notes.txt"));
+        Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
+    }
+
+    [AvaloniaFact]
+    public async Task A_file_changed_while_mark_resolved_waits_in_the_queue_is_not_overwritten_without_asking()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
+        await app.WaitForResolverAsync("notes.txt");
+        var resolver = repository.Resolver;
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        resolver.Choose(1, ConflictChoice.UseOurs);
+
+        // Another operation runs: "Resolve notes.txt" waits behind it, the watcher paused (D81).
+        var gate = new TaskCompletionSource();
+        var other = repository.Queue.RunAsync(new GitOperation("Hold", "Holding…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done(string.Empty);
+        }));
+        var marking = resolver.MarkResolvedCommand.ExecuteAsync(null);
+        await app.WaitForAsync(() => resolver.IsBusy, "Mark resolved waiting", TimeSpan.FromSeconds(10));
+
+        // Meanwhile an editor saves the file; then the other operation ends.
+        repo.WriteFile("notes.txt", "resolved in an editor\n");
+        gate.SetResult();
+        await other;
+
+        // 7.2's question; Cancel keeps the editor's file, unresolved, and the resolver's result.
+        var question = await app.WaitForDialogAsync<ConfirmationViewModel>();
+        Assert.Equal(("notes.txt changed on disk.", "Overwrite"), (question.Title, question.ConfirmText));
+        question.Cancel();
+        await marking;
+        await app.WaitForIdleAsync();
+        Assert.Equal("resolved in an editor\n", Read(repo, "notes.txt"));
+        Assert.Equal(["UU notes.txt"], await PorcelainAsync(repo));
+        Assert.True(resolver.IsModified);
+        Assert.Equal("notes.txt", resolver.Path);
+    }
+
+    [AvaloniaFact]
+    public async Task A_file_changed_while_the_markers_question_is_open_is_asked_about_and_the_click_s_text_is_what_overwrites_it()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
+        await app.WaitForResolverAsync("notes.txt");
+        var resolver = repository.Resolver;
+        var clicked = resolver.Document!.Text;
+
+        // Mark resolved on the file as git left it: the markers question opens.
+        var marking = resolver.MarkResolvedCommand.ExecuteAsync(null);
+        var markers = await app.WaitForDialogAsync<ConfirmationViewModel>();
+        Assert.Equal("notes.txt still has conflict markers.", markers.Title);
+
+        // While it is open, an editor saves the file and a refresh reads the status.
+        repo.WriteFile("notes.txt", "resolved in an editor\n");
+        await repository.RefreshStatusAsync();
+        await app.WaitForIdleAsync();
+        Assert.Equal(clicked, resolver.Document!.Text);
+
+        // Going ahead, the operation finds the file changed and writes nothing; 7.2 asks.
+        markers.ConfirmCommand.Execute(null);
+        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is ConfirmationViewModel { Title: "notes.txt changed on disk." }, "the changed-on-disk question", TimeSpan.FromSeconds(30));
+        var changed = app.Dialog<ConfirmationViewModel>();
+        Assert.Equal("resolved in an editor\n", Read(repo, "notes.txt"));
+
+        // Overwrite writes the text the click took.
+        changed.ConfirmCommand.Execute(null);
+        await marking;
+        await app.WaitForIdleAsync();
+        Assert.Equal(clicked.ReplaceLineEndings("\n"), Read(repo, "notes.txt").ReplaceLineEndings("\n"));
+        Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
     }
 
     [Fact]

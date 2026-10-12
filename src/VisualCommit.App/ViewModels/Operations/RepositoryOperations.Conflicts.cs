@@ -57,15 +57,42 @@ public sealed partial class RepositoryOperations : IConflictActions
     }
 
     /// <summary>
-    /// Mark resolved (11.7): one operation "Resolve {file}" that writes the result to the
-    /// working-tree file and stages it (<see cref="IGitRepository.WriteResolutionAsync"/>); "Resolved
-    /// {file}" in the status bar, a failure in the error dialog "Resolving failed".
+    /// Mark resolved (11.7): one operation "Resolve {file}" that reads the working-tree file
+    /// (<see cref="IGitRepository.ReadConflictAsync"/>) and, when it is still the bytes the
+    /// resolver expected, writes the result and stages it (<see cref="IGitRepository.WriteResolutionAsync"/>):
+    /// "Resolved {file}" in the status bar, a failure in the error dialog "Resolving failed". The
+    /// check runs inside the operation, just before the write, so a change made while the
+    /// operation waited in the queue (when the watcher is paused, D81) is caught too. When the file
+    /// changed, nothing is written, no dialog opens and the status bar says
+    /// <c>{file} changed on disk: nothing was written</c> in the warning colour; the resolver asks
+    /// next.
     /// </summary>
-    Task<bool> IConflictActions.MarkResolvedAsync(string path, byte[] content)
+    async Task<MarkResolvedResult> IConflictActions.MarkResolvedAsync(ConflictEntry entry, byte[] content, byte[]? expected)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(content);
-        return ResolveAsync(path, options => Git.WriteResolutionAsync(path, content, options));
+        var path = entry.Path;
+        var file = WorkingChangesViewModel.FileName(path);
+        byte[]? onDisk = null;
+        var changed = false;
+        var resolved = await ResolveAsync(path, async options =>
+        {
+            var now = await Git.ReadConflictAsync(entry, options);
+            onDisk = now.WorkingTreeExists ? now.WorkingTree : null;
+            if (expected is null ? onDisk is not null : onDisk is null || !onDisk.AsSpan().SequenceEqual(expected))
+            {
+                changed = true;
+                Log.Info($"{Repository.Name}: {path} changed on disk since the resolver read it: its result was not written.");
+                return OperationReport.Warning(ConflictResolverTexts.ChangedOnDiskNotWritten(file));
+            }
+
+            await Git.WriteResolutionAsync(path, content, options);
+            return null;
+        });
+
+        return changed
+            ? new MarkResolvedResult(MarkResolvedOutcome.ChangedOnDisk, onDisk)
+            : new MarkResolvedResult(resolved ? MarkResolvedOutcome.Resolved : MarkResolvedOutcome.Failed);
     }
 
     /// <summary>A whole file from one side, "Keep the file", "Keep it" (11.8): one operation "Resolve {file}" (<see cref="IGitRepository.TakeSideAsync"/>).</summary>
@@ -277,7 +304,15 @@ public sealed partial class RepositoryOperations : IConflictActions
     /// {file}" in the status bar (secondary, 14.3), a failure in the error dialog "Resolving
     /// failed" with git's output. True when it succeeded.
     /// </summary>
-    private async Task<bool> ResolveAsync(string path, Func<NetworkOptions, Task> resolve)
+    private Task<bool> ResolveAsync(string path, Func<NetworkOptions, Task> resolve) =>
+        ResolveAsync(path, async options =>
+        {
+            await resolve(options);
+            return (OperationReport?)null;
+        });
+
+    /// <summary>As <see cref="ResolveAsync(string, Func{NetworkOptions, Task})"/>, where <paramref name="resolve"/> may end the operation with a report of its own (null: "Resolved {file}").</summary>
+    private async Task<bool> ResolveAsync(string path, Func<NetworkOptions, Task<OperationReport?>> resolve)
     {
         var file = WorkingChangesViewModel.FileName(path);
         var text = OperationTexts.Resolve(file);
@@ -287,11 +322,7 @@ public sealed partial class RepositoryOperations : IConflictActions
                 text,
                 OperationKind.Local,
                 RefreshScope.Status,
-                async context =>
-                {
-                    await resolve(NetworkOptions.From(context));
-                    return OperationReport.Done(OperationTexts.Resolved(file));
-                }),
+                async context => await resolve(NetworkOptions.From(context)) ?? OperationReport.Done(OperationTexts.Resolved(file))),
             fallback: null);
         return result?.Outcome == OperationOutcome.Succeeded;
     }

@@ -547,6 +547,81 @@ public class ConflictResolverViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task A_refresh_while_the_markers_question_is_open_neither_replaces_the_result_nor_skips_the_changed_on_disk_question()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        var document = resolver.Document;
+
+        // While the markers question is open, an editor saves the file and a refresh comes.
+        actions.WhileAsking = question =>
+        {
+            if (question.Title == "notes.txt still has conflict markers.")
+            {
+                actions.SetText("notes.txt", "resolved in an editor\n");
+                resolver.Update(Status(Merge(), Entry("notes.txt")), "main", null);
+                Settle();
+                Assert.Same(document, resolver.Document);
+            }
+        };
+        actions.Answer(true, false);
+
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        // The operation found the file changed and wrote nothing; Cancel: the unmodified result is read again.
+        Assert.Equal(["notes.txt still has conflict markers.", "notes.txt changed on disk."], actions.Questions.Select(question => question.Title));
+        Assert.Empty(actions.Writes);
+        Assert.Contains("Refused notes.txt: changed on disk", actions.Calls);
+        Settle();
+        Assert.Equal("resolved in an editor\n", Text(resolver));
+        Assert.False(resolver.IsModified);
+        Assert.False(resolver.IsBusy);
+    }
+
+    [AvaloniaFact]
+    public async Task Overwrite_after_a_change_on_disk_writes_the_click_s_text_over_the_file_as_the_operation_found_it()
+    {
+        var (actions, _, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        resolver.Choose(1, ConflictChoice.UseBothOursFirst);
+        var closed = false;
+        resolver.Closed += (_, _) => closed = true;
+
+        // The write waits in the queue; meanwhile a terminal changes the file.
+        var hold = actions.Hold = new TaskCompletionSource();
+        var marking = resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Settle();
+        Assert.True(resolver.IsBusy);
+        actions.SetText("notes.txt", "changed by a terminal\n");
+        actions.Hold = null;
+        actions.BeforeWriteEnds = _ => resolver.Update(Status(Merge()), "main", null);
+        actions.Answer(true);
+        hold.SetResult();
+        await marking;
+
+        Assert.Equal("notes.txt changed on disk.", Assert.Single(actions.Questions).Title);
+        Assert.Equal(["Refused notes.txt: changed on disk", "MarkResolved notes.txt"], actions.Calls.Where(call => call.StartsWith("Refused", StringComparison.Ordinal) || call.StartsWith("MarkResolved", StringComparison.Ordinal)));
+        Assert.Equal(Encoding.UTF8.GetBytes(R3), actions.Written["notes.txt"]);
+        Assert.True(closed);
+    }
+
+    [AvaloniaFact]
+    public async Task A_file_that_was_missing_when_read_and_is_still_missing_is_written_without_asking()
+    {
+        var actions = new RecordingConflictActions();
+        actions.Contents["gone.txt"] = new ConflictContent([], 7, false, false, false, WorkingTreeExists: false);
+        var resolver = Resolver(actions, new ManualDelays(), Status(Merge(), Entry("gone.txt")));
+        await resolver.OpenAsync("gone.txt");
+        resolver.Document!.Insert(0, "written\n");
+
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        Assert.Empty(actions.Questions);
+        Assert.Equal("written\n"u8.ToArray(), actions.Written["gone.txt"]);
+    }
+
+    [AvaloniaFact]
     public async Task The_file_is_written_in_the_encoding_and_with_the_line_ends_it_was_read_with()
     {
         var actions = new RecordingConflictActions();

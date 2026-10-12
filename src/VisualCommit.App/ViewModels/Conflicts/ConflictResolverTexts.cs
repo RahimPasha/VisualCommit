@@ -127,6 +127,13 @@ public static partial class ConflictResolverTexts
     public static ConfirmationRequest ChangedOnDiskQuestion(string file) =>
         new($"{file} changed on disk.", "Overwrite it with the result?", string.Empty, "Overwrite", IsDestructive: true);
 
+    /// <summary>
+    /// The status bar, in the warning colour, after Mark resolved's operation found the file
+    /// changed on disk and wrote nothing (11.7); the resolver then asks
+    /// <see cref="ChangedOnDiskQuestion"/>.
+    /// </summary>
+    public static string ChangedOnDiskNotWritten(string file) => $"{file} changed on disk: nothing was written";
+
     /// <summary>A commit's short SHA (its first 7 characters), or empty.</summary>
     public static string Short(string? sha) => sha is null ? string.Empty : sha[..Math.Min(7, sha.Length)];
 
