@@ -65,7 +65,7 @@ public sealed partial class Phase4ChecksC : Phase4Checks
     }
 
     /// <summary>What checks C14 to C17 share; see the file's header.</summary>
-    private static class C14To17
+    internal static class C14To17
     {
         /// <summary>The app's tint for the report's token name.</summary>
         public static ConflictTint AppTint(Tint tint) => Enum.Parse<ConflictTint>(tint.ToString());
