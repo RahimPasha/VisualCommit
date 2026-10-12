@@ -391,16 +391,13 @@ public sealed partial class GitRepository
             return new RebaseResult(RebaseOutcome.UpToDate, null, 0);
         }
 
+        // A rebase that finished and left conflicted files can only have had them from putting
+        // back the user's stashed changes (rebase.autoStash). Told by the state, not the words:
+        // Git 2.36 says "Applying autostash resulted in conflicts", 2.55 "Your local changes are
+        // stashed, however applying them resulted in conflicts", over several lines.
         var newTip = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
-        if (Says(result, "Applying autostash resulted in conflicts"))
-        {
-            return new RebaseResult(RebaseOutcome.Rebased, newTip, await CountConflictedFilesAsync(cancellationToken).ConfigureAwait(false))
-            {
-                AutostashConflicted = true,
-            };
-        }
-
-        return new RebaseResult(RebaseOutcome.Rebased, newTip, 0);
+        var conflicted = await CountConflictedFilesAsync(cancellationToken).ConfigureAwait(false);
+        return new RebaseResult(RebaseOutcome.Rebased, newTip, conflicted) { AutostashConflicted = conflicted > 0 };
 
         // "f.txt: needs merge" / "You must edit all merge conflicts and then mark them as resolved
         // using git add": git rebase --continue with unresolved files changed nothing (0.1).

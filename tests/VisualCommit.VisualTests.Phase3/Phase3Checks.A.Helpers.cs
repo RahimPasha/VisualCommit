@@ -364,12 +364,17 @@ public sealed partial class Phase3ChecksA
     /// <summary>The diff's text view.</summary>
     private static DiffTextView DiffText(ShellDriver app) => app.Find<DiffTextView>("DiffText");
 
-    /// <summary>Waits until the open diff of <paramref name="path"/> shows its text rows laid out.</summary>
+    /// <summary>
+    /// Waits until the open diff of <paramref name="path"/> shows its text rows laid out. Loading a
+    /// diff runs git, so the wait is the outside-change bound, not one step's 10 s: on CI's bare
+    /// container, with five test processes side by side, it took longer (run 38256873492).
+    /// </summary>
     private static Task WaitForTextDiffAsync(ShellDriver app, string path) =>
         app.WaitForAsync(
             () => Repo(app).Diff is { ShowsText: true } diff && diff.Target.Path == path
                 && app.Window.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.Name == "DiffText" && view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null),
-            $"the text diff of {path}");
+            $"the text diff of {path}",
+            OutsideChangeTimeout);
 
     /// <summary>
     /// The diff's rows as phase 2's checks write them: "K old/new text" inline (K the kind's letter,
