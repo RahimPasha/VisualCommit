@@ -4,7 +4,7 @@ namespace VisualCommit.App.ViewModels.Menus;
 /// <param name="CanUndo">Something can be undone.</param>
 /// <param name="CanRedo">Something can be redone.</param>
 /// <param name="HasSelection">Text is selected.</param>
-/// <param name="IsReadOnly">The result is read-only while a write of the resolver runs: nothing that changes it is offered.</param>
+/// <param name="IsReadOnly">The result is read-only while a write of the resolver runs: Undo, Redo and Cut are disabled (Paste does nothing then).</param>
 public sealed record ConflictResultMenuState(bool CanUndo, bool CanRedo, bool HasSelection, bool IsReadOnly = false);
 
 /// <summary>What the result menu's items do: the resolver's undo and redo, the editor's clipboard.</summary>
@@ -52,7 +52,7 @@ public static class ConflictMenus
             [
                 new MenuItem("Cut", actions.Cut, state.HasSelection && editable, state.HasSelection ? null : SelectTextFirst),
                 new MenuItem("Copy", actions.Copy, state.HasSelection, state.HasSelection ? null : SelectTextFirst),
-                new MenuItem("Paste", actions.Paste, editable),
+                new MenuItem("Paste", actions.Paste),
                 new MenuItem("Select all", actions.SelectAll),
             ]);
     }
