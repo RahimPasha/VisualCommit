@@ -730,7 +730,8 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         string? folder = null;
         if (kind == ConflictCardKind.MovedAside)
         {
-            otherName = entry.Kind == ConflictKind.AddedByUs ? theirsName : oursName;
+            // The file is the side's that has it (added by us, or deleted by them: ours); the other side has the folder.
+            otherName = entry.Kind is ConflictKind.AddedByUs or ConflictKind.DeletedByThem ? theirsName : oursName;
             var moved = MovedAsideFolder(path) ?? path;
             folder = WorkingChangesViewModel.FileName(moved);
         }
@@ -1406,12 +1407,13 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return ConflictCardKind.Submodule;
         }
 
+        // A file/folder clash is any kind on <p>~<label> (14.2): git also reports it as modify/delete.
         switch (entry.Kind)
         {
             case ConflictKind.DeletedByThem:
-                return ConflictCardKind.DeletedByThem;
+                return MovedAsideFolder(entry.Path) is not null ? ConflictCardKind.MovedAside : ConflictCardKind.DeletedByThem;
             case ConflictKind.DeletedByUs:
-                return ConflictCardKind.DeletedByUs;
+                return MovedAsideFolder(entry.Path) is not null ? ConflictCardKind.MovedAside : ConflictCardKind.DeletedByUs;
             case ConflictKind.AddedByUs:
                 return MovedAsideFolder(entry.Path) is not null ? ConflictCardKind.MovedAside : ConflictCardKind.AddedByUs;
             case ConflictKind.AddedByThem:

@@ -737,6 +737,35 @@ public class ConflictResolverViewModelTests
         Assert.Equal(["TakeSide p~HEAD Ours"], actions.Writes);
     }
 
+    [AvaloniaTheory]
+    [InlineData("p~HEAD", ConflictKind.DeletedByThem, "Git moved p~HEAD aside because feature/theirs has a folder named p: rename or remove it, then mark it resolved.", "TakeSide p~HEAD Ours")]
+    [InlineData("p~feature_theirs", ConflictKind.DeletedByUs, "Git moved p~feature_theirs aside because main has a folder named p: rename or remove it, then mark it resolved.", "TakeSide p~feature_theirs Theirs")]
+    public async Task A_file_moved_aside_that_git_reports_as_modify_delete_has_the_moved_aside_card(string path, ConflictKind kind, string text, string write)
+    {
+        // Git 2.36: ours modified p, theirs replaced it with the folder p/: "UD p~HEAD" (14.2); the
+        // label of a branch has its slashes made underscores.
+        var actions = new RecordingConflictActions();
+        actions.SetText(path, "file content\n");
+        var status = Status(Merge(), Entry(path, kind)) with
+        {
+            Staged = [new ChangedFile("p/x", FileChangeKind.Added)],
+        };
+        var resolver = Resolver(actions, new ManualDelays(), status);
+
+        await resolver.OpenAsync(path);
+
+        Assert.Equal((ConflictCardKind.MovedAside, text), (resolver.CardKind, resolver.CardText));
+        var button = Assert.Single(resolver.CardButtons);
+        Assert.Equal(("Mark resolved", "ConflictCardMarkResolved"), (button.Label, button.AutomationId));
+        await button.RunCommand.ExecuteAsync(null);
+        Assert.Equal([write], actions.Writes);
+
+        // Without a folder of that name it is the deletion's card.
+        var plain = Resolver(actions, new ManualDelays(), Status(Merge(), Entry(path, kind)));
+        await plain.OpenAsync(path);
+        Assert.Equal(kind == ConflictKind.DeletedByThem ? ConflictCardKind.DeletedByThem : ConflictCardKind.DeletedByUs, plain.CardKind);
+    }
+
     // --- The merge tool (11.9; C16) ------------------------------------------------------------
 
     [AvaloniaFact]

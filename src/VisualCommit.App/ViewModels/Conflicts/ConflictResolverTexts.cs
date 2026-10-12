@@ -164,7 +164,7 @@ public enum ConflictCardKind
     /// <summary><c>UA</c>: only theirs has the file.</summary>
     AddedByThem,
 
-    /// <summary><c>AU</c> or <c>UA</c> on <c>&lt;p&gt;~&lt;label&gt;</c>, <c>&lt;p&gt;</c> being a folder: a file/folder clash.</summary>
+    /// <summary>A one-sided file (<c>AU</c>, <c>UA</c>, <c>UD</c>, <c>DU</c>) on <c>&lt;p&gt;~&lt;label&gt;</c>, <c>&lt;p&gt;</c> being a folder: a file/folder clash (14.2).</summary>
     MovedAside,
 
     /// <summary><c>DD</c>: both sides deleted it.</summary>

@@ -111,6 +111,31 @@ public class ConflictResolverRealGitTests
         Assert.Equal(("2 conflicts left", "Conflict 1 of 2"), (resolver.ResultCountText, resolver.ConflictPositionText));
     }
 
+    [AvaloniaFact]
+    public async Task A_file_git_moved_aside_for_a_folder_and_reports_as_modify_delete_shows_the_moved_aside_card()
+    {
+        // Ours changed the file a, theirs replaced it with the folder a/: git moves ours' file to
+        // a~HEAD and reports it as deleted by them (14.2).
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("keep.txt", "keep\n").WriteFile("a", "base\n");
+        await repo.CommitAsync("Base");
+        await repo.CreateBranchAsync("feature");
+        repo.WriteFile("a", "ours\n");
+        await repo.CommitAsync("Ours");
+        await repo.CheckoutAsync("feature");
+        repo.DeleteFile("a").WriteFile("a/x", "theirs\n");
+        await repo.CommitAsync("Theirs");
+        await repo.CheckoutAsync("main");
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("merge", "--no-edit", "feature")).ExitCode);
+
+        var (resolver, status) = await OpenAsync(repo, "a~HEAD");
+
+        Assert.Equal(ConflictKind.DeletedByThem, Assert.Single(status.Conflicts).Kind);
+        Assert.Equal((ConflictResolverBody.Card, ConflictCardKind.MovedAside), (resolver.Body, resolver.CardKind));
+        Assert.Equal("Git moved a~HEAD aside because feature has a folder named a: rename or remove it, then mark it resolved.", resolver.CardText);
+        Assert.Equal(["Mark resolved"], resolver.CardButtons.Select(button => button.Label));
+    }
+
     private static async Task<(ConflictResolverViewModel Resolver, WorkingTreeStatus Status)> OpenAsync(TempRepo repo, string path)
     {
         var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
