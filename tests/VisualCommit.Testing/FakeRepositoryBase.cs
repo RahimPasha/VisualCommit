@@ -190,6 +190,9 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<RebaseResult> RebaseAsync(string onto, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public virtual Task<bool> ReadRebaseAutoStashAsync(NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
+
     public virtual Task<RebaseList> ReadRebaseListAsync(string onto, string branch, bool fromCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         Task.FromResult(new RebaseList(onto, string.Empty, [], 0));
 
