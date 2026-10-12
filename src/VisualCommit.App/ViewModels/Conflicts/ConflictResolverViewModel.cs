@@ -69,6 +69,9 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly TimeProvider _time;
 
+    /// <summary>The whole sides Take ours and Take theirs took for the open file: their text and their bytes as read (11.6).</summary>
+    private readonly List<(string Text, byte[] Bytes)> _takenSides = [];
+
     private IReadOnlyList<ConflictEntry> _conflicts = [];
     private InProgressState _inProgress = InProgressState.None;
     private IReadOnlySet<string> _statusPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -509,7 +512,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
             return;
         }
 
-        var content = ConflictText.Encode(text, _isUtf8);
+        var content = BytesToWrite(text);
         await ResolveAsync(entry, () => _actions.MarkResolvedAsync(entry.Path, content), resolved =>
         {
             _original = text;
@@ -661,6 +664,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         DetachDocument();
         Entry = entry;
         IsResolvedElsewhere = false;
+        _takenSides.Clear();
         _readBytes = content.WorkingTree;
         _markerSize = content.MarkerSize > 0 ? content.MarkerSize : ConflictText.DefaultMarkerSize;
         UpdateFilePosition();
@@ -778,6 +782,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
         DetachDocument();
         Entry = null;
         ResultFocusPending = false;
+        _takenSides.Clear();
         _read = null;
         _current = null;
         _choices = [];
@@ -967,9 +972,31 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         FlushParse();
         var text = ConflictText.Decode(bytes).Text;
+
+        // Mark resolved writes the side's own bytes while the result is exactly this text (11.6).
+        _takenSides.Add((text, bytes));
         var choices = Enumerable.Repeat<BlockChoice?>(side == ConflictSide.Ours ? BlockChoice.Ours : BlockChoice.Theirs, _choices.Length).ToArray();
         Change(document, 0, document.TextLength, text, choices);
         Navigate(new ConflictNavigation(0, null, 1, FocusResult: true));
+    }
+
+    /// <summary>
+    /// The bytes Mark resolved writes for the result <paramref name="text"/> (11.6, 11.7): a whole
+    /// side's bytes as they were read, byte for byte, when the result is exactly that side's text
+    /// as Take ours or Take theirs took it (the side may be in another encoding than the file with
+    /// markers); otherwise the text in the encoding the file was read in.
+    /// </summary>
+    private byte[] BytesToWrite(string text)
+    {
+        for (var i = _takenSides.Count - 1; i >= 0; i--)
+        {
+            if (string.Equals(_takenSides[i].Text, text, StringComparison.Ordinal))
+            {
+                return _takenSides[i].Bytes;
+            }
+        }
+
+        return ConflictText.Encode(text, _isUtf8);
     }
 
     /// <summary>Tells the view where the caret goes; a navigation that gives the result the focus is kept until the view has given it (a view shown later still does).</summary>

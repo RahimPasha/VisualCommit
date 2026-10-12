@@ -562,6 +562,56 @@ public class ConflictResolverViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task A_side_taken_whole_is_written_byte_for_byte_whatever_encoding_the_file_with_markers_was_read_in()
+    {
+        // Ours is Latin-1 ("café" as E9), theirs UTF-8 with an arrow: the file with markers mixes
+        // them, is not valid UTF-8 and is read as Latin-1.
+        var ours = Encoding.Latin1.GetBytes("café\nours\n");
+        var theirs = Encoding.UTF8.GetBytes("café → done\ntheirs\n");
+        var marked = (byte[])[.. "<<<<<<< HEAD\n"u8, .. ours, .. "=======\n"u8, .. theirs, .. ">>>>>>> feature\n"u8];
+        var actions = new RecordingConflictActions();
+        actions.Contents["mixed.txt"] = new ConflictContent(marked, 7, false, false, false, true);
+        actions.Sides[("mixed.txt", ConflictSide.Ours)] = ours;
+        actions.Sides[("mixed.txt", ConflictSide.Theirs)] = theirs;
+        var resolver = Resolver(actions, new ManualDelays(), Status(Merge(), Entry("mixed.txt")));
+        await resolver.OpenAsync("mixed.txt");
+
+        await resolver.TakeTheirsCommand.ExecuteAsync(null);
+        Assert.Equal("café → done\ntheirs\n", Text(resolver));
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Equal(theirs, actions.Written["mixed.txt"]);
+
+        // A file with markers that is valid UTF-8, and a side that is not: the side's bytes too.
+        var utf8 = new RecordingConflictActions();
+        utf8.SetText("other.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\ncafé\n");
+        var latin = Encoding.Latin1.GetBytes("ours\ncafé\n");
+        utf8.Sides[("other.txt", ConflictSide.Ours)] = latin;
+        var other = Resolver(utf8, new ManualDelays(), Status(Merge(), Entry("other.txt")));
+        await other.OpenAsync("other.txt");
+        await other.TakeOursCommand.ExecuteAsync(null);
+        await other.MarkResolvedCommand.ExecuteAsync(null);
+        Assert.Equal(latin, utf8.Written["other.txt"]);
+    }
+
+    [AvaloniaFact]
+    public async Task A_side_taken_whole_and_then_edited_is_written_in_the_encoding_the_file_was_read_in()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("other.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\ncafé\n");
+        actions.Sides[("other.txt", ConflictSide.Ours)] = Encoding.Latin1.GetBytes("ours\ncafé\n");
+        var delays = new ManualDelays();
+        var resolver = Resolver(actions, delays, Status(Merge(), Entry("other.txt")));
+        await resolver.OpenAsync("other.txt");
+        await resolver.TakeOursCommand.ExecuteAsync(null);
+
+        resolver.Document!.Insert(0, "top\n");
+        delays.Elapse();
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        Assert.Equal(Encoding.UTF8.GetBytes("top\nours\ncafé\n"), actions.Written["other.txt"]);
+    }
+
+    [AvaloniaFact]
     public async Task While_a_write_runs_the_result_is_read_only_and_the_resolver_moves_on_to_the_next_file_when_it_ends()
     {
         var actions = new RecordingConflictActions();
