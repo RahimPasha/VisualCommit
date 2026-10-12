@@ -127,9 +127,10 @@ public sealed partial class GitRepository
     /// <item>no pick head, <c>sequencer/</c>, no <c>MERGE_MSG</c>, HEAD moved: a later commit git
     /// could not apply without a conflict (an untracked file in the way),
     /// <see cref="SequenceStop.Refused"/>;</item>
-    /// <item>anything else that failed: <see cref="GitException"/> with git's text, as does a call
-    /// that git refused because conflicts or a pick, revert or list were there before (then
-    /// nothing of this call is quit).</item>
+    /// <item>anything else that failed: <see cref="GitException"/> with git's text. So does a call
+    /// git refused because a pick, revert or list was in progress before (what is there is not
+    /// this call's, and nothing is quit), and one refused over conflicts already there (its list
+    /// is quit as at a refused start).</item>
     /// </list>
     /// <see cref="SequenceResult.Applied"/> is the list's length less the commands left in
     /// <c>sequencer/todo</c> (the stopped one is still its first line); a single commit that
@@ -150,10 +151,10 @@ public sealed partial class GitRepository
 
         var pickHead = kind == InProgressKind.CherryPick ? CherryPickHead : RevertHead;
         var sequencer = Path.Combine(GitDirectory, "sequencer");
-        var inProgressBefore = await HasConflictsAsync(cancellationToken).ConfigureAwait(false)
-            || Directory.Exists(sequencer)
+        var operationBefore = Directory.Exists(sequencer)
             || await ReadPseudoRefAsync(CherryPickHead, cancellationToken).ConfigureAwait(false) is not null
             || await ReadPseudoRefAsync(RevertHead, cancellationToken).ConfigureAwait(false) is not null;
+        var conflictedBefore = await HasConflictsAsync(cancellationToken).ConfigureAwait(false);
         var command = WriteCommand(options, [.. verb, .. Positional([.. commits])]);
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         var total = commits.Count;
@@ -162,12 +163,20 @@ public sealed partial class GitRepository
             return new SequenceResult(SequenceStop.None, total, total);
         }
 
-        if (inProgressBefore)
+        if (operationBefore)
         {
+            // Another pick, revert or list was there: git refused, and what is left is not ours.
             result.EnsureSuccess(command);
         }
 
         var sequenced = Directory.Exists(sequencer);
+        if (conflictedBefore)
+        {
+            // Git refuses to pick over conflicts, after writing its list: quit that list.
+            await QuitRefusedListAsync(kind, command, sequenced, options, cancellationToken).ConfigureAwait(false);
+            result.EnsureSuccess(command);
+        }
+
         var applied = sequenced
             ? Math.Max(0, total - CountTodoLines(ReadGitFile("sequencer", "todo")))
             : total - 1;
@@ -193,16 +202,33 @@ public sealed partial class GitRepository
             }
 
             // Refused at the start: nothing was applied, but git wrote its list.
-            var quit = WriteCommand(options, SequenceVerb(kind), "--quit");
-            var quitResult = await _runner.RunAsync(quit, cancellationToken).ConfigureAwait(false);
-            if (!quitResult.Succeeded)
-            {
-                _log.Warning($"{Name}: {quit.DisplayText} failed after a refused {command.DisplayText}: {quitResult.StandardError.Trim()}");
-            }
+            await QuitRefusedListAsync(kind, command, sequenced, options, cancellationToken).ConfigureAwait(false);
         }
 
         result.EnsureSuccess(command);
         return new SequenceResult(SequenceStop.None, total, total); // Not reached: the call failed.
+    }
+
+    /// <summary>
+    /// Removes the list a refused call left (<paramref name="sequenced"/>) with <c>--quit</c>, which
+    /// keeps HEAD, the index and the working tree (D145). The refusal is what the caller reports;
+    /// a <c>--quit</c> that fails is logged and leaves the list for Abort.
+    /// </summary>
+    private async Task QuitRefusedListAsync(InProgressKind kind, GitCommand refused, bool sequenced, NetworkOptions? options, CancellationToken cancellationToken)
+    {
+        if (!sequenced)
+        {
+            return;
+        }
+
+        try
+        {
+            await QuitSequenceAsync(kind, options, cancellationToken).ConfigureAwait(false);
+        }
+        catch (GitException ex)
+        {
+            _log.Warning($"{Name}: the list that {refused.DisplayText} left could not be quit: {ex.Message}");
+        }
     }
 
     /// <summary>The git command of a list's kind: <c>cherry-pick</c> or <c>revert</c>.</summary>

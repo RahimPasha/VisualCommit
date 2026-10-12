@@ -7,10 +7,12 @@ using static VisualCommit.Git.Tests.RepositoryTestSupport;
 namespace VisualCommit.Git.Tests;
 
 /// <summary>
-/// Phase 3's history operations against real git on the scenario repos (design 2.11 to 2.15):
-/// reset in each mode with its backup refs, cherry-pick and revert one commit at a time (several
-/// as the app runs them: one call per commit, stopping at the first that does not apply cleanly,
-/// 2.13), and the abort of every state. Expected states are read back with plain git.
+/// The history operations against real git on the scenario repos: phase 3's reset in each mode
+/// with its backup refs, cherry-pick and revert of one commit (design 2.11 to 2.15; the
+/// single-commit calls stay for one commit, and the tests that call them once per commit show
+/// what they do), phase 4's lists with one git call and git's sequencer, one test per row of
+/// docs/phase-4-design.md section 4's table (D136, D145), <c>--quit</c>, and the abort of every
+/// state. Expected states are read back with plain git.
 /// </summary>
 public class HistoryOperationTests
 {
@@ -404,6 +406,377 @@ public class HistoryOperationTests
             Assert.NotNull(failure);
             Assert.Contains("nothing to commit", failure.StandardOutput + failure.StandardError, StringComparison.Ordinal);
             Assert.Same(InProgressState.None, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+        }
+    }
+
+    // ---- Lists with git's sequencer (phase 4 design section 4) -------------------------------------
+
+    [Fact]
+    public async Task A_list_of_picks_is_one_git_call_that_applies_every_commit_oldest_first()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        var alphaOne = await RevAsync(repo, "refs/heads/feature/alpha~1");
+        var alphaTwo = await RevAsync(repo, "refs/heads/feature/alpha");
+
+        var result = await repository.CherryPickAsync([alphaOne, alphaTwo], cancellationToken: TestCancelled);
+
+        // Exit 0: None, every commit applied.
+        Assert.Equal(new SequenceResult(SequenceStop.None, 2, 2), result);
+        Assert.Equal([$"git cherry-pick {alphaOne} {alphaTwo}"], calls.Snapshot().Select(call => call.CommandText).Where(text => text.StartsWith("git cherry-pick", StringComparison.Ordinal)));
+        Assert.Equal(["Alpha two", "Alpha one", "Main work"], await GitLinesAsync(repo, "log", "--format=%s", "-3"));
+        Assert.Equal(mainWork, await RevAsync(repo, "HEAD~2"));
+        Assert.Equal(Scenarios.OperationsFiles.AlphaTwo, ReadText(repo, "src/alpha.txt"));
+        Assert.False(GitFileExists(repo, "sequencer"));
+        Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
+        Assert.Same(InProgressState.None, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_list_of_reverts_is_one_git_call_newest_first()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        var addCore = await RevAsync(repo, "refs/heads/main~1");
+
+        var result = await repository.RevertAsync([mainWork, addCore], cancellationToken: TestCancelled);
+
+        Assert.Equal(new SequenceResult(SequenceStop.None, 2, 2), result);
+        Assert.Equal([$"git revert --no-edit {mainWork} {addCore}"], calls.Snapshot().Select(call => call.CommandText).Where(text => text.StartsWith("git revert", StringComparison.Ordinal)));
+        Assert.Equal(["Revert \"Add core\"", "Revert \"Main work\"", "Main work"], await GitLinesAsync(repo, "log", "--format=%s", "-3"));
+        Assert.False(File.Exists(Path.Combine(repo.Path, "src", "core.txt")));
+        Assert.False(GitFileExists(repo, "sequencer"));
+    }
+
+    [Fact]
+    public async Task A_list_that_conflicts_stops_with_its_pick_head_and_gits_list()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var alphaOne = await RevAsync(repo, "refs/heads/feature/alpha~1");
+        var conflicting = await RevAsync(repo, "refs/heads/feature/conflict");
+        var alphaTwo = await RevAsync(repo, "refs/heads/feature/alpha");
+
+        var result = await repository.CherryPickAsync([alphaOne, conflicting, alphaTwo], cancellationToken: TestCancelled);
+
+        // A pick head and a conflicted file: Conflicts. Alpha one is applied; the stopped pick is
+        // still the todo's first line, so 3 less 2 lines.
+        Assert.Equal(new SequenceResult(SequenceStop.Conflicts, 1, 3), result);
+        Assert.Equal(conflicting, ReadGitFile(repo, "CHERRY_PICK_HEAD").Trim());
+        Assert.Equal(2, ReadGitFile(repo, "sequencer/todo").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        Assert.Equal(["Alpha one", "Main work"], await GitLinesAsync(repo, "log", "--format=%s", "-2"));
+        Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Equal(
+            new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false) { Sequenced = true, HasPickHead = true },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_list_of_reverts_that_conflicts_stops_with_REVERT_HEAD()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        var addCore = await RevAsync(repo, "refs/heads/main~1");
+        await repo.CommitFileAsync("src/core.txt", Scenarios.OperationsFiles.CoreAgain, "Core again");
+
+        var result = await repository.RevertAsync([mainWork, addCore], cancellationToken: TestCancelled);
+
+        Assert.Equal(new SequenceResult(SequenceStop.Conflicts, 0, 2), result);
+        Assert.Equal(mainWork, ReadGitFile(repo, "REVERT_HEAD").Trim());
+        Assert.StartsWith("revert ", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
+        Assert.Equal(
+            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { Sequenced = true, HasPickHead = true },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_pick_in_a_list_that_changes_nothing_stops_empty()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var alphaOne = await RevAsync(repo, "refs/heads/feature/alpha~1");
+        var alphaTwo = await RevAsync(repo, "refs/heads/feature/alpha");
+        await repo.GitAsync("cherry-pick", alphaOne);
+        var head = await repo.HeadAsync();
+
+        var result = await repository.CherryPickAsync([alphaOne, alphaTwo], cancellationToken: TestCancelled);
+
+        // A pick head, nothing conflicted, the index equal to HEAD: Empty.
+        Assert.Equal(new SequenceResult(SequenceStop.Empty, 0, 2), result);
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(alphaOne, ReadGitFile(repo, "CHERRY_PICK_HEAD").Trim());
+        Assert.True(GitFileExists(repo, "sequencer"));
+        Assert.Equal(
+            new InProgressState(InProgressKind.CherryPick, alphaOne, "Alpha one", null, null, 1, true) { Sequenced = true, HasPickHead = true },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_pick_in_a_list_that_rerere_resolved_stops_with_no_conflicted_file()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "base\n", "Base");
+        await repo.CreateBranchAsync("side");
+        var mainTip = await repo.CommitFileAsync("a.txt", "main\n", "Main change");
+        await repo.CheckoutAsync("side");
+        var sideChange = await repo.CommitFileAsync("a.txt", "side\n", "Side change");
+        var sideMore = await repo.CommitFileAsync("b.txt", "more\n", "Side more");
+        await repo.CheckoutAsync("main");
+        await repo.ConfigAsync("rerere.enabled", "true");
+        await repo.ConfigAsync("rerere.autoUpdate", "true");
+
+        // The resolution recorded once, then forgotten.
+        await repo.GitAllowingFailureAsync("cherry-pick", sideChange);
+        repo.WriteFile("a.txt", "resolved\n");
+        await repo.GitAsync("add", "a.txt");
+        await repo.GitAsync("commit", "--quiet", "--no-edit");
+        await repo.GitAsync("reset", "--quiet", "--hard", mainTip);
+        var repository = await OpenAsync(repo);
+
+        var result = await repository.CherryPickAsync([sideChange, sideMore], cancellationToken: TestCancelled);
+
+        // A pick head, nothing conflicted, the index not equal to HEAD: Conflicts with 0 files (D128).
+        Assert.Equal(new SequenceResult(SequenceStop.Conflicts, 0, 2), result);
+        Assert.Equal(["M  a.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Equal(sideChange, ReadGitFile(repo, "CHERRY_PICK_HEAD").Trim());
+        Assert.True(GitFileExists(repo, "sequencer"));
+    }
+
+    [Fact]
+    public async Task An_empty_revert_in_a_list_stops_without_REVERT_HEAD()
+    {
+        var (repo, commits) = await ThreeCommitsAsync();
+        using var _repo = repo;
+        var (a, b, c) = commits;
+        await repo.GitAsync("revert", "--no-edit", b);
+        var repository = await OpenAsync(repo);
+
+        var result = await repository.RevertAsync([c, b, a], cancellationToken: TestCancelled);
+
+        // C reverted; B's revert changes nothing: no pick head, the list and MERGE_MSG kept: Empty.
+        Assert.Equal(new SequenceResult(SequenceStop.Empty, 1, 3), result);
+        Assert.False(GitFileExists(repo, "REVERT_HEAD"));
+        Assert.StartsWith($"Revert \"B adds b\"", ReadGitFile(repo, "MERGE_MSG"), StringComparison.Ordinal);
+        Assert.StartsWith($"revert {b[..7]}", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
+        Assert.Equal(["Revert \"C adds c\"", "Revert \"B adds b\""], await GitLinesAsync(repo, "log", "--format=%s", "-2"));
+        Assert.Equal(
+            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task An_empty_revert_first_in_a_list_stops_where_the_list_started()
+    {
+        var (repo, commits) = await ThreeCommitsAsync();
+        using var _repo = repo;
+        var (_, b, c) = commits;
+        await repo.GitAsync("revert", "--no-edit", b);
+        var head = await repo.HeadAsync();
+        var repository = await OpenAsync(repo);
+
+        var result = await repository.RevertAsync([b, c], cancellationToken: TestCancelled);
+
+        // HEAD is still sequencer/head, as at a refused start: MERGE_MSG tells them apart.
+        Assert.Equal(new SequenceResult(SequenceStop.Empty, 0, 2), result);
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(head, ReadGitFile(repo, "sequencer/head").Trim());
+        Assert.Equal(head, ReadGitFile(repo, "sequencer/abort-safety").Trim());
+        Assert.True(GitFileExists(repo, "MERGE_MSG"));
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal(new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true }, state);
+    }
+
+    [Fact]
+    public async Task A_list_refused_at_its_start_is_quit_and_keeps_the_staged_change()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var head = await repo.HeadAsync();
+        var alphaOne = await RevAsync(repo, "refs/heads/feature/alpha~1");
+        var alphaTwo = await RevAsync(repo, "refs/heads/feature/alpha");
+        repo.WriteFile("scratch.txt", "staged\n");
+        await repo.GitAsync("add", "scratch.txt");
+
+        var error = await Assert.ThrowsAsync<GitException>(() => repository.CherryPickAsync([alphaOne, alphaTwo], cancellationToken: TestCancelled));
+
+        // Git's refusal is reported; the list git wrote anyway is quit, not aborted (D145).
+        Assert.Equal($"git cherry-pick {alphaOne} {alphaTwo}", error.CommandText);
+        Assert.Contains("fatal: cherry-pick failed", error.StandardError, StringComparison.Ordinal);
+        Assert.Contains("git cherry-pick --quit", calls.Snapshot().Select(call => call.CommandText));
+        Assert.DoesNotContain("git cherry-pick --abort", calls.Snapshot().Select(call => call.CommandText));
+        Assert.False(GitFileExists(repo, "sequencer"));
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(["A  scratch.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Same(InProgressState.None, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_list_of_reverts_refused_by_a_local_change_is_quit_and_keeps_it()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        var addCore = await RevAsync(repo, "refs/heads/main~1");
+        repo.WriteFile("src/core.txt", "core\nmain work\nlocal\n");
+
+        var error = await Assert.ThrowsAsync<GitException>(() => repository.RevertAsync([mainWork, addCore], cancellationToken: TestCancelled));
+
+        Assert.Contains("would be overwritten", error.StandardError, StringComparison.Ordinal);
+        Assert.False(GitFileExists(repo, "sequencer"));
+        Assert.False(GitFileExists(repo, "REVERT_HEAD"));
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal([" M src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Equal("core\nmain work\nlocal\n", ReadText(repo, "src/core.txt"));
+    }
+
+    [Fact]
+    public async Task A_later_commit_git_cannot_apply_stops_the_list_as_refused()
+    {
+        var (repo, untracked) = await UntrackedInTheWayAsync();
+        using var _repo = repo;
+        var (a, b, c) = untracked;
+        var repository = await OpenAsync(repo);
+        var start = await repo.HeadAsync();
+
+        var result = await repository.CherryPickAsync([a, b, c], cancellationToken: TestCancelled);
+
+        // No pick head, no MERGE_MSG, the list kept with B first, HEAD moved by A: Refused.
+        Assert.Equal(new SequenceResult(SequenceStop.Refused, 1, 3), result);
+        Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
+        Assert.False(GitFileExists(repo, "MERGE_MSG"));
+        Assert.StartsWith($"pick {b[..7]}", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
+        Assert.Equal(start, ReadGitFile(repo, "sequencer/head").Trim());
+        Assert.Equal(await repo.HeadAsync(), ReadGitFile(repo, "sequencer/abort-safety").Trim());
+        Assert.Equal("untracked\n", ReadText(repo, "u.txt"));
+        Assert.Equal(
+            new InProgressState(InProgressKind.CherryPick, b, "B adds u", null, null, 1, false) { Sequenced = true },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_list_over_conflicts_already_there_is_refused_and_leaves_no_list()
+    {
+        // Conflicts from a stash, with no operation in progress.
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.None);
+        var repository = await OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        var alphaOne = await RevAsync(repo, "refs/heads/feature/alpha~1");
+        var alphaTwo = await RevAsync(repo, "refs/heads/feature/alpha");
+
+        await Assert.ThrowsAsync<GitException>(() => repository.CherryPickAsync([alphaOne, alphaTwo], cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.RevertAsync([head, alphaOne], cancellationToken: TestCancelled));
+
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.False(GitFileExists(repo, "sequencer"));
+        Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
+        Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Same(InProgressState.None, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_list_while_another_list_is_stopped_is_refused_and_leaves_that_list_alone()
+    {
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.CherryPick);
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var todo = ReadGitFile(repo, "sequencer/todo");
+        var pickHead = ReadGitFile(repo, "CHERRY_PICK_HEAD");
+        var head = await repo.HeadAsync();
+        var mainWork = await RevAsync(repo, "refs/heads/main~1");
+
+        var error = await Assert.ThrowsAsync<GitException>(() => repository.RevertAsync([head, mainWork], cancellationToken: TestCancelled));
+
+        Assert.Equal(128, error.ExitCode);
+        Assert.DoesNotContain(calls.Snapshot(), call => call.CommandText.EndsWith("--quit", StringComparison.Ordinal));
+        Assert.Equal(todo, ReadGitFile(repo, "sequencer/todo"));
+        Assert.Equal(pickHead, ReadGitFile(repo, "CHERRY_PICK_HEAD"));
+        Assert.Equal(head, await repo.HeadAsync());
+    }
+
+    [Fact]
+    public async Task A_list_of_one_commit_that_stops_has_no_list_and_none_applied()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var conflicting = await RevAsync(repo, "refs/heads/feature/conflict");
+
+        var result = await repository.CherryPickAsync([conflicting], cancellationToken: TestCancelled);
+
+        Assert.Equal(new SequenceResult(SequenceStop.Conflicts, 0, 1), result);
+        Assert.False(GitFileExists(repo, "sequencer"));
+        Assert.Equal(conflicting, ReadGitFile(repo, "CHERRY_PICK_HEAD").Trim());
+        await Assert.ThrowsAsync<ArgumentException>(() => repository.CherryPickAsync([], cancellationToken: TestCancelled));
+    }
+
+    [Fact]
+    public async Task Quit_ends_a_list_and_keeps_HEAD_and_the_files()
+    {
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.CherryPick);
+        var repository = await OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        var conflicted = ReadText(repo, "src/core.txt");
+
+        await repository.QuitSequenceAsync(InProgressKind.CherryPick, cancellationToken: TestCancelled);
+
+        // Git forgets the list and the stopped pick; HEAD and the conflicted file stay.
+        Assert.False(GitFileExists(repo, "sequencer"));
+        Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(conflicted, ReadText(repo, "src/core.txt"));
+        Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
+        Assert.Same(InProgressState.None, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => repository.QuitSequenceAsync(InProgressKind.Merge, cancellationToken: TestCancelled));
+    }
+
+    /// <summary>Initial commit, then "A adds a", "B adds b", "C adds c" on main; returns the three commits.</summary>
+    private static async Task<(TempRepo Repo, (string A, string B, string C) Commits)> ThreeCommitsAsync()
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+            var a = await repo.CommitFileAsync("a.txt", "a\n", "A adds a");
+            var b = await repo.CommitFileAsync("b.txt", "b\n", "B adds b");
+            var c = await repo.CommitFileAsync("c.txt", "c\n", "C adds c");
+            return (repo, (a, b, c));
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// main with an untracked u.txt, and side with "A adds a", "B adds u" (u.txt, in the way of
+    /// the untracked one) and "C adds c"; HEAD on main.
+    /// </summary>
+    private static async Task<(TempRepo Repo, (string A, string B, string C) Commits)> UntrackedInTheWayAsync()
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+            await repo.CreateBranchAsync("side");
+            await repo.CheckoutAsync("side");
+            var a = await repo.CommitFileAsync("a.txt", "a\n", "A adds a");
+            var b = await repo.CommitFileAsync("u.txt", "tracked\n", "B adds u");
+            var c = await repo.CommitFileAsync("c.txt", "c\n", "C adds c");
+            await repo.CheckoutAsync("main");
+            repo.WriteFile("u.txt", "untracked\n");
+            return (repo, (a, b, c));
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
         }
     }
 
