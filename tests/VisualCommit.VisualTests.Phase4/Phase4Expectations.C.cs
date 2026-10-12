@@ -793,6 +793,9 @@ public static partial class Phase4Expectations
 
         public const string AddNotes = "git add -- notes.txt";
 
+        /// <summary>The call that writes the backup refs (phase 3's backups, D83: one <c>update-ref</c> transaction), which the report's "saved … then ran …" orders before git's own call.</summary>
+        public const string BackupWriteCall = "git update-ref --stdin";
+
         public const string DiffCachedCheck = "git diff --cached --check -- notes.txt";
 
         public const string MergeCommitCall = "git commit --file=- --cleanup=whitespace";

@@ -101,8 +101,12 @@ public sealed partial class Phase4ChecksC : Phase4Checks
     /// <summary>The tooltip that the banner's icon and text share (10.3), without picturing it.</summary>
     private static string? BannerTip(ShellDriver app) => ToolTip.GetTip(app.Find<Border>("BannerInfo")) as string;
 
-    /// <summary>The open tooltip with <paramref name="text"/> lies inside the window ("drawn inside the window").</summary>
-    private static void AssertTipInsideWindow(ShellDriver app, string text)
+    /// <summary>
+    /// The open tooltip with <paramref name="text"/> lies inside the window ("drawn inside the
+    /// window") and below the pointer at <paramref name="pointer"/> (this part's conventions: a
+    /// tooltip opens below the pointer).
+    /// </summary>
+    private static void AssertTipInsideWindow(ShellDriver app, string text, Point pointer)
     {
         var tips = app.Window.GetVisualDescendants().OfType<ToolTip>().Where(tip => tip.IsEffectivelyVisible && tip.Bounds.Width > 0).ToList();
         var tip = Assert.Single(tips, candidate => TipTextOf(candidate) == text);
@@ -111,6 +115,7 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         Assert.True(
             bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= size.Width && bounds.Bottom <= size.Height,
             $"The tooltip at {bounds} is not inside the {size.Width}x{size.Height} window.");
+        Assert.True(bounds.Top >= pointer.Y, $"The tooltip at {bounds} is not below the pointer at {pointer}.");
     }
 
     private static string TipTextOf(ToolTip tip) => tip.Content switch
@@ -363,8 +368,21 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         Assert.Equal(WindowLayout.LeftPanelWidth, left.Width, 1.0);
         Assert.False(app.Session.Shell.ActiveTab.Repository!.ShowsGraph, "The graph shows beside the resolver.");
 
-        Assert.Equal(36, app.BoundsOf(app.Find<Border>("ResolverHeader")).Height, 1.0);
+        var header = app.BoundsOf(app.Find<Border>("ResolverHeader"));
+        Assert.Equal(36, header.Height, 1.0);
         Assert.Equal(36, app.BoundsOf(app.Find<Border>("ResolverToolbar")).Height, 1.0);
+
+        // The header's file arrows and close button (at its right), the toolbar's conflict arrows.
+        foreach (var id in new[] { "ResolverPreviousFile", "ResolverNextFile", "ResolverCloseButton", "ResolverPreviousConflict", "ResolverNextConflict" })
+        {
+            Assert.True(app.Find<Button>(id).IsEffectivelyVisible, $"{id} is hidden.");
+        }
+
+        var close = app.BoundsOf(app.Find<Button>("ResolverCloseButton"));
+        Assert.True(header.Right - close.Right <= 8 && close.Left > app.BoundsOf(app.Find<Button>("ResolverNextFile")).Right, $"The close button at {close} is not at the header's right ({header}).");
+
+        // The result's caret does not blink in a scripted check (D151).
+        Assert.False(ConflictResultEditor.CaretBlinks, "The result's caret blinks.");
         var ours = app.BoundsOf(app.FindByAutomationId("ConflictOurs"));
         var theirs = app.BoundsOf(app.FindByAutomationId("ConflictTheirs"));
         Assert.Equal(ours.Width, theirs.Width, 1.0);
@@ -477,6 +495,21 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         var palette = PaletteOf(app);
         var tintColours = new[] { palette.ConflictOurs, palette.ConflictTheirs, palette.ConflictMarker, palette.ConflictUsed };
         var panes = app.ResolverPanes;
+
+        // The panes' rows line up, row for row (11.3).
+        var count = panes.RowsOf(ConflictPaneSide.Ours).Count;
+        Assert.Equal(count, panes.RowsOf(ConflictPaneSide.Theirs).Count);
+        for (var index = 0; index < count; index++)
+        {
+            var ours = panes.RowBounds(ConflictPaneSide.Ours, index);
+            var theirs = panes.RowBounds(ConflictPaneSide.Theirs, index);
+            Assert.True((ours is null) == (theirs is null), $"Row {index} is in view in one pane only.");
+            if (ours is { } left && theirs is { } right)
+            {
+                Assert.True(Math.Abs(left.Top - right.Top) <= 0.5 && Math.Abs(left.Height - right.Height) <= 0.5, $"Row {index} is at {left} in the ours pane and at {right} in the theirs pane.");
+            }
+        }
+
         foreach (var side in new[] { ConflictPaneSide.Ours, ConflictPaneSide.Theirs })
         {
             var editor = app.BoundsOf(panes.PaneEditor(side));
@@ -726,15 +759,22 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         await AssertBranchesAsync(repo, ("refs/heads/main", StopSha.Short(pickedClean)));
     }
 
-    /// <summary>Asserts a git call's own lines (stdout or stderr) on Git 2.36 only (this part's conventions).</summary>
-    private static async Task AssertGitPrintedAsync(VisualCommit.Core.Git.GitCallRecord call, params string[] lines)
+    /// <summary>Asserts lines a git call printed (on either stream, where the report names none) on Git 2.36 only (this part's conventions).</summary>
+    private static Task AssertGitPrintedAsync(VisualCommit.Core.Git.GitCallRecord call, params string[] lines) =>
+        AssertGitLinesAsync(call, call.StandardOutput + "\n" + call.StandardError, lines);
+
+    /// <summary>Asserts lines a git call printed on its standard output, on Git 2.36 only.</summary>
+    private static Task AssertGitStandardOutputAsync(VisualCommit.Core.Git.GitCallRecord call, params string[] lines) =>
+        AssertGitLinesAsync(call, call.StandardOutput, lines);
+
+    private static async Task AssertGitLinesAsync(VisualCommit.Core.Git.GitCallRecord call, string output, string[] lines)
     {
         if (!await IsReportGitAsync())
         {
             return;
         }
 
-        var printed = (call.StandardOutput + "\n" + call.StandardError).Replace("\r", "\n", StringComparison.Ordinal).Split('\n').Select(line => line.TrimEnd()).ToList();
+        var printed = output.Replace("\r", "\n", StringComparison.Ordinal).Split('\n').Select(line => line.TrimEnd()).ToList();
         foreach (var line in lines)
         {
             Assert.True(printed.Contains(line), $"\"{call.CommandText}\" did not print \"{line}\". It printed:\n{call.StandardOutput}\n{call.StandardError}");

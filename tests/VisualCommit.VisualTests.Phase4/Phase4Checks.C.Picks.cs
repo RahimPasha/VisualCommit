@@ -56,7 +56,7 @@ public sealed partial class Phase4ChecksC
         var pick = AssertCalled(app, callMark, PickListCall);
         Assert.Equal(1, pick.ExitCode);
         Assert.Single(CallsSince(app, callMark), call => call.StartsWith("git cherry-pick", StringComparison.Ordinal));
-        await AssertGitPrintedAsync(pick, "[main 25c817e] Pick clean", ConflictInNotes);
+        await AssertGitStandardOutputAsync(pick, "[main 25c817e] Pick clean", ConflictInNotes);
         AssertStatus(app, PickListStoppedStatus, OperationStatusTone.Warning);
         var resolveFirst = BannerButton.ContinueDisabled(ResolveFirstOneFile);
         AssertStopBanner(app, shot, PickListBanner, AbortCherryPick, resolveFirst, BannerButton.Skip);
@@ -71,10 +71,11 @@ public sealed partial class Phase4ChecksC
         await ClickWorkingRowAsync(app);
         await AssertConflictedNotesRowAsync(app);
         await AssertStagePanelAsync(app, UnstagedOneConflict, ["U notes.txt"], StagedNone, [], "Pick conflicting", ContinueCherryPickButton, commitEnabled: false, ResolveFirstOneFile);
+        var pointer2 = app.BoundsOf(app.Find<Button>("CommitButton")).Center;
         var tip = await app.RestPointerOnAsync(app.Find<Button>("CommitButton"));
         shot = Shot(app, "c12c-stage-panel", keepPointer: true);
         Assert.Equal(ResolveFirstOneFile, tip);
-        AssertTipInsideWindow(app, ResolveFirstOneFile);
+        AssertTipInsideWindow(app, ResolveFirstOneFile, pointer2);
         AssertWorkingRowSelected(app, shot);
         AssertAmendDisabled(app, FinishCherryPickFirst);
         Assert.Equal(PickListBannerTip, BannerTip(app));
@@ -88,6 +89,7 @@ public sealed partial class Phase4ChecksC
         AssertResolverLayout(app);
         AssertStopBanner(app, shot, PickListBanner, AbortCherryPick, resolveFirst, BannerButton.Skip, overResolver: true);
         AssertResolverState(app, shot, PickTitles, C12Opened);
+        AssertNothingScrolled(app);
 
         // Step 5: Use ours.
         await ChooseAsync(app, 0, ConflictPaneSide.Ours, ConflictChoice.UseOurs);
@@ -135,7 +137,7 @@ public sealed partial class Phase4ChecksC
         Assert.True(AssertCalled(app, callMark, MergeCommitCall).Succeeded);
         var continued = AssertCalled(app, callMark, PickContinueCall);
         Assert.True(continued.Succeeded);
-        await AssertGitPrintedAsync(continued, "[main 9d814c4] Pick last");
+        await AssertGitStandardOutputAsync(continued, "[main 9d814c4] Pick last");
         Assert.Null(app.BannerBounds);
         AssertStatus(app, PickFinishedStatus);
         AssertGraph(app, GcPicked, 5, working: null, showsDate: false, picture: shot);

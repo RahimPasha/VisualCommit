@@ -63,6 +63,7 @@ public sealed partial class Phase4ChecksC
         Assert.Equal(StopSha.OursEdits, skip.Sha);
         await AssertChangesSnapshotAsync(repo, skipChanges.Sha, StopSha.OursEdits, NotesRebaseFirst);
         var skipped = AssertCalled(app, callMark, RebaseSkipCall);
+        AssertCalledInOrder(app, callMark, BackupWriteCall, RebaseSkipCall);
         Assert.Equal(1, skipped.ExitCode);
         await AssertGitPrintedAsync(skipped, ConflictInNotes);
         AssertStatus(app, RebaseStoppedStatus, OperationStatusTone.Warning);
@@ -91,6 +92,7 @@ public sealed partial class Phase4ChecksC
         await AssertNoDialogAsync(app);
         shot = Shot(app, "c13e-aborted");
         var aborted = AssertCalled(app, callMark, RebaseAbortCall);
+        AssertCalledInOrder(app, callMark, BackupWriteCall, RebaseAbortCall);
         Assert.True(aborted.Succeeded);
         Assert.Equal(string.Empty, aborted.StandardOutput + aborted.StandardError);
         backups = await BackupsAsync(repo);
@@ -151,6 +153,7 @@ public sealed partial class Phase4ChecksC
         await AssertNoDialogAsync(app);
         shot = Shot(app, "c13h-picks-aborted");
         Assert.True(AssertCalled(app, callMark, PickAbortCall).Succeeded);
+        AssertCalledInOrder(app, callMark, BackupWriteCall, PickAbortCall);
         var backups = await BackupsAsync(repo);
         Assert.Equal(2, backups.Count);
         Assert.Equal(["abort", "abort"], backups.Select(backup => backup.Ref.Kind).ToList());
@@ -212,7 +215,7 @@ public sealed partial class Phase4ChecksC
         var step10Calls = callMark;
         Assert.True(AssertCalled(app, callMark, SwitchToRebaseCall).Succeeded);
         Assert.Equal(1, AssertCalled(app, callMark, RebaseOntoMainCall).ExitCode);
-        AssertCalledInOrder(app, callMark, SwitchToRebaseCall, RebaseOntoMainCall);
+        AssertCalledInOrder(app, callMark, SwitchToRebaseCall, BackupWriteCall, RebaseOntoMainCall);
         var backup = Assert.Single(await BackupsAsync(repo));
         Assert.Equal(("rebase", false, "feature/rebase"), (backup.Ref.Kind, backup.Ref.IsChanges, backup.Ref.Name));
         Assert.Equal(StopSha.SecondChange, backup.Sha);
@@ -237,7 +240,7 @@ public sealed partial class Phase4ChecksC
         await WaitForOperationAsync(app, repo, AbortRebaseOperation, logMark);
         await AssertNoDialogAsync(app);
         shot = Shot(app, "c13l-returned");
-        AssertCalledInOrder(app, callMark, RebaseAbortCall, SwitchToMainCall);
+        AssertCalledInOrder(app, callMark, BackupWriteCall, RebaseAbortCall, SwitchToMainCall);
         Assert.True(AssertCalled(app, callMark, RebaseAbortCall).Succeeded);
         Assert.True(AssertCalled(app, callMark, SwitchToMainCall).Succeeded);
         var backups = await BackupsAsync(repo);

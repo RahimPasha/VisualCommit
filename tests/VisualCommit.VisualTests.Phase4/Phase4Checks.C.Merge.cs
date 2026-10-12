@@ -44,26 +44,30 @@ public sealed partial class Phase4ChecksC
         Assert.Empty(await BackupsAsync(repo));
 
         // Step 2: Continue's reason under the pointer.
+        var pointer = app.BoundsOf(app.BannerContinueButton).Center;
         var tip = await app.RestPointerOnAsync(app.BannerContinueButton);
         Shot(app, "c10b-continue-reason", keepPointer: true);
         Assert.Equal(ResolveFirstOneFile, tip);
-        AssertTipInsideWindow(app, ResolveFirstOneFile);
+        AssertTipInsideWindow(app, ResolveFirstOneFile, pointer);
 
         // Step 3: the banner's own tooltip (10.3), the pointer on its text.
         app.MoveToNeutral();
+        pointer = app.BoundsOf(app.Find<TextBlock>("BannerText")).Center;
         tip = await app.RestPointerOnAsync(app.Find<TextBlock>("BannerText"));
         Shot(app, "c10c-banner-tooltip", keepPointer: true);
         Assert.Equal(MergeBannerTip, tip);
         Assert.Equal(MergeBannerTip, BannerTip(app));
-        AssertTipInsideWindow(app, MergeBannerTip);
+        AssertTipInsideWindow(app, MergeBannerTip, pointer);
 
         // Step 4: the stage panel; the pointer rests on the conflicted file, which opens nothing.
         app.MoveToNeutral();
         await ClickWorkingRowAsync(app);
         var row = await AssertConflictedNotesRowAsync(app);
+        pointer = app.BoundsOf(row).Center;
         tip = await app.RestPointerOnAsync(row);
         shot = Shot(app, "c10d-stage-panel", keepPointer: true);
         Assert.Equal(ConflictRowTip, tip);
+        AssertTipInsideWindow(app, ConflictRowTip, pointer);
         AssertWorkingRowSelected(app, shot);
         await AssertStagePanelAsync(app, UnstagedOneConflict, ["U notes.txt"], StagedNone, [], MergeSummary, StageFilesToCommit, commitEnabled: false);
         Assert.Null(app.ShownResolver);

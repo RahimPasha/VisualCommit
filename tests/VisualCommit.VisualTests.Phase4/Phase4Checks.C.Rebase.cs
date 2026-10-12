@@ -51,7 +51,8 @@ public sealed partial class Phase4ChecksC
         Assert.Equal(StopSha.SecondChange, backup.Sha);
         var rebase = AssertCalled(app, callMark, RebaseOntoMainCall);
         Assert.Equal(1, rebase.ExitCode);
-        await AssertGitPrintedAsync(rebase, AutoMergingNotes, ConflictInNotes);
+        await AssertGitStandardOutputAsync(rebase, AutoMergingNotes, ConflictInNotes);
+        AssertCalledInOrder(app, callMark, BackupWriteCall, RebaseOntoMainCall);
         AssertStatus(app, RebaseStoppedStatus, OperationStatusTone.Warning);
         var resolveFirst = BannerButton.ContinueDisabled(ResolveFirstOneFile);
         AssertStopBanner(app, shot, RebaseFirstBanner, AbortRebase, resolveFirst, BannerButton.Skip);
@@ -61,11 +62,12 @@ public sealed partial class Phase4ChecksC
         await AssertRebaseFirstStopAsync(repo);
 
         // Step 3: the banner's tooltip.
+        var pointer = app.BoundsOf(app.Find<TextBlock>("BannerText")).Center;
         var tip = await app.RestPointerOnAsync(app.Find<TextBlock>("BannerText"));
         Shot(app, "c11b-banner-tooltip", keepPointer: true);
         Assert.Equal(RebaseBannerTip, tip);
         Assert.Equal(RebaseBannerTip, BannerTip(app));
-        AssertTipInsideWindow(app, RebaseBannerTip);
+        AssertTipInsideWindow(app, RebaseBannerTip, pointer);
 
         // Step 4: the stage panel at the rebase's stop.
         app.MoveToNeutral();
@@ -84,6 +86,7 @@ public sealed partial class Phase4ChecksC
         AssertResolverLayout(app);
         AssertStopBanner(app, shot, RebaseFirstBanner, AbortRebase, resolveFirst, BannerButton.Skip, overResolver: true);
         AssertResolverState(app, shot, RebaseFirstTitles, C11FirstOpened);
+        AssertNothingScrolled(app);
 
         // Step 6: Use theirs.
         await ChooseAsync(app, 0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs);
