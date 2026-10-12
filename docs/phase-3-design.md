@@ -1,8 +1,15 @@
 # Phase 3 design: branch, remote, stash and tag operations
 
+**History, kept for the references to it.** These are the design notes of phase 3, written on
+2026-10-11 before any phase 3 code existed and corrected while the phase was built. They are no
+longer maintained: `architecture.md` says what is built and wins where the two differ, and
+`decisions.md` holds the decisions (D105 to D133 amend what is written here; the numbers of
+sections cited in `decisions.md` and in `test-reports/phase-3.md` refer to this file). Start
+from `architecture.md` and the handoff, not from here.
+
 Working design notes for phase 3, written on 2026-10-11 before any phase 3 code exists. The
-builders implement from this file; the final facts are folded into `architecture.md` at the end
-of the phase and this file is then deleted. Section 9 lists the decisions this design makes;
+builders implemented from this file; its final facts were folded into `architecture.md` at the
+end of the phase. Section 9 lists the decisions this design makes;
 they are recorded in `decisions.md` as D77 to D104. Three independent reviews (git and data
 safety, UI and harnesses, coverage and consistency) were folded in before recording; what they
 changed is summarised in section 10.

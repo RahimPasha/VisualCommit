@@ -277,14 +277,13 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take 21 to 26 minutes on the Windows machine (measured on 2026-10-11 during
-  phase 3, from Git Bash, while other programs took one to three of its eight logical
+- The default tests take about 19 minutes on the Windows machine with nothing else running, up to 26
+  with other load (measured on 2026-10-11 and 12 during phase 3's gate, from Git Bash, while other programs took one to three of its eight logical
   processors). The four test projects run side by side, and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it. Alone, `VisualCommit.Git.Tests` takes about 7
   minutes, `VisualCommit.App.Tests` 9, the phase 3 walk-through 8 and phases 0 to 2's 2.5. CI
-  took about 10 minutes per job before phase 3's walk-through had a project of its own; not
-  measured since. Phase 1's checks load and clone a 100k-commit repo,
+  takes 11 minutes (Windows), 8.5 (macOS) and 3 (Linux) per job. Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
@@ -295,7 +294,7 @@ What to know about them:
   a later run are the same files (the `tr` removes the line endings a Windows checkout adds,
   which `sha256sum` would take as part of each name).
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 6 minutes (phases 0, 1 and 2): tell the
+  app on the desktop and moves the real mouse for about 11 minutes (phases 0 to 3): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
   and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so

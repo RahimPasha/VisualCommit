@@ -27,8 +27,13 @@ is the longer form of this table.
 | Backup refs before destructive operations | Visual checks 9, 10, 13, 15, 16, 20, 22, 30, 32 (asserted with `TempRepo.BackupRefsAsync`); `BackupRefTests` (and `.Collisions.cs`) |
 | Basic conflict state: a banner with Abort, conflicted files flagged | Visual checks 9, 9b, 11b, 12, 14, 15b, 25; `InProgressTests`, `ConflictBannerTests`, `WorkingChangesInProgressTests`, `RerereTests` |
 
-GATE: whether every check above passed in both passes, and for any that did not, its fix or
-where it went.
+Every check passed in both passes on the gate's commit: the scripted pass ran all 41, and the
+real-window pass repeated the steps the report marks RW (check 27, at 1920×1080, is scripted
+only, because that size does not fit this screen). The gate's earlier runs and its inspection found six faults, each fixed before
+the final run and listed in the report's "Found by the gate": three in the product (the error
+dialog's output box, the radio button's focus frame and its unchecked ring: `2ddec83`,
+`54722ed`), one in when the scripted pictures of a selected commit were taken (`2ddec83`), and
+two timing faults in phase 1's checks 12 and 18 (`674e79d`, `594f9fb`).
 
 Not delivered, by decision, and where each went:
 
@@ -42,19 +47,34 @@ Not delivered, by decision, and where each went:
 - Pull with rebase is partly delivered here: pull follows `pull.rebase` and
   `branch.<name>.rebase` (D78, D84), and a pull that rebases and stops shows the banner with
   Abort. Phase 4 keeps rebase onto, continue and skip (also after a pull's rebase).
-- GATE: anything the gate itself moves to a later phase.
+- The gate moved nothing to a later phase. The cosmetic things its inspection noticed and left
+  are under Known issues; the questions it raised are under Waiting on the owner.
 
 ## State of the repo
 
-- GATE: the branch's last commit, the gate's commit, and whether the phase is "Awaiting
-  acceptance" on `phase/3-operations` (nothing is merged into `master` until the owner accepts).
-- GATE: the number of tests in the default run on the gate's commit and their result. For
-  reference, the default run had 1,756 tests at `2310d10`, when the big test classes were split
-  (D133).
-- GATE: the visual gate's result, with the link to the report, the number of pictures inspected
-  in each pass, and any check or part that could not run (the plan allows only the 1920×1080
-  real window on this screen).
-- GATE: the CI run of the gate's commit and its result in each of the five jobs, with its link.
+The visual test gate passed on `594f9fb`, the gate's commit: `dotnet test` (1,756 tests, all
+passed, 19 min 15 s) and the real-window pass (32 tests, all passed, 11 min 11 s) on the same
+commit, every picture of both inspected. The real-window count is the 14 tests of phases 0 to
+2, phase 3's 15 and the 3 `Phase3ExpectationsTests`, which come along with the
+`Phase3Expectations*.cs` files the project links. The final run's pictures are 388 scripted
+(phase 0: 14, phase 1: 43, phase 2: 66, phase 3: 265) and 77 real-window captures, each with
+its difference picture (the largest difference 1.49 percent, the limit 3). Over the gate's
+rounds the inspectors opened first the 361 scripted pictures that phase 3 added or changed and
+all 77 real-window ones, then the 35 and 16 scripted and 11 real-window pictures that later
+fixes changed, and finally the 77 real-window captures of the final run again; the other 27
+scripted pictures are byte-identical to those the gates of phases 1 and 2 inspected. Q1 measured 1189 ms to
+the first rows (limit 2000). The report is [test-reports/phase-3.md](../test-reports/phase-3.md).
+
+CI run [38206493320](https://github.com/RahimPasha/VisualCommit/actions/runs/38206493320) built
+and tested that commit with the same 1,756 tests, and all five jobs succeeded: windows-latest in
+10 min 56 s, macos-latest 8 min 35 s, ubuntu-latest 3 min 11 s, and the bare ubuntu containers
+4 min 1 s (SDK from Ubuntu's packages) and 3 min 25 s (SDK from Microsoft's installer). The
+scripted pictures CI took on macOS and Linux were compared with the Windows ones (97 and 36 of
+each platform's 388 opened); what they showed is in the report's "Other platforms".
+
+The commits after the gate's commit change only docs. The phase is "Awaiting acceptance" on
+`phase/3-operations`; nothing is merged into `master` yet. Only the real window at 1920×1080
+could not run, as the plan allows on this screen.
 
 Before the gate, an independent review of the code found problems in the queue, the remote
 operations, the git layer, the UI and the tests; they were fixed on `wip/p3-fix-*` branches and
@@ -71,7 +91,7 @@ D132 record the changes of behaviour. Then the test projects were rearranged for
 | Git | 2.36.0.windows.1 locally, with `core.fsmonitor=true` in the owner's global configuration; 2.55.0 on the CI runners |
 | Packages | Unchanged since phase 2: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, D24), FlaUI.UIA3 5.0.0 |
 | New project | `src/VisualCommit.AskPass`, the prompt helper `visualcommit-askpass` (D82): framework-dependent, no references, referenced by `VisualCommit.Git`, so its app host lands next to the app and in every test project's output |
-| Screenshots | Scripted: scaling 1. GATE: the real window's scaling as `run.txt` records it (200% expected) |
+| Screenshots | Scripted: scaling 1. Real window: 200% and a work area of 1500×952 logical pixels, as `run.txt` records them |
 
 ## Build, run and test
 
@@ -90,12 +110,15 @@ bash scripts/time-scripted-check.sh "*Check_01_commit_menu"
 dotnet test --project tests/VisualCommit.RealWindowTests -c Release
 ```
 
-- The default run takes 21 to 26 minutes on the development laptop (measured during phase 3,
-  with other programs busy), and longer when the laptop is hot. It is bound by the processors
-  (git's processes and the virus scanner), not by how many tests run side by side (D133). Alone,
-  `VisualCommit.Git.Tests` takes about 7 minutes, `VisualCommit.App.Tests` 9, the phase 3
-  walk-through 8 and phases 0 to 2's 2.5. GATE: the time of the gate's default run, and CI's
-  time per job on the gate's run.
+- The default run took 19 min 15 s at the gate, on a rested laptop with every other program
+  stopped (side by side: `VisualCommit.Git.Tests` 13 min 16 s, `VisualCommit.App.Tests` 16 min
+  34 s, `VisualCommit.VisualTests` 11 min 22 s, `VisualCommit.VisualTests.Phase3` 19 min 13 s).
+  Earlier in the phase, with other programs busy, it took 21 to 26 minutes, and it takes longer
+  when the laptop is hot. It is bound by the processors (git's processes and the virus scanner),
+  not by how many tests run side by side (D133). Alone, `VisualCommit.Git.Tests` takes about 7
+  minutes, `VisualCommit.App.Tests` 9, the phase 3 walk-through 8 and phases 0 to 2's 2.5. On
+  CI the gate's jobs took 10 min 56 s (Windows), 8 min 35 s (macOS), 3 min 11 s (Linux) and
+  about 3.5 and 4 minutes (the two containers), build included.
 - While working, run one project or one class (`--filter-class`), not the whole run.
   `scripts/time-scripted-check.sh` builds the walk-through project of the phase it is given (3
   when left out) and prints each test's time and the time of each step a phase 3 check noted
@@ -128,21 +151,33 @@ As in phase 2's handoff, with phase 3's own project and a much longer real-windo
    `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (never `--no-build`).
    It takes over the real mouse and keyboard, needs the desktop unlocked, and compares its
    captures with the scripted pictures of step 1, so nothing may run a partial walk-through in
-   between. Expected duration: 13 to 16 minutes (phases 0 to 2 took about 6; phase 3 adds 15
-   tests repeating 19 checks, every real input waits 400 ms, and the first context menu of a
-   launch takes up to about 2 s). Never start it while other work runs on the machine: sub-agents
-   building or testing take the processors and the mouse waits time out. GATE: the measured time.
+   between. It took 11 min 11 s at phase 3's gate (11 min 42 s with the build; the estimate had
+   been 13 to 16). Phases 0 to 2 took about 6; phase 3 adds 15 tests repeating 19 checks, every
+   real input waits 400 ms, and the first context menu of a launch takes up to about 2 s. Never
+   start it while other work runs on the machine: sub-agents building or testing take the
+   processors and the mouse waits time out. It also times Q1, which a warm laptop can fail by
+   itself (Known issues): the rest before it matters.
 3. Open every picture of both passes. Before any new run, save `sha256sum` of the pictures you
-   inspected: the next run empties the folders. GATE: the name and size of
-   `docs/test-reports/phase-3-pictures.sha256`, and which earlier phases' pictures differ from
-   `phase-1-pictures.sha256` and `phase-2-pictures.sha256` on purpose (the report's "Changes to
-   expected results" lists the expected ones: the enabled toolbar, phase 1's `08d` and `08e`).
+   inspected: the next run empties the folders. `docs/test-reports/phase-3-pictures.sha256`
+   lists the 542 files of phase 3's final run: 388 scripted pictures and 154 real-window files
+   (77 captures and their difference pictures);
+   `tr -d '\r' < docs/test-reports/phase-3-pictures.sha256 | sha256sum -c` shows which pictures
+   of a later run changed. Against `phase-2-pictures.sha256` (which holds phases 0 to 2), 96
+   scripted pictures of phases 1 and 2 differ, as the report's "Changes to expected results"
+   expects: the enabled toolbar, phase 1's `08d` and `08e` (the left panel follows the graph),
+   and phase 1's `11a`, `13b`, `14a` and `14b`, which already differed before phase 3's code.
+   The other 27 (all 14 of phase 0, 11 of phase 1, 2 of phase 2) are the same files. Ten
+   pictures of the final run vary by nature from run to run (a clone's or a held fetch's
+   percentage, an animated progress bar or caret, a temporary folder's random name; the
+   report's Run section). Real-window pictures are never byte-identical and must all be opened.
 
 The phase 3 part of the real-window pass is `Phase3RealWindowPass.cs` (the run, `Phase3Run`) and
 `Phase3RealWindowPass.A.cs` to `.D.cs`, with the helpers in `RealApp.Phase3.cs` and
 `RealApp.Checks.cs`. Until the gate all of it was compiled (CI's Windows job builds it) but never
-run. In the real window it waits for an operation's log line `ops: <Title>: <outcome> after <N>
-ms: <message>` (`RealApp.OperationEnded`), finds menus and their items as `ContextMenu` and
+run; its first run, at the gate, needed no change to it (nothing in the project, or in the
+expectation files it links, changed between `2310d10` and the gate's commit). In the real window
+it waits for an operation's log line `ops: <Title>: <outcome> after <N> ms: <message>`
+(`RealApp.OperationEnded`), finds menus and their items as `ContextMenu` and
 `ContextMenuItem`, takes graph rows below a banner from the `ConflictBanner` element's bounds
 (D122), moves the pointer to the neutral point (760, 687) before a capture, and never clicks an
 item that reaches outside the window ("Copy …", "Open file", "Show in folder"). A held fetch's
@@ -263,13 +298,12 @@ Rules worth keeping:
 | Issue | How much it matters | Where |
 |---|---|---|
 | Under the reftable ref format (Git 2.45 and later, opt-in), `CHERRY_PICK_HEAD` and `REVERT_HEAD` are no files, so a stopped pick or revert shows no banner | Low today (reftable is not git's default); phase 4's in-progress handling must read the state another way | `GitRepository.InProgress.cs`, `GitRepository.History.cs` (D128) |
-| No ssh timeout for auto-fetch: a stalled ssh connection holds the queue until the user cancels it (the status bar offers Cancel while an operation of theirs waits). HTTP ends by itself after 60 s below 1 byte/s | Low; the only way to set one through git would replace the user's `core.sshCommand` | `AutoFetchScheduler`, `NetworkOptions.Configuration` (D125) |
+| No ssh timeout for auto-fetch: a stalled ssh connection holds the queue until the user cancels it (the status bar offers Cancel while an operation of theirs waits). HTTP ends by itself after 60 s below 1 byte/s | Low; the only way to set one through git would replace the user's `core.sshCommand`. Whether to keep it so is put to the owner | `AutoFetchScheduler`, `NetworkOptions.Configuration` (D125); plan risk 19 |
 | `DropFacts.RemoteMapsBranchesDifferently` is never set (nothing reads `remote.<r>.fetch`): a drop onto a branch of a remote with a non-default fetch refspec offers the push as for the default one | Low; such refspecs are rare | `ViewModels/Menus/RepositoryMenuContext.cs` |
-| A rename that changes only the case of a branch is refused on Windows and macOS ("A branch named Topic exists in another case."), because Git 2.36 refuses it for a loose ref | Low; it can be done in a terminal in two renames | `NameDialogViewModel`, `RefNameRules` (D131) |
+| A rename that changes only the case of a branch is refused on Windows and macOS ("A branch named Topic exists in another case."), because Git 2.36 refuses it for a loose ref | Low; it can be done in a terminal in two renames. Whether to keep refusing it is put to the owner | `NameDialogViewModel`, `RefNameRules` (D131) |
 | The error dialog's git output is a text box that wraps inside a URL (check 21d: "fatal: Authentication failed for 'http://127.0.0.1:47391/remote.git/'"); only the summaries and prompt texts keep URLs whole (`UrlTextBlock`) | Cosmetic | `ErrorDialogView.axaml` (`ErrorOutput`) |
 | The first context menu of a process takes up to about 2 s to appear (Avalonia's flyout on its first use; 1.7 s measured on a loaded machine); later ones are fast | Noticeable once per start; the harnesses wait for it | `MenuLayer` |
 | Menus are 200 to 520 wide; a longer label is cut with "…" and shows whole in its tooltip, a header at 340 | Cosmetic, for very long branch names | `Theme/Menus.axaml`, `MenuLayer.axaml.cs` |
-| The real-window helpers and the phase 3 real-window pass were compiled but never run before the gate | GATE: what the gate's first run found in them | `tests/VisualCommit.RealWindowTests/Phase3RealWindowPass*.cs`, `RealApp.Phase3.cs`, `RealApp.Checks.cs` |
 | After a closed tab or "Quit now" during a fetch or push, lock files git left are only logged; the next fetch fails with git's `File exists` until they are removed (after Cancel the app offers "Remove lock files") | Low | `LockFiles`, `RepositoryOperations.Run.cs` (D81, D126) |
 | Local operations cannot be cancelled: a git-lfs download during a checkout runs to its end; it can prompt, though | Low; not tested automatically (no LFS server) | D81, D82 |
 | On macOS and Linux, Cancel kills git only; ssh and the askpass helper end when their pipes break (D37). Not tried on a Mac | Unknown until the Mac checklist | `GitRunner` |
@@ -279,7 +313,13 @@ Rules worth keeping:
 | The detached-HEAD question counts commits that only a stash or a backup ref reaches as left behind | Asks more often than needed, the safe way | `RepositoryOperations.Branches.cs` |
 | `RepositoryOperations.Run.cs` keeps two unused `NotBuilt` helpers from the work packages' stubs | Debt, harmless | `RepositoryOperations.Run.cs` |
 | The first tokenization of a grammar that embeds others (Markdown) reads TextMateSharp's grammar list without a shared lock while another thread may add to it; no test has failed on it | Low | `DiffHighlighter` (`Controls/Diff/DiffSyntax.cs`) |
-| Earlier phases' issues that remain: the welcome page's wrapping of a long folder (phase 6), Q1's margin on a hot laptop, type changes without hunk actions, untracked nested repositories, old discard snapshots without UI, the Linux watcher's inotify use: see phase 1's and phase 2's handoffs | As there | |
+| Noticed by the gate's inspection and left (the pictures match their expected results): the in-progress banner wraps the git command at its hyphen (25a, 25e); a disabled menu item's tooltip opens below the pointer and covers the next item, and a long worktree path in a tooltip wraps at any character (30g); the sixth row of the unstaged list is cut by the stage panel's fixed split (26a); in the real window a hover colour stays on a left-panel row after a right-click (28a) | Cosmetic | The report's "Found by the gate" |
+| The working-changes row's dashed line is drawn through the node of another branch that uses the same lane when HEAD is not the top row (06f; D60's drawing rule) | Cosmetic and rare; a question of the graph's layout, put to the owner | `Controls/CommitGraphControl.Render.cs`; the report's "Found by the gate" |
+| Q1 varies with the laptop's temperature more than its margin allows: 1189 ms at the gate on a rested laptop, but 1438 to 2268 ms in other runs the same day on a warmer one. The real-window test fails above 2000 ms, so a warm laptop can fail the gate by itself. Run alternately on the same machine, the phase 2 build (`master` at `d3814bd`) needed 1688 to 1911 ms and phase 3's 1618 to 2002 ms: phase 3 costs no more than the noise | Can fail a gate that is otherwise green. Rest the laptop before the real-window pass; to tell a slower build from a warm machine, run the old and the new build alternately on the same machine | `Phase1RealWindowPass.cs` (the 2000 ms limit); the report's Run section; plan risk 10 |
+| The default run is bound by the processors, and the virus scanner takes a large share of them: 19 min 15 s at the gate rested and alone, 21 to 26 minutes with other programs busy | Every full run and gate; an exclusion for the repository folder and `%TEMP%\VisualCommit.Tests` is put to the owner | Windows Security on the development machine; plan risk 12 |
+| Durations written before phase 3's gate are stale: phases 0 to 2's 5 to 6 minutes for the default run and about 6 for the real-window pass, and CI's time per job "not measured since". Measured at the gate: 19 min 15 s, 11 min 11 s, and CI's jobs 3 min 11 s to 10 min 56 s (State of the repo) | Misleading when planning a run, wherever a doc still gives the old figures | CLAUDE.md's Commands section (the real-window pass's "about 6 minutes", CI's time per job); phase 2's handoff keeps its own figures as history |
+| CI's time limits were raised for phase 3's tests: 22 minutes per job and 14 per test step (25 for the container jobs). A hung job now runs that long before it is stopped | Low; whether to keep them is put to the owner | `.github/workflows/ci.yml` |
+| Earlier phases' issues that remain: the welcome page's wrapping of a long folder (phase 6; 11a), the side-by-side diff's overlay scroll bars (phase 2's 07d), type changes without hunk actions, untracked nested repositories, old discard snapshots without UI, the Linux watcher's inotify use: see phase 1's and phase 2's handoffs | As there | |
 
 ## Things that cost time
 
@@ -293,25 +333,35 @@ Rules worth keeping:
   part per package and `DialogViewLocator`'s naming kept the merges apart. Even so, two parts of
   the real-window pass each defined a `WaitForDetails` and the merge stopped compiling
   (`fdb63a2`): build after every merge.
-- **Disk and stale processes.** Each built worktree holds its own `bin` and `obj` (about 5.7 GB
-  for this solution) and the disk filled up; and every worktree kept a git fsmonitor daemon
-  running after its agent ended (the owner's global `core.fsmonitor=true`). Stop the daemon and
-  remove the worktree as soon as its branch is merged.
-- **The default run grew to 21 to 26 minutes.** One big test class (`RepositoryOperationsTests`)
-  and one walk-through project were long serial chains; splitting them (D133) cut each project's own time but not the whole
-  run, which is bound by the processors. Waits that were generous alone timed out under the full
+- **Disk and stale processes.** Each built worktree holds its own `bin` and `obj` (about 580 MB
+  per project, about 5.7 GB for this solution), and the worktrees of parallel agents filled the
+  disk. Every worktree also kept a git fsmonitor daemon running after its agent ended (the
+  owner's global `core.fsmonitor=true`): 79 were found before the gate, running for days. Stop
+  the daemon and remove the worktree as soon as its branch is merged, and check that none runs
+  before the gate (step 0 of "Running the visual gate").
+- **The default run grew to 21 to 26 minutes** (19 min 15 s at the gate, rested and alone). One
+  big test class (`RepositoryOperationsTests`) and one walk-through project were long serial
+  chains; splitting them (D133) cut each project's own time but not the whole run, which is
+  bound by the processors. Waits that were generous alone timed out under the full
   run (`c8e0323`), and the hang watchdog charged a shared template's build to whichever test came
   first (D132).
 - **CI limits.** The test step's 5-minute limit cut the Windows and macOS jobs once phase 3's
   tests ran (run 38162210730); the limits are now 22 minutes per job and 14 per test step (25 for
   the container jobs) in `.github/workflows/ci.yml`. A whole run took about 10 to 11 minutes
-  late in the phase.
+  late in the phase; its longest job on the gate's commit, Windows, took 10 min 56 s.
 - **Failures only CI found.** Git 2.55's `Z` dates (`f22d7ea`, `e721323`); macOS's
   `/private/var` paths (`e721323`); two macOS waits that assumed one layout pass was enough
   (`07203b7`, `106378e`); the Windows runner's elevated process, whose pipe owner the MSYS2 ssh
   could not match (D118); `U+2060` missing from Inter, so Linux and macOS drew URLs with another
-  font's line metrics (`2470ed3`). Read every job of every run; a failure on one platform is
-  usually a wrong assumption in the test, not flakiness.
+  font's line metrics (`2470ed3`); timing faults in new and old tests, such as phase 1's check
+  18, which looked at the first row's labels before they were laid out (run 38203733545,
+  Windows, during the gate; `594f9fb`). Read every job of every run; a failure on one platform
+  is usually a wrong assumption in the test, not flakiness.
+- **The gate ran four times**, the real-window pass three times. Each CI flake and each finding
+  of the inspection led to a commit that changed more than docs, and after such a commit both
+  passes run again on the new commit and their pictures are inspected again (CLAUDE.md). Collect
+  all fixes first: finish inspecting every picture of a run and read every CI job, make all the
+  fixes, then run the gate once more.
 - **Shell quirks**, as in phase 2: in the Bash tool a heredoc fails on apostrophes; PowerShell 5.1
   garbles dashes and backticks in docs; write docs with the file tools.
 
@@ -337,10 +387,10 @@ Do first:
 Open points for phase 4 (record each as a decision; ask the owner those that are a matter of
 taste):
 
-- **Where phase 4's scripted checks run.** The default run is already 21 to 26 minutes on the
-  laptop. A project of its own (`VisualCommit.VisualTests.Phase4`) gets a UI thread of its own,
-  but the run is bound by the processors; decide what to add, and what to measure, before
-  writing the checks.
+- **Where phase 4's scripted checks run.** The default run is already 19 to 26 minutes on the
+  laptop (19 min 15 s at phase 3's gate, rested and alone). A project of its own
+  (`VisualCommit.VisualTests.Phase4`) gets a UI thread of its own, but the run is bound by the
+  processors; decide what to add, and what to measure, before writing the checks.
 - **The sequencer.** Phase 3 never starts git's sequencer (D88) and sets
   `GIT_SEQUENCE_EDITOR=:` on every call (D102). Interactive rebase sets its own sequence editor;
   decide how the todo list reaches git, and whether a multi-commit pick should now use the
@@ -357,7 +407,10 @@ taste):
 Risks to watch:
 
 - The run time of the default tests and of the real-window pass (plan risk 12): the laptop is
-  CPU-bound with phase 3's tests, and the real-window pass is 13 to 16 minutes.
+  CPU-bound with phase 3's tests, and the real-window pass took 11 minutes at phase 3's gate.
+- Q1 on a warm laptop (plan risk 10): it measured up to 2268 ms on phase 3's gate day, over the
+  2000 ms limit. Rest the laptop before the real-window pass, and compare builds alternately on
+  the same machine before blaming the code.
 - The menu adapter's Invoke peer relies on `MenuBase.Close()` and `MenuItem.ClickEvent` as in
   Avalonia 12.1.3; `ContextMenuAdapterTests` catch a change when Avalonia is updated.
 - Git's texts and rules differ between 2.36 and 2.55 (and change again); a rebase's messages and
@@ -366,12 +419,28 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- GATE: accept phase 3, or say what to change: "Phase 3 accepted" merges `phase/3-operations`
-  into `master`.
-- GATE: anything the gate leaves for the owner to decide.
-- When you have a Mac at hand: the checklist at the end of the
-  [phase 3 test report](../test-reports/phase-3.md) (GATE: its number of steps; among them
-  cancelling a fetch over ssh, the first context menu's latency, and Cmd for selecting several
-  commits), and phases 0, 1 and 2's, still open.
+- Accept phase 3, or say what to change: "Phase 3 accepted" merges `phase/3-operations` into
+  `master`. A session on any machine can do that and what follows it.
+- When you have a Mac at hand: the ten-step checklist at the end of the
+  [phase 3 test report](../test-reports/phase-3.md) (among its steps cancelling a fetch, the
+  first context menu's latency, and Cmd for selecting several commits), and the seven-, nine-
+  and eight-step ones of phases 2, 1 and 0, still open.
+- Questions the gate left, each with a recommendation (Known issues has the details):
+  - **CI's time limits.** Keep 22 minutes per job and 14 per test step (25 for the container
+    jobs)? Recommended: keep them. The gate's Windows job took 10 min 56 s, and the old 5-minute
+    step limit cut the jobs once phase 3's tests ran (run 38162210730).
+  - **The dashed line through another branch's node (06f).** Change how the working-changes
+    row's line is drawn now? Recommended: no. It shows only when HEAD is not the top row; settle
+    it with the next change to the graph's layout.
+  - **A virus-scanner exclusion.** Exclude the repository folder and `%TEMP%\VisualCommit.Tests`
+    from Windows Defender on the development machine? Recommended: try it for those two folders
+    only, which hold the project's builds and test repositories, and measure the default run
+    before and after. It is a security setting of your machine, so only you can make it.
+  - **Renaming a branch in case only** on Windows and macOS. Keep refusing it (D131)?
+    Recommended: keep. It is rare, and two renames in a terminal do it; the app can do the two
+    renames itself later if users ask.
+  - **No ssh timeout for auto-fetch** (D125). Keep it so? Recommended: keep. A timeout through
+    git would replace the user's own `core.sshCommand`, and the status bar offers Cancel for a
+    stalled auto-fetch as soon as an operation of the user's waits behind it (plan risk 19).
 - By hand on any machine, when convenient: a real ssh server's host-key question and Git
   Credential Manager's own window (D97), which no automated test can reach.
