@@ -24,6 +24,16 @@ public static class EscapeOrder
     /// <summary>The top dialog is cancelled (D69, D104).</summary>
     public const int Dialog = 300;
 
+    /// <summary>
+    /// The conflict resolver (docs/phase-4-design.md 11.10): it takes Esc and does nothing while
+    /// the focus is in its result, so a slip never loses work; otherwise it closes, asking first
+    /// when the result is modified.
+    /// </summary>
+    public const int Resolver = 350;
+
+    /// <summary>The interactive rebase's list (2.2): a row drag in progress is cancelled first; otherwise the list closes, asking first when it was changed.</summary>
+    public const int InteractiveRebase = 360;
+
     /// <summary>The open diff closes, unless a text box has the focus (D63).</summary>
     public const int Diff = 400;
 }
