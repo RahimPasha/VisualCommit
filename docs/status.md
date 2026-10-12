@@ -41,8 +41,12 @@ requirement numbers.
 Start:
 
 - [x] 1. Phase branch created, phase set to "In progress", this checklist.
-- [ ] 2. Baseline: the default run on `master` (`3731b31`) passes, timed after the owner's
-  virus-scanner exclusion and compared with phase 3's 19 min 15 s.
+- [x] 2. Baseline: the default run on `master` (`3731b31`) passes: 1756 of 1756 in 23 min 21 s
+  (VisualTests 11 min 27 s, Git.Tests 14 min 26 s, App.Tests 19 min 55 s, VisualTests.Phase3
+  23 min 19 s). Not a clean comparison with phase 3's 19 min 15 s: six research agents ran git
+  experiments beside it and the laptop had not rested. Whether the owner's virus-scanner
+  exclusion is in effect cannot be read without administrator rights. A clean timing (rested,
+  nothing else running) is taken before the gate.
 - [x] 3. Phase 3's leftovers removed: the 29 `worktree-*` branches (all merged, deleted with
   `-d`) and seven git file-system monitor daemons of deleted worktrees.
 - [ ] 4. Open points decided and recorded: the owner's answers of 2026-10-12 (50 backups kept
