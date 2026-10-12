@@ -144,15 +144,17 @@ public class GraphAreaHooksTests
             app.Settle();
             Assert.True(first.IsBusy);
 
-            // Another list, a diff and the resolver from the stage panel, and Esc: declined at once, without a question.
+            // Esc, another list, a diff and the resolver from the stage panel: declined at once, without a question.
+            app.PressKey(Key.Escape);
             var second = repository.ShowInteractiveRebaseAsync(request, list);
+            var leaving = repository.TryLeaveGraphAreaAsync();
             repository.OpenDiff(new ChangedFile("src/base.txt", FileChangeKind.Modified), staged: false);
             repository.OpenResolver(new ChangedFile("src/one.txt", FileChangeKind.Conflicted));
-            app.PressKey(Key.Escape);
             app.Settle();
-            Assert.True(second.IsCompleted, "Opening another list waits for no answer.");
-            Assert.False(await repository.TryLeaveGraphAreaAsync());
             Assert.Empty(app.Session.Shell.Dialogs.Open);
+            Assert.True(second.IsCompleted, "Opening another list waits for no answer.");
+            Assert.True(leaving.IsCompleted, "Leaving waits for no answer.");
+            Assert.False(await leaving);
             Assert.Same(first, repository.InteractiveRebase);
             Assert.True(repository.ShowsInteractiveRebase);
             Assert.False(repository.IsDiffOpen);
