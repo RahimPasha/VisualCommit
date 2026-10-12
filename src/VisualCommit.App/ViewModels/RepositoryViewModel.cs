@@ -207,6 +207,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     [NotifyPropertyChangedFor(nameof(IsDiffOpen))]
     [NotifyPropertyChangedFor(nameof(ShowsGraph))]
     [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
+    [NotifyPropertyChangedFor(nameof(ShowsDiff))]
     public partial DiffViewModel? Diff { get; private set; }
 
     public bool IsDiffOpen => Diff is not null;
@@ -464,10 +465,31 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     public void OnFrameDrawn(TimeSpan duration) =>
         (Graph.IsComplete ? _frameTimes : _loadingFrameTimes).Add(duration.TotalMilliseconds);
 
-    /// <summary>Opens a working-tree file's diff: unstaged or staged (D63).</summary>
+    /// <summary>
+    /// Opens a working-tree file's diff: unstaged or staged (D63). A conflicted file opens the
+    /// conflict resolver instead (docs/phase-4-design.md 11.1, D148); while the interactive list or
+    /// the resolver is open, they are left first (asking when changed).
+    /// </summary>
     public void OpenDiff(ChangedFile file, bool staged)
     {
         ArgumentNullException.ThrowIfNull(file);
+        if (!staged && file.Kind == FileChangeKind.Conflicted)
+        {
+            OpenResolver(file);
+            return;
+        }
+
+        if (IsInteractiveRebaseOpen || IsResolverOpen)
+        {
+            _ = OpenDiffAfterLeavingAsync(file, staged);
+            return;
+        }
+
+        ShowWorkingTreeDiff(file, staged);
+    }
+
+    private void ShowWorkingTreeDiff(ChangedFile file, bool staged)
+    {
         var target = new DiffTarget(
             staged ? DiffSide.Staged : DiffSide.Unstaged,
             file.Path,
@@ -517,6 +539,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         _lifetime.Cancel();
         _watcher?.Dispose();
         Diff?.Dispose();
+        _resolver?.Dispose();
         LogFrameStatistics();
         _lifetime.Dispose();
     }
@@ -860,6 +883,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         Changes.Update(status, HasHead);
         OnStatusApplied(status);
+        FollowStatusInGraphArea(status);
     }
 
     private async Task ShowStatusAsync(Task<WorkingTreeStatus> reading)
@@ -892,8 +916,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         var staged = diff.Target.Side == DiffSide.Staged;
         var list = staged ? Status.Staged : Status.Unstaged;
         var file = list.FirstOrDefault(candidate => candidate.Path == diff.Target.Path);
-        if (file is null)
+        if (file is null || file.Kind == FileChangeKind.Conflicted)
         {
+            // Gone from its list, or conflicted now: a conflicted file is the resolver's (11.1).
             CloseDiff();
             return;
         }

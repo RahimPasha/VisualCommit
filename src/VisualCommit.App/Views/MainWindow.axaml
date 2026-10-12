@@ -31,12 +31,14 @@
 
       <!-- The three regions show the active tab (D45). -->
       <shell:LeftPanelView Grid.Column="0" DataContext="{Binding ActiveTab.LeftPanel}" />
-      <shell:CommitGraphView Grid.Column="1" DataContext="{Binding ActiveTab}" />
+      <!-- While the conflict resolver is open the graph area spans the right panel's column too,
+           which keeps its width (docs/phase-4-design.md 11.2). -->
+      <shell:CommitGraphView Grid.Column="1" DataContext="{Binding ActiveTab}" Grid.ColumnSpan="{Binding GraphColumnSpan}" />
       <!-- The commit's details, or the stage panel while the working-changes row is selected. -->
-      <Panel Grid.Column="2" IsVisible="{Binding !ActiveTab.ShowsWorkingChanges}">
+      <Panel Grid.Column="2" IsVisible="{Binding ActiveTab.ShowsDetailsPanel}">
         <shell:RightPanelView DataContext="{Binding ActiveTab.Details}" />
       </Panel>
-      <Panel Grid.Column="2" IsVisible="{Binding ActiveTab.ShowsWorkingChanges}">
+      <Panel Grid.Column="2" IsVisible="{Binding ActiveTab.ShowsStagePanel}">
         <shell:WorkingChangesView DataContext="{Binding ActiveTab.Changes}" />
       </Panel>
 
@@ -59,6 +61,7 @@
                     ResizeDirection="Columns"
                     Background="Transparent"
                     ZIndex="1"
+                    IsVisible="{Binding ActiveTab.ShowsRightPanel}"
                     AutomationProperties.AutomationId="RightSplitter" />
     </Grid>
 

@@ -59,6 +59,7 @@ public sealed partial class RepositoryViewModel
     {
         OtherWorktrees = _otherWorktrees,
         TipsOnHead = BranchTipsOnHead(),
+        MergeTool = _mergeTool,
     };
 
     /// <summary>

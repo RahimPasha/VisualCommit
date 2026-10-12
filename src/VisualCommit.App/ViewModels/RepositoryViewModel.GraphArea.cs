@@ -1,19 +1,28 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using VisualCommit.App.ViewModels.Conflicts;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
 
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
-/// The lead's hooks of phase 4 (docs/phase-4-design.md 2.2, 11.1 and section 14): what puts the
-/// interactive rebase's list and the conflict resolver in the graph area, what must be left
-/// before something else takes it, where the focus goes when they close; and what the backups'
-/// clean-up keeps.
+/// The lead's hooks of phase 4 (docs/phase-4-design.md 2.2, 11.1, 11.2, 11.9 and section 14):
+/// what puts the interactive rebase's list and the conflict resolver in the graph area, what
+/// must be left before something else takes it, where the focus goes when they close, the
+/// resolver fed from every status read with git's merge tool; and what the backups' clean-up
+/// keeps.
 /// </summary>
 public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 {
+    private ConflictResolverViewModel? _resolver;
+    private string? _mergeTool;
+    private bool _closingResolverQuietly;
+    private int _mergeToolReads;
+
     /// <summary>The interactive rebase's list shown in place of the graph (2.2), or null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsInteractiveRebaseOpen))]
@@ -23,11 +32,34 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     public bool IsInteractiveRebaseOpen => InteractiveRebase is not null;
 
+    /// <summary>
+    /// The conflict resolver (11.1): one per repository, like the diff, so that its document,
+    /// undo stack, caret and scroll are kept while another tab is shown. It shows only while
+    /// <see cref="IsResolverOpen"/>.
+    /// </summary>
+    public ConflictResolverViewModel Resolver => _resolver ??= CreateResolver();
+
+    /// <summary>The resolver is open in the graph area, which then spans the graph and right-panel columns (11.2).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsGraph))]
+    [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
+    [NotifyPropertyChangedFor(nameof(ShowsDiff))]
+    public partial bool IsResolverOpen { get; private set; }
+
     /// <summary>The graph area shows the graph: no diff, list or resolver is open in its place.</summary>
-    public bool ShowsGraph => !IsDiffOpen && !IsInteractiveRebaseOpen;
+    public bool ShowsGraph => !IsDiffOpen && !IsInteractiveRebaseOpen && !IsResolverOpen;
 
     /// <summary>The graph area shows the list: it is open and no diff is open over it (2.2).</summary>
-    public bool ShowsInteractiveRebase => IsInteractiveRebaseOpen && !IsDiffOpen;
+    public bool ShowsInteractiveRebase => IsInteractiveRebaseOpen && !IsDiffOpen && !IsResolverOpen;
+
+    /// <summary>The graph area shows the open diff.</summary>
+    public bool ShowsDiff => IsDiffOpen && !IsResolverOpen;
+
+    /// <summary>
+    /// Git's merge tool (<c>merge.tool</c>), read whenever the status shows a conflict (11.9), or
+    /// null: the menus' <c>Open in merge tool</c> and the resolver's <c>Merge tool…</c>.
+    /// </summary>
+    public string? MergeTool => _mergeTool;
 
     /// <summary>
     /// Raised when the list or the resolver has closed (2.2, 11.1): the graph area's view gives
@@ -50,8 +82,7 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             return;
         }
 
-        CloseDiff();
-        InteractiveRebase = null;
+        LeaveGraphArea();
         IsWorkingRowSelected = false;
         var index = Graph.IndexOf(list.Onto);
         var baseSubject = index >= 0 ? Graph.CommitAt(index).Subject : string.Empty;
@@ -64,17 +95,30 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
         InteractiveRebase = opened;
     }
 
-    /// <summary>Opens the conflict resolver on <paramref name="file"/> (11.1, D148), after leaving what the graph area shows.</summary>
-    public void OpenResolver(ChangedFile file) =>
-        throw new NotImplementedException("The lead's hook: docs/phase-4-design.md 11.1");
+    /// <summary>
+    /// Opens the conflict resolver on <paramref name="file"/> (11.1, D148): "Resolve conflict", a
+    /// click on a conflicted file in the stage panel, <see cref="OpenDiff"/> of one. Leaves what the
+    /// graph area shows first (asking when the list was changed or the result modified).
+    /// </summary>
+    public void OpenResolver(ChangedFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        _ = OpenResolverAsync(file.Path);
+    }
 
     /// <summary>
     /// Whether what the graph area shows may be replaced (11.1): asks the list's question when it
-    /// was changed (2.2, 7.2). False on "Keep editing". It closes nothing itself.
+    /// was changed (2.2, 7.2), and the resolver's when its result is modified. False on "Keep
+    /// editing". It closes nothing itself.
     /// </summary>
     public async Task<bool> TryLeaveGraphAreaAsync()
     {
         if (InteractiveRebase is { } list && !await list.TryLeaveAsync())
+        {
+            return false;
+        }
+
+        if (IsResolverOpen && _resolver is { } resolver && !await resolver.TryLeaveAsync())
         {
             return false;
         }
@@ -88,6 +132,136 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     /// </summary>
     public IReadOnlySet<string> BackupsToKeep =>
         _lastSnapshot is { } snapshot ? new HashSet<string>(StringComparer.Ordinal) { snapshot.Ref } : new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Closes what the graph area shows instead of the graph, without asking (after
+    /// <see cref="TryLeaveGraphAreaAsync"/>): the diff, the list and the resolver. The focus stays
+    /// where the caller puts it.
+    /// </summary>
+    private void LeaveGraphArea()
+    {
+        CloseDiff(returnFocus: false);
+        InteractiveRebase = null;
+        if (IsResolverOpen && _resolver is { } resolver)
+        {
+            _closingResolverQuietly = true;
+            try
+            {
+                resolver.Close();
+            }
+            finally
+            {
+                _closingResolverQuietly = false;
+            }
+        }
+    }
+
+    private async Task OpenResolverAsync(string path)
+    {
+        try
+        {
+            // Another file of the open resolver asks as leaving it does (11.1).
+            if (_disposed || !await TryLeaveGraphAreaAsync())
+            {
+                return;
+            }
+
+            var resolver = Resolver;
+            CloseDiff(returnFocus: false);
+            InteractiveRebase = null;
+            resolver.Update(Status, CurrentName(), OntoNameOf(Status.InProgress));
+            await resolver.OpenAsync(path);
+            IsResolverOpen = resolver.IsOpen;
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"{Name}: opening the conflict resolver on {path} failed.", ex);
+        }
+    }
+
+    /// <summary>A working-tree file's diff from the stage panel while the list or the resolver is open: leaves them first (11.1).</summary>
+    private async Task OpenDiffAfterLeavingAsync(ChangedFile file, bool staged)
+    {
+        try
+        {
+            if (_disposed || !await TryLeaveGraphAreaAsync())
+            {
+                return;
+            }
+
+            LeaveGraphArea();
+            ShowWorkingTreeDiff(file, staged);
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"{Name}: opening the diff of {file.Path} failed.", ex);
+        }
+    }
+
+    private ConflictResolverViewModel CreateResolver()
+    {
+        var resolver = new ConflictResolverViewModel(Operations, _log)
+        {
+            MergeTool = _mergeTool,
+            FileMenu = file => RepositoryMenus.ForUnstagedFile(
+                MenuContext,
+                new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: null),
+                MenuActions),
+        };
+        resolver.Closed += OnResolverClosed;
+        return resolver;
+    }
+
+    private void OnResolverClosed(object? sender, EventArgs e)
+    {
+        IsResolverOpen = false;
+        if (!_closingResolverQuietly && !_disposed)
+        {
+            // The next step after the last file is resolved is Continue (11.1).
+            GraphFocusRequested?.Invoke(this, GraphFocusRequest.ContinueFirst);
+        }
+    }
+
+    /// <summary>
+    /// After every status read (11.9, 11.11): the resolver learns the conflicts and what is in
+    /// progress, and git's merge tool is read again while files conflict.
+    /// </summary>
+    private void FollowStatusInGraphArea(WorkingTreeStatus status)
+    {
+        _resolver?.Update(status, CurrentName(), OntoNameOf(status.InProgress));
+        if (status.Conflicts.Count > 0)
+        {
+            _ = ReadMergeToolAsync();
+        }
+    }
+
+    private async Task ReadMergeToolAsync()
+    {
+        var read = ++_mergeToolReads;
+        try
+        {
+            var tool = await Repository.ReadMergeToolAsync(cancellationToken: _lifetime.Token);
+            if (read != _mergeToolReads || _disposed)
+            {
+                return;
+            }
+
+            _mergeTool = string.IsNullOrWhiteSpace(tool) ? null : tool;
+            if (_resolver is { } resolver)
+            {
+                resolver.MergeTool = _mergeTool;
+            }
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+        }
+        catch (Exception ex)
+        {
+            _log.Warning($"{Name}: git's merge tool could not be read.", ex);
+        }
+    }
+
+    private string CurrentName() => Refs?.Head.BranchName ?? "HEAD";
 
     // The list's host (2.2, IInteractiveRebaseHost).
 
