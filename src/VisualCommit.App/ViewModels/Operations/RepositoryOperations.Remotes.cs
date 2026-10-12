@@ -199,13 +199,15 @@ public sealed partial class RepositoryOperations
                     : OperationReport.Done(rebased);
             case PullOutcome.Conflicts:
                 var conflicts = await CountConflictedFilesAsync();
-                if (conflicts > 0 || (await Git.ReadStatusAsync()).InProgress.Kind != InProgressKind.Rebase)
-                {
-                    return OperationReport.Conflicts(OperationTexts.PullConflicts(conflicts));
-                }
+                var stopped = conflicts > 0 || (await Git.ReadStatusAsync()).InProgress.Kind != InProgressKind.Rebase
+                    ? OperationReport.Conflicts(OperationTexts.PullConflicts(conflicts))
+                    : await RebaseStopReportAsync(context, 0, notice); // A rebase stopped with no conflicted file (section 6, 1.4).
 
-                // A rebase stopped with no conflicted file (section 6, 1.4).
-                return await RebaseStopReportAsync(context, 0, notice);
+                // Git's fork point left out commits the upstream once had, also when the rebase
+                // stopped (10.2, D147; the review's finding 20); the stop's own warning tone.
+                return pulled.LeftOutByForkPoint > 0
+                    ? stopped with { Message = OperationTexts.WithLeftOutByForkPoint(stopped.Message, upstream, pulled.LeftOutByForkPoint) }
+                    : stopped;
             case PullOutcome.UpstreamGone:
                 return OperationReport.Done(OperationTexts.PullUpstreamGone(
                     ShortName(branch.UpstreamRemoteRef ?? branch.UpstreamRef!), branch.UpstreamRemote ?? LocalRemote));

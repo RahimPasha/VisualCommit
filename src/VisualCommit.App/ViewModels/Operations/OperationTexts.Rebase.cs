@@ -204,7 +204,15 @@ public static partial class OperationTexts
 
     /// <summary>A pull's rebase from which git's fork point left out commits the upstream once had (section 6; warning).</summary>
     public static string PulledRebasedLeftOut(string branch, string upstream, int leftOut) =>
-        $"Pulled and rebased {branch} onto {upstream}; git left out {Count(leftOut, "commit")} that {upstream} once had";
+        WithLeftOutByForkPoint(PulledRebased(branch, upstream), upstream, leftOut);
+
+    /// <summary>
+    /// 10.2's fork-point clause after a pull's result: "{result}; git left out {k} commits that
+    /// {up} once had". Also after a pull whose rebase stopped ("Pull stopped: 1 file has
+    /// conflicts; git left out 1 commit that origin/main once had", the review's finding 20).
+    /// </summary>
+    public static string WithLeftOutByForkPoint(string result, string upstream, int leftOut) =>
+        $"{result}; git left out {Count(leftOut, "commit")} that {upstream} once had";
 
     // 7.2: Skip's question.
 

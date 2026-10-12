@@ -64,6 +64,34 @@ public class RepositoryOperationsPullRebaseTests
     }
 
     [Fact]
+    public async Task A_pull_whose_rebase_stops_also_says_what_the_fork_point_left_out()
+    {
+        // The review's finding 20: origin's main was rewritten by a force push after main took
+        // "Other work" from it; main's own "Local work" edits that file, so the rebase onto the
+        // rewritten upstream stops, and git's fork point leaves "Other work" out (section 6).
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await repo.GitAsync("remote", "set-url", "origin", "../origin.git");
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/other.txt", "other\n", "Other work");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        await repo.GitAsync("merge", "--quiet", "--ff-only", "refs/remotes/origin/main");
+        await repo.CommitFileAsync("src/other.txt", "other, mine\n", "Local work");
+        var other = repo.OpenSibling("other");
+        await other.GitAsync("reset", "--quiet", "--hard", "HEAD~1");
+        await other.CommitFileAsync("src/other.txt", "other, rewritten\n", "Other work, rewritten");
+        await other.GitAsync("push", "--quiet", "--force", "origin", "refs/heads/main:refs/heads/main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.PullRebaseAsync();
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(
+            ("Pull stopped: 1 file has conflicts; git left out 1 commit that origin/main once had", OperationStatusTone.Warning),
+            (app.StatusText, app.StatusTone));
+        var state = app.Operations.Status.InProgress;
+        Assert.Equal((InProgressKind.Rebase, "Local work", 1, 1), (state.Kind, state.Subject, state.Done, state.Total));
+    }
+
+    [Fact]
     public async Task A_pull_with_rebase_that_stops_is_continued_with_the_stopped_commits_author()
     {
         using var repo = await Scenarios.RemoteSyncAsync();

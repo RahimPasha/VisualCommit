@@ -246,6 +246,9 @@ public class OperationTextsTests
         Assert.Equal(
             "Pulled and rebased main onto origin/main; git left out 1 commit that origin/main once had",
             OperationTexts.PulledRebasedLeftOut("main", "origin/main", 1));
+        Assert.Equal(
+            "Pull stopped: 1 file has conflicts; git left out 2 commits that origin/main once had",
+            OperationTexts.WithLeftOutByForkPoint(OperationTexts.PullConflicts(1), "origin/main", 2));
         Assert.Equal("Resolved notes.txt", OperationTexts.Resolved("notes.txt"));
         Assert.Equal("Resolved notes.txt in meld", OperationTexts.ResolvedInTool("notes.txt", "meld"));
         Assert.Equal("meld closed without resolving notes.txt", OperationTexts.ToolClosedWithoutResolving("meld", "notes.txt"));
