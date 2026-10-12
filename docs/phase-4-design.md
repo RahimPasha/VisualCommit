@@ -598,8 +598,8 @@ counts the commands that apply a commit (8). The icon's tooltip is in 10.3.
     `exec … vc-message-<n>` line still waits in `git-rebase-todo` before the next `label`), the
     group's message `rebase-merge/vc-message-<n>` instead.
   - a `fixup` or `squash` stop of a rebase started elsewhere: `rebase-merge/message` less git's
-    comment lines; Continue's tooltip then says `Continue keeps git's message for the squashed
-    commit`.
+    comment lines (Continue then runs `git rebase --continue`, which keeps git's message; no
+    tooltip says so: the state does not tell that stop apart, 14.2).
   - The first line is the summary, the rest the description (phase 3's `SplitMessage` without its
     `#` filter). Continue passes no message when the boxes still hold what was filled, so that the
     git layer reads the source itself.
@@ -1476,6 +1476,42 @@ above:
   document's original (`MarkOriginal()`); a file read again is shown as a new document. Ctrl+Tab
   and Ctrl+Shift+Tab leave the result; Shift+Tab stays AvaloniaEdit's unindent. A headless test
   sees a `DispatcherTimer` (the caret's blink) tick only while it awaits.
+
+### 14.2 What WP1 to WP3 settled (merged in `81769a6`, `0a4fdc6`, `bd18b84`)
+
+- **WP1** (rebase): the fork point's count is, before the rebase, `rev-list --count --no-merges
+  --right-only --cherry-pick <upstream>...HEAD` less the same count with `^$(git merge-base
+  --fork-point <upstream> HEAD)` (0 without a fork point): section 6's before-and-after count
+  would also count a commit git drops as empty. The sequence editor copies every message file
+  with one pattern (`vc() { cp '<folder>/'vc-message-* "$(dirname "$1")/" && cp '<todo>' "$1";
+  }; vc`), so that its value stays under Windows' 32,767 characters for any number of groups.
+  `PullResult.LeftOutByForkPoint`. `RebaseTodo.SquashMessage` and `.SquashPlan` build a squash's
+  message and plan; the squashed commit is `NewTip~(list length − N)`. A moved HEAD at Start throws
+  with `GitRepository.RebaseHeadMovedMessage`. Phase 3's `PullRebaseParityTests` (for
+  `pull.rebase=true`) is now `PullRebaseTrueParityTests`. Left: `RebaseResult` carries no git
+  output (the app takes it from the call log, `FailureOfLastCall`); a pull's rebase has no
+  autostash flag; a commit message in another encoding than UTF-8 is not kept byte for byte by an
+  interactive rebase's own-message copy (known issue).
+- **WP2** (lists, Continue, Skip): a paused list's state names the commit that waits
+  (`Commit`, `Subject`), so "paused" is `Sequenced && !HasPickHead` (phase 3's banner and the stage
+  panel were changed to read it so, `4177a58`); `ContinueAsync` throws `InvalidOperationException`
+  for a list stopped on a refused commit; a list refused because conflicts were already there is
+  quit too; `NextIsSquash` is false when the stopped command is itself a fixup or squash (a group's
+  member: emptying it joins nothing elsewhere); `Group` is set for `OwnAmendFailed`; a rebase's
+  `Empty` stays false and `StopKind` carries emptiness; a rescheduled pick on a newer git (no
+  `stopped-sha`) is recognised by `done` ending with the same command; with `rebase.backend=apply`
+  Continue with nothing staged stops again ("No changes"). No state tells a fixup or squash stop of
+  a rebase from elsewhere apart, so 5.3's tooltip for it is dropped.
+- **WP3** (conflicts, the clean-up): `ConflictText` (`Parse`, `Segments`, `Blocks`, `Choose`,
+  `BlockChoice` `Ours`, `Theirs`, `OursThenTheirs`, `TheirsThenOurs`, `Decode` and `Encode` byte
+  for byte); its parsing is strict as git's rerere is (one `=` marker, `|` only before it), so a
+  block whose theirs side holds a 7-character `=======` line is read as common text, and `git diff
+  --cached --check` reports any marker-like line. `git rm` on a conflicted path deletes the file
+  whatever it holds, so "Delete it" (`RemoveConflictedAsync`) saves a D67 snapshot first when the
+  file matches none of the path's stages. A file/folder clash is any kind on `<p>~<label>` with
+  `<p>` a folder in the index (git also reports it as modify/delete). The merge tool: an unknown
+  tool or one that is not installed throws `GitException` (it did not run); a tool that fails
+  leaves the file as it was. New member `ReadStagedConflictMarkersAsync`.
 
 ## 15. Decisions
 

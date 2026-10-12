@@ -77,22 +77,26 @@ Start:
 
 Git layer:
 
-- [ ] 9. Rebase a branch onto a commit or branch (the current branch or another), with a backup
+- [x] 9. Rebase a branch onto a commit or branch (the current branch or another), with a backup
   of the old tip first and no confirmation (D135); the rebase's stopped state read fully; Continue,
   Skip and Abort for a rebase. Tests.
-- [ ] 10. Interactive rebase with the app's own sequence editor: reorder, squash, fixup, reword,
+- [x] 10. Interactive rebase with the app's own sequence editor: reorder, squash, fixup, reword,
   drop; squash of several selected commits. Tests.
-- [ ] 11. Several commits picked and reverted with one git command (D136); Continue and Skip for
+- [x] 11. Several commits picked and reverted with one git command (D136); Continue and Skip for
   a merge, a cherry-pick and a revert, one or a list, also one started in a terminal; the
   in-progress state read so that the reftable ref format works too (D128). Tests.
-- [ ] 12. Pull with rebase chosen for one pull, whatever git's configuration says; Continue and
+- [x] 12. Pull with rebase chosen for one pull, whatever git's configuration says; Continue and
   Skip after a pull's rebase. Tests, with `PullParityTests`.
-- [ ] 13. Conflicts: per file the base, ours and theirs, the kind of conflict and its hunks;
+- [x] 13. Conflicts: per file the base, ours and theirs, the kind of conflict and its hunks;
   taking a whole file from one side; writing a result and marking it resolved; the external merge
   tool. Tests for every conflict kind.
-- [ ] 14. Backups cleaned up automatically (D137): after 30 days or beyond 50, the oldest first,
+- [x] 14. Backups cleaned up automatically (D137): after 30 days or beyond 50, the oldest first,
   never one an operation in progress needs, when a repository is opened and after every new
   backup; logged, nothing on screen. Tests.
+
+  Steps 9 to 14 are done in the Git layer: WP1 (`bd18b84`), WP2 (`0a4fdc6`), WP3 (`81769a6`); design
+  14.2 says what they settled. The app's halves (saving the rebase's backup, scheduling the
+  clean-up, the operations that call these members) are WP4's, in step 15.
 
 App:
 
