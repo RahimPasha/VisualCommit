@@ -191,11 +191,21 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP4's fixes are merged (`f68ece9`), and with them parts A, B, C14 to C17 and D of step 20 (80 of 80
-tests of the Phase 4 project pass on `112e376`). Still running: WP7-C1 (checks C10 to C13) in a
-worktree, and the independent review of step 22 (a workflow: five reviewers, each finding verified
-adversarially, read-only). Then: merge C1, fix what the review confirms, WP8 (the real-window
-pass's code for the RW-marked steps), steps 15, 16 and 19 ticked, and the gate.
+Step 20's checks are all merged (A, B, C10 to C17, D: 80 tests, `96166f2`). The independent review
+of step 22 (a workflow, `wf_4ce4a46c-fbf`: five reviewers, each finding verified adversarially)
+confirmed 31 findings, 5 major and 26 minor, none a blocker; three agents fix them in worktrees:
+WP9-G (the git layer and the operations: findings 1 to 3, 11 to 13, 15 to 24), WP9-R (the resolver:
+4, 5, 7 to 10, 25 to 31) and WP9-L (leaving the list while its Start runs: 6 and 14), with the
+lead's decisions in their briefs. Then: merge them, record what they change in design 14.4 and
+the report, run the default tests, read CI, WP8 (the real-window pass's code), and the gate.
+
+CI: runs 38290071444, 38293870481 and 38295807963 failed. The first two because the background
+`Clean up backups` held the queue right after every opening (fixed in `c12ff65`: the clean-up reads
+first and queues only when a backup is due); the walk-through's checks then failed on git 2.55's
+rebase files (fixed in `9856b2c` and `1c1c3b1`). The default run on this machine passed 2343 of
+2344 on `96166f2` (26 min 49 s, with the review's agents running); the one failure, phase 3's
+`Double_clicks_check_out_branches_and_apply_a_stash_from_the_left_panel_and_only_select_elsewhere`,
+passed alone and in its class afterwards.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
