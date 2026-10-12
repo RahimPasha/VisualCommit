@@ -258,7 +258,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     /// <summary>The result's caret, kept while another tab's resolver is shown.</summary>
     public int CaretOffset { get; set; }
 
-    /// <summary>The result is to take the keyboard focus (on opening, after a choice) and the view has not given it yet: a view shown later gives it.</summary>
+    /// <summary>The body is to take the keyboard focus (the result on opening and after a choice, or a card's first button) and the view has not given it yet: a view shown later gives it.</summary>
     public bool ResultFocusPending { get; set; }
 
     /// <summary>The result's scroll offset, kept while another tab's resolver is shown.</summary>
@@ -660,7 +660,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         if (KindOf(entry, content) is { } card)
         {
-            ShowCard(entry, card);
+            ShowCard(entry, card, focus);
             return;
         }
 
@@ -701,7 +701,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     }
 
     /// <summary>The card of a conflict without text (11.8) and its buttons.</summary>
-    private void ShowCard(ConflictEntry entry, ConflictCardKind kind)
+    private void ShowCard(ConflictEntry entry, ConflictCardKind kind, bool focus)
     {
         _read = null;
         _current = null;
@@ -730,6 +730,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         CardText = ConflictResolverTexts.CardText(kind, file, oursName, theirsName, otherName, folder);
         var keepSide = entry.Kind is ConflictKind.DeletedByThem or ConflictKind.AddedByUs ? ConflictSide.Ours : ConflictSide.Theirs;
+        ResultFocusPending = focus && kind != ConflictCardKind.Submodule;
         CardButtons = kind switch
         {
             ConflictCardKind.DeletedByThem or ConflictCardKind.DeletedByUs =>

@@ -590,6 +590,11 @@ public class ConflictResolverViewModelTests
         Assert.True(resolver.ShowsMergeTool);
         Assert.False(resolver.RunMergeToolCommand.CanExecute(null));
 
+        // The card that opens asks for the focus on its first button.
+        resolver.ResultFocusPending = false;
+        await resolver.OpenAsync("image.png");
+        Assert.True(resolver.ResultFocusPending);
+
         await resolver.CardButtons[1].RunCommand.ExecuteAsync(null);
 
         Assert.Equal(["TakeSide other.txt Ours", "TakeSide image.png Theirs"], actions.Writes);

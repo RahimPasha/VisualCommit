@@ -107,6 +107,10 @@ public partial class ConflictResolverView : UserControl
             viewModel.PropertyChanged += OnViewModelPropertyChanged;
             viewModel.NavigationRequested += OnNavigationRequested;
             ShowDocument(viewModel, restore: true);
+            if (viewModel.ShowsCard && viewModel.ResultFocusPending)
+            {
+                RequestFocus();
+            }
         }
         else
         {
@@ -163,10 +167,19 @@ public partial class ConflictResolverView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is ConflictResolverViewModel viewModel && e.PropertyName == nameof(ConflictResolverViewModel.Document)
-            && !ReferenceEquals(Result.Document, viewModel.Document))
+        if (sender is not ConflictResolverViewModel viewModel)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(ConflictResolverViewModel.Document) && !ReferenceEquals(Result.Document, viewModel.Document))
         {
             ShowDocument(viewModel, restore: false);
+        }
+        else if (e.PropertyName is nameof(ConflictResolverViewModel.Body) or nameof(ConflictResolverViewModel.CardButtons) && viewModel.ShowsCard && viewModel.ResultFocusPending)
+        {
+            // A card that opens takes the focus on its first button, without a focus outline.
+            RequestFocus();
         }
     }
 
@@ -212,13 +225,21 @@ public partial class ConflictResolverView : UserControl
 
     private void TryFocusPending()
     {
-        if (!_focusPending || _viewModel is not { ShowsText: true } || !Result.IsEffectivelyVisible || !(Result.Bounds.Height > 0))
+        if (!_focusPending || _viewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        InputElement? target = viewModel.ShowsText
+            ? Result.TextArea
+            : viewModel.ShowsCard ? CardButtons.GetVisualDescendants().OfType<Button>().FirstOrDefault() : null;
+        if (target is null || !target.IsEffectivelyVisible || !(target.Bounds.Height > 0))
         {
             return;
         }
 
         _focusPending = false;
-        if (Result.TextArea.Focus(NavigationMethod.Unspecified) && _viewModel is { } viewModel)
+        if (target.Focus(NavigationMethod.Unspecified))
         {
             viewModel.ResultFocusPending = false;
         }

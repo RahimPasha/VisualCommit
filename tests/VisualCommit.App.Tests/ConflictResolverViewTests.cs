@@ -402,6 +402,8 @@ public class ConflictResolverViewTests
         Assert.Equal(72 + ((Height - 72) / 2), card.Center.Y, 1.0);
         Assert.Equal("main changed other.txt; feature/kinds deleted it.", Text(host, "ConflictCardText"));
         Assert.Equal("Keep the file", ((Button)host.Find("ConflictKeepFile")).Content);
+        Assert.True(host.Find("ConflictKeepFile").IsFocused);
+        Assert.DoesNotContain(":focus-visible", host.Find("ConflictKeepFile").Classes);
         Assert.Equal("Delete it", ((Button)host.Find("ConflictDeleteFile")).Content);
         Assert.Equal(new Rect(0, 36, 840, 36), Bounds(host, "ResolverToolbar"));
         foreach (var id in new[] { "ResolverConflictPosition", "ResolverTakeOurs", "ResolverTakeTheirs", "ResolverMergeTool", "ResolverMarkResolved", "ResolverText" })
