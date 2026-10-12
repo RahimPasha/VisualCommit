@@ -129,7 +129,7 @@ public sealed partial class GitRepository
     /// <item>Refuses (<see cref="RebaseHeadMovedMessage"/>) unless HEAD is on
     /// <see cref="RebasePlan.BranchRef"/> at <see cref="RebasePlan.ExpectedTip"/>.</item>
     /// <item>Builds the todo and its message files (<see cref="RebaseTodo"/>), reading the own
-    /// messages it needs exactly (<c>git cat-file commit</c>, after the header), and writes them
+    /// messages it needs exactly (<see cref="ReadOwnMessageAsync"/>, in UTF-8), and writes them
     /// as UTF-8 without a byte order mark into <c>&lt;tempRoot&gt;/visualcommit-rebase-&lt;guid&gt;</c>.</item>
     /// <item>Runs <c>git rebase -i &lt;onto&gt;</c> with <c>GIT_SEQUENCE_EDITOR</c> set for this
     /// call to a shell function that copies each message file next to git's todo and the todo
@@ -216,14 +216,17 @@ public sealed partial class GitRepository
             || result.StandardError.Contains("may have been dropped accidentally", StringComparison.Ordinal));
 
     /// <summary>
-    /// A commit's message exactly as git keeps it: the part of <c>git cat-file commit</c> after the
-    /// header's first empty line, its <c>#</c> lines and white space included (2.5).
+    /// A commit's message exactly as git keeps it, its <c>#</c> lines and white space included
+    /// (2.5), in UTF-8: <c>git log -1 --encoding=UTF-8 -z --format=%B &lt;sha&gt;</c>, which gives the
+    /// raw message re-encoded from the commit's <c>encoding</c> header and ends it with a NUL
+    /// (taken off). The raw <c>git cat-file commit</c> would hand a commit made with
+    /// <c>i18n.commitEncoding=ISO-8859-1</c> to the UTF-8 decoder, and every non-ASCII letter
+    /// would become U+FFFD in the rewritten commit (the review's finding 15).
     /// </summary>
     private async Task<string> ReadOwnMessageAsync(string commit, CancellationToken cancellationToken)
     {
-        var raw = await ReadOutputAsync(cancellationToken, "cat-file", "commit", commit).ConfigureAwait(false);
-        var end = raw.IndexOf("\n\n", StringComparison.Ordinal);
-        return end < 0 ? string.Empty : raw[(end + 2)..];
+        var raw = await ReadOutputAsync(cancellationToken, "log", "-1", "--no-show-signature", "--no-color", "--encoding=UTF-8", "-z", "--format=%B", commit, "--").ConfigureAwait(false);
+        return raw.EndsWith('\0') ? raw[..^1] : raw;
     }
 
     /// <summary>The full id of the commit <paramref name="revision"/> names, or a <see cref="GitException"/> with git's text.</summary>
