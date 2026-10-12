@@ -507,19 +507,17 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
 
     /// <summary>
     /// "Continue cherry-pick", "Continue revert", "Continue rebase" (5.3): the banner's Continue
-    /// with the boxes' message, or no message while they still hold what was filled in, so that
-    /// the git layer reads the operation's own. When the operation went on (another stopped
-    /// commit, or nothing in progress), the boxes are emptied and filled again for the next stop.
+    /// with <see cref="ContinueMessage"/>. When the operation went on (another stopped commit, or
+    /// nothing in progress), the boxes are emptied and filled again for the next stop.
     /// </summary>
     private async Task ContinueAsync()
     {
         ErrorText = null;
         IsCommitting = true;
-        var before = MessageKey(_status.InProgress);
-        var typed = (Summary, Description);
+        var mark = MarkContinue();
         try
         {
-            var error = await _host.ContinueAsync(HoldsFilledMessage ? null : JoinedMessage);
+            var error = await _host.ContinueAsync(ContinueMessage);
             if (error is not null)
             {
                 ErrorText = error;
@@ -531,11 +529,43 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
             IsCommitting = false;
         }
 
-        // The refresh after the operation has shown the new state already: it cleared a message
-        // that was still as filled in, and filled the next one. A message the user typed is still
-        // there; it belonged to the commit Continue made.
+        await AfterContinueAsync(mark);
+    }
+
+    /// <summary>
+    /// The message Continue commits with, from the banner or this panel (5.3, 5.4): the boxes'
+    /// message when the user changed what was filled in; null, so that the git layer reads the
+    /// operation's own, while the boxes still hold what was filled in or the summary is empty
+    /// ("The summary may be empty: the operation's own message is used then").
+    /// </summary>
+    public string? ContinueMessage => HoldsFilledMessage || string.IsNullOrWhiteSpace(Summary) ? null : JoinedMessage;
+
+    /// <summary>
+    /// The banner's Continue (5.4), which commits as this panel's Continue does: <paramref name="run"/>
+    /// gets <see cref="ContinueMessage"/>; afterwards, when the operation went on, a message the
+    /// user typed (and Continue committed) is cleared and the next stop's message is filled in.
+    /// </summary>
+    public async Task ContinueWithMessageAsync(Func<string?, Task> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var mark = MarkContinue();
+        await run(ContinueMessage);
+        await AfterContinueAsync(mark);
+    }
+
+    /// <summary>What <see cref="AfterContinueAsync"/> compares: the stopped commit and the boxes before Continue.</summary>
+    private (string? Key, string Summary, string Description) MarkContinue() => (MessageKey(_status.InProgress), Summary, Description);
+
+    /// <summary>
+    /// After a Continue: the refresh after the operation has shown the new state already, which
+    /// cleared a message that was still as filled in and filled the next one. A message the user
+    /// typed is still there; it belonged to the commit Continue made, so it is cleared and the next
+    /// stop's message filled in.
+    /// </summary>
+    private async Task AfterContinueAsync((string? Key, string Summary, string Description) before)
+    {
         var state = _status.InProgress;
-        if (MessageKey(state) != before && (Summary, Description) == typed && (typed.Summary.Length > 0 || typed.Description.Length > 0))
+        if (MessageKey(state) != before.Key && (Summary, Description) == (before.Summary, before.Description) && (before.Summary.Length > 0 || before.Description.Length > 0))
         {
             Summary = string.Empty;
             Description = string.Empty;

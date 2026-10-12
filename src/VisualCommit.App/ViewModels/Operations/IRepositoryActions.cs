@@ -79,8 +79,10 @@ public interface IRepositoryActions
     Task CherryPickAsync(string commit);
 
     /// <summary>
-    /// Cherry-picks several commits, one <c>git cherry-pick</c> each, oldest first by the
-    /// graph's rows, stopping at the first that does not apply cleanly (2.13, D88).
+    /// Cherry-picks several commits with one git call that takes the whole list, oldest first by
+    /// the graph's rows: <c>git cherry-pick &lt;oldest&gt; … &lt;newest&gt;</c> (docs/phase-4-design.md
+    /// section 4, D136). Git stops at the first commit that does not apply cleanly and keeps the
+    /// rest in its list, which the banner's Continue and Skip go on with.
     /// <paramref name="commits"/> are the SHAs the menu captured, in any order.
     /// </summary>
     Task CherryPickSeveralAsync(IReadOnlyList<string> commits);
@@ -88,7 +90,13 @@ public interface IRepositoryActions
     /// <summary>Reverts one commit, a merge commit with <c>-m 1</c> (2.14).</summary>
     Task RevertAsync(string commit);
 
-    /// <summary>Reverts several commits, one <c>git revert</c> each, newest first, stopping at the first that does not apply cleanly (2.14).</summary>
+    /// <summary>
+    /// Reverts several commits with one git call that takes the whole list, newest first by the
+    /// graph's rows: <c>git revert --no-edit &lt;newest&gt; … &lt;oldest&gt;</c> (section 4, D136).
+    /// Git stops at the first that does not apply cleanly and keeps the rest in its list, as for
+    /// <see cref="CherryPickSeveralAsync"/>. Merge commits are not reverted in a list (the menu
+    /// disables it).
+    /// </summary>
     Task RevertSeveralAsync(IReadOnlyList<string> commits);
 
     /// <summary>Confirms, backs up and aborts the merge, cherry-pick, revert, rebase or <c>git am</c> in progress (2.15, section 5).</summary>

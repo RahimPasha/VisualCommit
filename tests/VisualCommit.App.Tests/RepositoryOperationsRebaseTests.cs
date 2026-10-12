@@ -203,10 +203,13 @@ public class RepositoryOperationsRebaseTests
         using var repo = await Scenarios.RebaseAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         app.Select(OtherOne);
+        var texts = RecordRunningTexts(app);
 
         // A3 step 5.
         await app.Operations.CheckoutAndRebaseAsync("refs/heads/feature/other", new RebaseTarget(MainMore, "main"));
 
+        // 10.1: the status bar names the step: the checkout, then the rebase.
+        Assert.Equal(["Checking out feature/other…", "Rebasing feature/other onto main…"], texts);
         Assert.Empty(app.Dialogs.Shown);
         Assert.Equal("Rebased feature/other onto main", app.StatusText);
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
@@ -238,7 +241,32 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal("feature/topic", await repo.CurrentBranchAsync());
         Assert.Equal(OtherOne, await repo.RefTargetAsync("refs/heads/feature/other"));
         Assert.Empty(await repo.BackupRefsAsync());
+        // A5 step 3: git's rebase.autoStash (unset: exit 1), then the status read.
+        var calls = app.Calls.Snapshot();
+        var autoStash = calls.ToList().FindIndex(call => call.CommandText == "git config --type=bool --get rebase.autoStash");
+        Assert.True(autoStash >= 0, "The app did not read rebase.autoStash.");
+        Assert.Equal(1, calls[autoStash].ExitCode);
+        Assert.Contains(calls.Skip(autoStash + 1), call => call.CommandText.StartsWith("git status ", StringComparison.Ordinal));
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Check_out_and_rebase_lets_git_stash_a_changed_file_when_rebase_autoStash_is_set()
+    {
+        // 1.3 step 1, D142: git stashes the change itself and puts it back after the rebase.
+        using var repo = await Scenarios.RebaseAsync();
+        await repo.ConfigAsync("rebase.autoStash", "true");
+        repo.WriteFile("README.md", "# Changed here\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.CheckoutAndRebaseAsync("refs/heads/feature/other", new RebaseTarget(MainMore, "main"));
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Rebased feature/other onto main", app.StatusText);
+        Assert.Equal("feature/other", await repo.CurrentBranchAsync());
+        Assert.Equal(MainMore, (await repo.GitAsync("rev-parse", "feature/other~1")).StandardOutput.Trim());
+        Assert.Equal("# Changed here\n", Read(repo, "README.md"));
+        AssertCalledInOrder(app, "git config --type=bool --get rebase.autoStash", "git switch --no-guess feature/other", $"git rebase {MainMore}");
     }
 
     [Fact]
@@ -313,9 +341,11 @@ public class RepositoryOperationsRebaseTests
         var list = await app.Repository.Repository.ReadRebaseListAsync(MainMore, "refs/heads/feature/other", fromCommit: false, options: null, TestContext.Current.CancellationToken);
         var request = new InteractiveRebaseRequest(new RebaseTarget(MainMore, "main"), "refs/heads/feature/other", FromHere: false, CheckoutFirst: true);
         var plan = new RebasePlan(list.Onto, list.BranchTip, "refs/heads/feature/other", [new RebaseStep(OtherOne, RebaseAction.Reword, "Other one, reworded\n\n#1 kept")]);
+        var texts = RecordRunningTexts(app);
 
         Assert.True(await app.Operations.RunInteractiveRebaseAsync(plan, request));
 
+        Assert.Equal(["Checking out feature/other…", "Rebasing feature/other…"], texts);
         Assert.Equal("Rebased feature/other: 1 commit", app.StatusText);
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
         Assert.Equal("Other one, reworded\n\n#1 kept", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.TrimEnd());
@@ -387,26 +417,65 @@ public class RepositoryOperationsRebaseTests
     }
 
     [Fact]
-    public async Task The_backups_clean_up_runs_after_an_operation_that_saved_one_and_removes_old_backups()
+    public async Task Squash_refused_by_the_app_shows_its_own_summary()
     {
-        // Section 9, D139: an old backup (named as 40 days old) goes after the rebase that saved a new one.
-        using var repo = await Scenarios.RebaseAsync();
-        var old = DateTimeOffset.UtcNow.AddDays(-40).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture);
-        await repo.GitAsync("update-ref", $"refs/visualcommit/backup/reset-{old}", TopicOne);
+        // The branch moved after the list was read (D124): main gained a commit while the squash waited.
+        using var repo = await Scenarios.InteractiveAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        var parent = await app.ShaAsync("main~1");
+        app.Dialogs.Answer<MessageDialogViewModel>(dialog => dialog.ConfirmCommand.Execute(null));
+        app.Dialogs.CloseError();
+        var (hold, ahead) = HoldQueue(app, () => repo.GitAsync("commit", "--allow-empty", "-m", "Moved"));
+        var waiting = app.Operations.SquashAsync([parent, head]);
 
-        await app.Operations.RebaseAsync(new RebaseTarget(MainMore, "main"));
+        // The squash read its list and waits in the queue; then main moves ahead of it.
+        for (var tries = 0; app.Repository.Queue.Waiting == 0; tries++)
+        {
+            Assert.True(tries < 500, "The squash did not reach the queue.");
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
 
-        // Nothing on screen: the status is the rebase's, and no dialog opened.
-        var backup = Assert.Single(await repo.BackupRefsAsync());
-        Assert.StartsWith("refs/visualcommit/backup/rebase-", backup.Name, StringComparison.Ordinal);
-        Assert.Equal("Rebased feature/topic onto main", app.StatusText);
-        Assert.Empty(app.Dialogs.Shown);
+        hold.SetResult();
+        await ahead;
+        await waiting;
 
-        // An operation that saved none does not clean up: the old one, named again, stays.
-        await repo.GitAsync("update-ref", $"refs/visualcommit/backup/reset-{old}", TopicOne);
-        await app.Operations.CherryPickAsync(OtherOne);
-        Assert.Equal(2, (await repo.BackupRefsAsync()).Count);
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Squash failed", "main changed while the list was open: open it again. Nothing was rebased."), (dialog.Title, dialog.Summary));
+        Assert.True(string.IsNullOrEmpty(dialog.Output), "The app's own refusal shows no git output.");
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
+
+        // A merge in progress: "Finish or abort the merge first", not "Squash 2 commits failed.".
+        using var merging = await Scenarios.ConflictsStoppedAsync(Scenarios.ConflictsStop.Merge);
+        using var other = await OperationsHarness.OpenAsync(merging);
+        other.Dialogs.Answer<MessageDialogViewModel>(dialog => dialog.ConfirmCommand.Execute(null));
+        other.Dialogs.CloseError();
+
+        await other.Operations.SquashAsync([await other.ShaAsync("main~1"), await merging.HeadAsync()]);
+
+        dialog = Assert.Single(other.Dialogs.Errors);
+        Assert.Equal(("Squash failed", "Finish or abort the merge first"), (dialog.Title, dialog.Summary));
+        Assert.Empty(await merging.BackupRefsAsync());
+    }
+
+    // The backups' clean-up after an operation (section 9, D139): RepositoryOperationsBackupCleanupTests.
+
+    /// <summary>The running texts the status bar is given, in order, each once (the queue's <c>Current</c> at each change).</summary>
+    private static List<string> RecordRunningTexts(OperationsHarness app)
+    {
+        var texts = new List<string>();
+        app.Repository.Queue.Changed += (_, _) =>
+        {
+            lock (texts)
+            {
+                if (app.Repository.Queue.Current?.RunningText is { } text && (texts.Count == 0 || texts[^1] != text))
+                {
+                    texts.Add(text);
+                }
+            }
+        };
+        return texts;
     }
 
     /// <summary>The subjects of <paramref name="branch"/>'s history, newest first.</summary>

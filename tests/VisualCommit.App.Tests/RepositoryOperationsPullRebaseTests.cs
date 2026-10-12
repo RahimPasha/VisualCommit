@@ -123,6 +123,41 @@ public class RepositoryOperationsPullRebaseTests
     }
 
     [Fact]
+    public async Task A_rebase_that_git_s_fork_point_shortened_is_a_success_said_in_the_warning_colour()
+    {
+        // Section 6, 10.2: topic's upstream is the local main, which once held "Kept for a while"
+        // (topic has it) and was reset back over it; git's fork point leaves it out.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "Initial commit");
+        await repo.CommitFileAsync("x.txt", "x\n", "Kept for a while");
+        await repo.CreateBranchAsync("topic");
+        await repo.CheckoutAsync("topic");
+        await repo.GitAsync("branch", "--set-upstream-to=main");
+        await repo.CommitFileAsync("t.txt", "t\n", "Topic work");
+        await repo.CheckoutAsync("main");
+        await repo.GitAsync("reset", "--quiet", "--hard", "HEAD~1");
+        await repo.CommitFileAsync("m.txt", "m\n", "Main later work");
+        await repo.CheckoutAsync("topic");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var finished = new List<(GitOperation Operation, OperationResult Result)>();
+        app.Repository.Queue.Finished += (_, e) => finished.Add((e.Operation, e.Result));
+
+        await app.Operations.PullRebaseAsync();
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal(
+            ("Pulled and rebased topic onto main; git left out 1 commit that main once had", OperationStatusTone.Warning),
+            (app.StatusText, app.StatusTone));
+        Assert.Equal(["Topic work", "Main later work", "Initial commit"], (await repo.GitAsync("log", "--format=%s")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+
+        // Not a conflict: a success with the warning colour, logged as one, which auto-fetch counts as a fetch.
+        var (operation, result) = Assert.Single(finished);
+        Assert.Equal((OperationOutcome.Succeeded, true), (result.Outcome, result.IsWarning));
+        Assert.True(AutoFetchScheduler.Fetched(operation, result));
+        Assert.Contains(app.Log.Messages, message => Regex.IsMatch(message, @": Pull \(rebase\): Succeeded after \d+ ms: Pulled and rebased topic onto main; git left out 1 commit that main once had$"));
+    }
+
+    [Fact]
     public async Task A_pull_with_rebase_and_a_plain_pull_are_never_merged_while_one_waits()
     {
         using var repo = await Scenarios.RemoteSyncAsync();

@@ -35,6 +35,24 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
+    /// Whether git stashes a dirty working tree itself before a rebase (1.3 step 1, D142): <c>git
+    /// config --type=bool --get rebase.autoStash</c>, read as git reads a boolean; exit 1 (unset) is
+    /// false. A read (<c>GIT_OPTIONAL_LOCKS=0</c>); a value git cannot read as a boolean throws
+    /// <see cref="GitException"/> with git's text, as <c>git rebase</c> would refuse it.
+    /// </summary>
+    public async Task<bool> ReadRebaseAutoStashAsync(NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        var command = new GitCommand("config", "--type=bool", "--get", "rebase.autoStash") { WorkingDirectory = WorkingDirectory, Environment = ReadEnvironmentWith(options) };
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode == 1)
+        {
+            return false;
+        }
+
+        return string.Equals(result.EnsureSuccess(command).StandardOutput.Trim(), "true", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The commits an interactive rebase of <paramref name="branch"/> would replay (2.3), read from
     /// the branch's tip as it is now, which the list keeps as <see cref="RebaseList.BranchTip"/>.
     /// "From here": <c>git log --reverse --topo-order &lt;onto&gt;..&lt;tip&gt;</c>; otherwise the commits

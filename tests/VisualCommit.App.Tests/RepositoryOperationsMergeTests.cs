@@ -402,7 +402,7 @@ public class RepositoryOperationsMergeTests
         Assert.Equal($"Cherry-picked {alphaOne[..7]} onto hotfix", TextOf(app, "OperationStatus"));
         var pick = operations.CherryPickAsync(alphaOne);
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
-        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on hotfix: its changes are already there. Abort the cherry-pick to go on."),
+        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on hotfix: its changes are already there. Skip it to go on."),
             (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
         Assert.Equal($"Cherry-pick {alphaOne[..7]} failed", TextOf(app, "OperationStatus"));
 

@@ -168,7 +168,12 @@ public sealed partial class RepositoryViewModel : IConflictMarkerQuestions
         }
     }
 
-    /// <summary>The banner's Continue (docs/phase-4-design.md 5.4): hands it to <see cref="InProgressActions"/> with the operation's own message.</summary>
+    /// <summary>
+    /// The banner's Continue (docs/phase-4-design.md 5.4): hands it to <see cref="InProgressActions"/>
+    /// with the stage panel's message, exactly as the stage panel's own Continue does
+    /// (<see cref="WorkingChangesViewModel.ContinueMessage"/>: the message the user changed; null,
+    /// the operation's own, while the boxes hold what was filled in or the summary is empty).
+    /// </summary>
     private async Task ContinueInProgressAsync(InProgressState state)
     {
         try
@@ -179,7 +184,7 @@ public sealed partial class RepositoryViewModel : IConflictMarkerQuestions
                 return;
             }
 
-            await actions.ContinueAsync(state, null);
+            await Changes.ContinueWithMessageAsync(message => actions.ContinueAsync(state, message));
         }
         catch (Exception ex)
         {

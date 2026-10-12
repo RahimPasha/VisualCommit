@@ -29,10 +29,31 @@ public sealed partial class RepositoryOperations : IConflictActions
     }
 
     /// <inheritdoc cref="IRepositoryActions.OpenMergeToolAsync"/>
-    public Task OpenMergeToolAsync(string path)
+    /// <remarks>
+    /// When the resolver is open on <paramref name="path"/>, its own <c>Merge tool…</c> runs
+    /// (11.9): it asks first when its result is modified ("Keep editing" starts nothing), keeps the
+    /// result read-only while the tool runs and moves on afterwards. Otherwise the tool runs as one
+    /// operation (<see cref="IConflictActions.RunMergeToolAsync"/>).
+    /// </remarks>
+    public async Task OpenMergeToolAsync(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return ((IConflictActions)this).RunMergeToolAsync(path);
+        if (Repository.IsResolverOpen && string.Equals(Repository.Resolver.Path, path, StringComparison.Ordinal))
+        {
+            var command = Repository.Resolver.RunMergeToolCommand;
+            if (command.CanExecute(null))
+            {
+                await command.ExecuteAsync(null);
+            }
+            else
+            {
+                Log.Info($"{Repository.Name}: the merge tool for {path} was not started: the resolver is busy or has no merge tool.");
+            }
+
+            return;
+        }
+
+        await ((IConflictActions)this).RunMergeToolAsync(path);
     }
 
     /// <summary>

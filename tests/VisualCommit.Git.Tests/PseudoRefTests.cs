@@ -69,7 +69,7 @@ public class PseudoRefTests
 
         var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
         Assert.Equal(
-            new InProgressState(InProgressKind.CherryPick, conflicting, "Side edit", null, null, 1, false) { Sequenced = true, HasPickHead = true },
+            new InProgressState(InProgressKind.CherryPick, conflicting, "Side edit", null, null, 1, false) { Sequenced = true, HasPickHead = true, Done = 0, Total = 2 },
             state);
 
         // Continue commits it and picks the rest.

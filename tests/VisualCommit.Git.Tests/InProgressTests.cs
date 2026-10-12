@@ -69,7 +69,7 @@ public class InProgressTests
 
         var status = await repository.ReadStatusAsync(TestCancelled);
 
-        Assert.Equal(new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false) { Sequenced = true, HasPickHead = true }, status.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false) { Sequenced = true, HasPickHead = true, Done = 1, Total = 3 }, status.InProgress);
         Assert.False(status.InProgress.AbortKeepsHead);
     }
 
@@ -96,6 +96,10 @@ public class InProgressTests
             {
                 AbortKeepsHead = true,
                 Sequenced = true,
+
+                // Alpha one and the committed stopped pick are made; Alpha two waits (10.2's K of N).
+                Done = 2,
+                Total = 3,
             },
             status.InProgress);
         Assert.Empty(status.Unstaged);
@@ -123,7 +127,7 @@ public class InProgressTests
         // Main work's revert conflicts with Core again; Add core waits.
         Assert.False((await repo.GitAllowingFailureAsync("revert", "--no-edit", mainWork, addCore)).Succeeded);
         var stopped = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { Sequenced = true, HasPickHead = true }, stopped.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { Sequenced = true, HasPickHead = true, Done = 0, Total = 2 }, stopped.InProgress);
 
         // Resolved and committed in a terminal: stopped between commits.
         repo.WriteFile("src/core.txt", "core\n");
@@ -134,7 +138,7 @@ public class InProgressTests
 
         var between = await repository.ReadStatusAsync(TestCancelled);
         Assert.Equal(
-            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { AbortKeepsHead = true, Sequenced = true },
+            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { AbortKeepsHead = true, Sequenced = true, Done = 1, Total = 2 },
             between.InProgress);
     }
 

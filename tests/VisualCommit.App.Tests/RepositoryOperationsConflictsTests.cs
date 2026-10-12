@@ -1,9 +1,12 @@
+using Avalonia.Headless.XUnit;
+using VisualCommit.App.Controls.Conflicts;
 using VisualCommit.App.ViewModels.Conflicts;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 using Stop = VisualCommit.Testing.Scenarios.ConflictsStop;
@@ -94,6 +97,41 @@ public class RepositoryOperationsConflictsTests
         Assert.Equal(Scenarios.ConflictsFiles.FakeMergeToolResult, Read(repo, "notes.txt"));
         Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
         Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git -c mergetool.keepBackup=false mergetool --tool=fake --no-prompt -- notes.txt");
+    }
+
+    [AvaloniaFact]
+    public async Task Open_in_merge_tool_on_the_file_the_resolver_shows_runs_the_resolvers_own_and_asks_first_for_a_modified_result()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge, mergeTool: true);
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
+        await app.WaitForResolverAsync("notes.txt");
+        var resolver = repository.Resolver;
+        await app.WaitForAsync(() => resolver.RunMergeToolCommand.CanExecute(null), "the resolver's merge tool", TimeSpan.FromSeconds(10));
+        resolver.Choose(0, ConflictChoice.UseOurs);
+        Assert.True(resolver.IsModified);
+
+        // 11.9 and 7.2: the file menu's "Open in merge tool" asks as the resolver's own button does; "Keep editing" starts nothing.
+        var keep = repository.Operations.OpenMergeToolAsync("notes.txt");
+        var question = await app.WaitForDialogAsync<ConfirmationViewModel>();
+        Assert.Equal(("Discard your changes to notes.txt?", "Keep editing"), (question.Title, question.CancelText));
+        question.Cancel();
+        await keep;
+        Assert.True(resolver.IsModified);
+        Assert.DoesNotContain(app.GitCalls(), call => call.CommandText.Contains("mergetool", StringComparison.Ordinal));
+
+        // Discard: the tool runs and resolves the file.
+        var run = repository.Operations.OpenMergeToolAsync("notes.txt");
+        (await app.WaitForDialogAsync<ConfirmationViewModel>()).ConfirmCommand.Execute(null);
+        await run;
+        await app.WaitForIdleAsync();
+        Assert.Contains(app.GitCalls(), call => call.CommandText == "git -c mergetool.keepBackup=false mergetool --tool=fake --no-prompt -- notes.txt");
+        Assert.Equal(Scenarios.ConflictsFiles.FakeMergeToolResult, Read(repo, "notes.txt"));
+        Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
     }
 
     [Fact]

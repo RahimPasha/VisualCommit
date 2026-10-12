@@ -257,7 +257,7 @@ public class OperationTextsTests
         Assert.Equal("origin/published has commits that your published does not include. Pull or look at them before forcing.", OperationTexts.ForcePushStopped("origin/published", "published"));
         Assert.Equal("published on origin has changed since you last fetched. Fetch and look at it before deleting.", OperationTexts.RemoteBranchChanged("published", "origin"));
         Assert.Equal("origin has no tag v1.0, or its v1.0 is not the same as yours.", OperationTexts.RemoteTagDiffers("origin", "v1.0"));
-        Assert.Equal("a1b2c3d changes nothing on main: its changes are already there. Abort the cherry-pick to go on.", OperationTexts.CherryPickEmpty(Sha, "main"));
+        Assert.Equal("a1b2c3d changes nothing on main: its changes are already there. Skip it to go on.", OperationTexts.CherryPickEmpty(Sha, "main"));
         Assert.Equal("a1b2c3d changes nothing on main: it is already undone.", OperationTexts.RevertEmpty(Sha, "main"));
         Assert.Equal("Git could not fetch from origin and mirror.", OperationTexts.FetchFailed(["origin", "mirror"]));
         Assert.Equal("Git could not fetch from a, b and c.", OperationTexts.FetchFailed(["a", "b", "c"]));

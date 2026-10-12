@@ -325,10 +325,11 @@ public partial class MenuLayer : UserControl
             placement.Offset = PlaceMenu(MenuPanel.Bounds.Size, at, placement.PopupSize, openedBy);
             placement.ConstraintAdjustment = PopupPositionerConstraintAdjustment.None;
         };
+        var hasEnabledItem = true;
         flyout.Opened += (_, _) =>
         {
             LetTheShadowThrough(flyout);
-            HighlightFirstItem(flyout);
+            hasEnabledItem = HighlightFirstItem(flyout);
         };
         flyout.Closed += (_, _) =>
         {
@@ -336,6 +337,13 @@ public partial class MenuLayer : UserControl
             {
                 _flyout = null;
                 _viewModel?.Close();
+            }
+
+            // A menu without an enabled item ran nothing: the focus goes back where it was
+            // before it opened (4a), as Avalonia does for a menu whose item had the focus.
+            if (!hasEnabledItem && _focusBeforeMenu is Control before && before.IsEffectivelyVisible && before.IsEffectivelyEnabled)
+            {
+                before.Focus(NavigationMethod.Unspecified);
             }
         };
 
@@ -349,21 +357,32 @@ public partial class MenuLayer : UserControl
     /// <summary>
     /// Gives the focus and the highlight to the menu's first enabled item when it opens, however it
     /// was opened (D105), where the stock flyout has not done so already. A menu without an
-    /// enabled item highlights none.
+    /// enabled item highlights none and keeps the focus on its presenter, so that it does not go to
+    /// the window's first focusable control (the resolver's pane menu, phase 4). Returns whether
+    /// the menu has an enabled item.
     /// </summary>
-    private static void HighlightFirstItem(MenuFlyoutWithLimit flyout)
+    private static bool HighlightFirstItem(MenuFlyoutWithLimit flyout)
     {
         var items = flyout.Items.OfType<ContextMenuItem>().ToList();
         if (items.Any(item => item.IsSelected))
         {
-            return;
+            return true;
         }
 
         if (items.FirstOrDefault(item => item.IsEffectivelyEnabled) is { } first)
         {
             first.Focus(NavigationMethod.Directional);
             first.IsSelected = true;
+            return true;
         }
+
+        if (flyout.Presenter is { } presenter)
+        {
+            presenter.Focusable = true;
+            presenter.Focus(NavigationMethod.Unspecified);
+        }
+
+        return false;
     }
 
     /// <summary>
