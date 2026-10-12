@@ -65,6 +65,9 @@ public sealed partial class ShellDriver : IDisposable
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
+        // The conflict resolver's caret does not blink in a scripted check (D151).
+        HoldCaretsStill();
+
         var folders = new FakeFolderPicker();
         var launcher = new FakeFileLauncher();
         var clipboard = new FakeClipboard();
