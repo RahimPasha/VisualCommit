@@ -179,7 +179,7 @@ public sealed partial class Phase4ChecksC
         Assert.Equal(["U notes.txt"], C14To17.FileRows(app, "UnstagedFileList"));
         await C14To17.AssertConflictRowAsync(app, "notes.txt");
         C14To17.AssertEmptyLists(app, unstagedEmpty: false, stagedEmpty: true);
-        C14To17.AssertMessage(app, PartC2.MergeTheirsSummary, string.Empty);
+        await C14To17.AssertMessageAsync(app, PartC2.MergeTheirsSummary, string.Empty);
         C14To17.AssertCommitButton(app, PartC2.StageFilesToCommit, enabled: false);
         AssertBanner(app, PartC2.MergeTheirsBanner, PartC2.AbortMerge, BannerButton.ContinueDisabled(PartC2.ResolveFirst(1)), oneLine: false, placement: BannerButtonPlacement.OwnRow);
         await C14To17.AssertNothingWrittenAsync(app, repo, "notes.txt", PartC2.Fm, PartC2.MergeStopStatus, unmergedAtStop, start);

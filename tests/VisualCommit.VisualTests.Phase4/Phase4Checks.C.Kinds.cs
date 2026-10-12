@@ -44,7 +44,7 @@ public sealed partial class Phase4ChecksC
         }
 
         C14To17.AssertEmptyLists(app, unstagedEmpty: false, stagedEmpty: true);
-        C14To17.AssertMessage(app, PartC2.MergeKindsSummary, string.Empty);
+        await C14To17.AssertMessageAsync(app, PartC2.MergeKindsSummary, string.Empty);
         C14To17.AssertCommitButton(app, PartC2.StageFilesToCommit, enabled: false);
         Assert.Equal(PartC2.KindsStopStatus, await C14To17.PorcelainAsync(repo));
         var unmergedAtStop = await C14To17.UnmergedAsync(repo);
@@ -142,7 +142,7 @@ public sealed partial class Phase4ChecksC
         AssertBanner(app, PartC2.MergeKindsResolvedBanner, PartC2.AbortMerge, BannerButton.Continue, oneLine: false, placement: BannerButtonPlacement.OwnRow);
         C14To17.AssertEmptyLists(app, unstagedEmpty: true, stagedEmpty: false);
         Assert.Equal(["M image.png", "M new.txt"], C14To17.FileRows(app, "StagedFileList"));
-        C14To17.AssertMessage(app, PartC2.MergeKindsSummary, string.Empty);
+        await C14To17.AssertMessageAsync(app, PartC2.MergeKindsSummary, string.Empty);
         C14To17.AssertCommitButton(app, PartC2.Commit2Files, enabled: true);
         Assert.False(app.Find<Control>("RestoreBar").IsEffectivelyVisible, "The stage panel offers the card's snapshot in its restore bar.");
         Assert.Equal(["M  image.png", "M  new.txt"], await C14To17.PorcelainAsync(repo));

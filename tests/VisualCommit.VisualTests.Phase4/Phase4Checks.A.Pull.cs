@@ -384,8 +384,18 @@ public sealed partial class Phase4ChecksA
         Assert.Equal("1", GitDirFile(repo, "rebase-merge/msgnum").Trim());
         Assert.Equal("1", GitDirFile(repo, "rebase-merge/end").Trim());
         Assert.StartsWith("8e65315", GitDirFile(repo, "rebase-merge/stopped-sha").Trim(), StringComparison.Ordinal);
-        Assert.Equal("Unpushed work\n\n", GitDirFile(repo, "rebase-merge/message"));
-        Assert.Equal($"pick {PartA.UnpushedWorkSha} Unpushed work", GitDirFile(repo, "rebase-merge/done").Trim());
+        if (await IsReportGitAsync())
+        {
+            Assert.Equal("Unpushed work\n\n", GitDirFile(repo, "rebase-merge/message"));
+            Assert.Equal($"pick {PartA.UnpushedWorkSha} Unpushed work", GitDirFile(repo, "rebase-merge/done").Trim());
+        }
+        else
+        {
+            // A newer git (CI's 2.55) adds its "# Conflicts:" block to the message and writes the
+            // subject as a comment in done: the classifying parts are the same (design 0.1).
+            Assert.StartsWith("Unpushed work\n\n", GitDirFile(repo, "rebase-merge/message"), StringComparison.Ordinal);
+            Assert.Matches($"^pick {PartA.UnpushedWorkSha} (# )?Unpushed work$", GitDirFile(repo, "rebase-merge/done").Trim());
+        }
         Assert.Equal(string.Empty, GitDirFile(repo, "rebase-merge/git-rebase-todo"));
         Assert.Contains("GIT_AUTHOR_DATE='@1767268980 +0000'", GitDirFile(repo, "rebase-merge/author-script").Split('\n'));
         Assert.Equal(PartA.UnpushedWorkSha, GitDirFile(repo, "REBASE_HEAD").Trim());

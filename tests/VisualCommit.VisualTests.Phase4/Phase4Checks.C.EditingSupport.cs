@@ -242,10 +242,15 @@ public sealed partial class Phase4ChecksC : Phase4Checks
             }
         }
 
-        /// <summary>The message box: its summary and description (5.3).</summary>
-        public static void AssertMessage(ShellDriver app, string summary, string description)
+        /// <summary>
+        /// The message box: its summary and description (5.3). The stage panel fills them from the
+        /// operation's message after a read of its own, so this waits for the summary first.
+        /// </summary>
+        public static async Task AssertMessageAsync(ShellDriver app, string summary, string description)
         {
-            Assert.Equal(summary, ((TextBox)app.FindByAutomationId("CommitSummary")).Text ?? string.Empty);
+            var summaryBox = (TextBox)app.FindByAutomationId("CommitSummary");
+            await app.WaitForAsync(() => (summaryBox.Text ?? string.Empty) == summary, $"the stage panel's summary \"{summary}\"", OutsideChangeTimeout);
+            Assert.Equal(summary, summaryBox.Text ?? string.Empty);
             Assert.Equal(description, ((TextBox)app.FindByAutomationId("CommitDescription")).Text ?? string.Empty);
         }
 

@@ -76,7 +76,7 @@ public sealed partial class Phase4ChecksC
         Assert.Equal(["U notes.txt"], C14To17.FileRows(app, "UnstagedFileList"));
         await C14To17.AssertConflictRowAsync(app, "notes.txt");
         C14To17.AssertEmptyLists(app, unstagedEmpty: false, stagedEmpty: true);
-        C14To17.AssertMessage(app, PartC2.PickConflictingSummary, string.Empty);
+        await C14To17.AssertMessageAsync(app, PartC2.PickConflictingSummary, string.Empty);
         C14To17.AssertCommitButton(app, PartC2.ContinueRebaseButton, enabled: false, PartC2.ResolveFirst(1));
         var amend = (CheckBox)app.FindByAutomationId("AmendCheckBox");
         Assert.False(amend.IsEffectivelyEnabled, "Amend is enabled during the rebase's stop.");
@@ -99,7 +99,7 @@ public sealed partial class Phase4ChecksC
         C14To17.AssertEmptyLists(app, unstagedEmpty: true, stagedEmpty: false);
         Assert.Equal(["M notes.txt"], C14To17.FileRows(app, "StagedFileList"));
         C14To17.AssertCommitButton(app, PartC2.ContinueRebaseButton, enabled: true);
-        C14To17.AssertMessage(app, PartC2.PickConflictingSummary, string.Empty);
+        await C14To17.AssertMessageAsync(app, PartC2.PickConflictingSummary, string.Empty);
 
         // Step 6: the banner's Continue: the staged file checked for markers (none: no question), then Continue the rebase.
         var calls = app.GitCalls().Count;
@@ -178,11 +178,21 @@ public sealed partial class Phase4ChecksC
             Assert.StartsWith(PartC2.PickConflictingSha, C14To17.GitFile(repo, "REBASE_HEAD"), StringComparison.Ordinal);
             var done = Commands(repo, "rebase-merge/done");
             Assert.Equal(2, done.Count);
-            Assert.Matches("^pick " + PartC2.PickCleanSha + "[0-9a-f]* Pick clean$", done[0]);
-            Assert.Matches("^pick " + PartC2.PickConflictingSha + "[0-9a-f]* Pick conflicting$", done[1]);
+            // A newer git (CI's 2.55) writes each subject as a comment ("# Pick clean") and adds
+            // its "# Conflicts:" block to the message (design 0.1); 2.36 does neither.
+            Assert.Matches("^pick " + PartC2.PickCleanSha + "[0-9a-f]* (# )?Pick clean$", done[0]);
+            Assert.Matches("^pick " + PartC2.PickConflictingSha + "[0-9a-f]* (# )?Pick conflicting$", done[1]);
             var todo = Assert.Single(Commands(repo, "rebase-merge/git-rebase-todo"));
-            Assert.Matches("^pick " + PartC2.PickLastSha + "[0-9a-f]* Pick last$", todo);
-            Assert.Equal("Pick conflicting\n\n", File.ReadAllText(Path.Combine(repo.Path, ".git", "rebase-merge", "message")).Replace("\r", string.Empty, StringComparison.Ordinal));
+            Assert.Matches("^pick " + PartC2.PickLastSha + "[0-9a-f]* (# )?Pick last$", todo);
+            var message = File.ReadAllText(Path.Combine(repo.Path, ".git", "rebase-merge", "message")).Replace("\r", string.Empty, StringComparison.Ordinal);
+            if (await IsReportGitAsync())
+            {
+                Assert.Equal("Pick conflicting\n\n", message);
+            }
+            else
+            {
+                Assert.StartsWith("Pick conflicting\n\n", message, StringComparison.Ordinal);
+            }
             Assert.Contains(PartC2.PickConflictingAuthorScriptDate, File.ReadAllLines(Path.Combine(repo.Path, ".git", "rebase-merge", "author-script")));
             Assert.Equal(["Pick conflicting", string.Empty, "# Conflicts:", "#\tnotes.txt"], File.ReadAllLines(Path.Combine(repo.Path, ".git", "MERGE_MSG")));
             Assert.Equal(C14To17.Bytes(PartC2.PicksStopNotes), C14To17.WorkingFile(repo, "notes.txt"));

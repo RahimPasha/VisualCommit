@@ -114,7 +114,7 @@ public sealed partial class Phase4ChecksC
         AssertBanner(app, PartC2.MergeTheirsResolvedBanner, PartC2.AbortMerge, BannerButton.Continue, oneLine: false, placement: BannerButtonPlacement.OwnRow);
         C14To17.AssertEmptyLists(app, unstagedEmpty: true, stagedEmpty: false);
         Assert.Equal(["M notes.txt"], C14To17.FileRows(app, "StagedFileList"));
-        C14To17.AssertMessage(app, PartC2.MergeTheirsSummary, string.Empty);
+        await C14To17.AssertMessageAsync(app, PartC2.MergeTheirsSummary, string.Empty);
         C14To17.AssertCommitButton(app, PartC2.Commit1File, enabled: true);
         Assert.Equal(C14To17.Bytes(PartC2.FakeToolResult), C14To17.WorkingFile(repo, "notes.txt"));
         Assert.StartsWith(PartC2.FakeToolBlob, await C14To17.StagedBlobAsync(repo, "notes.txt"), StringComparison.Ordinal);
