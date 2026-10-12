@@ -251,6 +251,36 @@ public class RepositoryOperationsRebaseTests
     }
 
     [Fact]
+    public async Task Check_out_and_rebase_goes_on_over_a_moved_submodule_as_git_rebase_does()
+    {
+        // The review's finding 21: git's rebase leaves submodules out of its clean-tree check
+        // (1 .M SC.. sub: the submodule is at another commit), so the app's own check does too.
+        using var repo = await TempRepo.CreateAsync();
+        repo.WriteFile("README.md", "readme\n");
+        await repo.GitAsync("init", "--quiet", "sub");
+        await repo.GitAsync("-C", "sub", "commit", "--quiet", "--allow-empty", "-m", "One");
+        var one = (await repo.GitAsync("-C", "sub", "rev-parse", "HEAD")).StandardOutput.Trim();
+        await repo.GitAsync("add", "README.md");
+        await repo.GitAsync("update-index", "--add", "--cacheinfo", $"160000,{one},sub");
+        await repo.GitAsync("commit", "--quiet", "-m", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        var main = await repo.CommitFileAsync("main.txt", "main\n", "Main work");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("topic.txt", "topic\n", "Topic work");
+        await repo.CheckoutAsync("main");
+        await repo.GitAsync("-C", "sub", "commit", "--quiet", "--allow-empty", "-m", "Two");
+        Assert.StartsWith("1 .M S", (await repo.GitAsync("status", "--porcelain=v2")).StandardOutput, StringComparison.Ordinal);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.CheckoutAndRebaseAsync("refs/heads/topic", new RebaseTarget(main, "main"));
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Rebased topic onto main", app.StatusText);
+        Assert.Equal("topic", await repo.CurrentBranchAsync());
+        Assert.Equal(main, (await repo.GitAsync("rev-parse", "topic~1")).StandardOutput.Trim());
+    }
+
+    [Fact]
     public async Task Check_out_and_rebase_lets_git_stash_a_changed_file_when_rebase_autoStash_is_set()
     {
         // 1.3 step 1, D142: git stashes the change itself and puts it back after the rebase.

@@ -641,9 +641,15 @@ public sealed partial class RepositoryOperations
         return !autoStash && IsDirty(status) ? Refused(text, OperationTexts.RebaseNeedsCleanTree) : null;
     }
 
-    /// <summary>Staged or unstaged changes to tracked files (untracked files are git's to judge, 1.3).</summary>
+    /// <summary>
+    /// Staged or unstaged changes to tracked files (untracked files are git's to judge, 1.3).
+    /// Submodules are left out, as git's rebase leaves them out of its own clean-tree check
+    /// (<c>--ignore-submodules</c>): a moved submodule does not stop git's rebase, so it does not
+    /// stop the app's (the review's finding 21).
+    /// </summary>
     private static bool IsDirty(WorkingTreeStatus status) =>
-        status.Staged.Count > 0 || status.Unstaged.Any(file => !status.IsUntracked(file.Path));
+        status.Staged.Any(file => !status.IsSubmodule(file.Path))
+        || status.Unstaged.Any(file => !status.IsUntracked(file.Path) && !status.IsSubmodule(file.Path));
 
     /// <summary>
     /// Whether git's configuration has <c>rebase.autoStash</c> set (1.3, D142: <c>git config
