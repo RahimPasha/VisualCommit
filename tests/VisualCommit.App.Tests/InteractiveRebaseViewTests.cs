@@ -33,7 +33,7 @@ public class InteractiveRebaseViewTests
 
     private static void SelectAll(ShellDriver app) => app.PressKey(Key.A, Raw(app.CommandModifier));
 
-    private static bool FocusIsOn(ShellDriver app, string subject) => app.RebaseList().Row(subject).HasKeyboardFocus;
+    private static bool FocusIsOn(ShellDriver app, string subject) => app.RebaseListSnapshot().Row(subject).HasKeyboardFocus;
 
     [AvaloniaFact]
     public async Task The_list_opens_as_L0_with_the_reports_geometry()
@@ -43,7 +43,7 @@ public class InteractiveRebaseViewTests
         var app = harness.App;
         await app.WaitForRebaseListAsync();
         TestPictures.Save(app, "rebase-list-l0");
-        var list = app.RebaseList();
+        var list = app.RebaseListSnapshot();
 
         Assert.Equal(new Rect(260, 88, 440, 586), list.Bounds);
         Assert.Equal(new Rect(260, 88, 440, 36), list.HeaderBounds);
@@ -103,17 +103,17 @@ public class InteractiveRebaseViewTests
 
         app.PressKey(Key.Down);
         app.PressKey(Key.Down);
-        Assert.Equal("Three", app.RebaseList().Selected!.Subject);
+        Assert.Equal("Three", app.RebaseListSnapshot().Selected!.Subject);
         Assert.True(FocusIsOn(app, "Three"));
-        Assert.Equal([null, null, DarkSelection], app.RebaseList().Rows.Take(3).Select(row => row.Background));
+        Assert.Equal([null, null, DarkSelection], app.RebaseListSnapshot().Rows.Take(3).Select(row => row.Background));
 
         app.Click(new Point(600, 319));
-        Assert.Equal("Three", app.RebaseList().Selected!.Subject);
+        Assert.Equal("Three", app.RebaseListSnapshot().Selected!.Subject);
         Assert.True(FocusIsOn(app, "Three"));
         Assert.Equal([InteractiveList.Five, InteractiveList.Four, InteractiveList.Three], harness.Host.Details);
 
         app.PressKey(Key.End);
-        Assert.Equal("One", app.RebaseList().Selected!.Subject);
+        Assert.Equal("One", app.RebaseListSnapshot().Selected!.Subject);
         Assert.True(FocusIsOn(app, "One"));
         app.PressKey(Key.Down);
         Assert.True(FocusIsOn(app, "One"));
@@ -125,7 +125,7 @@ public class InteractiveRebaseViewTests
         // A click selects a row and gives it the focus.
         app.ClickRebaseRow("Two");
         Assert.True(FocusIsOn(app, "Two"));
-        Assert.Equal("Two", app.RebaseList().Selected!.Subject);
+        Assert.Equal("Two", app.RebaseListSnapshot().Selected!.Subject);
     }
 
     [AvaloniaFact]
@@ -151,7 +151,7 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.Escape);
         Assert.False(app.IsMenuOpen);
         Assert.True(FocusIsOn(app, "Three"));
-        Assert.Equal(RebaseAction.Pick, app.RebaseList().Row("Three").Action);
+        Assert.Equal(RebaseAction.Pick, app.RebaseListSnapshot().Row("Three").Action);
 
         app.PressKey(Key.F10, RawInputModifiers.Shift);
         var byKeyboard = app.Menu();
@@ -182,10 +182,10 @@ public class InteractiveRebaseViewTests
 
         app.ClickRebaseRow("One");
         app.PressKey(Key.S);
-        Assert.Equal(RebaseAction.Pick, app.RebaseList().Row("One").Action);
+        Assert.Equal(RebaseAction.Pick, app.RebaseListSnapshot().Row("One").Action);
         Assert.False(app.IsMenuOpen);
         Assert.Null(app.TopDialogView);
-        Assert.False(app.RebaseList().CanStart);
+        Assert.False(app.RebaseListSnapshot().CanStart);
 
         app.RightClickRebaseRow("One");
         var menu = app.Menu();
@@ -217,7 +217,7 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.Down);
         app.PressKey(Key.Down);
         app.PressKey(Key.Down);
-        Assert.Equal("Fix one", app.RebaseList().Selected!.Subject);
+        Assert.Equal("Fix one", app.RebaseListSnapshot().Selected!.Subject);
 
         // The row with the keyboard focus has the selection background and no focus frame.
         var focused = app.Capture();
@@ -226,7 +226,7 @@ public class InteractiveRebaseViewTests
 
         app.PressMouse(new Point(600, 229));
         app.MoveMouseHeld(new Point(600, 270), steps: 5);
-        var held = app.RebaseList();
+        var held = app.RebaseListSnapshot();
         TestPictures.Save(app, "rebase-list-drag");
         Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], held.Subjects);
         Assert.Equal(0.5, held.Row("Fix one").Opacity);
@@ -237,7 +237,7 @@ public class InteractiveRebaseViewTests
         Assert.False(app.IsMenuOpen);
 
         app.ReleaseMouse(new Point(600, 270));
-        var moved = app.RebaseList();
+        var moved = app.RebaseListSnapshot();
         Assert.Equal(["Five", "Four", "Three", "Two", "Fix one", "One"], moved.Subjects);
         Assert.Null(moved.DragLine);
         Assert.Null(moved.DragGap);
@@ -261,7 +261,7 @@ public class InteractiveRebaseViewTests
         app.MoveMouseHeld(new Point(600, 203));
         Assert.False(harness.View.IsDragging);
         app.ReleaseMouse(new Point(600, 203));
-        Assert.Equal("Three", app.RebaseList().Selected!.Subject);
+        Assert.Equal("Three", app.RebaseListSnapshot().Selected!.Subject);
         Assert.False(harness.ViewModel.IsChanged);
     }
 
@@ -286,7 +286,7 @@ public class InteractiveRebaseViewTests
         Assert.Equal(app.RebaseActionButtonCorner("Fix one"), fixOneMenu.Bounds.TopLeft);
         TestPictures.Save(app, "rebase-list-fix-one-menu");
         app.ClickMenuItem("Fixup");
-        var fixup = app.RebaseList();
+        var fixup = app.RebaseListSnapshot();
         var fixOne = fixup.Row("Fix one");
         Assert.Equal(("Fixup", 16.0), (fixOne.ActionText, fixOne.Indent));
         Assert.Equal(new Rect(281, 252, 14, 14), fixOne.GripBounds);
@@ -302,7 +302,7 @@ public class InteractiveRebaseViewTests
         app.RightClickRebaseRow("Four");
         Assert.Equal(["eef5c15 Four", "Reword…", "Squash", "Fixup", "Drop"], app.Menu().Lines());
         app.ClickMenuItem("Squash");
-        var squash = app.RebaseList();
+        var squash = app.RebaseListSnapshot();
         Assert.Equal(("Squash", 16.0), (squash.Row("Four").ActionText, squash.Row("Four").Indent));
         Assert.Equal(("Message: Three", new Rect(260, 214, 440, 22)), (squash.Row("Three").SecondLine, squash.Row("Three").SecondLineBounds));
         Assert.Equal([124.0, 154, 184, 236, 266, 296], squash.Rows.Select(row => row.Bounds!.Value.Y));
@@ -333,8 +333,8 @@ public class InteractiveRebaseViewTests
         Assert.Equal(("Three and four", "58", "#42 is the issue", true), (edited.Summary, edited.Counter, edited.Description, edited.ConfirmEnabled));
         app.Click(app.FindByAutomationId("ConfirmButton"));
         Assert.Null(app.TopDialogView);
-        Assert.Equal("Message: Three and four", app.RebaseList().Row("Three").SecondLine);
-        Assert.Equal("Four", app.RebaseList().Selected!.Subject);
+        Assert.Equal("Message: Three and four", app.RebaseListSnapshot().Row("Three").SecondLine);
+        Assert.Equal("Four", app.RebaseListSnapshot().Selected!.Subject);
 
         // Step 8: Reword from Two's menu, Esc in the dialog, then R and Enter.
         app.ClickRebaseRow("Two");
@@ -346,7 +346,7 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.Escape);
         Assert.Null(app.TopDialogView);
         Assert.True(harness.App.Window.IsVisible);
-        Assert.Equal(("Pick", null), (app.RebaseList().Row("Two").ActionText, app.RebaseList().Row("Two").SecondLine));
+        Assert.Equal(("Pick", null), (app.RebaseListSnapshot().Row("Two").ActionText, app.RebaseListSnapshot().Row("Two").SecondLine));
         Assert.False(harness.ViewModel.IsClosed);
         app.ClickRebaseRow("Two");
         app.PressKey(Key.R);
@@ -355,7 +355,7 @@ public class InteractiveRebaseViewTests
         app.Type("Two reworded");
         app.PressKey(Key.Enter);
         Assert.Null(app.TopDialogView);
-        var reworded = app.RebaseList();
+        var reworded = app.RebaseListSnapshot();
         Assert.Equal(("Reword", "New message: Two reworded", new Rect(260, 266, 440, 22)), (reworded.Row("Two").ActionText, reworded.Row("Two").SecondLine, reworded.Row("Two").SecondLineBounds));
         Assert.Equal(new Rect(272, 303, 2, 15), reworded.JoinLines.Single(joined => joined.MemberSha == InteractiveList.FixOne).Bounds);
 
@@ -364,7 +364,7 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.D);
         app.MoveToNeutral();
         TestPictures.Save(app, "rebase-list-l7");
-        var l7 = app.RebaseList();
+        var l7 = app.RebaseListSnapshot();
         Assert.Equal(
             [
                 ("Five", 124.0, "Drop", 0.0, true, null),
@@ -417,7 +417,7 @@ public class InteractiveRebaseViewTests
         await app.WaitForRebaseListAsync();
 
         // The list the git layer read is L0, and the graph behind it selected Five.
-        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseList().Subjects);
+        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseListSnapshot().Subjects);
         Assert.Equal(InteractiveList.Five, repository.Selection.Single);
         app.MoveToNeutral();
         app.WaitForCommitDetails();
@@ -452,7 +452,7 @@ public class InteractiveRebaseViewTests
         Assert.Equal(InteractiveList.Five, repository.Selection.Single);
         app.WaitForCommitDetails();
         TestPictures.Save(app, "rebase-list-on-repository-l7");
-        Assert.Equal(["Drop", "Squash", "Pick", "Reword", "Fixup", "Pick"], app.RebaseList().Rows.Select(row => row.ActionText));
+        Assert.Equal(["Drop", "Squash", "Pick", "Reword", "Fixup", "Pick"], app.RebaseListSnapshot().Rows.Select(row => row.ActionText));
 
         // Start: the plan goes to the real git layer, as the repository's operation hands it over.
         harness.Host.OnStart = async plan =>
@@ -489,25 +489,25 @@ public class InteractiveRebaseViewTests
         // Step 2: a drag of Five, Esc while held, then the release.
         app.PressMouse(new Point(600, 139));
         app.MoveMouseHeld(new Point(600, 210), steps: 5);
-        Assert.Equal((3, 0.5), (app.RebaseList().DragGap, app.RebaseList().Row("Five").Opacity));
-        Assert.Equal(new Rect(260, 213, 440, 2), app.RebaseList().DragLine);
+        Assert.Equal((3, 0.5), (app.RebaseListSnapshot().DragGap, app.RebaseListSnapshot().Row("Five").Opacity));
+        Assert.Equal(new Rect(260, 213, 440, 2), app.RebaseListSnapshot().DragLine);
         app.PressKey(Key.Escape);
         Assert.False(harness.View.IsDragging);
-        Assert.Null(app.RebaseList().DragLine);
-        Assert.Equal(1, app.RebaseList().Row("Five").Opacity);
+        Assert.Null(app.RebaseListSnapshot().DragLine);
+        Assert.Equal(1, app.RebaseListSnapshot().Row("Five").Opacity);
         Assert.Null(app.TopDialogView);
         app.ReleaseMouse(new Point(600, 210));
-        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseList().Subjects);
+        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseListSnapshot().Subjects);
         Assert.False(harness.ViewModel.IsChanged);
         Assert.True(app.IsRebaseListOpen);
 
         // Steps 3 and 4: Alt+Down and Alt+Up.
         app.PressKey(Key.Down, RawInputModifiers.Alt);
-        Assert.Equal(["Four", "Five", "Three", "Fix one", "Two", "One"], app.RebaseList().Subjects);
-        Assert.Equal((new Rect(260, 154, 440, 30), true, true), (app.RebaseList().Row("Five").Bounds, app.RebaseList().Row("Five").IsSelected, FocusIsOn(app, "Five")));
-        Assert.True(app.RebaseList().CanStart);
+        Assert.Equal(["Four", "Five", "Three", "Fix one", "Two", "One"], app.RebaseListSnapshot().Subjects);
+        Assert.Equal((new Rect(260, 154, 440, 30), true, true), (app.RebaseListSnapshot().Row("Five").Bounds, app.RebaseListSnapshot().Row("Five").IsSelected, FocusIsOn(app, "Five")));
+        Assert.True(app.RebaseListSnapshot().CanStart);
         app.PressKey(Key.Up, RawInputModifiers.Alt);
-        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseList().Subjects);
+        Assert.Equal(["Five", "Four", "Three", "Fix one", "Two", "One"], app.RebaseListSnapshot().Subjects);
         Assert.True(FocusIsOn(app, "Five"));
         Assert.Equal("Change an action or the order first", await app.RestPointerOnAsync(app.FindByAutomationId("RebaseStartButton")));
 
@@ -524,7 +524,7 @@ public class InteractiveRebaseViewTests
         app.Click(app.FindByAutomationId("CancelButton"));
         Assert.Null(app.TopDialogView);
         Assert.True(app.IsRebaseListOpen);
-        Assert.Equal(["Four", "Five", "Three", "Fix one", "Two", "One"], app.RebaseList().Subjects);
+        Assert.Equal(["Four", "Five", "Three", "Fix one", "Two", "One"], app.RebaseListSnapshot().Subjects);
         Assert.Equal(0, harness.Host.Closed);
 
         // Step 7: Cancel asks the same; Discard closes the list.
@@ -571,11 +571,11 @@ public class InteractiveRebaseViewTests
         harness.Host.HeldStart = new TaskCompletionSource<bool>();
 
         app.ClickRebaseStart();
-        var running = app.RebaseList();
+        var running = app.RebaseListSnapshot();
         Assert.False(running.IsInteractive);
         Assert.False(running.CanStart);
         Assert.False(app.FindByAutomationId("RebaseCancelButton").IsEffectivelyEnabled);
-        Assert.False(app.RebaseList().Rows[0].Bounds is null);
+        Assert.False(app.RebaseListSnapshot().Rows[0].Bounds is null);
         app.PressKey(Key.Down);
         app.PressKey(Key.P);
         app.PressKey(Key.Escape);
@@ -585,9 +585,9 @@ public class InteractiveRebaseViewTests
         // Git refused before anything started: the list is as it was, and takes input again.
         harness.Host.HeldStart.SetResult(false);
         await app.WaitForAsync(() => harness.ViewModel.IsInteractive, "Start to end");
-        Assert.True(app.RebaseList().CanStart);
+        Assert.True(app.RebaseListSnapshot().CanStart);
         Assert.True(app.IsRebaseListOpen);
-        Assert.Equal(RebaseAction.Drop, app.RebaseList().Rows[0].Action);
+        Assert.Equal(RebaseAction.Drop, app.RebaseListSnapshot().Rows[0].Action);
     }
 
     [AvaloniaFact]
@@ -599,7 +599,7 @@ public class InteractiveRebaseViewTests
         await app.WaitForRebaseListAsync();
         TestPictures.Save(app, "rebase-list-message");
 
-        var list = app.RebaseList();
+        var list = app.RebaseListSnapshot();
         Assert.Equal("A merge lies between 4b4622c and main: interactive rebase would flatten it.", list.Message);
         Assert.True(app.FindByAutomationId("RebaseListMessage").IsEffectivelyVisible);
         Assert.Empty(list.Rows);
@@ -620,23 +620,23 @@ public class InteractiveRebaseViewTests
         var app = harness.App;
         await app.WaitForRebaseListAsync();
 
-        var list = app.RebaseList();
+        var list = app.RebaseListSnapshot();
         Assert.Equal(("300 commits", "Commit 300"), (list.Count, list.Rows[0].Subject));
         Assert.True(list.Rows.Count(row => row.Bounds is not null) < 60);
 
         app.PressKey(Key.End);
-        var end = app.RebaseList();
+        var end = app.RebaseListSnapshot();
         Assert.Equal("Commit 1", end.Selected!.Subject);
         Assert.True(end.Selected.HasKeyboardFocus);
         Assert.InRange(end.Selected.Bounds!.Value.Bottom, 124, 630);
         Assert.InRange(end.BaseRow!.Bounds!.Value.Bottom, 124, 631);
 
         app.PressKey(Key.Up, RawInputModifiers.Alt);
-        Assert.Equal("Commit 1", app.RebaseList().Rows[298].Subject);
-        Assert.True(app.RebaseList().Rows[298].HasKeyboardFocus);
+        Assert.Equal("Commit 1", app.RebaseListSnapshot().Rows[298].Subject);
+        Assert.True(app.RebaseListSnapshot().Rows[298].HasKeyboardFocus);
         app.PressKey(Key.Home);
-        Assert.True(app.RebaseList().Rows[0].HasKeyboardFocus);
-        Assert.Equal(new Rect(260, 124, 440, 30), app.RebaseList().Rows[0].Bounds);
+        Assert.True(app.RebaseListSnapshot().Rows[0].HasKeyboardFocus);
+        Assert.Equal(new Rect(260, 124, 440, 30), app.RebaseListSnapshot().Rows[0].Bounds);
 
         // A drag held near the rows' bottom edge scrolls them, so a row goes past the rows in view.
         app.PressMouse(new Point(600, 139));
@@ -646,11 +646,11 @@ public class InteractiveRebaseViewTests
             app.MoveMouseHeld(new Point(600, 625 + (move % 2)));
         }
 
-        Assert.True(app.RebaseList().Rows[0].Bounds is null || app.RebaseList().Rows[0].Bounds!.Value.Y < 124);
+        Assert.True(app.RebaseListSnapshot().Rows[0].Bounds is null || app.RebaseListSnapshot().Rows[0].Bounds!.Value.Y < 124);
         app.ReleaseMouse(new Point(600, 626));
         var moved = harness.ViewModel.IndexOf(harness.ViewModel.Rows.Single(row => row.Subject == "Commit 300"));
         Assert.InRange(moved, 20, 299);
-        Assert.True(app.RebaseList().Rows[moved].HasKeyboardFocus);
+        Assert.True(app.RebaseListSnapshot().Rows[moved].HasKeyboardFocus);
     }
 
     [AvaloniaFact]
@@ -668,7 +668,7 @@ public class InteractiveRebaseViewTests
         app.PressKey(Key.S);
         app.MoveToNeutral();
         TestPictures.Save(app, "rebase-list-light-1920");
-        var list = app.RebaseList();
+        var list = app.RebaseListSnapshot();
 
         Assert.Equal(new Rect(260, 88, 1260, 966), list.Bounds);
         Assert.True(list.ShowsAuthor);
@@ -692,7 +692,7 @@ public class InteractiveRebaseViewTests
         Assert.Equal(("Message of the squashed commit", "Three", "67", "#42 is the issue\n\nFour"), (dialog.Title, dialog.Summary, dialog.Counter, dialog.Description));
         app.Click(app.FindByAutomationId("CancelButton"));
         Assert.Null(app.TopDialogView);
-        Assert.Equal("Four", app.RebaseList().Selected!.Subject);
-        Assert.Equal("Message: Three", app.RebaseList().Row("Three").SecondLine);
+        Assert.Equal("Four", app.RebaseListSnapshot().Selected!.Subject);
+        Assert.Equal("Message: Three", app.RebaseListSnapshot().Row("Three").SecondLine);
     }
 }

@@ -63,7 +63,7 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>The list as drawn now, in the window's coordinates.</summary>
-    public InteractiveRebaseSnapshot RebaseList() => RebaseListView.Snapshot(Window);
+    public InteractiveRebaseSnapshot RebaseListSnapshot() => RebaseListView.Snapshot(Window);
 
     /// <summary>
     /// A row's point (the report's convention): its vertical centre, <see cref="RebaseRowPointX"/>
@@ -71,7 +71,7 @@ public sealed partial class ShellDriver
     /// </summary>
     public Point RebaseRowPoint(string subject)
     {
-        var list = RebaseList();
+        var list = RebaseListSnapshot();
         var bounds = list.Row(subject).Bounds ?? throw new InvalidOperationException($"The row \"{subject}\" is not drawn: scroll it into view first.");
         return new Point(list.Bounds.X + RebaseRowPointX, bounds.Center.Y);
     }
@@ -84,7 +84,7 @@ public sealed partial class ShellDriver
 
     /// <summary>Where the row's action button (<c>RebaseActionButton</c>) is, in the window.</summary>
     public Rect RebaseActionButtonBounds(string subject) =>
-        RebaseList().Row(subject).ActionButtonBounds ?? throw new InvalidOperationException($"The row \"{subject}\" is not drawn: scroll it into view first.");
+        RebaseListSnapshot().Row(subject).ActionButtonBounds ?? throw new InvalidOperationException($"The row \"{subject}\" is not drawn: scroll it into view first.");
 
     /// <summary>The bottom-left corner of the row's action button: where its menu opens from the button, Shift+F10 or the Menu key (design 14.3).</summary>
     public Point RebaseActionButtonCorner(string subject) => RebaseActionButtonBounds(subject).BottomLeft;
@@ -120,7 +120,7 @@ public sealed partial class ShellDriver
     /// <summary>Clicks <c>Edit…</c> (<c>RebaseEditMessageButton</c>) on the second line under the row: the message dialog opens.</summary>
     public void ClickRebaseEditMessage(string subject)
     {
-        var bounds = RebaseList().Row(subject).EditButtonBounds
+        var bounds = RebaseListSnapshot().Row(subject).EditButtonBounds
             ?? throw new InvalidOperationException($"The row \"{subject}\" has no second line with Edit… in view.");
         Click(bounds.Center);
     }
@@ -128,7 +128,7 @@ public sealed partial class ShellDriver
     /// <summary>Clicks <c>Start rebase</c>. Throws when it is hidden or disabled (a click would do nothing).</summary>
     public void ClickRebaseStart()
     {
-        var list = RebaseList();
+        var list = RebaseListSnapshot();
         if (!list.StartShown || !list.CanStart)
         {
             throw new InvalidOperationException($"Start rebase cannot be clicked: shown {list.StartShown}, enabled {list.CanStart} ({list.StartToolTip ?? "no reason given"}).");
@@ -138,7 +138,7 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>Clicks the list's <c>Cancel</c>: it closes, asking first when the list was changed.</summary>
-    public void ClickRebaseCancel() => Click(RebaseList().CancelBounds.Center);
+    public void ClickRebaseCancel() => Click(RebaseListSnapshot().CancelBounds.Center);
 
     /// <summary>
     /// The message dialog on top (<c>MessageDialog</c>, design 7.2): its title, summary (with where
