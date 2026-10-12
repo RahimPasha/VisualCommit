@@ -29,6 +29,12 @@ public sealed record RunOptions
     /// <summary>A local operation of several git calls (<see cref="GitOperation.HasSeveralSteps"/>, 1.8).</summary>
     public bool HasSeveralSteps { get; init; }
 
+    /// <summary>
+    /// A local operation that only waits for another program and can be cancelled
+    /// (<see cref="GitOperation.CanBeCancelled"/>: the merge tool, docs/phase-4-design.md 11.9, D149).
+    /// </summary>
+    public bool CanBeCancelled { get; init; }
+
     /// <summary>The operation's <see cref="GitOperation.Prompts"/>; null for the queue's default (Ask).</summary>
     public PromptMode? Prompts { get; init; }
 
@@ -281,6 +287,7 @@ public sealed partial class RepositoryOperations
             DedupeKey = options.DedupeKey,
             HasSeveralSteps = options.HasSeveralSteps,
             Prompts = options.Prompts,
+            CanBeCancelled = options.CanBeCancelled,
         };
         // A second call with the dedupe key of a waiting or running operation gets that
         // operation's task (1.2): only the first caller shows its result, so a failure opens one

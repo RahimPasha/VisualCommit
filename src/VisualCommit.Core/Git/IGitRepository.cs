@@ -288,7 +288,8 @@ public interface IGitRepository
     /// the fetched head is fast-forwarded with <c>git merge --ff-only</c>, as git 2.34 and later
     /// do, and the result says <c>FastForward</c>) or <c>git merge --no-edit [--no-ff | --ff] FETCH_HEAD</c>;
     /// a local upstream uses <see cref="GitRef.UpstreamRef"/> in place of <c>FETCH_HEAD</c>.
-    /// Conflicts are returned, not thrown.
+    /// Conflicts are returned, not thrown. The same as the phase 4 overload with
+    /// <see cref="PullIntegration.AsConfigured"/> and no callback (docs/phase-4-design.md section 6).
     /// </summary>
     Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
@@ -372,6 +373,179 @@ public interface IGitRepository
     /// git call.
     /// </summary>
     Task AppendToGitignoreAsync(string pattern, CancellationToken cancellationToken = default);
+
+    // Phase 4: rebase and conflict resolution (docs/phase-4-design.md). Each takes the operation's
+    // NetworkOptions (a filter or hook can prompt) and a token, as phase 3's writes; a write runs
+    // inside one operation of the queue and throws GitException with git's own text when git
+    // refuses, while a stop (conflicts, an empty commit, the other stops of 5.1) is returned.
+
+    // Rebase (sections 1 to 3, 6; work package WP1).
+
+    /// <summary>
+    /// Rebases the current branch onto <paramref name="onto"/> (a full SHA read when the menu
+    /// opened, D124): <c>git rebase &lt;onto&gt;</c>, never with a branch argument and with no
+    /// option that changes git's configured behaviour (1.3, D142). The caller saves the backup
+    /// first. Classified by 1.4's table: up to date, rebased (with
+    /// <see cref="RebaseResult.AutostashConflicted"/> when <c>rebase.autoStash</c>'s changes
+    /// conflicted when put back) or stopped; a refusal throws.
+    /// </summary>
+    Task<RebaseResult> RebaseAsync(string onto, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The commits an interactive rebase of <paramref name="branch"/> (a full ref name: HEAD's
+    /// branch, or a drop's source that is not checked out) would replay, read when its list opens
+    /// (2.3). <paramref name="fromCommit"/> ("from here", 2.1): <c>git rev-list --reverse
+    /// --topo-order &lt;onto&gt;..&lt;branch&gt;</c>, <paramref name="onto"/> being the base
+    /// commit; otherwise the commits git's own todo would hold, <c>git rev-list --reverse
+    /// --topo-order --no-merges --right-only --cherry-pick &lt;onto&gt;...&lt;branch&gt;</c>, with
+    /// <c>git rev-list --merges --count &lt;onto&gt;..&lt;branch&gt;</c> for
+    /// <see cref="RebaseList.MergeCount"/>. A read: <c>GIT_OPTIONAL_LOCKS=0</c>.
+    /// </summary>
+    Task<RebaseList> ReadRebaseListAsync(string onto, string branch, bool fromCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs an interactive rebase (2.4, 2.5) or a squash (section 3): refuses unless HEAD is on
+    /// <see cref="RebasePlan.BranchRef"/> at <see cref="RebasePlan.ExpectedTip"/> (D124), then
+    /// <c>git rebase -i &lt;onto&gt;</c> with <c>GIT_SEQUENCE_EDITOR</c> set for this call to the
+    /// app's shell function, which copies the todo built from the plan (<c>RebaseTodo</c>, Core)
+    /// and its message files into <c>rebase-merge/</c>. The caller saves the backup first. A todo
+    /// git refused (<c>error: invalid line</c>, the <c>missingCommitsCheck</c> warning) is aborted
+    /// and thrown. Classified as <see cref="RebaseAsync"/>.
+    /// </summary>
+    Task<RebaseResult> InteractiveRebaseAsync(RebasePlan plan, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pull's second step with its integration chosen (section 6, D147):
+    /// <see cref="PullIntegration.AsConfigured"/> is phase 3's
+    /// <see cref="IntegratePullAsync(GitRef, NetworkOptions?, CancellationToken)"/>;
+    /// <see cref="PullIntegration.Rebase"/> is <c>git merge --ff-only &lt;head&gt;</c> when the
+    /// branch has nothing of its own, otherwise <c>git rebase</c> without arguments (from the
+    /// upstream's fork point, as <c>git pull --rebase</c>), git's pull settings not read. Before
+    /// either rebases, <paramref name="beforeRebase"/> is called with the branch's old tip (the
+    /// app saves 1.2's backup there). Both pulls classify a rebase with 1.4's rules: every stop is
+    /// <see cref="PullOutcome.Conflicts"/>.
+    /// </summary>
+    Task<PullResult> IntegratePullAsync(
+        GitRef branch,
+        PullIntegration integration,
+        Func<string, Task>? beforeRebase,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default);
+
+    // Lists of picks and reverts, Continue and Skip (sections 4, 5, 8; work package WP2).
+
+    /// <summary>
+    /// Cherry-picks several commits with one git call that takes the whole list (D136):
+    /// <c>git cherry-pick &lt;A&gt; &lt;B&gt; &lt;C&gt;</c>, <paramref name="commitsOldestFirst"/>
+    /// in that order. One commit keeps phase 3's
+    /// <see cref="CherryPickAsync(string, NetworkOptions?, CancellationToken)"/>. How it ended is
+    /// read from git's files (section 4's table); a list refused at its start is cleared with
+    /// <c>git cherry-pick --quit</c>, which keeps the user's changes, and throws (D145).
+    /// </summary>
+    Task<SequenceResult> CherryPickAsync(IReadOnlyList<string> commitsOldestFirst, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reverts several commits with one git call (D136): <c>git revert --no-edit &lt;C&gt;
+    /// &lt;B&gt; &lt;A&gt;</c>, <paramref name="commitsNewestFirst"/> in that order; no merge
+    /// commits (those are reverted one at a time). Results as
+    /// <see cref="CherryPickAsync(IReadOnlyList{string}, NetworkOptions?, CancellationToken)"/>.
+    /// </summary>
+    Task<SequenceResult> RevertAsync(IReadOnlyList<string> commitsNewestFirst, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ends a list of picks or reverts without undoing anything: <c>git cherry-pick --quit</c>
+    /// or <c>git revert --quit</c> for <paramref name="kind"/>, which removes <c>sequencer/</c>
+    /// and keeps the user's changes (section 4, D145).
+    /// </summary>
+    Task QuitSequenceAsync(InProgressKind kind, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Continue for <paramref name="state"/> (5.4): commits a merge, pick or revert with
+    /// <paramref name="message"/> (<c>git commit --file=- --cleanup=whitespace</c>), then for a list
+    /// <c>git cherry-pick --continue</c> (<c>revert</c>); for a rebase stopped with something
+    /// staged, writes a group's message file, commits with the stopped commit's author from
+    /// <c>rebase-merge/author-script</c> (<c>--no-verify</c>) and runs <c>git rebase
+    /// --continue</c>; for the app's failed amend, the amend again, then <c>--continue</c>;
+    /// otherwise <c>git rebase --continue</c>. <paramref name="message"/> is the stage panel's,
+    /// or null for the operation's own (5.3). A refusal throws.
+    /// </summary>
+    Task<ContinueResult> ContinueAsync(InProgressState state, string? message, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Skip for <paramref name="state"/> (5.4): <c>git cherry-pick --skip</c>, <c>git revert
+    /// --skip</c> or <c>git rebase --skip</c>; for <see cref="RebaseStopKind.OwnAmendFailed"/>
+    /// <c>git rebase --continue</c> (on without the new message). The question and the
+    /// <c>skip</c> backup come before, in the app. A refusal throws.
+    /// </summary>
+    Task<ContinueResult> SkipAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The message the stage panel fills in for <paramref name="state"/>'s stopped commit (5.3),
+    /// or null when there is none: <c>MERGE_MSG</c> less git's trailing comment block for a merge,
+    /// pick or revert; <c>rebase-merge/message</c> with no line removed for a rebase, or the
+    /// group's <c>rebase-merge/vc-message-&lt;n&gt;</c> inside a group the app wrote; a
+    /// <c>fixup</c> or <c>squash</c> stop of a rebase started elsewhere less git's comment lines.
+    /// No git call beyond <c>core.commentChar</c>.
+    /// </summary>
+    Task<string?> ReadOperationMessageAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    // Conflicts, the merge tool and the backups' clean-up (sections 9, 11; work package WP3).
+
+    /// <summary>
+    /// What the resolver reads of a conflicted file (11.3, 11.8): the working-tree file's bytes,
+    /// its marker size (<c>git check-attr conflict-marker-size -- &lt;p&gt;</c>, default 7),
+    /// whether a side is binary (a NUL in its first 8000 bytes) or a symbolic link.
+    /// </summary>
+    Task<ConflictContent> ReadConflictAsync(ConflictEntry entry, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One side of a conflicted file in its working-tree form (11.6): <c>git cat-file --filters
+    /// --path=&lt;p&gt; &lt;stage id&gt;</c>, which writes nothing; null when that side has no file.
+    /// </summary>
+    Task<byte[]?> ReadConflictSideAsync(ConflictEntry entry, ConflictSide side, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks a text conflict resolved with the resolver's result (11.7): writes
+    /// <paramref name="content"/> to the working-tree file <paramref name="path"/>, then
+    /// <c>git add -- &lt;p&gt;</c>.
+    /// </summary>
+    Task WriteResolutionAsync(string path, byte[] content, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves a conflict with one side's whole file (11.8: a binary file, a symbolic link, or
+    /// "Keep the file" when git's file is missing): <c>git checkout --ours|--theirs -- &lt;p&gt;</c>,
+    /// then <c>git add -- &lt;p&gt;</c>. Never <c>git restore --ours</c> (0.4).
+    /// </summary>
+    Task TakeSideAsync(string path, ConflictSide side, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Resolves a conflict by deleting the file (11.8: "Delete it", both deleted): <c>git rm -- &lt;p&gt;</c>.</summary>
+    Task RemoveConflictedAsync(string path, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>The merge tool git's configuration names (<c>git config --get merge.tool</c>), or null when none (11.9).</summary>
+    Task<string?> ReadMergeToolAsync(NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs the external merge tool on one conflicted file and waits for it (11.9, D149):
+    /// <c>git -c mergetool.keepBackup=false mergetool --tool=&lt;tool&gt; --no-prompt -- &lt;p&gt;</c>.
+    /// Cancelling stops git and the tool. Afterwards (also after a cancel) the files git leaves
+    /// beside the file on its failure paths are deleted when they did not exist before.
+    /// </summary>
+    Task<MergeToolResult> RunMergeToolAsync(string path, string tool, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The backups' clean-up (section 9, D139): reads <c>refs/visualcommit/backup/</c> with one
+    /// <c>git for-each-ref</c>, groups the refs into backups by 9's pattern, and deletes those
+    /// older than <see cref="BackupRetention.Days"/>, then the oldest beyond
+    /// <see cref="BackupRetention.Count"/>, in one <c>git update-ref --stdin</c> transaction of
+    /// <c>delete &lt;ref&gt; &lt;old value&gt;</c> lines. Nothing goes while an operation is in
+    /// progress in any worktree, nor a ref of <paramref name="keep"/> (the restore bar's snapshot),
+    /// nor a ref that fits no scheme. Returns what it removed.
+    /// </summary>
+    Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>A snapshot taken before a discard (D67).</summary>

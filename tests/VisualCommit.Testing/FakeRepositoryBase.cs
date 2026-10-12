@@ -8,7 +8,8 @@ namespace VisualCommit.Testing;
 /// what it reads, and the rest reports a clean working tree or refuses. A fake that a
 /// <c>RepositoryViewModel</c> opens is asked for its status, so the default is a clean tree.
 /// Phase 3's reads give empty results (no remotes, no worktrees, nothing detached) and its
-/// writes throw <see cref="NotSupportedException"/>.
+/// writes throw <see cref="NotSupportedException"/>. So do phase 4's: its reads give an empty
+/// list or null (no merge tool, no operation message), the backups' clean-up removes nothing.
 /// </summary>
 public abstract class FakeRepositoryBase : IGitRepository
 {
@@ -182,4 +183,70 @@ public abstract class FakeRepositoryBase : IGitRepository
 
     public virtual Task AppendToGitignoreAsync(string pattern, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
+
+    // Phase 4 (docs/phase-4-design.md): reads give empty results or null and never throw, the
+    // backups' clean-up removes nothing, writes are refused.
+
+    public virtual Task<RebaseResult> RebaseAsync(string onto, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<RebaseList> ReadRebaseListAsync(string onto, string branch, bool fromCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new RebaseList(onto, string.Empty, [], 0));
+
+    public virtual Task<RebaseResult> InteractiveRebaseAsync(RebasePlan plan, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<PullResult> IntegratePullAsync(
+        GitRef branch,
+        PullIntegration integration,
+        Func<string, Task>? beforeRebase,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<SequenceResult> CherryPickAsync(IReadOnlyList<string> commitsOldestFirst, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<SequenceResult> RevertAsync(IReadOnlyList<string> commitsNewestFirst, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task QuitSequenceAsync(InProgressKind kind, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<ContinueResult> ContinueAsync(InProgressState state, string? message, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<ContinueResult> SkipAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<string?> ReadOperationMessageAsync(InProgressState state, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
+    public virtual Task<ConflictContent> ReadConflictAsync(ConflictEntry entry, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new ConflictContent([], 7, OursBinary: false, TheirsBinary: false, IsSymbolicLink: false, WorkingTreeExists: false));
+
+    public virtual Task<byte[]?> ReadConflictSideAsync(ConflictEntry entry, ConflictSide side, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult<byte[]?>(null);
+
+    public virtual Task WriteResolutionAsync(string path, byte[] content, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task TakeSideAsync(string path, ConflictSide side, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task RemoveConflictedAsync(string path, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<string?> ReadMergeToolAsync(NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
+    public virtual Task<MergeToolResult> RunMergeToolAsync(string path, string tool, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<RemovedBackup>>([]);
 }

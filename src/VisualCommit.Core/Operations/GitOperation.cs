@@ -3,7 +3,11 @@ namespace VisualCommit.Core.Operations;
 /// <summary>Whether an operation talks to a remote (phase 3 design 1.5).</summary>
 public enum OperationKind
 {
-    /// <summary>Touches only the repository on disk. Once started, it runs all its steps to the end: its git calls get no cancellation token.</summary>
+    /// <summary>
+    /// Touches only the repository on disk. Once started, it runs all its steps to the end: its
+    /// git calls get no cancellation token, unless it waits only for another program
+    /// (<see cref="GitOperation.CanBeCancelled"/>, phase 4's merge tool).
+    /// </summary>
     Local,
 
     /// <summary>Talks to a remote: fetch, pull, push. The user can cancel it until <see cref="OperationContext.EndCancelWindow"/>.</summary>
@@ -98,4 +102,13 @@ public sealed record GitOperation(
     /// steps will not run when the user quits now (1.8).
     /// </summary>
     public bool HasSeveralSteps { get; init; }
+
+    /// <summary>
+    /// A local operation that only waits for another program, the external merge tool
+    /// (docs/phase-4-design.md 11.9, D149, amending D81): the queue gives it a cancellation
+    /// source as it gives a network operation, so the status bar offers Cancel, which stops git
+    /// and what it started; the stale lock files are looked for after its cancel, as after a
+    /// network one. Otherwise it stays local: closing the tab leaves it to finish.
+    /// </summary>
+    public bool CanBeCancelled { get; init; }
 }

@@ -220,6 +220,37 @@ public class RepositoryOperationsTests
     }
 
     [Fact]
+    public async Task A_local_operation_run_as_one_that_can_be_cancelled_offers_cancel_and_stops()
+    {
+        // Phase 4's merge tool (docs/phase-4-design.md 11.9): RunOptions.CanBeCancelled reaches the queue.
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var started = new TaskCompletionSource();
+        var text = new OperationText("Merge tool for notes.txt", "Waiting for fake to close…", "Merge tool failed", "fake did not resolve notes.txt.");
+
+        var run = app.Operations.RunAsync(
+            text,
+            OperationKind.Local,
+            RefreshScope.Status,
+            async context =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, context.CancellationToken);
+                return OperationReport.Done(string.Empty);
+            },
+            new RunOptions { CanBeCancelled = true });
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.Equal((OperationKind.Local, true), (app.Operations.Queue.Current!.Kind, app.Operations.Queue.Current.CanCancel));
+        app.Operations.Queue.CancelCurrent();
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.Equal(OperationOutcome.Cancelled, result.Outcome);
+        Assert.Equal("Merge tool for notes.txt cancelled", app.StatusText);
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
+    [Fact]
     public async Task A_cancelled_network_operation_that_left_lock_files_lists_them_and_removes_them_on_request()
     {
         using var repo = await Scenarios.OperationsAsync();

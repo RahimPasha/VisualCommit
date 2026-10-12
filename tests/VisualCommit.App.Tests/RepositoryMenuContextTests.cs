@@ -72,6 +72,27 @@ public class RepositoryMenuContextTests
         Assert.Equal(byName[alpha], context.FindSelected(alpha));
         Assert.Null(context.FindSelected(new string('0', 40)));
 
+        // Phase 4 (docs/phase-4-design.md 1.1, 2.1): where each is on HEAD's linear line, the
+        // branch tips HEAD reaches (as git's merge-base says), and no merge tool read yet.
+        Assert.Equal(0, byName[head].HeadLineDepth);
+        Assert.Equal(2, byName[initial].HeadLineDepth);
+        Assert.Null(byName[alpha].HeadLineDepth);
+        Assert.Null(byName[stash].HeadLineDepth);
+        var tips = context.LocalBranches.Concat(context.RemoteBranches).Select(gitRef => gitRef.TargetSha).Distinct().ToList();
+        var onHead = new List<string>();
+        foreach (var tip in tips)
+        {
+            if ((await repo.GitAllowingFailureAsync("merge-base", "--is-ancestor", tip, "HEAD")).ExitCode == 0)
+            {
+                onHead.Add(tip);
+            }
+        }
+
+        Assert.Equal(onHead.Order(StringComparer.Ordinal), context.TipsOnHead.Order(StringComparer.Ordinal));
+        Assert.Contains(head, context.TipsOnHead);
+        Assert.DoesNotContain(alpha, context.TipsOnHead);
+        Assert.Null(context.MergeTool);
+
         app.Select(alpha);
         Assert.False(app.Repository.MenuContext.HasMultiSelection);
         Assert.Equal([alpha], app.Repository.MenuContext.SelectedCommits.Select(commit => commit.Sha));
@@ -95,6 +116,29 @@ public class RepositoryMenuContextTests
         Assert.True(commit.IsReachableFromHead);
         Assert.Equal(InProgressKind.Merge, context.InProgress.Kind);
         Assert.Equal(new ToolbarAvailability(false, "Finish or abort the merge first"), context.Toolbar.Pull);
+
+        // HEAD is the merge commit: it is HEAD's linear line on its own (phase 4 design 2.1).
+        Assert.Equal(0, commit.HeadLineDepth);
+        app.Select(await app.ShaAsync("HEAD~1"));
+        Assert.Null(Assert.Single(app.Repository.MenuContext.SelectedCommits).HeadLineDepth);
+        Assert.Equal([merge], app.Repository.Graph.LinearLineFromHead());
+    }
+
+    [Fact]
+    public async Task A_drop_reads_whether_its_source_contains_a_local_or_remote_target()
+    {
+        // Phase 4 design 1.1: "{A} is up to date with {B}" for the drop's rebase items; the
+        // fast-forward's own fact (4g) stays as phase 3 read it.
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        Assert.Equal(new DropFacts(false) { SourceContainsTarget = false }, await app.Repository.ReadDropFactsAsync("refs/heads/feature/alpha", "refs/heads/main"));
+        Assert.Equal(new DropFacts(true) { SourceContainsTarget = true }, await app.Repository.ReadDropFactsAsync("refs/heads/feature/ff", "refs/heads/main"));
+        Assert.Equal(new DropFacts(true) { SourceContainsTarget = true }, await app.Repository.ReadDropFactsAsync("refs/heads/feature/alpha", "refs/remotes/origin/feature/alpha"));
+        Assert.Equal(new DropFacts(true) { SourceContainsTarget = false }, await app.Repository.ReadDropFactsAsync("refs/heads/main", "refs/remotes/origin/feature/alpha"));
+
+        // A read that fails leaves both to git: the fast-forward enabled, the rebase items not known.
+        Assert.Equal(new DropFacts(true) { SourceContainsTarget = null }, await app.Repository.ReadDropFactsAsync("refs/heads/main", "refs/remotes/origin/no-such-branch"));
     }
 
     [Fact]

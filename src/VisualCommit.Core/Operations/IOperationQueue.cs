@@ -4,7 +4,8 @@ namespace VisualCommit.Core.Operations;
 /// One repository's operations (phase 3 design 1, D81): one at a time, first in first out, each
 /// on the synchronization context it was queued from, with the watcher paused and the refresh it
 /// names afterwards. Disposing it (closing the tab) drops what waits, stops a running network
-/// operation and lets a running local one finish all its steps.
+/// operation and lets a running local one finish all its steps (also one that can be cancelled,
+/// <see cref="GitOperation.CanBeCancelled"/>).
 /// </summary>
 public interface IOperationQueue : IDisposable
 {

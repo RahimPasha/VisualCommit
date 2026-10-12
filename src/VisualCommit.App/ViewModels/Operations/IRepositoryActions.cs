@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -215,4 +216,43 @@ public interface IRepositoryActions
 
     /// <summary>Opens a working-tree file's diff, as a click on its row does (D63).</summary>
     void OpenDiff(ChangedFile file, bool staged);
+
+    // Phase 4: rebase and conflicts (docs/phase-4-design.md; RepositoryOperations.Rebase.cs and
+    // .Conflicts.cs, work package WP4).
+
+    /// <summary>
+    /// "Rebase {cur} onto this commit", "Rebase {cur} onto {b}", "Rebase {cur} onto {r}/{b}" and a
+    /// drop's "Rebase {A} onto {B}" (1.1, 1.3, D142): one local operation that checks HEAD and
+    /// what is in progress, saves the backup of 1.2 and runs <c>git rebase &lt;onto's SHA&gt;</c>.
+    /// It asks nothing (D135).
+    /// </summary>
+    Task RebaseAsync(RebaseTarget onto);
+
+    /// <summary>
+    /// A drop's "Check out {A} and rebase it onto {B}" (1.3): one operation of several steps that
+    /// refuses a dirty tree (unless <c>rebase.autoStash</c>), checks out
+    /// <paramref name="branchRef"/> (phase 3's checkout), saves its backup and rebases it onto
+    /// <paramref name="onto"/>; when the rebase stops, the app's Abort checks out again the branch
+    /// the user was on.
+    /// </summary>
+    Task CheckoutAndRebaseAsync(string branchRef, RebaseTarget onto);
+
+    /// <summary>The "Interactive rebase…" items (2.1): opens the interactive rebase's list in the graph area (2.2).</summary>
+    Task OpenInteractiveRebaseAsync(InteractiveRebaseRequest request);
+
+    /// <summary>
+    /// "Squash {N} commits…" (section 3): the message dialog with git's squash message, then one
+    /// local operation that saves the backup and runs an interactive rebase that joins
+    /// <paramref name="commits"/> (the SHAs the menu captured, in any order).
+    /// </summary>
+    Task SquashAsync(IReadOnlyList<string> commits);
+
+    /// <summary>"Pull from {up} (rebase)" (section 6, D147): the current branch's pull with its integration forced to a rebase.</summary>
+    Task PullRebaseAsync();
+
+    /// <summary>"Resolve conflict", and a click on a conflicted file (11.1, D148): opens the conflict resolver on <paramref name="file"/>.</summary>
+    void ResolveConflict(ChangedFile file);
+
+    /// <summary>"Open in merge tool" (11.9, D149): runs git's configured merge tool on <paramref name="path"/> as an operation that can be cancelled.</summary>
+    Task OpenMergeToolAsync(string path);
 }

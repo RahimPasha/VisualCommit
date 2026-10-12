@@ -14,6 +14,9 @@ public sealed record ConfirmationRequest(string Title, string Question, string D
 {
     /// <summary>The repository to name under the title ("In &lt;name&gt;", 4f), or null for none.</summary>
     public string? RepositoryName { get; init; }
+
+    /// <summary>The label of the button that does not go ahead: "Cancel", or "Keep editing" for phase 4's questions about leaving changed work (docs/phase-4-design.md 7.2).</summary>
+    public string CancelText { get; init; } = "Cancel";
 }
 
 /// <summary>Asks the user to confirm, in a dialog drawn inside the main window (D69).</summary>
@@ -43,6 +46,9 @@ public sealed partial class ConfirmationViewModel : DialogViewModel<bool>
     public bool HasDetail => Request.Detail.Length > 0;
 
     public string ConfirmText => Request.ConfirmText;
+
+    /// <summary>The label of the button that does not go ahead (<see cref="ConfirmationRequest.CancelText"/>).</summary>
+    public string CancelText => Request.CancelText;
 
     public bool IsDestructive => Request.IsDestructive;
 
