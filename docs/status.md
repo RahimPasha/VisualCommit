@@ -54,8 +54,22 @@ gate's commit `594f9fb`: all five jobs succeeded, each with 1756 tests passed: `
 ubuntu container" jobs (4 min 1 s and 3 min 25 s). The commits after it changed only docs, which
 start no run. CI's Test step has a limit of 14 minutes now (the default run took 3.5 minutes
 before phase 3); the owner said to let it run as long as it needs and to look again at CI's
-duration when the project is over (D134). The run for the merge on `master` is added below once
-it has been read.
+duration when the project is over (D134).
+
+The run for the merge on `master` is
+[38213858149](https://github.com/RahimPasha/VisualCommit/actions/runs/38213858149), for `d74c99e`
+(the merge commit `8b33745` and the commit that set phase 3 to "Done"). Its first attempt had four
+jobs succeed with 1756 tests each (`windows-latest` 11 min 28 s, `macos-latest` 8 min 22 s, the
+two "bare ubuntu container" jobs 3 min 50 s and 3 min 0 s) and `ubuntu-latest` fail: 1755 of
+1756 passed, and the one failure was phase 1's `Check_13_clone_with_progress` ("Timed out after
+90 s waiting for a screenshot of the clone showing a percentage between 1 and 99"). Re-running
+that job passed, 1756 of 1756, so all five jobs are green on attempt 2. The failure is a
+timing flake that phase 3 did not cause: the check has to catch a local clone of the 100k-commit
+repository part-way through, and a fast runner can finish the clone between two screenshots
+(phase 1's checks 12 and 18 flaked the same way during phase 3). It passed in the gate's own run
+of `ubuntu-latest` (38206493320). The proper fix is to hold the clone at a percentage, as phase 3's
+held fetch does, instead of racing it; the owner is asked whether that is phase 4's first
+commit (see "Waiting on the owner").
 
 CI found faults on the way that this machine could not (git 2.55 prints dates as `Z`, macOS
 physical paths, a time limit, timing in some tests): the runs before the gate's last commit were
@@ -147,6 +161,9 @@ every commit.
   [phase 1 test report](test-reports/phase-1.md) and the eight-step one at the end of the
   [phase 0 test report](test-reports/phase-0.md). The owner will do them at the end, when a Mac
   is at hand (2026-10-11).
+- Whether to make phase 1's `Check_13_clone_with_progress` deterministic (see "CI"): recommended
+  as one of phase 4's first commits, so that no phase starts from a `master` whose CI can fail by
+  chance. Without an answer, "Start phase 4" does it.
 - When the project is over: whether a CI run of 30 minutes or more is reasonable or needs another
   solution (D134).
 

@@ -391,6 +391,10 @@ Do first:
    it); make it with phase 4's first code commit.
 4. Write phase 4's checks into `docs/test-reports/phase-4.md` before the UI, as phase 3's report
    does: scenario graphs derived by running git, menu notation, git's texts for 2.36.
+5. Make phase 1's `Check_13_clone_with_progress` deterministic: it failed once on CI's
+   `ubuntu-latest` after phase 3's merge (a fast clone finished between two screenshots; the re-run
+   passed). Hold the clone at a percentage with the held-fetch server (`AuthRemoteServer`) instead
+   of racing a local clone (`status.md`, "CI").
 
 Running one phase's part of the real-window pass is untried: each phase's checks are one class
 (`Phase0RealWindowPass` to `Phase3RealWindowPass`), so
