@@ -13,8 +13,8 @@ namespace VisualCommit.Git;
 public sealed partial class GitRepository
 {
     /// <summary>
-    /// The standard error of the <see cref="GitException"/> that <see cref="InteractiveRebaseAsync"/>
-    /// throws, before anything runs, when HEAD is no longer on the plan's branch at the tip the
+    /// The standard error of the <see cref="GitException"/> that
+    /// <see cref="InteractiveRebaseAsync(RebasePlan, NetworkOptions?, CancellationToken)"/> throws, before anything runs, when HEAD is no longer on the plan's branch at the tip the
     /// list was read from (D124).
     /// </summary>
     public const string RebaseHeadMovedMessage = "HEAD is no longer on the branch at the commit the list was read from.";
