@@ -12,9 +12,11 @@ public static class GitIsolation
     /// Cuts every git process this test process starts off from the machine, through the test
     /// process's own environment, which git inherits: no system or user configuration (the user
     /// configuration needs Git 2.32 or newer to be left out), no search for a repository above
-    /// <see cref="CeilingDirectory"/>, none of <see cref="InheritedVariables"/>, and dates shown
-    /// in UTC by the app under test (D43). For the git calls of code under test that does not take
-    /// <see cref="TempRepo.Environment"/>, such as the app's own repository reading.
+    /// <see cref="CeilingDirectory"/>, none of <see cref="InheritedVariables"/>, dates shown
+    /// in UTC by the app under test (D43), and <see cref="MachineIndependence"/>: no askpass
+    /// program or proxy of the machine, auto-fetch off (D112). For the git calls of code under
+    /// test that does not take <see cref="TempRepo.Environment"/>, such as the app's own
+    /// repository reading.
     /// </summary>
     public static void IsolateThisProcess()
     {
@@ -39,7 +41,102 @@ public static class GitIsolation
         {
             Environment.SetEnvironmentVariable(variable, null);
         }
+
+        foreach (var (variable, value) in MachineIndependence)
+        {
+            Environment.SetEnvironmentVariable(variable, value);
+        }
     }
+
+    /// <summary>
+    /// Applies <see cref="MachineIndependence"/> to the environment of a process about to start
+    /// (<c>ProcessStartInfo.Environment</c>): removes the variables it removes, in every case the
+    /// dictionary holds them in, and sets the others. For a process that does not inherit the
+    /// test process's isolated environment, such as the app the real-window pass starts (D112).
+    /// </summary>
+    public static void ApplyMachineIndependence(IDictionary<string, string?> environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        foreach (var (variable, value) in MachineIndependence)
+        {
+            if (value is null)
+            {
+                // A dictionary that tells cases apart (on Linux and macOS) may hold Http_Proxy too;
+                // on Windows the environment knows no case, and neither does ProcessStartInfo's.
+                foreach (var key in environment.Keys.Where(key => string.Equals(key, variable, StringComparison.OrdinalIgnoreCase)).ToList())
+                {
+                    environment.Remove(key);
+                }
+            }
+            else
+            {
+                environment[variable] = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The environment variable that overrides the auto-fetch interval of the app under test
+    /// (<c>AppSettings.AutoFetchMinutes</c>); the tests set it to 0, so that no fetch starts
+    /// that no check asked for (D85, D112).
+    /// </summary>
+    public const string AutoFetchMinutesVariable = "VISUALCOMMIT_AUTO_FETCH_MINUTES";
+
+    /// <summary>
+    /// What the hosts of the tests' own servers are reached by: never through a proxy
+    /// (<c>no_proxy</c>, <c>NO_PROXY</c>, D112).
+    /// </summary>
+    public const string NoProxyHosts = "127.0.0.1,localhost";
+
+    /// <summary>
+    /// Programs that answer git's and ssh's prompts in place of the app (VS Code sets
+    /// <c>GIT_ASKPASS</c> and <c>SSH_ASKPASS</c> in its terminals; Git Credential Manager reads
+    /// <c>GCM_INTERACTIVE</c>), and the ssh commands that override a repository's
+    /// <c>core.sshCommand</c> and <c>ssh.variant</c> (TortoiseGit and PuTTY users have
+    /// <c>GIT_SSH</c> set): none of them may answer or reroute a test's prompt (D112, D115).
+    /// </summary>
+    public static IReadOnlyList<string> PromptVariables { get; } =
+    [
+        "GIT_ASKPASS",
+        "SSH_ASKPASS",
+        "SSH_ASKPASS_REQUIRE",
+        "GCM_INTERACTIVE",
+        "GIT_SSH",
+        "GIT_SSH_COMMAND",
+        "GIT_SSH_VARIANT",
+    ];
+
+    /// <summary>
+    /// The proxies a machine may name, which git (through curl) would use for a request to a
+    /// test server on 127.0.0.1 (D112). curl reads the lower-case names (and <c>HTTPS_PROXY</c>,
+    /// <c>ALL_PROXY</c>); both cases are removed.
+    /// </summary>
+    public static IReadOnlyList<string> ProxyVariables { get; } =
+    [
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+    ];
+
+    /// <summary>
+    /// The variables beyond git's configuration that make the app's and git's behaviour depend
+    /// on the machine, with what the tests give them instead (D112): <see cref="PromptVariables"/>
+    /// and <see cref="ProxyVariables"/> removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set to
+    /// <see cref="NoProxyHosts"/>, and auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/>
+    /// 0). Applied to the test process (<see cref="IsolateThisProcess"/>), to the app the
+    /// real-window pass starts (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls.
+    /// </summary>
+    public static IReadOnlyList<KeyValuePair<string, string?>> MachineIndependence { get; } =
+    [
+        .. PromptVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        .. ProxyVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        new("no_proxy", NoProxyHosts),
+        new("NO_PROXY", NoProxyHosts),
+        new(AutoFetchMinutesVariable, "0"),
+    ];
 
     /// <summary>
     /// The author and committer date of every commit the app under test makes (D72): 2026-01-02

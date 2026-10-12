@@ -1,0 +1,95 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.PickDialogView"
+                  x:DataType="vm:PickDialogViewModel"
+                  AutomationProperties.AutomationId="PickDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The pick dialog (docs/phase-3-design.md 2.21, 4f): a filter box over a list that scrolls,
+       on the wide card (460). The filter takes the focus; the confirm button needs a selection. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="PickDialogCard" Classes="dialogCard wide">
+      <StackPanel>
+        <TextBlock Name="PickTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="PickTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <TextBox Name="PickFilter"
+                 Classes="dialogBox"
+                 Text="{Binding Filter}"
+                 PlaceholderText="Filter"
+                 AutomationProperties.AutomationId="PickFilter"
+                 AutomationProperties.Name="Filter" />
+        <Border Margin="0,8,0,0"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="5"
+                Background="{DynamicResource VcWindowBackgroundBrush}">
+          <ListBox Name="PickList"
+                   ItemsSource="{Binding Items}"
+                   SelectedItem="{Binding Selected}"
+                   MaxHeight="232"
+                   MinHeight="58"
+                   Background="Transparent"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   AutomationProperties.AutomationId="PickList"
+                   AutomationProperties.Name="{Binding Title}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" VerticalAlignment="Center" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <!-- Each item is a PickItem named by its text, 28 high, in the panel's colours: the selected one
+       on the selection background, the one under the pointer on the hover background. -->
+  <local:DialogView.Styles>
+    <Style Selector="ListBox#PickList ListBoxItem">
+      <Setter Property="AutomationProperties.AutomationId" Value="PickItem" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding}" x:DataType="x:String" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#PickList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#PickList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#PickList ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+    <Style Selector="ListBox#PickList ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

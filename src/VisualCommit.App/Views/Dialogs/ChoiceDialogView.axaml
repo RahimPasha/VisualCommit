@@ -1,0 +1,68 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.ChoiceDialogView"
+                  x:DataType="vm:ChoiceDialogViewModel"
+                  AutomationProperties.AutomationId="ChoiceDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The remote choice dialog (docs/phase-3-design.md 2.29, 4f): a radio button per remote,
+       the first checked; the confirm button in the danger style for a deletion. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="ChoiceDialogCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="ChoiceTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="ChoiceTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <!-- Not clipped: a radio button's focus frame reaches outside it (VcRadioButton). -->
+        <ItemsControl Name="ChoiceOptions" ItemsSource="{Binding Options}" Margin="0,14,0,0" ClipToBounds="False">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="10" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChoiceOption">
+              <RadioButton Theme="{StaticResource VcRadioButton}"
+                           IsChecked="{Binding IsChecked}"
+                           AutomationProperties.AutomationId="ChoiceOption"
+                           AutomationProperties.Name="{Binding Text}">
+                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Text}" />
+              </RadioButton>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Classes.danger="{Binding IsDestructive}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <local:DialogView.Styles>
+    <Style Selector="Button#ConfirmButton">
+      <Setter Property="Theme" Value="{StaticResource VcPrimaryButton}" />
+    </Style>
+    <Style Selector="Button#ConfirmButton.danger">
+      <Setter Property="Theme" Value="{StaticResource VcDangerButton}" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

@@ -134,6 +134,35 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task Git_speaks_English_when_the_user_has_LANGUAGE_set_to_another_language()
+    {
+        // gettext puts LANGUAGE before LC_ALL; a German desktop sets it, and git inherits it from
+        // the app's own environment. Set here for this process for a moment: every git call of
+        // the tests goes through the runner, which overrides it.
+        using var repo = await TempRepo.CreateAsync();
+        var runner = new GitRunner(GitPath);
+        var before = Environment.GetEnvironmentVariable("LANGUAGE");
+        GitResult language;
+        GitResult refused;
+        try
+        {
+            Environment.SetEnvironmentVariable("LANGUAGE", "de_DE:de");
+            language = await runner.RunAsync(Script("echo language=${LANGUAGE-unset}"), TestCancelled);
+            refused = await runner.RunAsync(
+                new GitCommand("switch", "--no-guess", "no-such-branch") { WorkingDirectory = repo.Path, Environment = repo.Environment },
+                TestCancelled);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("LANGUAGE", before);
+        }
+
+        Assert.Equal("language=en", language.StandardOutput.Trim());
+        Assert.False(refused.Succeeded);
+        Assert.Contains("invalid reference: no-such-branch", refused.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Output_lines_are_streamed_while_git_is_still_running()
     {
         var runner = new GitRunner(GitPath);
@@ -316,6 +345,31 @@ public class GitRunnerTests
         }
     }
 
+    [Fact]
+    public async Task A_cancel_that_comes_after_git_exited_with_success_and_its_output_was_read_keeps_the_result()
+    {
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+
+        // The handler of git's only line holds the call until git has exited (a second and a half
+        // is plenty for a git that prints one line), then the user's Cancel comes, and the handler
+        // returns: git finished, with its output read in full, before the cancel reached it.
+        var result = await runner.RunAsync(
+            Script(
+                "echo only",
+                onOutputLine: _ =>
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(1.5));
+                    cancellation.Cancel();
+                }),
+            cancellation.Token).WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.True(result.Succeeded);
+        Assert.Equal(GitCallOutcome.Completed, Assert.Single(calls.Snapshot()).Outcome);
+    }
+
     [Theory]
     [InlineData("https://user:ghp_secret123@github.com/team/repo.git", "https://***@github.com/team/repo.git")]
     [InlineData("https://ghp_secret123@dev.azure.com/org/project/_git/repo", "https://***@dev.azure.com/org/project/_git/repo")]
@@ -344,6 +398,63 @@ public class GitRunnerTests
         var command = new GitCommand("clone", argument);
 
         Assert.Equal("git clone " + (argument.Contains(' ') ? $"\"{argument}\"" : argument), command.DisplayText);
+    }
+
+    [Theory]
+    [InlineData("https://user:ghp_secret123@github.com/team/repo.git", "https://github.com/team/repo.git")]
+    [InlineData("http://user:p@ss@127.0.0.1:8080/x.git", "http://127.0.0.1:8080/x.git")]
+    [InlineData("https://a:secret@one/x https://b:secret@two/y", "https://one/x https://two/y")]
+    [InlineData("git@github.com:team/repo.git", "git@github.com:team/repo.git")]
+    [InlineData("https://host/people/user@example.com/repo.git", "https://host/people/user@example.com/repo.git")]
+    public void Removing_credentials_leaves_a_url_that_can_be_shared(string url, string expected) =>
+        Assert.Equal(expected, GitCommand.RemoveCredentials(url));
+
+    [Fact]
+    public async Task Every_call_runs_with_a_no_op_sequence_editor()
+    {
+        // D102: a user's sequence.editor would otherwise open for a rebase's list of commits.
+        var runner = new GitRunner(GitPath);
+
+        var result = await runner.RunAsync(Script("printf '%s' \"$GIT_SEQUENCE_EDITOR\""), TestCancelled);
+
+        Assert.Equal(":", result.StandardOutput);
+    }
+
+    [Fact]
+    public async Task The_recorded_output_hides_credentials_and_names_the_operation_the_call_belongs_to()
+    {
+        // D103 and 1.7: git remote -v and some errors print URLs with tokens in them.
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+        var secret = "https://alice:ghp_SECRET123@127.0.0.1:1/x.git";
+
+        using (VisualCommit.Core.Operations.GitOperationScope.Enter("op-42"))
+        {
+            await runner.RunAsync(Script($"echo {secret}; echo {secret} >&2"), TestCancelled);
+        }
+
+        await runner.RunAsync(new GitCommand("--version"), TestCancelled);
+
+        var (inside, outside) = (calls.Snapshot()[0], calls.Snapshot()[1]);
+        Assert.Equal("op-42", inside.OperationId);
+        Assert.Null(outside.OperationId);
+        Assert.DoesNotContain("ghp_SECRET123", inside.StandardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_SECRET123", inside.StandardError, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_SECRET123", inside.CommandText, StringComparison.Ordinal);
+        Assert.Contains("https://***@127.0.0.1:1/x.git", inside.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_failure_carries_gits_standard_output_too()
+    {
+        var runner = new GitRunner(GitPath);
+        var command = Script("echo merged-message; echo failed >&2; exit 1");
+
+        var result = await runner.RunAsync(command, TestCancelled);
+        var exception = Assert.Throws<GitException>(() => result.EnsureSuccess(command));
+
+        Assert.Equal("merged-message", exception.StandardOutput.Trim());
+        Assert.Equal("failed", exception.StandardError.Trim());
     }
 
     [Fact]
@@ -427,6 +538,52 @@ public class GitRunnerTests
         Assert.Equal(GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length, recorded.Length);
         Assert.StartsWith(content[..GitCallRecord.MaxOutputLength], recorded);
         Assert.EndsWith(GitCallRecord.TruncationMarker, recorded);
+    }
+
+    [Theory]
+    [InlineData(20)]
+    [InlineData(15)]
+    [InlineData(2)]
+    public async Task A_record_cut_off_inside_a_url_shows_none_of_its_credentials(int beforeCut)
+    {
+        // The cut falls <beforeCut> characters into "https://alice:ghp_SECRET...@example.com":
+        // inside the token, just after the user name, inside the scheme.
+        using var repo = await TempRepo.CreateAsync();
+        const string Url = "https://alice:ghp_SECRETTOKEN1234567890@example.com/x.git";
+        var filler = new string('x', GitCallRecord.MaxOutputLength - beforeCut - 1) + "\n";
+        var content = filler + Url + "\n" + string.Concat(Enumerable.Repeat("more output\n", 200));
+        await repo.CommitFileAsync("big.txt", content, "Add a big file");
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+
+        var result = await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
+
+        Assert.Equal(content, result.StandardOutput);
+        var recorded = Assert.Single(calls.Snapshot()).StandardOutput;
+        Assert.StartsWith(filler, recorded);
+        Assert.EndsWith(GitCallRecord.TruncationMarker, recorded);
+        Assert.InRange(recorded.Length, filler.Length, GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length);
+        Assert.DoesNotContain("alice", recorded, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_", recorded, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_record_hides_the_credentials_of_a_url_and_keeps_its_host_when_the_url_ends_before_the_cut()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        const string Url = "https://alice:ghp_SECRETTOKEN1234567890@example.com/x.git";
+        var filler = new string('x', GitCallRecord.MaxOutputLength - Url.Length - 100) + "\n";
+        var content = filler + Url + "\n" + string.Concat(Enumerable.Repeat("more output\n", 200));
+        await repo.CommitFileAsync("big.txt", content, "Add a big file");
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+
+        await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
+
+        var recorded = Assert.Single(calls.Snapshot()).StandardOutput;
+        Assert.Contains("\nhttps://***@example.com/x.git\n", recorded, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_", recorded, StringComparison.Ordinal);
+        Assert.Equal(GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length, recorded.Length);
     }
 
     [Fact]

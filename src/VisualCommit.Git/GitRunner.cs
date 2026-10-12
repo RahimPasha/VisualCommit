@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Git;
 
@@ -28,17 +29,23 @@ public sealed class GitRunner : IGitRunner
 
     /// <summary>
     /// Applied to every call. English messages keep git's output parseable and the same on every
-    /// machine; with prompts off, git fails instead of waiting on a terminal that is not there.
+    /// machine: <c>LANGUAGE</c> too, which gettext puts before <c>LC_ALL</c> (a German desktop sets
+    /// <c>de_DE:de</c>); there is no English catalogue, so git keeps its own text. With prompts
+    /// off, git fails instead of waiting on a terminal that is not there.
     /// The editor is git's shell's no-op command, so a command that wants an editor goes on
-    /// without one instead of opening the user's editor out of sight (D68). Paths are taken
-    /// literally, so a file named <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
+    /// without one instead of opening the user's editor out of sight (D68); so is the editor of a
+    /// rebase's list of commits, which a user's <c>sequence.editor</c> would otherwise open even
+    /// with <c>GIT_EDITOR</c> set (D102). Paths are taken literally, so a file named
+    /// <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string?> DefaultEnvironment = new Dictionary<string, string?>
     {
         ["LC_ALL"] = "en_US.UTF-8",
         ["LANG"] = "en_US.UTF-8",
+        ["LANGUAGE"] = "en",
         ["GIT_TERMINAL_PROMPT"] = "0",
         ["GIT_EDITOR"] = ":",
+        ["GIT_SEQUENCE_EDITOR"] = ":",
         ["GIT_LITERAL_PATHSPECS"] = "1",
     };
 
@@ -93,10 +100,14 @@ public sealed class GitRunner : IGitRunner
         var exit = process.WaitForExitAsync(CancellationToken.None);
 
         // Cancelling stops git, which ends the wait below. Should git not stop, the wait is given
-        // up after StopTimeout: a call that was cancelled must return, whatever git does.
+        // up after StopTimeout: a call that was cancelled must return, whatever git does. A
+        // cancel that comes after git has exited stops nothing (stopped stays false), so the call
+        // that finished keeps its result.
         var gaveUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = false;
         using var stopOnCancel = cancellationToken.Register(() =>
         {
+            Volatile.Write(ref stopped, !exit.IsCompleted);
             Stop();
             _ = Task.Delay(StopTimeout, CancellationToken.None)
                 .ContinueWith(_ => gaveUp.TrySetResult(), TaskScheduler.Default);
@@ -144,7 +155,12 @@ public sealed class GitRunner : IGitRunner
         }
 
         var duration = stopwatch.Elapsed;
-        if (cancellationToken.IsCancellationRequested)
+
+        // A cancel that came after git had exited by itself (or so close before that git still
+        // exited with success) and after its output was read in full stopped nothing: the call
+        // keeps its result, so a push that went through is not reported as cancelled.
+        var endedByItself = exit.IsCompleted && pumps.IsCompletedSuccessfully && (!Volatile.Read(ref stopped) || process.ExitCode == 0);
+        if (cancellationToken.IsCancellationRequested && !endedByItself)
         {
             Record(command, startedAt, duration, GitCallOutcome.Cancelled, null, output.Head, error.Head);
             throw new OperationCanceledException(cancellationToken);
@@ -352,6 +368,11 @@ public sealed class GitRunner : IGitRunner
         string standardOutput,
         string standardError)
     {
+        // The output is recorded with the credentials of every URL hidden, as the command line
+        // is: git remote -v and some error texts print URLs with tokens in them (D103). Git's
+        // streams arrive hidden and cut already (OutputCollector.Head hides before it cuts), and
+        // hiding again changes nothing. The call belongs to the operation the queue is running in
+        // this flow, if any (1.7).
         var record = new GitCallRecord(
             startedAt,
             duration,
@@ -359,8 +380,9 @@ public sealed class GitRunner : IGitRunner
             command.WorkingDirectory,
             outcome,
             exitCode,
-            standardOutput,
-            standardError);
+            GitCommand.HideCredentials(standardOutput),
+            GitCommand.HideCredentials(standardError),
+            GitOperationScope.Current);
 
         var result = outcome == GitCallOutcome.Completed ? $"exit {exitCode}" : outcome.ToString();
         var where = command.WorkingDirectory is null ? string.Empty : $" in {command.WorkingDirectory}";
@@ -385,6 +407,12 @@ public sealed class GitRunner : IGitRunner
     /// </summary>
     private sealed class OutputCollector(Action<string>? onLine, bool keepAll, bool splitOnCarriageReturn)
     {
+        /// <summary>
+        /// How much more than <see cref="GitCallRecord.MaxOutputLength"/> is kept for the record, so
+        /// that a URL that the cut falls into is still whole when its credentials are hidden.
+        /// </summary>
+        private const int HeadSlack = 1024;
+
         private readonly Lock _gate = new();
         private readonly StringBuilder? _all = keepAll ? new StringBuilder() : null;
         private readonly StringBuilder _head = new();
@@ -412,15 +440,53 @@ public sealed class GitRunner : IGitRunner
             }
         }
 
+        /// <summary>The start of the output for the call record: its credentials hidden, then cut off (<see cref="RecordedOutput"/>).</summary>
         public string Head
         {
             get
             {
                 lock (_gate)
                 {
-                    return _headCutOff ? _head.ToString() + GitCallRecord.TruncationMarker : _head.ToString();
+                    return RecordedOutput(_head.ToString(), _headCutOff);
                 }
             }
+        }
+
+        /// <summary>
+        /// What the record keeps of <paramref name="text"/>, the start of a stream that git wrote
+        /// more of when <paramref name="cutOff"/>: the credentials of every URL hidden on the whole
+        /// text first (D103), then cut to <see cref="GitCallRecord.MaxOutputLength"/> with
+        /// <see cref="GitCallRecord.TruncationMarker"/>. A URL's authority that runs on to the cut
+        /// is left out from its <c>://</c>: its <c>@</c> may lie beyond the cut, and then its user
+        /// information was not found to be hidden.
+        /// </summary>
+        public static string RecordedOutput(string text, bool cutOff)
+        {
+            const string SchemeEnd = "://";
+            var hidden = GitCommand.HideCredentials(text);
+            if (!cutOff && hidden.Length <= GitCallRecord.MaxOutputLength)
+            {
+                return hidden;
+            }
+
+            var end = Math.Min(hidden.Length, GitCallRecord.MaxOutputLength);
+            var schemeEnd = end < SchemeEnd.Length ? -1 : hidden.LastIndexOf(SchemeEnd, end - 1, end, StringComparison.Ordinal);
+            if (schemeEnd >= 0)
+            {
+                var authorityStart = schemeEnd + SchemeEnd.Length;
+                var authorityEnded = false;
+                for (var i = authorityStart; i < end && !authorityEnded; i++)
+                {
+                    authorityEnded = hidden[i] is '/' or '?' or '#' || char.IsWhiteSpace(hidden[i]);
+                }
+
+                if (!authorityEnded)
+                {
+                    end = authorityStart;
+                }
+            }
+
+            return hidden[..end] + GitCallRecord.TruncationMarker;
         }
 
         /// <summary>Stops collecting. A pump that is still reading discards what arrives from now on.</summary>
@@ -474,7 +540,7 @@ public sealed class GitRunner : IGitRunner
 
         private void AppendToHead(ReadOnlySpan<char> chunk)
         {
-            var room = GitCallRecord.MaxOutputLength - _head.Length;
+            var room = GitCallRecord.MaxOutputLength + HeadSlack - _head.Length;
             if (chunk.Length > room)
             {
                 _headCutOff = true;

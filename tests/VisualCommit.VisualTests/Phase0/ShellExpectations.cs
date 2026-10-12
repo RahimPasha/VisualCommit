@@ -165,31 +165,8 @@ public static class ShellExpectations
         return region;
     }
 
-    /// <summary>The visible texts inside a region, in reading order: top to bottom, then left to right.</summary>
-    public static List<string> TextsIn(Visual region)
-    {
-        var items = region.GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
-            .Select(text => (Text: text.Text!, Area: new Rect(text.TranslatePoint(default, region) ?? default, text.Bounds.Size)))
-            .OrderBy(item => item.Area.Center.Y)
-            .ToList();
-
-        // Texts whose centres are within a few pixels of each other vertically are on one row.
-        var texts = new List<string>();
-        for (var start = 0; start < items.Count;)
-        {
-            var end = start + 1;
-            while (end < items.Count && items[end].Area.Center.Y - items[end - 1].Area.Center.Y < 6)
-            {
-                end++;
-            }
-
-            texts.AddRange(items[start..end].OrderBy(item => item.Area.X).Select(item => item.Text));
-            start = end;
-        }
-
-        return texts;
-    }
+    /// <summary>The visible texts inside a region, in reading order: top to bottom, then left to right (<see cref="VisibleTexts.In"/>).</summary>
+    public static List<string> TextsIn(Visual region) => VisibleTexts.In(region);
 
     public static void AssertColour(Color expected, Screenshot screenshot, Point position, string what)
     {

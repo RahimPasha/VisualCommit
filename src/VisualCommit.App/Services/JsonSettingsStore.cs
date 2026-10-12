@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Settings;
@@ -52,7 +53,7 @@ public sealed class JsonSettingsStore : ISettingsStore
         try
         {
             var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+            return Read(json);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -60,6 +61,31 @@ public sealed class JsonSettingsStore : ISettingsStore
             SetAside();
             return new AppSettings();
         }
+    }
+
+    /// <summary>
+    /// The settings in <paramref name="json"/>, with the defaults of <see cref="AppSettings"/> for
+    /// the settings the file does not have. The generated serializer sets every init-only
+    /// property, so a setting missing from the file would get 0 or false instead of its default
+    /// (a phase 2 file has no <c>autoFetchMinutes</c>, whose default is 5): the file's values are
+    /// laid over the defaults' JSON first.
+    /// </summary>
+    private static AppSettings Read(string json)
+    {
+        var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+        if (JsonNode.Parse(json, documentOptions: options) is not JsonObject values)
+        {
+            // Not an object: read as before, which refuses it or gives the defaults for "null".
+            return JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+        }
+
+        var merged = JsonSerializer.SerializeToNode(new AppSettings(), SettingsJsonContext.Default.AppSettings)!.AsObject();
+        foreach (var (name, value) in values.ToList())
+        {
+            merged[name] = value?.DeepClone();
+        }
+
+        return merged.Deserialize(SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
     }
 
     private void Save(AppSettings settings)

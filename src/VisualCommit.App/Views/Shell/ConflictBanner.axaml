@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
+             x:Class="VisualCommit.App.Views.Shell.ConflictBanner"
+             x:DataType="ops:ConflictBannerViewModel"
+             MinHeight="36"
+             AutomationProperties.AutomationId="ConflictBanner"
+             AutomationProperties.Name="{Binding Text}">
+
+  <!-- The banner above the graph or the diff while an operation is in progress or files have
+       conflicts (docs/phase-3-design.md section 5): the warning icon, what is in progress, and
+       Abort at the right. It is 36 high while its text fits on one line; a longer text wraps and
+       the banner grows, so that what to do next is never cut off (the graph area can be 440 wide
+       at 1100 by 700). The icon and the text share the tooltip of section 5. -->
+  <Border Background="{DynamicResource VcBannerBackgroundBrush}"
+          BorderBrush="{DynamicResource VcWarningBrush}"
+          BorderThickness="0,0,0,1">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <Border Name="BannerInfo" Grid.Column="0" Grid.ColumnSpan="2" Background="Transparent" ToolTip.Tip="{Binding ToolTip}" />
+      <c:Icon Name="BannerIcon"
+              Grid.Column="0"
+              Data="{StaticResource IconAlert}"
+              Width="16"
+              Height="16"
+              Margin="12,0,8,0"
+              Foreground="{DynamicResource VcWarningBrush}"
+              VerticalAlignment="Center"
+              IsHitTestVisible="False" />
+      <TextBlock Name="BannerText"
+                 Grid.Column="1"
+                 Margin="0,9,8,9"
+                 VerticalAlignment="Center"
+                 Text="{Binding Text}"
+                 Foreground="{DynamicResource VcTextPrimaryBrush}"
+                 TextWrapping="Wrap"
+                 IsHitTestVisible="False"
+                 AutomationProperties.AutomationId="BannerText" />
+      <Button Name="BannerAbortButton"
+              Grid.Column="2"
+              Theme="{StaticResource VcActionButton}"
+              Height="26"
+              Padding="10,0"
+              Margin="0,0,8,0"
+              VerticalAlignment="Center"
+              Content="{Binding AbortText}"
+              Command="{Binding AbortCommand}"
+              IsVisible="{Binding HasAbort}"
+              AutomationProperties.AutomationId="BannerAbortButton"
+              AutomationProperties.Name="{Binding AbortText}" />
+    </Grid>
+  </Border>
+</UserControl>

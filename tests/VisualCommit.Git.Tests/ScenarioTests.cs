@@ -1,10 +1,14 @@
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using Xunit;
+using static VisualCommit.Git.Tests.ScenarioTestSupport;
 
 namespace VisualCommit.Git.Tests;
 
-/// <summary>Pins down what each scenario repo contains. Visual checks describe their expected results in these terms.</summary>
+/// <summary>
+/// Pins down what each scenario repo contains. Visual checks describe their expected results in
+/// these terms. Phase 3's scenarios are pinned in <see cref="Phase3ScenarioTests"/>.
+/// </summary>
 public class ScenarioTests
 {
     [Fact]
@@ -289,10 +293,4 @@ public class ScenarioTests
         Assert.True(File.Exists(Path.Combine(repo.Path, ".git", "MERGE_HEAD")));
         Assert.Equal(["Ours", "Base"], Lines(await repo.GitAsync("log", "--format=%s")));
     }
-
-    private static string[] Lines(GitResult result) => Lines(result.StandardOutput);
-
-    private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-    private static string Subject(GitResult result) => result.StandardOutput.Trim();
 }

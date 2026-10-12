@@ -6,12 +6,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Graph;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Settings;
 
 namespace VisualCommit.App.ViewModels;
@@ -19,8 +21,9 @@ namespace VisualCommit.App.ViewModels;
 /// <summary>
 /// One repository open in a tab (D45): its refs, its graph, its left panel and commit details,
 /// its working-tree status with the stage panel and the open diff, its watcher, and everything
-/// that keeps them up to date. Every write the app makes to the repository runs here, with the
-/// watcher paused (D71). Closing the tab disposes it, which stops all of its work.
+/// that keeps them up to date. Every write the app makes to the repository runs through its
+/// operation queue (<see cref="Queue"/>, D81), with the watcher paused (D71). Closing the tab
+/// disposes it, which stops all of its work but a local operation that has started (1.8).
 /// </summary>
 public sealed partial class RepositoryViewModel : ObservableObject, IDisposable, IWorkingChangesHost, IDiffHost
 {
@@ -44,8 +47,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private string? _headSha;
     private readonly Lock _refreshGate = new();
     private readonly Lock _statusGate = new();
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly OperationQueue _queue;
     private bool _firstRowsLogged;
+    private bool _syncingSelection;
     private Task? _refreshing;
     private bool _refreshAgain;
     private Task? _statusRefreshing;
@@ -63,13 +67,18 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <param name="log">The app's log, which also gets the Q1 measurements (D50).</param>
     /// <param name="sinceOpening">Started when opening the repository began; the time to the first graph rows is measured from it.</param>
     /// <param name="dialogs">Where a discard asks for confirmation (D62, D69). Without it, discards go ahead unasked: tests only.</param>
+    /// <param name="services">
+    /// The app's services for phase 3's operations: the operation log and the prompt channel the
+    /// queue uses, and what <see cref="Operations"/> needs. Null in view-model tests that need none.
+    /// </param>
     public RepositoryViewModel(
         IGitRepository repository,
         ISettingsStore settings,
         DateDisplay dates,
         IAppLog? log = null,
         Stopwatch? sinceOpening = null,
-        IDialogService? dialogs = null)
+        IDialogService? dialogs = null,
+        TabServices? services = null)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(settings);
@@ -82,6 +91,22 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         _sinceOpening = sinceOpening ?? Stopwatch.StartNew();
         _ui = SynchronizationContext.Current;
 
+        // Every write to the repository runs through its queue, one at a time (D76, D81).
+        _queue = new OperationQueue(
+            repository.Name,
+            repository.GitDirectory,
+            () => _watcher?.Pause(),
+            scope => scope.HasFlag(RefreshScope.Refs) ? RefreshAsync()
+                : scope.HasFlag(RefreshScope.Status) ? RefreshStatusAsync()
+                : Task.CompletedTask,
+            services?.Prompts,
+            services?.Operations,
+            _log,
+            since => LockFiles.FindSince([repository.GitDirectory, repository.CommonDirectory], since));
+        OperationStatus = new OperationStatusViewModel(_queue, services?.DialogHost.Notices);
+        Operations = new RepositoryOperations(this, _queue, services, _log);
+        Toolbar = new ToolbarViewModel(this);
+
         LeftPanel = new LeftPanelViewModel();
         LeftPanel.RefActivated += (_, sha) => Select(sha, reveal: true);
         Details = new CommitDetailsViewModel(repository, settings, dates, _log);
@@ -91,6 +116,34 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     }
 
     public IGitRepository Repository { get; }
+
+    /// <summary>The repository's operation queue (docs/phase-3-design.md 1, D81).</summary>
+    public IOperationQueue Queue => _queue;
+
+    /// <summary>What the status bar shows of the operations (4e).</summary>
+    public OperationStatusViewModel OperationStatus { get; }
+
+    /// <summary>Builds and starts the operations of section 2 (WP7 fills it).</summary>
+    public RepositoryOperations Operations { get; }
+
+    /// <summary>The toolbar's buttons for this repository (4d).</summary>
+    public ToolbarViewModel Toolbar { get; }
+
+    /// <summary>
+    /// The commits selected in the graph, as SHAs (4h, D88). One selected commit is also
+    /// <see cref="SelectedIndex"/>; several leave <see cref="SelectedIndex"/> at -1. The graph
+    /// control binds to it both ways.
+    /// </summary>
+    [ObservableProperty]
+    public partial GraphSelection Selection { get; set; } = GraphSelection.Empty;
+
+    /// <summary>What the details panel shows instead of one commit's details while several are selected (4h); null otherwise. WP8 sets it.</summary>
+    [ObservableProperty]
+    public partial object? MultiSelection { get; private set; }
+
+    /// <summary>What the working-changes row says (D60); WP9 adds the count of conflicts (section 5).</summary>
+    [ObservableProperty]
+    public partial string WorkingRowText { get; private set; } = "Working changes";
 
     /// <summary>The name the tab shows.</summary>
     public string Name => Repository.Name;
@@ -127,6 +180,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>What the status bar shows: the branch HEAD is on, or "Detached at" and its short id.</summary>
     [ObservableProperty]
     public partial string BranchText { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// The refs as last read: HEAD, the branches with their upstreams, the stashes and the
+    /// remotes; null before the first read. Set by every refresh, also when only an upstream or
+    /// its counts changed (which <see cref="Graph"/>'s refs do not follow). The toolbar's states
+    /// follow it (docs/phase-3-design.md 4d).
+    /// </summary>
+    [ObservableProperty]
+    public partial RepoRefs? Refs { get; private set; }
 
     /// <summary>Why the repository could not be read, or null.</summary>
     [ObservableProperty]
@@ -436,6 +498,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
 
         _disposed = true;
+
+        // What waits is dropped and a network operation is stopped; a local one that has started
+        // runs all its steps to the end, without the refresh (1.8).
+        _queue.Dispose();
+        OperationStatus.Dispose();
         _lifetime.Cancel();
         _watcher?.Dispose();
         Diff?.Dispose();
@@ -450,7 +517,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         ArgumentNullException.ThrowIfNull(files);
         return files.Count == 0
             ? Task.FromResult<string?>(null)
-            : WriteAsync(cancellationToken => Repository.StageAsync([.. files.Select(file => file.Path)], cancellationToken));
+            : WriteAsync("Stage", "Staging…", cancellationToken => Repository.StageAsync([.. files.Select(file => file.Path)], cancellationToken));
     }
 
     public Task<string?> UnstageAsync(IReadOnlyList<ChangedFile> files)
@@ -461,7 +528,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         var paths = files.SelectMany(file => file.OldPath is { } old ? new[] { file.Path, old } : [file.Path]).Distinct().ToList();
         return paths.Count == 0
             ? Task.FromResult<string?>(null)
-            : WriteAsync(cancellationToken => Repository.UnstageAsync(paths, cancellationToken));
+            : WriteAsync("Unstage", "Unstaging…", cancellationToken => Repository.UnstageAsync(paths, cancellationToken));
     }
 
     public async Task<string?> DiscardAsync(IReadOnlyList<ChangedFile> files)
@@ -504,6 +571,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         var untracked = new HashSet<string>(paths.Where(Status.IsUntracked), StringComparer.Ordinal);
         return await WriteAsync(
+            "Discard",
+            "Discarding…",
             async cancellationToken =>
             {
                 var snapshot = await Repository.SaveSnapshotAsync(paths, cancellationToken);
@@ -528,13 +597,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 ? $"{WorkingChangesViewModel.FileName(changed[0])} has changed since the discard. Put back the version from before the discard?"
                 : string.Create(CultureInfo.InvariantCulture, $"{changed.Count} files have changed since the discard. Put back the versions from before the discard?");
             var request = new ConfirmationRequest("Restore discarded changes?", question, "A snapshot of the newer changes is saved first.", "Restore");
-            if (_dialogs is not null && !await _dialogs.ConfirmAsync(request))
+            if (!await AskAsync(request))
             {
                 return null;
             }
         }
 
         return await WriteAsync(
+            "Restore",
+            "Restoring…",
             async cancellationToken =>
             {
                 if (changed.Count > 0)
@@ -553,6 +624,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     {
         string? commit = null;
         var error = await WriteAsync(
+            "Commit",
+            "Committing…",
             async cancellationToken => commit = await Repository.CommitAsync(message, amend, cancellationToken),
             refsChange: true);
 
@@ -616,6 +689,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
 
         return await WriteAsync(
+            "Apply lines",
+            "Applying…",
             async cancellationToken =>
             {
                 // The whole file goes into a discard's snapshot, so Restore puts all of it back (D67).
@@ -650,6 +725,13 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
 
         var sha = value >= 0 && value < Graph.Count ? Graph.CommitAt(value).Sha : null;
+        if (!_syncingSelection && (sha is null ? !Selection.IsMultiple : Selection.Single != sha))
+        {
+            // One selected row is the selection; -1 ends a single selection, not a multi-selection
+            // (which keeps SelectedIndex at -1 itself).
+            SetSelectionQuietly(sha is null ? GraphSelection.Empty : GraphSelection.Of(sha));
+        }
+
         if (sha == _selectedSha)
         {
             return;
@@ -660,6 +742,73 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         {
             var stash = sha is null ? null : Graph.Refs.Stashes.FirstOrDefault(entry => entry.Sha == sha);
             _ = Details.ShowAsync(sha, stash, _lifetime.Token);
+        }
+    }
+
+    partial void OnSelectionChanged(GraphSelection value)
+    {
+        if (!_syncingSelection)
+        {
+            // A selection set from outside (the graph control's multi-select, WP8): exactly one
+            // commit is also SelectedIndex, which phases 1 and 2 bind to; none or several leave it at -1.
+            _syncingSelection = true;
+            try
+            {
+                if (value.Single is { } sha)
+                {
+                    var index = Graph.IndexOf(sha);
+                    if (index >= 0)
+                    {
+                        SelectedIndex = index;
+                    }
+                    else
+                    {
+                        _pendingSelection = Graph.IsComplete ? null : sha;
+                    }
+                }
+                else if (SelectedIndex >= 0)
+                {
+                    SelectedIndex = -1;
+                }
+            }
+            finally
+            {
+                _syncingSelection = false;
+            }
+        }
+
+        OnGraphSelectionChanged(value);
+    }
+
+    /// <summary>
+    /// Hook (docs/phase-3-design.md 6.3, section 8): the graph's selection changed. WP9 implements
+    /// it in a partial file to make the left panel follow the single selected commit (D98).
+    /// </summary>
+    partial void OnGraphSelectionChanged(GraphSelection selection);
+
+    /// <summary>
+    /// Hook (4h, section 8): a reloaded history replaced <see cref="Graph"/>. WP8 implements it in a
+    /// partial file to map a multi-selection onto the new graph by its SHAs.
+    /// </summary>
+    partial void OnGraphSwapped(CommitGraphData data);
+
+    /// <summary>
+    /// Hook (section 5, section 8): a newly read status was shown. WP9 implements it in a partial
+    /// file for the conflict banner and the working-changes row's text.
+    /// </summary>
+    partial void OnStatusApplied(WorkingTreeStatus status);
+
+    /// <summary>Sets <see cref="Selection"/> without mapping it back onto <see cref="SelectedIndex"/>, which it follows here.</summary>
+    private void SetSelectionQuietly(GraphSelection selection)
+    {
+        _syncingSelection = true;
+        try
+        {
+            Selection = selection;
+        }
+        finally
+        {
+            _syncingSelection = false;
         }
     }
 
@@ -699,6 +848,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
 
         Changes.Update(status, HasHead);
+        OnStatusApplied(status);
     }
 
     private async Task ShowStatusAsync(Task<WorkingTreeStatus> reading)
@@ -773,8 +923,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>A file's name as dialogs and messages give it; a folder's without its slash.</summary>
     private static string DisplayName(ChangedFile file) => WorkingChangesViewModel.FileName(file.Path.TrimEnd('/'));
 
-    private async Task<bool> ConfirmDiscardAsync(string question) =>
-        _dialogs is null || await _dialogs.ConfirmAsync(new ConfirmationRequest("Discard changes?", question, SnapshotNote, "Discard"));
+    private Task<bool> ConfirmDiscardAsync(string question) =>
+        AskAsync(new ConfirmationRequest("Discard changes?", question, SnapshotNote, "Discard"));
+
+    /// <summary>
+    /// Asks <paramref name="request"/> in the window's confirmation, naming this repository under
+    /// its title by the window's rule, as every dialog of an operation does (4f,
+    /// <see cref="RepositoryOperations.NamesRepositoryInDialogs"/>). True without a dialog service
+    /// (tests only: the change goes ahead unasked).
+    /// </summary>
+    private async Task<bool> AskAsync(ConfirmationRequest request) =>
+        _dialogs is null || await _dialogs.ConfirmAsync(request with { RepositoryName = Operations.NamesRepositoryInDialogs ? Name : null });
 
     /// <summary>
     /// After a discard that succeeded: keeps its snapshot for Restore, and what the files hold now,
@@ -832,67 +991,31 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     }
 
     /// <summary>
-    /// Runs one of the app's own writes with the watcher paused, then reads what changed: the
-    /// status (and the open diff), and with <paramref name="refsChange"/> the refs and history
-    /// too (D71). Returns git's message when the write failed, and shows it in the stage panel.
-    /// Writes run one at a time, each with the reading after it (D76): two at once would meet at
-    /// git's index lock.
+    /// Runs one of the stage panel's and diff view's writes (phase 2) as an operation of the
+    /// queue (docs/phase-3-design.md 1.4): one at a time, after those queued before it (D76), with
+    /// the watcher paused, then reading what changed: the status (and the open diff), and with
+    /// <paramref name="refsChange"/> the refs and history too (D71), whether or not it succeeded.
+    /// Returns git's message when the write failed, and shows it in the stage panel, not in a
+    /// dialog. A write asked for after the tab closed (a confirmation was still open) does
+    /// nothing. A write that has started runs to its end, also when the tab closes (1.8).
     /// </summary>
-    private async Task<string?> WriteAsync(Func<CancellationToken, Task> write, bool refsChange = false)
+    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, bool refsChange = false)
     {
-        // The tab may have closed while a confirmation was open.
-        if (_disposed)
-        {
-            return null;
-        }
-
-        await _writeGate.WaitAsync();
-        try
-        {
-            return _disposed ? null : await WriteNowAsync(write, refsChange);
-        }
-        finally
-        {
-            _writeGate.Release();
-        }
-    }
-
-    private async Task<string?> WriteNowAsync(Func<CancellationToken, Task> write, bool refsChange)
-    {
-        var cancellationToken = _lifetime.Token;
-        string? error = null;
-        using (_watcher?.Pause())
-        {
-            try
+        var result = await _queue.RunAsync(new GitOperation(
+            title,
+            runningText,
+            OperationKind.Local,
+            refsChange ? RefreshScope.Refs : RefreshScope.Status,
+            async context =>
             {
-                await write(cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                return null;
-            }
-            catch (GitException ex)
-            {
-                _log.Warning($"{Name}: {ex.Message}");
-                error = string.IsNullOrWhiteSpace(ex.StandardError) ? ex.Message : ex.StandardError.Trim();
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _log.Warning($"{Name}: a write to the working tree failed.", ex);
-                error = ex.Message;
-            }
-        }
-
-        // Read again whether or not the write succeeded: it may have done part of its work.
-        if (refsChange)
+                await write(context.CancellationToken);
+                return OperationReport.Done(string.Empty);
+            })
         {
-            await RefreshAsync();
-        }
-        else
-        {
-            await RefreshStatusAsync();
-        }
-
+            Errors = ErrorDisplay.StagePanel,
+            Prompts = PromptMode.None,
+        });
+        var error = result.Outcome == OperationOutcome.Failed ? result.Failure!.GitOutput : null;
         Changes.ErrorText = error;
         return error;
     }
@@ -980,6 +1103,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             _ => string.Empty,
         };
         LeftPanel.Update(refs);
+        Refs = refs;
     }
 
     private void SwapGraph(CommitGraphData data)
@@ -1008,6 +1132,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             // name: stash@{0} becomes stash@{1}. Show it again under its new name.
             _ = Details.ShowAsync(selected, stash, _lifetime.Token);
         }
+
+        OnGraphSwapped(data);
     }
 
     private void ApplyPendingSelection(CommitGraphData data)

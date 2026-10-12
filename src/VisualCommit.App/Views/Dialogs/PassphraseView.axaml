@@ -1,0 +1,52 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.PassphraseView"
+                  x:DataType="vm:PassphraseViewModel"
+                  AutomationProperties.AutomationId="PassphraseDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- "Key passphrase" (docs/phase-3-design.md 3.2, 4f; check 21b): ssh asks for a key's passphrase. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="PassphraseCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="DialogTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="DialogTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <c:UrlTextBlock Name="PassphraseText"
+                   Classes="dialogText"
+                   Text="{Binding Text}"
+                   AutomationProperties.AutomationId="PassphraseText" />
+        <c:SecretTextBox Name="PassphraseBox"
+                 Classes="dialogBox"
+                 Text="{Binding Passphrase}"
+                 PasswordChar="{x:Static vm:PromptDialogViewModel.MaskCharacter}"
+                 AutomationProperties.AutomationId="PassphraseBox"
+                 AutomationProperties.Name="Passphrase" />
+
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</local:DialogView>

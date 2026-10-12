@@ -55,8 +55,8 @@ public sealed partial class CommitGraphControl
 
     private const string Ellipsis = "…";
 
-    /// <summary>What the working-changes row says in the Message column (D60).</summary>
-    public const string WorkingRowText = "Working changes";
+    /// <summary>What the working-changes row says in the Message column (D60) unless <see cref="WorkingRowText"/> says otherwise.</summary>
+    public const string DefaultWorkingRowText = "Working changes";
 
     /// <summary>The working-changes row's dashed line: dashes and gaps of 3 pixels, in units of the line's thickness.</summary>
     private const double DashLength = 3;
@@ -98,11 +98,11 @@ public sealed partial class CommitGraphControl
         }
 
         var columns = Columns;
-        var selected = SelectedIndex;
+        var selection = Selection;
 
         for (var display = first; display <= last; display++)
         {
-            var background = RowBackground(display, selected, palette);
+            var background = RowBackground(data, display, selection, palette);
             if (!ReferenceEquals(background, palette.Background))
             {
                 context.FillRectangle(background, new Rect(0, RowTop(display, offset), size.Width, RowHeight));
@@ -120,7 +120,7 @@ public sealed partial class CommitGraphControl
             for (var display = first; display <= last; display++)
             {
                 var top = RowTop(display, offset);
-                var background = RowBackground(display, selected, palette);
+                var background = RowBackground(data, display, selection, palette);
                 if (display < rowOffset)
                 {
                     DrawWorkingRowNode(context, data, top, background, palette);
@@ -139,7 +139,8 @@ public sealed partial class CommitGraphControl
                 var index = display - rowOffset;
                 if (data.LabelsAt(index).Count > 0)
                 {
-                    DrawLabels(context, GetRowVisual(data, index), data.RowAt(index).NodeColor, RowTop(display, offset), palette);
+                    var dimmed = _draggedLabel is { } dragged && dragged.Sha == data.CommitAt(index).Sha ? dragged.RefName : null;
+                    DrawLabels(context, GetRowVisual(data, index), data.RowAt(index).NodeColor, RowTop(display, offset), palette, dimmed);
                 }
             }
         }
@@ -148,7 +149,7 @@ public sealed partial class CommitGraphControl
         {
             if (display < rowOffset)
             {
-                _workingRowLayout ??= CellLayout(WorkingRowText, CellTypeface, palette.TextSecondary, columns.Message);
+                _workingRowLayout ??= CellLayout(WorkingRowText ?? DefaultWorkingRowText, CellTypeface, palette.TextSecondary, columns.Message);
                 DrawCell(context, _workingRowLayout, columns.Message.X, RowTop(display, offset));
             }
             else
@@ -170,10 +171,10 @@ public sealed partial class CommitGraphControl
 
     private static double RowTop(int display, double offset) => (display * RowHeight) - offset;
 
-    /// <summary>A drawn row's background: the working-changes row is row 0 when shown.</summary>
-    private IBrush RowBackground(int display, int selected, Palette palette)
+    /// <summary>A drawn row's background: the working-changes row is row 0 when shown; every selected row has the selection's (4h).</summary>
+    private IBrush RowBackground(CommitGraphData data, int display, GraphSelection selection, Palette palette)
     {
-        var isSelected = display < RowOffset ? IsWorkingRowSelected : display - RowOffset == selected;
+        var isSelected = display < RowOffset ? IsWorkingRowSelected : IsRowSelected(data, display - RowOffset, selection);
         return isSelected ? palette.Selection
             : display == _hoveredRow ? palette.RowHover
             : palette.Background;
@@ -299,11 +300,15 @@ public sealed partial class CommitGraphControl
         context.DrawGeometry(null, pen, geometry);
     }
 
-    private static void DrawLabels(DrawingContext context, RowVisual visual, int nodeColor, double top, Palette palette)
+    /// <summary>Draws a row's labels; the one named <paramref name="dimmedRef"/> is being dragged and is drawn at half opacity (4g).</summary>
+    private static void DrawLabels(DrawingContext context, RowVisual visual, int nodeColor, double top, Palette palette, string? dimmedRef)
     {
         var color = Modulo(nodeColor);
         foreach (var label in visual.Labels)
         {
+            using var opacity = dimmedRef is not null && !label.IsOverflow && label.RefName == dimmedRef
+                ? context.PushOpacity(DraggedSourceOpacity)
+                : default(DrawingContext.PushedState?);
             var bounds = label.Bounds.Translate(new Vector(0, top));
             var (fill, border, iconPen) = LabelColors(label, color, palette);
             if (border is null)
@@ -534,7 +539,7 @@ public sealed partial class CommitGraphControl
             }
 
             var layout = LabelLayout(text, typeface, label.Kind, palette);
-            placed.Add(new LabelVisual(text, label.Text, label.Kind, new Rect(x, labelTop, width, LabelHeight), IsOverflow: false, layout));
+            placed.Add(new LabelVisual(text, label.Text, label.Kind, new Rect(x, labelTop, width, LabelHeight), IsOverflow: false, layout, label.RefName));
             x += width + LabelSpacing;
         }
 
@@ -638,7 +643,7 @@ public sealed partial class CommitGraphControl
     private sealed record RowVisual(TextLayout? Message, TextLayout? Author, TextLayout? Date, TextLayout? Sha, LabelVisual[] Labels);
 
     /// <summary>A placed label with its laid-out text; <see cref="Bounds"/> is relative to the row's top.</summary>
-    private sealed record LabelVisual(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, TextLayout Layout);
+    private sealed record LabelVisual(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, TextLayout Layout, string? RefName = null);
 
     /// <summary>
     /// The theme's colours as immutable brushes and pens, looked up once per theme from the

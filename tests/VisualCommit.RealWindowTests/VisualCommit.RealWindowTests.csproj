@@ -31,6 +31,13 @@
     <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
   </ItemGroup>
 
+  <!-- Phase 3's expectations, shared with the scripted walk-through, so that the pass clicks and
+       compares with the same constants and texts (docs/phase-3-design.md 7.4). Those files use
+       nothing of VisualCommit.VisualTests.Phase3 but themselves. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase3\Phase3Expectations*.cs" Link="Phase3\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
     <AssemblyMetadata Include="AppExecutable" Value="$(RepoRoot)src\VisualCommit.App\bin\$(Configuration)\net10.0\VisualCommit.exe" />

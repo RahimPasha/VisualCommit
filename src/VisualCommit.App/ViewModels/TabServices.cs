@@ -4,6 +4,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 
@@ -20,7 +21,12 @@ public sealed class TabServices
         DateDisplay dates,
         IAppLog? log = null,
         TimeProvider? clock = null,
-        IDialogService? dialogs = null)
+        IDialogService? dialogs = null,
+        IOperationLog? operations = null,
+        IGitPromptBroker? prompts = null,
+        IFileLauncher? launcher = null,
+        IClipboardService? clipboard = null,
+        IGitCallLog? gitCalls = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -32,8 +38,15 @@ public sealed class TabServices
         Settings = settings;
         Dates = dates;
         Log = log ?? NullAppLog.Instance;
-        Recent = new RecentRepositories(session, clock ?? TimeProvider.System);
+        Clock = clock ?? TimeProvider.System;
+        Recent = new RecentRepositories(session, Clock);
         Dialogs = dialogs ?? new DialogHostViewModel();
+        DialogHost = Dialogs as DialogHostViewModel ?? new DialogHostViewModel();
+        Operations = operations ?? new OperationLog();
+        Prompts = prompts ?? NullGitPromptBroker.Instance;
+        Launcher = launcher;
+        Clipboard = clipboard;
+        GitCalls = gitCalls;
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -50,6 +63,42 @@ public sealed class TabServices
 
     /// <summary>The window's confirmations (D69).</summary>
     public IDialogService Dialogs { get; }
+
+    /// <summary>
+    /// The window's dialog layer, for dialogs beyond a confirmation (D104): <see cref="Dialogs"/>
+    /// itself, or a layer of its own when a test gave a fake confirmation service.
+    /// </summary>
+    public DialogHostViewModel DialogHost { get; }
+
+    /// <summary>The clock: the recent list's times and auto-fetch's timer.</summary>
+    public TimeProvider Clock { get; }
+
+    /// <summary>The record of every operation of the session (docs/phase-3-design.md 1.7), handed to each repository's queue.</summary>
+    public IOperationLog Operations { get; }
+
+    /// <summary>The prompt channel (section 3): each operation and each clone opens a scope here.</summary>
+    public IGitPromptBroker Prompts { get; }
+
+    /// <summary>Opens files and shows them in the file manager (2.32); null where nothing may be opened (view-model tests).</summary>
+    public IFileLauncher? Launcher { get; }
+
+    /// <summary>The clipboard (2.32); null where nothing may be copied (view-model tests).</summary>
+    public IClipboardService? Clipboard { get; }
+
+    /// <summary>
+    /// Whether a dialog that an operation of a repository opens names that repository ("In
+    /// &lt;repo&gt;" under its title, docs/phase-3-design.md 4f): the window's one rule
+    /// (<see cref="MainWindowViewModel.NamesRepositoryInDialogs"/>, more than one tab has a
+    /// repository), which the window sets here when it is made. False without a window.
+    /// </summary>
+    public Func<bool> NamesRepositoryInDialogs { get; set; } = static () => false;
+
+    /// <summary>
+    /// The record of every git call of the session (1.7), each with its operation's id: where an
+    /// operation finds the command and the output of a failed call that its git method reported
+    /// only as an outcome (an empty cherry-pick, 2.12). Null where nothing records the calls.
+    /// </summary>
+    public IGitCallLog? GitCalls { get; }
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

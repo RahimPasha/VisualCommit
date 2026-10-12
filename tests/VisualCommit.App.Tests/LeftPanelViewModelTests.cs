@@ -337,6 +337,86 @@ public class LeftPanelViewModelTests
             Describe(panel));
     }
 
+    [Fact]
+    public void The_clicked_ref_keeps_its_background_only_while_the_graphs_single_selection_is_its_target()
+    {
+        // docs/phase-3-design.md 6.3, D98: the graph's selection reaches the panel as the single
+        // selected commit, or null for none or several.
+        var refs = GraphRefs();
+        var panel = Updated(refs);
+        panel.Activate(Item(panel, "v0.1", RefItemKind.Tag));
+
+        panel.SyncSelection(Sha('b'));
+        Assert.Equal(["v0.1"], SelectedTexts(panel));
+
+        // A reload keeps it while the selection stays.
+        panel.Update(refs);
+        panel.SyncSelection(Sha('b'));
+        Assert.Equal(["v0.1"], SelectedTexts(panel));
+
+        // Another commit (a click, the keys, a parent link) clears it, and coming back does not
+        // highlight it again: a selection made in the graph highlights no ref.
+        panel.SyncSelection(Sha('c'));
+        Assert.Empty(SelectedTexts(panel));
+        panel.SyncSelection(Sha('b'));
+        Assert.Empty(SelectedTexts(panel));
+        Assert.All(panel.Rows.OfType<RefItemRow>(), row => Assert.False(row.IsSelected));
+    }
+
+    [Fact]
+    public void Several_or_no_selected_commits_clear_the_clicked_ref_and_the_last_clicked_of_one_commit_wins()
+    {
+        var panel = Updated(GraphRefs());
+
+        // main and the stash's base share a commit: the ref clicked last is the one highlighted.
+        panel.Activate(Item(panel, "main", RefItemKind.LocalBranch));
+        panel.SyncSelection(Sha('a'));
+        Assert.Equal(["main"], SelectedTexts(panel));
+        panel.SyncSelection(null);
+        Assert.Empty(SelectedTexts(panel));
+
+        panel.Activate(Item(panel, "v0.2", RefItemKind.Tag));
+        panel.Activate(Item(panel, "On main: Work in progress on README", RefItemKind.Stash));
+        panel.SyncSelection(Sha('s'));
+        Assert.Equal(["On main: Work in progress on README"], SelectedTexts(panel));
+
+        // A ref in a closed folder keeps its selection by key and loses it the same way.
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        panel.Activate(Item(panel, "search", RefItemKind.LocalBranch));
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        panel.SyncSelection(Sha('f'));
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        Assert.Equal(["search"], SelectedTexts(panel));
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        panel.SyncSelection(Sha('a'));
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        Assert.Empty(SelectedTexts(panel));
+    }
+
+    [Fact]
+    public async Task The_repositorys_graph_selection_drives_the_panel()
+    {
+        // The hook WP0 put in RepositoryViewModel (OnGraphSelectionChanged) calls SyncSelection.
+        using var repo = await Scenarios.GraphAsync();
+        var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
+        using var viewModel = new VisualCommit.App.ViewModels.RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new VisualCommit.Core.DateDisplay(TimeZoneInfo.Utc));
+        await viewModel.StartAsync();
+        var panel = viewModel.LeftPanel;
+
+        panel.Activate(Item(panel, "v0.1", RefItemKind.Tag));
+        var tagged = viewModel.SelectedIndex;
+        Assert.True(tagged >= 0);
+        Assert.Equal(["v0.1"], SelectedTexts(panel));
+
+        viewModel.SelectedIndex = tagged == 0 ? 1 : 0;
+        Assert.Empty(SelectedTexts(panel));
+
+        panel.Activate(Item(panel, "v0.1", RefItemKind.Tag));
+        Assert.Equal(["v0.1"], SelectedTexts(panel));
+        viewModel.Selection = new VisualCommit.App.ViewModels.Graph.GraphSelection([viewModel.Graph.CommitAt(0).Sha, viewModel.Graph.CommitAt(1).Sha]);
+        Assert.Empty(SelectedTexts(panel));
+    }
+
     private static LeftPanelViewModel Updated(RepoRefs refs)
     {
         var panel = new LeftPanelViewModel();

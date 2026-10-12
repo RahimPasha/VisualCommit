@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Shell"
+             xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
+             x:Class="VisualCommit.App.Views.Shell.MultiSelectionView"
+             x:DataType="vm:MultiSelectionViewModel"
+             AutomationProperties.AutomationId="MultiSelectionView"
+             AutomationProperties.Name="{Binding Title}">
+
+  <!-- Two or more commits selected in the graph (docs/phase-3-design.md 4h): it covers the
+       commit details in the right panel's slot. The title takes the place of "Commit details",
+       then the commits in row order (short id in the code font, subject cut with "…"), then the
+       hint. No file list. The list scrolls when it is long; the code-behind keeps the hint in
+       view under it. -->
+  <Border Background="{DynamicResource VcPanelBackgroundBrush}">
+    <Grid Name="Layout" RowDefinitions="36,Auto,Auto,*">
+
+      <Border Grid.Row="0"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="0,0,0,1">
+        <TextBlock Name="MultiSelectionTitle"
+                   Text="{Binding Title}"
+                   FontWeight="SemiBold"
+                   Margin="12,0"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   AutomationProperties.AutomationId="MultiSelectionTitle" />
+      </Border>
+
+      <ItemsControl Grid.Row="1"
+                    Name="MultiSelectionList"
+                    Margin="0,8,0,0"
+                    ItemsSource="{Binding Items}"
+                    AutomationProperties.AutomationId="MultiSelectionList"
+                    AutomationProperties.Name="Selected commits">
+        <ItemsControl.Template>
+          <ControlTemplate>
+            <ScrollViewer Name="PART_ScrollViewer"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+              <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+            </ScrollViewer>
+          </ControlTemplate>
+        </ItemsControl.Template>
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:MultiSelectionItem">
+            <dialogs:DialogRow Height="24"
+                               Padding="12,0"
+                               Background="Transparent"
+                               AutomationProperties.AutomationId="MultiSelectionItem"
+                               AutomationProperties.Name="{Binding AccessibleName}">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           Name="MultiSelectionSha"
+                           Classes="secondary"
+                           FontFamily="{DynamicResource VcCodeFontFamily}"
+                           FontSize="12"
+                           Margin="0,0,10,0"
+                           VerticalAlignment="Center"
+                           Text="{Binding ShortSha}" />
+                <TextBlock Name="MultiSelectionSubject"
+                           Text="{Binding Subject}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding Subject}"
+                           VerticalAlignment="Center" />
+              </DockPanel>
+            </dialogs:DialogRow>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Grid.Row="2"
+                 Name="MultiSelectionHint"
+                 Classes="secondary"
+                 Text="{Binding Hint}"
+                 TextWrapping="Wrap"
+                 Margin="12,10,12,12"
+                 AutomationProperties.AutomationId="MultiSelectionHint" />
+    </Grid>
+  </Border>
+</UserControl>

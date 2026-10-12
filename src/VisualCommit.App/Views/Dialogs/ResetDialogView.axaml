@@ -1,0 +1,93 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.ResetDialogView"
+                  x:DataType="vm:ResetDialogViewModel"
+                  AutomationProperties.AutomationId="ResetDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The reset dialog (docs/phase-3-design.md 2.11, 4f): the reset's only confirmation. Soft,
+       Mixed (chosen) or Hard, each with what it keeps; "Reset" in the danger style while Hard is
+       chosen, whose line is in the danger colour. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="ResetDialogCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="ResetTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="ResetTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <TextBlock Name="ResetText"
+                   Classes="dialogText"
+                   Text="{Binding Text}"
+                   AutomationProperties.AutomationId="ResetText" />
+        <StackPanel Margin="0,14,0,0" Spacing="10">
+          <RadioButton Name="ResetSoft"
+                       Theme="{StaticResource VcRadioButton}"
+                       IsChecked="{Binding IsSoft}"
+                       AutomationProperties.AutomationId="ResetSoft"
+                       AutomationProperties.Name="Soft">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Soft" FontWeight="SemiBold" />
+              <TextBlock Classes="secondary" Text="{x:Static vm:ResetDialogViewModel.SoftText}" TextWrapping="Wrap" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Name="ResetMixed"
+                       Theme="{StaticResource VcRadioButton}"
+                       IsChecked="{Binding IsMixed}"
+                       AutomationProperties.AutomationId="ResetMixed"
+                       AutomationProperties.Name="Mixed">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Mixed" FontWeight="SemiBold" />
+              <TextBlock Classes="secondary" Text="{x:Static vm:ResetDialogViewModel.MixedText}" TextWrapping="Wrap" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Name="ResetHard"
+                       Theme="{StaticResource VcRadioButton}"
+                       IsChecked="{Binding IsHard}"
+                       AutomationProperties.AutomationId="ResetHard"
+                       AutomationProperties.Name="Hard">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Hard" FontWeight="SemiBold" />
+              <TextBlock Name="ResetHardText" Classes="error" Text="{x:Static vm:ResetDialogViewModel.HardText}" TextWrapping="Wrap" />
+            </StackPanel>
+          </RadioButton>
+        </StackPanel>
+        <TextBlock Name="ConfirmDetail"
+                   Classes="secondary"
+                   Text="{Binding Detail}"
+                   Margin="0,14,0,0"
+                   TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="ConfirmDetail" />
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Classes.danger="{Binding IsHard}"
+                  Content="Reset"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="Reset" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <local:DialogView.Styles>
+    <Style Selector="Button#ConfirmButton">
+      <Setter Property="Theme" Value="{StaticResource VcPrimaryButton}" />
+    </Style>
+    <Style Selector="Button#ConfirmButton.danger">
+      <Setter Property="Theme" Value="{StaticResource VcDangerButton}" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

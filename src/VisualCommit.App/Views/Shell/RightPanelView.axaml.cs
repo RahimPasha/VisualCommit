@@ -1,4 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Panels;
 
 namespace VisualCommit.App.Views.Shell;
 
@@ -18,5 +21,23 @@ public partial class RightPanelView : UserControl
         InitializeComponent();
         DetailsContent.SizeChanged += (_, e) =>
             DetailsHeaderScroller.MaxHeight = Math.Max(MinimumHeaderHeight, e.NewSize.Height * HeaderShare);
+
+        // A commit's changed file has a menu of its own (docs/phase-3-design.md 4b): open file,
+        // show in folder, copy path. It opens the menu only; the file's diff opens on a click.
+        FileList.AddHandler(ContextRequestedEvent, OnFileContextRequested);
+    }
+
+    private void OnFileContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (e.Handled
+            || ContextMenuRequests.Find<Button>(e.Source, button => button.Classes.Contains("fileRow")) is not { DataContext: ChangedFileRow { File: { } file } } row
+            || ContextMenuRequests.ActiveRepository(this) is not ({ } layer, { } repository)
+            || !ReferenceEquals(repository.Details, DataContext))
+        {
+            return;
+        }
+
+        var (position, openedBy) = ContextMenuRequests.Where(e, row);
+        e.Handled = repository.OpenFileMenu(layer, file, FileMenuPlace.CommitFiles, position, openedBy);
     }
 }

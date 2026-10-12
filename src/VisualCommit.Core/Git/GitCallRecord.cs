@@ -24,6 +24,11 @@ public enum GitCallOutcome
 /// <param name="ExitCode">Git's exit code, or null when it did not complete.</param>
 /// <param name="StandardOutput">The start of git's standard output, cut off at <see cref="MaxOutputLength"/> characters.</param>
 /// <param name="StandardError">The start of git's standard error, cut off the same way.</param>
+/// <param name="OperationId">
+/// The operation of the queue the call belongs to (<c>op-&lt;n&gt;</c>, phase 3 design 1.7), as
+/// <see cref="Operations.GitOperationScope"/> named it when the call was made; null for a call
+/// outside an operation (reads, refreshes, clone).
+/// </param>
 public sealed record GitCallRecord(
     DateTimeOffset StartedAt,
     TimeSpan Duration,
@@ -32,7 +37,8 @@ public sealed record GitCallRecord(
     GitCallOutcome Outcome,
     int? ExitCode,
     string StandardOutput,
-    string StandardError)
+    string StandardError,
+    string? OperationId = null)
 {
     /// <summary>The most output a record keeps per stream. Longer output is cut off with <see cref="TruncationMarker"/>.</summary>
     public const int MaxOutputLength = 16 * 1024;

@@ -338,11 +338,18 @@ public partial class Phase1Checks
         await WaitForDetailsAsync(app, AddSettingsPage);
 
         await repo.CommitFileAsync("terminal.txt", "from a terminal\n", "Commit from a terminal");
-        await app.WaitForAsync(() => graph.Data is { IsComplete: true, Count: 14 }, "the commit made outside the app", TimeSpan.FromSeconds(5));
+        await app.WaitForAsync(() => graph.Data is { IsComplete: true, Count: 14 }, "the commit made outside the app", TimeSpan.FromSeconds(30));
 
         // The file is written before it is committed: with the working tree watched (phase 2,
         // D71) a working-changes row can show in between, until the next refresh.
-        await app.WaitForAsync(() => !graph.ShowsWorkingRow, "no working-changes row", TimeSpan.FromSeconds(5));
+        await app.WaitForAsync(() => !graph.ShowsWorkingRow, "no working-changes row", TimeSpan.FromSeconds(30));
+
+        // The history is swapped in before the labels of its first row are laid out: on a loaded
+        // machine the check looked at them too early (CI run 38203733545).
+        await app.WaitForAsync(
+            () => graph.LabelsInRow(0).Select(label => label.FullText).SequenceEqual(["main"]),
+            "the new commit to carry the label of its branch",
+            TimeSpan.FromSeconds(30));
         var appeared = app.Capture();
         appeared.Save(Phase, "18a-terminal-commit");
         Assert.Equal("Commit from a terminal", graph.Data!.CommitAt(0).Subject);
@@ -358,9 +365,9 @@ public partial class Phase1Checks
         Assert.Equal(["main", "↑2", "↓1"], left[main..(main + 3)]);
 
         await repo.DetachAsync("v0.2");
-        await app.WaitForAsync(() => app.Find<TextBlock>("CurrentBranch").Text == "Detached at 2775228", "the status bar to show the detached HEAD", TimeSpan.FromSeconds(5));
+        await app.WaitForAsync(() => app.Find<TextBlock>("CurrentBranch").Text == "Detached at 2775228", "the status bar to show the detached HEAD", TimeSpan.FromSeconds(30));
         await app.WaitForAsync(() => graph.Data is { IsComplete: true } data && data.IndexOf(data.Refs.Head.Sha!) >= 0, "the graph to follow");
-        await app.WaitForAsync(() => !graph.ShowsWorkingRow, "no working-changes row", TimeSpan.FromSeconds(5));
+        await app.WaitForAsync(() => !graph.ShowsWorkingRow, "no working-changes row", TimeSpan.FromSeconds(30));
         var detached = app.Capture();
         detached.Save(Phase, "18b-detached");
         var bump = graph.Data!.IndexOf(graph.Data.Refs.Head.Sha!);

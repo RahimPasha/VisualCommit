@@ -57,8 +57,17 @@ public partial class CommitDetailsViewModel : ObservableObject
 
     public bool HasError => ErrorText is not null;
 
-    /// <summary>Neither details nor an error: the panel says "Select a commit to see its details.".</summary>
-    public bool ShowsPlaceholder => !HasCommit && !HasError;
+    /// <summary>
+    /// Two or more commits are selected (docs/phase-3-design.md 4h): the list of them covers the
+    /// panel (<c>MultiSelectionView</c>), so neither one commit's details nor the placeholder show.
+    /// The repository sets it with the selection.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsPlaceholder))]
+    public partial bool IsMultiSelection { get; set; }
+
+    /// <summary>Neither details, an error nor several selected commits: the panel says "Select a commit to see its details.".</summary>
+    public bool ShowsPlaceholder => !HasCommit && !HasError && !IsMultiSelection;
 
     /// <summary>A commit's details are being read. The panel keeps showing the previous ones until they arrive.</summary>
     [ObservableProperty]

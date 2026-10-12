@@ -20,7 +20,12 @@ public sealed partial class GitRepository
     {
         var output = await ReadOutputAsync(cancellationToken, "status", "--porcelain=v2", "-z", "--untracked-files=all", "--renames")
             .ConfigureAwait(false);
-        return ParseStatus(output);
+        var status = ParseStatus(output);
+
+        // The operation in progress comes from files in the git folder (phase 3 design 5): no
+        // git call unless one is there.
+        var inProgress = await ReadInProgressAsync(status, cancellationToken).ConfigureAwait(false);
+        return inProgress.IsActive ? status with { InProgress = inProgress } : status;
     }
 
     /// <summary>

@@ -1,0 +1,236 @@
+using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.Core.Diff;
+using VisualCommit.Core.Git;
+
+namespace VisualCommit.App.ViewModels.Menus;
+
+/// <summary>Whether a toolbar button can be used now, and why not (4d): the empty graph area's items are enabled as the toolbar's buttons.</summary>
+/// <param name="IsEnabled">The button is enabled.</param>
+/// <param name="Reason">Its tooltip while disabled; null while enabled, or before the refs are read.</param>
+public readonly record struct ToolbarAvailability(bool IsEnabled, string? Reason);
+
+/// <summary>The toolbar's buttons as they were when the menu opened (<see cref="ToolbarViewModel"/>, 4d).</summary>
+public sealed record ToolbarMenuState(
+    ToolbarAvailability Fetch,
+    ToolbarAvailability Pull,
+    ToolbarAvailability Push,
+    ToolbarAvailability Branch,
+    ToolbarAvailability Stash,
+    ToolbarAvailability Pop)
+{
+    /// <summary>Every button disabled without a reason: a repository whose refs are not read yet.</summary>
+    public static ToolbarMenuState Disabled { get; } = new(default, default, default, default, default, default);
+
+    /// <summary>The state of <paramref name="toolbar"/>'s buttons now.</summary>
+    public static ToolbarMenuState Of(ToolbarViewModel toolbar)
+    {
+        ArgumentNullException.ThrowIfNull(toolbar);
+        return new(
+            new(toolbar.CanFetch, toolbar.FetchToolTip),
+            new(toolbar.CanPull, toolbar.PullToolTip),
+            new(toolbar.CanPush, toolbar.PushToolTip),
+            new(toolbar.CanBranch, toolbar.BranchToolTip),
+            new(toolbar.CanStash, toolbar.StashToolTip),
+            new(toolbar.CanPop, toolbar.PopToolTip));
+    }
+}
+
+/// <summary>One selected commit as the commit menus need it (4b, 4h).</summary>
+/// <param name="Sha">Its full id (a stash's commit for a stash row).</param>
+/// <param name="Subject">Its subject; a stash's message.</param>
+/// <param name="Parents">Its parents, first parent first.</param>
+/// <param name="Kind">A commit or a stash row.</param>
+/// <param name="Row">Its row in the graph when the menu opened (rows are only an order here, never what a menu acts on).</param>
+/// <param name="IsReachableFromHead">
+/// HEAD's history holds it (4h): "This commit is already on main" (2.12, 2.13). False while the
+/// history is loading and the walk from HEAD has not reached it: the item stays enabled and git decides.
+/// </param>
+public sealed record CommitMenuInfo(string Sha, string Subject, IReadOnlyList<string> Parents, CommitKind Kind, int Row, bool IsReachableFromHead)
+{
+    public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
+
+    /// <summary>A merge commit: two parents or more.</summary>
+    public bool IsMerge => Parents.Count > 1;
+
+    /// <summary>A stash row of the graph.</summary>
+    public bool IsStash => Kind == CommitKind.Stash;
+}
+
+/// <summary>What a drop of a branch onto a branch found when it read the repository (4g), before its menu is built.</summary>
+/// <param name="TargetIsAncestorOfSource">
+/// <c>git merge-base --is-ancestor &lt;B&gt; &lt;A&gt;</c> succeeded: B can be fast-forwarded to A
+/// (2.7, 2.10); otherwise "&lt;B&gt; has commits that &lt;A&gt; does not have".
+/// </param>
+/// <param name="RemoteMapsBranchesDifferently">
+/// For a remote branch as the target: its remote's fetch refspec is not the default
+/// (<c>+refs/heads/*:refs/remotes/&lt;r&gt;/*</c>), so the branch's name on the remote is not
+/// known and the drop offers nothing but its reason (4g).
+/// </param>
+// Known issue (phase 3): nothing sets RemoteMapsBranchesDifferently yet, because no code reads remote.<r>.fetch; a drop onto a remote with another fetch refspec offers the push as for the default one.
+public sealed record DropFacts(bool TargetIsAncestorOfSource, bool RemoteMapsBranchesDifferently = false);
+
+/// <summary>
+/// Everything the menu builders (<see cref="RepositoryMenus"/>) read, as one immutable snapshot
+/// taken when a menu opens (docs/phase-3-design.md 4a, 4b, 4g, 4h): the refs (HEAD, branches with
+/// their upstreams, remote branches, tags, stashes, remotes), the working tree's status with what
+/// is in progress, the selected commits, the other worktrees, the toolbar's states and whether an
+/// operation runs. The builders are pure functions of it, so they are tested without a UI or git.
+/// <see cref="RepositoryViewModel.MenuContext"/> builds it from the repository's view model.
+/// </summary>
+/// <param name="RepositoryName">The repository's name: the empty graph area's header.</param>
+/// <param name="WorkingDirectory">The working tree's folder.</param>
+/// <param name="Refs">The refs as last read.</param>
+/// <param name="Status">The working tree's status as last read, with <see cref="WorkingTreeStatus.InProgress"/>.</param>
+/// <param name="SelectedCommits">The commits selected in the graph, in row order (top first); stash rows included.</param>
+/// <param name="Toolbar">The toolbar's buttons now.</param>
+/// <param name="IsOperationRunning">An operation of this repository runs (an auto-fetch included).</param>
+public sealed record RepositoryMenuContext(
+    string RepositoryName,
+    string WorkingDirectory,
+    RepoRefs Refs,
+    WorkingTreeStatus Status,
+    IReadOnlyList<CommitMenuInfo> SelectedCommits,
+    ToolbarMenuState Toolbar,
+    bool IsOperationRunning)
+{
+    private const string HeadsPrefix = "refs/heads/";
+
+    /// <summary>
+    /// The repository's other worktrees (linked or main, not this one) and the branch each has
+    /// checked out: "&lt;b&gt; is checked out in another worktree (&lt;path&gt;)" (2.7). Empty when
+    /// they were not read (<see cref="RepositoryViewModel.ReadMenuContextAsync"/> reads them).
+    /// </summary>
+    public IReadOnlyList<WorktreeInfo> OtherWorktrees { get; init; } = [];
+
+    /// <summary>What a drop read (4g), for <see cref="RepositoryMenus.ForDrop"/>; null otherwise.</summary>
+    public DropFacts? Drop { get; init; }
+
+    public HeadState Head => Refs.Head;
+
+    public bool IsDetached => Head.IsDetached;
+
+    public bool IsUnborn => Head.IsUnborn;
+
+    /// <summary>What is in progress (section 5).</summary>
+    public InProgressState InProgress => Status.InProgress;
+
+    /// <summary>The local branch HEAD is on, or null.</summary>
+    public GitRef? CurrentBranch => Head.BranchName is { } branch ? FindRef(HeadsPrefix + branch) : null;
+
+    /// <summary>How the menus name what HEAD is on: the current branch, or "HEAD" while detached (4b).</summary>
+    public string CurrentName => Head.BranchName ?? "HEAD";
+
+    public bool HasRemotes => Refs.Remotes.Count > 0;
+
+    public IReadOnlyList<string> Remotes => Refs.Remotes;
+
+    public IEnumerable<GitRef> LocalBranches => Refs.Refs.Where(gitRef => gitRef.Kind == RefKind.LocalBranch);
+
+    public IEnumerable<GitRef> RemoteBranches => Refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch);
+
+    public IEnumerable<GitRef> Tags => Refs.Refs.Where(gitRef => gitRef.Kind == RefKind.Tag);
+
+    /// <summary>Two or more commits are selected: their menu is the one for several commits (4h).</summary>
+    public bool HasMultiSelection => SelectedCommits.Count > 1;
+
+    /// <summary>The branch, remote branch or tag with this full name, or null.</summary>
+    public GitRef? FindRef(string fullName) =>
+        Refs.Refs.FirstOrDefault(gitRef => string.Equals(gitRef.FullName, fullName, StringComparison.Ordinal));
+
+    /// <summary>The stash whose commit is <paramref name="sha"/>, or null.</summary>
+    public StashEntry? FindStash(string sha) =>
+        Refs.Stashes.FirstOrDefault(stash => string.Equals(stash.Sha, sha, StringComparison.Ordinal));
+
+    /// <summary>The selected commit <paramref name="sha"/>, or null when it is not selected.</summary>
+    public CommitMenuInfo? FindSelected(string sha) =>
+        SelectedCommits.FirstOrDefault(commit => string.Equals(commit.Sha, sha, StringComparison.Ordinal));
+
+    /// <summary>How the menus name a branch's upstream: <c>origin/main</c>, or a local upstream's branch alone (D114); null without one.</summary>
+    public static string? UpstreamText(GitRef branch) => ToolbarViewModel.UpstreamText(branch);
+
+    /// <summary>
+    /// The local branch name a remote branch checks out into (2.2): the part after
+    /// <c>&lt;remote&gt;/</c> (<c>origin/feature/x</c> → <c>feature/x</c>); null for a ref that is not a remote branch.
+    /// </summary>
+    public static string? LocalNameOf(GitRef remoteBranch)
+    {
+        ArgumentNullException.ThrowIfNull(remoteBranch);
+        if (remoteBranch.Kind != RefKind.RemoteBranch || remoteBranch.RemoteName is not { } remote)
+        {
+            return null;
+        }
+
+        var prefix = remote + "/";
+        return remoteBranch.Name.StartsWith(prefix, StringComparison.Ordinal) ? remoteBranch.Name[prefix.Length..] : remoteBranch.Name;
+    }
+
+    /// <summary>The other worktree where the local branch <paramref name="branchRef"/> is checked out, or null (2.7).</summary>
+    public string? OtherWorktreeOf(string branchRef) =>
+        OtherWorktrees.FirstOrDefault(worktree => string.Equals(worktree.Branch, branchRef, StringComparison.Ordinal))?.Path;
+}
+
+/// <summary>Where a file's menu was asked for (4b): the stage panel's two lists, the diff view, a commit's changed files.</summary>
+public enum FileMenuPlace
+{
+    Unstaged,
+    Staged,
+    Diff,
+    CommitFiles,
+}
+
+/// <summary>A file a menu acts on (4b): the file as its list shows it, and what the menu needs to know about it.</summary>
+/// <param name="File">The file: its path (repository-relative, <c>/</c>), its kind, its old path.</param>
+/// <param name="IsUntracked">Git does not track it: it can be ignored (2.30).</param>
+/// <param name="ExistsInWorkingTree">It is in the working tree: "Open file" is enabled (2.32).</param>
+/// <param name="CommitSha">For a commit's changed files, the commit; null otherwise.</param>
+public sealed record FileMenuTarget(ChangedFile File, bool IsUntracked, bool ExistsInWorkingTree, string? CommitSha = null)
+{
+    public string Path => File.Path;
+
+    /// <summary>The file part of the path ("Ignore run.log"); a folder's without its slash.</summary>
+    public string FileName => WorkingChangesViewModel.FileName(Path.TrimEnd('/'));
+
+    /// <summary>The extension without its dot ("log"), or null when the name has none (2.30): "Ignore all *.log files" is left out then.</summary>
+    public string? Extension
+    {
+        get
+        {
+            var name = FileName;
+            var dot = name.LastIndexOf('.');
+            return dot > 0 && dot < name.Length - 1 ? name[(dot + 1)..] : null;
+        }
+    }
+
+    /// <summary>A conflicted file: "Mark as resolved", and no discard (4b).</summary>
+    public bool IsConflicted => File.Kind == FileChangeKind.Conflicted;
+
+    /// <summary>An untracked folder git lists with a slash: a repository of its own, never discarded (D75).</summary>
+    public bool IsNestedRepository => Path.EndsWith('/');
+}
+
+/// <summary>A right-click in the diff view (4b): which file and side, and what is selected or under the pointer.</summary>
+/// <param name="File">The file.</param>
+/// <param name="Side">The diff's side: unstaged, staged or a commit's.</param>
+/// <param name="HasSelectedLines">Lines are selected: "Stage selected lines", "Discard selected lines…", "Unstage selected lines".</param>
+/// <param name="Hunk">The hunk the right-click was in, or null outside every hunk.</param>
+/// <param name="ActsOnLines">Lines and hunks can be acted on (not a type change, D76).</param>
+public sealed record DiffMenuTarget(FileMenuTarget File, DiffSide Side, bool HasSelectedLines, int? Hunk, bool ActsOnLines);
+
+/// <summary>
+/// The diff view's own line and hunk actions (phase 2, D70, D76), which the diff's menu offers
+/// besides the file's: the menus' sub-package adapts the open <c>DiffViewModel</c> to it.
+/// </summary>
+public interface IDiffMenuActions
+{
+    /// <summary>"Stage selected lines".</summary>
+    Task StageLinesAsync();
+
+    /// <summary>"Unstage selected lines".</summary>
+    Task UnstageLinesAsync();
+
+    /// <summary>"Discard selected lines…" (asks first).</summary>
+    Task DiscardLinesAsync();
+
+    /// <summary>"Stage hunk", "Unstage hunk", "Discard hunk…" on <paramref name="hunk"/>.</summary>
+    Task RunHunkActionAsync(int hunk, Diff.LineAction action);
+}

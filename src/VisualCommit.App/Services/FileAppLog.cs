@@ -27,6 +27,7 @@ public sealed class FileAppLog : IAppLog
 
     private readonly string _directory;
     private readonly TimeProvider _clock;
+    private volatile bool _closed;
 
     public FileAppLog(string directory, LogLevel minimumLevel = LogLevel.Debug, TimeProvider? clock = null)
     {
@@ -42,9 +43,17 @@ public sealed class FileAppLog : IAppLog
     /// <summary>The file that entries written now go to.</summary>
     public string CurrentFile => FileFor(_clock.GetLocalNow());
 
+    /// <summary>
+    /// Stops the log: entries written after this are dropped. The app session closes its log as
+    /// the last step of ending, so that work which ends after the session (a git call it
+    /// cancelled, whose record comes when git has gone) writes nothing into a data folder that
+    /// may be gone by then, or that the next session on the same folder writes to.
+    /// </summary>
+    public void Close() => _closed = true;
+
     public void Write(LogLevel level, string message, Exception? exception = null)
     {
-        if (level < MinimumLevel)
+        if (level < MinimumLevel || _closed)
         {
             return;
         }

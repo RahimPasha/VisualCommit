@@ -1,0 +1,168 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- The dialogs' shared look (docs/phase-3-design.md 4f): every dialog of the dialog layer is a
+       card on a backdrop, as phase 2's confirmation (D69). The prompt dialogs of work package WP3
+       keep their own styles in their views. Colours are tokens only. -->
+
+  <Styles.Resources>
+
+    <!-- A radio button with a second line: a ring of 14 (the accent and a dot when checked), its
+         content beside it, aligned to the first line. The whole row takes clicks.
+         The keyboard focus (:focus-visible, as the theme's focus frame shows it) is a frame round
+         the ring and the content, in the colours of the theme's frame (2 px, and 1 px inside it),
+         drawn outside the button's bounds: the theme's own frame lies on the bounds, which are as
+         high as the first line, and cut through the ring (phase 3's gate, 29c). FocusFrame takes
+         no room: its negative margin gives back what its borders and padding take, so the rows
+         and the dialogs keep their sizes, and the frame lies in the space between the rows (at
+         least 8: StackPanel spacing). It reaches 7 left and right of the button, 4 above it and 6
+         below (the ring sits 2 below the top), so the button does not clip and neither may what
+         holds it: an ItemsControl clips by default and needs ClipToBounds="False".
+         Without the focus its borders have no brush, so they draw nothing and take no clicks. -->
+    <ControlTheme x:Key="VcRadioButton" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="ClipToBounds" Value="False" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel Background="{TemplateBinding Background}">
+            <Border Name="FocusFrame"
+                    HorizontalAlignment="Left"
+                    Margin="-7,-4,-7,-6"
+                    BorderThickness="2">
+              <Border Name="FocusFrameInner"
+                      BorderThickness="1"
+                      Padding="4,1,4,3">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Border Name="Ring"
+                          Width="14" Height="14"
+                          Margin="0,2,0,0"
+                          CornerRadius="7"
+                          BorderThickness="1"
+                          BorderBrush="{DynamicResource VcTextSecondaryBrush}"
+                          Background="{DynamicResource VcControlBackgroundBrush}"
+                          VerticalAlignment="Top">
+                    <Ellipse Name="Dot" Width="6" Height="6" Fill="{DynamicResource VcAccentTextBrush}" IsVisible="False" />
+                  </Border>
+                  <ContentPresenter Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    VerticalAlignment="Top" />
+                </Grid>
+              </Border>
+            </Border>
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:focus-visible /template/ Border#FocusFrame">
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemControlFocusVisualPrimaryBrush}" />
+      </Style>
+      <Style Selector="^:focus-visible /template/ Border#FocusFrameInner">
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemControlFocusVisualSecondaryBrush}" />
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#Ring">
+        <Setter Property="BorderBrush" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ Border#Ring">
+        <Setter Property="Background" Value="{DynamicResource VcAccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcAccentBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ Ellipse#Dot">
+        <Setter Property="IsVisible" Value="True" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+    </ControlTheme>
+
+  </Styles.Resources>
+
+  <!-- The dimmed window behind a dialog; a dialog over another has a backdrop of its own (D104). -->
+  <Style Selector="Panel.dialogBackdrop">
+    <Setter Property="Background" Value="{DynamicResource VcBackdropBrush}" />
+  </Style>
+
+  <!-- The card: 400 wide at most (460 for the Remotes and Pick dialogs, class "wide"), in the
+       middle of the window; Tab goes round its controls and never to the window behind. -->
+  <Style Selector="Border.dialogCard">
+    <Setter Property="KeyboardNavigation.TabNavigation" Value="Cycle" />
+    <Setter Property="MaxWidth" Value="400" />
+    <Setter Property="Margin" Value="20" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource VcPanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="Border.dialogCard.wide">
+    <Setter Property="MaxWidth" Value="460" />
+  </Style>
+
+  <Style Selector="TextBlock.dialogTitle">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- "In <repo>" under the title (DialogRepository, ErrorRepository). -->
+  <Style Selector="TextBlock.dialogRepository">
+    <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    <Setter Property="Margin" Value="0,4,0,0" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <!-- A line of text in the card's body. -->
+  <Style Selector="TextBlock.dialogText">
+    <Setter Property="Margin" Value="0,12,0,0" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- A message under a box: why its value cannot be used (NameError, RemoteError). -->
+  <Style Selector="TextBlock.dialogError">
+    <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    <Setter Property="Margin" Value="0,6,0,0" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- A box of the card: full width, below the line before it. -->
+  <Style Selector="TextBox.dialogBox">
+    <Setter Property="Margin" Value="0,12,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <!-- The buttons at the bottom right: Cancel, then the button that goes ahead. -->
+  <Style Selector="StackPanel.dialogButtons">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="8" />
+    <Setter Property="Margin" Value="0,20,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
+
+  <!-- Git's own output and other code text: the code font, small, in lines of 15. It scrolls past
+       13 lines: the box is at most 209 high (1 + 6 + 13 × 15 + 6 + 1), so that unscrolled it
+       ends on a whole line, never on half of one. The scroll bar (the theme's, thin until the
+       pointer comes) lies 2 from the right border, and the text keeps 14 clear of the
+       scroll bar's place, so that no character touches the bar, even when it widens. -->
+  <Style Selector="TextBox.dialogCode">
+    <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="LineHeight" Value="15" />
+    <Setter Property="IsReadOnly" Value="True" />
+    <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxHeight" Value="209" />
+    <Setter Property="Margin" Value="0,12,0,0" />
+    <Setter Property="Padding" Value="8,6,2,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="TextBox.dialogCode /template/ TextPresenter#PART_TextPresenter">
+    <Setter Property="Margin" Value="0,0,14,0" />
+  </Style>
+
+</Styles>

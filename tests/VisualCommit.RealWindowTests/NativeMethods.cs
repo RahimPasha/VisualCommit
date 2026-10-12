@@ -57,6 +57,68 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);
 
+    /// <summary>Every process of the machine with its parent's id, from a Toolhelp snapshot: to find the processes an app started (check 31).</summary>
+    public static IReadOnlyList<(int Id, int ParentId, string ExeName)> Processes()
+    {
+        var snapshot = CreateToolhelp32Snapshot(SnapProcess, 0);
+        if (snapshot == InvalidHandle)
+        {
+            throw new InvalidOperationException($"CreateToolhelp32Snapshot failed with error {Marshal.GetLastWin32Error()}.");
+        }
+
+        try
+        {
+            var result = new List<(int, int, string)>();
+            var entry = new ProcessEntry32 { Size = (uint)Marshal.SizeOf<ProcessEntry32>() };
+            for (var more = Process32FirstW(snapshot, ref entry); more; more = Process32NextW(snapshot, ref entry))
+            {
+                result.Add(((int)entry.ProcessId, (int)entry.ParentProcessId, entry.ExeFile));
+            }
+
+            return result;
+        }
+        finally
+        {
+            CloseHandle(snapshot);
+        }
+    }
+
+    private const uint SnapProcess = 0x00000002;
+
+    private static readonly IntPtr InvalidHandle = new(-1);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Process32FirstW(IntPtr snapshot, ref ProcessEntry32 entry);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Process32NextW(IntPtr snapshot, ref ProcessEntry32 entry);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ProcessEntry32
+    {
+        public uint Size;
+        public uint Usage;
+        public uint ProcessId;
+        public IntPtr DefaultHeapId;
+        public uint ModuleId;
+        public uint Threads;
+        public uint ParentProcessId;
+        public int PriorityClassBase;
+        public uint Flags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string ExeFile;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct Point
     {

@@ -3,10 +3,12 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Git;
@@ -22,23 +24,27 @@ namespace VisualCommit.App;
 public sealed class AppSession : IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly FileAppLog _log;
     private bool _disposed;
     private bool _windowClosed;
 
     private AppSession(
         AppPaths paths,
-        IAppLog log,
+        FileAppLog log,
         ISettingsStore settings,
         ISessionStore session,
         IGitCallLog gitCalls,
+        TabServices services,
         MainWindowViewModel shell,
         MainWindow mainWindow)
     {
         Paths = paths;
+        _log = log;
         Log = log;
         Settings = settings;
         SessionState = session;
         GitCalls = gitCalls;
+        Services = services;
         Shell = shell;
         MainWindow = mainWindow;
         mainWindow.Closed += (_, _) => _windowClosed = true;
@@ -57,6 +63,12 @@ public sealed class AppSession : IDisposable
     /// <summary>Every git call this session made.</summary>
     public IGitCallLog GitCalls { get; }
 
+    /// <summary>What every tab uses, phase 3's services included: the operation log, the prompt broker, the file launcher and the clipboard.</summary>
+    public TabServices Services { get; }
+
+    /// <summary>Every operation this session ran (docs/phase-3-design.md 1.7).</summary>
+    public IOperationLog Operations => Services.Operations;
+
     /// <summary>The view model of the main window.</summary>
     public MainWindowViewModel Shell { get; }
 
@@ -70,9 +82,17 @@ public sealed class AppSession : IDisposable
     /// Starts the app on <paramref name="paths"/>: loads the settings and the session, applies
     /// the saved theme and creates the main window with the tabs of the last session. Must be
     /// called on the UI thread. <paramref name="folderPicker"/> replaces the platform's folder
-    /// dialog; the scripted walk-through passes a fake (D42).
+    /// dialog; the scripted walk-through passes a fake (D42). <paramref name="launcher"/>,
+    /// <paramref name="clipboard"/> and <paramref name="promptHandler"/> replace the file launcher,
+    /// the clipboard and the prompt dialogs the same way (docs/phase-3-design.md 2.32, 3.5, 7.4).
     /// </summary>
-    public static AppSession Start(AppPaths paths, Application application, IFolderPicker? folderPicker = null)
+    public static AppSession Start(
+        AppPaths paths,
+        Application application,
+        IFolderPicker? folderPicker = null,
+        IFileLauncher? launcher = null,
+        IClipboardService? clipboard = null,
+        IGitPromptHandler? promptHandler = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
@@ -115,19 +135,33 @@ public sealed class AppSession : IDisposable
             }
         }
 
+        // Phase 3 (docs/phase-3-design.md 1.7, 2.32, 3.1): one record of the operations, the
+        // prompt channel of the session, and the file launcher and clipboard of the window.
         MainWindow? mainWindow = null;
+        var dialogs = new DialogHostViewModel();
+        var promptPresenter = new PromptDialogPresenter(dialogs, dialogs.Notices);
+        var prompts = PromptDialogs.CreateBroker(promptHandler ?? new PromptDialogs(promptPresenter, log), log);
         var tabServices = new TabServices(
             new GitRepositoryProvider(new GitAccess(gitFound.Task), log),
             folderPicker ?? new StorageFolderPicker(() => mainWindow),
             settings,
             session,
             DateDisplay.Resolve(),
-            log);
+            log,
+            dialogs: dialogs,
+            operations: new OperationLog(),
+            prompts: prompts,
+            launcher: launcher ?? new FileLauncher(() => mainWindow, log),
+            clipboard: clipboard ?? new ClipboardService(() => mainWindow),
+            gitCalls: gitCalls);
         var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session);
+
+        // A prompt dialog names its repository by the window's one rule, as every other dialog (4f).
+        promptPresenter.ShowsRepositoryName = () => shell.NamesRepositoryInDialogs;
         mainWindow = new MainWindow { DataContext = shell };
         mainWindow.UseSession(session);
 
-        return new AppSession(paths, log, settings, session, gitCalls, shell, mainWindow);
+        return new AppSession(paths, log, settings, session, gitCalls, tabServices, shell, mainWindow);
     }
 
     public static string AppVersion =>
@@ -147,12 +181,20 @@ public sealed class AppSession : IDisposable
         _lifetime.Dispose();
         if (!_windowClosed)
         {
+            // The session ends: the window does not wait for running operations (1.8).
+            Shell.ConfirmClose();
             MainWindow.Close();
         }
 
         // Stops every tab's work and logs each graph's frame times (D50).
         Shell.CloseAll();
+        (Services.Prompts as IDisposable)?.Dispose();
 
         Log.Info("VisualCommit closed.");
+
+        // Git calls the session cancelled end a moment later and would log that they did: into
+        // a data folder a test may have deleted by then (recreating it), or into the log of the
+        // next session on the same folder. Nothing is written after "closed".
+        _log.Close();
     }
 }

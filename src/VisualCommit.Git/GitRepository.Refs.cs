@@ -13,13 +13,16 @@ public sealed partial class GitRepository
     /// <summary>
     /// The fields <c>for-each-ref</c> prints for each ref, separated by the unit separator
     /// (<c>%1f</c>), which ref names cannot contain. <c>*objecttype</c> and <c>*objectname</c>
-    /// describe what an annotated tag points to.
+    /// describe what an annotated tag points to. A branch's upstream is read as its full ref, its
+    /// remote's name and its name on the remote, never cut out of <c>%(upstream:short)</c>, which
+    /// is wrong for a local upstream (D101); the short form is kept for the left panel's tooltip.
     /// </summary>
     private const string RefFormat =
         "%(refname)%1f%(objecttype)%1f%(objectname)%1f%(*objecttype)%1f%(*objectname)" +
-        "%1f%(upstream)%1f%(upstream:short)%1f%(upstream:track)%1f%(symref)";
+        "%1f%(upstream)%1f%(upstream:short)%1f%(upstream:track)%1f%(symref)" +
+        "%1f%(upstream:remotename)%1f%(upstream:remoteref)";
 
-    private const int RefFieldCount = 9;
+    private const int RefFieldCount = 11;
 
     /// <summary>The fields <c>git stash list</c> prints for each stash; the subject of a stash's reflog entry (<c>%gs</c>) is its message.</summary>
     private const string StashFormat = "%H%x1f%P%x1f%aN%x1f%aE%x1f%aI%x1f%cI%x1f%gs";
@@ -48,6 +51,16 @@ public sealed partial class GitRepository
         var branchName = headRef is null ? null : headRef.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? headRef[HeadsPrefix.Length..] : headRef;
         var head = new HeadState(branchName, await headShaTask.ConfigureAwait(false));
         return new RepoRefs(head, refs, stashes, remotes);
+    }
+
+    public async Task<HeadState> ReadHeadAsync(CancellationToken cancellationToken = default)
+    {
+        var headRef = ReadHeadRefAsync(cancellationToken);
+        var headSha = ReadHeadShaAsync(cancellationToken);
+        await Task.WhenAll(headRef, headSha).ConfigureAwait(false);
+        var name = await headRef.ConfigureAwait(false);
+        var branchName = name is null ? null : name.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? name[HeadsPrefix.Length..] : name;
+        return new HeadState(branchName, await headSha.ConfigureAwait(false));
     }
 
     /// <summary>The full name of the branch HEAD is on, or null when HEAD is detached.</summary>
@@ -97,21 +110,26 @@ public sealed partial class GitRepository
 
             var (fullName, objectType, objectName, peeledType, peeledName) = (fields[0], fields[1], fields[2], fields[3], fields[4]);
             var (upstream, upstreamShort, track, symref) = (fields[5], fields[6], fields[7], fields[8]);
+            var (upstreamRemote, upstreamRemoteRef) = (fields[9], fields[10]);
 
             GitRef gitRef;
             if (fullName.StartsWith(HeadsPrefix, StringComparison.Ordinal))
             {
                 var (ahead, behind, gone) = ParseTrack(track);
+                var hasUpstream = upstream.Length > 0;
                 gitRef = new GitRef(
                     fullName,
                     fullName[HeadsPrefix.Length..],
                     RefKind.LocalBranch,
                     objectName,
-                    Upstream: upstream.Length > 0 && upstreamShort.Length > 0 ? upstreamShort : null,
+                    Upstream: hasUpstream && upstreamShort.Length > 0 ? upstreamShort : null,
                     Ahead: ahead,
                     Behind: behind,
                     UpstreamGone: gone,
-                    IsHead: fullName == headRef);
+                    IsHead: fullName == headRef,
+                    UpstreamRef: hasUpstream ? upstream : null,
+                    UpstreamRemote: hasUpstream && upstreamRemote.Length > 0 ? upstreamRemote : null,
+                    UpstreamRemoteRef: hasUpstream && upstreamRemoteRef.Length > 0 ? upstreamRemoteRef : null);
             }
             else if (fullName.StartsWith(RemotesPrefix, StringComparison.Ordinal))
             {

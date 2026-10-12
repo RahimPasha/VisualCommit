@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/VisualCommit.App/VisualCommit.App.csproj" />
+    <Project Path="src/VisualCommit.AskPass/VisualCommit.AskPass.csproj" />
     <Project Path="src/VisualCommit.Core/VisualCommit.Core.csproj" />
     <Project Path="src/VisualCommit.Git/VisualCommit.Git.csproj" />
   </Folder>
@@ -19,5 +20,6 @@
     <Project Path="tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj" />
     <Project Path="tests/VisualCommit.Testing/VisualCommit.Testing.csproj" />
     <Project Path="tests/VisualCommit.VisualTests/VisualCommit.VisualTests.csproj" />
+    <Project Path="tests/VisualCommit.VisualTests.Phase3/VisualCommit.VisualTests.Phase3.csproj" />
   </Folder>
 </Solution>

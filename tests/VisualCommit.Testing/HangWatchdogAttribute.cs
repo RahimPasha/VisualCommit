@@ -1,8 +1,7 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
-using System.Text;
+using Xunit;
 using Xunit.v3;
 
 namespace VisualCommit.Testing;
@@ -17,6 +16,12 @@ namespace VisualCommit.Testing;
 /// long, ends the test process with a message naming the tests that were running and the last
 /// one that started or finished.
 /// </para>
+/// <para>
+/// The time a test waits for a shared preparation, a scenario template or the 100k-commit repo
+/// that one test of the process builds for all (<see cref="SharedPreparationAsync{T}"/>), does
+/// not count against that test; the preparation is held to the limit on its own
+/// (<see cref="HangClock"/>).
+/// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Assembly)]
 public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
@@ -27,11 +32,10 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
     /// <summary>The longest a single test may run, and the longest the run may stand still. No test comes close.</summary>
     private static readonly TimeSpan Limit = ReadLimit() ?? TimeSpan.FromMinutes(3);
 
-    private static readonly ConcurrentDictionary<string, (string Name, long StartedAt)> Running = new();
+    private static readonly long RunStart = Stopwatch.GetTimestamp();
+    private static readonly HangClock Clock = new(() => Stopwatch.GetElapsedTime(RunStart));
     private static readonly Lock StartGate = new();
     private static Thread? watcher;
-    private static long lastEventAt = Stopwatch.GetTimestamp();
-    private static string lastEvent = "no test has started";
 
     /// <summary>
     /// Starts the watch as soon as the test framework reads the attribute, so that a run that
@@ -65,46 +69,56 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
         }
     }
 
-    public override void Before(MethodInfo methodUnderTest, IXunitTest test)
+    /// <summary>
+    /// Awaits <paramref name="preparation"/>, something the tests of a process share and the
+    /// first of them builds (<paramref name="what"/> names it in the watchdog's message), without
+    /// counting the wait against the test that awaits it. Outside a test, or in an assembly
+    /// without the watchdog, it just awaits.
+    /// </summary>
+    public static async Task<T> SharedPreparationAsync<T>(string what, Task<T> preparation)
     {
-        Running[test.UniqueID] = (test.TestDisplayName, Stopwatch.GetTimestamp());
-        Note("started " + test.TestDisplayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        ArgumentNullException.ThrowIfNull(preparation);
+        if (preparation.IsCompleted)
+        {
+            return await preparation.ConfigureAwait(false);
+        }
+
+        using (Clock.Preparing(TestContext.Current.Test?.UniqueID, what))
+        {
+            return await preparation.ConfigureAwait(false);
+        }
     }
 
-    public override void After(MethodInfo methodUnderTest, IXunitTest test)
+    /// <summary>
+    /// Notes that the current test waits from now, until the result is disposed, for its turn on
+    /// something the tests share one at a time (<paramref name="what"/>: the headless UI thread,
+    /// on which every headless test runs in turn). The wait does not count against the test, and
+    /// it is not held to the limit on its own: the queue moves as other tests finish, and if it
+    /// stops, the "nothing happens" rule ends the run.
+    /// </summary>
+    public static IDisposable WaitingForTurn(string what)
     {
-        Running.TryRemove(test.UniqueID, out _);
-        Note("finished " + test.TestDisplayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        return Clock.Preparing(TestContext.Current.Test?.UniqueID, what, heldToLimit: false);
     }
 
-    private static void Note(string what)
-    {
-        Volatile.Write(ref lastEvent, what);
-        Volatile.Write(ref lastEventAt, Stopwatch.GetTimestamp());
-    }
+    /// <summary>
+    /// The time the current test has run so far, less its waits for shared preparations: what
+    /// the watchdog holds to the limit. Null outside a test, or in an assembly without the watchdog.
+    /// </summary>
+    public static TimeSpan? CountedTimeOfCurrentTest() =>
+        TestContext.Current.Test?.UniqueID is { } test ? Clock.CountedTime(test) : null;
+
+    public override void Before(MethodInfo methodUnderTest, IXunitTest test) => Clock.Started(test.UniqueID, test.TestDisplayName);
+
+    public override void After(MethodInfo methodUnderTest, IXunitTest test) => Clock.Finished(test.UniqueID);
 
     private static void Check()
     {
-        var running = Running.Values.ToList();
-        var overdue = running.Where(test => Stopwatch.GetElapsedTime(test.StartedAt) > Limit).ToList();
-        var standingStill = Stopwatch.GetElapsedTime(Volatile.Read(ref lastEventAt)) > Limit;
-        if (overdue.Count == 0 && !standingStill)
+        if (Clock.Check(Limit) is not { } message)
         {
             return;
-        }
-
-        var message = new StringBuilder()
-            .AppendLine()
-            .AppendLine(CultureInfo.InvariantCulture, $"HANG WATCHDOG: the test run is stuck (limit {Limit.TotalSeconds:F0} seconds). Stopping the test process.")
-            .AppendLine(CultureInfo.InvariantCulture, $"  Last event, {Stopwatch.GetElapsedTime(Volatile.Read(ref lastEventAt)).TotalSeconds:F0} seconds ago: {Volatile.Read(ref lastEvent)}");
-        if (running.Count == 0)
-        {
-            message.AppendLine("  No test is running: the run is stuck between tests or after the last one.");
-        }
-
-        foreach (var test in running.OrderBy(test => test.StartedAt))
-        {
-            message.AppendLine(CultureInfo.InvariantCulture, $"  Running for {Stopwatch.GetElapsedTime(test.StartedAt).TotalSeconds:F0} seconds: {test.Name}");
         }
 
         // Both streams: which one the test runner shows for a dead test process varies.

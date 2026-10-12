@@ -29,11 +29,20 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
         return await GitRepository.InitAsync(runner, path, cancellationToken, _log).ConfigureAwait(false);
     }
 
-    public async Task<IGitRepository> CloneAsync(string url, string destination, IProgress<CloneProgress>? progress, CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// <paramref name="environment"/> holds the variables of the clone's prompt scope (phase 3
+    /// design 3.3), which <c>WelcomeViewModel</c> opens; git gets them with the clone.
+    /// </remarks>
+    public async Task<IGitRepository> CloneAsync(
+        string url,
+        string destination,
+        IProgress<CloneProgress>? progress,
+        CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string?>? environment = null)
     {
         // Nothing here needs the UI thread, so the app can wait for a clone to clean up while it
         // closes (MainWindowViewModel.CloseAll) without the clone waiting for the UI thread.
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return await GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log).ConfigureAwait(false);
+        return await GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log, environment).ConfigureAwait(false);
     }
 }

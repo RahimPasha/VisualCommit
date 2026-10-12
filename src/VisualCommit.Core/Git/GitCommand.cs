@@ -66,7 +66,17 @@ public sealed class GitCommand
     /// <c>/</c>, <c>?</c>, <c>#</c> or white space), so a password with an <c>@</c> in it is
     /// hidden whole. An <c>@</c> in the path, or in <c>user@host:path</c>, is left alone.
     /// </summary>
-    public static string HideCredentials(string text)
+    public static string HideCredentials(string text) => ReplaceCredentials(text, "***@");
+
+    /// <summary>
+    /// Removes the user information of every URL in <paramref name="text"/>, the <c>@</c>
+    /// included (<c>https://user:token@host/x.git</c> becomes <c>https://host/x.git</c>): what
+    /// "Copy URL" copies, which can be shared and cloned (phase 3 design 2.23, D103). The user
+    /// information is found as <see cref="HideCredentials"/> finds it.
+    /// </summary>
+    public static string RemoveCredentials(string text) => ReplaceCredentials(text, string.Empty);
+
+    private static string ReplaceCredentials(string text, string replacement)
     {
         ArgumentNullException.ThrowIfNull(text);
         const string SchemeEnd = "://";
@@ -90,8 +100,8 @@ public sealed class GitCommand
             var at = text.LastIndexOf('@', authorityEnd - 1, authorityEnd - authorityStart);
             if (at > authorityStart)
             {
-                result.Append(text, copied, authorityStart - copied).Append("***");
-                copied = at;
+                result.Append(text, copied, authorityStart - copied).Append(replacement);
+                copied = at + 1;
             }
 
             schemeEnd = text.IndexOf(SchemeEnd, authorityEnd, StringComparison.Ordinal);

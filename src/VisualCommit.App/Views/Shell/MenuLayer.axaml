@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Menus"
+             x:Class="VisualCommit.App.Views.Shell.MenuLayer"
+             x:DataType="vm:MenuLayerViewModel">
+
+  <!-- The layer the in-window context menu opens from (docs/phase-3-design.md 4a, D105): over the
+       main grid and under the dialog layer, filling the client area. The menu itself is Avalonia's
+       stock MenuFlyout on the window's overlay layer, shown at a point of this panel; the panel has
+       no background, so it takes no input of its own. -->
+  <Panel Name="MenuPanel" />
+
+</UserControl>

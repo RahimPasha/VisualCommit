@@ -3,9 +3,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 
@@ -23,8 +26,16 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IAppLog _log;
     private readonly ISessionStore _session;
     private readonly TabServices _tabServices;
-    private readonly DialogHostViewModel _fallbackDialogs = new();
+
+    /// <summary>
+    /// The repositories of tabs that were closed while an operation the user started ran in them
+    /// (1.8): a local one goes on to its end, every step of it, so the window waits for it as for
+    /// an open tab's. Each is kept until its queue is idle. Only touched on the UI thread.
+    /// </summary>
+    private readonly List<RepositoryViewModel> _closedButRunning = [];
     private bool _restoring;
+    private bool _closeConfirmed;
+    private FinishingDialogViewModel? _finishing;
 
     public MainWindowViewModel(
         ISettingsStore settings,
@@ -41,7 +52,16 @@ public partial class MainWindowViewModel : ObservableObject
         _session = session ?? new MemorySessionStore();
         _tabServices = tabServices ?? new TabServices(
             new UnavailableRepositoryProvider(), new NoFolderPicker(), settings, _session, DateDisplay.Resolve(), _log);
+
+        // Every dialog of a repository's operations follows the window's one rule (4f).
+        _tabServices.NamesRepositoryInDialogs = () => NamesRepositoryInDialogs;
         Theme = themes.Current;
+
+        // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
+        Menu = new MenuLayerViewModel(
+            _log,
+            () => ActiveTab?.Repository?.Name,
+            owner => ReferenceEquals(ActiveTab?.Repository, owner) && !Dialogs.IsOpen);
 
         // The tabs of the last session are there from the first frame, under their folder names;
         // InitializeAsync opens them once git has been found.
@@ -68,10 +88,34 @@ public partial class MainWindowViewModel : ObservableObject
         Activate(Tabs[saved.ActiveTab >= 0 && saved.ActiveTab < Tabs.Count ? saved.ActiveTab : 0]);
         _restoring = false;
         UpdateCanClose();
+
+        // Auto-fetch looks at the active tab's repository (docs/phase-3-design.md 6.1, D85).
+        AutoFetch = new AutoFetchScheduler(
+            () => ActiveTab.Repository,
+            () => Dialogs.IsOpen,
+            settings,
+            _tabServices.Clock,
+            _log);
+        AutoFetch.Start();
     }
 
-    /// <summary>The window's dialog layer (D69): what the overlay shows, and Esc's first target.</summary>
-    public DialogHostViewModel Dialogs => _tabServices.Dialogs as DialogHostViewModel ?? _fallbackDialogs;
+    /// <summary>The window's dialog layer (D69, D104): what the overlay shows, and one of Esc's targets.</summary>
+    public DialogHostViewModel Dialogs => _tabServices.DialogHost;
+
+    /// <summary>The window's in-window context menu layer (docs/phase-3-design.md 4a, D86).</summary>
+    public MenuLayerViewModel Menu { get; }
+
+    /// <summary>
+    /// The one rule of docs/phase-3-design.md 4f: a dialog that an operation of a repository opens
+    /// (a confirmation, the name, choice, pick, push, reset, stash, tag and remotes dialogs, git's
+    /// and ssh's prompts) names that repository, "In &lt;repo&gt;" under its title, while more than
+    /// one tab has a repository. The error dialog names it always. Every tab's operations and the
+    /// prompt dialogs read it when a dialog opens (<see cref="TabServices.NamesRepositoryInDialogs"/>).
+    /// </summary>
+    public bool NamesRepositoryInDialogs => Tabs.Count(tab => tab.Repository is not null) > 1;
+
+    /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
+    public AutoFetchScheduler AutoFetch { get; }
 
     /// <summary>The theme the app is showing.</summary>
     [ObservableProperty]
@@ -173,6 +217,10 @@ public partial class MainWindowViewModel : ObservableObject
         Tabs.RemoveAt(index);
         tab.RepositoryOpened -= OnRepositoryOpened;
         tab.Dispose();
+        if (tab.Repository is { } repository && repository.Queue.Current is { IsBackground: false })
+        {
+            _ = KeepUntilIdleAsync(repository);
+        }
 
         if (Tabs.Count == 0)
         {
@@ -195,6 +243,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void CloseAll()
     {
+        AutoFetch.Dispose();
         var clones = Tabs.Select(tab => tab.Welcome.RunningClone).OfType<Task>().ToArray();
         foreach (var tab in Tabs)
         {
@@ -210,6 +259,121 @@ public partial class MainWindowViewModel : ObservableObject
             catch (AggregateException)
             {
                 // Cancelled or failed: the clone removed its folder either way.
+            }
+        }
+    }
+
+    /// <summary>
+    /// The window is closing (docs/phase-3-design.md 1.8): returns true when it may close now.
+    /// While a repository runs an operation the user started, the close waits (also for the local
+    /// operation of a tab closed meanwhile, which goes on to its end): what waits is
+    /// dropped, "Finishing operations" lists what runs, and <paramref name="closeWindow"/> is
+    /// called when they have ended, or when the user chooses "Quit now". A background auto-fetch
+    /// does not hold the window. Once the close is confirmed, every later call returns true.
+    /// <para>
+    /// What a close does follows the dialog's own state, not when its answer is acted on (a
+    /// continuation that runs later on the UI thread): while the dialog is open, or after "Quit
+    /// now" until the window closes, a close only waits; once "Keep open" has closed the dialog,
+    /// the next close asks again at once.
+    /// </para>
+    /// </summary>
+    public bool TryClose(Action closeWindow)
+    {
+        ArgumentNullException.ThrowIfNull(closeWindow);
+        if (_closeConfirmed)
+        {
+            return true;
+        }
+
+        var running = Tabs
+            .Select(tab => tab.Repository)
+            .OfType<RepositoryViewModel>()
+            .Concat(_closedButRunning)
+            .Select(repository => (Repository: repository, Current: repository.Queue.Current))
+            .Where(entry => entry.Current is { IsBackground: false })
+            .ToList();
+        if (running.Count == 0)
+        {
+            _closeConfirmed = true;
+            return true;
+        }
+
+        if (_finishing is not { } finishing || (finishing.IsClosed && !QuitNowChosen(finishing)))
+        {
+            foreach (var tab in Tabs)
+            {
+                tab.Repository?.Queue.DropWaiting();
+            }
+
+            _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), closeWindow);
+        }
+
+        return false;
+    }
+
+    /// <summary>Keeps a closed tab's repository in <see cref="_closedButRunning"/> until its running operation has ended.</summary>
+    private async Task KeepUntilIdleAsync(RepositoryViewModel repository)
+    {
+        _closedButRunning.Add(repository);
+        try
+        {
+            await repository.Queue.WhenIdleAsync();
+        }
+        finally
+        {
+            _closedButRunning.Remove(repository);
+        }
+    }
+
+    /// <summary>Confirms the close without waiting: the app session ends (its owner disposes it).</summary>
+    public void ConfirmClose() => _closeConfirmed = true;
+
+    /// <summary>Whether the user answered <paramref name="dialog"/> with "Quit now".</summary>
+    private static bool QuitNowChosen(FinishingDialogViewModel dialog) =>
+        dialog.Result.IsCompletedSuccessfully && dialog.Result.Result;
+
+    /// <summary>
+    /// Shows "Finishing operations" and closes the window when the operations have ended or the
+    /// user chooses "Quit now". <see cref="_finishing"/> keeps the dialog afterwards, also after
+    /// "Keep open": <see cref="TryClose"/> goes by its state.
+    /// </summary>
+    private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, Action closeWindow)
+    {
+        var items = repositories
+            .Select(repository => (Repository: repository, Current: repository.Queue.Current))
+            .Where(entry => entry.Current is { IsBackground: false })
+            .Select(entry => new FinishingItem(
+                $"{entry.Current!.Title} — {entry.Repository.Name}",
+                entry.Current.Kind == OperationKind.Local && entry.Current.HasSeveralSteps))
+            .ToList();
+        var dialog = new FinishingDialogViewModel(items);
+        _finishing = dialog;
+        try
+        {
+            var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()));
+            var answer = Dialogs.ShowAsync(dialog);
+            var first = await Task.WhenAny(idle, answer);
+            if (first == idle)
+            {
+                dialog.CloseAsFinished();
+            }
+            else if (!await answer)
+            {
+                // "Keep open": the window stays and the operations go on.
+                return;
+            }
+
+            _closeConfirmed = true;
+            closeWindow();
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Closing the window after the running operations failed.", ex);
+
+            // A dialog that may never close must not keep the next close waiting.
+            if (ReferenceEquals(_finishing, dialog))
+            {
+                _finishing = null;
             }
         }
     }
@@ -282,7 +446,12 @@ public partial class MainWindowViewModel : ObservableObject
         public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) =>
             throw new GitUnavailableException("No repositories can be created here.");
 
-        public Task<IGitRepository> CloneAsync(string url, string destination, IProgress<CloneProgress>? progress, CancellationToken cancellationToken = default) =>
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) =>
             throw new GitUnavailableException("No repositories can be cloned here.");
     }
 

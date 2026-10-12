@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
+             xmlns:app="using:VisualCommit.App.ViewModels"
+             xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
              x:Class="VisualCommit.App.Views.Shell.RightPanelView"
              x:DataType="vm:CommitDetailsViewModel"
              AutomationProperties.AutomationId="RightPanel">
@@ -318,6 +320,20 @@
         </ItemsControl>
 
       </Grid>
+
+      <!-- The slot for several selected commits (docs/phase-3-design.md 4h): it covers the
+           details while the repository's MultiSelection is set, with the view the view locator
+           finds for it (WP8's MultiSelectionView). Empty, it is not drawn and takes no input. -->
+      <ContentControl Name="MultiSelectionSlot"
+                      Grid.RowSpan="2"
+                      Content="{Binding $parent[Window].((app:MainWindowViewModel)DataContext).ActiveTab.Repository.MultiSelection, FallbackValue={x:Null}}"
+                      IsVisible="{Binding $self.Content, Converter={x:Static ObjectConverters.IsNotNull}}"
+                      HorizontalContentAlignment="Stretch"
+                      VerticalContentAlignment="Stretch">
+        <ContentControl.ContentTemplate>
+          <dialogs:DialogViewLocator />
+        </ContentControl.ContentTemplate>
+      </ContentControl>
     </Grid>
   </Border>
 </UserControl>

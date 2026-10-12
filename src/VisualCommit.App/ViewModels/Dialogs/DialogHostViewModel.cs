@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -9,7 +10,11 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// <param name="Detail">A second line in the secondary colour, or empty.</param>
 /// <param name="ConfirmText">The label of the button that goes ahead, such as "Discard".</param>
 /// <param name="IsDestructive">The button that goes ahead has the danger colour.</param>
-public sealed record ConfirmationRequest(string Title, string Question, string Detail, string ConfirmText, bool IsDestructive = true);
+public sealed record ConfirmationRequest(string Title, string Question, string Detail, string ConfirmText, bool IsDestructive = true)
+{
+    /// <summary>The repository to name under the title ("In &lt;name&gt;", 4f), or null for none.</summary>
+    public string? RepositoryName { get; init; }
+}
 
 /// <summary>Asks the user to confirm, in a dialog drawn inside the main window (D69).</summary>
 public interface IDialogService
@@ -19,15 +24,17 @@ public interface IDialogService
 }
 
 /// <summary>One open confirmation: what it says and the two answers.</summary>
-public sealed partial class ConfirmationViewModel : ObservableObject
+public sealed partial class ConfirmationViewModel : DialogViewModel<bool>
 {
-    private readonly TaskCompletionSource<bool> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    internal ConfirmationViewModel(ConfirmationRequest request) => Request = request;
+    internal ConfirmationViewModel(ConfirmationRequest request)
+    {
+        Request = request;
+        RepositoryName = request.RepositoryName;
+    }
 
     public ConfirmationRequest Request { get; }
 
-    public string Title => Request.Title;
+    public override string Title => Request.Title;
 
     public string Question => Request.Question;
 
@@ -39,48 +46,65 @@ public sealed partial class ConfirmationViewModel : ObservableObject
 
     public bool IsDestructive => Request.IsDestructive;
 
-    internal Task<bool> Answer => _answer.Task;
+    internal Task<bool> Answer => Result;
+
+    protected override bool CancelledResult => false;
 
     [RelayCommand]
-    private void Confirm() => _answer.TrySetResult(true);
-
-    [RelayCommand]
-    private void Cancel() => _answer.TrySetResult(false);
+    private void Confirm() => Complete(true);
 }
 
 /// <summary>
-/// The window's dialog layer (D69): at most one confirmation at a time, shown over a dimmed
-/// backdrop. A second request while one is open waits for the first to be answered.
+/// The window's dialog layer (D69), as a stack (D104): a dialog opened while another is open goes
+/// on top of it, over a backdrop of its own; the one below stays drawn, takes no input, and gets
+/// the focus back when the top one closes. Esc cancels the top dialog only. Views are found by
+/// the dialog's type (<c>DialogViewLocator</c>).
 /// </summary>
 public sealed partial class DialogHostViewModel : ObservableObject, IDialogService
 {
-    private readonly SemaphoreSlim _one = new(1, 1);
+    /// <summary>The open dialogs, the bottom one first: what the dialog layer draws, in this order.</summary>
+    public ObservableCollection<DialogViewModel> Open { get; } = [];
 
-    /// <summary>The confirmation on screen, or null.</summary>
+    /// <summary>The top dialog, which takes the input, or null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsOpen))]
-    public partial ConfirmationViewModel? Current { get; private set; }
+    public partial DialogViewModel? Current { get; private set; }
 
     public bool IsOpen => Current is not null;
 
-    public async Task<bool> ConfirmAsync(ConfirmationRequest request)
+    /// <summary>ssh's notices, which get no dialog (docs/phase-3-design.md 3.2): the status bar shows the newest while it lasts.</summary>
+    public PromptNotices Notices { get; } = new();
+
+    /// <summary>
+    /// Raised when a dialog has closed, just before it leaves <see cref="Open"/>: the window moves
+    /// the keyboard focus away from it first (to the dialog below, D104).
+    /// </summary>
+    public event EventHandler<DialogViewModel>? Removing;
+
+    public Task<bool> ConfirmAsync(ConfirmationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await _one.WaitAsync();
-        try
-        {
-            var dialog = new ConfirmationViewModel(request);
-            Current = dialog;
-            return await dialog.Answer;
-        }
-        finally
-        {
-            Current = null;
-            _one.Release();
-        }
+        return ShowAsync(new ConfirmationViewModel(request));
     }
 
-    /// <summary>Esc: cancels the open confirmation. Returns whether one was open.</summary>
+    /// <summary>Shows <paramref name="dialog"/> on top of any open one and completes with its answer when it closes.</summary>
+    public Task<TResult> ShowAsync<TResult>(DialogViewModel<TResult> dialog)
+    {
+        Show(dialog);
+        return dialog.Result;
+    }
+
+    /// <summary>Shows <paramref name="dialog"/> on top of any open one; completes when it closes.</summary>
+    public Task ShowAsync(DialogViewModel dialog)
+    {
+        Show(dialog);
+        return dialog.Closed;
+    }
+
+    /// <summary>
+    /// Esc: the top dialog handles it (<see cref="DialogViewModel.HandleEscape"/>: it cancels, or
+    /// goes back a step); the dialogs below see nothing of it. Returns whether one was open.
+    /// </summary>
     public bool CancelCurrent()
     {
         if (Current is not { } dialog)
@@ -88,7 +112,33 @@ public sealed partial class DialogHostViewModel : ObservableObject, IDialogServi
             return false;
         }
 
-        dialog.CancelCommand.Execute(null);
+        dialog.HandleEscape();
         return true;
+    }
+
+    private void Show(DialogViewModel dialog)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+        if (dialog.IsClosed || Open.Contains(dialog))
+        {
+            return;
+        }
+
+        dialog.Closing += OnClosing;
+        Open.Add(dialog);
+        Current = dialog;
+    }
+
+    private void OnClosing(object? sender, EventArgs e)
+    {
+        if (sender is not DialogViewModel dialog)
+        {
+            return;
+        }
+
+        dialog.Closing -= OnClosing;
+        Removing?.Invoke(this, dialog);
+        Open.Remove(dialog);
+        Current = Open.Count > 0 ? Open[^1] : null;
     }
 }

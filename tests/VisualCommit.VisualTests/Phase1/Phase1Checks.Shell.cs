@@ -134,6 +134,12 @@ public partial class Phase1Checks
         await app.WaitForAsync(
             () => tab.Repository?.HasNoCommits == true && !string.IsNullOrEmpty(app.Find<TextBlock>("CurrentBranch").Text),
             "the new repository to show that it has no commits, and its branch");
+
+        // The view model knows before the view has drawn its empty-graph texts: on a loaded
+        // machine the check looked at the texts too early (gate run of phase 3, twice).
+        await app.WaitForAsync(
+            () => ShellExpectations.TextsIn(app.FindByAutomationId("CommitGraph")).Contains("No commits yet"),
+            "the graph area to draw its empty-graph text");
         app.Capture().Save(Phase, "12-initialised");
 
         Assert.True(Directory.Exists(Path.Combine(fresh, ".git")));

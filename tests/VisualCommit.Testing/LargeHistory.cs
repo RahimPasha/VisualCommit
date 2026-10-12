@@ -37,14 +37,18 @@ public static class LargeHistory
     private static readonly SemaphoreSlim BuildGate = new(1, 1);
     private static string? _path;
 
-    /// <summary>The working tree of the shared repo, built first if this machine does not have it yet.</summary>
-    public static async Task<string> GetAsync()
-    {
-        if (_path is not null)
-        {
-            return _path;
-        }
+    /// <summary>
+    /// The working tree of the shared repo, built first if this machine does not have it yet. The
+    /// wait for the build does not count against the test's time in the hang watchdog
+    /// (<see cref="HangWatchdogAttribute.SharedPreparationAsync{T}"/>).
+    /// </summary>
+    public static Task<string> GetAsync() =>
+        _path is { } path
+            ? Task.FromResult(path)
+            : HangWatchdogAttribute.SharedPreparationAsync("the 100k-commit repo", GetOnceAsync());
 
+    private static async Task<string> GetOnceAsync()
+    {
         await BuildGate.WaitAsync().ConfigureAwait(false);
         try
         {

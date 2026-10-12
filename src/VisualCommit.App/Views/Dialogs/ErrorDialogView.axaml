@@ -1,0 +1,87 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.ErrorDialogView"
+                  x:DataType="vm:ErrorDialogViewModel"
+                  AutomationProperties.AutomationId="ErrorDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The error dialog (docs/phase-3-design.md 1.6, 4f, C11): what happened, the repository,
+       git's own output in the code font (read-only, selectable, scrolling past 13 lines: the
+       style dialogCode), the command,
+       and "Copy output", the extra action and "Close". Without git output it shows the summary
+       alone (D114). Close takes the focus. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="ErrorDialogCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="ErrorTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="ErrorTitle" />
+        <c:UrlTextBlock Name="ErrorSummary"
+                   Classes="dialogText"
+                   Text="{Binding Summary}"
+                   AutomationProperties.AutomationId="ErrorSummary" />
+        <TextBlock Name="ErrorRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   Margin="0,6,0,0"
+                   AutomationProperties.AutomationId="ErrorRepository" />
+        <TextBox Name="ErrorOutput"
+                 Classes="dialogCode"
+                 Text="{Binding Output}"
+                 IsVisible="{Binding HasOutput}"
+                 AutomationProperties.AutomationId="ErrorOutput"
+                 AutomationProperties.Name="Git's output" />
+        <TextBlock Name="ErrorCommand"
+                   Classes="secondary"
+                   Text="{Binding Command}"
+                   IsVisible="{Binding HasCommand}"
+                   FontSize="11"
+                   Margin="0,6,0,0"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding Command}"
+                   AutomationProperties.AutomationId="ErrorCommand" />
+        <DockPanel Margin="0,20,0,0">
+          <Button Name="ErrorCopyButton"
+                  DockPanel.Dock="Left"
+                  Classes="errorAction"
+                  Margin="0,0,6,0"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Copy output"
+                  Command="{Binding CopyOutputCommand}"
+                  IsVisible="{Binding HasOutput}"
+                  AutomationProperties.AutomationId="ErrorCopyButton"
+                  AutomationProperties.Name="Copy output" />
+          <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+            <Button Name="ErrorExtraButton"
+                    Classes="errorAction"
+                    Theme="{StaticResource VcActionButton}"
+                    Content="{Binding ExtraAction}"
+                    Command="{Binding ExtraCommand}"
+                    IsVisible="{Binding HasExtraAction}"
+                    AutomationProperties.AutomationId="ErrorExtraButton"
+                    AutomationProperties.Name="{Binding ExtraAction}" />
+            <Button Name="ConfirmButton"
+                    Theme="{StaticResource VcPrimaryButton}"
+                    Content="Close"
+                    Command="{Binding ConfirmCommand}"
+                    AutomationProperties.AutomationId="ConfirmButton"
+                    AutomationProperties.Name="Close" />
+          </StackPanel>
+        </DockPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <!-- Three buttons share the card's 358: "Copy output", the longest extra action ("Stash
+       changes and check out") and "Close" fit with a gap when the two framed ones are a little
+       narrower than elsewhere. -->
+  <local:DialogView.Styles>
+    <Style Selector="Button.errorAction">
+      <Setter Property="Padding" Value="9,6" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>
