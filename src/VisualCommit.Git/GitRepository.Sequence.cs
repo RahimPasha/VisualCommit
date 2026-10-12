@@ -93,10 +93,13 @@ public sealed partial class GitRepository
                 }
 
                 // A fixup or squash of a rebase started elsewhere: git's own message, which it
-                // commits without its comment lines.
+                // commits without its comment lines. Otherwise the commit's message, less the
+                // "Conflicts:" block that newer git (2.55 on CI) appends to it at a conflict stop
+                // and 2.36 does not.
+                var comment = await CommentCharAsync(cancellationToken).ConfigureAwait(false);
                 return LastDoneCommand() is { IsSquashLike: true }
-                    ? Tidy(WithoutCommentLines(message, await CommentCharAsync(cancellationToken).ConfigureAwait(false)))
-                    : Tidy(message);
+                    ? Tidy(WithoutCommentLines(message, comment))
+                    : Tidy(WithoutConflictsBlock(message, comment));
 
             case InProgressKind.Rebase:
                 return ReadGitFile("rebase-apply", "final-commit") is { } patchMessage ? Tidy(patchMessage) : null;

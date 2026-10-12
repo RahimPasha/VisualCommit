@@ -392,7 +392,7 @@ public sealed partial class GitRepository
         }
 
         var newTip = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
-        if (result.StandardError.Contains("Applying autostash resulted in conflicts", StringComparison.Ordinal))
+        if (Says(result, "Applying autostash resulted in conflicts"))
         {
             return new RebaseResult(RebaseOutcome.Rebased, newTip, await CountConflictedFilesAsync(cancellationToken).ConfigureAwait(false))
             {

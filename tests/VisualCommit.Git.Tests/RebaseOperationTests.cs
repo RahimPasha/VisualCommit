@@ -161,9 +161,15 @@ public class RebaseOperationTests
         repo.WriteFile("f.txt", "my line\n");
         var repository = await OpenAsync(repo);
 
+        using var plain = await repo.CopyAsync();
         var result = await repository.RebaseAsync(await RevAsync(repo, "main"), cancellationToken: TestCancelled);
 
-        Assert.Equal(new RebaseResult(RebaseOutcome.Rebased, await repo.HeadAsync(), 1) { AutostashConflicted = true }, result);
+        // What plain git does on a copy, in the message, so that a git whose autostash behaves
+        // otherwise than 2.36's says how (CI's 2.55 did, run 38247793913).
+        var git = await plain.GitAllowingFailureAsync("rebase", await RevAsync(plain, "main"));
+        var seen = $"git {(await plain.GitAsync("--version")).StandardOutput.Trim()}: exit {git.ExitCode}; stdout <{git.StandardOutput}>; stderr <{git.StandardError}>; "
+            + $"status <{string.Join(" | ", await GitLinesAsync(plain, "status", "--porcelain"))}>; stashes {(await plain.StashListAsync()).Count}; app {result}";
+        Assert.True(new RebaseResult(RebaseOutcome.Rebased, await repo.HeadAsync(), 1) { AutostashConflicted = true } == result, seen);
         Assert.Equal(await RevAsync(repo, "main"), await RevAsync(repo, "HEAD~1"));
         Assert.False(RebaseInProgress(repo));
         Assert.Equal(["UU f.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
