@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
 
 namespace VisualCommit.Git;
 
@@ -74,9 +75,15 @@ public sealed partial class GitRepository
 
             case InProgressKind.Rebase when state.StopKind == RebaseStopKind.OwnAmendFailed:
                 // The app's amend failed: going on without the new message is git's --continue,
-                // which does not run a failed exec again (no-reschedule-failed-exec, 0.1); it
-                // refuses as Continue does while other files are unstaged.
+                // which does not run a failed exec again (no-reschedule-failed-exec, 0.1) unless
+                // the user's rebase.rescheduleFailedExec put it back first in the todo, where it
+                // is removed first; it refuses as Continue does while other files are unstaged.
                 await RefuseUnstagedChangesAsync(options, cancellationToken).ConfigureAwait(false);
+                if (state.Group is { } group)
+                {
+                    DropRescheduledOwnAmend(group);
+                }
+
                 return await RebaseStepAsync("--continue", options, cancellationToken).ConfigureAwait(false);
 
             case InProgressKind.Rebase:
@@ -234,6 +241,10 @@ public sealed partial class GitRepository
                 var amend = WriteCommand(options, "commit", "--amend", "--only", "--allow-empty", "--cleanup=whitespace", "--file=" + MessageFilePath(amended));
                 (await _runner.RunAsync(amend, cancellationToken).ConfigureAwait(false)).EnsureSuccess(amend);
             }
+
+            // The amend is made (or, its guard failing, would amend nothing): git's rescheduled
+            // copy of it would only run the hooks and amend once more.
+            DropRescheduledOwnAmend(amended);
         }
         else if (merging
             && state.StopKind == RebaseStopKind.Pick
@@ -295,6 +306,57 @@ public sealed partial class GitRepository
             {
                 AutostashConflicted = outcome.AutostashConflicted,
             };
+    }
+
+    /// <summary>
+    /// Removes the app's guarded amend of <paramref name="group"/> (2.5) from the head of
+    /// <c>rebase-merge/git-rebase-todo</c> when git put it back there after it failed (the user's
+    /// <c>rebase.rescheduleFailedExec</c>): otherwise <c>git rebase --continue</c> runs it again,
+    /// the hook refuses again, and Skip could never leave the stop (the review's finding 13). Only
+    /// that line goes, when it is the first command of the todo; the file's other bytes stay as
+    /// git wrote them. Nothing happens otherwise.
+    /// </summary>
+    private void DropRescheduledOwnAmend(int group)
+    {
+        var path = Path.Combine(GitDirectory, "rebase-merge", "git-rebase-todo");
+        byte[] bytes;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            bytes = File.ReadAllBytes(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warning($"The rebase's todo could not be read; a rescheduled amend of group {group} stays.", ex);
+            return;
+        }
+
+        for (var start = 0; start < bytes.Length;)
+        {
+            var end = Array.IndexOf(bytes, (byte)'\n', start);
+            var next = end < 0 ? bytes.Length : end + 1;
+            var line = Encoding.UTF8.GetString(bytes, start, (end < 0 ? bytes.Length : end) - start).Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                start = next;
+                continue;
+            }
+
+            if (MessageGroup(TodoLine.Parse(line)) == group)
+            {
+                var kept = new byte[bytes.Length - (next - start)];
+                Array.Copy(bytes, 0, kept, 0, start);
+                Array.Copy(bytes, next, kept, start, bytes.Length - next);
+                File.WriteAllBytes(path, kept);
+                _log.Info($"Removed the rescheduled amend of group {group} from the rebase's todo.");
+            }
+
+            return;
+        }
     }
 
     /// <summary>The last line of <c>rebase-merge/done</c>: the command the rebase stopped at (or after), or null.</summary>

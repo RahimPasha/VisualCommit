@@ -313,6 +313,49 @@ public class ContinueSkipRebaseTests
     }
 
     [Fact]
+    public async Task Skip_at_the_apps_failed_amend_goes_on_also_when_git_rescheduled_it()
+    {
+        // The review's finding 13: with rebase.rescheduleFailedExec git puts the failed amend back
+        // first in the todo (and 2.36 ends done with the pick before it again), so --continue ran
+        // it again and the hook refused again: Skip never left the stop.
+        var (repo, main, commits) = await TopicAsync(("t.txt", "T target"), ("p.txt", "P plain"));
+        using var _repo = repo;
+        await repo.ConfigAsync("rebase.rescheduleFailedExec", "true");
+        var repository = await OpenAsync(repo);
+        await StopOnRefusedAmendAsync(repo, main, commits);
+        Assert.Contains("vc-message-1", File.ReadAllText(Path.Combine(repo.Path, ".git", "rebase-merge", "git-rebase-todo")).Split('\n')[0], StringComparison.Ordinal);
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((RebaseStopKind.OwnAmendFailed, (int?)1, commits[0]), (state.StopKind!.Value, state.Group, state.Commit));
+
+        var result = await repository.SkipAsync(state, cancellationToken: TestCancelled);
+
+        Assert.Equal(ContinueOutcome.Done, result.Outcome);
+        Assert.False(repository.RebaseFolderExists());
+        Assert.Equal(["P plain", "T target", "Main edit"], await GitLinesAsync(repo, "log", "--format=%s", "-3"));
+    }
+
+    [Fact]
+    public async Task Continue_at_the_apps_failed_amend_that_git_rescheduled_amends_once_and_goes_on()
+    {
+        var (repo, main, commits) = await TopicAsync(("t.txt", "T target"), ("p.txt", "P plain"));
+        using var _repo = repo;
+        await repo.ConfigAsync("rebase.rescheduleFailedExec", "true");
+        var repository = await OpenAsync(repo);
+        await StopOnRefusedAmendAsync(repo, main, commits);
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((RebaseStopKind.OwnAmendFailed, (int?)1), (state.StopKind!.Value, state.Group));
+
+        // The hook now accepts, and counts its runs: only the app's amend asks it.
+        WriteHook(repo, "commit-msg", "echo run >> \"$(git rev-parse --git-dir)/hook-runs\"\nexit 0");
+        var result = await repository.ContinueAsync(state, null, cancellationToken: TestCancelled);
+
+        Assert.Equal(ContinueOutcome.Done, result.Outcome);
+        Assert.Equal("T reworded\n\n#4 kept", await GitTextAsync(repo, "log", "-1", "--format=%B", "HEAD~1"));
+        Assert.Equal(["P plain", "T reworded", "Main edit"], await GitLinesAsync(repo, "log", "--format=%s", "-3"));
+        Assert.Equal(["run"], File.ReadAllLines(Path.Combine(repo.Path, ".git", "hook-runs")));
+    }
+
+    [Fact]
     public async Task Continue_at_an_edit_stop_lets_git_amend_what_is_staged()
     {
         var (repo, main, commits) = await TopicAsync(("a.txt", "A adds a"), ("b.txt", "B adds b"));
