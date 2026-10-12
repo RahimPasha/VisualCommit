@@ -3,7 +3,7 @@
 // fetches and pushes, and their texts in 2.33 (OperationTexts). Clone is not here (the welcome
 // page), nor auto-fetch (AutoFetchScheduler, WP9), whose title is 2.33's "Auto-fetch". Built by
 // WP7-remotes on the helpers of RepositoryOperations.Run.cs; its tests are in
-// tests/VisualCommit.App.Tests/RepositoryOperationsTests.Remotes.cs.
+// tests/VisualCommit.App.Tests/RepositoryOperations{Fetch,Pull,Push,Remotes}Tests.cs.
 //
 // Every operation here that talks to a remote is a Network operation with PromptMode.Ask (3.3):
 // git's and ssh's prompts reach the app's dialogs, the status bar offers Cancel, and a cancel

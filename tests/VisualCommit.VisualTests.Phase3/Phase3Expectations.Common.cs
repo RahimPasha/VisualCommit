@@ -10,7 +10,8 @@
 // Phase3Expectations*.cs), so that both harnesses use the same numbers and texts (design 7.4: the
 // pass clicks rows at positions computed from the same constants). Use only the BCL, Avalonia,
 // Xunit, VisualCommit.Core, VisualCommit.Git and VisualCommit.Testing here: no other file of
-// VisualCommit.VisualTests (not ShellExpectations or Palettes, which the pass does not compile).
+// VisualCommit.VisualTests.Phase3 or VisualCommit.VisualTests (not ShellExpectations or Palettes,
+// which the pass does not compile).
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Avalonia.Media;

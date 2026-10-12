@@ -4,6 +4,7 @@ using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using Xunit;
+using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 
 namespace VisualCommit.App.Tests;
 
@@ -14,7 +15,8 @@ namespace VisualCommit.App.Tests;
 /// plain git, the status bar, the failure dialogs, a cancel, a closed tab, and that each
 /// operation runs once.
 /// </summary>
-public partial class RepositoryOperationsTests
+[Collection(RepositoryOperationsTestSupport.StashTagsCollection)]
+public class RepositoryOperationsStashTagsTests
 {
     private const string Experiment = "On main: Experiment";
 
@@ -552,8 +554,4 @@ public partial class RepositoryOperationsTests
         Assert.Equal("?? todo.txt", (await repo.GitAsync("status", "--porcelain")).StandardOutput.Trim());
         Assert.DoesNotContain(app.Log.Messages, message => message.Contains("Succeeded after", StringComparison.Ordinal));
     }
-
-    /// <summary>The operation <paramref name="title"/> ran exactly once (the queue logs each operation it ran).</summary>
-    private static void AssertRanOnce(OperationsHarness app, string title) =>
-        Assert.Single(app.Log.Messages, message => message.Contains($": {title}: ", StringComparison.Ordinal) && message.Contains(" after ", StringComparison.Ordinal));
 }

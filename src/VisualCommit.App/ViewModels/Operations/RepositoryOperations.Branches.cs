@@ -1,6 +1,6 @@
 // Branches and history: docs/phase-3-design.md 2.0 to 2.15, 2.31, 4g's "Check out and merge",
 // section 5's Abort, and their texts in 2.33 (OperationTexts), built by WP7-branches on the helpers
-// of RepositoryOperations.Run.cs. Its tests are tests/VisualCommit.App.Tests/RepositoryOperationsTests.Branches.cs.
+// of RepositoryOperations.Run.cs. Its tests are tests/VisualCommit.App.Tests/RepositoryOperations{Checkout,Branches,Merge,History}Tests.cs.
 
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;

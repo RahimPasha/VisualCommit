@@ -3,11 +3,16 @@ using VisualCommit.Core.Graph;
 using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
+using static VisualCommit.Git.Tests.ScenarioTestSupport;
 
 namespace VisualCommit.Git.Tests;
 
-/// <summary>Pins down phase 3's scenario repos (design 7.1): their graphs as the app lays them out, refs, remotes and states.</summary>
-public partial class ScenarioTests
+/// <summary>
+/// Pins down phase 3's scenario repos (design 7.1): their graphs as the app lays them out, refs,
+/// remotes and states. A class of its own beside <see cref="ScenarioTests"/> (the scenarios of
+/// phases 0 to 2), so that xunit runs the two side by side.
+/// </summary>
+public class Phase3ScenarioTests
 {
     // ---- OperationsAsync ------------------------------------------------------------------------
 

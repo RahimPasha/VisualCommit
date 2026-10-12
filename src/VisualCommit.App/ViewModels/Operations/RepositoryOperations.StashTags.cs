@@ -2,7 +2,7 @@
 // pop, drop; tag create and delete), and their texts in 2.33 (OperationTexts). Pushing and
 // deleting a tag on a remote is in RepositoryOperations.Remotes.cs (2.29). Built by the
 // sub-package WP7-stashtags on the helpers of RepositoryOperations.Run.cs; its tests are
-// tests/VisualCommit.App.Tests/RepositoryOperationsTests.StashTags.cs.
+// tests/VisualCommit.App.Tests/RepositoryOperationsStashTagsTests.cs.
 
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;

@@ -2041,7 +2041,7 @@ To be recorded under "Changes to expected results" in the phase 3 report, each w
 
 ### 7.1 Scenario repos (new, in `tests/VisualCommit.Testing/Scenarios.Phase3.cs`; `Scenarios` becomes `static partial`)
 
-All built by WP-S1 (stage 2) and pinned in `ScenarioTests.Phase3.cs` (refs, SHAs, upstreams,
+All built by WP-S1 (stage 2) and pinned in `Phase3ScenarioTests.cs` (refs, SHAs, upstreams,
 the graph's rows and lanes as `GraphLayout` lays out the app's pages), built once per test
 process and copied per test (`TempRepo.CopyAsync`, which gives the copy its own clock carrying
 on from the template's), unless said otherwise. TempRepo's clock gives 2026-01-01 12:00 UTC plus
@@ -2174,7 +2174,7 @@ on the three platforms with nothing to register (D97).
 
 Ports: the three test projects run side by side, so every server listens on port 0 (a port the
 system picks) and tests read `Url`, except the servers of the visual checks whose pictures show
-the URL (check 21's dialog shows "127.0.0.1:<port>"): `VisualCommit.VisualTests` and the
+the URL (check 21's dialog shows "127.0.0.1:<port>"): `VisualCommit.VisualTests.Phase3` and the
 real-window pass (which runs alone) use port 47391, falling back to a free port only when it is
 taken, which the report then notes (the picture differs in the port only). 47391 is below
 Windows' ephemeral range (49152 and up), so the other projects' port-0 servers do not take it

@@ -5,6 +5,7 @@ using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using Xunit;
+using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 
 namespace VisualCommit.App.Tests;
 
@@ -16,7 +17,8 @@ namespace VisualCommit.App.Tests;
 /// not name. Each test holds the queue with an operation of its own, queues the operation under
 /// test behind it, changes the repository, then lets the queue go on.
 /// </summary>
-public partial class RepositoryOperationsTests
+[Collection(RepositoryOperationsTestSupport.SharedCollection)]
+public class RepositoryOperationsQueueTests
 {
     private static readonly TimeSpan QueueTimeout = TimeSpan.FromSeconds(60);
 
@@ -337,28 +339,6 @@ public partial class RepositoryOperationsTests
         Assert.Equal(("Popped stash@{0}", OperationStatusTone.Secondary), (app.StatusText, app.StatusTone));
         Assert.Equal(before - 1, (await repo.StashListAsync()).Count);
         Assert.Equal(1, Ran(app, "Pop stash@{0}"));
-    }
-
-    /// <summary>
-    /// Queues an operation of the test's own that waits until the returned source is set, then
-    /// runs <paramref name="then"/> (a change to the repository, as an operation ahead of the one
-    /// under test would make it); waits until it runs.
-    /// </summary>
-    private static (TaskCompletionSource Hold, Task<OperationResult> Ahead) HoldQueue(OperationsHarness app, Func<Task>? then = null)
-    {
-        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var ahead = app.Repository.Queue.RunAsync(new GitOperation("Held", "Holding…", OperationKind.Local, RefreshScope.Refs, async _ =>
-        {
-            await hold.Task;
-            if (then is not null)
-            {
-                await then();
-            }
-
-            return OperationReport.Done("Held");
-        }));
-        Assert.NotNull(app.Repository.Queue.Current);
-        return (hold, ahead);
     }
 
     /// <summary>Waits until <paramref name="count"/> operations wait in the queue.</summary>

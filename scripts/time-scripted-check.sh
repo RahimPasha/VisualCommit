@@ -8,7 +8,9 @@
 # Usage, from anywhere in the repository (Git Bash on Windows, bash elsewhere):
 #   bash scripts/time-scripted-check.sh "*Check_01_commit_menu"
 #   bash scripts/time-scripted-check.sh "*Phase3ChecksD*" 3
-# The second argument is the phase whose step times to print (3 when left out).
+# The second argument is the phase whose step times to print (3 when left out). It also picks the
+# walk-through project: tests/VisualCommit.VisualTests.Phase3 for phase 3, and
+# tests/VisualCommit.VisualTests for phases 0 to 2.
 #
 # Like every partial run, it empties the phase's picture folder first (VisualRun.Save), so the
 # folder then holds only the pictures of the checks it ran; run `dotnet test` at the repo root
@@ -21,7 +23,13 @@ phase="${2:-3}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-dotnet build tests/VisualCommit.VisualTests --nologo -v quiet
+if [ "$phase" -ge 3 ]; then
+  project="tests/VisualCommit.VisualTests.Phase3"
+else
+  project="tests/VisualCommit.VisualTests"
+fi
+
+dotnet build "$project" --nologo -v quiet
 
 timings="artifacts/visual/phase-${phase}/timings"
 mkdir -p "$timings"
@@ -30,7 +38,7 @@ trap 'rm -f "$marker"' EXIT
 
 start=$(date +%s)
 status=0
-dotnet test --project tests/VisualCommit.VisualTests --no-build --filter-method "$filter" --output Detailed || status=$?
+dotnet test --project "$project" --no-build --filter-method "$filter" --output Detailed || status=$?
 end=$(date +%s)
 
 echo

@@ -15,4 +15,9 @@
     <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Where VisualRun saves the walk-throughs' screenshots: artifacts/visual/ under the repo root. -->
+    <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
+  </ItemGroup>
+
 </Project>

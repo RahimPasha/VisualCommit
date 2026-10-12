@@ -4,7 +4,7 @@
 // unstage, discard with its confirmation and snapshot, open diff; D62, D67, D70, D76). The
 // launcher and the clipboard come from TabServices (Launcher, Clipboard); none of these but
 // ignore is an operation in the queue. Built by the sub-package WP7-stashtags; its tests are
-// tests/VisualCommit.App.Tests/RepositoryOperationsTests.Files.cs (through OperationsHarness,
+// tests/VisualCommit.App.Tests/RepositoryOperationsFilesTests.cs (through OperationsHarness,
 // whose FakeFileLauncher and FakeClipboard record what was asked).
 
 using VisualCommit.App.Services;
