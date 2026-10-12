@@ -39,10 +39,13 @@ public sealed partial class Phase4ChecksC
         await repo.GitAsync("switch", "feature/picks");
         var rebase = await repo.GitAllowingFailureAsync("rebase", "main");
         Assert.Equal(1, rebase.ExitCode);
+        // The refs too: a refresh that read them between the terminal's switch and its rebase
+        // shows feature/picks checked out until the next refresh (CI run 38311351849).
         await app.WaitForAsync(
             () => app.BannerBounds is not null && app.Find<TextBlock>("BannerText").Text == PartC2.PicksRebaseBanner
-                && Graph(app).ShowsWorkingRow && Graph(app).WorkingRowText == PartC2.WorkingConflicts(1),
-            "the rebase's banner and the working-changes row with its conflict",
+                && Graph(app).ShowsWorkingRow && Graph(app).WorkingRowText == PartC2.WorkingConflicts(1)
+                && ((TextBlock)app.FindByAutomationId("CurrentBranch")).Text == "Detached at d71cdc4",
+            "the rebase's banner, the working-changes row with its conflict and the detached HEAD",
             OutsideChangeTimeout);
         await app.WaitForIdleAsync();
         Shot(app, "c17a-terminal-rebase");
