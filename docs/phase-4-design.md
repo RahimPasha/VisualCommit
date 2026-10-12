@@ -55,6 +55,7 @@ AvaloniaEdit packages. Where CI's Git 2.55 may differ, the Git-layer tests run o
 | The `<branch>` argument | git prefixes `refs/heads/` itself: `git rebase main refs/heads/topic` rebases a **detached** HEAD (`Successfully rebased and updated detached HEAD.`) and leaves `topic` where it was. The app never passes a branch argument (1.3) |
 | A conflict stop (two conflicting commits) | exit 1; stdout `Auto-merging f.txt` / `CONFLICT (content): Merge conflict in f.txt`; stderr `Rebasing (1/3)error: could not apply dd76563... T1 topic edits one`, four `hint:` lines, `Could not apply dd76563... T1 topic edits one` |
 | Files at a stop | `.git/rebase-merge/`: `head-name` (`refs/heads/topic`), `onto` and `orig-head` (full SHAs), `done` (the commands done, full SHAs), `git-rebase-todo` (left), `msgnum`/`end` (count every command, `label` and `exec` included), `message` (the message Continue uses), `author-script` (`GIT_AUTHOR_NAME='…'` / `GIT_AUTHOR_EMAIL='…'` / `GIT_AUTHOR_DATE='@<seconds> <zone>'`, shell-quoted), `stopped-sha` (full), `patch`, `interactive` (also for a plain rebase), `rewritten-list` after the first commit; `amend` at an `edit` stop. Also `.git/REBASE_HEAD` (= `stopped-sha`), `ORIG_HEAD`, `AUTO_MERGE`, `MERGE_MSG`. HEAD is detached |
+| Git 2.55 (found on CI) | at a conflict stop `rebase-merge/message` ends with git's `# Conflicts:` block (`# Conflicts:` and a `#	<path>` line per conflicted file), which 2.36 does not write: the app leaves that block out of the message it fills (5.3), except after a fixup or squash, where it leaves out every comment line as git does. An autostash that conflicts when put back is told in other words (`Your local changes are stashed, however applying them` / `resulted in conflicts.`): the app tells that state by the conflicted files left after an exit 0 with no rebase folder (1.4), never by git's words |
 | Stale files | `REBASE_HEAD` and `AUTO_MERGE` stay after a rebase or sequence finishes: neither means "in progress". Only `rebase-merge/` or `rebase-apply/` does, **also after an exit 0** (an `edit` stop exits 0 with the folder present) |
 | Stages in a rebase | stage 2 ("ours") = HEAD = the new base plus the commits already replayed; stage 3 ("theirs") = the user's commit being replayed. Markers `<<<<<<< HEAD` / `>>>>>>> <short> (<subject>)` |
 | `git rebase --continue` after `git add` (`GIT_EDITOR=:`) | commits with `rebase-merge/message` (author and author date kept) and goes on; the next stop exits 1 with the same lines. It starts the editor on `.git/COMMIT_EDITMSG`, so `GIT_EDITOR=:` strips every line of the message that starts with `#` (`#12 issue line` lost). `-c commit.cleanup=whitespace` writes git's whole comment block into the message: unusable. It runs **no** `pre-commit` and **no** `commit-msg` hook |
@@ -254,7 +255,7 @@ after the call is this call's own:
 |---|---|---|---|
 | 0 | no rebase folder, stdout has `is up to date` | `UpToDate` | `{b} is already up to date with {target}` |
 | 0 | no rebase folder | `Rebased` (the new tip) | `Rebased {b} onto {target}` |
-| 0 | no rebase folder, stderr has `Applying autostash resulted in conflicts` | `Rebased`, with the conflicts of the put-back changes | warning: `Rebased {b} onto {target}; your changes conflicted when put back: they are also kept in the stash` (the banner shows the conflicted files, as phase 3 shows a stash's) |
+| 0 | no rebase folder, conflicted files in the status (git 2.36 says `Applying autostash resulted in conflicts`, 2.55 other words: 0.1) | `Rebased`, with the conflicts of the put-back changes | warning: `Rebased {b} onto {target}; your changes conflicted when put back: they are also kept in the stash` (the banner shows the conflicted files, as phase 3 shows a stash's) |
 | any | a rebase folder present | `Stopped` (conflicted file count from the status) | `Rebase stopped: {N} files have conflicts` or, with none, `Rebase stopped at {short} "{subject}"` (warning tone, no dialog unless 5.1 says so) |
 | non-zero | no rebase folder | a `GitException`: nothing changed | `Rebase {b} onto {target} failed` and the error dialog "Rebase failed" with git's output |
 
@@ -264,8 +265,9 @@ The graph reloads (refs changed). When a rebase the app runs ends rebased (start
 list or a squash, or finished by Continue or Skip), the rewritten branch's new tip is selected if
 the selected commit was one of the branch's commits before the rebase, whether or not that old
 commit is still drawn (another ref may still reach it), or was dropped; otherwise the selection
-stays as it was. The working-changes row is unaffected; when it was selected and the working tree
-becomes clean, phase 2's rule applies (nothing is selected, 14.3).
+stays as it was. A squash of selected commits is the exception: it selects the squashed commit
+(3). The working-changes row is unaffected; when it was selected and the working tree becomes clean,
+phase 2's rule applies (nothing is selected, 14.3).
 
 ## 2. Interactive rebase
 
@@ -554,8 +556,8 @@ number of conflicted files of the status; "staged" means the index differs from 
 the same style (`VcActionButton`, 26 high), shown as 5.1 says, a disabled one with its reason as its
 tooltip (`ToolTip.ShowOnDisabled`). `ConflictBannerViewModel(abort, continue, skip)` gains
 `HasContinue`, `CanContinue`, `ContinueToolTip`, `ContinueCommand` and the same for Skip; `Show(state,
-conflicts, ontoName)` takes the name of a branch that points at a rebase's `onto` (from the refs;
-null when none does).
+conflicts, ontoName)` takes the name of a branch that points at a rebase's `onto` (from the refs: a
+local branch if one does, else a remote branch; null when none does, 14.3).
 
 **Layout** (amends D122): the buttons stand right of the text, 6 apart and 8 from the right edge,
 while the text column keeps at least 240 px; otherwise they go on a row of their own under the text,
@@ -580,7 +582,8 @@ buttons are inline or below, never a measured height.
 | Rebase, edit (new) | `Rebasing {b} onto {onto}: stopped to edit {short} "{subject}" ({k} of {n}). Continue when ready.` |
 | `git am`, conflicts without an operation | phase 3's |
 
-`{onto}` is the branch name that points at `onto` when one does, else its short SHA; `{k} of {n}`
+`{onto}` is a local branch that points at `onto` when one does, else a remote branch that does,
+else its short SHA (14.3); `{k} of {n}`
 counts the commands that apply a commit (8). The icon's tooltip is in 10.3.
 
 ### 5.3 The stage panel during a stop
@@ -1088,7 +1091,11 @@ is the user's own commit.
 `Take ours` and `Take theirs` (`ResolverTakeOurs`, `ResolverTakeTheirs`; text conflicts) replace the
 whole result with that side's file, read with `git cat-file --filters --path=<p> <stage oid>` (the
 working-tree form, 0.4), as one undo step; nothing is written until Mark resolved. A side the
-conflict lacks disables the button with `This side deleted the file`.
+conflict lacks disables the button with `This side deleted the file`. Afterwards every block's bars
+and tints are as if that side had been chosen in it (11.5): after `Take ours` each ours bar says
+`Used in the result` and its rows take the used tint, each theirs bar says `Not used` and its rows
+lose their tint; `Take theirs` the mirror image. The result tints no line. Undoing it brings back the
+bars and tints as they were before it, and so does undoing or redoing a choice (14.3).
 
 ### 11.7 Mark resolved
 
@@ -1199,14 +1206,17 @@ package that makes that code (14):
   30 (the drop menu's height too); the real-window pass's parts B and C; `RepositoryMenusTests`,
   `RepositoryMenusTests.Window` and `ContextMenuAdapterTests`: item lists, heights, and the first
   enabled item where it moves. Check 3's menus do not change.
-- **Phase 3's banner**: the Continue and Skip buttons and the layout of 5.2 (checks 9, 9b, 25 and
-  27's heights); the icon's tooltip (checks 9, 14, 15b and 25, the real-window pass's part B); the
-  texts of 5.2 marked "new" (checks 12 step E's empty pick, 25's list, rebase and empty texts); the
-  merge and single-pick texts do not change.
-- **Phase 3's stage panel**: the conflicted row's tooltip (checks 9 step 4 and 25 step 2); the empty
-  pick's commit tooltip; the message filled from `MERGE_MSG` now keeps a commit's own `#` lines.
+- **Phase 3's banner**: the Continue and Skip buttons and the layout of 5.2 (checks 9, 9b, 11b
+  steps 2 and 4, 12 steps 8 and 9, and 25; check 27 keeps one line at 1920); the icon's tooltip
+  (checks 9, 14, 15b and 25, the real-window pass's part B); the texts of 5.2 marked "new" (check 12
+  step 11's alternative, the empty pick; check 25's list, rebase and empty texts); the merge and
+  single-pick texts do not change.
+- **Phase 3's stage panel**: the conflicted row's tooltip (checks 9 step 4, 14 step 8, 15b step 6,
+  and 25 steps 2, 5 and 8); the empty pick's commit tooltip; the message filled from `MERGE_MSG` now
+  keeps a commit's own `#` lines.
 - **Phase 3's check 11b** (a pick of two commits that stops): the app now makes one git call with
-  the list, so `sequencer/` is there at the stop; the Abort question says the commits already made
+  the list, so `sequencer/` is there at the stop; the status says `Cherry-picked 1 of 2 commits;
+  stopped at 078ef05 with conflicts in 1 file`; the Abort question says the commits already made
   are dropped too; after Abort `main` is where it was before the first pick.
 - **Phase 3's check 25 step 4** (a terminal's pick sequence): the stopped pick is committed in a
   terminal (the check runs `git commit --no-edit` through `TempRepo`), and the check shows the paused
@@ -1368,7 +1378,7 @@ run is bound by the processors, so expect it to grow by a few minutes. On CI the
 step took about 9 minutes of its 14-minute limit at phase 3's gate: every package reads its CI runs,
 and when the Windows test step passes 12 minutes the lead raises the step's limit, taking the owner's
 answer recorded in D134 ("let it run as long as it needs") as allowing it, and records that as an
-amendment of D134. The real-window pass gains about seven launches (estimated 5 to 7 minutes on top
+amendment of D134 (done on 2026-10-12: D152, at 12 min 8 s). The real-window pass gains about seven launches (estimated 5 to 7 minutes on top
 of phase 3's 11).
 
 ## 14. Work breakdown
@@ -1391,7 +1401,7 @@ commit.
 | WP3 | Git: `GitRepository.Conflicts.cs` (versions, sides, resolutions, the merge tool), `GitRepository.Backups.cs` (the clean-up), `GitRepository.Writes.cs` (discard snapshots named by the backup clock), `Core/Conflicts/*` (`ConflictText`); `ConflictOperationTests`, `ConflictTextTests`, `BackupCleanupTests` |
 | WP4 | App operations, menus and texts: `RepositoryOperations.Rebase.cs`, `.Conflicts.cs`, `.Branches.cs` (lists, Abort's return, `HasSequencer` removed), `.Remotes.cs` (pull), `.Run.cs` (`RunOptions.CanBeCancelled`, the clean-up after a backup), `.Files.cs` (marking resolved, staging with markers); `RepositoryMenus.cs`; `OperationTexts*.cs`; the banner (`ConflictBannerViewModel.cs`, `ConflictBanner.axaml(.cs)`); the stage panel (`WorkingChangesViewModel.cs` apart from the interface, `WorkingChangesView.axaml`, `CommitDetailsRows.cs`); `AutoFetchScheduler.cs` (counting a pull with rebase); their tests, and phase 3's test, expectation and real-window files that change with them (12.1) |
 | WP5 | The interactive list: `ViewModels/Rebase/*`, `Views/Rebase/*`, the message dialog's view model and view; `ShellDriver.Phase4.Rebase.cs`, `RealApp.Phase4.Rebase.cs`; `InteractiveRebaseViewModelTests`, `MessageDialogTests` |
-| WP6 | The resolver: `ViewModels/Conflicts/*`, `Views/Conflicts/*`, `Controls/Conflicts/*`, `Controls/Diff/*` (the generalisation of 11.3: phase 2's pictures and tests unchanged), `Views/Diff/DiffView.axaml` and `ViewModels/Diff/DiffViewModel.cs` (the Conflict body removed); `ShellDriver.Phase4.Conflicts.cs`, `RealApp.Phase4.Conflicts.cs`; `ConflictResolverViewModelTests`, `ConflictResultEditorTests`, `ConflictPanesTests` |
+| WP6 | The resolver: `ViewModels/Conflicts/*`, `Views/Conflicts/*`, `Controls/Conflicts/*`, `Controls/Diff/*` (the generalisation of 11.3: phase 2's pictures and tests unchanged), `Views/Diff/DiffView.axaml` and `ViewModels/Diff/DiffViewModel.cs` (the Conflict body removed); `ShellDriver.Phase4.Conflicts.cs`, `RealApp.Phase4.Conflicts.cs`; `ConflictResolverViewModelTests`, `ConflictResultEditorTests`, `ConflictPanesTests`, and a headless test of 11.1's 500-ms guard (a press with click count 2 on the open resolver's `ConflictUseTheirs` within 500 ms of its opening changes nothing; after 500 ms the same press chooses) |
 | WP7 | The scripted checks of the report, part by part: `Phase4Checks.{A,B,C,D}*.cs`, `Phase4Expectations*.cs`, `Phase4ExpectationTests.cs` |
 | WP8 | The real-window pass for the RW checks: `Phase4RealWindowPass*.cs`, the Phase 4 link in `RealWindowTests.csproj` |
 | Lead | `RepositoryViewModel*.cs` (the hooks: `Resolver`, `IsResolverOpen`, `OpenResolver`; `InteractiveRebase`, `IsInteractiveRebaseOpen`, `OpenInteractiveRebaseAsync`; `TryLeaveGraphAreaAsync`, and `OpenDiff` sending a conflicted file to the resolver; the resolver fed from `OnStatusApplied`; the banner's Continue and Skip with the Skip question; `ReadOperationMessageAsync`; `OnFirstLoadCompleted` and the restore bar's snapshot as `keep`; the details for the list; `MergeTool` kept with the state), `RepoTabViewModel.cs` (`ShowsRightPanel`), `MainWindow.axaml(.cs)` (the column span, the hidden right panel and splitter), `MainWindowViewModel.cs`, `CommitGraphView.axaml`, `GitRunner.cs`, `Program.cs` and `App` (the caret switch), the `.slnx`, CI, the docs, CLAUDE.md |
@@ -1550,10 +1560,11 @@ the design left open; the lead decided (the sections above are corrected where t
   reached; with no block left the toolbar says `No conflicts left`. A choice does not move to the
   next block. A block's bars keep showing its choice after the user types inside the chosen text,
   until an undo brings its markers back; a block whose markers were removed by typing alone shows
-  `Not used` on both bars. The result tints no chosen line. The stage panel's message is joined as
-  `{summary}
-
-{description}`. The ours pane's common text is the working-tree file's, so it can
+  `Not used` on both bars. After `Take ours` or `Take theirs` the bars and tints are as if that side
+  had been chosen in every block (11.6). The result tints no chosen line. The squash of selected
+  commits selects the squashed commit (3), the one exception to 1.5. The stage panel's message is
+  joined as phase 3's commit joins it: the summary alone when the description is blank, else the
+  summary, an empty line and the description. The ours pane's common text is the working-tree file's, so it can
   hold lines git merged in cleanly from theirs (11.3). The view model exposes `IsParsePending`, true
   from a typed change until its parse is applied, for the checks to wait on. A merge's or a single
   pick's stage-panel Commit asks the marker question too (it concludes the operation). The result's
@@ -1588,6 +1599,7 @@ Recorded in `decisions.md` with their reasons; in short:
 | D149 | The merge tool: `git -c mergetool.keepBackup=false mergetool --tool=<merge.tool> --no-prompt`, for text and binary conflicts only, as a local operation that can be cancelled (amends D81), the files it leaves removed afterwards; disabled without `merge.tool` | 11.9 |
 | D150 | Phase 1's checks 13 and 14 clone a bare copy of the 100k-commit repository through `AuthRemoteServer`, held at a fixed percentage, on a second fixed port 47392 (amends D97) | 12.1, 13.2 |
 | D151 | Phase 4's walk-through is the project `VisualCommit.VisualTests.Phase4`; `TempRepo` and the tests' isolation set and remove the editor variables; the result's caret does not blink in either harness | 13.2, 13.3 |
+| D152 | CI's Test step 24 minutes and the OS jobs 32 (amends D134) | 13.6 |
 
 ## 16. What the reviews changed
 

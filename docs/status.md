@@ -72,8 +72,12 @@ Start:
   resolver shows), pinned by tests; the project `VisualCommit.VisualTests.Phase4` in the
   solution, CI and `scripts/time-scripted-check.sh`; the driver helpers the checks need. Done in
   WP-S (merged in `d64e2b7`); the drivers of the list and the resolver come with WP5 and WP6.
-- [ ] 8. Phase 4's visual checks written into `docs/test-reports/phase-4.md`, each marked for
-  the real-window pass, reviewed independently, and committed before the UI they test.
+- [x] 8. Phase 4's visual checks written into `docs/test-reports/phase-4.md`, each marked for
+  the real-window pass, reviewed independently, and committed before the UI they test. Done: 18
+  checks (A1 to A5, B6 to B9, C10 to C17, D18), 141 steps, 122 planned pictures of which 28 in the
+  real window; every git state derived with Git 2.36 on replicas of the scenarios; each part
+  reviewed adversarially and revised, then the whole cross-checked; the lead's decisions in design
+  14.3.
 
 Git layer:
 
@@ -181,11 +185,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 8, the report's checks (a workflow: replicas of the scenarios, four writers, a review and a
-revision per part), while WP1 (rebase, interactive rebase, squash, pull with rebase), WP2 (lists,
-Continue and Skip, the in-progress read, reftable) and WP3 (conflicts, the merge tool, the backups'
-clean-up) build in worktrees; then merge them, and step 8's report is committed before WP4 to WP6
-build UI.
+Steps 15 to 18: WP4 (the operations, menus, banner, stage panel and texts, and phase 3's
+expectations that change), WP5 (the interactive rebase's list and the message dialog, with their
+drivers) and WP6 (the resolver, the diff view's `Conflict` body removed, with its drivers) build in
+worktrees side by side from the commit that holds the report (design 14); then the lead's hooks in
+`RepositoryViewModel`, `MainWindow` and `RepoTabViewModel`, and step 19.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
@@ -215,6 +219,12 @@ This always names the single next thing to do and is kept accurate in every comm
 - Packages: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and
   TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
   FlaUI 5.0.0. Phase 3 added no packages.
+- CI's Test step was raised to 24 minutes and the OS jobs to 32 (D152, amending D134): the
+  Windows test step took 12 min 8 s on `8a2e2c9`. Git 2.55 on CI differs from 2.36 here in two
+  ways found so far (design 0.1): the `# Conflicts:` block in `rebase-merge/message`, and the
+  autostash's wording. Phase 3's `Check_04` timed out once on `ubuntu-latest` waiting for a
+  diff (run 38258811117); `8a2e2c9` makes a timeout save a picture and the app's log, and its run
+  passed.
 - Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled
   the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
   apostrophes fails and turns `\n` in a string into a line break, and `sed -i` drops a CRLF
