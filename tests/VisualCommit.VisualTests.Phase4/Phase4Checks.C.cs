@@ -381,6 +381,13 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         var close = app.BoundsOf(app.Find<Button>("ResolverCloseButton"));
         Assert.True(header.Right - close.Right <= 8 && close.Left > app.BoundsOf(app.Find<Button>("ResolverNextFile")).Right, $"The close button at {close} is not at the header's right ({header}).");
 
+        // The text is the code font at 12 in the panes and the result (11.2).
+        var oursEditor = (AvaloniaEdit.TextEditor)app.ResolverPanes.PaneEditor(ConflictPaneSide.Ours);
+        var theirsEditor = (AvaloniaEdit.TextEditor)app.ResolverPanes.PaneEditor(ConflictPaneSide.Theirs);
+        Assert.Equal((12.0, 12.0, 12.0), (oursEditor.FontSize, theirsEditor.FontSize, app.ResultEditor.FontSize));
+        Assert.Equal(oursEditor.FontFamily, app.ResultEditor.FontFamily);
+        Assert.Equal(oursEditor.FontFamily, theirsEditor.FontFamily);
+
         // The result's caret does not blink in a scripted check (D151).
         Assert.False(ConflictResultEditor.CaretBlinks, "The result's caret blinks.");
         var ours = app.BoundsOf(app.FindByAutomationId("ConflictOurs"));
