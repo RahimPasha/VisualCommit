@@ -6,6 +6,7 @@ using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -262,6 +263,42 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     }
 
     private string CurrentName() => Refs?.Head.BranchName ?? "HEAD";
+
+    /// <summary>
+    /// The repository has opened and its first load is done (section 9 (b), D139): the backups'
+    /// clean-up runs as a background operation of the queue, <c>Clean up backups</c>, which shows
+    /// nothing and never fails; when the queue is busy now, the next backup or opening does it.
+    /// </summary>
+    private void OnFirstLoadCompleted()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var cleanUp = new GitOperation(
+            CleanUpBackupsTitle,
+            string.Empty,
+            OperationKind.Local,
+            RefreshScope.None,
+            async _ =>
+            {
+                // CleanUpBackupsAsync logs its own failure at Warning and never throws.
+                await Operations.CleanUpBackupsAsync();
+                return OperationReport.Done(string.Empty);
+            })
+        {
+            IsBackground = true,
+            Prompts = PromptMode.None,
+        };
+        if (!_queue.TryStartInBackground(cleanUp))
+        {
+            _log.Debug($"{Name}: the backups' clean-up waits for the next backup or opening: the queue is busy.");
+        }
+    }
+
+    /// <summary>The background operation's title (10.1): never shown, only logged.</summary>
+    public const string CleanUpBackupsTitle = "Clean up backups";
 
     // The list's host (2.2, IInteractiveRebaseHost).
 

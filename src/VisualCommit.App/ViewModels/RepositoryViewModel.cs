@@ -275,6 +275,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             OnPropertyChanged(nameof(HasNoCommits));
 
             _started = true;
+            OnFirstLoadCompleted();
             if (_changedWhileStarting)
             {
                 await RefreshAsync();

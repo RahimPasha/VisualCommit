@@ -62,6 +62,29 @@ public class GraphAreaHooksTests
     }
 
     [AvaloniaFact]
+    public async Task Opening_a_repository_cleans_up_its_old_backups_in_the_background_and_keeps_the_new_ones()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.InteractiveAsync();
+        await repo.GitAsync("update-ref", "refs/visualcommit/backup/reset-20250101T120000000Z/main", "HEAD");
+        var recent = "refs/visualcommit/backup/reset-" + DateTime.UtcNow.AddDays(-1).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture) + "/main";
+        await repo.GitAsync("update-ref", recent, "HEAD");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+
+        await app.WaitForAsync(
+            () => !Task.Run(() => repo.GitAsync("for-each-ref", "--format=%(refname)", "refs/visualcommit/backup/")).GetAwaiter().GetResult().StandardOutput.Contains("20250101", StringComparison.Ordinal),
+            "the backup of 2025-01-01 removed",
+            TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Queue.Current is null, "the clean-up ended", TimeSpan.FromSeconds(30));
+
+        var left = (await repo.GitAsync("for-each-ref", "--format=%(refname)", "refs/visualcommit/backup/")).StandardOutput.Trim();
+        Assert.Equal(recent, left);
+        Assert.Equal("Ready", repository.OperationStatus.Text);
+    }
+
+    [AvaloniaFact]
     public async Task The_interactive_list_replaces_the_graph_and_Cancel_gives_the_focus_back_to_the_graph()
     {
         using var data = new TempDirectory("data");
