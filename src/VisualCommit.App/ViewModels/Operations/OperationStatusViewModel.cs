@@ -22,8 +22,11 @@ public enum OperationStatusTone
 /// <summary>
 /// What the status bar shows of one repository's operations (docs/phase-3-design.md 1.9, 4e,
 /// D95): the running operation's text and progress, Cancel, how many wait, and afterwards the
-/// last result, which stays until the next operation starts. A background operation (auto-fetch)
-/// shows nothing unless it fails; a stage-panel operation (phase 2's writes) leaves "Ready".
+/// last result, which stays until the next operation starts. A background operation shows
+/// nothing: auto-fetch's own says "Auto-fetch failed" when it fails and "Waiting for auto-fetch…"
+/// while an operation of the user waits for it, any other (phase 4's clean-up of the backups,
+/// docs/phase-4-design.md section 9) leaves the text as it was; a stage-panel operation (phase
+/// 2's writes) leaves "Ready".
 /// While ssh shows a notice (3.2: "Confirm user presence for key …", a prompt that gets no
 /// dialog) the text is the notice's, whatever the operations do; the progress bar, Cancel and
 /// the waiting count go on as before. It follows the queue's events on the synchronization
@@ -154,8 +157,9 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     {
         if (operation.IsBackground)
         {
-            // A background operation changes nothing unless it fails (4e).
-            if (result.Outcome == OperationOutcome.Failed)
+            // A background operation changes nothing unless auto-fetch fails (4e); another one
+            // (the backups' clean-up, phase 4 section 9) changes nothing at all.
+            if (result.Outcome == OperationOutcome.Failed && IsAutoFetch(operation.Title))
             {
                 (_resultText, _resultTone) = (AutoFetchFailedText, OperationStatusTone.Secondary);
                 _resultToolTip = result.Failure?.GitOutput.Split('\n')[0] is { Length: > 0 } line ? line : null;
@@ -221,7 +225,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
             return;
         }
 
-        if (current is { IsBackground: true } && Waiting > 0)
+        if (current is { IsBackground: true } && Waiting > 0 && IsAutoFetch(current.Title))
         {
             Show(WaitingForAutoFetchText, OperationStatusTone.Secondary, null, running: false, percent: null);
             return;
@@ -244,6 +248,9 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
         IsRunning = running;
         Percent = percent;
     }
+
+    /// <summary>Auto-fetch's own operation, by its title (<see cref="AutoFetchScheduler.Title"/>): the only one the auto-fetch texts are about.</summary>
+    private static bool IsAutoFetch(string title) => string.Equals(title, AutoFetchScheduler.Title, StringComparison.Ordinal);
 
     private void OnUiThread(Action action)
     {

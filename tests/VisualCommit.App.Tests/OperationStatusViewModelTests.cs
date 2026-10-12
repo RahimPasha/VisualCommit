@@ -129,6 +129,36 @@ public class OperationStatusViewModelTests
     });
 
     [Fact]
+    public Task Another_background_operation_never_shows_auto_fetchs_texts() => WithoutContext(async () =>
+    {
+        // Phase 4's clean-up of the backups (docs/phase-4-design.md section 9) runs in the
+        // background too: while it runs, and when it fails, the status bar keeps its text.
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        await queue.RunAsync(new GitOperation("Pull", "Pulling…", OperationKind.Network, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("main is already up to date"))));
+        var gate = new TaskCompletionSource();
+        Assert.True(queue.TryStartInBackground(new GitOperation("Clean up backups", string.Empty, OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done(string.Empty);
+        })));
+
+        var stage = queue.RunAsync(new GitOperation("Stage", "Staging…", OperationKind.Local, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Staged"))));
+        Assert.Equal(("main is already up to date", false, true, "1 waiting"), (status.Text, status.CanCancel, status.HasWaiting, status.WaitingText));
+        gate.SetResult();
+        await stage.WaitAsync(Patience, TestCancelled);
+        Assert.Equal("Staged", status.Text);
+
+        var failed = new TaskCompletionSource();
+        queue.Finished += (_, _) => failed.TrySetResult();
+        Assert.True(queue.TryStartInBackground(new GitOperation("Clean up backups", string.Empty, OperationKind.Local, RefreshScope.None, _ =>
+            throw new GitException("git update-ref --stdin", 128, "fatal: cannot lock ref 'refs/visualcommit/backup/x'"))));
+        await failed.Task.WaitAsync(Patience, TestCancelled);
+        await queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+        Assert.Equal(("Staged", OperationStatusTone.Secondary, "Staged"), (status.Text, status.Tone, status.ToolTip));
+    });
+
+    [Fact]
     public Task The_stage_panels_operations_leave_ready() => WithoutContext(async () =>
     {
         using var queue = NewQueue();
