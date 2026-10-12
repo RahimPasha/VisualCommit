@@ -315,7 +315,7 @@ Rules worth keeping:
 | The detached-HEAD question counts commits that only a stash or a backup ref reaches as left behind | Asks more often than needed, the safe way | `RepositoryOperations.Branches.cs` |
 | The first tokenization of a grammar that embeds others (Markdown) reads TextMateSharp's grammar list without a shared lock while another thread may add to it; no test has failed on it | Low | `DiffHighlighter` (`Controls/Diff/DiffSyntax.cs`) |
 | Noticed by the gate's inspection and left (the pictures match their expected results): the in-progress banner wraps the git command at its hyphen (25a, 25e); a disabled menu item's tooltip opens below the pointer and covers the next item, and a long worktree path in a tooltip wraps at any character (30g); the sixth row of the unstaged list is cut by the stage panel's fixed split (26a); in the real window a hover colour stays on a left-panel row after a right-click (28a) | Cosmetic | The report's "Found by the gate" |
-| The working-changes row's dashed line is drawn through the node of another branch that uses the same lane when HEAD is not the top row (06f; D60's drawing rule) | Cosmetic and rare; a question of the graph's layout, put to the owner | `Controls/CommitGraphControl.Render.cs`; the report's "Found by the gate" |
+| The working-changes row's dashed line is drawn through the node of another branch that uses the same lane when HEAD is not the top row (06f; D60's drawing rule) | Cosmetic and rare; the owner said to leave it for now (2026-10-12); settle it with the next change to the graph's layout | `Controls/CommitGraphControl.Render.cs`; the report's "Found by the gate" |
 | Q1 varies with the laptop's temperature more than its margin allows: 1189 ms at the gate on a rested laptop, but 1438 to 2268 ms in other runs the same day on a warmer one. The real-window test fails above 2000 ms, so a warm laptop can fail the gate by itself. Run alternately on the same machine, the phase 2 build (`master` at `d3814bd`) needed 1688 to 1911 ms and phase 3's 1618 to 2002 ms: phase 3 costs no more than the noise | Can fail a gate that is otherwise green. Rest the laptop before the real-window pass; to tell a slower build from a warm machine, run the old and the new build alternately on the same machine | `Phase1RealWindowPass.cs` (the 2000 ms limit); the report's Run section; plan risk 10 |
 | The default run is bound by the processors, and the virus scanner takes a large share of them: 19 min 15 s at the gate rested and alone, 21 to 26 minutes with other programs busy | Every full run and gate; an exclusion for the repository folder and `%TEMP%\VisualCommit.Tests` is put to the owner | Windows Security on the development machine; plan risk 12 |
 | Durations written before phase 3's gate are stale: phases 0 to 2's 5 to 6 minutes for the default run and about 6 for the real-window pass, and CI's time per job "not measured since". Measured at the gate: 19 min 15 s, 11 min 11 s, and CI's jobs 3 min 11 s to 10 min 56 s (State of the repo) | Misleading when planning a run, wherever a doc still gives the old figures | CLAUDE.md's Commands section was brought up to date in `9c8a8d1`. Still old: `README.md` ("It takes a few minutes") and the comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` ("about half a minute"); phase 2's handoff keeps its own figures as history |
@@ -467,18 +467,20 @@ Risks to watch:
     (D134). Keep 22 minutes per job and 14 per test step (25 for the container
     jobs)? Recommended: keep them. The gate's Windows job took 10 min 56 s, and the old 5-minute
     step limit cut the jobs once phase 3's tests ran (run 38162210730).
-  - **The dashed line through another branch's node (06f).** Change how the working-changes
-    row's line is drawn now? Recommended: no. It shows only when HEAD is not the top row; settle
-    it with the next change to the graph's layout.
+  - **The dashed line through another branch's node (06f).** Answered 2026-10-12: leave it for
+    now. It shows only when HEAD is not the top row; settle it with the next change to the
+    graph's layout. The owner added a wish for later (not phase 4): C12 and D138, the working
+    changes protected as GitKraken does and automatic stashes drawn in the graph.
   - **A virus-scanner exclusion.** Done by the owner on 2026-10-12 (the two folders below):
     time the next full default run and compare it with phase 3's 19 minutes. Exclude the repository folder and `%TEMP%\VisualCommit.Tests`
     from Windows Defender on the development machine? Recommended: try it for those two folders
     only, which hold the project's builds and test repositories, and measure the default run
     before and after. It is a security setting of your machine, so only you can make it.
-  - **Renaming a branch in case only** on Windows and macOS. Keep refusing it (D131)?
-    Recommended: keep. It is rare, and two renames in a terminal do it; the app can do the two
+  - **Renaming a branch in case only** on Windows and macOS. Answered 2026-10-12: keep
+    refusing it (D131). It is rare, and two renames in a terminal do it; the app can do the two
     renames itself later if users ask.
-  - **No ssh timeout for auto-fetch** (D125). Keep it so? Recommended: keep. A timeout through
+  - **No ssh timeout for auto-fetch** (D125). Answered 2026-10-12: keep it so, with Cancel by
+    hand. A timeout through
     git would replace the user's own `core.sshCommand`, and the status bar offers Cancel for a
     stalled auto-fetch as soon as an operation of the user's waits behind it (plan risk 19).
 - By hand on any machine, when convenient: a real ssh server's host-key question and Git

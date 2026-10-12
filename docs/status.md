@@ -141,9 +141,12 @@ every commit.
 - The virus-scanner exclusion on the development machine (the repository folder and
   `C:\Users\rpkha\AppData\Local\Temp\VisualCommit.Tests`) was set up by the owner on
   2026-10-12. Time the next full default run and compare it with the 19 minutes of phase 3's gate.
-- Still open, with the handoff's recommendation to keep things as they are unless the owner says
-  otherwise: the working-changes row's dashed line crossing another branch's node (06f);
-  case-only branch renames on Windows and macOS (D131); an ssh timeout for auto-fetch (D125).
+- Settled on 2026-10-12: the working-changes row's dashed line crossing another branch's node
+  (06f) is left for now; case-only branch renames on Windows and macOS stay refused (D131);
+  auto-fetch gets no ssh timeout, only Cancel by hand (D125).
+- Recorded for a later phase, not phase 4 (C12, D138): protect uncommitted changes as GitKraken
+  does, with automatic stashes drawn in the graph. The owner says which phase when phases 5 and
+  later are planned; the proposal is phase 5.
 - When you have a Mac at hand: the eleven-step checklist at the end of the
   [phase 3 test report](test-reports/phase-3.md), the seven-step one at the end of the
   [phase 2 test report](test-reports/phase-2.md), the nine-step one at the end of the

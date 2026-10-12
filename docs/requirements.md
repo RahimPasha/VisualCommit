@@ -37,6 +37,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | C9 | Stash and tags | Stash, apply, pop, drop; create, delete and push tags |
 | C10 | Conflict resolution | Conflicted-file list; built-in three-pane resolver (pick ours, theirs or both per hunk, edit the result); take a whole file from one side; continue or abort |
 | C11 | Remote sign-in | HTTPS through Git Credential Manager; SSH keys; prompts shown as in-app dialogs |
+| C12 | Protect uncommitted changes | An operation that could lose uncommitted changes does not start and says why; checking out another commit on the same branch stashes them automatically, and the stash shows in the graph as a hollow circle joined to the commit it was taken on (D138). Not scheduled yet |
 
 ## Main window layout
 

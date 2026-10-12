@@ -235,9 +235,10 @@ Delivers:
 - Conflict resolver: three panes (ours, theirs, result); pick ours, theirs or both per hunk; edit the result freely; take a whole file from one side; mark resolved; launch an external merge tool.
 - From phase 3 (D77, D92): "Rebase onto" in the commit and branch menus, rebase in the menu of a branch dropped onto a branch, and squash on a multi-selection. The menus are built as data by `RepositoryMenus` (`ForCommit`, `ForLocalBranch`, `ForDrop`, `ForCommits`); the new items go there. Squash builds on the multi-selection kept as SHAs (D88).
 - From phase 3: Pull already rebases when `pull.rebase` or `branch.<name>.rebase` asks for it (D78, D84), and a pull whose rebase stops shows the banner with Abort. Left here: a pull with rebase chosen for one pull, whatever git's configuration says, and continue and skip for a pull's rebase.
-- From phase 3: Continue and Skip in the in-progress banner (`ConflictBanner`, `ConflictBannerViewModel`, read from `InProgressState`), which offers Abort only and, for a rebase or a cherry-pick or revert sequence started in a terminal, says to continue in a terminal (D89, D110). The app never starts git's sequencer: several commits are picked one `git cherry-pick` at a time, and those a stop left unpicked are only named in the status bar (D88).
+- From phase 3: Continue and Skip in the in-progress banner (`ConflictBanner`, `ConflictBannerViewModel`, read from `InProgressState`), which offers Abort only and, for a rebase or a cherry-pick or revert sequence started in a terminal, says to continue in a terminal (D89, D110). Several commits are picked and reverted with one git command that takes the whole list, so that git's sequencer keeps it and Continue, Skip and Abort act on the list (D136, replacing D88's one command per commit; phase 3's code still runs one command per commit and the status bar only names the picks a stop left, until this phase changes it). The stage panel's Commit button does not finish such a pick; Continue does.
 - From phase 3: under the reftable ref format (Git 2.45 and later) `CHERRY_PICK_HEAD` and `REVERT_HEAD` are refs, not files, so `GitRepository.InProgress.cs` and `GitRepository.History.cs` miss a stopped pick or revert, which then gets no banner of its own (D128, risk 17). Read them as refs.
 - Interactive rebase sets its own sequence editor: every git call runs with `GIT_SEQUENCE_EDITOR=:` and `GIT_EDITOR=:` (D68, D102).
+- From the owner's answers of 2026-10-11 and 12 (D135, D137): a rebase asks for no confirmation; when it or a merge stops on a conflict the user resolves it or aborts and is back where everything was. A rebase saves a backup ref of the branch's old tip first. Backups under `refs/visualcommit/backup/` are cleaned up automatically: a backup goes after 30 days or when more than a set number exist (the oldest first), never the backup of an operation still in progress. Propose the number, the moment of the cleanup and the app's message about it before building it.
 
 Visual checks:
 - Before and after graphs for a plain rebase.
@@ -258,7 +259,7 @@ Delivers:
 - Compare any two commits or branches.
 - Undo and redo of the last git action.
 - Solo and hide branches in the graph.
-- From phase 3: undo reads the backup refs that phases 2 and 3 write before every destructive operation, `refs/visualcommit/backup/<kind>-<UTC time>[-<n>][/<name>]`, one timestamp per operation (D67, D83, D127). The kinds are `discard`, `reset` (with `reset-<time>-changes` after a hard reset, and after a mixed one when the index differed from HEAD), `abort` (with its own `-changes`), `detached`, `branch`, `stash`, `tag`, `force-push`, `remote-branch`, `remote` and `remote-tag`; `architecture.md` says what each holds. Phase 3 deletes none of them, and they keep their commits from git's garbage collection: this phase decides when they go.
+- From phase 3: undo reads the backup refs that phases 2 and 3 write before every destructive operation, `refs/visualcommit/backup/<kind>-<UTC time>[-<n>][/<name>]`, one timestamp per operation (D67, D83, D127). The kinds are `discard`, `reset` (with `reset-<time>-changes` after a hard reset, and after a mixed one when the index differed from HEAD), `abort` (with its own `-changes`), `detached`, `branch`, `stash`, `tag`, `force-push`, `remote-branch`, `remote` and `remote-tag`; `architecture.md` says what each holds. Phase 3 deletes none of them, and they keep their commits from git's garbage collection; phase 4 builds their automatic cleanup (D137: after 30 days, or when more than a set number exist), and undo has to find what it offers within it.
 - From phase 3: the activity log reads `OperationLog` (`IOperationLog`: the last 500 `OperationRecord`s of the session, in memory, with title, start, duration, outcome and the status bar's message) and groups the git call records of `IGitCallLog` under them by `GitCallRecord.OperationId`.
 - From phase 3 (D77, D92): compare on a multi-selection (`RepositoryMenus.ForCommits`), file history and blame in the file menus (`ForUnstagedFile`, `ForStagedFile`, `ForCommitFile`, `ForDiff`), and solo and hide in the branch menus.
 - From phases 1 and 3: the toolbar's Undo, Redo and Search become real; they are placeholders (D53, D90).
@@ -332,6 +333,11 @@ Visual checks:
 Done when: a new user on each platform can install, open a repo and receive an update without help.
 
 ## Backlog (not scheduled)
+
+C12, protect uncommitted changes (the owner's wish, D138): refuse an operation that could lose them, and
+stash them automatically when another commit of the same branch is checked out, drawing the stash
+as a hollow circle joined to its commit. Not phase 4. Proposal: phase 5, which already reworks
+checkout's neighbours (undo, the activity log); the owner decides when phase 5 is planned.
 
 O10 submodules, O11 worktrees, O12 Git LFS, O13 built-in terminal, O14 built-in file editor,
 O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
