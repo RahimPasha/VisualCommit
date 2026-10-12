@@ -222,7 +222,10 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     /// </summary>
     private async Task FollowOperationMessageAsync(InProgressState state)
     {
-        var key = state is { Kind: InProgressKind.Merge or InProgressKind.CherryPick or InProgressKind.Revert, Commit: { } commit }
+        // A list paused between commits names the commit that waits, but there is nothing to
+        // commit and no message to fill (docs/phase-4-design.md 8).
+        var paused = state.Sequenced && !state.HasPickHead;
+        var key = !paused && state is { Kind: InProgressKind.Merge or InProgressKind.CherryPick or InProgressKind.Revert, Commit: { } commit }
             ? $"{state.Kind}:{commit}"
             : null;
         if (key == _messageKey)

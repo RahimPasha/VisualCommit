@@ -233,9 +233,10 @@ public sealed partial class ConflictBannerViewModel : ObservableObject
     {
         var cherryPick = state.Kind == InProgressKind.CherryPick;
         var (doing, done, name) = cherryPick ? ("Cherry-picking", "Cherry-pick", "cherry-pick") : ("Reverting", "Revert", "revert");
-        if (state.Commit is not { } commit)
+        if ((state.Sequenced && !state.HasPickHead) || state.Commit is not { } commit)
         {
-            // A sequence from a terminal, stopped between commits (D110).
+            // A sequence from a terminal, stopped between commits (D110): no pick head, though
+            // the state names the commit that waits first (docs/phase-4-design.md 8).
             return state.Remaining switch
             {
                 0 => $"{done} stopped with no commits left: abort to end it.",
