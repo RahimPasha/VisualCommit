@@ -294,7 +294,23 @@ public partial class Phase4RealWindowPass
     /// </summary>
     private static void WaitForResult(RealApp app, string text, string count, string position)
     {
-        app.WaitForResultCount(count);
+        try
+        {
+            app.WaitForResultCount(count);
+        }
+        catch (TimeoutException ex)
+        {
+            // What the window showed, for a step whose input did not do what it should.
+            var folder = Path.Combine(Screens.RealWindowFolder(VisualCommit.VisualTests.Phase4.Phase4Expectations.Phase), "failures");
+            Directory.CreateDirectory(folder);
+            using (var picture = app.CaptureClient())
+            {
+                picture.Save(Path.Combine(folder, $"result-{count.Replace(' ', '-')}-timeout.png"), System.Drawing.Imaging.ImageFormat.Png);
+            }
+
+            throw new TimeoutException($"{ex.Message} The result's text:\n{app.ResultText()}", ex);
+        }
+
         try
         {
             app.WaitFor(() => app.ResultText() == text, "the result's text", RealApp.DefaultWaitTimeout);
