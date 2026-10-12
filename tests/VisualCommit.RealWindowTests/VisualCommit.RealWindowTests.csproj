@@ -40,9 +40,10 @@
   </ItemGroup>
 
   <!-- Phase 4's expectations, likewise (docs/phase-4-design.md 13.3). The walk-through's own tests
-       of them, Phase4ExpectationTests.cs, are left out by name. -->
+       of them, Phase4ExpectationTests.<part>.cs, are left out by their name, which the pattern
+       does not match. -->
   <ItemGroup>
-    <Compile Include="..\VisualCommit.VisualTests.Phase4\Phase4Expectations*.cs" Exclude="..\VisualCommit.VisualTests.Phase4\Phase4ExpectationTests.cs" Link="Phase4\%(Filename)%(Extension)" />
+    <Compile Include="..\VisualCommit.VisualTests.Phase4\Phase4Expectations*.cs" Link="Phase4\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
