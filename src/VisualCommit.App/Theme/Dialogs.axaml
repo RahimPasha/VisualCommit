@@ -42,7 +42,7 @@
                           Margin="0,2,0,0"
                           CornerRadius="7"
                           BorderThickness="1"
-                          BorderBrush="{DynamicResource VcBorderBrush}"
+                          BorderBrush="{DynamicResource VcTextSecondaryBrush}"
                           Background="{DynamicResource VcControlBackgroundBrush}"
                           VerticalAlignment="Top">
                     <Ellipse Name="Dot" Width="6" Height="6" Fill="{DynamicResource VcAccentTextBrush}" IsVisible="False" />
@@ -65,7 +65,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource SystemControlFocusVisualSecondaryBrush}" />
       </Style>
       <Style Selector="^:pointerover /template/ Border#Ring">
-        <Setter Property="BorderBrush" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcTextPrimaryBrush}" />
       </Style>
       <Style Selector="^:checked /template/ Border#Ring">
         <Setter Property="Background" Value="{DynamicResource VcAccentBrush}" />
