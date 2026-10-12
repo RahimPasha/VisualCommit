@@ -354,6 +354,49 @@ public class ConflictPanesTests
         Assert.Equal(0, panes.ScrollOffset.Y, 0.5);
     }
 
+    /// <summary>
+    /// Revealing a block near the end scrolls both panes only as far as both can go: at the top
+    /// half's height at 1100×700 (a viewport of 212.5) the ours pane, whose scroll bar is hidden,
+    /// stopped half a pixel before the theirs pane, and their rows were a pixel apart (11.3: the
+    /// rows line up and the panes scroll together; phase 4's check C10 step 7).
+    /// </summary>
+    [AvaloniaFact]
+    public void Panes_scrolled_to_their_end_keep_their_rows_lined_up()
+    {
+        var panes = new ConflictPanes
+        {
+            Parts =
+            [
+                ConflictPanesPart.Common("line 1"),
+                ConflictPanesPart.Block(["line 2 ours"], ["line 2 theirs"]),
+                ConflictPanesPart.Common([.. Enumerable.Range(3, 7).Select(n => $"line {n}")]),
+                ConflictPanesPart.Block(["line 10 ours"], ["line 10 theirs"]),
+                ConflictPanesPart.Common("line 11", "line 12"),
+            ],
+        };
+        using var host = DiffHost.Show(panes, Width, 212.5, ThemeVariant.Dark);
+        host.Capture();
+
+        panes.RevealBlock(1);
+        host.Capture();
+        Assert.True(panes.ScrollOffset.Y > 0, "The panes did not scroll.");
+        AssertRowsLinedUp(panes);
+
+        // The wheel over the theirs pane, which shows the scroll bar, down to its end: the same.
+        host.Window.MouseWheel(host.ToWindow(panes, new Point(600, 100)), new Vector(0, -10));
+        host.Capture();
+        AssertRowsLinedUp(panes);
+
+        static void AssertRowsLinedUp(ConflictPanes panes)
+        {
+            var rows = panes.RowsOf(ConflictPaneSide.Ours).Count;
+            for (var row = 0; row < rows; row++)
+            {
+                Assert.Equal(panes.RowBounds(ConflictPaneSide.Ours, row)?.Y, panes.RowBounds(ConflictPaneSide.Theirs, row)?.Y);
+            }
+        }
+    }
+
     [AvaloniaFact]
     public void The_parts_of_a_parsed_file_its_sides_a_selection_s_copy_and_the_tab_stops()
     {

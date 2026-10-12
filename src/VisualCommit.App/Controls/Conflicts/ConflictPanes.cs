@@ -474,7 +474,8 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
 
         var other = pane == _ours ? _theirs : _ours;
         var offset = pane.Editor.ScrollOffset;
-        if (other.Editor.ScrollOffset == offset)
+        var y = Math.Min(offset.Y, MaxVerticalOffset());
+        if (y == offset.Y && other.Editor.ScrollOffset == offset)
         {
             return;
         }
@@ -482,12 +483,31 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         _syncingScroll = true;
         try
         {
-            other.Editor.ScrollTo(offset.X, offset.Y);
+            if (y < offset.Y)
+            {
+                pane.Editor.ScrollTo(null, y);
+            }
+
+            other.Editor.ScrollTo(offset.X, y);
         }
         finally
         {
             _syncingScroll = false;
         }
+    }
+
+    /// <summary>
+    /// How far down both panes can scroll: each text view stops where its last row meets its
+    /// bottom, and the two can stop a fraction apart (the ours pane hides its scroll bar, and its
+    /// text view can be half a pixel taller than its scroll viewer's viewport). Both stop at the
+    /// nearer end, so that the rows stay lined up (11.3).
+    /// </summary>
+    private double MaxVerticalOffset()
+    {
+        static double Max(DiffPane pane) =>
+            Math.Max(0, pane.Editor.ExtentHeight - Math.Max(pane.Editor.ViewportHeight, pane.TextView.Bounds.Height));
+
+        return Math.Min(Max(_ours), Max(_theirs));
     }
 
     void IDiffPaneHost.OnPaneSelectionChanged(DiffPane pane)
@@ -750,8 +770,9 @@ public sealed class ConflictPanes : UserControl, IDiffPaneHost
         _pendingOffset = null;
         if (target is { } to)
         {
-            _ours.Editor.ScrollTo(to.X, to.Y);
-            _theirs.Editor.ScrollTo(to.X, to.Y);
+            var y = Math.Min(to.Y, MaxVerticalOffset());
+            _ours.Editor.ScrollTo(to.X, y);
+            _theirs.Editor.ScrollTo(to.X, y);
         }
     }
 
