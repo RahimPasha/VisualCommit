@@ -41,7 +41,11 @@ public sealed partial class ShellDriver
     /// <summary>Whether an interactive rebase list is in view now.</summary>
     public bool IsRebaseListOpen => RebaseListViewOrNull is not null;
 
-    /// <summary>Waits until a list is in view with its rows laid out (or its message shown), and returns it.</summary>
+    /// <summary>
+    /// Waits until a list is in view with its rows laid out (or its message shown), and returns
+    /// it. The wait lets the UI thread run what was posted to it, so a list that has just opened
+    /// has given its top row the keyboard focus by then (design 2.2).
+    /// </summary>
     public async Task<InteractiveRebaseView> WaitForRebaseListAsync(TimeSpan? timeout = null)
     {
         InteractiveRebaseView? found = null;
@@ -55,10 +59,11 @@ public sealed partial class ShellDriver
                 }
 
                 var list = found.Snapshot(Window);
-                return list.Message is not null || (list.Rows.Count > 0 && list.Rows[0].Bounds is not null && list.Rows[0].HasKeyboardFocus);
+                return list.Message is not null || (list.Rows.Count > 0 && list.Rows.Any(row => row.Bounds is not null));
             },
             "the interactive rebase list to show its rows",
             timeout);
+        Settle();
         return found!;
     }
 
