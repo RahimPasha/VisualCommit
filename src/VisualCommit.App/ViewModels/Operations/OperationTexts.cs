@@ -556,8 +556,4 @@ public static partial class OperationTexts
 
     /// <summary>1.8: the title of the dialog that lists the lock files a cancelled operation left.</summary>
     public static string Cancelled(string title) => $"{title} cancelled";
-
-    private static string Progress(string verb, int done, int count) =>
-        string.Create(CultureInfo.InvariantCulture, $"{verb} {done} of {Count(count, "commit")}.");
-
 }
