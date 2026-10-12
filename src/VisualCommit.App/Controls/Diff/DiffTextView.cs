@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaEdit.Rendering;
@@ -43,7 +44,7 @@ namespace VisualCommit.App.Controls.Diff;
 /// line's in the new column.
 /// </para>
 /// </remarks>
-public sealed class DiffTextView : UserControl
+public sealed class DiffTextView : UserControl, IDiffPaneHost
 {
     /// <summary>A diff of at most this many lines is tokenized and its words compared on the UI thread, before it is drawn.</summary>
     public const int SynchronousHighlightLimit = 1_000;
@@ -182,6 +183,18 @@ public sealed class DiffTextView : UserControl
 
     private bool IsSideBySide => _builtMode == DiffMode.SideBySide;
 
+    TemplatedControl IDiffPaneHost.View => this;
+
+    DiffPalette IDiffPaneHost.Palette => Palette;
+
+    DiffSyntax? IDiffPaneHost.Syntax => Syntax;
+
+    IReadOnlyDictionary<DiffLineRef, IReadOnlyList<TextRange>> IDiffPaneHost.Words => Words;
+
+    bool IDiffPaneHost.RowsSelectable => true;
+
+    bool IDiffPaneHost.ShowsSign => true;
+
     /// <summary>Selects nothing.</summary>
     public void ClearSelection()
     {
@@ -257,6 +270,38 @@ public sealed class DiffTextView : UserControl
     public FontWeight FontWeightAt(DiffLineRef line, int column) => ElementAt(line, column)?.TextRunProperties.Typeface.Weight ?? FontWeight.Normal;
 
     internal void RaiseHunkAction(int hunk, HunkAction action) => HunkActionRequested?.Invoke(this, new HunkActionEventArgs(hunk, action));
+
+    /// <summary>A row's background: by the kind of the line on the pane's side (<see cref="DiffPalette.RowBackground"/>).</summary>
+    IImmutableBrush IDiffPaneHost.RowBackground(DiffPane pane, DiffDisplayRow row, DiffCell? cell) => Palette.RowBackground(row, cell);
+
+    /// <summary>
+    /// A hunk header's bar: git's header line in the code font (inline, and the left pane side by
+    /// side) and the hunk's buttons at the right end (inline, and the right pane side by side).
+    /// </summary>
+    HeaderBarContent IDiffPaneHost.HeaderOf(DiffPane pane, DiffDisplayRow header)
+    {
+        var hunk = header.Hunk;
+        IReadOnlyList<HeaderBarButton>? buttons = null;
+        if (pane.Side != PaneSide.Left)
+        {
+            buttons = HunkActions switch
+            {
+                HunkActions.StageAndDiscard =>
+                [
+                    new HeaderBarButton("Stage hunk", "StageHunkButton", () => RaiseHunkAction(hunk, HunkAction.Stage)),
+                    new HeaderBarButton("Discard hunk", "DiscardHunkButton", () => RaiseHunkAction(hunk, HunkAction.Discard)),
+                ],
+                HunkActions.Unstage => [new HeaderBarButton("Unstage hunk", "UnstageHunkButton", () => RaiseHunkAction(hunk, HunkAction.Unstage))],
+                _ => [],
+            };
+        }
+
+        return new HeaderBarContent(pane.Side != PaneSide.Right ? header.HeaderText ?? string.Empty : null, buttons);
+    }
+
+    void IDiffPaneHost.OnPaneSelectionChanged(DiffPane pane) => OnPaneSelectionChanged(pane);
+
+    void IDiffPaneHost.OnPaneScrolled(DiffPane pane) => OnPaneScrolled(pane);
 
     /// <summary>A pane's selection changed: a selection in one pane clears the other's.</summary>
     internal void OnPaneSelectionChanged(DiffPane pane)

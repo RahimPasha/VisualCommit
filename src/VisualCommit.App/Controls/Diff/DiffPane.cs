@@ -30,7 +30,9 @@ internal enum PaneSide
 /// One column of the diff view: an AvaloniaEdit editor whose document holds one line per display
 /// row, with the gutter as a margin, the row backgrounds, selection and word highlights as a
 /// background renderer, syntax colours as a colorizer, and the hunk headers as a layer of real
-/// controls over the text. The inline mode has one pane; side by side has two.
+/// controls over the text. The inline mode has one pane; side by side has two. What the rows look
+/// like beyond their text (backgrounds, bars, syntax, selection) is asked of its host
+/// (<see cref="IDiffPaneHost"/>): the diff view, or the conflict resolver's panes.
 /// </summary>
 internal sealed class DiffPane
 {
@@ -46,12 +48,12 @@ internal sealed class DiffPane
     private const char LineFeedSymbol = (char)0x240A;
     private const char ReplacementCharacter = (char)0xFFFD;
 
-    private readonly DiffTextView _owner;
+    private readonly IDiffPaneHost _host;
     private bool _settingTextSelection;
 
-    public DiffPane(DiffTextView owner)
+    public DiffPane(IDiffPaneHost host)
     {
-        _owner = owner;
+        _host = host;
         Editor = new DiffTextEditor
         {
             IsReadOnly = true,
@@ -95,10 +97,10 @@ internal sealed class DiffPane
         ((LayeredTextView)TextView).AddControlLayer(Headers);
 
         area.SelectionChanged += (_, _) => OnTextSelectionChanged();
-        TextView.ScrollOffsetChanged += (_, _) => _owner.OnPaneScrolled(this);
+        TextView.ScrollOffsetChanged += (_, _) => _host.OnPaneScrolled(this);
     }
 
-    public DiffTextView Owner => _owner;
+    public IDiffPaneHost Host => _host;
 
     public DiffTextEditor Editor { get; }
 
@@ -119,8 +121,8 @@ internal sealed class DiffPane
     /// </summary>
     public (int Anchor, int Active)? Selection { get; private set; }
 
-    /// <summary>The palette of the owner's theme.</summary>
-    public DiffPalette Palette => _owner.Palette;
+    /// <summary>The palette of the host's theme.</summary>
+    public DiffPalette Palette => _host.Palette;
 
     /// <summary>Header rows whose visual lines have not been built yet: they are built once the pane has a size, so that the scroll extent knows their height.</summary>
     public bool HeadersPending { get; set; }
@@ -174,6 +176,12 @@ internal sealed class DiffPane
         Editor.Background = Palette.Background;
         Editor.Foreground = Palette.TextPrimary;
         Editor.FontFamily = Palette.CodeFont;
+        if (!_host.RowsSelectable)
+        {
+            // Without row selection, a selection is AvaloniaEdit's own, drawn as any text's is.
+            Editor.TextArea.SelectionBrush = Palette.Selection;
+        }
+
         TextView.Redraw();
         Gutter.UpdateColumns();
         Headers.Rebuild();
@@ -275,7 +283,7 @@ internal sealed class DiffPane
         Selection = selection;
         ClearTextSelection();
         RedrawBackgrounds();
-        _owner.OnPaneSelectionChanged(this);
+        _host.OnPaneSelectionChanged(this);
     }
 
     private void ClearTextSelection()
@@ -323,7 +331,7 @@ internal sealed class DiffPane
     /// </summary>
     private void OnTextSelectionChanged()
     {
-        if (_settingTextSelection)
+        if (_settingTextSelection || !_host.RowsSelectable)
         {
             return;
         }
@@ -336,7 +344,7 @@ internal sealed class DiffPane
             {
                 Selection = null;
                 RedrawBackgrounds();
-                _owner.OnPaneSelectionChanged(this);
+                _host.OnPaneSelectionChanged(this);
             }
 
             return;
@@ -354,7 +362,7 @@ internal sealed class DiffPane
         var caretAtStart = Editor.TextArea.Caret.Offset <= segment.Offset;
         Selection = caretAtStart ? (last - 1, first - 1) : (first - 1, last - 1);
         RedrawBackgrounds();
-        _owner.OnPaneSelectionChanged(this);
+        _host.OnPaneSelectionChanged(this);
     }
 
     /// <summary>
@@ -395,43 +403,11 @@ internal sealed class DiffPane
 /// The editor of a pane: AvaloniaEdit's, with its look, and visible to UI Automation as one
 /// element that the real-window pass finds by its automation id.
 /// </summary>
-internal sealed class DiffTextEditor : TextEditor
+internal sealed class DiffTextEditor : CodeTextEditor
 {
-    private ScrollViewer? _scrollViewer;
-
     public DiffTextEditor()
         : base(new LayeredTextArea())
     {
-    }
-
-    /// <summary>The current scroll offset, from the editor's scroll viewer.</summary>
-    public Vector ScrollOffset => _scrollViewer?.Offset ?? default;
-
-    protected override Type StyleKeyOverride => typeof(TextEditor);
-
-    /// <summary>
-    /// Scrolls to an offset, either part left as it is when null. Done on the template's scroll
-    /// viewer, because <see cref="TextEditor.ScrollToVerticalOffset"/> does not scroll in this
-    /// version of AvaloniaEdit. The scroll viewer clamps the offset to the extent.
-    /// </summary>
-    public void ScrollTo(double? horizontal, double? vertical)
-    {
-        ApplyTemplate();
-        if (_scrollViewer is { } viewer)
-        {
-            viewer.Offset = new Vector(horizontal ?? viewer.Offset.X, vertical ?? viewer.Offset.Y);
-        }
-    }
-
-    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
-    {
-        base.OnApplyTemplate(e);
-        _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
-
-        // The editor installs its search panel with its template. The panel handles Esc even
-        // while it is closed, and the diff view's parent closes the view on Esc; the diff view
-        // has no search.
-        SearchPanel?.Uninstall();
     }
 
     protected override AutomationPeer OnCreateAutomationPeer() => new DiffTextAutomationPeer(this);
@@ -477,9 +453,10 @@ internal sealed class LayeredTextView : TextView
 /// <summary>
 /// A pane's gutter (a margin left of the text that does not scroll sideways): number columns, each
 /// 8 + 7.2 × d + 8 wide for the d digits of its largest number (at least 2), the numbers
-/// right-aligned 8 from the column's right edge; then a sign column 16 wide with "+" or "-"
-/// centred. Inline has an old and a new number column, each side by side pane one. Clicking a
-/// row's number selects the row; Shift extends the selection; dragging over the numbers too.
+/// right-aligned 8 from the column's right edge; then, when the host shows it, a sign column 16
+/// wide with "+" or "-" centred. Inline has an old and a new number column, each side by side
+/// pane one. When the host's rows can be selected, clicking a row's number selects the row; Shift
+/// extends the selection; dragging over the numbers too.
 /// </summary>
 internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
 {
@@ -502,8 +479,8 @@ internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
     /// <summary>The widths of the number columns, left to right.</summary>
     public IReadOnlyList<double> ColumnWidths => _columnWidths;
 
-    /// <summary>The gutter's width: its number columns and the sign column.</summary>
-    public double TotalWidth => _columnWidths.Sum() + SignWidth;
+    /// <summary>The gutter's width: its number columns and the sign column, when it has one.</summary>
+    public double TotalWidth => _columnWidths.Sum() + (_pane.Host.ShowsSign ? SignWidth : 0);
 
     /// <summary>Sizes the number columns for the largest number each shows.</summary>
     public void UpdateColumns()
@@ -550,6 +527,7 @@ internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
             return;
         }
 
+        var host = _pane.Host;
         var palette = _pane.Palette;
         var typeface = new Typeface(palette.CodeFont);
         var width = Bounds.Width;
@@ -563,7 +541,7 @@ internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
             var cell = _pane.CellOf(row);
             var top = _pane.TopOf(line);
             var bottom = _pane.BottomOf(line);
-            context.FillRectangle(palette.RowBackground(row, cell), new Rect(0, top, width, bottom - top));
+            context.FillRectangle(host.RowBackground(_pane, row, cell), new Rect(0, top, width, bottom - top));
             if (row.Kind != DiffRowKind.Line || cell is null)
             {
                 continue;
@@ -596,7 +574,7 @@ internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
                 _ => null,
             };
 
-            if (sign is not null)
+            if (sign is not null && host.ShowsSign)
             {
                 var text = Format(sign, typeface, palette.TextSecondary);
                 context.DrawText(text, new Point(right + ((SignWidth - text.WidthIncludingTrailingWhitespace) / 2), textTop));
@@ -636,7 +614,7 @@ internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
         e.Handled = true;
         TextArea?.Focus();
         var row = _pane.RowAtY(point.Position.Y);
-        if (row < 0 || _pane.Rows[row].Kind == DiffRowKind.HunkHeader)
+        if (row < 0 || _pane.Rows[row].Kind == DiffRowKind.HunkHeader || !_pane.Host.RowsSelectable)
         {
             return;
         }
@@ -697,8 +675,9 @@ internal sealed class DiffGutter : AvaloniaEdit.Editing.AbstractMargin
 }
 
 /// <summary>
-/// Draws, behind each row's text and across the text column's whole width: the row's background,
-/// the selection background on a selected row, and the word-level highlights of a changed line.
+/// Draws, behind each row's text and across the text column's whole width: the row's background
+/// (the host's), the selection background on a selected row, and the word-level highlights of a
+/// changed line.
 /// </summary>
 internal sealed class DiffRowRenderer(DiffPane pane) : IBackgroundRenderer
 {
@@ -711,9 +690,10 @@ internal sealed class DiffRowRenderer(DiffPane pane) : IBackgroundRenderer
             return;
         }
 
+        var host = pane.Host;
         var palette = pane.Palette;
         var width = textView.Bounds.Width;
-        var words = pane.Owner.Words;
+        var words = host.Words;
         foreach (var line in textView.VisualLines)
         {
             var index = line.FirstDocumentLine.LineNumber - 1;
@@ -725,7 +705,7 @@ internal sealed class DiffRowRenderer(DiffPane pane) : IBackgroundRenderer
             var cell = pane.CellOf(row);
             var top = pane.TopOf(line);
             var bounds = new Rect(0, top, width, pane.BottomOf(line) - top);
-            drawingContext.FillRectangle(palette.RowBackground(row, cell), bounds);
+            drawingContext.FillRectangle(host.RowBackground(pane, row, cell), bounds);
             if (row.Kind == DiffRowKind.HunkHeader)
             {
                 continue;
@@ -772,7 +752,7 @@ internal sealed class DiffColorizer(DiffPane pane) : DocumentColorizingTransform
             return;
         }
 
-        if (row.Kind != DiffRowKind.Line || pane.Owner.Syntax is not { } syntax)
+        if (row.Kind != DiffRowKind.Line || pane.Host.Syntax is not { } syntax)
         {
             return;
         }

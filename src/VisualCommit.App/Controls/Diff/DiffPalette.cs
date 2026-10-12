@@ -7,8 +7,9 @@ using VisualCommit.Core.Diff;
 namespace VisualCommit.App.Controls.Diff;
 
 /// <summary>
-/// The diff view's colours and code font, looked up in the theme resources for a control's theme
-/// variant, as <c>CommitGraphControl</c> does. Resolved again when the theme changes.
+/// The diff view's and the conflict resolver's colours and code font, looked up in the theme
+/// resources for a control's theme variant, as <c>CommitGraphControl</c> does. Resolved again when
+/// the theme changes.
 /// </summary>
 internal sealed class DiffPalette
 {
@@ -41,6 +42,19 @@ internal sealed class DiffPalette
 
     public required IImmutableBrush Border { get; init; }
 
+    public required IImmutableBrush Warning { get; init; }
+
+    /// <summary>The conflict resolver's colours (docs/phase-4-design.md 7.3): the ours and theirs sides, a base section, marker lines, a side used in the result.</summary>
+    public required IImmutableBrush ConflictOurs { get; init; }
+
+    public required IImmutableBrush ConflictTheirs { get; init; }
+
+    public required IImmutableBrush ConflictBase { get; init; }
+
+    public required IImmutableBrush ConflictMarker { get; init; }
+
+    public required IImmutableBrush ConflictUsed { get; init; }
+
     public required FontFamily CodeFont { get; init; }
 
     public static DiffPalette Resolve(Control control)
@@ -70,6 +84,12 @@ internal sealed class DiffPalette
             TextSecondary = Brush("VcTextSecondaryBrush"),
             Selection = Brush("VcSelectionBrush"),
             Border = Brush("VcBorderBrush"),
+            Warning = Brush("VcWarningBrush"),
+            ConflictOurs = Brush("VcConflictOursBrush"),
+            ConflictTheirs = Brush("VcConflictTheirsBrush"),
+            ConflictBase = Brush("VcConflictBaseBrush"),
+            ConflictMarker = Brush("VcConflictMarkerBrush"),
+            ConflictUsed = Brush("VcConflictUsedBrush"),
             CodeFont = font,
         };
     }
