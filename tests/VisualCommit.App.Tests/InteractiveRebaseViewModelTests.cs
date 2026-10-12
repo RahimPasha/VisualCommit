@@ -527,6 +527,33 @@ public class InteractiveRebaseViewModelTests
     }
 
     [Fact]
+    public async Task While_Start_waits_or_runs_the_list_cannot_be_left_asks_nothing_and_closes_itself_when_the_rebase_ends()
+    {
+        var (list, host) = Open();
+        await list.SetActionAsync(Row(list, "Five"), RebaseAction.Drop);
+        host.HeldStart = new TaskCompletionSource<bool>();
+        var starting = list.StartCommand.ExecuteAsync(null);
+
+        // Another list, a diff or the resolver asks through TryLeaveAsync; Cancel and Esc too,
+        // past their disabled state. A Discard is queued that must never be asked for.
+        host.ConfirmAnswers.Enqueue(true);
+        Assert.False(await list.TryLeaveAsync());
+        await list.CancelCommand.ExecuteAsync(null);
+        Assert.Empty(host.Questions);
+        Assert.Equal(0, host.Closed);
+        Assert.False(list.IsClosed);
+        Assert.True(list.IsBusy);
+
+        // The rebase ends: the list closes itself.
+        host.HeldStart.SetResult(true);
+        await starting;
+        Assert.True(list.IsClosed);
+        Assert.Equal(1, host.Closed);
+        Assert.Empty(host.Questions);
+        Assert.True(await list.TryLeaveAsync());
+    }
+
+    [Fact]
     public async Task Cancel_closes_an_unchanged_list_at_once_and_asks_first_on_a_changed_one()
     {
         var (unchanged, quiet) = Open();

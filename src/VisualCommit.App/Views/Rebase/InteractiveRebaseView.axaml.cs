@@ -201,7 +201,8 @@ public partial class InteractiveRebaseView : UserControl
 
     /// <summary>
     /// Esc (2.2): a row drag in progress is cancelled first, and the row stays where it was;
-    /// otherwise the list closes, asking first when it was changed. While a diff covers the list,
+    /// otherwise the list closes, asking first when it was changed. While Start's operation waits
+    /// or runs it takes Esc and does nothing (Cancel is disabled). While a diff covers the list,
     /// or no list is open, it declines, so that the diff's own handler closes the diff (14.3).
     /// </summary>
     private bool HandleEscape()

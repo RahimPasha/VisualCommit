@@ -110,7 +110,8 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     /// <summary>
     /// Whether what the graph area shows may be replaced (11.1): asks the list's question when it
     /// was changed (2.2, 7.2), and the resolver's when its result is modified. False on "Keep
-    /// editing". It closes nothing itself.
+    /// editing", and at once, without a question, while the list's Start waits or runs: the list
+    /// closes itself when its rebase ends, and the user tries again then. It closes nothing itself.
     /// </summary>
     public async Task<bool> TryLeaveGraphAreaAsync()
     {
@@ -327,8 +328,8 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     // The list's host (2.2, IInteractiveRebaseHost).
 
-    Task<bool> IInteractiveRebaseHost.StartAsync(RebasePlan plan) =>
-        InteractiveRebase is { } list ? Operations.RunInteractiveRebaseAsync(plan, list.Request) : Task.FromResult(false);
+    Task<bool> IInteractiveRebaseHost.StartAsync(InteractiveRebaseViewModel list, RebasePlan plan) =>
+        ReferenceEquals(InteractiveRebase, list) ? Operations.RunInteractiveRebaseAsync(plan, list.Request) : Task.FromResult(false);
 
     void IInteractiveRebaseHost.ShowDetails(string? sha)
     {
@@ -354,8 +355,14 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     Task<string?> IInteractiveRebaseHost.AskMessageAsync(string title, string message, string confirmText) =>
         Operations.ShowDialogAsync(new MessageDialogViewModel(title, message, confirmText));
 
-    void IInteractiveRebaseHost.Close()
+    void IInteractiveRebaseHost.Close(InteractiveRebaseViewModel list)
     {
+        // A list left for something else (another list, a diff, the resolver) closes nothing and takes no focus.
+        if (!ReferenceEquals(InteractiveRebase, list))
+        {
+            return;
+        }
+
         InteractiveRebase = null;
         GraphFocusRequested?.Invoke(this, GraphFocusRequest.Graph);
     }

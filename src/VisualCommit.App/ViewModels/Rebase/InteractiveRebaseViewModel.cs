@@ -170,7 +170,10 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     public partial bool IsHeadMoved { get; private set; }
 
-    /// <summary>Start's operation waits or runs: the rows and buttons are disabled (2.2).</summary>
+    /// <summary>
+    /// Start's operation waits or runs: the rows and buttons are disabled (2.2), and the list
+    /// cannot be left (<see cref="TryLeaveAsync"/>) until it closes itself when the rebase ends.
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart), nameof(StartToolTip), nameof(IsInteractive))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(CancelCommand))]
@@ -539,7 +542,7 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
         var close = false;
         try
         {
-            close = await _host.StartAsync(plan);
+            close = await _host.StartAsync(this, plan);
         }
         finally
         {
@@ -554,7 +557,8 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
     /// <summary>
     /// Cancel (<c>RebaseCancelButton</c>), and Esc: closes the list, asking first when it was
     /// changed (7.2, 14.3). The button stays enabled while its question is open (a second press
-    /// asks nothing more: <see cref="TryLeaveAsync"/> declines while a question is open).
+    /// asks nothing more: <see cref="TryLeaveAsync"/> declines while a question is open). While
+    /// Start's operation waits or runs it is disabled and does nothing.
     /// </summary>
     [RelayCommand(CanExecute = nameof(IsInteractive), AllowConcurrentExecutions = true)]
     private async Task CancelAsync()
@@ -568,7 +572,10 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
     /// <summary>
     /// Whether the list may be left (2.2, 11.1): true at once when it was not changed; otherwise
     /// after the question <c>Discard the changes to this list?</c> (7.2), true on <c>Discard</c>,
-    /// false on <c>Keep editing</c>. It closes nothing itself: the repository's
+    /// false on <c>Keep editing</c>. While Start's operation waits or runs (<see cref="IsBusy"/>)
+    /// it is false at once, without a question: the rebase goes ahead and the list closes itself
+    /// when it ends, so that Esc, Cancel, another list, a diff of the stage panel and the resolver
+    /// wait for the user to try again then. It closes nothing itself: the repository's
     /// <c>TryLeaveGraphAreaAsync</c> asks through it before something else takes the graph area.
     /// </summary>
     public async Task<bool> TryLeaveAsync()
@@ -576,6 +583,11 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
         if (IsClosed)
         {
             return true;
+        }
+
+        if (IsBusy)
+        {
+            return false;
         }
 
         if (!IsChanged)
@@ -638,7 +650,7 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
         }
 
         IsClosed = true;
-        _host.Close();
+        _host.Close(this);
     }
 
     private async Task<string?> AskAsync(string title, string message)
