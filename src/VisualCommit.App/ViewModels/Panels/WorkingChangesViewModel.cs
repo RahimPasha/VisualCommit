@@ -101,6 +101,9 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     /// <summary>The summary and description as they were filled from the operation's message, or null.</summary>
     private (string Summary, string Description)? _filledMessage;
 
+    /// <summary>The last read of the operation's message for the boxes, started by a status update.</summary>
+    private Task _messageFill = Task.CompletedTask;
+
     public WorkingChangesViewModel(IWorkingChangesHost host, ISettingsStore settings)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -263,7 +266,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         OnPropertyChanged(nameof(CanCommit));
         OnPropertyChanged(nameof(CommitToolTip));
         CommitCommand.NotifyCanExecuteChanged();
-        _ = FollowOperationMessageAsync(status.InProgress);
+        _messageFill = FollowOperationMessageAsync(status.InProgress);
     }
 
     /// <summary>
@@ -339,6 +342,12 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
 
     /// <summary>The boxes still hold what was filled in for the stopped commit (5.3): Continue then passes no message.</summary>
     public bool HoldsFilledMessage => _filledMessage is { } filled && Summary == filled.Summary && Description == filled.Description;
+
+    /// <summary>
+    /// The boxes are still waiting for the operation's message, read after the last status update
+    /// (5.3): the checks wait for it before they look at the panel.
+    /// </summary>
+    public bool IsFillingMessage => !_messageFill.IsCompleted;
 
     /// <summary>Takes the Flat or Tree setting again: the commit details may have changed it (D70).</summary>
     public void SyncFileList()

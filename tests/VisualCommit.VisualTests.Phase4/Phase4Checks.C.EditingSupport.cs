@@ -205,7 +205,8 @@ public sealed partial class Phase4ChecksC : Phase4Checks
             app.WaitForAsync(
                 () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                     && app.Find<TextBlock>("UnstagedTitle").Text == unstagedTitle
-                    && app.Find<TextBlock>("StagedTitle").Text == stagedTitle,
+                    && app.Find<TextBlock>("StagedTitle").Text == stagedTitle
+                    && app.StagePanelSettled,
                 $"the stage panel with \"{unstagedTitle}\" and \"{stagedTitle}\"");
 
         /// <summary>A stage list's file rows as "&lt;letter&gt; &lt;name&gt;" (every file of these checks is at the root).</summary>

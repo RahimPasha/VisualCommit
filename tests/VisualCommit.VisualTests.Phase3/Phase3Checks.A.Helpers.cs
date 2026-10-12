@@ -336,7 +336,8 @@ public sealed partial class Phase3ChecksA
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == $"Unstaged files ({unstaged})"
-                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})",
+                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})"
+                && app.StagePanelSettled,
             $"the stage panel with {unstaged} unstaged and {staged} staged files");
 
     /// <summary>The diff's text view.</summary>

@@ -120,7 +120,8 @@ public partial class Phase2Checks
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == $"Unstaged files ({unstaged})"
-                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})",
+                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})"
+                && app.StagePanelSettled,
             $"the stage panel with {unstaged} unstaged and {staged} staged files");
 
     /// <summary>A list's rows as text: status letter, name, folder (flat) and origin, from the list's own rows, scrolled into view or not.</summary>

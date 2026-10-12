@@ -211,7 +211,8 @@ public sealed partial class Phase3ChecksC
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == unstagedTitle
-                && app.Find<TextBlock>("StagedTitle").Text == stagedTitle,
+                && app.Find<TextBlock>("StagedTitle").Text == stagedTitle
+                && app.StagePanelSettled,
             $"the stage panel with \"{unstagedTitle}\" and \"{stagedTitle}\"");
 
     /// <summary>A stage list's file rows as "&lt;letter&gt; &lt;name&gt; &lt;folder&gt;" (the folder left out when the file has none).</summary>

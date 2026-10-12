@@ -327,7 +327,8 @@ public sealed partial class Phase4ChecksA
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == unstagedTitle
-                && app.Find<TextBlock>("StagedTitle").Text == stagedTitle,
+                && app.Find<TextBlock>("StagedTitle").Text == stagedTitle
+                && app.StagePanelSettled,
             $"the stage panel with \"{unstagedTitle}\" and \"{stagedTitle}\"");
 
     /// <summary>A file list's rows as "letter name folder" (<c>UnstagedFileList</c>, <c>StagedFileList</c>, <c>FileList</c>).</summary>
