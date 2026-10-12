@@ -96,8 +96,11 @@ public sealed partial class Phase4ChecksC
         var mark = app.LogMark();
         app.ClickResolverButton("ResolverMergeTool");
         await AssertConfirmationAsync(app, PartC2.DiscardTitle("notes.txt"), PartC2.MergeToolQuestion, string.Empty, PartC2.Discard, destructive: true, cancelText: PartC2.KeepEditing);
+        using var statusTexts = app.RecordStatusTexts();
         C14To17.ClickDialogButton(app, "ConfirmButton");
         await WaitForOperationAsync(app, repo, PartC2.MergeToolTitle, mark);
+        Assert.Contains(PartC2.MergeToolRunning, statusTexts.Texts);
+        Assert.Equal(PartC2.ResolvedInFake, statusTexts.Texts[^1]);
         await app.WaitForResolverClosedAsync();
         await AssertNoDialogAsync(app);
         await C14To17.WaitForStagePanelAsync(app, PartC2.UnstagedTitle(0), PartC2.StagedTitle(1));

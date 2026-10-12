@@ -104,8 +104,11 @@ public sealed partial class Phase4ChecksC
         // Step 6: the banner's Continue: the staged file checked for markers (none: no question), then Continue the rebase.
         var calls = app.GitCalls().Count;
         var mark = app.LogMark();
+        using var statusTexts = app.RecordStatusTexts();
         app.ClickBannerContinue();
         await WaitForOperationAsync(app, repo, PartC2.ContinueRebaseTitle, mark, OperationChainTimeout);
+        Assert.Contains(PartC2.ContinueRebaseRunning, statusTexts.Texts);
+        Assert.Equal(PartC2.RebasedPicks, statusTexts.Texts[^1]);
         await app.WaitForAsync(() => app.BannerBounds is null && !Graph(app).ShowsWorkingRow, "the banner and the working-changes row to go", OperationChainTimeout);
         await app.WaitForIdleAsync(timeout: OperationChainTimeout);
         Shot(app, "c17e-rebased");
