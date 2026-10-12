@@ -23,9 +23,13 @@ public interface IConflictActions
     Task<bool> MarkResolvedAsync(string path, byte[] content);
 
     /// <summary>
-    /// Resolves <paramref name="path"/> with one side's whole file at once (11.8: a binary file, a
-    /// symbolic link): <c>git checkout --ours|--theirs</c>, then <c>git add</c>, saving a snapshot
-    /// first when the working-tree file differs from that side (D67's scheme).
+    /// Resolves <paramref name="path"/> with one side's whole file at once (11.8). Both sides
+    /// present (a binary file, a symbolic link: "Use ours", "Use theirs"): <c>git checkout
+    /// --ours|--theirs</c>, then <c>git add</c>, saving a snapshot first when the working-tree
+    /// file differs from that side (D67's scheme). Only <paramref name="side"/> has the file
+    /// (deleted by them or by us, added by us or by them: "Keep the file", "Keep it"): the file
+    /// git left is staged as it is, so that the user's edits are kept, and checked out from that
+    /// side only when it is missing.
     /// </summary>
     Task<bool> TakeSideAsync(string path, ConflictSide side);
 
