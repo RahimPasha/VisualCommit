@@ -568,12 +568,20 @@ public interface IGitRepository
 
     /// <summary>
     /// The backups' clean-up (section 9, D139): reads <c>refs/visualcommit/backup/</c> with one
-    /// <c>git for-each-ref</c>, groups the refs into backups by 9's pattern, and deletes those
-    /// older than <see cref="BackupRetention.Days"/>, then the oldest beyond
-    /// <see cref="BackupRetention.Count"/>, in one <c>git update-ref --stdin</c> transaction of
-    /// <c>delete &lt;ref&gt; &lt;old value&gt;</c> lines. Nothing goes while an operation is in
-    /// progress in any worktree, nor a ref of <paramref name="keep"/> (the restore bar's snapshot),
-    /// nor a ref that fits no scheme. Returns what it removed.
+    /// <c>git for-each-ref</c>, groups the refs into backups by 9's pattern (the refs that share
+    /// kind, time and number), and deletes those older than <see cref="BackupRetention.Days"/>
+    /// (by the time in the name, a time later than now counting as now), then, while more than
+    /// <see cref="BackupRetention.Count"/> remain, the oldest, in one <c>git update-ref --stdin</c>
+    /// transaction of <c>delete &lt;ref&gt; &lt;old value&gt;</c> lines. "Now" is the backups' clock.
+    /// Nothing goes while an operation is in progress in any worktree (the main git folder and every
+    /// <c>&lt;common&gt;/worktrees/*/</c>: <c>rebase-merge/</c>, <c>rebase-apply/</c>,
+    /// <c>MERGE_HEAD</c>, <c>sequencer/</c>, a pick head; a Debug log line says why it waits), nor a
+    /// backup with a ref in <paramref name="keep"/> (full ref names: the restore bar's snapshot,
+    /// which still counts), nor a ref that fits no scheme (not counted either). A ref changed since
+    /// the read fails the transaction: nothing is deleted, a Warning is logged and the list is
+    /// empty. One Info line per backup removed: <c>&lt;repo&gt;: Removed backup
+    /// &lt;kind&gt;-&lt;time&gt;[-&lt;n&gt;] (older than 30 days)</c> or <c>(more than 50
+    /// backups)</c>. Returns what it removed, oldest first.
     /// </summary>
     Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync(
         BackupRetention retention,

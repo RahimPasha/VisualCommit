@@ -151,7 +151,9 @@ public sealed partial class GitRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(tool);
-        // Git runs no tool for a path that is not unmerged ("does not need merging"), nor for a submodule.
+
+        // Git runs no tool for a path that is not unmerged ("does not need merging"), nor for a
+        // submodule: refused before git runs.
         await ReadUnmergedStagesAsync(path, options, cancellationToken).ConfigureAwait(false);
         var leftovers = new MergeToolLeftovers(WorkingTreePath(path));
         try

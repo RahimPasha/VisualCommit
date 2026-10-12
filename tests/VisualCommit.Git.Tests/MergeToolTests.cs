@@ -80,7 +80,8 @@ public class MergeToolTests
 
         var failure = await Assert.ThrowsAsync<GitException>(() => repository.RunMergeToolAsync(Conflicted, "kdiff3", cancellationToken: TestCancelled));
 
-        Assert.Contains("The merge tool kdiff3 is not available as '/no/such/folder/kdiff3'", failure.StandardError, StringComparison.Ordinal);
+        // Git 2.36: "The merge tool kdiff3 is not available as '/no/such/folder/kdiff3'".
+        Assert.Contains("kdiff3 is not available as", failure.StandardError, StringComparison.Ordinal);
         Assert.Equal(["f.txt"], FilesIn(repo));
         Assert.Equal(["UU dir/f.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
     }
