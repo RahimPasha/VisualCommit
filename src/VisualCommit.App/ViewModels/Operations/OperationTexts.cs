@@ -278,26 +278,8 @@ public static partial class OperationTexts
 
     public static string CherryPickedSeveral(int count, string current) => $"Cherry-picked {Count(count, "commit")} onto {current}";
 
-    /// <summary>
-    /// 2.13's message when a pick stopped with conflicts: "Cherry-picked 1 of 3 commits. a1b2c3d
-    /// stopped with conflicts in 1 file; not picked: b2c3d4e "Alpha two"." The list is left out
-    /// when the stopped commit was the last one.
-    /// </summary>
-    /// <param name="done">The commits picked before the stop.</param>
-    /// <param name="count">All the commits of the operation.</param>
-    /// <param name="stopped">The commit that stopped.</param>
-    /// <param name="conflictedFiles">Its conflicted files.</param>
-    /// <param name="notPicked">The commits after it, as (SHA, subject), in the order they would have been picked.</param>
-    public static string CherryPickSeveralStopped(int done, int count, string stopped, int conflictedFiles, IReadOnlyList<(string Sha, string Subject)> notPicked) =>
-        SeveralStopped("Cherry-picked", "picked", done, count, stopped, conflictedFiles, notPicked);
-
-    /// <summary>2.13's summary when a later pick failed otherwise ("Cherry-pick failed").</summary>
-    public static string CherryPickSeveralFailed(int done, int count, string failed) =>
-        $"{Progress("Cherry-picked", done, count)} Git could not cherry-pick {Short(failed)}.";
-
-    /// <summary>2.13's summary when a later pick changed nothing ("Cherry-pick stopped"): <see cref="CherryPickEmpty"/> after the count.</summary>
-    public static string CherryPickSeveralEmpty(int done, int count, string empty, string current) =>
-        $"{Progress("Cherry-picked", done, count)} {CherryPickEmpty(empty, current)}";
+    // A list that stops says so in phase 4's words (D136, design 10.6): ListStoppedWithConflicts,
+    // ListStoppedEmpty and ListStoppedRefused in OperationTexts.Rebase.cs.
 
     // 2.14: revert.
 
@@ -318,13 +300,6 @@ public static partial class OperationTexts
 
     /// <summary>The summary of "Revert failed" for a revert that changes nothing (D117), with git's output beneath.</summary>
     public static string RevertEmpty(string sha, string current) => $"{Short(sha)} changes nothing on {current}: it is already undone.";
-
-    /// <summary>2.14's message when one of several reverts stopped with conflicts, as <see cref="CherryPickSeveralStopped"/> with "Reverted" and "not reverted".</summary>
-    public static string RevertSeveralStopped(int done, int count, string stopped, int conflictedFiles, IReadOnlyList<(string Sha, string Subject)> notReverted) =>
-        SeveralStopped("Reverted", "reverted", done, count, stopped, conflictedFiles, notReverted);
-
-    public static string RevertSeveralFailed(int done, int count, string failed) =>
-        $"{Progress("Reverted", done, count)} Git could not revert {Short(failed)}.";
 
     // 2.15: abort.
 
@@ -581,16 +556,4 @@ public static partial class OperationTexts
     private static string Progress(string verb, int done, int count) =>
         string.Create(CultureInfo.InvariantCulture, $"{verb} {done} of {Count(count, "commit")}.");
 
-    private static string SeveralStopped(
-        string verb, string notVerb, int done, int count, string stopped, int conflictedFiles, IReadOnlyList<(string Sha, string Subject)> rest)
-    {
-        ArgumentNullException.ThrowIfNull(rest);
-        var text = $"{Progress(verb, done, count)} {Short(stopped)} stopped with conflicts in {Count(conflictedFiles, "file")}";
-        if (rest.Count > 0)
-        {
-            text += $"; not {notVerb}: " + string.Join(", ", rest.Select(commit => DialogText.Commit(commit.Sha, commit.Subject)));
-        }
-
-        return text + ".";
-    }
 }
