@@ -392,6 +392,15 @@ public interface IGitRepository
     Task<RebaseResult> RebaseAsync(string onto, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Whether git's configuration has <c>rebase.autoStash</c> set (1.3 step 1, D142), so that git
+    /// stashes a dirty working tree itself before a rebase and the app does not refuse it: <c>git
+    /// config --type=bool --get rebase.autoStash</c>; unset (exit 1) is false. A read:
+    /// <c>GIT_OPTIONAL_LOCKS=0</c>. A value git cannot read as a boolean throws
+    /// <see cref="GitException"/>.
+    /// </summary>
+    Task<bool> ReadRebaseAutoStashAsync(NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The commits an interactive rebase of <paramref name="branch"/> (a full ref name: HEAD's
     /// branch, or a drop's source that is not checked out) would replay, read when its list opens
     /// (2.3). <paramref name="fromCommit"/> ("from here", 2.1): <c>git rev-list --reverse

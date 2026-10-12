@@ -472,7 +472,7 @@ public class HistoryOperationTests
         Assert.Equal(["Alpha one", "Main work"], await GitLinesAsync(repo, "log", "--format=%s", "-2"));
         Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
         Assert.Equal(
-            new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false) { Sequenced = true, HasPickHead = true },
+            new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false) { Sequenced = true, HasPickHead = true, Done = 1, Total = 3 },
             (await repository.ReadStatusAsync(TestCancelled)).InProgress);
     }
 
@@ -491,7 +491,7 @@ public class HistoryOperationTests
         Assert.Equal(mainWork, ReadGitFile(repo, "REVERT_HEAD").Trim());
         Assert.StartsWith("revert ", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
         Assert.Equal(
-            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { Sequenced = true, HasPickHead = true },
+            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { Sequenced = true, HasPickHead = true, Done = 0, Total = 2 },
             (await repository.ReadStatusAsync(TestCancelled)).InProgress);
     }
 
@@ -513,7 +513,7 @@ public class HistoryOperationTests
         Assert.Equal(alphaOne, ReadGitFile(repo, "CHERRY_PICK_HEAD").Trim());
         Assert.True(GitFileExists(repo, "sequencer"));
         Assert.Equal(
-            new InProgressState(InProgressKind.CherryPick, alphaOne, "Alpha one", null, null, 1, true) { Sequenced = true, HasPickHead = true },
+            new InProgressState(InProgressKind.CherryPick, alphaOne, "Alpha one", null, null, 1, true) { Sequenced = true, HasPickHead = true, Done = 0, Total = 2 },
             (await repository.ReadStatusAsync(TestCancelled)).InProgress);
     }
 
@@ -572,7 +572,7 @@ public class HistoryOperationTests
         Assert.StartsWith($"revert {b[..7]}", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
         Assert.Equal(["Revert \"C adds c\"", "Revert \"B adds b\""], await GitLinesAsync(repo, "log", "--format=%s", "-2"));
         Assert.Equal(
-            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true, HasPickHead = pickHead },
+            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true, HasPickHead = pickHead, Done = 1, Total = 3 },
             (await repository.ReadStatusAsync(TestCancelled)).InProgress);
     }
 
@@ -596,7 +596,7 @@ public class HistoryOperationTests
         Assert.True(GitFileExists(repo, "MERGE_MSG"));
         var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
         Assert.Equal(
-            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true, HasPickHead = GitFileExists(repo, "REVERT_HEAD") },
+            new InProgressState(InProgressKind.Revert, b, "B adds b", null, null, 1, true) { Sequenced = true, HasPickHead = GitFileExists(repo, "REVERT_HEAD"), Done = 0, Total = 2 },
             state);
     }
 
@@ -665,7 +665,7 @@ public class HistoryOperationTests
         Assert.Equal(await repo.HeadAsync(), ReadGitFile(repo, "sequencer/abort-safety").Trim());
         Assert.Equal("untracked\n", ReadText(repo, "u.txt"));
         Assert.Equal(
-            new InProgressState(InProgressKind.CherryPick, b, "B adds u", null, null, 1, false) { Sequenced = true },
+            new InProgressState(InProgressKind.CherryPick, b, "B adds u", null, null, 1, false) { Sequenced = true, Done = 1, Total = 3 },
             (await repository.ReadStatusAsync(TestCancelled)).InProgress);
     }
 

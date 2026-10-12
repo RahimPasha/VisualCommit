@@ -21,9 +21,10 @@ public static partial class OperationTexts
 
     /// <summary>
     /// "Check out {A} and rebase it onto {B}" (1.3): one operation of several steps. Its running
-    /// text is the first step's, <c>Checking out {A}…</c> (the queue keeps one running text per
-    /// operation); a failure names the step that failed (<see cref="CheckOut"/>'s or
-    /// <see cref="RebaseOnto"/>'s texts).
+    /// text is the first step's, <c>Checking out {A}…</c>; after the checkout the operation shows
+    /// <see cref="RebaseOnto"/>'s, <c>Rebasing {A} onto {B}…</c>
+    /// (<see cref="VisualCommit.Core.Operations.OperationContext.SetRunningText"/>). A failure names the step
+    /// that failed (<see cref="CheckOut"/>'s or <see cref="RebaseOnto"/>'s texts).
     /// </summary>
     public static OperationText CheckOutAndRebase(string branch, string target) =>
         new($"Check out {branch} and rebase it onto {target}", $"Checking out {branch}…", RebaseFailedTitle, $"Rebase {branch} onto {target} failed.");
@@ -32,7 +33,7 @@ public static partial class OperationTexts
     public static OperationText InteractiveRebase(string branch) =>
         new($"Interactive rebase of {branch}", $"Rebasing {branch}…", "Interactive rebase failed", $"Interactive rebase of {branch} failed.");
 
-    /// <summary>"Interactive rebase of {b}" that checks the branch out first (2.4): its running text is the checkout's.</summary>
+    /// <summary>"Interactive rebase of {b}" that checks the branch out first (2.4): its running text is the checkout's, then <see cref="InteractiveRebase"/>'s.</summary>
     public static OperationText InteractiveRebaseWithCheckout(string branch) =>
         InteractiveRebase(branch) with { RunningText = $"Checking out {branch}…" };
 

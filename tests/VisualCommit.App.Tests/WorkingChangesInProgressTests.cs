@@ -158,6 +158,43 @@ public class WorkingChangesInProgressTests
         host.OnContinue = null;
         await panel.CommitCommand.ExecuteAsync(null);
         Assert.Equal("Kept", panel.Summary);
+
+        // 5.3: "The summary may be empty: the operation's own message is used then."
+        panel.Summary = string.Empty;
+        panel.Description = "a description alone";
+        Assert.Null(panel.ContinueMessage);
+        await panel.CommitCommand.ExecuteAsync(null);
+        Assert.Null(host.Continued[^1]);
+    }
+
+    [Fact]
+    public async Task The_banners_Continue_passes_the_same_message_as_the_panels_and_clears_a_committed_one()
+    {
+        var host = new FakeHost { OperationMessage = "Merge branch 'side'\n" };
+        var panel = Panel(host);
+        var merge = new InProgressState(InProgressKind.Merge, new string('7', 40), "Merge branch 'side'", null, null, 0, false);
+        panel.Update(Status([Modified], [], merge), hasHead: true);
+        Assert.Equal("Merge branch 'side'", panel.Summary);
+
+        // As filled in: null (git's own message).
+        var passed = new List<string?>();
+        await panel.ContinueWithMessageAsync(message =>
+        {
+            passed.Add(message);
+            return Task.CompletedTask;
+        });
+
+        // Changed: the boxes' message; once the merge is committed, the boxes are emptied.
+        panel.Summary = "Merge side by hand";
+        await panel.ContinueWithMessageAsync(message =>
+        {
+            passed.Add(message);
+            panel.Update(Status([], [], InProgressState.None), hasHead: true);
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal([null, "Merge side by hand"], passed);
+        Assert.Equal((string.Empty, string.Empty), (panel.Summary, panel.Description));
     }
 
     [Fact]

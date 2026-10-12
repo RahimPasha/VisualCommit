@@ -168,6 +168,52 @@ public class RepositoryOperationsSequenceTests
     }
 
     [Fact]
+    public async Task The_banners_Continue_commits_the_stage_panels_message_when_the_user_changed_it()
+    {
+        // 5.4 and 10.3: "Continue commits the merge with the message in the stage panel."
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        repo.WriteFile("notes.txt", Scenarios.ConflictsFiles.NotesTheirs);
+        await repo.GitAsync("add", "notes.txt");
+        await app.Repository.RefreshAsync();
+        var changes = app.Repository.Changes;
+        await WaitUntilAsync(() => changes.Summary == "Merge branch 'feature/theirs'", "the stage panel to fill in MERGE_MSG");
+        Assert.Null(changes.ContinueMessage);
+        changes.Summary = "Merge feature/theirs by hand";
+        changes.Description = "#12 Theirs wins.";
+
+        await app.Repository.Banner.ContinueCommand.ExecuteAsync(null);
+
+        Assert.Equal("Merge committed", app.StatusText);
+        Assert.Equal("Merge feature/theirs by hand\n\n#12 Theirs wins.", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.TrimEnd());
+        await WaitUntilAsync(() => changes.Summary.Length == 0 && changes.Description.Length == 0, "the committed message to leave the boxes");
+
+        // The boxes as filled in: no message, so git's own (MERGE_MSG less its comment block).
+        using var untouched = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
+        using var other = await OperationsHarness.OpenAsync(untouched);
+        untouched.WriteFile("notes.txt", Scenarios.ConflictsFiles.NotesTheirs);
+        await untouched.GitAsync("add", "notes.txt");
+        await other.Repository.RefreshAsync();
+        await WaitUntilAsync(() => other.Repository.Changes.Summary.Length > 0, "the stage panel to fill in MERGE_MSG");
+
+        await other.Repository.Banner.ContinueCommand.ExecuteAsync(null);
+
+        Assert.Equal("Merge committed", other.StatusText);
+        Assert.Equal("Merge branch 'feature/theirs'", (await untouched.GitAsync("log", "-1", "--format=%B")).StandardOutput.TrimEnd());
+    }
+
+    /// <summary>Waits, up to ten seconds, until <paramref name="condition"/> holds on the UI's view models.</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, string what)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < until, $"Timed out waiting for {what}.");
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task Continue_asks_first_when_the_files_conflicted_at_the_stop_have_markers_staged()
     {
         using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
@@ -243,6 +289,50 @@ public class RepositoryOperationsSequenceTests
         Assert.Equal("Cherry-pick finished", app.StatusText);
         Assert.Equal("Alpha two", (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
         Assert.False(app.Operations.Status.InProgress.IsActive);
+    }
+
+    [Fact]
+    public async Task Continue_and_Skip_of_a_list_that_stops_again_say_how_far_it_came_and_a_refused_commit_opens_the_dialog()
+    {
+        // Main and the side edit f.txt (each pick conflicts); C adds u.txt, which is untracked on main.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+        await repo.CreateBranchAsync("side");
+        await repo.CommitFileAsync("f.txt", "main\n", "Main edit");
+        await repo.CheckoutAsync("side");
+        var a = await repo.CommitFileAsync("f.txt", "side 1\n", "Side one");
+        var b = await repo.CommitFileAsync("f.txt", "side 2\n", "Side two");
+        var c = await repo.CommitFileAsync("u.txt", "tracked\n", "Side adds u");
+        await repo.CheckoutAsync("main");
+        repo.WriteFile("u.txt", "untracked\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.CherryPickSeveralAsync([a, b, c]);
+        Assert.Equal(($"Cherry-picked 0 of 3 commits; stopped at {a[..7]} with conflicts in 1 file", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+
+        // Skip (its question is RepositoryViewModel's): Side two stops with conflicts. Git keeps no
+        // count of the skipped commit, so 10.2's K of N come from its list as it is now.
+        await app.Operations.SkipAsync(app.Operations.Status.InProgress);
+        Assert.Equal(($"Cherry-picked 0 of 2 commits; stopped at {b[..7]} with conflicts in 1 file", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        Assert.Empty(app.Dialogs.Errors);
+
+        // Continue commits Side two; git cannot pick Side adds u over the untracked file: 5.1's dialog.
+        repo.WriteFile("f.txt", "resolved\n");
+        await repo.GitAsync("add", "f.txt");
+        await app.Repository.RefreshAsync();
+        await app.Operations.ContinueAsync(app.Operations.Status.InProgress, null);
+
+        Assert.Equal(($"Cherry-picked 1 of 2 commits; git could not pick {c[..7]}", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        var state = app.Operations.Status.InProgress;
+        Assert.Equal((c, true, false), (state.Commit, state.Sequenced, state.HasPickHead));
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Cherry-pick stopped", app.Repository.Banner.Text), (dialog.Title, dialog.Summary));
+        Assert.Equal($"Cherry-pick stopped at {c[..7]} \"Side adds u\": git could not pick it. Skip it, or abort.", dialog.Summary);
+        Assert.Contains("untracked working tree files would be overwritten", dialog.Output, StringComparison.Ordinal);
+        Assert.Equal("git cherry-pick --continue", dialog.Command);
+        Assert.Equal("untracked\n", File.ReadAllText(Path.Combine(repo.Path, "u.txt")));
+        app.AssertScriptFollowed();
     }
 
     [Fact]

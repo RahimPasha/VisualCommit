@@ -8,6 +8,7 @@ public sealed class OperationContext
     private readonly CancellationToken _cancellationToken;
     private readonly Func<bool>? _endCancelWindow;
     private readonly Func<bool>? _promptCancelled;
+    private readonly Action<string>? _setRunningText;
     private volatile bool _cancelWindowOpen = true;
 
     /// <param name="operationId">The operation's id, <c>op-&lt;n&gt;</c>.</param>
@@ -19,13 +20,15 @@ public sealed class OperationContext
     /// and returns true when the user had already cancelled.
     /// </param>
     /// <param name="promptCancelled">Whether the user has cancelled one of the operation's prompts (<see cref="PromptScope.UserCancelled"/>).</param>
+    /// <param name="setRunningText">Called by <see cref="SetRunningText"/>: the queue shows the running operation's new text; null ignores it.</param>
     public OperationContext(
         string operationId,
         CancellationToken cancellationToken = default,
         IReadOnlyDictionary<string, string?>? environment = null,
         IProgress<OperationProgress>? progress = null,
         Func<bool>? endCancelWindow = null,
-        Func<bool>? promptCancelled = null)
+        Func<bool>? promptCancelled = null,
+        Action<string>? setRunningText = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
         OperationId = operationId;
@@ -34,6 +37,19 @@ public sealed class OperationContext
         Progress = progress ?? NoProgress.Instance;
         _endCancelWindow = endCancelWindow;
         _promptCancelled = promptCancelled;
+        _setRunningText = setRunningText;
+    }
+
+    /// <summary>
+    /// Shows <paramref name="text"/> as the running operation's text from now on, in place of its
+    /// <see cref="GitOperation.RunningText"/>: an operation of several steps names the step it is
+    /// at (docs/phase-4-design.md 10.1: "Checking out {A}…", then "Rebasing {A} onto {B}…"). Git's
+    /// progress of the step before is dropped. The operation's title and its log lines do not change.
+    /// </summary>
+    public void SetRunningText(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        _setRunningText?.Invoke(text);
     }
 
     /// <summary>

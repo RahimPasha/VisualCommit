@@ -72,7 +72,7 @@ public class RepositoryOperationsHistoryTests
         await app.Operations.CherryPickAsync(alphaOne);
 
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on main: its changes are already there. Abort the cherry-pick to go on."),
+        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on main: its changes are already there. Skip it to go on."),
             (dialog.Title, dialog.Summary));
         Assert.Equal(($"Cherry-pick {alphaOne[..7]} failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.True(File.Exists(Path.Combine(repo.Path, ".git", "CHERRY_PICK_HEAD")));

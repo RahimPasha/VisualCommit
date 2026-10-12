@@ -307,9 +307,30 @@ public sealed class OperationQueue : IOperationQueue
         entry.Cancellation is not null && entry.CancelWindowOpen && !entry.CancelRequested
         && (!entry.Operation.IsBackground || _waiting.Count > 0);
 
+    /// <summary>
+    /// <see cref="OperationContext.SetRunningText"/>: the running operation's text from now on,
+    /// without the progress of the step before; <see cref="Changed"/> lets the status bar know.
+    /// Ignored once the operation no longer runs.
+    /// </summary>
+    private void SetRunningText(Entry entry, string text)
+    {
+        lock (_gate)
+        {
+            if (!ReferenceEquals(_running, entry) || entry.RunningText == text)
+            {
+                return;
+            }
+
+            entry.RunningText = text;
+            entry.Progress = null;
+        }
+
+        RaiseChanged();
+    }
+
     private OperationSnapshot Snapshot(Entry entry) => new(
         entry.Operation.Title,
-        entry.Operation.RunningText,
+        entry.RunningText,
         entry.Operation.Kind,
         entry.Operation.IsBackground,
         entry.Operation.Errors,
@@ -483,7 +504,8 @@ public sealed class OperationQueue : IOperationQueue
                 scope?.Environment,
                 new ProgressSink(this, entry),
                 () => EndCancelWindow(entry),
-                () => scope is { UserCancelled: true });
+                () => scope is { UserCancelled: true },
+                text => SetRunningText(entry, text));
 
             OperationReport report;
             using (GitOperationScope.Enter(entry.Id))
@@ -505,7 +527,7 @@ public sealed class OperationQueue : IOperationQueue
                     report.Message.Length > 0 ? report.Message : $"{operation.Title} failed",
                     report.Failure ?? FailureOf(operation, report.Message)),
                 OperationOutcome.Cancelled => CancelledResult(operation),
-                _ => new OperationResult(report.Outcome, report.Message, null),
+                _ => new OperationResult(report.Outcome, report.Message, null) { IsWarning = report.IsWarning && report.Outcome == OperationOutcome.Succeeded },
             };
         }
         catch (OperationCanceledException)
@@ -756,6 +778,9 @@ public sealed class OperationQueue : IOperationQueue
         public bool Started { get; set; }
 
         public OperationProgress? Progress { get; set; }
+
+        /// <summary>What the status bar shows while it runs: <see cref="GitOperation.RunningText"/>, or the step's (<see cref="OperationContext.SetRunningText"/>).</summary>
+        public string RunningText { get; set; } = operation.RunningText;
 
         public PromptScope? Scope { get; set; }
 

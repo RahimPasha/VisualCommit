@@ -265,9 +265,13 @@ public static partial class OperationTexts
 
     public static string CherryPickConflicts(int conflictedFiles) => $"Cherry-pick stopped: {FilesHaveConflicts(conflictedFiles)}";
 
-    /// <summary>The summary of <see cref="CherryPickStoppedTitle"/> for a pick that changes nothing (2.12).</summary>
+    /// <summary>
+    /// The summary of <see cref="CherryPickStoppedTitle"/> for a pick that changes nothing (2.12),
+    /// ending as the banner beneath it does since phase 4 offers Skip (docs/phase-4-design.md 5.2:
+    /// "Skip it to go on.", in place of phase 3's "Abort the cherry-pick to go on.").
+    /// </summary>
     public static string CherryPickEmpty(string sha, string current) =>
-        $"{Short(sha)} changes nothing on {current}: its changes are already there. Abort the cherry-pick to go on.";
+        $"{Short(sha)} changes nothing on {current}: its changes are already there. Skip it to go on.";
 
     /// <summary>2.13's operation: the summary of its failures is one of the sentences below.</summary>
     public static OperationText CherryPickSeveral(int count) => new(
@@ -552,8 +556,4 @@ public static partial class OperationTexts
 
     /// <summary>1.8: the title of the dialog that lists the lock files a cancelled operation left.</summary>
     public static string Cancelled(string title) => $"{title} cancelled";
-
-    private static string Progress(string verb, int done, int count) =>
-        string.Create(CultureInfo.InvariantCulture, $"{verb} {done} of {Count(count, "commit")}.");
-
 }

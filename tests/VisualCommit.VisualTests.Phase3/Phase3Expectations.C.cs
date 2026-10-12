@@ -550,7 +550,7 @@ public static partial class Phase3Expectations
 
         public const string T7Key = "The previous cherry-pick is now empty, possibly due to conflict resolution.";
 
-        public const string Check25EmptySummary = "dff8fbf changes nothing on main: its changes are already there. Abort the cherry-pick to go on.";
+        public const string Check25EmptySummary = "dff8fbf changes nothing on main: its changes are already there. Skip it to go on.";
 
         /// <summary>Check 25 step 7: phase 4's empty pick text (design 5.2: "Skip it to go on.").</summary>
         public const string Check25EmptyBanner = "Cherry-picking dff8fbf \"Alpha one\" changes nothing: its changes are already here. Skip it to go on.";

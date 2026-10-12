@@ -36,7 +36,8 @@ public sealed partial class GitRepository
     /// (<see cref="ReadPseudoRefAsync"/>, 8.1); <c>sequencer/todo</c> alone (a list paused between
     /// commits, or stopped on a commit git could not apply). Git calls are made only while
     /// something is in progress (D89): the subject of the commit being applied, HEAD when a
-    /// sequencer is there (D110), and the abbreviated commit of a paused list's first line.
+    /// sequencer is there (D110), the abbreviated commit of a paused list's first line, and the
+    /// commits a list has made (<see cref="ReadListProgressAsync"/>).
     /// <paramref name="status"/> tells whether a stop is empty.
     /// <para>
     /// A list (<see cref="InProgressState.Sequenced"/>) without a pick head is paused: committed in a
@@ -92,6 +93,7 @@ public sealed partial class GitRepository
             {
                 // Git stopped on a pick that changes nothing: the index is HEAD's tree (nothing
                 // staged) and nothing conflicts (2.12).
+                var (done, total) = sequenced ? await ReadListProgressAsync(sequencerTodo, firstMade: false, cancellationToken).ConfigureAwait(false) : (0, 0);
                 return new InProgressState(
                     kind,
                     commit,
@@ -104,6 +106,8 @@ public sealed partial class GitRepository
                     AbortKeepsHead = sequenced && await HeadMovedSinceSequencerAsync(cancellationToken).ConfigureAwait(false),
                     Sequenced = sequenced,
                     HasPickHead = true,
+                    Done = done,
+                    Total = total,
                 };
             }
         }
@@ -113,6 +117,11 @@ public sealed partial class GitRepository
             // The stopped command stays the todo's first line, abbreviated (0.3).
             var first = TodoLines(sequencerTodo).First().Split(' ', 3);
             var commit = first.Length > 1 ? await ResolveCommitAsync(first[1], cancellationToken).ConfigureAwait(false) : null;
+            var empty = File.Exists(Path.Combine(GitDirectory, "MERGE_MSG"));
+            var abortKeepsHead = await HeadMovedSinceSequencerAsync(cancellationToken).ConfigureAwait(false);
+
+            // Paused after the stopped pick was committed in a terminal: its line is made already.
+            var (done, total) = await ReadListProgressAsync(sequencerTodo, firstMade: abortKeepsHead && !empty, cancellationToken).ConfigureAwait(false);
             return new InProgressState(
                 stoppedKind,
                 commit,
@@ -120,10 +129,12 @@ public sealed partial class GitRepository
                 null,
                 null,
                 RemainingAfterStop(sequencerTodo),
-                Empty: File.Exists(Path.Combine(GitDirectory, "MERGE_MSG")))
+                empty)
             {
-                AbortKeepsHead = await HeadMovedSinceSequencerAsync(cancellationToken).ConfigureAwait(false),
+                AbortKeepsHead = abortKeepsHead,
                 Sequenced = true,
+                Done = done,
+                Total = total,
             };
         }
 
@@ -389,6 +400,36 @@ public sealed partial class GitRepository
     /// </summary>
     private static int RemainingAfterStop(string? sequencerTodo) =>
         sequencerTodo is null ? 0 : Math.Max(0, CountTodoLines(sequencerTodo) - 1);
+
+    /// <summary>
+    /// How far a list of picks or reverts has come (section 4, 10.2's "Cherry-picked {K} of {N}
+    /// commits"): Done, the commits it has made so far (<c>git rev-list --count
+    /// &lt;sequencer/head&gt;..HEAD</c>, from the HEAD the list started on); Total, those plus the
+    /// commands left in <c>sequencer/todo</c>, less its first line when that commit was made already
+    /// (<paramref name="firstMade"/>: a list paused after the stopped pick was committed in a
+    /// terminal). Git keeps no record of a skipped commit, so one that was skipped counts in
+    /// neither. (0, 0) when <c>sequencer/head</c> is missing or names nothing git can count from.
+    /// </summary>
+    private async Task<(int Done, int Total)> ReadListProgressAsync(string? sequencerTodo, bool firstMade, CancellationToken cancellationToken)
+    {
+        if (FirstLine(ReadGitFile("sequencer", "head")) is not { Length: > 0 } start)
+        {
+            return (0, 0);
+        }
+
+        int made;
+        try
+        {
+            made = await CountCommitsAsync(start, "HEAD", cancellationToken).ConfigureAwait(false);
+        }
+        catch (GitException)
+        {
+            return (0, 0);
+        }
+
+        var left = CountTodoLines(sequencerTodo) - (firstMade ? 1 : 0);
+        return (made, made + Math.Max(0, left));
+    }
 
     /// <summary>A sequence's kind by its todo's first line: <c>pick</c> or <c>revert</c>.</summary>
     private static InProgressKind? TodoKind(string todo)

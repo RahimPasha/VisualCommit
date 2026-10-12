@@ -40,6 +40,30 @@ public class RebaseOperationTests
     }
 
     [Fact]
+    public async Task Rebase_autoStash_is_read_as_git_reads_a_boolean_and_unset_is_false()
+    {
+        // 1.3 step 1, D142: the app refuses a dirty tree unless git stashes it itself.
+        using var repo = await DivergedAsync(conflicting: false);
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+
+        Assert.False(await repository.ReadRebaseAutoStashAsync(cancellationToken: TestCancelled));
+        var call = Assert.Single(calls.Snapshot(), record => record.CommandText.StartsWith("git config", StringComparison.Ordinal));
+        Assert.Equal(("git config --type=bool --get rebase.autoStash", 1, string.Empty), (call.CommandText, call.ExitCode, call.StandardOutput));
+
+        foreach (var (value, expected) in new[] { ("true", true), ("yes", true), ("1", true), ("off", false), ("false", false) })
+        {
+            await repo.ConfigAsync("rebase.autoStash", value);
+            Assert.Equal(expected, await repository.ReadRebaseAutoStashAsync(cancellationToken: TestCancelled));
+        }
+
+        // A value git cannot read as a boolean: git's own refusal, as git rebase would refuse it.
+        await repo.ConfigAsync("rebase.autoStash", "maybe");
+        var error = await Assert.ThrowsAsync<GitException>(() => repository.ReadRebaseAutoStashAsync(cancellationToken: TestCancelled));
+        Assert.Contains("bad boolean config value", error.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Onto_a_commit_that_is_no_branch_tip_the_branch_is_replayed_on_that_commit()
     {
         using var repo = await DivergedAsync(conflicting: false);

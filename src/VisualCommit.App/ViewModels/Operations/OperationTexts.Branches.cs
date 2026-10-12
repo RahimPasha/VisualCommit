@@ -28,14 +28,6 @@ public static partial class OperationTexts
         $"Git could not check out {target}, and your changes could not be re-applied. They are kept in the stash \"{StashBeforeCheckout(target)}\".";
 
     /// <summary>
-    /// 2.14 for several commits when one of them changes nothing (D117): the count, then
-    /// <see cref="RevertEmpty"/>; the error dialog's summary on a git that fails such a revert, the
-    /// status bar's message on one that stops it.
-    /// </summary>
-    public static string RevertSeveralEmpty(int done, int count, string empty, string current) =>
-        $"{Progress("Reverted", done, count)} {RevertEmpty(empty, current)}";
-
-    /// <summary>
     /// The status bar's message, in the warning colour, when a revert that changes nothing stopped
     /// with <c>REVERT_HEAD</c> (D117's other case, check 12 part E): "Revert stopped: a1b2c3d changes
     /// nothing on main: it is already undone." No dialog opens; the banner offers Abort.
