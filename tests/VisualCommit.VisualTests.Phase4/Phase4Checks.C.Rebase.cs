@@ -56,6 +56,7 @@ public sealed partial class Phase4ChecksC
         var resolveFirst = BannerButton.ContinueDisabled(ResolveFirstOneFile);
         AssertStopBanner(app, shot, RebaseFirstBanner, AbortRebase, resolveFirst, BannerButton.Skip);
         AssertGraph(app, GcRebaseFirst, 5, WorkingOneConflict, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: false);
         AssertBranch(app, "Detached at da31c97");
         await AssertRebaseFirstStopAsync(repo);
 
@@ -99,6 +100,7 @@ public sealed partial class Phase4ChecksC
         await AssertResolverClosedAsync(app);
         AssertStopBanner(app, shot, RebaseFirstResolvedBanner, AbortRebase, BannerButton.Continue, BannerButton.Skip);
         AssertGraph(app, GcRebaseFirst, 5, WorkingNoConflict, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: false);
         await AssertStagePanelAsync(app, UnstagedNone, [], StagedOne, ["M notes.txt"], "First change", ContinueRebaseButton, commitEnabled: true);
         Assert.Equal(["M  notes.txt"], await PorcelainAsync(repo));
         Assert.Equal(NotesRebaseFirstTheirs, WorkingFile(repo, ResolverFile));

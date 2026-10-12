@@ -178,6 +178,29 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         Assert.True(selected.Count == 0, "Selected in the left panel: " + string.Join(", ", selected));
     }
 
+    /// <summary>
+    /// The left panel's Local branches as the report's graphs of "conflicts" state them: 5, the
+    /// closed folder <c>feature</c>, then <c>main</c>, which is in the accent colour when HEAD is on
+    /// it (<paramref name="mainIsHead"/>: GC0); with HEAD detached (GC-R1) no local branch is.
+    /// </summary>
+    private static async Task AssertLocalBranchesAsync(ShellDriver app, bool mainIsHead)
+    {
+        app.Settle();
+        var rows = app.Session.Shell.ActiveTab.LeftPanel.Rows.ToList();
+        var start = rows.FindIndex(row => row is RefSectionRow && row.Text == "Local branches");
+        Assert.True(start >= 0, "The left panel has no section Local branches.");
+        Assert.Equal(5, ((RefSectionRow)rows[start]).Count);
+        var items = rows.Skip(start + 1).TakeWhile(row => row is RefItemRow).Cast<RefItemRow>().ToList();
+        Assert.Equal(["feature", "main"], items.Select(row => row.Text).ToList());
+        Assert.True(items[0].IsContainer && !items[0].IsOpen, "The folder feature is open.");
+        Assert.DoesNotContain(items, row => row.IsHead && row.Text != "main");
+        Assert.Equal(mainIsHead, items[1].IsHead);
+        var button = await app.RefRowAsync("Local branches", "main");
+        var name = button.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == "main" && text.IsEffectivelyVisible);
+        var palette = PaletteOf(app);
+        Assert.Equal(mainIsHead ? palette.Accent : palette.TextPrimary, (name.Foreground as ISolidColorBrush)?.Color);
+    }
+
     /// <summary>Clicks commit row <paramref name="row"/> in its Message column and waits for its details.</summary>
     private static async Task ClickCommitRowAsync(ShellDriver app, int row, string subject)
     {

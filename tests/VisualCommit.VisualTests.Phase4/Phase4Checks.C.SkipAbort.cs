@@ -33,6 +33,7 @@ public sealed partial class Phase4ChecksC
         var shot = Shot(app, "c13a-rebase-stopped");
         AssertStopBanner(app, shot, RebaseFirstBanner, AbortRebase, resolveFirst, BannerButton.Skip);
         AssertGraph(app, GcRebaseFirst, 5, WorkingOneConflict, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: false);
         AssertStatus(app, "Ready");
         AssertBranch(app, "Detached at da31c97");
         await AssertRebaseFirstStopAsync(repo);
@@ -67,6 +68,7 @@ public sealed partial class Phase4ChecksC
         AssertStatus(app, RebaseStoppedStatus, OperationStatusTone.Warning);
         AssertStopBanner(app, shot, RebaseSecondBanner, AbortRebase, resolveFirst, BannerButton.Skip);
         AssertGraph(app, GcRebaseFirst, 5, WorkingOneConflict, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: false);
         AssertBranch(app, "Detached at da31c97");
         Assert.Equal(["UU notes.txt"], await PorcelainAsync(repo));
         Assert.Equal(StopSha.OursEdits, await repo.HeadAsync());
@@ -159,6 +161,7 @@ public sealed partial class Phase4ChecksC
         Assert.Null(app.BannerBounds);
         AssertStatus(app, AbortedPickStatus);
         AssertGraph(app, Gc0, 5, working: null, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: true);
         AssertBranch(app, "main");
         Assert.Equal(["## main"], await LinesOfGitAsync(repo, "status", "--short", "--branch"));
         Assert.Equal(StopSha.OursEdits, await repo.HeadAsync());
@@ -217,6 +220,7 @@ public sealed partial class Phase4ChecksC
         AssertStatus(app, RebaseStoppedStatus, OperationStatusTone.Warning);
         AssertStopBanner(app, shot, RebaseFirstBanner, AbortRebase, BannerButton.ContinueDisabled(ResolveFirstOneFile), BannerButton.Skip);
         AssertGraph(app, GcRebaseFirst, 5, WorkingOneConflict, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: false);
         AssertSelectedCommits(app, shot, "305f7f7");
         AssertBranch(app, "Detached at da31c97");
         await AssertRebaseFirstStopAsync(repo);
@@ -248,6 +252,7 @@ public sealed partial class Phase4ChecksC
         Assert.Null(app.BannerBounds);
         AssertStatus(app, AbortedRebaseStatus);
         AssertGraph(app, Gc0, 5, working: null, showsDate: false, picture: shot);
+        await AssertLocalBranchesAsync(app, mainIsHead: true);
         AssertSelectedCommits(app, shot, "305f7f7");
         AssertBranch(app, "main");
         Assert.Equal(["## main"], await LinesOfGitAsync(repo, "status", "--short", "--branch"));
