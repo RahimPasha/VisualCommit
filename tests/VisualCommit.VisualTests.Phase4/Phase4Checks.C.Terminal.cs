@@ -72,6 +72,7 @@ public sealed partial class Phase4ChecksC
         app.Click(app.WorkingRowPoint());
         await C14To17.WaitForStagePanelAsync(app, PartC2.UnstagedTitle(1, 1), PartC2.StagedTitle(0));
         await app.WaitForIdleAsync();
+        await C14To17.AssertMessageAsync(app, PartC2.PickConflictingSummary, string.Empty);
         Shot(app, "c17c-stage-panel");
         Assert.Equal(["U notes.txt"], C14To17.FileRows(app, "UnstagedFileList"));
         await C14To17.AssertConflictRowAsync(app, "notes.txt");

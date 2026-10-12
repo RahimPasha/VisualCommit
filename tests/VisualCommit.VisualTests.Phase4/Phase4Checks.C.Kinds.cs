@@ -33,6 +33,7 @@ public sealed partial class Phase4ChecksC
         app.Click(app.WorkingRowPoint());
         await C14To17.WaitForStagePanelAsync(app, PartC2.UnstagedTitle(3, 3), PartC2.StagedTitle(0));
         await app.WaitForIdleAsync();
+        await C14To17.AssertMessageAsync(app, PartC2.MergeKindsSummary, string.Empty);
         Shot(app, "c15a-kinds-stage-panel");
         AssertBanner(app, PartC2.MergeKindsBanner(3), PartC2.AbortMerge, BannerButton.ContinueDisabled(PartC2.ResolveFirst(3)), oneLine: false, placement: BannerButtonPlacement.OwnRow);
         AssertGraph(app, PartC2.GcM, PartC2.ConflictsLanes, PartC2.WorkingRow(PartC2.WorkingConflicts(3)), showsDate: false);

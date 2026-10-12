@@ -720,12 +720,24 @@ public sealed partial class Phase4ChecksC : Phase4Checks
         Assert.Equal(parents, lines[4].Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    /// <summary>The <c>rebase-merge/</c> files a step names, each as git wrote it.</summary>
+    /// <summary>
+    /// The <c>rebase-merge/</c> files a step names, each as git wrote it. Git 2.36 writes them as
+    /// the report gives them; a newer git (CI's 2.55) writes a todo line's subject as a comment
+    /// (<c>pick &lt;sha&gt; # First change</c>) and ends the message with its <c>"# Conflicts:"</c>
+    /// block (design 0.1), which are taken out before comparing: the rest is the same.
+    /// </summary>
     private static void AssertRebaseFiles(TempRepo repo, IReadOnlyDictionary<string, string> files)
     {
         foreach (var (name, content) in files)
         {
-            Assert.True(GitFile(repo, "rebase-merge/" + name) is { } actual && actual == content, $"rebase-merge/{name} is \"{GitFile(repo, "rebase-merge/" + name)}\", expected \"{content}\".");
+            var written = GitFile(repo, "rebase-merge/" + name);
+            var actual = written is null ? null : name switch
+            {
+                "done" or "git-rebase-todo" => System.Text.RegularExpressions.Regex.Replace(written, @"(?m)^(\w+ [0-9a-f]{7,40}) # ", "$1 "),
+                "message" => System.Text.RegularExpressions.Regex.Replace(written, @"(?m)^# Conflicts:\n(#.*(\n|$))*", string.Empty),
+                _ => written,
+            };
+            Assert.True(actual == content, $"rebase-merge/{name} is \"{written}\", expected \"{content}\".");
         }
     }
 
