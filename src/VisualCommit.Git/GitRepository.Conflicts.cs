@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using VisualCommit.Core.Conflicts;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -254,7 +255,7 @@ public sealed partial class GitRepository
 
         // "<path>\0conflict-marker-size\0<value>\0"
         var fields = output.Split('\0');
-        return fields.Length >= 3 && LeadingNumber(fields[2]) is > 0 and var size ? size : Core.Conflicts.ConflictText.DefaultMarkerSize;
+        return fields.Length >= 3 && LeadingNumber(fields[2]) is > 0 and var size ? size : ConflictText.DefaultMarkerSize;
 
         // As C's atoi, which git uses: leading digits, after an optional sign.
         static int LeadingNumber(string value)
