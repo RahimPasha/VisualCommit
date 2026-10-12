@@ -168,12 +168,12 @@ public partial class Phase1Checks
     [AvaloniaFact]
     public async Task Check_13_clone_with_progress()
     {
-        // The clone is of a bare copy of the 100k-commit repo, served over HTTP on a free port
-        // (47391 is phase 3's, whose checks may run in a parallel process) and held at a fixed
-        // percentage instead of raced (D150): a fast CI runner once finished the clone of the
-        // file URL between two pictures. Declared before the app, so that it outlives it.
-        await using var server = await AuthRemoteServer.StartAsync(existingRepository: await LargeHistory.GetBareAsync());
-        server.RequireAuth = false;
+        // The clone is of a bare copy of the 100k-commit repo, served over HTTP and held at a
+        // fixed percentage instead of raced (D150): a fast CI runner once finished the clone of
+        // the file URL between two pictures. The server's fixed port, 47392 (a free one when it
+        // is taken), keeps the picture's URL the same (D97); 47391 is phase 3's, whose checks
+        // run in another process at the same time. Declared before the app, so that it outlives it.
+        await using var server = await StartCloneServerAsync();
         using var data = new TempDirectory("data");
         using var parent = new TempDirectory("clones");
 
@@ -236,8 +236,7 @@ public partial class Phase1Checks
     {
         // The clone that is cancelled is held as check 13's is, so that Cancel comes while it
         // runs, never after it ended (D150).
-        await using var server = await AuthRemoteServer.StartAsync(existingRepository: await LargeHistory.GetBareAsync());
-        server.RequireAuth = false;
+        await using var server = await StartCloneServerAsync();
         using var data = new TempDirectory("data");
         using var parent = new TempDirectory("clones");
         var missing = new Uri(parent.Combine("does-not-exist")).AbsoluteUri;
@@ -454,6 +453,18 @@ public partial class Phase1Checks
 
     private static void AssertNoClippedText(ShellDriver app) =>
         Assert.Empty(LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true));
+
+    /// <summary>
+    /// The server of checks 13 and 14: the bare copy of the 100k-commit repo served in place on
+    /// <see cref="AuthRemoteServer.Phase1VisualChecksPort"/> (a free port when it is taken),
+    /// asking nobody to sign in. Dispose it after the app (declared before it).
+    /// </summary>
+    private static async Task<AuthRemoteServer> StartCloneServerAsync()
+    {
+        var server = await AuthRemoteServer.StartForVisualChecksAsync(await LargeHistory.GetBareAsync(), AuthRemoteServer.Phase1VisualChecksPort);
+        server.RequireAuth = false;
+        return server;
+    }
 
     private static async Task TypeCloneFormAsync(ShellDriver app, string url, string parent, string name)
     {

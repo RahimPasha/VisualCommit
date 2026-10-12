@@ -413,6 +413,7 @@ public class AuthRemoteServerTests
         Assert.True(second.PortWasTaken);
         Assert.NotEqual(first.Port, second.Port);
         Assert.Equal(47391, AuthRemoteServer.VisualChecksPort);
+        Assert.Equal(47392, AuthRemoteServer.Phase1VisualChecksPort);
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

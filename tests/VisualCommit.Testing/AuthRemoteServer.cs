@@ -33,6 +33,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>The port of the servers whose URL the visual checks' pictures show (design 7.3).</summary>
     public const int VisualChecksPort = 47391;
 
+    /// <summary>
+    /// The port of the server of phase 1's clone checks (13 and 14, D150), whose URL picture 13b
+    /// shows: not <see cref="VisualChecksPort"/>, because phase 1's checks run in another process
+    /// at the same time as phase 3's.
+    /// </summary>
+    public const int Phase1VisualChecksPort = 47392;
+
     /// <summary>The folder name of the served repository, and the last part of <see cref="Url"/>.</summary>
     public const string RepositoryName = "remote.git";
 
@@ -198,12 +205,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Starts a server for a visual check: on <see cref="VisualChecksPort"/>, or on a free port
-    /// when it is taken; serving <paramref name="existingRepository"/> in place when given
+    /// Starts a server for a visual check: on <paramref name="port"/>, <see cref="VisualChecksPort"/>
+    /// unless another is given (<see cref="Phase1VisualChecksPort"/>), or on a free port when it
+    /// is taken; serving <paramref name="existingRepository"/> in place when given
     /// (<see cref="StartAsync"/>).
     /// </summary>
-    public static Task<AuthRemoteServer> StartForVisualChecksAsync(string? existingRepository = null) =>
-        StartAsync(VisualChecksPort, fallBackToFreePort: true, existingRepository);
+    public static Task<AuthRemoteServer> StartForVisualChecksAsync(string? existingRepository = null, int port = VisualChecksPort) =>
+        StartAsync(port, fallBackToFreePort: true, existingRepository);
 
     /// <summary>The folder that holds <paramref name="repository"/> and its name, once it is known to be a bare repository with a name that needs no escaping in a URL.</summary>
     private static async Task<(string ProjectRoot, string Name)?> ExistingRepositoryAsync(string repository, IReadOnlyDictionary<string, string?> environment)
