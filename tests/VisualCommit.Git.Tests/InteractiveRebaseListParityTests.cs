@@ -73,6 +73,29 @@ public class InteractiveRebaseListParityTests
     }
 
     [Fact]
+    public async Task An_empty_commit_is_listed_as_git_keeps_it_also_when_the_target_has_an_empty_commit_too()
+    {
+        // The review's findings 2 and 3: every empty commit has the same patch id, so an empty
+        // commit on the target side hid the branch's from --cherry-pick, while git's todo keeps a
+        // commit that starts empty; a commit whose non-empty patch is upstream is still left out.
+        using var repo = await DivergedAsync();
+        await repo.CommitAsync("Empty on topic");
+        await repo.CommitFileAsync("four.txt", "four\n", "Topic four");
+        await repo.CheckoutAsync("main");
+        await repo.CommitAsync("CI trigger");
+        await repo.GitAsync("cherry-pick", "topic~3");
+        await repo.CheckoutAsync("topic");
+        var repository = await OpenAsync(repo);
+        var main = await RevAsync(repo, "main");
+
+        var list = await repository.ReadRebaseListAsync(main, Topic, fromCommit: false, cancellationToken: TestCancelled);
+
+        Assert.Equal(await GitTodoAsync(repo, main), list.CommitsOldestFirst.Select(entry => entry.Sha));
+        Assert.Equal(["Topic one", "Topic three", "Empty on topic", "Topic four"], list.CommitsOldestFirst.Select(entry => entry.Subject));
+        Assert.Equal("Empty on topic\n", list.CommitsOldestFirst[2].Message);
+    }
+
+    [Fact]
     public async Task A_merge_in_the_range_is_counted_and_left_out_of_the_list_as_git_leaves_it_out()
     {
         using var repo = await DivergedAsync();
