@@ -36,4 +36,10 @@
   <StreamGeometry x:Key="IconList">M3 12 h0.01 M3 18 h0.01 M3 6 h0.01 M8 12 h13 M8 18 h13 M8 6 h13</StreamGeometry>
   <StreamGeometry x:Key="IconListTree">M21 12 h-8 M21 6 H8 M21 18 h-8 M3 6 v4 c0 1.1 0.9 2 2 2 h3 M3 10 v6 c0 1.1 0.9 2 2 2 h3</StreamGeometry>
 
+  <!-- Phase 4 (docs/phase-4-design.md 7.3): the interactive rebase's drag handle, and the
+       resolver's previous file and previous conflict. -->
+  <StreamGeometry x:Key="IconGrip">M8 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M8 5 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M8 19 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M14 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M14 5 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M14 19 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0</StreamGeometry>
+  <StreamGeometry x:Key="IconChevronLeft">M15 18 l-6 -6 l6 -6</StreamGeometry>
+  <StreamGeometry x:Key="IconChevronUp">M18 15 l-6 -6 l-6 6</StreamGeometry>
+
 </ResourceDictionary>
