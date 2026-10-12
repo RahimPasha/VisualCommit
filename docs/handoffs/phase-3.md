@@ -134,7 +134,9 @@ As in phase 2's handoff, with phase 3's own project and a much longer real-windo
 
 0. **Clean up first** (part of the gate). `git worktree list`: every sub-agent worktree under
    `.claude/worktrees/` whose branch is merged is removed with `git worktree remove <path>`
-   (without force) and its branch with `git branch -d <branch>`. With `core.fsmonitor=true` in
+   (without force) and its branch with `git branch -d <branch>`, together with the
+   `worktree-<name>` branch the worktree tool made for it (`git branch --list "worktree-*"`).
+   With `core.fsmonitor=true` in
    the owner's global configuration, git starts a file-system monitor daemon for every working
    tree it runs in, and the daemon outlives the agent that started it and watches every file the
    builds and tests write there: stop each with `git -C <path> fsmonitor--daemon stop` before
@@ -201,7 +203,7 @@ Menus are data built by `RepositoryMenus` and drawn by `MenuLayer` with Avalonia
 | Add a dialog | A view model deriving from `DialogViewModel<TResult>` in `ViewModels/Dialogs/` and a view named after it in `Views/Dialogs/` (`NameDialogViewModel` → `NameDialogView.axaml`): `DialogViewLocator` finds it by name, so no shared XAML changes. Show it with `RepositoryOperations.ShowDialogAsync` or `DialogHostViewModel.ShowAsync`; dialogs stack (D104). Confirmations are `ConfirmationRequest` and `ConfirmAsync`. Long texts with a URL use `UrlTextBlock`; masked input uses `SecretTextBox` (D130) |
 | Add a git read | A method in `GitRepository.<area>.cs`; every read runs with `GIT_OPTIONAL_LOCKS=0` and must never write (D47). The in-progress state is read from files in the git folder without git calls (`GitRepository.InProgress.cs`, D89) |
 | Add a git write | As a read, taking `NetworkOptions` (prompt variables, progress, `-c` settings) so that a hook or filter can prompt (D107). `GitRunner` adds `LC_ALL`, `LANGUAGE=en`, `GIT_TERMINAL_PROMPT=0`, `GIT_EDITOR=:`, `GIT_SEQUENCE_EDITOR=:` and `GIT_LITERAL_PATHSPECS=1` to every call (D30, D68, D74, D102, D128; the exceptions `check-ignore` and `stash push`, D108). Put `--end-of-options` before names that may start with "-" (D128) |
-| Add a prompt kind | `GitPromptKind` in `Core/Operations/GitPrompts.cs`; `GitPromptClassifier` (`Git/Prompts`) recognises git's or ssh's text; `PromptDialogs` (`App/Services`) maps the kind to its dialog view model in `PromptDialogViewModels.cs`; the view by naming convention. Test with recorded texts through the real helper (`AskPassRunner`, `PromptDialogTests`) |
+| Add a prompt kind | `GitPromptKind` in `Core/Operations/GitPrompts.cs`; `GitPromptClassifier` (`Git/Prompts`) recognises git's or ssh's text; `PromptDialogs` (`App/Services/PromptDialogs.cs`) maps the kind to its dialog view model (`ViewModels/Dialogs/PromptDialogViewModels.cs`); the view by naming convention. Test with recorded texts through the real helper (`AskPassRunner`, `PromptDialogTests`) |
 | Add a banner state | `InProgressKind` and `InProgressState` (`Core/Git/InProgressState.cs`), read in `GitRepository.InProgress.cs`; the text, the Abort label and the Abort question in `ConflictBannerViewModel` (`TextFor`, `AbortButtonText`, `AbortConfirmation`); the abort itself through `IInProgressActions`. Phase 4's Continue and Skip go here |
 | Add a background operation | Like `AutoFetchScheduler`: a `GitOperation` with `IsBackground = true`, started with `IOperationQueue.TryStartInBackground`, which starts only when the queue is idle; prompts are denied; it is never pre-empted, and the user may cancel it only while an operation of theirs waits (D85, D125) |
 | Add a toolbar button | `ToolbarViewModel` (its enabled state and the disabled reason as tooltip) and `IToolbarActions`, implemented by `RepositoryOperations`; `ToolbarView.axaml` |
@@ -221,7 +223,7 @@ Menus are data built by `RepositoryMenus` and drawn by `MenuLayer` with Avalonia
 | A menu | `RepositoryMenus.ForCommit` and its tests in `RepositoryMenusTests`; how it is drawn, kept on the overlay and invoked through UI Automation: `ContextMenuAdapterTests` |
 | A dialog | `NameDialogViewModel` and `NameDialogView.axaml` (validation as the user types with `RefNameRules`, D96); tests in `DialogTests` |
 | A scripted visual check | `Phase3Checks.C.Tags.cs` with `Phase3Expectations.C.cs` |
-| A real-window check | `Phase3RealWindowPass.C.cs`: one launch shared by checks 13 and 16, waits on `RealApp.OperationEnded`, rows found as `RefItem` |
+| A real-window check | `Phase3RealWindowPass.C.cs`: checks 13 and 16 share one launch (`Checks_13_and_16_on_one_launch`); check 14 waits for each operation's log line with `ExpectOperation` (in `Phase3RealWindowPass.cs`, on `AppLogFile.OperationEnded`) and finds left-panel rows with `RealApp.RefRow` (the `RefItem` elements) |
 
 Rules worth keeping:
 
@@ -311,13 +313,12 @@ Rules worth keeping:
 | The askpass helper is framework-dependent: it needs the app's .NET runtime | Phase 8's self-contained packaging must include it | `src/VisualCommit.AskPass` |
 | Port 47391 of the visual checks' server: if taken, the server falls back and check 21's pictures differ in the port | Low | `AuthRemoteServer` (D97) |
 | The detached-HEAD question counts commits that only a stash or a backup ref reaches as left behind | Asks more often than needed, the safe way | `RepositoryOperations.Branches.cs` |
-| `RepositoryOperations.Run.cs` keeps two unused `NotBuilt` helpers from the work packages' stubs | Debt, harmless | `RepositoryOperations.Run.cs` |
 | The first tokenization of a grammar that embeds others (Markdown) reads TextMateSharp's grammar list without a shared lock while another thread may add to it; no test has failed on it | Low | `DiffHighlighter` (`Controls/Diff/DiffSyntax.cs`) |
 | Noticed by the gate's inspection and left (the pictures match their expected results): the in-progress banner wraps the git command at its hyphen (25a, 25e); a disabled menu item's tooltip opens below the pointer and covers the next item, and a long worktree path in a tooltip wraps at any character (30g); the sixth row of the unstaged list is cut by the stage panel's fixed split (26a); in the real window a hover colour stays on a left-panel row after a right-click (28a) | Cosmetic | The report's "Found by the gate" |
 | The working-changes row's dashed line is drawn through the node of another branch that uses the same lane when HEAD is not the top row (06f; D60's drawing rule) | Cosmetic and rare; a question of the graph's layout, put to the owner | `Controls/CommitGraphControl.Render.cs`; the report's "Found by the gate" |
 | Q1 varies with the laptop's temperature more than its margin allows: 1189 ms at the gate on a rested laptop, but 1438 to 2268 ms in other runs the same day on a warmer one. The real-window test fails above 2000 ms, so a warm laptop can fail the gate by itself. Run alternately on the same machine, the phase 2 build (`master` at `d3814bd`) needed 1688 to 1911 ms and phase 3's 1618 to 2002 ms: phase 3 costs no more than the noise | Can fail a gate that is otherwise green. Rest the laptop before the real-window pass; to tell a slower build from a warm machine, run the old and the new build alternately on the same machine | `Phase1RealWindowPass.cs` (the 2000 ms limit); the report's Run section; plan risk 10 |
 | The default run is bound by the processors, and the virus scanner takes a large share of them: 19 min 15 s at the gate rested and alone, 21 to 26 minutes with other programs busy | Every full run and gate; an exclusion for the repository folder and `%TEMP%\VisualCommit.Tests` is put to the owner | Windows Security on the development machine; plan risk 12 |
-| Durations written before phase 3's gate are stale: phases 0 to 2's 5 to 6 minutes for the default run and about 6 for the real-window pass, and CI's time per job "not measured since". Measured at the gate: 19 min 15 s, 11 min 11 s, and CI's jobs 3 min 11 s to 10 min 56 s (State of the repo) | Misleading when planning a run, wherever a doc still gives the old figures | CLAUDE.md's Commands section (the real-window pass's "about 6 minutes", CI's time per job); phase 2's handoff keeps its own figures as history |
+| Durations written before phase 3's gate are stale: phases 0 to 2's 5 to 6 minutes for the default run and about 6 for the real-window pass, and CI's time per job "not measured since". Measured at the gate: 19 min 15 s, 11 min 11 s, and CI's jobs 3 min 11 s to 10 min 56 s (State of the repo) | Misleading when planning a run, wherever a doc still gives the old figures | CLAUDE.md's Commands section was brought up to date in `9c8a8d1`. Still old: `README.md` ("It takes a few minutes") and the comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` ("about half a minute"); phase 2's handoff keeps its own figures as history |
 | CI's time limits were raised for phase 3's tests: 22 minutes per job and 14 per test step (25 for the container jobs). A hung job now runs that long before it is stopped | Low; whether to keep them is put to the owner | `.github/workflows/ci.yml` |
 | Earlier phases' issues that remain: the welcome page's wrapping of a long folder (phase 6; 11a), the side-by-side diff's overlay scroll bars (phase 2's 07d), type changes without hunk actions, untracked nested repositories, old discard snapshots without UI, the Linux watcher's inotify use: see phase 1's and phase 2's handoffs | As there | |
 
@@ -380,12 +381,29 @@ Do first:
 
 1. Read the Known issues above and phase 2's, and check the latest CI runs on `master`.
 2. Check that no worktree, `wip/*` branch or fsmonitor daemon is left from phase 3
-   (`git worktree list`, `git branch --list "wip/*"`).
-3. Write phase 4's checks into `docs/test-reports/phase-4.md` before the UI, as phase 3's report
+   (`git worktree list`, `git branch --list "wip/*"`). The worktree tool also leaves a local
+   branch `worktree-<name>` for every worktree it made: phase 3 left 29 (`worktree-wf_*`), all
+   at `master`'s `d3814bd` and merged. List them with `git branch --list "worktree-*"` and
+   delete each with `git branch -d <branch>` (never `-D`: a refusal means unmerged work).
+3. Correct the comment in `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj`
+   (line 8): it says the pass takes over the mouse "for about half a minute"; it is about 11
+   minutes. Not a doc change, so it was left out of phase 3 after the gate (it would have reset
+   it); make it with phase 4's first code commit.
+4. Write phase 4's checks into `docs/test-reports/phase-4.md` before the UI, as phase 3's report
    does: scenario graphs derived by running git, menu notation, git's texts for 2.36.
 
+Running one phase's part of the real-window pass is untried: each phase's checks are one class
+(`Phase0RealWindowPass` to `Phase3RealWindowPass`), so
+`dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase3RealWindowPass"`
+should select phase 3's; it needs that phase's scripted pictures from a `dotnet test` run first.
+Tell the owner before any run of the pass.
+
 Open points for phase 4 (record each as a decision; ask the owner those that are a matter of
-taste):
+taste, as phase 3 did before its design: step 2 of its checklist in `status.md`'s history). Two
+of them would change a recorded decision, which CLAUDE.md allows only with the owner: using the
+sequencer for several picks changes D88 ("git's sequencer is never started by the app"), and a
+confirmation or backup before a rebase changes D83 ("Nothing else confirms"). Put both to the
+owner with a recommendation before designing.
 
 - **Where phase 4's scripted checks run.** The default run is already 19 to 26 minutes on the
   laptop (19 min 15 s at phase 3's gate, rested and alone). A project of its own
@@ -421,9 +439,10 @@ Risks to watch:
 
 - Accept phase 3, or say what to change: "Phase 3 accepted" merges `phase/3-operations` into
   `master`. A session on any machine can do that and what follows it.
-- When you have a Mac at hand: the ten-step checklist at the end of the
+- When you have a Mac at hand: the eleven-step checklist at the end of the
   [phase 3 test report](../test-reports/phase-3.md) (among its steps cancelling a fetch, the
-  first context menu's latency, and Cmd for selecting several commits), and the seven-, nine-
+  first context menu's latency, Cmd for selecting several commits, and whether a Markdown
+  diff's headings are bold), and the seven-, nine-
   and eight-step ones of phases 2, 1 and 0, still open.
 - Questions the gate left, each with a recommendation (Known issues has the details):
   - **CI's time limits.** Keep 22 minutes per job and 14 per test step (25 for the container

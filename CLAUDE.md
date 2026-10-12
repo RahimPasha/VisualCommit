@@ -278,7 +278,7 @@ What to know about them:
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
 - The default tests take about 19 minutes on the Windows machine with nothing else running, up to 26
-  with other load (measured on 2026-10-11 and 12 during phase 3's gate, from Git Bash, while other programs took one to three of its eight logical
+  with other load (measured on 2026-10-11 during phase 3's gate, from Git Bash, while other programs took one to three of its eight logical
   processors). The four test projects run side by side, and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it. Alone, `VisualCommit.Git.Tests` takes about 7
@@ -334,3 +334,4 @@ lacks.
 | `docs/handoffs/phase-N.md` | What phase N built and what the next phase must know |
 | `docs/test-reports/phase-N.md` | Visual checks for phase N: expected results, then outcomes |
 | `docs/cloud-sessions.md` | For the owner: working on the project from a Claude Code cloud session |
+| `docs/phase-3-design.md` | Phase 3's design, kept as history; decisions and the report cite its sections as "design N.N" |

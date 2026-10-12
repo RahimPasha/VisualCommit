@@ -99,9 +99,9 @@ Closing:
 - [x] 28. `architecture.md` describes what is built.
 - [x] 29. `plan.md`: anything not delivered moved, risks updated.
 - [x] 30. Handoff `docs/handoffs/phase-3.md`.
-- [ ] 31. Cold-read check by a fresh agent; gaps fixed (running).
+- [x] 31. Cold-read check by a fresh agent; gaps fixed (the README, the handoff, the dates and the Docs map; one non-doc item left for phase 4, in the handoff's "Do first").
 - [x] 32. `status.md`: links, CI, gate commit, waiting on the owner, state.
-- [ ] 33. Owner told what passed, what did not, and what needs a decision.
+- [x] 33. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -148,7 +148,9 @@ This always names the single next thing to do and is kept accurate in every comm
 
 - Nothing is in flight. All work packages and fix branches of phase 3 are merged and their
   worktrees and `wip/*` branches removed. The working tree was clean when phase 3 was set to
-  "Awaiting acceptance".
+  "Awaiting acceptance". Left on the Windows machine: 29 local branches `worktree-wf_*` that the
+  worktree tool made, all at `d3814bd` and merged; delete them with `git branch -d` (the phase 3
+  handoff, "For the next phase", step 2).
 - Phase 3 was built mostly by sub-agents in git worktrees under `.claude/worktrees/`
   (git-ignored); the phase 3 handoff's "Things that cost time" says what to watch for: a worktree
   starts from `master` and its agent must create its branch from the phase branch first; merged

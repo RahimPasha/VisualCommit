@@ -15,7 +15,7 @@ pass repeats; "n/a" says why it does not.
 
 ## Run
 
-The gate ran on 2026-10-11 and 2026-10-12 (local time, UTC-7) on the Windows machine, on the
+The gate ran on 2026-10-11 (local time, UTC-7) on the Windows machine, on the
 commit `594f9fb`: the last commit that changed anything other than docs. Both passes ran on it
 with every other program of the session stopped and the laptop rested (the git file-system
 monitor daemons that the user's global `core.fsmonitor=true` leaves behind stopped, the build
