@@ -135,23 +135,12 @@ every commit.
 
 ## Waiting on the owner
 
-- When phase 4 starts, answers that the handoff's "Open points for phase 4" still needs:
-  - **The sequencer (D88).** The owner asked for an explanation on 2026-10-11; it is written out
-    in plain words in the handoff's "Open points for phase 4". Whether a several-commit pick, and
-    phase 4's Continue, use git's own list of commits is still undecided; the recommendation is
-    yes.
-  - **Cleaning up backups.** The owner wants a rebase to save a backup and asked that old backups
-    be cleaned up at some point (D135); phase 4 proposes how (how long they are kept, when they
-    are deleted) before building it.
-- A virus-scanner exclusion on the development machine: the owner agrees (2026-10-11) but has
-  not set it up yet; only they can (a security setting of their machine). The two folders are the
-  repository (`D:\Projects\Personal\Visual Git`) and the tests' temporary folder
-  (`C:\Users\rpkha\AppData\Local\Temp\VisualCommit.Tests`, where they create their throwaway
-  repositories and the shared 100k-commit one). Windows Security, Virus & threat protection,
-  Manage settings, Exclusions, Add or remove exclusions, Add an exclusion, Folder; or, in an
-  administrator PowerShell, `Add-MpPreference -ExclusionPath '<folder>','<folder>'` (undo with
-  `Remove-MpPreference -ExclusionPath`; `(Get-MpPreference).ExclusionPath` lists them). Then run
-  the default tests, compare with the 19 minutes of phase 3's gate, and note the times.
+- Answered on 2026-10-12, for phase 4 to build: git's own list of commits for several picks
+  (D136, replacing a sentence of D88); automatic cleanup of the backups after 30 days or when
+  more than a set number exist (D137): phase 4 proposes the number and the moment.
+- The virus-scanner exclusion on the development machine (the repository folder and
+  `C:\Users\rpkha\AppData\Local\Temp\VisualCommit.Tests`) was set up by the owner on
+  2026-10-12. Time the next full default run and compare it with the 19 minutes of phase 3's gate.
 - Still open, with the handoff's recommendation to keep things as they are unless the owner says
   otherwise: the working-changes row's dashed line crossing another branch's node (06f);
   case-only branch renames on Windows and macOS (D131); an ssh timeout for auto-fetch (D125).

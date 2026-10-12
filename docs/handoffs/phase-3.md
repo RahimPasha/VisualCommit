@@ -404,11 +404,11 @@ Tell the owner before any run of the pass.
 
 Open points for phase 4 (record each as a decision; ask the owner those that are a matter of
 taste, as phase 3 did before its design: step 2 of its checklist in `status.md`'s history). Using
-the sequencer for several picks would change D88 ("git's sequencer is never started by the app"),
-which CLAUDE.md allows only with the owner: the owner asked on 2026-10-11 what it means, and
-still has to answer (recommendation: yes, use it). The owner answered the rebase's confirmation
-and backup on 2026-10-11 (D135): no confirmation, a backup of the old tip, and a cleanup of the
-backups to design.
+the sequencer for several picks changes D88 ("git's sequencer is never started by the app"),
+which CLAUDE.md allows only with the owner: the owner asked on 2026-10-11 what it means and
+answered on 2026-10-12: use git's list (D136). The owner answered the rebase's confirmation and
+backup on 2026-10-11 (D135): no confirmation and a backup of the old tip; and the backups' cleanup
+on 2026-10-12 (D137): automatic, after 30 days or when there are more than a set number.
 
 - **Where phase 4's scripted checks run.** The default run is already 19 to 26 minutes on the
   laptop (19 min 15 s at phase 3's gate, rested and alone). A project of its own
@@ -418,20 +418,22 @@ backups to design.
   `GIT_SEQUENCE_EDITOR=:` on every call (D102). Interactive rebase sets its own sequence editor;
   decide how the todo list reaches git, and whether a multi-commit pick should now use the
   sequencer so that Continue works on it. The owner did not know the word (2026-10-11), so the
-  question was put to them in plain words, and is still open: picking commits A, B and C can be
-  done in two ways. Phase 3 runs `git cherry-pick A`, then B, then C as separate commands and
+  question was put to them in plain words, and answered on 2026-10-12: use git's list (D136).
+  Picking commits A, B and C can be done in two ways. Phase 3 runs `git cherry-pick A`, then B, then C as separate commands and
   stops at the first conflict: the app forgets the rest, resolving and continuing finishes only
   that one pick, and Abort undoes only that pick (the earlier ones stay). Git can also take the
   whole list at once, `git cherry-pick A B C`: it keeps the list in `.git/sequencer`, Continue
   resumes with the rest, and Abort puts the branch back to where it was before A. A rebase
-  already works the second way (its list is in `.git/rebase-merge`). Recommendation: use git's
-  list for several picks as well, because it gives the owner's wish of "abort, and everything is as
+  already works the second way (its list is in `.git/rebase-merge`). The owner chose git's list
+  for several picks as well, because it gives the owner's wish of "abort, and everything is as
   it was" and one Continue for the whole list; the cost is that the stage panel's Commit button
   can no longer finish such a pick by itself (D88's reason), so phase 4's Continue has to.
-- **Backups for a rebase** (D135, answered): a rebase saves a backup ref of the old tip and asks no
-  confirmation. Design its kind and name, and how old backups are cleaned up (how long they are
-  kept, when they are deleted); phase 5's undo reads them by kind and time (D83), so a cleanup
-  must keep what undo offers.
+- **Backups for a rebase** (D135 and D137, answered): a rebase saves a backup ref of the old tip
+  and asks no confirmation. Design its kind and name, and the automatic cleanup the owner asked
+  for: a backup goes after 30 days, or when more than a set number exist (oldest first); propose
+  the number and the moment (when a repository is opened, after a new backup). Phase 5's undo reads
+  the backups by kind and time (D83), so the cleanup must keep what undo offers, and never deletes
+  the backup of an operation that is still in progress.
 - **Continue and Skip** for each `InProgressKind`, including a pick sequence started in a
   terminal (D110) and a pull's rebase; the banner's texts now say "continue in a terminal".
 - **Reftable** (D128): if the resolver depends on `CHERRY_PICK_HEAD` and `REVERT_HEAD`, read them
@@ -468,8 +470,8 @@ Risks to watch:
   - **The dashed line through another branch's node (06f).** Change how the working-changes
     row's line is drawn now? Recommended: no. It shows only when HEAD is not the top row; settle
     it with the next change to the graph's layout.
-  - **A virus-scanner exclusion.** The owner agrees (2026-10-11) and has still to set it up
-    (`status.md`, "Waiting on the owner"; the steps are there). Exclude the repository folder and `%TEMP%\VisualCommit.Tests`
+  - **A virus-scanner exclusion.** Done by the owner on 2026-10-12 (the two folders below):
+    time the next full default run and compare it with phase 3's 19 minutes. Exclude the repository folder and `%TEMP%\VisualCommit.Tests`
     from Windows Defender on the development machine? Recommended: try it for those two folders
     only, which hold the project's builds and test repositories, and measure the default run
     before and after. It is a security setting of your machine, so only you can make it.
