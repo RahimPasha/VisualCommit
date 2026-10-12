@@ -1638,6 +1638,75 @@ The code's doc comments are the reference; where the build differs from or adds 
   is the operation `Clean up backups` (section 9 (b)). A confirmation with no question hides its
   question line (the list's `Discard the changes to this list?`).
 
+### 14.5 What the independent review changed (step 22)
+
+A workflow of five reviewers (git safety, the operations against this design, the resolver, the
+list, concurrency), each finding verified by an adversarial second agent, confirmed 31 findings
+(5 major, 26 minor, none a blocker; `wf_4ce4a46c-fbf`). They were fixed in `d1abbc4` (WP9-G),
+`68a5275` (WP9-R) and `d0b4372` (WP9-L), each with a test that fails without its fix. Where this
+list and the sections above differ, this list holds:
+
+- **Continue at a rebase stop** (5.1, 5.4): disabled while a tracked file that is not conflicted
+  has unstaged changes (submodules aside, as git's own check), with the reason `Stage or stash the
+  other changed files first: git continues a rebase only when nothing else is unstaged`; the git
+  layer checks the same (`update-index -q --refresh`, `diff-files --ignore-submodules`) before the
+  app's own commit and refuses without committing ("Continue failed", that sentence and a full
+  stop). Git refused only after the app had committed. `WorkingTreeStatus.Submodules` and
+  `HasUnstagedTrackedChanges`.
+- **The list** (2.3): read with `--cherry-mark`; a commit marked as already upstream is left out
+  only when it does not start empty, as git's todo does (an empty commit of the branch was dropped
+  silently). A target's own message is read with `git log -1 --encoding=UTF-8 -z --format=%B`.
+- **Outcomes** (1.4, 10.2): "up to date" is read from a whole line of git's output (`Current branch
+  <b> is up to date.`, `HEAD is up to date.`), never a substring. An autostash that conflicted is
+  reported by every rebase the app runs (the interactive rebase, a squash, a pull's rebase,
+  Continue, Skip) as the plain rebase reports it: `<result>; your changes conflicted when put back:
+  they are also kept in the stash` (`ContinueResult` and `PullResult` gain `AutostashConflicted`). A
+  pull whose rebase stops says the fork point's left-out commits too (`…; git left out {k} commits
+  that {up} once had`). The "Rebase stopped" dialog names the new base from refs read after the
+  pull's fetch.
+- **OwnAmendFailed** (8, 5.4): with `rebase.rescheduleFailedExec=true` git 2.36 reschedules the
+  app's amend; that stop (no `stopped-sha`, no pick head, `done` ending with a commit command, the
+  todo starting with the app's `vc-message-<n>` exec) is OwnAmendFailed, and Skip, or Continue
+  after the amend, removes the rescheduled line. Skip's question there: `Skip the new message of
+  {short}?` / `"{subject}" keeps its old message, and the rebase goes on.`, the backup detail,
+  `Skip` (danger).
+- **Squash's refusals**: `{b} changed while this waited: select the commits again. Nothing was
+  squashed.`; `HEAD moved while this waited: select the commits again. Nothing was squashed.`;
+  `Nothing was squashed.` after the HEAD-moved sentence.
+- **Skip** clears a message the user typed for the skipped commit
+  (`WorkingChangesViewModel.SkipClearingMessageAsync`). "Check out and rebase"'s dirty-tree check
+  leaves submodule entries out. A discard, a line discard and a Restore that saved a snapshot run
+  the backups' clean-up too (14.4's exception is gone).
+- **The resolver** (11.5): result blocks are matched to the panes' blocks keeping their order, by
+  the most evidence (the same sides, then the lines around the block), ties to the nearer place in
+  the file, a block a choice took out matched last, so identical blocks keep their own bars.
+- **Mark resolved** (11.6, 11.7): a side taken whole is written byte for byte while the result is
+  exactly its text; otherwise in the encoding the file was read in. The markers question is asked
+  for any marker line of the marker size (`ConflictText.HasMarkerLines`, which the stage panel's
+  check uses too), not only for whole blocks. The "changed on disk" check runs inside the queued
+  `Resolve {file}` operation just before it writes (`IConflictActions.MarkResolvedAsync(entry,
+  content, expected)` returns `MarkResolvedResult`): when the file differs, nothing is written, the
+  status says `{file} changed on disk: nothing was written` (warning), and the resolver asks 7.2's
+  question about the text taken at the click; no refresh replaces the result from the click to the
+  end. A file missing when read and still missing is written without asking.
+- **The merge tool** (11.9): a tool started from the file menu makes the resolver on that file
+  wait for it (`IConflictActions.RunningMergeTool`, `MergeToolStarted`), read-only with `Waiting for
+  {tool} to close…`, whenever it opens or the tool starts; a tool it did not start leaves a
+  modified result as it is. After a cancel, git's `_BACKUP_` copy goes back over the file while the
+  path is unmerged (two or more, or one that cannot be moved, are kept and logged).
+- **The sides' names** (11.4): after a pull's merge (`Merge branch '<x>' of <url>`), Theirs is a
+  remote branch `<r>/<x>` at `MERGE_HEAD` (the upstream first), else the current branch's upstream
+  when it is `<x>` on its remote, else `<x> of <url>` (`IConflictActions.MergedRemoteBranch`).
+- **The card** (11.8): `UD` and `DU` on `p~label` (a file moved aside by a file/folder clash; git
+  writes a branch label's slashes as underscores) get the moved-aside card.
+- **Esc** (11.10) does nothing while Mark resolved or the merge tool runs, and the close button
+  neither. **File order** (11.2): the stage list's order, also in its tree mode, as if every folder
+  were open (`IConflictActions.InStageListOrder`).
+- **The list while Start waits or runs** (2.2, 11.1): it cannot be left; Esc and Cancel do
+  nothing, and `TryLeaveGraphAreaAsync` declines without a question, so a diff, the resolver or
+  another list waits until the rebase has ended. The host starts and closes only the list it shows
+  (`IInteractiveRebaseHost.StartAsync(list, plan)`, `Close(list)`).
+
 ## 15. Decisions
 
 Recorded in `decisions.md` with their reasons; in short:
