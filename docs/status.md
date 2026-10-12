@@ -104,10 +104,10 @@ Git layer:
 
 App:
 
-- [ ] 15. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
+- [x] 15. Menus: "Rebase onto" in the commit and branch menus, rebase and interactive rebase in
   the drop menu, squash on a multi-selection, pull with rebase, interactive rebase from a commit.
   Built in WP4 (merged in `9242ed8`, its review's fixes in `f68ece9`).
-- [ ] 16. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
+- [x] 16. The banner's Continue, Skip and Abort for every kind; the stage panel during a stop
   (its message, and its button for a rebase or a list of picks). Built in WP4 (`9242ed8`,
   `f68ece9`).
 - [x] 17. The interactive rebase list in the graph area, newest on top: an action per commit,
@@ -117,20 +117,23 @@ App:
   editable result, ours, theirs or both per conflict, a whole file from one side, mark resolved,
   the next and previous conflicted file, the external merge tool. WP6 (`60cf77a`) and the lead's
   hooks (`f184e95`, the clean-up at opening `51fb51f`); design 14.4.
-- [ ] 19. Phases 0 to 3's checks updated for anything phase 4 changes on purpose, recorded under
+- [x] 19. Phases 0 to 3's checks updated for anything phase 4 changes on purpose, recorded under
   "Changes to expected results" in the phase 4 report. Phase 3's walk-through and real-window
   files updated in WP4 (81 of 81 and phases 0 to 2's 50 of 50 pass on `51fb51f`); what WP4's fixes
   change is still to be recorded.
 
 Visual checks:
 
-- [ ] 20. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase4`,
-  screenshots under `artifacts/visual/phase-4/scripted/`.
-- [ ] 21. Real-window pass for the checks marked for it (`Phase4RealWindowPass`).
+- [x] 20. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase4`,
+  screenshots under `artifacts/visual/phase-4/scripted/`. WP7-A, -B, -C1, -C2 (merged by
+  `96166f2`): 18 checks in 22 test methods, 122 pictures.
+- [x] 21. Real-window pass for the checks marked for it (`Phase4RealWindowPass`). WP8
+  (`7507207`): 10 launches, 28 captures; written and compiled, run in the gate.
 
 Closing:
 
-- [ ] 22. An independent review of the code before the gate; what it finds fixed, with tests.
+- [x] 22. An independent review of the code before the gate; what it finds fixed, with tests.
+  31 findings (5 major, 26 minor, none a blocker), fixed in WP9-G, -R and -L; design 14.5.
 - [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed.
 - [ ] 24. CI run of the gate's commit read, every job.
@@ -191,12 +194,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-All of steps 15 to 18, 20 and 22's fixes are merged: the review's 31 findings were fixed by WP9-G
-(`d1abbc4`), WP9-R (`68a5275`) and WP9-L (`d0b4372`), recorded in design 14.5. The default run on
-this machine passed 2411 of 2411 on `5f489d9` (26 min 30 s, WP8 writing beside it). WP8 writes the
-real-window pass's code in a worktree (compiled, not run). Then: read CI for `ffbdcfd`, merge WP8,
-tick steps 15, 16, 19, 20 and 22, and start the gate (step 23): a clean `dotnet test`, then the
-real-window pass, after telling the owner.
+Step 23, the gate, on `f1c2d17` (the last commit that changed anything other than docs): the
+default run at the root is running; then rest three minutes, tell the owner, and run the
+real-window pass (`dotnet test --project tests/VisualCommit.RealWindowTests -c Release`); then
+inspect every picture of both passes, complete the report, read CI of `f1c2d17` (run
+38313339886), and the closing steps 25 to 30.
 
 This always names the single next thing to do and is kept accurate in every commit.
 
