@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -54,6 +55,9 @@ internal sealed class HunkHeaderLayer : Panel
         pane.TextView.VisualLinesChanged += (_, _) => Update();
         pane.TextView.ScrollOffsetChanged += (_, _) => InvalidateArrange();
     }
+
+    /// <summary>The bar of header row <paramref name="row"/>, or null when that row is not in view.</summary>
+    public HunkHeaderBar? BarAt(int row) => _bars.GetValueOrDefault(row);
 
     /// <summary>Drops every bar and makes them again: the theme, the buttons or the rows changed.</summary>
     public void Rebuild()
@@ -128,67 +132,82 @@ internal sealed class HunkHeaderLayer : Panel
 }
 
 /// <summary>
-/// What a hunk header row shows over the text column: the hunk background, git's header line in
-/// the code font and the secondary colour from the start of the text column, cut with "…" 8
-/// before the first button, and at the right end the hunk's buttons (22 high, 8 of padding each
-/// side of the label, 4 apart, 6 from the right edge). Side by side, the left pane's bar shows
-/// the text and the right pane's the buttons. A click on the bar selects nothing.
+/// What a header row shows over the text column, as its pane's host says
+/// (<see cref="IDiffPaneHost.HeaderOf"/>): the row's background; a text in the secondary colour,
+/// cut with "…"; and buttons (22 high, 8 of padding each side of the label, 4 apart). The diff's
+/// hunk header has git's header line in the code font from the start of the text column, cut 8
+/// before the first button, and the hunk's buttons at the right end, 6 from the right edge; side
+/// by side, the left pane's bar shows the text and the right pane's the buttons. A conflict
+/// block's bar has its buttons first, 6 from the left edge. A click on the bar selects nothing.
 /// </summary>
 internal sealed class HunkHeaderBar : Border
 {
     /// <summary>The height of a hunk button.</summary>
     public const double ButtonHeight = 22;
 
+    private readonly List<Button> _buttons = [];
+
     public HunkHeaderBar(DiffPane pane, int row)
     {
         Row = row;
         var header = pane.Rows[row];
         Hunk = header.Hunk;
+        var host = pane.Host;
         var palette = pane.Palette;
-        Background = palette.Hunk;
+        var content = host.HeaderOf(pane, header);
+        Background = host.RowBackground(pane, header, null);
         Height = DiffPane.HeaderHeight;
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        if (pane.Side != PaneSide.Right)
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(content.ButtonsFirst ? "Auto,*" : "*,Auto") };
+        if (content.Text is { } headerText)
         {
             var text = new TextBlock
             {
-                Text = header.HeaderText,
-                FontFamily = palette.CodeFont,
+                Text = headerText,
+                FontFamily = content.TextInCodeFont ? palette.CodeFont : host.View.FontFamily,
                 FontSize = DiffPalette.CodeFontSize,
                 Foreground = palette.TextSecondary,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = content.ButtonsFirst ? new Thickness(8, 0, 6, 0) : new Thickness(0, 0, 8, 0),
             };
-            ToolTip.SetTip(text, header.HeaderText);
+            ToolTip.SetTip(text, headerText);
+            if (content.TextAutomationId is { } textId)
+            {
+                AutomationProperties.SetAutomationId(text, textId);
+            }
+
+            if (content.ButtonsFirst)
+            {
+                Grid.SetColumn(text, 1);
+            }
+
             grid.Children.Add(text);
         }
 
-        if (pane.Side != PaneSide.Left)
+        if (content.Buttons is { } buttonsContent)
         {
             var buttons = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 4,
-                Margin = new Thickness(0, 0, 6, 0),
+                Margin = content.ButtonsFirst ? new Thickness(6, 0, 0, 0) : new Thickness(0, 0, 6, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
 
-            var owner = pane.Owner;
-            switch (owner.HunkActions)
+            foreach (var button in buttonsContent)
             {
-                case HunkActions.StageAndDiscard:
-                    buttons.Children.Add(MakeButton(owner, "Stage hunk", "StageHunkButton", HunkAction.Stage));
-                    buttons.Children.Add(MakeButton(owner, "Discard hunk", "DiscardHunkButton", HunkAction.Discard));
-                    break;
-                case HunkActions.Unstage:
-                    buttons.Children.Add(MakeButton(owner, "Unstage hunk", "UnstageHunkButton", HunkAction.Unstage));
-                    break;
+                var made = MakeButton(host.View, button);
+                _buttons.Add(made);
+                buttons.Children.Add(made);
             }
 
-            Grid.SetColumn(buttons, 1);
+            if (!content.ButtonsFirst)
+            {
+                Grid.SetColumn(buttons, 1);
+            }
+
             grid.Children.Add(buttons);
         }
 
@@ -198,8 +217,11 @@ internal sealed class HunkHeaderBar : Border
     /// <summary>The header's row.</summary>
     public int Row { get; }
 
-    /// <summary>The header's hunk.</summary>
+    /// <summary>The header's hunk (a conflict block's bar: the block).</summary>
     public int Hunk { get; }
+
+    /// <summary>The bar's buttons, in order.</summary>
+    public IReadOnlyList<Button> Buttons => _buttons;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -209,27 +231,27 @@ internal sealed class HunkHeaderBar : Border
         e.Handled = true;
     }
 
-    private Button MakeButton(DiffTextView owner, string label, string automationId, HunkAction action)
+    private static Button MakeButton(TemplatedControl view, HeaderBarButton content)
     {
         var button = new Button
         {
-            Content = label,
+            Content = content.Label,
             Height = ButtonHeight,
             Padding = new Thickness(8, 0),
             FontSize = DiffPalette.CodeFontSize,
-            FontFamily = owner.FontFamily,
+            FontFamily = view.FontFamily,
             VerticalAlignment = VerticalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
 
-        if (owner.TryFindResource("VcActionButton", out var theme) && theme is ControlTheme controlTheme)
+        if (view.TryFindResource("VcActionButton", out var theme) && theme is ControlTheme controlTheme)
         {
             button.Theme = controlTheme;
         }
 
-        AutomationProperties.SetAutomationId(button, automationId);
-        AutomationProperties.SetName(button, label);
-        button.Click += (_, _) => owner.RaiseHunkAction(Hunk, action);
+        AutomationProperties.SetAutomationId(button, content.AutomationId);
+        AutomationProperties.SetName(button, content.Label);
+        button.Click += (_, _) => content.Click();
         return button;
     }
 }
