@@ -361,8 +361,9 @@ public sealed partial class GitRepository
     /// (<c>You must edit all merge conflicts</c>, exit 1, nothing changed) throw instead: the call
     /// changed nothing. A rebase onto refuses to run while a folder is there (1.3), so for it a
     /// folder after the call is always its own.</item>
-    /// <item>No folder, exit 0, and git said <c>is up to date</c> (<c>Current branch &lt;b&gt; is
-    /// up to date.</c>, <c>HEAD is up to date.</c>): <see cref="RebaseOutcome.UpToDate"/>.</item>
+    /// <item>No folder, exit 0, and a whole line of standard output is git's <c>Current branch
+    /// &lt;b&gt; is up to date.</c> or <c>HEAD is up to date.</c> (not the words inside a commit
+    /// subject git printed): <see cref="RebaseOutcome.UpToDate"/>.</item>
     /// <item>No folder, exit 0: <see cref="RebaseOutcome.Rebased"/> with HEAD as the new tip, and
     /// <see cref="RebaseResult.AutostashConflicted"/> with the conflicted files when standard error
     /// says <c>Applying autostash resulted in conflicts</c>.</item>
@@ -386,7 +387,7 @@ public sealed partial class GitRepository
         }
 
         result.EnsureSuccess(command);
-        if (Says(result, "is up to date"))
+        if (SaysUpToDate(result))
         {
             return new RebaseResult(RebaseOutcome.UpToDate, null, 0);
         }
@@ -405,6 +406,15 @@ public sealed partial class GitRepository
 
         static bool Says(GitResult result, string text) =>
             result.StandardOutput.Contains(text, StringComparison.Ordinal) || result.StandardError.Contains(text, StringComparison.Ordinal);
+
+        // Git's own line on standard output, whole: "Current branch <b> is up to date." or, while
+        // detached, "HEAD is up to date.". Not the words anywhere: git also prints commit subjects
+        // ("Applying: <subject>" under the apply backend, "dropping <sha> <subject> -- patch
+        // contents already upstream"), and a subject can say "is up to date" (the review's finding 11).
+        static bool SaysUpToDate(GitResult result) =>
+            result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(line => line == "HEAD is up to date."
+                    || (line.StartsWith("Current branch ", StringComparison.Ordinal) && line.EndsWith(" is up to date.", StringComparison.Ordinal)));
     }
 
     /// <summary>The number of conflicted paths in the index: the distinct paths of <c>git ls-files --unmerged -z</c> (one line per stage).</summary>
