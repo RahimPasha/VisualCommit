@@ -183,6 +183,30 @@ public sealed partial class RepositoryOperations : IConflictActions
     public MergeToolRun? RunningMergeTool => _runningMergeTool;
 
     /// <inheritdoc/>
+    public string? MergedRemoteBranch(string branch, string? mergeHead)
+    {
+        ArgumentNullException.ThrowIfNull(branch);
+        if (Refs is not { } refs)
+        {
+            return null;
+        }
+
+        // The app's pull merges the current branch's upstream (D147's FETCH_HEAD).
+        if (refs.Refs.FirstOrDefault(gitRef => gitRef is { Kind: RefKind.LocalBranch, IsHead: true }) is { Upstream: { } upstream, UpstreamRemoteRef: { } remoteRef } head
+            && !head.HasLocalUpstream
+            && string.Equals(remoteRef, "refs/heads/" + branch, StringComparison.Ordinal))
+        {
+            return upstream;
+        }
+
+        return mergeHead is null
+            ? null
+            : refs.Refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.RemoteBranch
+                && string.Equals(gitRef.TargetSha, mergeHead, StringComparison.Ordinal)
+                && string.Equals(gitRef.Name, $"{gitRef.RemoteName}/{branch}", StringComparison.Ordinal))?.Name;
+    }
+
+    /// <inheritdoc/>
     public event EventHandler<MergeToolRun>? MergeToolStarted;
 
     /// <summary>One side in its working-tree form (11.6); null when that side has no file or the read failed (logged).</summary>

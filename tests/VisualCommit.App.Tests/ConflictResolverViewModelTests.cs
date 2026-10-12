@@ -116,6 +116,42 @@ public class ConflictResolverViewModelTests
         Assert.Equal((ours, theirs), (ConflictResolverTexts.OursTitle(oursName), ConflictResolverTexts.TheirsTitle(theirsName)));
     }
 
+    [Theory]
+    [InlineData("Merge branch 'main' of C:/repos/up", "main", "origin/main", "Theirs: origin/main")]
+    [InlineData("Merge branch 'main' of https://example.com/r.git into topic", "main", "upstream/main", "Theirs: upstream/main")]
+    [InlineData("Merge branch 'feature' of https://example.com/r.git into topic", "feature", null, "Theirs: feature of https://example.com/r.git")]
+    [InlineData("Merge branch 'main' into topic", null, null, "Theirs: main")]
+    public void A_pull_s_merge_names_theirs_after_the_remote_tracking_branch_it_came_from(string subject, string? asked, string? remoteBranch, string theirs)
+    {
+        // 11.4: a pull merges FETCH_HEAD, whose MERGE_MSG names the branch of the remote's URL.
+        var state = new InProgressState(InProgressKind.Merge, "5c77ffb0ec78abf986d121f42013eee14422e5a5", subject, null, null, 0, false);
+        var questions = new List<string>();
+
+        var (ours, theirsName) = ConflictResolverTexts.SideNames(state, "main", null, "6cca2620f6a3", branch =>
+        {
+            questions.Add(branch);
+            return remoteBranch;
+        });
+
+        Assert.Equal(("main", theirs), (ours, ConflictResolverTexts.TheirsTitle(theirsName)));
+        string[] expected = asked is null ? [] : [asked];
+        Assert.Equal(expected, questions);
+    }
+
+    [AvaloniaFact]
+    public async Task After_a_pull_s_merge_the_panes_are_ours_and_the_upstream_s()
+    {
+        var actions = new RecordingConflictActions();
+        actions.SetText("notes.txt", Notes);
+        actions.RemoteBranches = (branch, mergeHead) => branch == "main" && mergeHead == "5c77ffb0ec78abf986d121f42013eee14422e5a5" ? "origin/main" : null;
+        var state = new InProgressState(InProgressKind.Merge, "5c77ffb0ec78abf986d121f42013eee14422e5a5", "Merge branch 'main' of C:/repos/up", null, null, 0, false);
+        var resolver = Resolver(actions, new ManualDelays(), Status(state, Entry("notes.txt")));
+
+        await resolver.OpenAsync("notes.txt");
+
+        Assert.Equal(("Ours: main", "Theirs: origin/main"), (resolver.OursTitle, resolver.TheirsTitle));
+    }
+
     [Fact]
     public void A_rebase_names_its_new_base_and_the_user_s_own_commit()
     {

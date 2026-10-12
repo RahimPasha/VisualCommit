@@ -70,6 +70,15 @@ public interface IConflictActions
 
     /// <summary>Asks a question on the window's dialog layer (7.2); true when the user goes ahead.</summary>
     Task<bool> ConfirmAsync(ConfirmationRequest request);
+
+    /// <summary>
+    /// For a merge whose message names <paramref name="branch"/> of a URL (<c>Merge branch
+    /// '&lt;x&gt;' of &lt;url&gt;</c>: a pull's merge of <c>FETCH_HEAD</c>, 11.4), the
+    /// remote-tracking branch it came from, as the refs last read have it: the current branch's
+    /// upstream when that is <paramref name="branch"/> on its remote, else a remote branch
+    /// <c>&lt;remote&gt;/&lt;branch&gt;</c> at <paramref name="mergeHead"/>; null when neither is.
+    /// </summary>
+    string? MergedRemoteBranch(string branch, string? mergeHead);
 }
 
 /// <summary>A merge tool that runs (<see cref="IConflictActions.RunningMergeTool"/>, 11.9).</summary>

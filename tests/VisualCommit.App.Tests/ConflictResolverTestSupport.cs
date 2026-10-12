@@ -135,6 +135,11 @@ internal sealed class RecordingConflictActions : IConflictActions
         return WriteAsync(path);
     }
 
+    /// <summary>What <see cref="MergedRemoteBranch"/> answers for a branch and MERGE_HEAD; null: none.</summary>
+    public Func<string, string?, string?>? RemoteBranches { get; set; }
+
+    public string? MergedRemoteBranch(string branch, string? mergeHead) => RemoteBranches?.Invoke(branch, mergeHead);
+
     /// <summary>The merge tool that runs now, as the test sets it (the file menu's, for instance).</summary>
     public MergeToolRun? RunningMergeTool { get; set; }
 

@@ -159,6 +159,8 @@ public class ConflictResolverRealGitTests
 
         public MergeToolRun? RunningMergeTool => null;
 
+        public string? MergedRemoteBranch(string branch, string? mergeHead) => null;
+
         public event EventHandler<MergeToolRun>? MergeToolStarted
         {
             add { }

@@ -1474,7 +1474,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     }
 
     private (string Ours, string Theirs) SideNames(string? theirsLabel) =>
-        ConflictResolverTexts.SideNames(_inProgress, _currentName, _ontoName, theirsLabel);
+        ConflictResolverTexts.SideNames(_inProgress, _currentName, _ontoName, theirsLabel, branch => _actions.MergedRemoteBranch(branch, _inProgress.Commit));
 
     private void NotifyToolbar()
     {

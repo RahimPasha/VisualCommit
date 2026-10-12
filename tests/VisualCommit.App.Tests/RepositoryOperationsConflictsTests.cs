@@ -288,6 +288,35 @@ public class RepositoryOperationsConflictsTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task After_a_pull_that_merges_and_conflicts_theirs_is_named_after_the_upstream()
+    {
+        // main tracks origin/main; both changed the same line; the pull merges FETCH_HEAD as the
+        // app's own pull does (MERGE_MSG: "Merge branch 'main' of <url>").
+        using var data = new TempDirectory("data");
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("notes.txt", "line 1\nline 2\n", "Base");
+        var bare = await repo.AddBareRemoteAsync("origin");
+        await repo.PushAsync("origin", setUpstream: true, "main");
+        var other = await repo.CloneSiblingAsync("other", bare);
+        await other.GitAsync("checkout", "--quiet", "-B", "main", "origin/main");
+        await other.CommitFileAsync("notes.txt", "line 1\nline 2 upstream\n", "Upstream");
+        await other.PushAsync("origin", setUpstream: false, "main");
+        await repo.CommitFileAsync("notes.txt", "line 1\nline 2 local\n", "Local");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("merge", "--no-edit", "FETCH_HEAD")).ExitCode);
+        Assert.StartsWith("Merge branch 'main' of ", File.ReadAllLines(Path.Combine(repo.Path, ".git", "MERGE_MSG"))[0], StringComparison.Ordinal);
+
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1 && repository.Refs is not null, "the conflict read", TimeSpan.FromSeconds(30));
+        repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
+        await app.WaitForResolverAsync("notes.txt");
+
+        Assert.Equal(("Ours: main", "Theirs: origin/main"), (repository.Resolver.OursTitle, repository.Resolver.TheirsTitle));
+    }
+
     [Fact]
     public async Task Without_merge_tool_in_gits_configuration_nothing_runs()
     {
