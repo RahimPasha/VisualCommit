@@ -9,6 +9,7 @@
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -53,6 +54,15 @@ public static class RepositoryMenus
             : context.IsUnborn ? ToolbarViewModel.UnbornText
             : InProgressReason(context);
 
+        // docs/phase-4-design.md 1.1 and 2.1: the object's own reasons first, then HEAD's state.
+        var rebaseReason = commit.IsReachableFromHead ? AlreadyOn(current) : RebaseStateReason(context);
+        var fromHereReason = commit.HeadLineDepth == 0 ? NoCommitsAfterThisOne(current)
+            : !commit.IsReachableFromHead ? NotOn(current)
+            : commit.HeadLineDepth is null ? MergeLiesBetweenThisCommitAnd(current)
+            : RebaseStateReason(context);
+        var onto = new RebaseTarget(sha, OperationTexts.Short(sha));
+        var branchRef = context.CurrentBranch?.FullName ?? HeadsPrefix + current;
+
         return Build(
             Header(CommitHeader(sha, commit.Subject)),
             [
@@ -63,6 +73,12 @@ public static class RepositoryMenus
             [
                 Item(actions, CherryPickOnto(current), () => actions.CherryPickAsync(sha), pickReason),
                 Item(actions, commit.IsMerge ? RevertThisMergeCommit : RevertThisCommit, () => actions.RevertAsync(sha), InProgressReason(context)),
+                Item(actions, RebaseOntoThisCommit(current), () => actions.RebaseAsync(onto), rebaseReason),
+                Item(
+                    actions,
+                    InteractiveRebaseFromHere(current),
+                    () => actions.OpenInteractiveRebaseAsync(new InteractiveRebaseRequest(onto, branchRef, FromHere: true, CheckoutFirst: false)),
+                    fromHereReason),
                 Item(actions, ResetTo(current), () => actions.ResetAsync(sha), context.IsUnborn ? ToolbarViewModel.UnbornText : null),
             ],
             [
@@ -91,6 +107,7 @@ public static class RepositoryMenus
         return Build(
             Header(CommitsHeader(commits.Count)),
             [
+                Item(actions, SquashCommits(commits.Count), () => actions.SquashAsync(shas), SquashReason(context, commits)),
                 Item(actions, CherryPickSeveralOnto(commits.Count, current), () => actions.CherryPickSeveralAsync(shas), pickReason),
                 Item(actions, RevertSeveralLabel(commits.Count), () => actions.RevertSeveralAsync(shas), revertReason),
             ],
@@ -178,9 +195,13 @@ public static class RepositoryMenus
         var mergeReason = MergeReason(context);
 
         MenuItem? pullOrFastForward = null;
+        MenuItem? pullRebase = null;
         if (hasUpstream && isCurrent)
         {
             pullOrFastForward = AsToolbar(Item(actions, PullFrom(upstream!), actions.PullAsync), context.Toolbar.Pull);
+
+            // docs/phase-4-design.md section 6: enabled exactly as the toolbar's Pull (D90).
+            pullRebase = AsToolbar(Item(actions, PullFromRebase(upstream!), actions.PullRebaseAsync), context.Toolbar.Pull);
         }
         else if (hasUpstream)
         {
@@ -211,13 +232,17 @@ public static class RepositoryMenus
         }
 
         var hasRemoteBranches = context.RemoteBranches.Any();
+        var onto = new RebaseTarget(branch.TargetSha, name);
         return Build(
             Header(name),
             [
                 isCurrent ? null : Item(actions, CheckOutName(name), () => actions.CheckoutAsync(branchRef)),
                 isCurrent ? null : Item(actions, MergeInto(name, current), () => actions.MergeAsync(branchRef, MergeMode.Default), mergeReason),
                 isCurrent ? null : Item(actions, MergeIntoWithCommit(name, current), () => actions.MergeAsync(branchRef, MergeMode.NoFastForward), mergeReason),
+                isCurrent ? null : RebaseOntoItem(context, onto, actions),
+                isCurrent ? null : InteractiveRebaseOntoItem(context, onto, actions),
                 pullOrFastForward,
+                pullRebase,
             ],
             [push, forcePush],
             [
@@ -259,6 +284,7 @@ public static class RepositoryMenus
         var current = context.CurrentName;
         var mergeReason = MergeReason(context);
         var onLocal = string.Equals(context.Head.BranchName, local, StringComparison.Ordinal);
+        var onto = new RebaseTarget(branch.TargetSha, name);
 
         return Build(
             Header(name),
@@ -266,6 +292,8 @@ public static class RepositoryMenus
                 Item(actions, CheckOutName(name), () => actions.CheckoutAsync(remoteBranchRef), onLocal ? AlreadyCheckedOut(local) : null),
                 Item(actions, MergeInto(name, current), () => actions.MergeAsync(remoteBranchRef, MergeMode.Default), mergeReason),
                 Item(actions, MergeIntoWithCommit(name, current), () => actions.MergeAsync(remoteBranchRef, MergeMode.NoFastForward), mergeReason),
+                RebaseOntoItem(context, onto, actions),
+                InteractiveRebaseOntoItem(context, onto, actions),
             ],
             [
                 Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(remoteBranchRef)),
@@ -390,11 +418,42 @@ public static class RepositoryMenus
         return Build(
             Header(file.FileName),
             [
+                file.IsConflicted ? Item(actions, ResolveConflict, () => ResolveConflictAsync(actions, file.File)) : null,
+                file.IsConflicted && OffersMergeTool(context, file.Path)
+                    ? Item(actions, OpenInMergeTool, () => actions.OpenMergeToolAsync(file.Path), context.MergeTool is null ? OperationTexts.SetMergeTool : null)
+                    : null,
                 Item(actions, file.IsConflicted ? MarkAsResolved : Stage, () => actions.StageFilesAsync([file.File])),
                 Item(actions, DiscardChanges, () => actions.DiscardFilesAsync([file.File]), DiscardReason(file)),
             ],
             IgnoreItems(file, actions),
             FileItems(file, actions));
+    }
+
+    /// <summary>
+    /// Whether the conflicted file's menu offers "Open in merge tool" (docs/phase-4-design.md 7.1,
+    /// 11.9): for text and binary conflicts only, both sides modified or both added and neither a
+    /// submodule nor a symbolic link, because git never runs the tool for the others (0.4). A
+    /// path the status does not describe is offered, and git decides.
+    /// </summary>
+    public static bool OffersMergeTool(RepositoryMenuContext context, string path)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(path);
+        var entry = context.Status.Conflicts.FirstOrDefault(conflict => string.Equals(conflict.Path, path, StringComparison.Ordinal));
+        return entry is null
+            || (entry.Kind is ConflictKind.BothModified or ConflictKind.BothAdded
+                && !entry.IsSubmodule
+                && entry.OursMode != SymbolicLinkMode
+                && entry.TheirsMode != SymbolicLinkMode);
+    }
+
+    /// <summary>A symbolic link's mode in git's index (0.4).</summary>
+    private const string SymbolicLinkMode = "120000";
+
+    private static Task ResolveConflictAsync(IRepositoryActions actions, ChangedFile file)
+    {
+        actions.ResolveConflict(file);
+        return Task.CompletedTask;
     }
 
     /// <summary>A file in the staged list (4b): header the file name; unstage — open file, show in folder, copy path.</summary>
@@ -513,6 +572,7 @@ public static class RepositoryMenus
         var target = targetBranch?.Name ?? ShortName(targetRef);
         var header = Header(DropHeader(source, target));
         var notAncestor = context.Drop is { TargetIsAncestorOfSource: false } ? HasCommitsThat(target, source) : null;
+        var rebaseItems = DropRebaseItems(context, sourceRef, source, targetBranch, target, actions);
 
         if (targetRef.StartsWith("refs/remotes/", StringComparison.Ordinal))
         {
@@ -524,7 +584,8 @@ public static class RepositoryMenus
                 [
                     Item(actions, PushTo(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: false), mapped),
                     Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), mapped),
-                ]);
+                ],
+                rebaseItems);
         }
 
         var isCurrent = targetBranch is not null ? IsCurrent(context, targetBranch) : string.Equals(HeadsPrefix + context.Head.BranchName, targetRef, StringComparison.Ordinal);
@@ -537,7 +598,8 @@ public static class RepositoryMenus
                     Item(actions, MergeInto(source, target), () => actions.MergeAsync(sourceRef, MergeMode.Default), mergeReason),
                     Item(actions, MergeIntoWithCommit(source, target), () => actions.MergeAsync(sourceRef, MergeMode.NoFastForward), mergeReason),
                     Item(actions, FastForwardTo(target, source), () => actions.MergeAsync(sourceRef, MergeMode.FastForwardOnly), notAncestor ?? mergeReason),
-                ]);
+                ],
+                rebaseItems);
         }
 
         var worktree = context.OtherWorktreeOf(targetRef) is { } path ? CheckedOutInAnotherWorktree(target, path) : null;
@@ -546,8 +608,153 @@ public static class RepositoryMenus
             [
                 Item(actions, FastForwardTo(target, source), () => actions.FastForwardBranchAsync(targetRef, sourceRef), notAncestor ?? worktree),
                 Item(actions, CheckOutAndMergeLabel(target, source), () => actions.CheckoutAndMergeAsync(targetRef, sourceRef), worktree),
-            ]);
+            ],
+            rebaseItems);
     }
+
+    /// <summary>
+    /// A drop's rebase items (docs/phase-4-design.md 1.1, 2.1, 7.1, 14.3), which change the source
+    /// A: none for a remote source (a remote branch is never rebased); for the current branch
+    /// "Rebase {A} onto {B}" and "Interactive rebase of {A} onto {B}…"; for another local branch
+    /// "Check out {A} and rebase it onto {B}" and "… interactively…", which check A out first and
+    /// so are not disabled while HEAD is detached. Reasons, the object's own first: A already
+    /// contains B (<see cref="DropFacts.SourceContainsTarget"/>; not for the interactive items), A
+    /// checked out in another worktree (the checkout items), then HEAD's state.
+    /// </summary>
+    private static MenuItem?[] DropRebaseItems(RepositoryMenuContext context, string sourceRef, string source, GitRef? targetBranch, string target, IRepositoryActions actions)
+    {
+        if (!sourceRef.StartsWith(HeadsPrefix, StringComparison.Ordinal) || targetBranch is null)
+        {
+            return [];
+        }
+
+        var onto = new RebaseTarget(targetBranch.TargetSha, target);
+        var upToDate = context.Drop?.SourceContainsTarget == true ? UpToDateWith(source, target) : null;
+        var sourceIsCurrent = string.Equals(HeadsPrefix + context.Head.BranchName, sourceRef, StringComparison.Ordinal);
+        if (sourceIsCurrent)
+        {
+            return
+            [
+                Item(actions, RebaseOntoLabel(source, target), () => actions.RebaseAsync(onto), upToDate ?? RebaseStateReason(context)),
+                Item(
+                    actions,
+                    InteractiveRebaseOnto(source, target),
+                    () => actions.OpenInteractiveRebaseAsync(new InteractiveRebaseRequest(onto, sourceRef, FromHere: false, CheckoutFirst: false)),
+                    RebaseStateReason(context)),
+            ];
+        }
+
+        var worktree = context.OtherWorktreeOf(sourceRef) is { } path ? CheckedOutInAnotherWorktree(source, path) : null;
+        var state = context.IsUnborn ? ToolbarViewModel.UnbornText : OperationOrConflictsReason(context);
+        return
+        [
+            Item(actions, CheckOutAndRebaseLabel(source, target), () => actions.CheckoutAndRebaseAsync(sourceRef, onto), upToDate ?? worktree ?? state),
+            Item(
+                actions,
+                CheckOutAndRebaseInteractively(source, target),
+                () => actions.OpenInteractiveRebaseAsync(new InteractiveRebaseRequest(onto, sourceRef, FromHere: false, CheckoutFirst: true)),
+                worktree ?? state),
+        ];
+    }
+
+    /// <summary>
+    /// A branch's "Rebase {cur} onto {b}" (1.1): disabled when HEAD already reaches the branch's
+    /// tip (<see cref="RepositoryMenuContext.TipsOnHead"/>), then by HEAD's state.
+    /// </summary>
+    private static MenuItem RebaseOntoItem(RepositoryMenuContext context, RebaseTarget onto, IRepositoryActions actions)
+    {
+        var current = context.CurrentName;
+        var reason = context.TipsOnHead.Contains(onto.Sha) ? UpToDateWith(current, onto.Name) : RebaseStateReason(context);
+        return Item(actions, RebaseOntoLabel(current, onto.Name), () => actions.RebaseAsync(onto), reason);
+    }
+
+    /// <summary>A branch's "Interactive rebase of {cur} onto {b}…" (2.1): only HEAD's state disables it (1.1's reasons 3 to 5).</summary>
+    private static MenuItem InteractiveRebaseOntoItem(RepositoryMenuContext context, RebaseTarget onto, IRepositoryActions actions)
+    {
+        var current = context.CurrentName;
+        var branchRef = context.CurrentBranch?.FullName ?? HeadsPrefix + current;
+        return Item(
+            actions,
+            InteractiveRebaseOnto(current, onto.Name),
+            () => actions.OpenInteractiveRebaseAsync(new InteractiveRebaseRequest(onto, branchRef, FromHere: false, CheckoutFirst: false)),
+            RebaseStateReason(context));
+    }
+
+    /// <summary>
+    /// "Squash {N} commits…" (docs/phase-4-design.md section 3): its reasons in order, or null when
+    /// the selected commits are a first-parent chain on HEAD's linear line without a merge or the
+    /// root, HEAD is on a branch, and nothing is in progress or conflicted.
+    /// </summary>
+    private static string? SquashReason(RepositoryMenuContext context, IReadOnlyList<CommitMenuInfo> commits)
+    {
+        var current = context.CurrentName;
+        if (commits.Any(commit => commit.IsMerge || commit.IsStash))
+        {
+            return MergeCommitsCannotBeSquashed;
+        }
+
+        if (commits.Any(commit => !commit.IsReachableFromHead))
+        {
+            return OnlyCommitsOfCanBeSquashed(current);
+        }
+
+        if (!IsFirstParentChain(commits))
+        {
+            return SelectCommitsThatFollowOneAnother;
+        }
+
+        if (commits.Any(commit => commit.HeadLineDepth is null))
+        {
+            return MergeLiesBetweenTheseCommitsAnd(current);
+        }
+
+        if (commits.Any(commit => commit.Parents.Count == 0))
+        {
+            return FirstCommitCannotBeSquashed;
+        }
+
+        return context.IsDetached ? CheckOutABranchToSquash : OperationOrConflictsReason(context);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="commits"/> follow one another: walking first parents from the one
+    /// no other selected commit has as its first parent reaches every selected commit.
+    /// </summary>
+    private static bool IsFirstParentChain(IReadOnlyList<CommitMenuInfo> commits)
+    {
+        var bySha = commits.GroupBy(commit => commit.Sha, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var firstParents = new HashSet<string>(bySha.Values.Where(commit => commit.Parents.Count > 0).Select(commit => commit.Parents[0]), StringComparer.Ordinal);
+        var newest = bySha.Values.Where(commit => !firstParents.Contains(commit.Sha)).ToList();
+        if (newest.Count != 1)
+        {
+            return false;
+        }
+
+        var reached = 1;
+        var walk = newest[0];
+        while (walk.Parents.Count > 0 && bySha.TryGetValue(walk.Parents[0], out var parent) && reached < bySha.Count)
+        {
+            walk = parent;
+            reached++;
+        }
+
+        return reached == bySha.Count;
+    }
+
+    /// <summary>
+    /// 1.1's reasons 3 to 5 for the rebase, interactive rebase and squash items: HEAD detached
+    /// ("Check out a branch to rebase"), unborn, an operation in progress, conflicts without one.
+    /// </summary>
+    private static string? RebaseStateReason(RepositoryMenuContext context) =>
+        context.IsDetached ? CheckOutABranchToRebase
+        : context.IsUnborn ? ToolbarViewModel.UnbornText
+        : OperationOrConflictsReason(context);
+
+    /// <summary>"Finish or abort the {kind} first" while an operation is in progress, "Resolve the conflicts first" while files conflict without one (D119); null otherwise.</summary>
+    private static string? OperationOrConflictsReason(RepositoryMenuContext context) =>
+        context.InProgress.IsActive ? FinishOrAbort(context.InProgress.Kind)
+        : context.Status.Unstaged.Any(file => file.Kind == FileChangeKind.Conflicted) ? ResolveTheConflictsFirst
+        : null;
 
     /// <summary>
     /// A menu from its header and groups of items (4a, D114): the header first; the items of each

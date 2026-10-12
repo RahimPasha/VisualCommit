@@ -52,11 +52,11 @@ public partial class RepositoryMenusTests
         app.RightClick(alphaTwo);
         var menu = app.Menu();
         Assert.Equal(
-            ["ce5ea6a Alpha two", "Check out this commit", "Create branch here…", "Create tag here…", "—", "Cherry-pick onto main", "Revert this commit", "Reset main to this commit…", "—", "Copy SHA"],
+            ["ce5ea6a Alpha two", "Check out this commit", "Create branch here…", "Create tag here…", "—", "Cherry-pick onto main", "Revert this commit", "Rebase main onto this commit", "Interactive rebase of main from here… (disabled: \"This commit is not on main\")", "Reset main to this commit…", "—", "Copy SHA"],
             menu.Lines());
         Assert.Equal("Check out this commit", menu.Highlighted?.Label);
         AssertNear(alphaTwo + new Point(2, 2), menu.Bounds.TopLeft);
-        Assert.InRange(menu.Bounds.Height, 230, 234);
+        Assert.InRange(menu.Bounds.Height, 282, 286);
         Assert.Equal(AlphaTwoRow, repository.SelectedIndex);
         Assert.Equal(MenuOpenedBy.Pointer, app.Session.Shell.Menu.OpenedBy);
         TestPictures.Save(app, "01a-commit-menu");
@@ -141,8 +141,8 @@ public partial class RepositoryMenusTests
         app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/feature/alpha"));
         var menu = app.Menu();
         Assert.Equal("feature/alpha", menu.Header);
-        Assert.Equal(13, menu.Items.Count);
-        Assert.InRange(menu.Bounds.Height, 404, 408);
+        Assert.Equal(15, menu.Items.Count);
+        Assert.InRange(menu.Bounds.Height, 456, 460);
         Assert.True(repository.Selection.IsEmpty);
         Assert.DoesNotContain(repository.LeftPanel.Rows.OfType<RefItemRow>(), row => row.IsSelected);
         Assert.True(repository.Details.ShowsPlaceholder);
@@ -317,11 +317,11 @@ public partial class RepositoryMenusTests
         var menu = app.Menu();
 
         Assert.Equal(
-            ["feature/alpha → main", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")"],
+            ["feature/alpha → main", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")", "—", "Check out feature/alpha and rebase it onto main", "Check out feature/alpha and rebase it onto main interactively…"],
             menu.Lines());
         Assert.Equal("Merge feature/alpha into main", menu.Highlighted?.Label);
         AssertNear(main + new Point(2, 2), menu.Bounds.TopLeft);
-        Assert.InRange(menu.Bounds.Height, 108, 112);
+        Assert.InRange(menu.Bounds.Height, 169, 173);
         TestPictures.Save(app, "07b-drop-menu");
         app.PressKey(Key.Escape);
     }
@@ -465,7 +465,7 @@ public partial class RepositoryMenusTests
             app.PressMouse(app.GraphLabelBounds(Row(commit => commit.Subject == "Alpha two"), "feature/alpha").Center);
             app.MoveMouseHeld(main, steps: 6);
             app.ReleaseMouse(main);
-            AssertWholeLabels(app, "Merge feature/alpha into main (create a merge commit)");
+            AssertWholeLabels(app, "Check out feature/alpha and rebase it onto main interactively…");
             TestPictures.Save(app, name + "-drop");
             app.PressKey(Key.Escape);
 
@@ -477,7 +477,7 @@ public partial class RepositoryMenusTests
 
             // The commit menu on a merge commit.
             app.RightClick(app.GraphRowPoint(Row(commit => commit.Sha == merge)));
-            AssertWholeLabels(app, "Reset main to this commit…");
+            AssertWholeLabels(app, "Interactive rebase of main from here…");
             TestPictures.Save(app, name + "-merge-commit");
             app.PressKey(Key.Escape);
 

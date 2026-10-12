@@ -75,6 +75,71 @@ public static partial class OperationTexts
         /// <summary>2.8, 2.12, 2.14, D119: "Finish or abort the merge first", the operations' and the toolbar's text (<see cref="FinishOrAbortFirst"/>).</summary>
         public static string FinishOrAbort(Core.Git.InProgressKind kind) => FinishOrAbortFirst(kind);
 
+        // Rebase, interactive rebase and squash (docs/phase-4-design.md 1.1, 2.1, 3, 7.1, 10.4).
+
+        /// <summary>A commit's "Rebase {cur} onto this commit" (1.1).</summary>
+        public static string RebaseOntoThisCommit(string current) => $"Rebase {current} onto this commit";
+
+        /// <summary>A commit's "Interactive rebase of {cur} from here…" (2.1).</summary>
+        public static string InteractiveRebaseFromHere(string current) => $"Interactive rebase of {current} from here…";
+
+        /// <summary>A branch's or a drop's "Rebase {cur} onto {b}" (1.1).</summary>
+        public static string RebaseOntoLabel(string branch, string target) => $"Rebase {branch} onto {target}";
+
+        /// <summary>A branch's or a drop's "Interactive rebase of {cur} onto {b}…" (2.1).</summary>
+        public static string InteractiveRebaseOnto(string branch, string target) => $"Interactive rebase of {branch} onto {target}…";
+
+        /// <summary>A drop's "Check out {A} and rebase it onto {B}" (1.1).</summary>
+        public static string CheckOutAndRebaseLabel(string branch, string target) => $"Check out {branch} and rebase it onto {target}";
+
+        /// <summary>A drop's "Check out {A} and rebase it onto {B} interactively…" (2.1).</summary>
+        public static string CheckOutAndRebaseInteractively(string branch, string target) => $"Check out {branch} and rebase it onto {target} interactively…";
+
+        /// <summary>Several commits' "Squash {N} commits…" (section 3).</summary>
+        public static string SquashCommits(int count) => $"Squash {Count(count, "commit")}…";
+
+        /// <summary>The current branch's "Pull from {up} (rebase)" (section 6).</summary>
+        public static string PullFromRebase(string upstream) => $"Pull from {upstream} (rebase)";
+
+        /// <summary>10.4: rebase and interactive items while HEAD is detached.</summary>
+        public const string CheckOutABranchToRebase = "Check out a branch to rebase";
+
+        /// <summary>10.4: squash while HEAD is detached.</summary>
+        public const string CheckOutABranchToSquash = "Check out a branch to squash";
+
+        /// <summary>10.4, D119: conflicts without an operation (a stash that did not apply cleanly).</summary>
+        public const string ResolveTheConflictsFirst = ToolbarViewModel.ResolveConflictsText;
+
+        /// <summary>10.4: "from here" on HEAD's own commit.</summary>
+        public static string NoCommitsAfterThisOne(string current) => $"{current} has no commits after this one";
+
+        /// <summary>10.4: "from here" on a commit HEAD does not reach.</summary>
+        public static string NotOn(string current) => $"This commit is not on {current}";
+
+        /// <summary>10.4: "from here" on a commit HEAD reaches off its linear first-parent line.</summary>
+        public static string MergeLiesBetweenThisCommitAnd(string current) => $"A merge lies between this commit and {current}";
+
+        /// <summary>10.4: squash with a merge commit among the selected.</summary>
+        public const string MergeCommitsCannotBeSquashed = "Merge commits cannot be squashed";
+
+        /// <summary>10.4: squash with a selected commit HEAD does not reach.</summary>
+        public static string OnlyCommitsOfCanBeSquashed(string current) => $"Only commits of {current} can be squashed";
+
+        /// <summary>10.4: squash of commits that are not a first-parent chain.</summary>
+        public const string SelectCommitsThatFollowOneAnother = "Select commits that follow one another";
+
+        /// <summary>10.4: squash of a chain off HEAD's linear line.</summary>
+        public static string MergeLiesBetweenTheseCommitsAnd(string current) => $"A merge lies between these commits and {current}";
+
+        /// <summary>10.4: squash with the root commit among the selected.</summary>
+        public const string FirstCommitCannotBeSquashed = "The first commit cannot be squashed";
+
+        // The conflicted file's menu (7.1, 11.9).
+
+        public const string ResolveConflict = "Resolve conflict";
+
+        public const string OpenInMergeTool = "Open in merge tool";
+
 
         // Stashes (2.24 to 2.26).
 

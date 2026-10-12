@@ -7,7 +7,10 @@
              AutomationProperties.AutomationId="StagePanel">
 
   <!-- The stage panel (C4), in the right panel while the working-changes row is selected: as
-       "The stage panel" in docs/test-reports/phase-2.md describes it. -->
+       "The stage panel" in docs/test-reports/phase-2.md describes it. During a list of picks or
+       reverts, or a rebase, the commit button continues the operation ("Continue rebase") and
+       Amend is disabled with its reason (docs/phase-4-design.md 5.3). -->
+
   <UserControl.Resources>
     <!-- A file row's own button: the whole row, transparent; the row's panel draws hover and selection. -->
     <ControlTheme x:Key="StageRowButton" TargetType="Button">
@@ -408,6 +411,8 @@
                     Content="Amend previous commit"
                     IsChecked="{Binding IsAmend}"
                     IsEnabled="{Binding CanAmend}"
+                    ToolTip.Tip="{Binding AmendToolTip}"
+                    ToolTip.ShowOnDisabled="True"
                     AutomationProperties.AutomationId="AmendCheckBox" />
           <Button Name="CommitButton"
                   Theme="{StaticResource VcPrimaryButton}"
