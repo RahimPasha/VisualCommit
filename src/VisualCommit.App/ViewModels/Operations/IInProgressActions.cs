@@ -20,4 +20,23 @@ public interface IInProgressActions
     /// operation has ended; never throws for git's failure.
     /// </summary>
     Task AbortAsync(InProgressState state);
+
+    /// <summary>
+    /// Continue (docs/phase-4-design.md 5.1, 5.4, D144) for <paramref name="state"/>, from the
+    /// banner (<paramref name="message"/> null) or the stage panel (its message): refuses when the
+    /// state changed since the click (a fresh status read), asks when markers are staged (7.2),
+    /// then runs <see cref="IGitRepository.ContinueAsync"/> as the local operation "Continue the
+    /// {kind}". Ends done, at the next stop (the banner), or failed ("Continue failed"). Completes
+    /// when the operation has ended; never throws for git's failure.
+    /// </summary>
+    Task ContinueAsync(InProgressState state, string? message);
+
+    /// <summary>
+    /// Skip (5.1, 5.4) for <paramref name="state"/>, after the user confirmed the banner's
+    /// question (asked by <see cref="RepositoryViewModel"/>, as Abort's is): saves the backup
+    /// <c>skip-&lt;time&gt;</c> (HEAD) with <c>skip-&lt;time&gt;-changes</c>, then runs
+    /// <see cref="IGitRepository.SkipAsync"/> as the local operation "Skip {short}". Completes
+    /// when the operation has ended; never throws for git's failure.
+    /// </summary>
+    Task SkipAsync(InProgressState state);
 }

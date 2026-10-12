@@ -36,6 +36,22 @@ public interface IWorkingChangesHost
     /// cherry-pick or revert in progress fills an empty commit message with (docs/phase-3-design.md section 5).
     /// </summary>
     Task<string?> ReadMergeMessageAsync() => Task.FromResult<string?>(null);
+
+    /// <summary>
+    /// The stage panel's "Continue cherry-pick", "Continue revert" or "Continue rebase"
+    /// (docs/phase-4-design.md 5.3): the banner's Continue with <paramref name="message"/>, or null
+    /// when the boxes still hold what was filled in (the git layer then reads the operation's own
+    /// message). Returns the stage panel's error text, or null: Continue's failures open the
+    /// error dialog. The default does nothing.
+    /// </summary>
+    Task<string?> ContinueAsync(string? message) => Task.FromResult<string?>(null);
+
+    /// <summary>
+    /// The message the stage panel fills in for <paramref name="state"/>'s stopped commit (5.3):
+    /// <c>MERGE_MSG</c> less git's comment block, a rebase's own message, or a group's. The
+    /// default is <see cref="ReadMergeMessageAsync"/>.
+    /// </summary>
+    Task<string?> ReadOperationMessageAsync(InProgressState state) => ReadMergeMessageAsync();
 }
 
 /// <summary>
