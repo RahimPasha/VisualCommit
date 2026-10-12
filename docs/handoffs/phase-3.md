@@ -399,11 +399,12 @@ should select phase 3's; it needs that phase's scripted pictures from a `dotnet 
 Tell the owner before any run of the pass.
 
 Open points for phase 4 (record each as a decision; ask the owner those that are a matter of
-taste, as phase 3 did before its design: step 2 of its checklist in `status.md`'s history). Two
-of them would change a recorded decision, which CLAUDE.md allows only with the owner: using the
-sequencer for several picks changes D88 ("git's sequencer is never started by the app"), and a
-confirmation or backup before a rebase changes D83 ("Nothing else confirms"). Put both to the
-owner with a recommendation before designing.
+taste, as phase 3 did before its design: step 2 of its checklist in `status.md`'s history). Using
+the sequencer for several picks would change D88 ("git's sequencer is never started by the app"),
+which CLAUDE.md allows only with the owner: the owner asked on 2026-10-11 what it means, and
+still has to answer (recommendation: yes, use it). The owner answered the rebase's confirmation
+and backup on 2026-10-11 (D135): no confirmation, a backup of the old tip, and a cleanup of the
+backups to design.
 
 - **Where phase 4's scripted checks run.** The default run is already 19 to 26 minutes on the
   laptop (19 min 15 s at phase 3's gate, rested and alone). A project of its own
@@ -412,9 +413,21 @@ owner with a recommendation before designing.
 - **The sequencer.** Phase 3 never starts git's sequencer (D88) and sets
   `GIT_SEQUENCE_EDITOR=:` on every call (D102). Interactive rebase sets its own sequence editor;
   decide how the todo list reaches git, and whether a multi-commit pick should now use the
-  sequencer so that Continue works on it.
-- **Confirmation and backups for a rebase** (Q3): D83 confirms only the abort; a rebase rewrites
-  a branch, so decide whether it saves a backup ref of the old tip (and of what kind).
+  sequencer so that Continue works on it. The owner did not know the word (2026-10-11), so the
+  question was put to them in plain words, and is still open: picking commits A, B and C can be
+  done in two ways. Phase 3 runs `git cherry-pick A`, then B, then C as separate commands and
+  stops at the first conflict: the app forgets the rest, resolving and continuing finishes only
+  that one pick, and Abort undoes only that pick (the earlier ones stay). Git can also take the
+  whole list at once, `git cherry-pick A B C`: it keeps the list in `.git/sequencer`, Continue
+  resumes with the rest, and Abort puts the branch back to where it was before A. A rebase
+  already works the second way (its list is in `.git/rebase-merge`). Recommendation: use git's
+  list for several picks as well, because it gives the owner's wish of "abort, and everything is as
+  it was" and one Continue for the whole list; the cost is that the stage panel's Commit button
+  can no longer finish such a pick by itself (D88's reason), so phase 4's Continue has to.
+- **Backups for a rebase** (D135, answered): a rebase saves a backup ref of the old tip and asks no
+  confirmation. Design its kind and name, and how old backups are cleaned up (how long they are
+  kept, when they are deleted); phase 5's undo reads them by kind and time (D83), so a cleanup
+  must keep what undo offers.
 - **Continue and Skip** for each `InProgressKind`, including a pick sequence started in a
   terminal (D110) and a pull's rebase; the banner's texts now say "continue in a terminal".
 - **Reftable** (D128): if the resolver depends on `CHERRY_PICK_HEAD` and `REVERT_HEAD`, read them
@@ -437,21 +450,22 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- Accept phase 3, or say what to change: "Phase 3 accepted" merges `phase/3-operations` into
-  `master`. A session on any machine can do that and what follows it.
+- Phase 3 was accepted on 2026-10-11 and merged into `master` (`8b33745`).
 - When you have a Mac at hand: the eleven-step checklist at the end of the
   [phase 3 test report](../test-reports/phase-3.md) (among its steps cancelling a fetch, the
   first context menu's latency, Cmd for selecting several commits, and whether a Markdown
   diff's headings are bold), and the seven-, nine-
   and eight-step ones of phases 2, 1 and 0, still open.
 - Questions the gate left, each with a recommendation (Known issues has the details):
-  - **CI's time limits.** Keep 22 minutes per job and 14 per test step (25 for the container
+  - **CI's time limits.** Answered 2026-10-11: keep them, and look again when the project is over
+    (D134). Keep 22 minutes per job and 14 per test step (25 for the container
     jobs)? Recommended: keep them. The gate's Windows job took 10 min 56 s, and the old 5-minute
     step limit cut the jobs once phase 3's tests ran (run 38162210730).
   - **The dashed line through another branch's node (06f).** Change how the working-changes
     row's line is drawn now? Recommended: no. It shows only when HEAD is not the top row; settle
     it with the next change to the graph's layout.
-  - **A virus-scanner exclusion.** Exclude the repository folder and `%TEMP%\VisualCommit.Tests`
+  - **A virus-scanner exclusion.** The owner agrees (2026-10-11) and has still to set it up
+    (`status.md`, "Waiting on the owner"; the steps are there). Exclude the repository folder and `%TEMP%\VisualCommit.Tests`
     from Windows Defender on the development machine? Recommended: try it for those two folders
     only, which hold the project's builds and test repositories, and measure the default run
     before and after. It is a security setting of your machine, so only you can make it.
