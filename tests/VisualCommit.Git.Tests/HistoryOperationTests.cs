@@ -205,7 +205,7 @@ public class HistoryOperationTests
         Assert.Equal("Conflicting change\n\n# Conflicts:\n#\tsrc/core.txt\n", ReadGitFile(repo, "MERGE_MSG"));
         Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
         var status = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.CherryPick, picks[1], "Conflicting change", null, null, 0, false), status.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.CherryPick, picks[1], "Conflicting change", null, null, 0, false) { HasPickHead = true }, status.InProgress);
         Assert.False(status.InProgress.AbortKeepsHead);
 
         // The abort keeps the pick already made.
@@ -355,7 +355,9 @@ public class HistoryOperationTests
         Assert.Equal(mainWork, ReadGitFile(repo, "REVERT_HEAD").Trim());
         Assert.Equal($"Revert \"Main work\"\n\nThis reverts commit {mainWork}.\n\n# Conflicts:\n#\tsrc/core.txt\n", ReadGitFile(repo, "MERGE_MSG"));
         Assert.Equal($"core\n<<<<<<< HEAD\nmain work again\n=======\n>>>>>>> parent of {mainWork[..7]} (Main work)\n", ReadText(repo, "src/core.txt"));
-        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 0, false), (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+        Assert.Equal(
+            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 0, false) { HasPickHead = true },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
 
         var changes = await repository.SnapshotTrackedChangesAsync(TestCancelled);
         var backup = await repository.SaveBackupRefsAsync(new BackupRequest("abort", [new BackupEntry(null, coreAgain)]) { ChangesCommit = changes }, TestCancelled);

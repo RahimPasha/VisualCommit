@@ -65,7 +65,7 @@ public class InProgressTests
 
         var status = await repository.ReadStatusAsync(TestCancelled);
 
-        Assert.Equal(new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false), status.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.CherryPick, conflicting, "Conflicting change", null, null, 1, false) { Sequenced = true, HasPickHead = true }, status.InProgress);
         Assert.False(status.InProgress.AbortKeepsHead);
     }
 
@@ -86,7 +86,14 @@ public class InProgressTests
         Assert.NotEqual(committed, ReadGitFile(repo, "sequencer/abort-safety").Trim());
 
         var status = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.CherryPick, null, null, null, null, 1, false) { AbortKeepsHead = true }, status.InProgress);
+        // The paused list names the stopped command, its todo's first line, resolved (8).
+        Assert.Equal(
+            new InProgressState(InProgressKind.CherryPick, await RevAsync(repo, "refs/heads/feature/conflict"), "Conflicting change", null, null, 1, false)
+            {
+                AbortKeepsHead = true,
+                Sequenced = true,
+            },
+            status.InProgress);
         Assert.Empty(status.Unstaged);
 
         var snapshot = await repository.SnapshotTrackedChangesAsync(TestCancelled);
@@ -112,7 +119,7 @@ public class InProgressTests
         // Main work's revert conflicts with Core again; Add core waits.
         Assert.False((await repo.GitAllowingFailureAsync("revert", "--no-edit", mainWork, addCore)).Succeeded);
         var stopped = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false), stopped.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { Sequenced = true, HasPickHead = true }, stopped.InProgress);
 
         // Resolved and committed in a terminal: stopped between commits.
         repo.WriteFile("src/core.txt", "core\n");
@@ -122,7 +129,9 @@ public class InProgressTests
         Assert.StartsWith("revert ", ReadGitFile(repo, "sequencer/todo"), StringComparison.Ordinal);
 
         var between = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.Revert, null, null, null, null, 1, false) { AbortKeepsHead = true }, between.InProgress);
+        Assert.Equal(
+            new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 1, false) { AbortKeepsHead = true, Sequenced = true },
+            between.InProgress);
     }
 
     [Fact]
@@ -136,7 +145,7 @@ public class InProgressTests
 
         var status = await repository.ReadStatusAsync(TestCancelled);
 
-        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 0, false), status.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.Revert, mainWork, "Main work", null, null, 0, false) { HasPickHead = true }, status.InProgress);
         Assert.False(status.InProgress.AbortKeepsHead);
     }
 
@@ -151,9 +160,19 @@ public class InProgressTests
         Assert.True(GitFileExists(repo, "rebase-merge"));
         Assert.Equal("refs/heads/feature/conflict", ReadGitFile(repo, "rebase-merge/head-name").Trim());
 
+        var conflicting = await RevAsync(repo, "refs/heads/feature/conflict");
+
         var status = await repository.ReadStatusAsync(TestCancelled);
 
-        Assert.Equal(new InProgressState(InProgressKind.Rebase, null, null, "feature/conflict", mainWork, 0, false), status.InProgress);
+        // Stopped on a pick (8): the stopped commit from stopped-sha, the first of one.
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, conflicting, "Conflicting change", "feature/conflict", mainWork, 0, false)
+            {
+                StopKind = RebaseStopKind.Pick,
+                Done = 1,
+                Total = 1,
+            },
+            status.InProgress);
         Assert.Equal([new ChangedFile("src/core.txt", FileChangeKind.Conflicted)], status.Unstaged);
     }
 
@@ -174,6 +193,7 @@ public class InProgressTests
         Assert.Equal(InProgressKind.Rebase, status.InProgress.Kind);
         Assert.Equal(2, status.InProgress.Remaining);
         Assert.Equal("feature/conflict", status.InProgress.Branch);
+        Assert.Equal((1, 3), (status.InProgress.Done, status.InProgress.Total));
     }
 
     [Fact]
@@ -199,7 +219,18 @@ public class InProgressTests
         Assert.False((await repo.GitAllowingFailureAsync("rebase", "--apply", "main")).Succeeded);
         Assert.False(GitFileExists(repo, "rebase-apply/applying"));
         var rebasing = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.Rebase, null, null, "feature/conflict", mainWork, 0, false), rebasing.InProgress);
+        var conflicting = await RevAsync(repo, "refs/heads/feature/conflict");
+
+        // The apply backend: the commit being applied is original-commit; next and last count.
+        Assert.Equal(conflicting, ReadGitFile(repo, "rebase-apply/original-commit").Trim());
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, conflicting, "Conflicting change", "feature/conflict", mainWork, 0, false)
+            {
+                StopKind = RebaseStopKind.Pick,
+                Done = 1,
+                Total = 1,
+            },
+            rebasing.InProgress);
     }
 
     [Fact]
@@ -227,7 +258,7 @@ public class InProgressTests
         Assert.True(GitFileExists(repo, "CHERRY_PICK_HEAD"));
 
         var status = await repository.ReadStatusAsync(TestCancelled);
-        Assert.Equal(new InProgressState(InProgressKind.CherryPick, alphaOne, "Alpha one", null, null, 0, true), status.InProgress);
+        Assert.Equal(new InProgressState(InProgressKind.CherryPick, alphaOne, "Alpha one", null, null, 0, true) { HasPickHead = true }, status.InProgress);
         Assert.False(status.HasChanges);
 
         // An unstaged change elsewhere keeps the index equal to HEAD's tree: still empty. Once it is
