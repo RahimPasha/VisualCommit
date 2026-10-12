@@ -3,14 +3,18 @@ using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.Git.Tests.OperationTestSupport;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
+using static VisualCommit.Git.Tests.SequenceTestSupport;
 
 namespace VisualCommit.Git.Tests;
 
 /// <summary>
 /// The operation in progress as <see cref="GitRepository.ReadStatusAsync"/> reads it from the
-/// files git leaves in the git folder (design section 5, D89, D110), for states made by git
-/// itself as a terminal would make them (<see cref="Scenarios.StoppedAsync"/>), and its abort
-/// (2.15). Each expected value is what git's own files and commands say about that state.
+/// files git leaves in the git folder (phase 3 design section 5, D89, D110; phase 4 design section
+/// 8), for states made by git itself as a terminal would make them (<see cref="Scenarios.StoppedAsync"/>,
+/// todos shaped as the app writes them, 2.5), and its abort (2.15): the lists' new properties, every
+/// stop of a rebase (<see cref="RebaseStopKind"/>, the group, the next squash, the counts), and no
+/// git call but the status when nothing is in progress. Each expected value is what git's own files
+/// and commands say about that state.
 /// </summary>
 public class InProgressTests
 {
@@ -313,5 +317,262 @@ public class InProgressTests
         await linked.AbortAsync(InProgressKind.Merge, cancellationToken: TestCancelled);
         Assert.Same(InProgressState.None, (await linked.ReadStatusAsync(TestCancelled)).InProgress);
         Assert.Equal("Side work", await GitInAsync(repo, worktree, "log", "-1", "--format=%s"));
+    }
+
+    // ---- Phase 4: no git call when nothing is in progress (D89, 8.1) ------------------------------
+
+    [Fact]
+    public async Task With_nothing_in_progress_a_files_repository_reads_its_state_without_another_git_call()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var opened = calls.Snapshot().Count;
+
+        var status = await repository.ReadStatusAsync(TestCancelled);
+
+        // Only the status itself: no pick head is asked for through git, nor the ref format.
+        Assert.Same(InProgressState.None, status.InProgress);
+        Assert.Equal(["git status --porcelain=v2 -z --untracked-files=all --renames"], calls.Snapshot().Skip(opened).Select(call => call.CommandText));
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("config", "--get", "extensions.refStorage")).ExitCode);
+    }
+
+    // ---- Phase 4: the stops of a rebase (section 8) -----------------------------------------------
+
+    [Fact]
+    public async Task A_rebase_pick_resolved_to_nothing_is_empty()
+    {
+        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.Rebase);
+        var repository = await OpenAsync(repo);
+        await repo.GitAsync("checkout", "--ours", "--", "src/core.txt");
+        await repo.GitAsync("add", "src/core.txt");
+
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        // Nothing staged and nothing conflicted at a pick for stopped-sha: Continue leaves it out.
+        Assert.Equal(RebaseStopKind.Empty, state.StopKind);
+        Assert.False(state.HasPickHead);
+        Assert.False(state.Empty); // A rebase's emptiness is its StopKind; Empty is a pick's or revert's.
+        Assert.Equal(await RevAsync(repo, "refs/heads/feature/conflict"), state.Commit);
+    }
+
+    [Fact]
+    public async Task A_pick_rescheduled_for_an_untracked_file_is_counted_once_also_after_another_try()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("README.md", "readme\n", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        var main = await repo.CommitFileAsync("main.txt", "main\n", "Main work");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("x.txt", "x\n", "X first");
+        var addIn = await repo.CommitFileAsync("in.txt", "tracked\n", "Add in");
+        repo.DeleteFile("in.txt");
+        await repo.CommitAsync("Remove in");
+        repo.WriteFile("in.txt", "untracked\n");
+        var repository = await OpenAsync(repo);
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("rebase", "main")).ExitCode);
+
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        // X first done, Add in current (git put it back as the todo's first line), Remove in left.
+        var expected = new InProgressState(InProgressKind.Rebase, addIn, "Add in", "topic", main, 1, false)
+        {
+            StopKind = RebaseStopKind.Rescheduled,
+            Done = 2,
+            Total = 3,
+        };
+        Assert.Equal(expected, state);
+        Assert.StartsWith($"pick {addIn}", ReadGitFile(repo, "rebase-merge/git-rebase-todo"), StringComparison.Ordinal);
+
+        // Git's next try fails the same way and appends to done again: the same state.
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("rebase", "--continue")).ExitCode);
+        Assert.Equal(expected, (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task A_failed_exec_from_another_todo_is_read_after_the_commit_it_followed()
+    {
+        var (repo, main, commits) = await TopicAsync(("a.txt", "A adds a"), ("b.txt", "B adds b"));
+        using var _repo = repo;
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(1, (await InteractiveRebaseAsync(repo, main, $"pick {commits[0]}\nexec false\npick {commits[1]}\n")).ExitCode);
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, commits[0], "A adds a", "topic", main, 1, false)
+            {
+                StopKind = RebaseStopKind.ExecFailed,
+                Done = 1,
+                Total = 2,
+            },
+            state);
+        Assert.False(File.Exists(Path.Combine(repo.Path, ".git", "rebase-merge", "stopped-sha")));
+    }
+
+    [Fact]
+    public async Task The_apps_amend_refused_by_a_hook_is_its_own_failed_amend_with_the_groups_target()
+    {
+        var (repo, main, commits) = await TopicAsync(("t.txt", "T target"), ("p.txt", "P plain"));
+        using var _repo = repo;
+        WriteHook(repo, "commit-msg", RefusingWhileMarked);
+        File.WriteAllText(Path.Combine(repo.Path, ".git", "refuse"), string.Empty);
+        var repository = await OpenAsync(repo);
+
+        var result = await InteractiveRebaseAsync(repo, main, Group(1, commits[0]) + $"pick {commits[1]}\n", "T reworded\n");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("the hook refuses this message", result.StandardError, StringComparison.Ordinal);
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, commits[0], "T target", "topic", main, 1, false)
+            {
+                StopKind = RebaseStopKind.OwnAmendFailed,
+                Group = 1,
+                Done = 1,
+                Total = 2,
+            },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task An_edit_stop_from_another_todo_is_read_as_edit()
+    {
+        var (repo, main, commits) = await TopicAsync(("a.txt", "A adds a"), ("b.txt", "B adds b"));
+        using var _repo = repo;
+        var repository = await OpenAsync(repo);
+
+        // An edit stop exits 0 with the folder there (0.1).
+        Assert.Equal(0, (await InteractiveRebaseAsync(repo, main, $"edit {commits[0]}\npick {commits[1]}\n")).ExitCode);
+
+        Assert.True(File.Exists(Path.Combine(repo.Path, ".git", "rebase-merge", "amend")));
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, commits[0], "A adds a", "topic", main, 1, false)
+            {
+                StopKind = RebaseStopKind.Edit,
+                Done = 1,
+                Total = 2,
+            },
+            (await repository.ReadStatusAsync(TestCancelled)).InProgress);
+    }
+
+    [Fact]
+    public async Task An_interactive_rebases_commit_that_became_empty_is_read_as_empty()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        var main = await repo.CommitFileAsync("m.txt", "m\n", "Main adds m");
+        await repo.CheckoutAsync("topic");
+        var same = await repo.CommitFileAsync("m.txt", "m\n", "E same as main");
+        var later = await repo.CommitFileAsync("b.txt", "b\n", "B adds b");
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(1, (await InteractiveRebaseAsync(repo, main, $"pick {same}\npick {later}\n")).ExitCode);
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        // Git 2.36 leaves CHERRY_PICK_HEAD beside the folder (0.1); without it, the pick for
+        // stopped-sha with nothing staged says the same.
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, same, "E same as main", "topic", main, 1, false)
+            {
+                HasPickHead = File.Exists(Path.Combine(repo.Path, ".git", "CHERRY_PICK_HEAD")),
+                StopKind = RebaseStopKind.Empty,
+                Done = 1,
+                Total = 2,
+            },
+            state);
+    }
+
+    [Fact]
+    public async Task A_groups_target_that_stops_is_inside_its_group_and_next_is_squash()
+    {
+        var (repo, main, commits) = await TopicAsync(("f.txt", "T conflicts"), ("h.txt", "F fixup"), ("p.txt", "P plain"));
+        using var _repo = repo;
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(1, (await InteractiveRebaseAsync(repo, main, Group(1, commits[0], commits[1]) + $"pick {commits[2]}\n", "Group message\n")).ExitCode);
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        // label and exec lines are not counted: T is the first of three commits.
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, commits[0], "T conflicts", "topic", main, 2, false)
+            {
+                StopKind = RebaseStopKind.Pick,
+                NextIsSquash = true,
+                Group = 1,
+                Done = 1,
+                Total = 3,
+            },
+            state);
+    }
+
+    [Fact]
+    public async Task A_groups_member_that_stops_is_inside_its_group_but_no_target()
+    {
+        var (repo, main, commits) = await TopicAsync(("t.txt", "T target"), ("f.txt", "F1 conflicts"), ("h.txt", "F2 more"));
+        using var _repo = repo;
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(1, (await InteractiveRebaseAsync(repo, main, Group(1, commits[0], commits[1], commits[2]), "Group message\n")).ExitCode);
+        var state = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+
+        // The next line is a fixup too, but leaving F1 out joins nothing to another commit.
+        Assert.Equal(
+            new InProgressState(InProgressKind.Rebase, commits[1], "F1 conflicts", "topic", main, 1, false)
+            {
+                StopKind = RebaseStopKind.Pick,
+                Group = 1,
+                Done = 2,
+                Total = 3,
+            },
+            state);
+    }
+
+    [Fact]
+    public async Task A_pick_before_a_group_and_a_reword_are_told_apart_by_the_next_label()
+    {
+        var (repo, main, commits) = await TopicAsync(("f.txt", "P conflicts"), ("t.txt", "T target"), ("h.txt", "F fixup"));
+        using var _repo = repo;
+        var repository = await OpenAsync(repo);
+
+        // A plain pick, then group 2: the stop is outside any group.
+        Assert.Equal(1, (await InteractiveRebaseAsync(repo, main, $"pick {commits[0]}\n" + Group(2, commits[1], commits[2]), "Unused\n", "Group two\n")).ExitCode);
+        var plain = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((RebaseStopKind.Pick, (int?)null, false, 1, 3), (plain.StopKind!.Value, plain.Group, plain.NextIsSquash, plain.Done, plain.Total));
+        await repo.GitAsync("rebase", "--abort");
+
+        // A reword: a group without members, its amend right after the target.
+        Assert.Equal(1, (await InteractiveRebaseAsync(repo, main, Group(1, commits[0]) + $"pick {commits[1]}\n", "P reworded\n")).ExitCode);
+        var reword = (await repository.ReadStatusAsync(TestCancelled)).InProgress;
+        Assert.Equal((RebaseStopKind.Pick, (int?)1, false, 1, 2), (reword.StopKind!.Value, reword.Group, reword.NextIsSquash, reword.Done, reword.Total));
+    }
+
+    /// <summary>
+    /// main and topic from "Initial commit" (f.txt "base\n"): main changes f.txt ("Main edit"),
+    /// topic makes one commit per file and subject given, each file "&lt;subject&gt;\n" (so a
+    /// commit to f.txt conflicts with main); HEAD on topic. Returns main's tip and topic's commits.
+    /// </summary>
+    private static async Task<(TempRepo Repo, string Main, IReadOnlyList<string> Commits)> TopicAsync(params (string File, string Subject)[] commits)
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+            await repo.CreateBranchAsync("topic");
+            var main = await repo.CommitFileAsync("f.txt", "main\n", "Main edit");
+            await repo.CheckoutAsync("topic");
+            var made = new List<string>();
+            foreach (var (file, subject) in commits)
+            {
+                made.Add(await repo.CommitFileAsync(file, subject + "\n", subject));
+            }
+
+            return (repo, main, made);
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
     }
 }

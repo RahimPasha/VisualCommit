@@ -140,10 +140,15 @@ public sealed partial class GitRepository
     /// <list type="number">
     /// <item><see cref="RebaseStopKind.Rescheduled"/>: the first line of <c>git-rebase-todo</c> is a
     /// pick-like command that names <c>stopped-sha</c> (an untracked file was in the way; git put
-    /// the command back, 0.1).</item>
-    /// <item><see cref="RebaseStopKind.ExecFailed"/>: <c>done</c> ends with an <c>exec</c> line and
-    /// there is no <c>stopped-sha</c>; <see cref="RebaseStopKind.OwnAmendFailed"/> when that line is
-    /// the app's guarded amend (it names <c>rebase-merge/vc-message-&lt;n&gt;</c>, 2.5).</item>
+    /// the command back, 0.1). A newer git than 2.36 writes no <c>stopped-sha</c> for it (read in
+    /// git's source, not run here: since 2023 a rescheduled command makes no patch, only
+    /// <c>REBASE_HEAD</c>), and <c>done</c> then ends with the same command: that counts too.</item>
+    /// <item><see cref="RebaseStopKind.ExecFailed"/>: <c>done</c> ends with an <c>exec</c> line
+    /// (git removes <c>stopped-sha</c> before each command, so there is none then; the one case
+    /// where <c>done</c> ends with an <c>exec</c> and one exists, Git 2.36 appending the command
+    /// before a rescheduled pick again, is read as rescheduled first);
+    /// <see cref="RebaseStopKind.OwnAmendFailed"/> when that line is the app's guarded amend (it
+    /// names <c>rebase-merge/vc-message-&lt;n&gt;</c>, 2.5).</item>
     /// <item><see cref="RebaseStopKind.Edit"/>: <c>amend</c> exists and <c>done</c> ends with
     /// <c>edit</c>.</item>
     /// <item><see cref="RebaseStopKind.Empty"/>: <c>CHERRY_PICK_HEAD</c> beside the folder (an
@@ -185,11 +190,12 @@ public sealed partial class GitRepository
 
         RebaseStopKind kind;
         int? group = null;
-        if (firstTodo is { IsPickLike: true } rescheduled && rescheduled.Names(stoppedSha))
+        if (firstTodo is { IsPickLike: true } rescheduled
+            && (rescheduled.Names(stoppedSha) || (stoppedSha is null && lastDone is { } previous && previous.Key == rescheduled.Key)))
         {
             kind = RebaseStopKind.Rescheduled;
         }
-        else if (lastDone is { Command: "exec" } exec && stoppedSha is null)
+        else if (lastDone is { Command: "exec" } exec)
         {
             group = MessageGroup(exec);
             kind = group is null ? RebaseStopKind.ExecFailed : RebaseStopKind.OwnAmendFailed;
@@ -224,6 +230,7 @@ public sealed partial class GitRepository
 
         var commit = kind switch
         {
+            RebaseStopKind.Rescheduled => firstTodo?.Commit,
             RebaseStopKind.OwnAmendFailed => GroupTarget(done, group!.Value) ?? LastCommit(done),
             RebaseStopKind.ExecFailed => LastCommit(done),
             _ => stoppedSha ?? pickHead ?? lastDone?.Commit,
