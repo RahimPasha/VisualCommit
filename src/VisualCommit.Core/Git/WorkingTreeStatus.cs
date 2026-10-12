@@ -23,17 +23,32 @@ public sealed record WorkingTreeStatus(
     /// </summary>
     public InProgressState InProgress { get; init; } = InProgressState.None;
 
+    /// <summary>
+    /// The conflicted paths with their kind, modes and stage ids (docs/phase-4-design.md 0.4), in
+    /// the byte order of the paths: one per <see cref="FileChangeKind.Conflicted"/> entry of
+    /// <see cref="Unstaged"/>. Empty when nothing conflicts.
+    /// </summary>
+    public IReadOnlyList<ConflictEntry> Conflicts { get; init; } = [];
+
     /// <summary>Anything to show in the working-changes row (D60).</summary>
     public bool HasChanges => Staged.Count > 0 || Unstaged.Count > 0;
 
     /// <summary>Whether <paramref name="path"/> is untracked.</summary>
     public bool IsUntracked(string path) => Untracked.Contains(path);
 
-    /// <summary>Equal when both lists hold the same files with the same kinds, in the same order, and the same operation is in progress.</summary>
+    /// <summary>The conflict at <paramref name="path"/>, or null when the path is not conflicted.</summary>
+    public ConflictEntry? FindConflict(string path) =>
+        Conflicts.FirstOrDefault(conflict => string.Equals(conflict.Path, path, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Equal when both lists hold the same files with the same kinds, in the same order, the same
+    /// conflicts with the same stages, and the same operation is in progress.
+    /// </summary>
     public bool SameAs(WorkingTreeStatus other)
     {
         ArgumentNullException.ThrowIfNull(other);
         return Staged.SequenceEqual(other.Staged) && Unstaged.SequenceEqual(other.Unstaged) && Untracked.SetEquals(other.Untracked)
+            && Conflicts.SequenceEqual(other.Conflicts)
             && InProgress == other.InProgress;
     }
 }
