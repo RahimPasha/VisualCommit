@@ -240,6 +240,23 @@ public sealed class ConflictText
     }
 
     /// <summary>
+    /// Whether <paramref name="text"/> has any line that is a <c>&lt;</c>, <c>|</c>, <c>=</c> or
+    /// <c>&gt;</c> marker of <paramref name="markerSize"/>, whether or not it is part of a whole
+    /// block: what staging a conflicted file and the resolver's Mark resolved ask about (7.1, 7.2,
+    /// D148), as git's own check of staged markers finds them.
+    /// </summary>
+    public static bool HasMarkerLines(string text, int markerSize = DefaultMarkerSize)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentOutOfRangeException.ThrowIfLessThan(markerSize, 1);
+        return SplitLines(text).Any(line =>
+            IsMarker(line.Text, '<', markerSize)
+            || IsMarker(line.Text, '=', markerSize)
+            || IsMarker(line.Text, '>', markerSize)
+            || IsMarker(line.Text, '|', markerSize));
+    }
+
+    /// <summary>
     /// Whether <paramref name="lineText"/> (a line without its line end) is a marker of
     /// <paramref name="marker"/>: exactly <paramref name="markerSize"/> of it, then a space or
     /// the line's end.

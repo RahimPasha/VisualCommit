@@ -489,7 +489,7 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
 
         var text = document.Text;
         var version = _version;
-        if (ConflictText.Parse(text, _markerSize).HasMarkers && !await _actions.ConfirmAsync(ConflictResolverTexts.MarkersQuestion(FileName)))
+        if (ConflictText.HasMarkerLines(text, _markerSize) && !await _actions.ConfirmAsync(ConflictResolverTexts.MarkersQuestion(FileName)))
         {
             return;
         }

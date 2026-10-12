@@ -263,12 +263,7 @@ public sealed partial class RepositoryOperations : IConflictActions
                 return false;
             }
 
-            var text = ConflictText.Decode(content.WorkingTree).Text;
-            return ConflictText.SplitLines(text).Any(line =>
-                ConflictText.IsMarker(line.Text, '<', content.MarkerSize)
-                || ConflictText.IsMarker(line.Text, '=', content.MarkerSize)
-                || ConflictText.IsMarker(line.Text, '>', content.MarkerSize)
-                || ConflictText.IsMarker(line.Text, '|', content.MarkerSize));
+            return ConflictText.HasMarkerLines(ConflictText.Decode(content.WorkingTree).Text, content.MarkerSize);
         }
         catch (Exception ex) when (ex is GitException or IOException)
         {

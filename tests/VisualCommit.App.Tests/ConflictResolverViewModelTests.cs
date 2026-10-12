@@ -504,6 +504,27 @@ public class ConflictResolverViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task Mark_resolved_asks_when_a_single_marker_line_is_left_as_staging_does()
+    {
+        var (actions, delays, resolver) = MergeStop();
+        await resolver.OpenAsync("notes.txt");
+        resolver.Choose(1, ConflictChoice.UseTheirs);
+
+        // Block 1's =, theirs and > lines deleted by hand: its < line is left.
+        var document = resolver.Document!;
+        Assert.Equal("=======", document.GetText(document.GetLineByNumber(4)));
+        document.Remove(document.GetLineByNumber(4).Offset, document.GetLineByNumber(7).Offset - document.GetLineByNumber(4).Offset);
+        delays.Elapse();
+        Assert.Equal("No conflicts left", resolver.ResultCountText);
+        actions.Answer(false);
+
+        await resolver.MarkResolvedCommand.ExecuteAsync(null);
+
+        Assert.Equal("notes.txt still has conflict markers.", Assert.Single(actions.Questions).Title);
+        Assert.Empty(actions.Writes);
+    }
+
+    [AvaloniaFact]
     public async Task Mark_resolved_over_a_file_changed_on_disk_asks_and_overwrites_only_when_told()
     {
         var (actions, _, resolver) = MergeStop();
