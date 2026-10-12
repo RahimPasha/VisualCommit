@@ -154,6 +154,69 @@ public partial class RepositoryMenusTests
     }
 
     [Fact]
+    public void A_merge_on_HEADs_line_disables_from_here_and_squash_below_it_before_HEADs_own_state()
+    {
+        // The review's finding 24 (docs/phase-4-design.md 2.1, section 3, 10.4): main's line runs
+        // from HEAD to the merge M; A and B are below M, reachable but off the linear line.
+        var (actions, _) = RecordingActions.Create();
+        var (head, merge, a, b) = (Sha('h'), Sha('m'), Sha('a'), Sha('b'));
+        var headCommit = new CommitMenuInfo(head, "Head", [merge], CommitKind.Commit, 0, true) { HeadLineDepth = 0 };
+        var mergeCommit = new CommitMenuInfo(merge, "Merge side", [b, Sha('s')], CommitKind.Commit, 1, true) { HeadLineDepth = 1 };
+        var bCommit = new CommitMenuInfo(b, "B", [a], CommitKind.Commit, 2, true);
+        var aCommit = new CommitMenuInfo(a, "A", [Sha('r')], CommitKind.Commit, 3, true);
+        var refs = OpsLikeRefs() with { Head = new HeadState("main", head) };
+
+        Assert.Contains(
+            "Interactive rebase of main from here… (disabled: \"A merge lies between this commit and main\")",
+            Lines(RepositoryMenus.ForCommit(Context(refs, selected: [aCommit]), a, actions)));
+        Assert.Contains(
+            "Squash 2 commits… (disabled: \"A merge lies between these commits and main\")",
+            Lines(RepositoryMenus.ForCommits(Context(refs, selected: [bCommit, aCommit]), actions)));
+
+        // The commits' own reason comes before HEAD's state (detached here): 1.1's order.
+        var detached = refs with { Head = new HeadState(null, head) };
+        Assert.Contains(
+            "Interactive rebase of HEAD from here… (disabled: \"A merge lies between this commit and HEAD\")",
+            Lines(RepositoryMenus.ForCommit(Context(detached, selected: [aCommit]), a, actions)));
+        Assert.Contains(
+            "Squash 2 commits… (disabled: \"A merge lies between these commits and HEAD\")",
+            Lines(RepositoryMenus.ForCommits(Context(detached, selected: [bCommit, aCommit]), actions)));
+
+        // On the line, HEAD and M squash; detached, it is HEAD's reason.
+        Assert.Contains("Squash 2 commits…", Lines(RepositoryMenus.ForCommits(Context(refs, selected: [headCommit, mergeCommit with { Parents = [b] }]), actions)));
+        Assert.Contains(
+            "Squash 2 commits… (disabled: \"Check out a branch to squash\")",
+            Lines(RepositoryMenus.ForCommits(Context(detached, selected: [headCommit, mergeCommit with { Parents = [b] }]), actions)));
+    }
+
+    [Fact]
+    public void Conflicts_left_by_a_stash_disable_the_rebase_interactive_and_squash_items_with_their_reason()
+    {
+        // The review's finding 24 (10.4, D119): files conflict without an operation in progress.
+        var (actions, _) = RecordingActions.Create();
+        var (head, parent, other) = (Sha('h'), Sha('p'), Sha('o'));
+        var headCommit = new CommitMenuInfo(head, "Head", [parent], CommitKind.Commit, 0, true) { HeadLineDepth = 0 };
+        var parentCommit = new CommitMenuInfo(parent, "Parent", [Sha('g')], CommitKind.Commit, 1, true) { HeadLineDepth = 1 };
+        var otherCommit = new CommitMenuInfo(other, "Elsewhere", [Sha('g')], CommitKind.Commit, 2, false);
+        var feature = new GitRef("refs/heads/feature", "feature", RefKind.LocalBranch, other);
+        var refs = OpsLikeRefs(feature) with { Head = new HeadState("main", head) };
+        var status = new WorkingTreeStatus([], [new ChangedFile("src/core.txt", FileChangeKind.Conflicted)], new HashSet<string>(StringComparer.Ordinal));
+        const string Reason = "(disabled: \"Resolve the conflicts first\")";
+
+        var commitMenu = Lines(RepositoryMenus.ForCommit(Context(refs, status, selected: [otherCommit]), other, actions));
+        Assert.Contains($"Rebase main onto this commit {Reason}", commitMenu);
+        Assert.Contains($"Interactive rebase of main from here… (disabled: \"This commit is not on main\")", commitMenu);
+        Assert.Contains($"Interactive rebase of main from here… {Reason}", Lines(RepositoryMenus.ForCommit(Context(refs, status, selected: [parentCommit]), parent, actions)));
+        var branchMenu = Lines(RepositoryMenus.ForLocalBranch(Context(refs, status), feature.FullName, actions));
+        Assert.Contains($"Rebase main onto feature {Reason}", branchMenu);
+        Assert.Contains($"Interactive rebase of main onto feature… {Reason}", branchMenu);
+        Assert.Contains($"Squash 2 commits… {Reason}", Lines(RepositoryMenus.ForCommits(Context(refs, status, selected: [headCommit, parentCommit]), actions)));
+    }
+
+    /// <summary>A made-up 40-character commit id, one per letter (as the other hand-built menus make them).</summary>
+    private static string Sha(char letter) => letter.ToString().PadRight(40, '0');
+
+    [Fact]
     public async Task A_stash_row_and_its_label_open_the_stash_menu()
     {
         using var repo = await Scenarios.OperationsAsync();
