@@ -192,9 +192,13 @@ public sealed partial class RealApp : IDisposable
             startInfo.Environment.Remove(variable);
         }
 
-        // No askpass program, ssh command or proxy of this machine, and no auto-fetch, as in the
-        // scripted walk-through (D112).
+        // No askpass program, ssh command, editor or proxy of this machine, and no auto-fetch, as
+        // in the scripted walk-through (D112, D151).
         GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+
+        // The conflict resolver's caret does not blink, so that its pictures do not depend on the
+        // moment of the capture (docs/phase-4-design.md 11.3, D151).
+        startInfo.Environment["VISUALCOMMIT_CARET_BLINK"] = "0";
 
         // What the check itself asks for comes last.
         foreach (var (variable, value) in environment ?? new Dictionary<string, string?>())

@@ -56,9 +56,10 @@ public sealed class TempRepo : IDisposable
     /// <paramref name="home"/> (created, with an empty <c>.gitconfig</c>, when missing) as its
     /// home folder: no system or user configuration, no search for a repository above the tests'
     /// own folder, none of the variables through which a surrounding process hands git extra
-    /// configuration or another repository, and <see cref="GitIsolation.MachineIndependence"/>
-    /// (no askpass program, ssh command or proxy of the machine, D112). <see cref="Environment"/>
-    /// is this plus the author.
+    /// configuration or another repository, <see cref="GitIsolation.MachineIndependence"/>
+    /// (no askpass program, ssh command, editor or proxy of the machine, D112), and
+    /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> set to <c>:</c>, so that no step waits
+    /// for an editor (docs/phase-4-design.md 0.5). <see cref="Environment"/> is this plus the author.
     /// </summary>
     public static IReadOnlyDictionary<string, string?> IsolatedEnvironment(string home)
     {
@@ -90,12 +91,16 @@ public sealed class TempRepo : IDisposable
             environment[variable] = null;
         }
 
-        // Nor an askpass program, an ssh command or a proxy of the machine (D112).
+        // Nor an askpass program, an ssh command, an editor or a proxy of the machine (D112).
         foreach (var (variable, value) in GitIsolation.MachineIndependence)
         {
             environment[variable] = value;
         }
 
+        // A step that wants an editor (git rebase --continue, a merge's message) goes on without
+        // one, as the app's own calls do (D102, docs/phase-4-design.md 0.5), whatever runs the call.
+        environment["GIT_EDITOR"] = ":";
+        environment["GIT_SEQUENCE_EDITOR"] = ":";
         return environment;
     }
 

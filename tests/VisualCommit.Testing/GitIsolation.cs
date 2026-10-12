@@ -14,7 +14,7 @@ public static class GitIsolation
     /// configuration needs Git 2.32 or newer to be left out), no search for a repository above
     /// <see cref="CeilingDirectory"/>, none of <see cref="InheritedVariables"/>, dates shown
     /// in UTC by the app under test (D43), and <see cref="MachineIndependence"/>: no askpass
-    /// program or proxy of the machine, auto-fetch off (D112). For the git calls of code under
+    /// program, editor or proxy of the machine, auto-fetch off (D112). For the git calls of code under
     /// test that does not take <see cref="TempRepo.Environment"/>, such as the app's own
     /// repository reading.
     /// </summary>
@@ -122,17 +122,35 @@ public static class GitIsolation
     ];
 
     /// <summary>
+    /// The editors a machine may name, which git starts for a commit message or a rebase's todo
+    /// (<c>git rebase --continue</c> opens one on <c>COMMIT_EDITMSG</c>; <c>vi</c> when none is
+    /// set): none of them may hold up a test (docs/phase-4-design.md 0.5, D151). The app's runner
+    /// sets <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c> for its own calls (D102);
+    /// <see cref="TempRepo"/>'s calls get <c>:</c> too.
+    /// </summary>
+    public static IReadOnlyList<string> EditorVariables { get; } =
+    [
+        "EDITOR",
+        "VISUAL",
+        "GIT_EDITOR",
+        "GIT_SEQUENCE_EDITOR",
+    ];
+
+    /// <summary>
     /// The variables beyond git's configuration that make the app's and git's behaviour depend
-    /// on the machine, with what the tests give them instead (D112): <see cref="PromptVariables"/>
-    /// and <see cref="ProxyVariables"/> removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set to
-    /// <see cref="NoProxyHosts"/>, and auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/>
-    /// 0). Applied to the test process (<see cref="IsolateThisProcess"/>), to the app the
-    /// real-window pass starts (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls.
+    /// on the machine, with what the tests give them instead (D112): <see cref="PromptVariables"/>,
+    /// <see cref="ProxyVariables"/> and <see cref="EditorVariables"/> removed (null), <c>no_proxy</c>
+    /// and <c>NO_PROXY</c> set to <see cref="NoProxyHosts"/>, and auto-fetch turned off
+    /// (<see cref="AutoFetchMinutesVariable"/> 0). Applied to the test process
+    /// (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
+    /// (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls, which then set
+    /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c>.
     /// </summary>
     public static IReadOnlyList<KeyValuePair<string, string?>> MachineIndependence { get; } =
     [
         .. PromptVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. ProxyVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        .. EditorVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         new("no_proxy", NoProxyHosts),
         new("NO_PROXY", NoProxyHosts),
         new(AutoFetchMinutesVariable, "0"),

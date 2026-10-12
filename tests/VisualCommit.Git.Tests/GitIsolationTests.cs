@@ -8,7 +8,7 @@ namespace VisualCommit.Git.Tests;
 
 /// <summary>
 /// The tests' isolation from what the machine adds to git's environment beyond its configuration
-/// (D112): askpass programs, ssh commands, proxies and auto-fetch, in the test process, in
+/// (D112): askpass programs, ssh commands, proxies, editors (D151) and auto-fetch, in the test process, in
 /// <see cref="TempRepo"/>'s git calls and in a process the tests start (the real-window pass's app).
 /// </summary>
 public class GitIsolationTests
@@ -30,7 +30,65 @@ public class GitIsolationTests
             ["GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "GCM_INTERACTIVE", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_SSH_VARIANT"],
             GitIsolation.PromptVariables);
         Assert.Equal(["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"], GitIsolation.ProxyVariables);
+        Assert.Equal(["EDITOR", "VISUAL", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR"], GitIsolation.EditorVariables);
         Assert.Equal("VISUALCOMMIT_AUTO_FETCH_MINUTES", GitIsolation.AutoFetchMinutesVariable);
+    }
+
+    [Fact]
+    public async Task No_editor_of_the_machine_reaches_the_test_process_or_a_temp_repos_calls()
+    {
+        Assert.All(GitIsolation.EditorVariables, variable => Assert.Null(Environment.GetEnvironmentVariable(variable)));
+
+        using var repo = await TempRepo.CreateAsync();
+        Assert.Null(repo.Environment["EDITOR"]);
+        Assert.Null(repo.Environment["VISUAL"]);
+        Assert.Equal(":", repo.Environment["GIT_EDITOR"]);
+        Assert.Equal(":", repo.Environment["GIT_SEQUENCE_EDITOR"]);
+    }
+
+    [Fact]
+    public async Task A_temp_repos_rebase_continue_after_a_conflict_does_not_wait_for_an_editor()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("f.txt", "base\n", "Initial commit");
+        await repo.CreateBranchAsync("topic");
+        await repo.CommitFileAsync("f.txt", "main\n", "Main edit");
+        await repo.CheckoutAsync("topic");
+        await repo.CommitFileAsync("f.txt", "topic\n", "Topic edit");
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("rebase", "main")).ExitCode);
+        repo.WriteFile("f.txt", "resolved\n");
+        await repo.GitAsync("add", "f.txt");
+
+        // A machine whose editors would fail (or open a window and wait): the temp repo's own
+        // environment, applied over it, wins, as it does for any process its variables are given.
+        var machine = GitIsolation.EditorVariables.ToDictionary(variable => variable, _ => (string?)"false");
+        foreach (var (variable, value) in repo.Environment)
+        {
+            machine[variable] = value;
+        }
+
+        var command = new GitCommand("rebase", "--continue") { WorkingDirectory = repo.Path, Environment = machine };
+        var result = await repo.Runner.RunAsync(command, TestCancelled);
+
+        Assert.True(result.Succeeded, result.StandardError);
+        Assert.False(Directory.Exists(Path.Combine(repo.Path, ".git", "rebase-merge")));
+        Assert.Equal("Topic edit", (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
+        Assert.Equal("resolved\n", File.ReadAllText(Path.Combine(repo.Path, "f.txt")));
+    }
+
+    [Fact]
+    public void A_started_process_loses_the_machines_editors()
+    {
+        var startInfo = new ProcessStartInfo("unused");
+        startInfo.Environment["EDITOR"] = "vim";
+        startInfo.Environment["VISUAL"] = "code --wait";
+        startInfo.Environment["GIT_EDITOR"] = "notepad";
+        startInfo.Environment["GIT_SEQUENCE_EDITOR"] = "interactive-rebase-tool";
+
+        GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+
+        var names = startInfo.Environment.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.All(GitIsolation.EditorVariables, variable => Assert.DoesNotContain(variable, names));
     }
 
     [Fact]
