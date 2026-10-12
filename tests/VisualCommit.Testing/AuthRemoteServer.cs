@@ -24,13 +24,21 @@ namespace VisualCommit.Testing;
 /// </para>
 /// <para>
 /// <see cref="HoldNextFetchPack"/> holds back part of the next response that carries a pack, so
-/// that a test sees a fetch in progress, with a percentage, for as long as it likes.
+/// that a test sees a fetch in progress, with a percentage (one it chose, if it likes), for as
+/// long as it likes.
 /// </para>
 /// </summary>
 public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 {
     /// <summary>The port of the servers whose URL the visual checks' pictures show (design 7.3).</summary>
     public const int VisualChecksPort = 47391;
+
+    /// <summary>
+    /// The port of the server of phase 1's clone checks (13 and 14, D150), whose URL picture 13b
+    /// shows: not <see cref="VisualChecksPort"/>, because phase 1's checks run in another process
+    /// at the same time as phase 3's.
+    /// </summary>
+    public const int Phase1VisualChecksPort = 47392;
 
     /// <summary>The folder name of the served repository, and the last part of <see cref="Url"/>.</summary>
     public const string RepositoryName = "remote.git";
@@ -197,12 +205,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Starts a server for a visual check: on <see cref="VisualChecksPort"/>, or on a free port
-    /// when it is taken; serving <paramref name="existingRepository"/> in place when given
+    /// Starts a server for a visual check: on <paramref name="port"/>, <see cref="VisualChecksPort"/>
+    /// unless another is given (<see cref="Phase1VisualChecksPort"/>), or on a free port when it
+    /// is taken; serving <paramref name="existingRepository"/> in place when given
     /// (<see cref="StartAsync"/>).
     /// </summary>
-    public static Task<AuthRemoteServer> StartForVisualChecksAsync(string? existingRepository = null) =>
-        StartAsync(VisualChecksPort, fallBackToFreePort: true, existingRepository);
+    public static Task<AuthRemoteServer> StartForVisualChecksAsync(string? existingRepository = null, int port = VisualChecksPort) =>
+        StartAsync(port, fallBackToFreePort: true, existingRepository);
 
     /// <summary>The folder that holds <paramref name="repository"/> and its name, once it is known to be a bare repository with a name that needs no escaping in a URL.</summary>
     private static async Task<(string ProjectRoot, string Name)?> ExistingRepositoryAsync(string repository, IReadOnlyDictionary<string, string?> environment)
@@ -238,20 +247,35 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// Holds back the next response that carries a pack: one to an upload-pack POST that asks for
     /// a pack (under protocol v2 a body with <c>command=fetch</c>, not the <c>command=ls-refs</c>
     /// that comes first; under protocol v0 any) and whose response has pack data. The server
-    /// sends the headers and the response up to and including the first progress line (side
-    /// band 2) that holds a <c>%</c>, then waits for <see cref="Release"/>; git meanwhile shows
-    /// that line and waits for the rest. When git asked for no progress (<c>no-progress</c>,
-    /// a fetch without <c>--progress</c> and without a terminal) only the headers go first.
-    /// Calling it again before a response was held changes nothing.
+    /// sends the headers and the first part of the response, then waits for
+    /// <see cref="Release"/>; git meanwhile shows the progress it got and waits for the rest.
+    /// <para>
+    /// With <paramref name="atPercent"/> 0 the first part ends with the first progress line
+    /// (side band 2) that holds a <c>%</c>: a pkt-line, which may hold several of git's lines
+    /// (<c>Counting objects:   0%</c> to <c>3%</c> for the 100k-commit repo). With a percentage
+    /// it ends right after the first whole line of git's (up to its <c>\r</c> or <c>\n</c>)
+    /// whose percentage is at least that one; when more follows that line in its pkt-line, the
+    /// pkt-line is split in two there and the response sent with the length of the rebuilt body
+    /// (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole, so the last line
+    /// it shows while held is that one: <c>Counting objects:  45% (…)</c> for 45 (D150).
+    /// </para>
+    /// <para>
+    /// When git asked for no progress (<c>no-progress</c>, a fetch without <c>--progress</c> and
+    /// without a terminal), or no line reaches the percentage, only the headers go first.
+    /// Calling it again before a response was held changes nothing, the percentage included.
+    /// </para>
     /// </summary>
+    /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
     /// <returns>A task that completes when the response is held: its first part has been sent.
     /// It is cancelled when <see cref="Release"/> comes first or the server is disposed.</returns>
-    public Task HoldNextFetchPack()
+    public Task HoldNextFetchPack(int atPercent = 0)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(atPercent);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(atPercent, 100);
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed != 0, this);
-            _pendingHold ??= new Hold();
+            _pendingHold ??= new Hold(atPercent);
             return _pendingHold.Engaged.Task;
         }
     }
@@ -477,9 +501,11 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             return;
         }
 
-        // A hold applies to an upload-pack POST that asks for a pack and gets one.
+        // A hold applies to an upload-pack POST that asks for a pack and gets one. A hold at a
+        // percentage may rebuild the body (a pkt-line split in two); the rebuilt one is sent.
         Hold? hold = null;
         var holdAt = 0;
+        var sent = response.Body;
         var asksForPack = head.Method == "POST"
             && path.EndsWith("/git-upload-pack", StringComparison.Ordinal)
             && (!IsVersion2(protocol) || command == "fetch");
@@ -489,7 +515,15 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             if (hasPack)
             {
                 hold = TakePendingHold();
-                holdAt = Math.Max(progressEnd, 0);
+                if (hold is { AtPercent: > 0 })
+                {
+                    (sent, var lineEnd) = SplitAtProgress(response.Body, hold.AtPercent);
+                    holdAt = Math.Max(lineEnd, 0);
+                }
+                else
+                {
+                    holdAt = Math.Max(progressEnd, 0);
+                }
             }
         }
 
@@ -497,20 +531,20 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         var responseHead = new StringBuilder()
             .Append(CultureInfo.InvariantCulture, $"HTTP/1.1 {response.Status} {response.Reason}\r\n")
             .Append(response.Headers)
-            .Append(CultureInfo.InvariantCulture, $"Content-Length: {response.Body.Length}\r\n")
+            .Append(CultureInfo.InvariantCulture, $"Content-Length: {sent.Length}\r\n")
             .Append("Connection: close\r\n\r\n")
             .ToString();
         await stream.WriteAsync(Encoding.Latin1.GetBytes(responseHead), stopping).ConfigureAwait(false);
 
         if (hold is null)
         {
-            await stream.WriteAsync(response.Body, stopping).ConfigureAwait(false);
+            await stream.WriteAsync(sent, stopping).ConfigureAwait(false);
             return;
         }
 
         try
         {
-            await stream.WriteAsync(response.Body.AsMemory(0, holdAt), stopping).ConfigureAwait(false);
+            await stream.WriteAsync(sent.AsMemory(0, holdAt), stopping).ConfigureAwait(false);
             await stream.FlushAsync(stopping).ConfigureAwait(false);
             hold.Engaged.TrySetResult();
             await hold.Released.Task.WaitAsync(stopping).ConfigureAwait(false);
@@ -525,7 +559,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         // The client may have given up meanwhile (a cancelled fetch): then this write fails,
         // which ends the connection quietly.
-        await stream.WriteAsync(response.Body.AsMemory(holdAt), stopping).ConfigureAwait(false);
+        await stream.WriteAsync(sent.AsMemory(holdAt), stopping).ConfigureAwait(false);
     }
 
     private Hold? TakePendingHold()
@@ -741,6 +775,110 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         return (hasPack, progressEnd);
     }
 
+    /// <summary>
+    /// Where a hold at <paramref name="atPercent"/> begins (<see cref="HoldNextFetchPack"/>):
+    /// right after the first whole line of git's progress (side band 2, up to and including its
+    /// <c>\r</c> or <c>\n</c>; a line may run over several pkt-lines) whose first percentage is
+    /// at least <paramref name="atPercent"/>. When more follows that line in its pkt-line, the
+    /// pkt-line is split in two right after the line, each part with its own 4-hex length and the
+    /// band's byte (<see cref="SplitPktLine"/>), so that the first part ends with the line.
+    /// Returns the body to send (5 bytes longer after a split) and the hold's offset in it; the
+    /// body unchanged and -1 when no line reaches the percentage.
+    /// </summary>
+    internal static (byte[] Body, int HoldAt) SplitAtProgress(byte[] body, int atPercent)
+    {
+        var line = new StringBuilder();
+        var offset = 0;
+        while (offset + 4 <= body.Length)
+        {
+            if (!int.TryParse(Encoding.ASCII.GetString(body, offset, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var length))
+            {
+                break;
+            }
+
+            // 0000 flush, 0001 delimiter, 0002 response end: no payload.
+            if (length < 4)
+            {
+                offset += 4;
+                continue;
+            }
+
+            var end = offset + length;
+            if (end > body.Length)
+            {
+                break;
+            }
+
+            // The band's byte, then git's text; other lines (pack data, ACK, NAK, packfile) do
+            // not break a progress line that runs over several pkt-lines.
+            if (length > 4 && body[offset + 4] == 2)
+            {
+                for (var i = offset + 5; i < end; i++)
+                {
+                    if (body[i] is not ((byte)'\r' or (byte)'\n'))
+                    {
+                        line.Append((char)body[i]);
+                        continue;
+                    }
+
+                    if (PercentOf(line.ToString()) >= atPercent)
+                    {
+                        var lineEnd = i + 1;
+                        return lineEnd == end ? (body, end) : (SplitPktLine(body, offset, lineEnd), lineEnd);
+                    }
+
+                    line.Clear();
+                }
+            }
+
+            offset = end;
+        }
+
+        return (body, -1);
+    }
+
+    /// <summary>
+    /// <paramref name="body"/> with the side-band pkt-line at <paramref name="offset"/> split in
+    /// two at <paramref name="at"/>: the first part keeps the pkt-line's start and gets the length
+    /// up to <paramref name="at"/>, the second the rest after a length and a band's byte of its
+    /// own. Everything before <paramref name="at"/> stays where it was.
+    /// </summary>
+    private static byte[] SplitPktLine(byte[] body, int offset, int at)
+    {
+        var length = int.Parse(Encoding.ASCII.GetString(body, offset, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture);
+        var end = offset + length;
+        var split = new byte[body.Length + 5];
+        body.AsSpan(0, at).CopyTo(split);
+        WritePktLength(split.AsSpan(offset, 4), at - offset);
+        WritePktLength(split.AsSpan(at, 4), 4 + 1 + (end - at));
+        split[at + 4] = body[offset + 4];
+        body.AsSpan(at).CopyTo(split.AsSpan(at + 5));
+        return split;
+    }
+
+    private static void WritePktLength(Span<byte> target, int length) =>
+        Encoding.ASCII.GetBytes(length.ToString("x4", CultureInfo.InvariantCulture), target);
+
+    /// <summary>The first percentage in a line of git's progress (45 for <c>Counting objects:  45% (45/100)</c>); -1 when it has none.</summary>
+    private static int PercentOf(string line)
+    {
+        for (var percent = line.IndexOf('%', StringComparison.Ordinal); percent >= 0; percent = line.IndexOf('%', percent + 1))
+        {
+            var start = percent;
+            while (start > 0 && char.IsAsciiDigit(line[start - 1]))
+            {
+                start--;
+            }
+
+            if (start < percent && int.TryParse(line.AsSpan(start, percent - start), NumberStyles.None, CultureInfo.InvariantCulture, out var value))
+            {
+                return value;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>Splits <c>http-backend</c>'s output into status, headers and body; null when it holds no header block.</summary>
     private static CgiResponse? ParseCgi(string output)
     {
@@ -822,8 +960,11 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private sealed record CgiResponse(int Status, string Reason, string Headers, byte[] Body);
 
     /// <summary>One hold: begun when the first part of the response is sent, ended by <see cref="Release"/>.</summary>
-    private sealed class Hold
+    private sealed class Hold(int atPercent)
     {
+        /// <summary>0, or the percentage of the progress line the hold begins after (<see cref="HoldNextFetchPack"/>).</summary>
+        public int AtPercent { get; } = atPercent;
+
         public TaskCompletionSource Engaged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

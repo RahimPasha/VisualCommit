@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using VisualCommit.Core.Git;
+using VisualCommit.Git;
 
 namespace VisualCommit.Testing;
 
@@ -35,7 +37,9 @@ public static class LargeHistory
     private const long FirstCommitTime = 1767268800; // 2026-01-01 12:00:00 UTC
 
     private static readonly SemaphoreSlim BuildGate = new(1, 1);
+    private static readonly SemaphoreSlim BareGate = new(1, 1);
     private static string? _path;
+    private static string? _barePath;
 
     /// <summary>
     /// The working tree of the shared repo, built first if this machine does not have it yet. The
@@ -46,6 +50,19 @@ public static class LargeHistory
         _path is { } path
             ? Task.FromResult(path)
             : HangWatchdogAttribute.SharedPreparationAsync("the 100k-commit repo", GetOnceAsync());
+
+    /// <summary>
+    /// A bare copy of the shared repo, for a server that serves it in place
+    /// (<see cref="AuthRemoteServer.StartAsync"/>: phase 1's checks 13 and 14 clone it over HTTP,
+    /// D150). It is made once per machine from the working tree's repo, beside it in the same
+    /// folder, under a name that needs no escaping in a URL (<c>large-history-v1.git</c>), and
+    /// must only be read, as that one. The wait for it, and for the working tree's repo it is made
+    /// from, does not count against the test's time in the hang watchdog.
+    /// </summary>
+    public static Task<string> GetBareAsync() =>
+        _barePath is { } path
+            ? Task.FromResult(path)
+            : HangWatchdogAttribute.SharedPreparationAsync("the bare copy of the 100k-commit repo", GetBareOnceAsync());
 
     private static async Task<string> GetOnceAsync()
     {
@@ -58,6 +75,25 @@ public static class LargeHistory
         finally
         {
             BuildGate.Release();
+        }
+    }
+
+    private static async Task<string> GetBareOnceAsync()
+    {
+        await BareGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_barePath is null)
+            {
+                var working = await GetOnceAsync().ConfigureAwait(false);
+                _barePath = await GetOrBuildBareAsync(working).ConfigureAwait(false);
+            }
+
+            return _barePath;
+        }
+        finally
+        {
+            BareGate.Release();
         }
     }
 
@@ -107,6 +143,40 @@ public static class LargeHistory
         var head = await repo.HeadAsync().ConfigureAwait(false);
 
         Directory.Move(repo.Path, final);
+        File.WriteAllText(marker, head + "\n");
+        return final;
+    }
+
+    /// <summary>The bare copy of <paramref name="working"/>, made beside it with a marker of its own as <see cref="GetOrBuildAsync"/> makes the working tree's repo.</summary>
+    private static async Task<string> GetOrBuildBareAsync(string working)
+    {
+        var shared = Path.GetDirectoryName(working)!;
+        var final = Path.Combine(shared, $"large-history-{Version}.git");
+        var marker = final + ".complete";
+
+        // Test processes of one run start at the same time: one makes the copy, the others wait for it.
+        using var lockFile = await LockAsync(final + ".lock").ConfigureAwait(false);
+        if (File.Exists(marker) && File.Exists(Path.Combine(final, "HEAD")))
+        {
+            return final;
+        }
+
+        // A copy without its marker is left over from one that did not finish.
+        if (Directory.Exists(final))
+        {
+            DeleteDirectory(final);
+        }
+
+        // Its own object files, not links to the working tree's repo's: nothing done to one can
+        // reach the other.
+        using var home = new TempDirectory("large-bare");
+        var environment = TempRepo.IsolatedEnvironment(home.Combine("home"));
+        var runner = new GitRunner(TempRepo.GitPath);
+        var clone = new GitCommand("clone", "--quiet", "--bare", "--no-hardlinks", working, final) { WorkingDirectory = shared, Environment = environment };
+        (await runner.RunAsync(clone).ConfigureAwait(false)).EnsureSuccess(clone);
+        var main = new GitCommand("rev-parse", "refs/heads/main") { WorkingDirectory = final, Environment = environment };
+        var head = (await runner.RunAsync(main).ConfigureAwait(false)).EnsureSuccess(main).StandardOutput.Trim();
+
         File.WriteAllText(marker, head + "\n");
         return final;
     }
