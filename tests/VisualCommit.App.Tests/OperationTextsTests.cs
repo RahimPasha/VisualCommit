@@ -263,6 +263,21 @@ public class OperationTextsTests
     }
 
     [Fact]
+    public void Skip_at_the_apps_failed_amend_asks_about_the_new_message_not_the_commit()
+    {
+        // The review's finding 18: Skip there keeps the commit with its old message (5.2's banner:
+        // "Skip goes on without it").
+        var state = new InProgressState(InProgressKind.Rebase, Sha, "Add login", "main", Sha, 0, false) { StopKind = RebaseStopKind.OwnAmendFailed, Group = 1 };
+
+        var question = OperationTexts.ConfirmSkip(state);
+
+        Assert.Equal(
+            ("Skip the new message of a1b2c3d?", "\"Add login\" keeps its old message, and the rebase goes on.", "A backup is saved first, so this can be undone.", "Skip", true),
+            (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
+        Assert.Contains("is left out of the rebase", OperationTexts.ConfirmSkip(state with { StopKind = RebaseStopKind.Pick }).Question, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Special_failures_have_their_own_dialog_texts()
     {
         Assert.Equal("Checkout blocked", OperationTexts.CheckoutBlockedTitle);

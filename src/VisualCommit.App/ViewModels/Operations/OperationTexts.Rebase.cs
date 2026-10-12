@@ -211,13 +211,25 @@ public static partial class OperationTexts
     /// <summary>
     /// The question Skip asks (7.2, D144): "Skip {short}?", "\"{subject}\" is left out of the
     /// {rebase, cherry-pick, revert}, and changes made to resolve its conflicts are lost.", the
-    /// backup's detail, and the danger button "Skip".
+    /// backup's detail, and the danger button "Skip". Where the app's own amend failed
+    /// (<see cref="RebaseStopKind.OwnAmendFailed"/>), Skip goes on without the new message and
+    /// keeps the commit (5.2: "Skip goes on without it"; the review's finding 18): "Skip the new
+    /// message of {short}?", "\"{subject}\" keeps its old message, and the rebase goes on."
     /// </summary>
     public static ConfirmationRequest ConfirmSkip(InProgressState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         var sha = state.Commit ?? string.Empty;
         var subject = state.Subject ?? Short(sha);
+        if (state is { Kind: InProgressKind.Rebase, StopKind: RebaseStopKind.OwnAmendFailed })
+        {
+            return new ConfirmationRequest(
+                $"Skip the new message of {Short(sha)}?",
+                $"\"{subject}\" keeps its old message, and the rebase goes on.",
+                BackupDetail,
+                "Skip");
+        }
+
         return new ConfirmationRequest(
             $"Skip {Short(sha)}?",
             $"\"{subject}\" is left out of the {InProgressName(state.Kind)}, and changes made to resolve its conflicts are lost.",
