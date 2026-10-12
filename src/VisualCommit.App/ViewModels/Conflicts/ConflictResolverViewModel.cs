@@ -445,11 +445,16 @@ public sealed partial class ConflictResolverViewModel : ObservableObject, IDispo
     [RelayCommand(CanExecute = nameof(CanGoToOtherFile))]
     private Task NextFile() => GoToFileAsync(1);
 
-    /// <summary>The close button and Esc outside the result (11.10): asks first when the result is modified. Not while a write of the resolver runs (11.7).</summary>
+    /// <summary>The close button and Esc outside the result (11.10): asks first when the result is modified. Nothing while a write of the resolver or the merge tool runs (11.7, 14.4), however it is called.</summary>
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task CloseResolver()
     {
-        if (await TryLeaveAsync())
+        if (IsBusy)
+        {
+            return;
+        }
+
+        if (await TryLeaveAsync() && !IsBusy)
         {
             Close();
         }
