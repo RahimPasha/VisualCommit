@@ -157,12 +157,14 @@ public sealed partial class GitRepository
         // submodule: refused before git runs.
         await ReadUnmergedStagesAsync(path, options, cancellationToken).ConfigureAwait(false);
         var leftovers = new MergeToolLeftovers(WorkingTreePath(path));
+        var gitEnded = false;
         try
         {
             // The -c comes before the subcommand: after it, git mergetool prints its usage (0.4).
             // keepBackup=false: a tool that succeeds leaves no backup of the file with markers.
             var command = WriteCommand(options, "-c", "mergetool.keepBackup=false", "mergetool", $"--tool={tool}", "--no-prompt", "--", path);
             var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+            gitEnded = true;
             if ((await ReadUnmergedEntriesAsync(path, options, cancellationToken).ConfigureAwait(false)).Count == 0)
             {
                 _log.Info($"The merge tool {tool} resolved {path}.");
@@ -183,10 +185,33 @@ public sealed partial class GitRepository
         }
         finally
         {
+            // Stopped (a cancel kills git before its own clean-up), git has not put the file back
+            // as it was before the tool: its backup (mv MERGED BACKUP; cp BACKUP MERGED) is the only
+            // copy of it, and goes back over whatever the tool saved, as git's own failure path
+            // does, while the path is still unmerged (14.2: a tool that fails leaves the file as
+            // it was).
+            if (!gitEnded && await IsStillUnmergedAsync().ConfigureAwait(false))
+            {
+                leftovers.RestoreBackup(_log);
+            }
+
             // Git leaves its copies beside the file when it cannot run the tool, when the user
-            // keeps them (mergetool.keepTemporaries) and when it is stopped; a cancel kills it
-            // before its own clean-up.
+            // keeps them (mergetool.keepTemporaries) and when it is stopped.
             leftovers.Remove(_log);
+        }
+
+        async Task<bool> IsStillUnmergedAsync()
+        {
+            try
+            {
+                return (await ReadUnmergedEntriesAsync(path, options, CancellationToken.None).ConfigureAwait(false)).Count > 0;
+            }
+            catch (Exception ex) when (ex is GitException or IOException or InvalidOperationException)
+            {
+                // Unknown: the file goes back as it was before the tool, as for a tool that failed.
+                _log.Warning($"Could not read whether {path} is still unmerged after the merge tool was stopped.", ex);
+                return true;
+            }
         }
 
         static bool ToolRanAndFailed(GitResult result) =>
@@ -422,26 +447,61 @@ public sealed partial class GitRepository
     /// </summary>
     private sealed class MergeToolLeftovers
     {
+        private readonly string _fullPath;
         private readonly string _folder;
         private readonly Regex _pattern;
         private readonly HashSet<string> _before;
+        private readonly HashSet<string> _kept = new(StringComparer.Ordinal);
 
         public MergeToolLeftovers(string fullPath)
         {
+            _fullPath = fullPath;
             _folder = Path.GetDirectoryName(fullPath)!;
             var name = Path.GetFileName(fullPath);
             var dot = name.LastIndexOf('.');
             var (stem, extension) = dot < 0 ? (name, string.Empty) : (name[..dot], name[dot..]);
             _pattern = new Regex(
-                $"^{Regex.Escape(stem)}_(BACKUP|BASE|LOCAL|REMOTE)_[0-9]+{Regex.Escape(extension)}$",
+                $"^{Regex.Escape(stem)}_(?<kind>BACKUP|BASE|LOCAL|REMOTE)_[0-9]+{Regex.Escape(extension)}$",
                 RegexOptions.CultureInvariant,
                 TimeSpan.FromSeconds(1));
             _before = Current();
         }
 
+        /// <summary>
+        /// Moves the backup git made of the file during this run (<c>_BACKUP_</c>) back over the
+        /// file. Two or more of them, or one that cannot be moved, are kept where they are (and
+        /// logged), so that the file as it was is never deleted.
+        /// </summary>
+        public void RestoreBackup(IAppLog log)
+        {
+            var backups = Current().Except(_before).Where(file => _pattern.Match(Path.GetFileName(file)).Groups["kind"].Value == "BACKUP").ToList();
+            if (backups.Count == 0)
+            {
+                return;
+            }
+
+            if (backups.Count > 1)
+            {
+                _kept.UnionWith(backups);
+                log.Warning($"The merge tool was stopped and left {backups.Count} backups of {Path.GetFileName(_fullPath)}: they are kept beside it.");
+                return;
+            }
+
+            try
+            {
+                File.Move(backups[0], _fullPath, overwrite: true);
+                log.Info($"Put {Path.GetFileName(_fullPath)} back as it was before the merge tool, from {Path.GetFileName(backups[0])}.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _kept.Add(backups[0]);
+                log.Warning($"The merge tool was stopped and {Path.GetFileName(_fullPath)} could not be put back from {backups[0]}, which is kept.", ex);
+            }
+        }
+
         public void Remove(IAppLog log)
         {
-            foreach (var file in Current().Except(_before))
+            foreach (var file in Current().Except(_before).Except(_kept))
             {
                 try
                 {

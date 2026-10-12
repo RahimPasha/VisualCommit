@@ -102,15 +102,19 @@ public class MergeToolTests
     }
 
     [Fact]
-    public async Task A_cancelled_tool_is_stopped_and_the_copies_git_made_are_removed()
+    public async Task A_cancelled_tool_is_stopped_the_file_is_put_back_as_it_was_and_the_copies_git_made_are_removed()
     {
         using var repo = await ConflictedAsync();
         var started = Sibling(repo, "tool-started");
         var release = Sibling(repo, "tool-release");
 
+        // The user's own partial resolution, made before the tool ran.
+        repo.WriteFile(Conflicted, "line 1\nmy partial resolution\nline 3\n");
+
         // The tool runs in the working tree's top folder, next to which the test's files lie. It
-        // waits to be stopped (or released, at the latest after a minute) and then fails.
-        await repo.ConfigAsync("mergetool.slow.cmd", "touch ../tool-started; i=0; while [ ! -f ../tool-release ] && [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done; exit 1");
+        // saves part of its work, waits to be stopped (or released, at the latest after a minute)
+        // and then fails.
+        await repo.ConfigAsync("mergetool.slow.cmd", "printf 'tool-partial\\n' > \"$MERGED\"; touch ../tool-started; i=0; while [ ! -f ../tool-release ] && [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done; exit 1");
         await repo.ConfigAsync("mergetool.slow.trustExitCode", "true");
         var repository = await OpenAsync(repo);
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
@@ -120,11 +124,14 @@ public class MergeToolTests
             var run = repository.RunMergeToolAsync(Conflicted, "slow", cancellationToken: cancel.Token);
             await WaitForFileAsync(started, run);
 
-            // While the tool runs, git's copies are beside the file.
+            // While the tool runs, git's copies are beside the file, which holds the tool's work.
             Assert.Equal(4, FilesIn(repo).Count(name => name.StartsWith("f_", StringComparison.Ordinal)));
+            Assert.Equal("tool-partial\n", ReadText(repo, Conflicted));
             await cancel.CancelAsync();
 
+            // 14.2: the file is as it was before the tool (git's backup put back), and only it is left.
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+            Assert.Equal("line 1\nmy partial resolution\nline 3\n", ReadText(repo, Conflicted));
             Assert.Equal(["f.txt"], FilesIn(repo));
             Assert.Equal(["UU dir/f.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
         }
