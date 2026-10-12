@@ -6,7 +6,8 @@ namespace VisualCommit.App.ViewModels;
 /// <summary>
 /// The lead's hooks of phase 4 (docs/phase-4-design.md 2.2, 11.1 and section 14): what puts the
 /// interactive rebase's list and the conflict resolver in the graph area. Stubs until work
-/// packages WP5 and WP6 are merged, so that WP4's operations build against them.
+/// packages WP5 and WP6 are merged, so that WP4's operations build against them; and what the
+/// backups' clean-up keeps.
 /// </summary>
 public sealed partial class RepositoryViewModel
 {
@@ -21,4 +22,11 @@ public sealed partial class RepositoryViewModel
     /// <summary>Opens the conflict resolver on <paramref name="file"/> (11.1, D148), after leaving what the graph area shows.</summary>
     public void OpenResolver(ChangedFile file) =>
         throw new NotImplementedException("The lead's hook: docs/phase-4-design.md 11.1");
+
+    /// <summary>
+    /// The full ref names the backups' clean-up keeps (section 9, D139): the restore bar's
+    /// snapshot while the bar offers it.
+    /// </summary>
+    public IReadOnlySet<string> BackupsToKeep =>
+        _lastSnapshot is { } snapshot ? new HashSet<string>(StringComparer.Ordinal) { snapshot.Ref } : new HashSet<string>(StringComparer.Ordinal);
 }
