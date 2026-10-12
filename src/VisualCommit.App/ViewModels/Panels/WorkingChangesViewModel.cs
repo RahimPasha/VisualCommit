@@ -553,6 +553,20 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         await AfterContinueAsync(mark);
     }
 
+    /// <summary>
+    /// The banner's Skip (5.4): <paramref name="run"/> asks and skips; afterwards, when the
+    /// operation went on (another stopped commit, or nothing in progress), a message the user
+    /// typed for the skipped commit is cleared, as after a Continue, and the next stop's message
+    /// is filled in from the operation (the review's finding 17: it was committed at the next stop).
+    /// </summary>
+    public async Task SkipClearingMessageAsync(Func<Task> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var mark = MarkContinue();
+        await run();
+        await AfterContinueAsync(mark);
+    }
+
     /// <summary>What <see cref="AfterContinueAsync"/> compares: the stopped commit and the boxes before Continue.</summary>
     private (string? Key, string Summary, string Description) MarkContinue() => (MessageKey(_status.InProgress), Summary, Description);
 

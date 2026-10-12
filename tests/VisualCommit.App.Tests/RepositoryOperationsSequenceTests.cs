@@ -245,6 +245,26 @@ public class RepositoryOperationsSequenceTests
     }
 
     [Fact]
+    public async Task The_banners_Skip_drops_a_message_typed_for_the_skipped_commit_and_the_next_stop_fills_its_own()
+    {
+        // The review's finding 17: the corrected message of "First change" stayed after Skip, and
+        // Continue at "Second change" committed it.
+        using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Rebase);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var changes = app.Repository.Changes;
+        await WaitUntilAsync(() => changes.Summary == "First change", "the stage panel to fill in the stopped commit's message");
+        changes.Summary = "First change, corrected";
+        app.Dialogs.Confirm();
+
+        await app.Repository.Banner.SkipCommand.ExecuteAsync(null);
+
+        Assert.Equal("Second change", app.Operations.Status.InProgress.Subject);
+        await WaitUntilAsync(() => changes.Summary == "Second change", "the next stop's own message");
+        Assert.Null(changes.ContinueMessage);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task Continue_is_refused_when_the_state_changed_since_the_click()
     {
         using var repo = await Scenarios.ConflictsStoppedAsync(Stop.Merge);
