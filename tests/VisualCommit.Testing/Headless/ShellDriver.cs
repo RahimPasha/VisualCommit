@@ -10,6 +10,7 @@ using VisualCommit.App;
 using VisualCommit.App.Services;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 
@@ -59,6 +60,8 @@ public sealed partial class ShellDriver : IDisposable
     /// <see cref="Launcher"/>, <see cref="Clipboard"/>), so nothing outside the window is opened or
     /// changed. Prompts of git and ssh go to the app's own dialogs, unless
     /// <paramref name="promptHandler"/> (a <see cref="ScriptedPromptHandler"/>) answers them instead.
+    /// The record clock stands at <see cref="AppClocks.HarnessTime"/> and the backup clock is fixed
+    /// there (docs/phase-5-design.md 2.3), as the real-window pass's are.
     /// </summary>
     public static ShellDriver Start(string dataDirectory, int? width = 1100, int? height = 700, IGitPromptHandler? promptHandler = null)
     {
@@ -71,7 +74,17 @@ public sealed partial class ShellDriver : IDisposable
         var folders = new FakeFolderPicker();
         var launcher = new FakeFileLauncher();
         var clipboard = new FakeClipboard();
-        var session = AppSession.Start(new AppPaths(dataDirectory), application, folders, launcher, clipboard, promptHandler);
+        // The activity log's times read 09:00:00 and its durations 0 ms, and the backups get the
+        // same names in every run, still in order (docs/phase-5-design.md 2.3).
+        var session = AppSession.Start(
+            new AppPaths(dataDirectory),
+            application,
+            folders,
+            launcher,
+            clipboard,
+            promptHandler,
+            recordClock: new FrozenClock(AppClocks.HarnessTime),
+            backupClock: BackupClock.Fixed(AppClocks.HarnessTime));
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;

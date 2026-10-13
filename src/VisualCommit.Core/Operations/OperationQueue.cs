@@ -24,6 +24,8 @@ public sealed class OperationQueue : IOperationQueue
     private static long _lastId;
 
     private readonly string _repositoryName;
+    private readonly string _repositoryKey;
+    private readonly TimeProvider _recordClock;
     private readonly Func<IDisposable?> _pauseWatcher;
     private readonly Func<RefreshScope, Task> _refresh;
     private readonly IGitPromptBroker? _prompts;
@@ -48,6 +50,12 @@ public sealed class OperationQueue : IOperationQueue
     /// Lists the lock files written since a time, after a cancelled network operation (1.8). Null
     /// looks in <paramref name="gitDirectory"/> only; a linked worktree passes its common git folder too.
     /// </param>
+    /// <param name="recordClock">
+    /// The clock of the times the activity log shows (<see cref="OperationRecord.DisplayedStart"/>
+    /// and its duration, docs/phase-5-design.md 2.3); the system clock by default. The queue's own
+    /// start time, which the scan for lock files after a cancel uses (D126), and the log file's
+    /// duration stay the system's.
+    /// </param>
     public OperationQueue(
         string repositoryName,
         string gitDirectory,
@@ -56,7 +64,8 @@ public sealed class OperationQueue : IOperationQueue
         IGitPromptBroker? prompts,
         IOperationLog? operations,
         IAppLog log,
-        Func<DateTimeOffset, IReadOnlyList<string>>? findLockFiles = null)
+        Func<DateTimeOffset, IReadOnlyList<string>>? findLockFiles = null,
+        TimeProvider? recordClock = null)
     {
         ArgumentNullException.ThrowIfNull(repositoryName);
         ArgumentNullException.ThrowIfNull(gitDirectory);
@@ -64,6 +73,8 @@ public sealed class OperationQueue : IOperationQueue
         ArgumentNullException.ThrowIfNull(refresh);
         ArgumentNullException.ThrowIfNull(log);
         _repositoryName = repositoryName;
+        _repositoryKey = WorktreeKey.Of(gitDirectory);
+        _recordClock = recordClock ?? TimeProvider.System;
         _pauseWatcher = pauseWatcher;
         _refresh = refresh;
         _prompts = prompts;
@@ -434,6 +445,19 @@ public sealed class OperationQueue : IOperationQueue
         var stopwatch = Stopwatch.StartNew();
         _log.Debug($"{_repositoryName}: {operation.Title}: started");
 
+        // The activity log shows it running from now on, in the order it started (2.3).
+        entry.Sequence = RecordSequence.Next();
+        entry.DisplayedStart = _recordClock.GetUtcNow();
+        entry.DisplayedTimestamp = _recordClock.GetTimestamp();
+        try
+        {
+            _operations?.Start(new OperationStart(entry.Id, _repositoryKey, _repositoryName, operation.Title, entry.Sequence, entry.DisplayedStart));
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"{_repositoryName}: recording the start of {operation.Title} failed.", ex);
+        }
+
         OperationResult result;
         try
         {
@@ -623,7 +647,16 @@ public sealed class OperationQueue : IOperationQueue
 
         try
         {
-            _operations?.Add(new OperationRecord(entry.Id, _repositoryName, operation.Title, entry.StartedAt, duration, result.Outcome, result.Message));
+            _operations?.Add(new OperationRecord(entry.Id, _repositoryName, operation.Title, entry.StartedAt, duration, result.Outcome, result.Message)
+            {
+                RepositoryKey = _repositoryKey,
+                Sequence = entry.Sequence,
+                IsWarning = result.IsWarning,
+                Kind = operation.Kind,
+                IsBackground = operation.IsBackground,
+                DisplayedStart = entry.DisplayedStart,
+                DisplayedDuration = _recordClock.GetElapsedTime(entry.DisplayedTimestamp),
+            });
         }
         catch (Exception ex)
         {
@@ -784,6 +817,15 @@ public sealed class OperationQueue : IOperationQueue
 
         public PromptScope? Scope { get; set; }
 
+        /// <summary>When it started to run, by the system clock: the lock files' scan after a cancel looks from here (D126).</summary>
         public DateTimeOffset StartedAt { get; set; }
+
+        /// <summary>The number it took when it started (<see cref="RecordSequence"/>).</summary>
+        public long Sequence { get; set; }
+
+        /// <summary>When it started by the record clock, and that clock's timestamp then.</summary>
+        public DateTimeOffset DisplayedStart { get; set; }
+
+        public long DisplayedTimestamp { get; set; }
     }
 }

@@ -7,6 +7,7 @@ using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -26,7 +27,9 @@ public sealed class TabServices
         IGitPromptBroker? prompts = null,
         IFileLauncher? launcher = null,
         IClipboardService? clipboard = null,
-        IGitCallLog? gitCalls = null)
+        IGitCallLog? gitCalls = null,
+        TimeProvider? recordClock = null,
+        UndoHistories? undoHistories = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -47,6 +50,8 @@ public sealed class TabServices
         Launcher = launcher;
         Clipboard = clipboard;
         GitCalls = gitCalls;
+        RecordClock = recordClock ?? TimeProvider.System;
+        UndoHistories = undoHistories ?? new UndoHistories();
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -99,6 +104,15 @@ public sealed class TabServices
     /// only as an outcome (an empty cherry-pick, 2.12). Null where nothing records the calls.
     /// </summary>
     public IGitCallLog? GitCalls { get; }
+
+    /// <summary>
+    /// The clock of the times the activity log shows, given to each repository's queue
+    /// (docs/phase-5-design.md 2.3): the system clock, or the harnesses' frozen one.
+    /// </summary>
+    public TimeProvider RecordClock { get; }
+
+    /// <summary>The undo histories of the session, one per worktree (docs/phase-5-design.md 7.1), shared by every tab.</summary>
+    public UndoHistories UndoHistories { get; }
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

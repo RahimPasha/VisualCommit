@@ -11,6 +11,7 @@ using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
+using VisualCommit.Core.Undo;
 using VisualCommit.Git;
 
 namespace VisualCommit.App;
@@ -85,6 +86,11 @@ public sealed class AppSession : IDisposable
     /// dialog; the scripted walk-through passes a fake (D42). <paramref name="launcher"/>,
     /// <paramref name="clipboard"/> and <paramref name="promptHandler"/> replace the file launcher,
     /// the clipboard and the prompt dialogs the same way (docs/phase-3-design.md 2.32, 3.5, 7.4).
+    /// <paramref name="recordClock"/> gives the activity log's times to every queue and to the git
+    /// runner, <paramref name="backupClock"/> names the backups of every repository the app opens
+    /// and is their clean-up's "now" (docs/phase-5-design.md 2.3, D173); without them, the clocks
+    /// the environment asks for (<see cref="AppClocks"/>: the system's, or the real-window pass's
+    /// fixed ones). The headless harness gives fixed ones.
     /// </summary>
     public static AppSession Start(
         AppPaths paths,
@@ -92,10 +98,14 @@ public sealed class AppSession : IDisposable
         IFolderPicker? folderPicker = null,
         IFileLauncher? launcher = null,
         IClipboardService? clipboard = null,
-        IGitPromptHandler? promptHandler = null)
+        IGitPromptHandler? promptHandler = null,
+        TimeProvider? recordClock = null,
+        BackupClock? backupClock = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
+        recordClock ??= AppClocks.RecordClockFromEnvironment();
+        backupClock ??= AppClocks.BackupClockFromEnvironment();
 
         Directory.CreateDirectory(paths.DataDirectory);
         var log = new FileAppLog(paths.LogDirectory);
@@ -119,7 +129,7 @@ public sealed class AppSession : IDisposable
         {
             try
             {
-                var detection = await GitLocator.DetectAsync(gitCalls, log, cancellationToken);
+                var detection = await GitLocator.DetectAsync(gitCalls, log, recordClock, cancellationToken);
                 gitFound.TrySetResult(detection);
                 return detection;
             }
@@ -136,13 +146,15 @@ public sealed class AppSession : IDisposable
         }
 
         // Phase 3 (docs/phase-3-design.md 1.7, 2.32, 3.1): one record of the operations, the
-        // prompt channel of the session, and the file launcher and clipboard of the window.
+        // prompt channel of the session, and the file launcher and clipboard of the window. Phase 5
+        // (docs/phase-5-design.md 2.3, 7.1): the record clock of every queue, and the undo
+        // histories of the session's worktrees.
         MainWindow? mainWindow = null;
         var dialogs = new DialogHostViewModel();
         var promptPresenter = new PromptDialogPresenter(dialogs, dialogs.Notices);
         var prompts = PromptDialogs.CreateBroker(promptHandler ?? new PromptDialogs(promptPresenter, log), log);
         var tabServices = new TabServices(
-            new GitRepositoryProvider(new GitAccess(gitFound.Task), log),
+            new GitRepositoryProvider(new GitAccess(gitFound.Task), log, backupClock),
             folderPicker ?? new StorageFolderPicker(() => mainWindow),
             settings,
             session,
@@ -153,7 +165,9 @@ public sealed class AppSession : IDisposable
             prompts: prompts,
             launcher: launcher ?? new FileLauncher(() => mainWindow, log),
             clipboard: clipboard ?? new ClipboardService(() => mainWindow),
-            gitCalls: gitCalls);
+            gitCalls: gitCalls,
+            recordClock: recordClock,
+            undoHistories: new UndoHistories());
         var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session);
 
         // A prompt dialog names its repository by the window's one rule, as every other dialog (4f).

@@ -6,6 +6,7 @@ using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Rebase;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -70,7 +71,9 @@ public class GraphAreaHooksTests
         using var data = new TempDirectory("data");
         using var repo = await Scenarios.InteractiveAsync();
         await repo.GitAsync("update-ref", "refs/visualcommit/backup/reset-20250101T120000000Z/main", "HEAD");
-        var recent = "refs/visualcommit/backup/reset-" + DateTime.UtcNow.AddDays(-1).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture) + "/main";
+
+        // A day before the harness's backup clock (docs/phase-5-design.md 2.3), whatever the date is.
+        var recent = "refs/visualcommit/backup/reset-" + AppClocks.HarnessTime.AddDays(-1).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture) + "/main";
         await repo.GitAsync("update-ref", recent, "HEAD");
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();

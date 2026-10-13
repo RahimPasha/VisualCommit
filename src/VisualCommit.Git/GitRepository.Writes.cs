@@ -137,7 +137,7 @@ public sealed partial class GitRepository
 
             // The backups' clock, as every backup's (docs/phase-4-design.md section 9): a test's fixed
             // clock then orders the snapshots with the other backups for the clean-up.
-            var name = SnapshotRefPrefix + BackupClock.GetUtcNow().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
+            var name = SnapshotRefPrefix + BackupClock.NextName().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
             var refName = name;
             for (var attempt = 2; ; attempt++)
             {
