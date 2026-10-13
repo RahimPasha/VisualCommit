@@ -70,7 +70,7 @@
                 Command="{Binding ActiveTab.OperationStatus.CancelCommand}"
                 CornerRadius="0"
                 Margin="6,0,0,0"
-                ToolTip.Tip="Stop git"
+                ToolTip.Tip="{Binding ActiveTab.OperationStatus.CancelToolTip}"
                 AutomationProperties.AutomationId="OperationCancelButton"
                 AutomationProperties.Name="Cancel">
           <TextBlock Text="Cancel" FontSize="11.5" VerticalAlignment="Center" />

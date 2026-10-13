@@ -89,6 +89,34 @@ public class StatusBarTests
     }
 
     [AvaloniaFact]
+    public async Task While_the_merge_tool_runs_Cancel_says_it_stops_git_and_the_merge_tool()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+
+        // The merge tool's operation (docs/phase-4-design.md 11.9): local, and it can be cancelled (D149).
+        var tool = repository.Queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for fake to close…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Resolved notes.txt");
+        })
+        {
+            CanBeCancelled = true,
+        });
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+
+        Assert.Equal("Stop git and the merge tool", ToolTip.GetTip(parts.Cancel));
+        app.Click(parts.Cancel);
+        Assert.Equal(OperationOutcome.Cancelled, (await tool).Outcome);
+        await app.WaitForIdleAsync(repository);
+        Assert.False(parts.Cancel.IsVisible);
+    }
+
+    [AvaloniaFact]
     public async Task Results_stay_in_their_colours_and_a_long_one_is_cut_with_its_whole_text_in_the_tooltip()
     {
         using var repo = await Scenarios.OperationsAsync();
