@@ -305,8 +305,12 @@ public sealed partial class GitRepository
     /// <c>git push --progress [--set-upstream] [--force-with-lease=&lt;remote ref&gt; --force-if-includes]
     /// &lt;remote&gt; refs/heads/&lt;branch&gt;:&lt;remote ref&gt;</c> (2.19, 2.20, D100). The lease names
     /// no expected value, so that git also applies <c>--force-if-includes</c>.
+    /// <para>
+    /// The <see cref="PushOutcome"/> lists no ref yet: reading git's summary lines into it
+    /// (docs/phase-5-design.md 0.5, 7.7) is work package WP3's, which owns this method's result.
+    /// </para>
     /// </summary>
-    public Task PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default)
+    public async Task<PushOutcome> PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(options);
@@ -328,7 +332,8 @@ public sealed partial class GitRepository
 
         arguments.Add(request.Remote);
         arguments.Add($"{HeadsPrefix}{request.Branch}:{request.RemoteRef}");
-        return RunRemoteCommandAsync([.. arguments], options, cancellationToken);
+        await RunRemoteCommandAsync([.. arguments], options, cancellationToken).ConfigureAwait(false);
+        return PushOutcome.None;
     }
 
     /// <summary><c>git branch --set-upstream-to=&lt;ref&gt; &lt;branch&gt;</c>: a remote branch, or a local branch for a local upstream (2.21).</summary>
@@ -448,13 +453,17 @@ public sealed partial class GitRepository
         return WriteAsync(cancellationToken, "remote", "remove", name);
     }
 
-    /// <summary><c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29).</summary>
-    public Task PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// <c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29). Its
+    /// <see cref="PushOutcome"/> lists no ref yet, as <see cref="PushAsync"/>'s (WP3 reads git's lines).
+    /// </summary>
+    public async Task<PushOutcome> PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
         ArgumentNullException.ThrowIfNull(options);
         RemoteArguments.RequireRemote(remote);
-        return RunRemoteCommandAsync(["push", "--progress", remote, $"{TagsPrefix}{tag}:{TagsPrefix}{tag}"], options, cancellationToken);
+        await RunRemoteCommandAsync(["push", "--progress", remote, $"{TagsPrefix}{tag}:{TagsPrefix}{tag}"], options, cancellationToken).ConfigureAwait(false);
+        return PushOutcome.None;
     }
 
     /// <summary>
