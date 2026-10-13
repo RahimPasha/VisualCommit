@@ -46,6 +46,25 @@ public sealed record GitCallRecord(
     public const string TruncationMarker = "\n... (output cut off)";
 
     public bool Succeeded => Outcome == GitCallOutcome.Completed && ExitCode == 0;
+
+    /// <summary>The number it took when it started (<see cref="Operations.RecordSequence"/>): the activity log orders its rows by it (docs/phase-5-design.md 2.3).</summary>
+    public long Sequence { get; init; }
+
+    /// <summary>When it started by the record clock (<see cref="AppClocks"/>): what the activity log shows.</summary>
+    public DateTimeOffset DisplayedStart { get; init; }
+
+    /// <summary>How long it ran by the record clock: what the activity log shows.</summary>
+    public TimeSpan DisplayedDuration { get; init; }
+
+    /// <summary>
+    /// What it was given on standard input, for a command that records it
+    /// (<see cref="GitCommand.RecordsStandardInput"/>: <c>update-ref --stdin</c>'s lines of ref names
+    /// and SHAs), cut off and with credentials hidden as the output is; null otherwise.
+    /// </summary>
+    public string? StandardInput { get; init; }
+
+    /// <summary>It ran with <c>GIT_INDEX_FILE</c> set: on a temporary index (a snapshot's), not the user's.</summary>
+    public bool OnTemporaryIndex { get; init; }
 }
 
 /// <summary>Collects the record of every git call. Safe to use from any thread.</summary>

@@ -1,5 +1,6 @@
 using System.Buffers;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Graph;
 using VisualCommit.Core.Logging;
 
 namespace VisualCommit.Git;
@@ -35,6 +36,16 @@ public sealed partial class GitRepository
         ArgumentNullException.ThrowIfNull(refs);
         return LoadCommitsAsync(Task.FromResult(refs), onPage, cancellationToken);
     }
+
+    /// <summary>
+    /// The graph with a filter (docs/phase-5-design.md 8.2): a null filter is exactly
+    /// <see cref="LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>.
+    /// Loading with a filter is work package WP2a's.
+    /// </summary>
+    public Task LoadCommitsAsync(Task<RepoRefs> refs, GraphFilter? filter, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) =>
+        filter is null
+            ? LoadCommitsAsync(refs, onPage, cancellationToken)
+            : throw new NotImplementedException("Loading a filtered graph is work package WP2a's (docs/phase-5-design.md 8.2).");
 
     public async Task LoadCommitsAsync(Task<RepoRefs> refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
     {

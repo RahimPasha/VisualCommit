@@ -31,8 +31,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
 Some Lucide icons derive from the Feather project. Of the icons used here, these do: arrow-down,
-arrow-up, check, chevron-down, chevron-left, chevron-right, chevron-up, cloud, download, folder, list,
-minus, moon, plus, search, tag, triangle-alert (Feather's alert-triangle) and x.
+arrow-up, check, chevron-down, chevron-left, chevron-right, chevron-up, cloud, crosshair, download,
+eye-off, folder, list, minus, moon, plus, search, tag, triangle-alert (Feather's alert-triangle) and x.
 
 ```
 The MIT License (MIT)

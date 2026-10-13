@@ -45,7 +45,8 @@ public sealed partial class RepositoryViewModel
     /// refs, the status, the selected commits in row order with whether HEAD's history holds them
     /// (4h) and where they are on HEAD's linear line (phase 4 design 2.1), the toolbar's states,
     /// whether an operation runs, the other worktrees as last read by
-    /// <see cref="ReadMenuContextAsync"/> (empty before), and the branch tips HEAD reaches (1.1).
+    /// <see cref="ReadMenuContextAsync"/> (empty before), the branch tips HEAD reaches (1.1), and
+    /// what the graph hides and solos (docs/phase-5-design.md 8.3).
     /// Before the refs are read: an unborn HEAD without refs, every toolbar button disabled.
     /// </summary>
     public RepositoryMenuContext MenuContext => new(
@@ -60,6 +61,7 @@ public sealed partial class RepositoryViewModel
         OtherWorktrees = _otherWorktrees,
         TipsOnHead = BranchTipsOnHead(),
         MergeTool = _mergeTool,
+        Filters = Filters,
     };
 
     /// <summary>

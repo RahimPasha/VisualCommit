@@ -2,16 +2,30 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels"
+             xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
              x:Class="VisualCommit.App.Views.Graph.RepositoryGraphView"
              x:DataType="vm:RepositoryViewModel">
 
   <!-- The graph of an open repository (D49): column headers, then the custom-drawn rows. The
        headers take their widths from the rows' column layout (code-behind), so the two line up
-       and hide the same columns when the area is narrow. -->
-  <Grid RowDefinitions="28,*">
+       and hide the same columns when the area is narrow. Above the headers, the search bar while
+       it is open (docs/phase-5-design.md 3.1), which pushes them and the rows down. -->
+  <Grid RowDefinitions="Auto,28,*">
+
+    <!-- The search bar (3.1), with the view the view locator finds for the search's view model
+         (WP7's). Closed, it holds nothing and takes no room. -->
+    <ContentControl Name="SearchSlot"
+                    Grid.Row="0"
+                    Content="{Binding Search}"
+                    IsVisible="{Binding $self.Content, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    HorizontalContentAlignment="Stretch">
+      <ContentControl.ContentTemplate>
+        <dialogs:DialogViewLocator />
+      </ContentControl.ContentTemplate>
+    </ContentControl>
 
     <Border Name="ColumnHeaders"
-            Grid.Row="0"
+            Grid.Row="1"
             Background="{DynamicResource VcChromeBackgroundBrush}"
             BorderBrush="{DynamicResource VcBorderBrush}"
             BorderThickness="0,0,0,1">
@@ -34,7 +48,7 @@
     <!-- Data is bound before the scroll offset, so that a new tab's offset is clamped to that
          tab's history and not to the one shown before. -->
     <c:CommitGraphControl Name="GraphRows"
-                          Grid.Row="1"
+                          Grid.Row="2"
                           Data="{Binding Graph}"
                           ShowsWorkingRow="{Binding HasWorkingChanges}"
                           IsWorkingRowSelected="{Binding IsWorkingRowSelected}"
@@ -43,13 +57,28 @@
                           Selection="{Binding Selection}"
                           WorkingRowText="{Binding WorkingRowText}"
                           ScrollOffset="{Binding ScrollOffset}"
+                          Search="{Binding SearchMarks}"
                           AutomationProperties.AutomationId="GraphRows"
                           AutomationProperties.Name="Commit graph" />
+
+    <!-- While the graph reloads for a change of what it hides or solos (8.2): a 2-px bar under the
+         column headers, over the rows' top edge. Hidden, it runs no animation. -->
+    <ProgressBar Name="GraphReloading"
+                 Grid.Row="2"
+                 IsVisible="{Binding IsReloadingGraph}"
+                 IsIndeterminate="{Binding IsReloadingGraph}"
+                 VerticalAlignment="Top"
+                 Height="2" MinHeight="2" MinWidth="0"
+                 CornerRadius="0"
+                 Foreground="{DynamicResource VcAccentBrush}"
+                 Background="Transparent"
+                 AutomationProperties.AutomationId="GraphReloading"
+                 AutomationProperties.Name="Reloading the graph" />
 
     <!-- Lies over the right edge of the rows and takes no width from the columns. The
          code-behind keeps it in step with the rows' scroll offset and extent. -->
     <ScrollBar Name="GraphScrollBar"
-               Grid.Row="1"
+               Grid.Row="2"
                Orientation="Vertical"
                HorizontalAlignment="Right"
                Minimum="0"
@@ -58,7 +87,7 @@
                AutomationProperties.AutomationId="GraphScrollBar" />
 
     <StackPanel Name="NoCommits"
-                Grid.Row="1"
+                Grid.Row="2"
                 IsVisible="{Binding HasNoCommits}"
                 VerticalAlignment="Center"
                 Margin="24,0"
@@ -75,7 +104,7 @@
     </StackPanel>
 
     <TextBlock Name="GraphError"
-               Grid.Row="1"
+               Grid.Row="2"
                Classes="error"
                Text="{Binding ErrorText}"
                IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"

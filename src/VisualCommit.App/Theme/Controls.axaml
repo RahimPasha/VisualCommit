@@ -68,6 +68,12 @@
         <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
       </Style>
+      <!-- On (docs/phase-5-design.md 1.2: the status bar's Activity log while its panel is open):
+           primary text on the control background, which the hover look does not have. -->
+      <Style Selector="^.selected">
+        <Setter Property="Background" Value="{DynamicResource VcControlBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      </Style>
       <Style Selector="^:pressed">
         <Setter Property="Background" Value="{DynamicResource VcControlBackgroundBrush}" />
       </Style>

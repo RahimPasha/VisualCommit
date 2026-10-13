@@ -24,11 +24,13 @@ public sealed partial class GitRepository
     private const string BackupTimeFormat = "yyyyMMdd'T'HHmmssfff'Z'";
 
     /// <summary>
-    /// The clock of the backup refs' timestamps, the discard snapshots' included, and the clean-up's
-    /// "now". Tests set a fixed one to make two batches collide (2.0's retry naming) and to age
-    /// backups (section 9).
+    /// The clock of the backup refs' timestamps, the discard snapshots' included
+    /// (<see cref="Core.Git.BackupClock.NextName"/>), and the clean-up's "now"
+    /// (<see cref="Core.Git.BackupClock.Now"/>). The system clock unless the app gives every
+    /// repository it opens its own (docs/phase-5-design.md 2.3: the harnesses' fixed clock); tests
+    /// set a fixed one to make two batches collide (2.0's retry naming) and to age backups (section 9).
     /// </summary>
-    internal TimeProvider BackupClock { get; set; } = TimeProvider.System;
+    public BackupClock BackupClock { get; set; } = BackupClock.System;
 
     /// <summary>
     /// Called by the clean-up between its read of the backup refs and its deletion, for tests that
@@ -44,7 +46,7 @@ public sealed partial class GitRepository
         // One timestamp for the whole operation; a retry puts its suffix on the kind-and-time
         // part, never on the whole ref, so a "-changes" ref keeps its pair's name and a name with
         // slashes cannot clash with a folder of the same name (2.0).
-        var time = BackupClock.GetUtcNow().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
+        var time = BackupClock.NextName().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
         var names = BackupNames(request.Entries);
         for (var attempt = 1; ; attempt++)
         {
@@ -65,7 +67,7 @@ public sealed partial class GitRepository
                 input.Append("create ").Append(name).Append(' ').Append(target).Append('\n');
             }
 
-            var command = new GitCommand("update-ref", "--stdin") { WorkingDirectory = WorkingDirectory, StandardInput = input.ToString() };
+            var command = new GitCommand("update-ref", "--stdin") { WorkingDirectory = WorkingDirectory, StandardInput = input.ToString(), RecordsStandardInput = true };
             var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
             if (result.Succeeded)
             {
@@ -544,6 +546,7 @@ public sealed partial class GitRepository
             WorkingDirectory = WorkingDirectory,
             Environment = (options ?? NetworkOptions.None).Environment,
             StandardInput = input.ToString(),
+            RecordsStandardInput = true,
         };
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded)
@@ -555,11 +558,9 @@ public sealed partial class GitRepository
         var removedBackups = new List<RemovedBackup>(removed.Count);
         foreach (var (backup, reason) in removed)
         {
-            var why = reason == BackupRemovalReason.OlderThanDays
-                ? $"older than {Count(retention.Days, "day")}"
-                : $"more than {Count(retention.Count, "backup")}";
-            _log.Info($"{Name}: Removed backup {backup.Name} ({why})");
-            removedBackups.Add(new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason));
+            var removedBackup = new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason);
+            _log.Info($"{Name}: {removedBackup.Describe(retention)}");
+            removedBackups.Add(removedBackup);
         }
 
         return removedBackups;
@@ -598,7 +599,7 @@ public sealed partial class GitRepository
         }
 
         var output = await ReadOutputAsync(cancellationToken, "for-each-ref", "--format=%(refname) %(objectname)", BackupRefPrefix).ConfigureAwait(false);
-        var now = BackupClock.GetUtcNow();
+        var now = BackupClock.Now;
         var backups = new Dictionary<string, Backup>(StringComparer.Ordinal);
         foreach (var line in SplitLines(output))
         {

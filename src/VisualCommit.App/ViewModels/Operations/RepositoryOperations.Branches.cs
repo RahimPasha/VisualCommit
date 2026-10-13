@@ -10,6 +10,7 @@ using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -49,6 +50,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         // The detached commits were confirmed and backed up already: 2.31 does not ask again.
                         ? display with { Extra = extra with { Run = () => StashAndCheckoutAsync(target, detachedBackedUp: true) } }
                         : CheckoutFailureDisplay(failure, target, offerStash: true),
+                    Undo = UndoScope.Checkout(plan.Name, Refs?.Head.BranchName, CreatedBranchOf(target)),
                 });
         });
     }
@@ -90,6 +92,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     // 1. The tracked changes only: the untracked files blocked nothing, and the
                     // checkout carries them along (D91).
                     var stash = await Git.StashAsync(OperationTexts.StashBeforeCheckout(name), includeUntracked: false, options);
+                    UndoCapture.Stash(stash, includedUntracked: false, OperationTexts.StashBeforeCheckout(name));
                     if (stash is null)
                     {
                         // Nothing is left to stash (the changes went meanwhile): a plain checkout.
@@ -127,7 +130,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     return OperationReport.Done(OperationTexts.CheckedOutWithChanges(name));
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = _ => display });
+                new RunOptions
+                {
+                    HasSeveralSteps = true,
+                    DescribeFailure = _ => display,
+                    Undo = UndoScope.StashAndCheckout(name, Refs?.Head.BranchName, CreatedBranchOf(target)),
+                });
 
             if (result.Outcome == OperationOutcome.Conflicts && conflicted >= 0)
             {
@@ -189,8 +197,41 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 {
                     HasSeveralSteps = true,
                     DescribeFailure = failure => display ?? CheckoutFailureDisplay(failure, branchRef, offerStash: false),
+                    Undo = UndoScope.CheckoutAndMerge(branch, source, Refs?.Head.BranchName),
                 });
         });
+    }
+
+    // The checkouts' error dialog (2.31, 2.33), which C12 changes (docs/phase-5-design.md 9.3).
+
+    /// <summary>"Stash changes and check out" (2.31): only for a checkout blocked by tracked changes.</summary>
+    public ErrorAction StashAndCheckoutAction(string target) =>
+        new(OperationTexts.StashAndCheckOutButton, () => StashAndCheckoutAsync(target));
+
+    /// <summary>
+    /// The dialog of a checkout's failure (2.1 to 2.3): "Checkout blocked" for tracked changes, with
+    /// "Stash changes and check out" when <paramref name="offerStash"/> (not after 4g's drop), or
+    /// for untracked files in the way, without it; null for any other failure (2.33's default).
+    /// </summary>
+    /// <param name="failure">The failure.</param>
+    /// <param name="target">What is checked out, as <see cref="CheckoutAsync"/> names it.</param>
+    /// <param name="offerStash">Offer "Stash changes and check out".</param>
+    public FailureDisplay? CheckoutFailureDisplay(GitFailure failure, string target, bool offerStash)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        ArgumentNullException.ThrowIfNull(target);
+        var name = ShortName(target);
+        return failure.Kind switch
+        {
+            GitFailureKind.CheckoutBlockedByLocalChanges => new FailureDisplay(
+                OperationTexts.CheckoutBlockedTitle,
+                OperationTexts.CheckoutBlockedByChanges(name),
+                offerStash ? StashAndCheckoutAction(target) : null),
+            GitFailureKind.CheckoutBlockedByUntrackedFiles => new FailureDisplay(
+                OperationTexts.CheckoutBlockedTitle,
+                OperationTexts.CheckoutBlockedByUntrackedFiles(name)),
+            _ => null,
+        };
     }
 
     // ---- Branches (2.4 to 2.7) --------------------------------------------------------------------
@@ -236,17 +277,22 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 backUpDetached = confirmed;
             }
 
-            await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async operation =>
-            {
-                // HEAD as it is now, not as it was when the dialog opened (2.1's rule, D83).
-                if (checkout && await GuardDetachedHeadAsync(text, backUpDetached, keptBy: startPoint) is { } refusal)
+            await RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Refs,
+                async operation =>
                 {
-                    return refusal;
-                }
+                    // HEAD as it is now, not as it was when the dialog opened (2.1's rule, D83).
+                    if (checkout && await GuardDetachedHeadAsync(text, backUpDetached, keptBy: startPoint) is { } refusal)
+                    {
+                        return refusal;
+                    }
 
-                await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
-                return OperationReport.Done(OperationTexts.CreatedBranch(name, checkout));
-            });
+                    await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
+                    return OperationReport.Done(OperationTexts.CreatedBranch(name, checkout));
+                },
+                new RunOptions { Undo = UndoScope.CreateBranch(name, Refs?.Head.BranchName) });
         });
     }
 
@@ -268,11 +314,16 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
         var newName = answer.Name;
         var text = OperationTexts.RenameBranch(branch, newName);
-        await GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
-        {
-            await Git.RenameBranchAsync(branch, newName);
-            return OperationReport.Done(OperationTexts.RenamedBranch(branch, newName));
-        }));
+        await GuardAsync(text, () => RunAsync(
+            text,
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async _ =>
+            {
+                await Git.RenameBranchAsync(branch, newName);
+                return OperationReport.Done(OperationTexts.RenamedBranch(branch, newName));
+            },
+            new RunOptions { Undo = UndoScope.RenameBranch(branch, newName) }));
     }
 
     /// <inheritdoc cref="IRepositoryActions.DeleteBranchAsync"/>
@@ -302,7 +353,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 {
                     await Git.DeleteBranchAsync(branch);
                     return OperationReport.Done(OperationTexts.DeletedBranch(branch));
-                });
+                },
+                new RunOptions { Undo = UndoScope.DeleteBranch(branch) });
         });
     }
 
@@ -323,7 +375,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 await Git.FastForwardBranchAsync(branch, targetRef);
                 return OperationReport.Done(OperationTexts.FastForwarded(branch, target));
             },
-            new RunOptions { Prompts = PromptMode.None, DescribeFailure = failure => FastForwardFailureDisplay(failure, branch, target) }));
+            new RunOptions
+            {
+                Prompts = PromptMode.None,
+                DescribeFailure = failure => FastForwardFailureDisplay(failure, branch, target),
+                Undo = UndoScope.FastForwardBranch(branch),
+            }));
     }
 
     // ---- Merge (2.8 to 2.10) ----------------------------------------------------------------------
@@ -336,20 +393,25 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var current = HeadName;
         var seen = Refs?.Head;
         var text = mode == MergeMode.FastForwardOnly ? OperationTexts.FastForward(current, source) : OperationTexts.Merge(source, current);
-        return GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
-        {
-            if (await RefuseWhileInProgressAsync(text) is { } refusal)
+        return GuardAsync(text, () => RunAsync(
+            text,
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async context =>
             {
-                return refusal;
-            }
+                if (await RefuseWhileInProgressAsync(text) is { } refusal)
+                {
+                    return refusal;
+                }
 
-            if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingMerged) is { } moved)
-            {
-                return moved;
-            }
+                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingMerged) is { } moved)
+                {
+                    return moved;
+                }
 
-            return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
-        }));
+                return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
+            },
+            new RunOptions { Undo = UndoScope.Merge(source, current, fastForwardOnly: mode == MergeMode.FastForwardOnly) }));
     }
 
     // ---- Reset (2.11) -----------------------------------------------------------------------------
@@ -376,27 +438,33 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 return;
             }
 
-            await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
-            {
-                // The dialog named the branch and what it would lose: HEAD must still be there.
-                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReset, sameCommit: true) is { } moved)
+            await RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Refs,
+                async context =>
                 {
-                    return moved;
-                }
+                    // The dialog named the branch and what it would lose: HEAD must still be there.
+                    if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReset, sameCommit: true) is { } moved)
+                    {
+                        return moved;
+                    }
 
-                var head = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
-                // Hard: the changes it discards; mixed: the index it replaces, when anything is
-                // staged, so that "this can be undone" holds for a staged version too.
-                var changes = mode switch
-                {
-                    ResetMode.Hard => await Git.SnapshotForHardResetAsync(commit),
-                    ResetMode.Mixed => await Git.SnapshotIndexAsync(),
-                    _ => null,
-                };
-                await SaveBackupAsync(new BackupRequest("reset", [new BackupEntry(null, head)]) { ChangesCommit = changes });
-                await Git.ResetAsync(commit, mode, NetworkOptions.From(context));
-                return OperationReport.Done(OperationTexts.ResetDone(current, commit, mode));
-            });
+                    var head = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
+                    // Hard: the changes it discards; mixed: the index it replaces, when anything is
+                    // staged, so that "this can be undone" holds for a staged version too.
+                    var changes = mode switch
+                    {
+                        ResetMode.Hard => await Git.SnapshotForHardResetAsync(commit),
+                        ResetMode.Mixed => await Git.SnapshotIndexAsync(),
+                        _ => null,
+                    };
+                    await SaveBackupAsync(new BackupRequest("reset", [new BackupEntry(null, head)]) { ChangesCommit = changes });
+                    UndoCapture.Reset(mode, changes);
+                    await Git.ResetAsync(commit, mode, NetworkOptions.From(context));
+                    return OperationReport.Done(OperationTexts.ResetDone(current, commit, mode));
+                },
+                new RunOptions { Undo = UndoScope.Reset(current, commit, mode) });
         });
     }
 
@@ -441,7 +509,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return Failed(text, FailureOfLastCall(context, command => IsCallOn(command, "cherry-pick", commit), display.Summary));
                 }
             },
-            new RunOptions { DescribeFailure = _ => display }));
+            new RunOptions { DescribeFailure = _ => display, Undo = UndoScope.CherryPick([commit], seen?.BranchName) }));
     }
 
     /// <inheritdoc cref="IRepositoryActions.CherryPickSeveralAsync"/>
@@ -464,7 +532,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
             seen,
             OperationTexts.NothingCherryPicked,
             options => Git.CherryPickAsync(ordered, options),
-            OperationTexts.CherryPickedSeveral(count, current)));
+            OperationTexts.CherryPickedSeveral(count, current),
+            UndoScope.CherryPick(ordered, seen?.BranchName)));
     }
 
     /// <summary>
@@ -486,7 +555,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
         HeadState? seen,
         string nothing,
         Func<NetworkOptions, Task<SequenceResult>> apply,
-        string done)
+        string done,
+        UndoScope undo)
     {
         var notice = new StopNotice();
         await RunAsync(
@@ -534,6 +604,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 DescribeFailure = failure => failure.GitOutput.Contains("would be overwritten", StringComparison.Ordinal)
                     ? new FailureDisplay(text.ErrorTitle, OperationTexts.ListRefusedAtStart(kind))
                     : null,
+                Undo = undo,
             });
         await FinishAsync(notice, new SelectionAfter());
     }
@@ -548,40 +619,45 @@ public sealed partial class RepositoryOperations : IInProgressActions
         return GuardAsync(text, async () =>
         {
             var isMerge = await IsMergeAsync(commit);
-            await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
-            {
-                if (await RefuseWhileInProgressAsync(text) is { } refusal)
+            await RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Refs,
+                async context =>
                 {
-                    return refusal;
-                }
+                    if (await RefuseWhileInProgressAsync(text) is { } refusal)
+                    {
+                        return refusal;
+                    }
 
-                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
-                {
-                    return moved;
-                }
+                    if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
+                    {
+                        return moved;
+                    }
 
-                ApplyResult result;
-                try
-                {
-                    result = await Git.RevertAsync(commit, isMerge, NetworkOptions.From(context));
-                }
-                catch (GitException failure) when (ChangesNothing(failure))
-                {
-                    // D117: an ordinary failure, git's output beneath the summary.
-                    return Failed(text, FailureOf(failure, OperationTexts.RevertEmpty(commit, current)));
-                }
+                    ApplyResult result;
+                    try
+                    {
+                        result = await Git.RevertAsync(commit, isMerge, NetworkOptions.From(context));
+                    }
+                    catch (GitException failure) when (ChangesNothing(failure))
+                    {
+                        // D117: an ordinary failure, git's output beneath the summary.
+                        return Failed(text, FailureOf(failure, OperationTexts.RevertEmpty(commit, current)));
+                    }
 
-                return result switch
-                {
-                    ApplyResult.Applied => OperationReport.Done(OperationTexts.Reverted(commit)),
-                    ApplyResult.Conflicts => OperationReport.Conflicts(OperationTexts.RevertConflicts(await CountConflictedFilesAsync())),
+                    return result switch
+                    {
+                        ApplyResult.Applied => OperationReport.Done(OperationTexts.Reverted(commit)),
+                        ApplyResult.Conflicts => OperationReport.Conflicts(OperationTexts.RevertConflicts(await CountConflictedFilesAsync())),
 
-                    // A git that keeps REVERT_HEAD after a revert that changes nothing (D117's
-                    // other case): a stop, not a failure; the banner says so and offers Abort,
-                    // and no dialog opens (2.33, check 12 part E).
-                    _ => OperationReport.Conflicts(OperationTexts.RevertStoppedEmpty(commit, current)),
-                };
-            });
+                        // A git that keeps REVERT_HEAD after a revert that changes nothing (D117's
+                        // other case): a stop, not a failure; the banner says so and offers Abort,
+                        // and no dialog opens (2.33, check 12 part E).
+                        _ => OperationReport.Conflicts(OperationTexts.RevertStoppedEmpty(commit, current)),
+                    };
+                },
+                new RunOptions { Undo = UndoScope.Revert([commit], seen?.BranchName) });
         });
     }
 
@@ -617,7 +693,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 seen,
                 OperationTexts.NothingReverted,
                 options => Git.RevertAsync(ordered, options),
-                OperationTexts.RevertedSeveral(count));
+                OperationTexts.RevertedSeveral(count),
+                UndoScope.Revert(ordered, seen?.BranchName));
         });
     }
 
@@ -704,7 +781,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                 return OperationReport.Done(OperationTexts.Aborted(state.Kind));
             },
-            new RunOptions { DescribeFailure = _ => display }));
+
+            // An abort is not undone (D165): the stopped action's pending entry goes, and the
+            // backups list restores what the abort's backups keep.
+            new RunOptions { DescribeFailure = _ => display, Undo = UndoScope.Abort }));
     }
 
     // ---- Helpers -----------------------------------------------------------------------------------
@@ -760,6 +840,14 @@ public sealed partial class RepositoryOperations : IInProgressActions
         await Git.CheckoutTrackingBranchAsync(local, remoteRef, options);
         return OperationTexts.CreatedTrackingAndCheckedOut(local, shown);
     }
+
+    /// <summary>
+    /// The local branch a checkout of <paramref name="target"/> may create (2.2), which the undo
+    /// history reads with its upstream keys (docs/phase-5-design.md 7.3): a remote branch's local
+    /// name, or null for any other target.
+    /// </summary>
+    private string? CreatedBranchOf(string target) =>
+        target.StartsWith(RemotesPrefix, StringComparison.Ordinal) ? LocalNameOfRemoteBranch(target) : null;
 
     /// <summary>The local name a remote branch checks out into: the part after <c>&lt;r&gt;/</c>, the remote found by its ref or, for a ref not read yet, by the longest remote name it starts with.</summary>
     private string LocalNameOfRemoteBranch(string remoteRef)

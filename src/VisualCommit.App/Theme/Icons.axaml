@@ -42,4 +42,11 @@
   <StreamGeometry x:Key="IconChevronLeft">M15 18 l-6 -6 l6 -6</StreamGeometry>
   <StreamGeometry x:Key="IconChevronUp">M18 15 l-6 -6 l-6 6</StreamGeometry>
 
+  <!-- Phase 5 (docs/phase-5-design.md 13.3): the file history and the blame pages ("history",
+       "text-search"), and a branch hidden or soloed in the left panel ("eye-off", "crosshair"). -->
+  <StreamGeometry x:Key="IconHistory">M3 12 a9 9 0 1 0 9 -9 a9.75 9.75 0 0 0 -6.74 2.74 L3 8 M3 3 v5 h5 M12 7 v5 l4 2</StreamGeometry>
+  <StreamGeometry x:Key="IconBlame">M21 5 H3 M10 12 H3 M10 19 H3 M14 15 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 M21 19 l-1.9 -1.9</StreamGeometry>
+  <StreamGeometry x:Key="IconEyeOff">M10.733 5.076 a10.744 10.744 0 0 1 11.205 6.575 a1 1 0 0 1 0 0.696 a10.747 10.747 0 0 1 -1.444 2.49 M14.084 14.158 a3 3 0 0 1 -4.242 -4.242 M17.479 17.499 a10.75 10.75 0 0 1 -15.417 -5.151 a1 1 0 0 1 0 -0.696 a10.75 10.75 0 0 1 4.446 -5.143 M2 2 l20 20</StreamGeometry>
+  <StreamGeometry x:Key="IconSolo">M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0 M22 12 h-4 M6 12 H2 M12 6 V2 M12 22 v-4</StreamGeometry>
+
 </ResourceDictionary>

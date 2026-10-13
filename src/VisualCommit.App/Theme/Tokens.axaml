@@ -54,6 +54,8 @@
       <SolidColorBrush x:Key="VcConflictBaseBrush" Color="#24272F" />
       <SolidColorBrush x:Key="VcConflictMarkerBrush" Color="#3A2E16" />
       <SolidColorBrush x:Key="VcConflictUsedBrush" Color="#1A2E24" />
+      <!-- Phase 5: the mark of a search match in the graph (docs/phase-5-design.md 3.3). -->
+      <SolidColorBrush x:Key="VcSearchMatchBrush" Color="#F2C94C" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#272C36" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C36" />
@@ -116,6 +118,8 @@
       <SolidColorBrush x:Key="VcConflictBaseBrush" Color="#EEF0F3" />
       <SolidColorBrush x:Key="VcConflictMarkerBrush" Color="#FCEFD2" />
       <SolidColorBrush x:Key="VcConflictUsedBrush" Color="#E6F6EC" />
+      <!-- Phase 5: the mark of a search match in the graph (docs/phase-5-design.md 3.3). -->
+      <SolidColorBrush x:Key="VcSearchMatchBrush" Color="#B98900" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />

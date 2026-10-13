@@ -28,7 +28,14 @@ public enum GraphLineKind
 /// <param name="FromLane">The lane it starts in (see <see cref="GraphLineKind"/>).</param>
 /// <param name="ToLane">The lane it ends in.</param>
 /// <param name="Color">The colour number of the lane the line belongs to. Draw it with palette entry <c>Color % palette size</c>.</param>
-public readonly record struct GraphLine(GraphLineKind Kind, int FromLane, int ToLane, int Color);
+public readonly record struct GraphLine(GraphLineKind Kind, int FromLane, int ToLane, int Color)
+{
+    /// <summary>
+    /// The line is drawn dashed: a stash's line down to the commit it was made on, from the stash's
+    /// row to its base's (docs/phase-5-design.md section 10, D161). False for every other line.
+    /// </summary>
+    public bool IsDashed { get; init; }
+}
 
 /// <summary>What the graph column draws in the row of one commit: its node and the lines around it.</summary>
 public sealed class GraphRow

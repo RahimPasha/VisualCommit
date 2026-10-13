@@ -12,6 +12,12 @@ public enum GitFailureKind
     /// <summary>A checkout refused because untracked files are in the way (alone or with tracked ones).</summary>
     CheckoutBlockedByUntrackedFiles,
 
+    /// <summary>
+    /// A checkout refused because it would delete a folder that holds untracked files (<c>Updating
+    /// the following directories would lose untracked files in them</c>, docs/phase-5-design.md 9.3).
+    /// </summary>
+    CheckoutBlockedByUntrackedFolder,
+
     /// <summary>A push rejected because the remote has commits the branch lacks (<c>fetch first</c>, <c>non-fast-forward</c>).</summary>
     PushRejected,
 
@@ -37,4 +43,12 @@ public enum GitFailureKind
 /// <param name="GitOutput">Git's standard error without progress lines, or its standard output when that is empty; credentials hidden; never shortened.</param>
 /// <param name="CommandText">The failing call as a user would type it, credentials hidden. Empty when no git call failed.</param>
 /// <param name="ExitCode">Git's exit code, or null when git did not run to the end.</param>
-public sealed record GitFailure(GitFailureKind Kind, string Summary, string GitOutput, string CommandText, int? ExitCode);
+public sealed record GitFailure(GitFailureKind Kind, string Summary, string GitOutput, string CommandText, int? ExitCode)
+{
+    /// <summary>
+    /// The paths git named under the headers of a refusal for local changes or files in the way
+    /// (docs/phase-5-design.md 9.3), each once, raw, in git's order: what the error dialog counts.
+    /// Empty for any other failure.
+    /// </summary>
+    public IReadOnlyList<string> BlockedPaths { get; init; } = [];
+}

@@ -8,7 +8,8 @@ namespace VisualCommit.Git;
 /// create, rename, delete, the fast-forward of a branch that is not checked out, and merge. Each
 /// write is one git call (merge: two) that throws <see cref="GitException"/> with git's own text
 /// when git refuses; a merge's conflicts are returned, not thrown. The queue and the confirmations
-/// around them are the caller's (WP7).
+/// around them are the caller's (WP7). Phase 5 adds C12's reads and writes (docs/phase-5-design.md
+/// section 9): the checkout that keeps ignored files and the automatic stash's steps.
 /// </summary>
 public sealed partial class GitRepository
 {
@@ -144,6 +145,21 @@ public sealed partial class GitRepository
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         return RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. Positional(commit)]);
     }
+
+    // ---- C12: protected changes and the automatic stash (docs/phase-5-design.md 9, D179) ---------
+    // Work package WP4 builds them here; until then each throws.
+
+    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotImplementedException("A checkout that keeps ignored files is work package WP4's (docs/phase-5-design.md 9.1).");
+
+    public Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotImplementedException("Putting back what a half-made automatic stash deleted is work package WP4's (docs/phase-5-design.md 9.2).");
+
+    public Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) =>
+        throw new NotImplementedException("The ignored files in a checkout's way are work package WP4's (docs/phase-5-design.md 9.3).");
+
+    public Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default) =>
+        throw new NotImplementedException("The stash apply's check is work package WP4's (docs/phase-5-design.md 9.3).");
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
 

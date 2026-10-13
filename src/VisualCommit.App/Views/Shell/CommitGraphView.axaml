@@ -6,6 +6,7 @@
              xmlns:diff="using:VisualCommit.App.Views.Diff"
              xmlns:rebase="using:VisualCommit.App.Views.Rebase"
              xmlns:conflicts="using:VisualCommit.App.Views.Conflicts"
+             xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
              x:Class="VisualCommit.App.Views.Shell.CommitGraphView"
              x:DataType="vm:RepoTabViewModel"
              AutomationProperties.AutomationId="CommitGraph">
@@ -24,8 +25,9 @@
         <shell:ConflictBanner DataContext="{Binding Repository.Banner}" />
       </Panel>
       <!-- The graph, or in its place the open diff (D63), the interactive rebase's list
-           (docs/phase-4-design.md 2.2) with a commit's diff over it, or the conflict resolver
-           (11.2), for which this view spans the graph and right-panel columns. -->
+           (docs/phase-4-design.md 2.2) with a commit's diff over it, the conflict resolver
+           (11.2), for which this view spans the graph and right-panel columns, or a page of phase
+           5 with a diff over it. -->
       <Panel>
         <Panel IsVisible="{Binding Repository.ShowsGraph, FallbackValue=True}">
           <graph:RepositoryGraphView DataContext="{Binding Repository}" />
@@ -38,6 +40,20 @@
         </Panel>
         <Panel IsVisible="{Binding Repository.IsResolverOpen, FallbackValue=False}">
           <conflicts:ConflictResolverView DataContext="{Binding Repository.Resolver}" />
+        </Panel>
+        <!-- A page in place of the graph (docs/phase-5-design.md 11.1): the file history, the blame
+             or the reflog, with the view the view locator finds for it (WP6's). It comes after the
+             diff and the resolver, so that a lookup by name finds the main diff's parts before the
+             history page's own diff. Without a page it holds nothing. -->
+        <Panel IsVisible="{Binding Repository.ShowsPage, FallbackValue=False}">
+          <ContentControl Name="PageSlot"
+                          Content="{Binding Repository.Page, FallbackValue={x:Null}}"
+                          HorizontalContentAlignment="Stretch"
+                          VerticalContentAlignment="Stretch">
+            <ContentControl.ContentTemplate>
+              <dialogs:DialogViewLocator />
+            </ContentControl.ContentTemplate>
+          </ContentControl>
         </Panel>
       </Panel>
     </DockPanel>

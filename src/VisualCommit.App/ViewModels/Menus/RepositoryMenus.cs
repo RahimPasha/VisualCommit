@@ -5,6 +5,11 @@
 // in progress) and D120 (a drop's entries that would check out a branch of another worktree).
 // Each builder is a pure function of a RepositoryMenuContext; its items start IRepositoryActions
 // on the objects captured when the menu opened. Tests: tests/VisualCommit.App.Tests/RepositoryMenusTests.cs.
+// Phase 5's items and builders are in three more parts (docs/phase-5-design.md 13.1, section 16):
+// RepositoryMenus.Pages.cs (file history, blame, the reflog and the backups; WP6),
+// RepositoryMenus.Filters.cs (compare, hide and solo; WP7) and RepositoryMenus.ActivityLog.cs (the
+// activity log's rows; WP5). The builders here call the hooks of the first two where 13.1 puts
+// the items; a hook that gives nothing leaves its menu as it was.
 
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Operations;
@@ -25,7 +30,7 @@ namespace VisualCommit.App.ViewModels.Menus;
 /// (D77, D92). Every menu starts with its header; groups are separated by one separator, and a
 /// group whose items are all left out leaves none (<see cref="Build"/>, D114).
 /// </summary>
-public static class RepositoryMenus
+public static partial class RepositoryMenus
 {
     private const string HeadsPrefix = "refs/heads/";
 
@@ -165,6 +170,7 @@ public static class RepositoryMenus
                 Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(null), context.IsUnborn ? ToolbarViewModel.UnbornText : null),
             ],
             [
+                .. ReflogItems(context, actions),
                 Item(actions, ShowInFolder, () => actions.ShowInFolderAsync(null)),
             ]);
     }
@@ -258,6 +264,11 @@ public static class RepositoryMenus
                 hasUpstream ? Item(actions, StopTracking(upstream!), () => actions.UnsetUpstreamAsync(branchRef)) : null,
             ],
             [
+                isCurrent ? null : CompareItem(context, branch, actions),
+                BranchReflogItem(context, branch, actions),
+                .. HideAndSoloItems(context, branch, actions),
+            ],
+            [
                 Item(actions, CopyBranchName, () => actions.CopyRefNameAsync(branchRef)),
             ]);
     }
@@ -303,6 +314,10 @@ public static class RepositoryMenus
                 Item(actions, DeleteOnRemoteLabel(local, remote), () => actions.DeleteRemoteBranchAsync(remoteBranchRef), isDestructive: true),
             ],
             [
+                CompareItem(context, branch, actions),
+                .. HideAndSoloItems(context, branch, actions),
+            ],
+            [
                 Item(actions, CopyBranchName, () => actions.CopyRefNameAsync(remoteBranchRef)),
             ]);
     }
@@ -325,6 +340,9 @@ public static class RepositoryMenus
                 Item(actions, ChangeUrl, () => actions.ShowEditRemoteAsync(remote)),
                 Item(actions, RenameLabel(remote), () => actions.ShowEditRemoteAsync(remote)),
                 Item(actions, RemoveLabel(remote), () => actions.RemoveRemoteAsync(remote), isDestructive: true),
+            ],
+            [
+                RemoteFilterItem(context, remote, actions),
             ],
             [
                 Item(actions, CopyUrl, () => actions.CopyRemoteUrlAsync(remote)),
@@ -369,6 +387,9 @@ public static class RepositoryMenus
                     isDestructive: true),
             ],
             [
+                CompareItem(context, tag, actions),
+            ],
+            [
                 Item(actions, CopyTagName, () => actions.CopyRefNameAsync(tagRef)),
             ]);
     }
@@ -387,13 +408,18 @@ public static class RepositoryMenus
         {
             RefSection.LocalBranches => Build(
                 Header(LeftPanelViewModel.LocalBranchesTitle),
-                [Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), unborn)]),
+                [
+                    Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), unborn),
+                    .. ReflogItems(context, actions),
+                    .. SectionFilterItems(context, actions),
+                ]),
             RefSection.Remotes => Build(
                 Header(LeftPanelViewModel.RemotesTitle),
                 [
                     Item(actions, AddRemote, actions.ShowAddRemoteAsync),
                     Item(actions, FetchAllRemotes, actions.FetchAllAsync, context.HasRemotes ? null : ToolbarViewModel.NoRemotesText),
                     Item(actions, ManageRemotes, actions.ManageRemotesAsync),
+                    .. SectionFilterItems(context, actions),
                 ]),
             RefSection.Tags => Build(
                 Header(LeftPanelViewModel.TagsTitle),
@@ -426,6 +452,7 @@ public static class RepositoryMenus
                 Item(actions, DiscardChanges, () => actions.DiscardFilesAsync([file.File]), DiscardReason(file)),
             ],
             IgnoreItems(file, actions),
+            FileHistoryItems(context, file, DiffSide.Unstaged, actions),
             FileItems(file, actions));
     }
 
@@ -465,6 +492,7 @@ public static class RepositoryMenus
         return Build(
             Header(file.FileName),
             [Item(actions, Unstage, () => actions.UnstageFilesAsync([file.File]))],
+            FileHistoryItems(context, file, DiffSide.Staged, actions),
             FileItems(file, actions));
     }
 
@@ -474,7 +502,7 @@ public static class RepositoryMenus
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(actions);
-        return Build(Header(file.FileName), FileItems(file, actions));
+        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, actions));
     }
 
     /// <summary>
@@ -512,6 +540,7 @@ public static class RepositoryMenus
                         Item(actions, DiscardFile, () => actions.DiscardFilesAsync([file.File]), DiscardReason(file)),
                     ],
                     file.IsUntracked ? IgnoreItems(file, actions) : [],
+                    FileHistoryItems(context, file, diff.Side, actions),
                     FileItems(file, actions));
 
             case DiffSide.Staged:
@@ -520,10 +549,11 @@ public static class RepositoryMenus
                     [selected ? Item(actions, UnstageSelectedLines, lines.UnstageLinesAsync) : null],
                     [hunk is { } unstageHunk ? Item(actions, UnstageHunk, () => lines.RunHunkActionAsync(unstageHunk, LineAction.Unstage)) : null],
                     [Item(actions, UnstageFile, () => actions.UnstageFilesAsync([file.File]))],
+                    FileHistoryItems(context, file, diff.Side, actions),
                     FileItems(file, actions));
 
             default:
-                return Build(header, FileItems(file, actions));
+                return Build(header, FileHistoryItems(context, file, diff.Side, actions), FileItems(file, actions));
         }
     }
 
@@ -549,6 +579,7 @@ public static class RepositoryMenus
                 AsToolbar(Item(actions, StashChanges, actions.StashAsync), toolbar.Stash),
             ],
             [
+                .. ReflogItems(context, actions),
                 Item(actions, ManageRemotes, actions.ManageRemotesAsync),
             ]);
     }
@@ -585,7 +616,8 @@ public static class RepositoryMenus
                     Item(actions, PushTo(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: false), mapped),
                     Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), mapped),
                 ],
-                rebaseItems);
+                rebaseItems,
+                [DropCompareItem(context, sourceRef, targetRef, actions)]);
         }
 
         var isCurrent = targetBranch is not null ? IsCurrent(context, targetBranch) : string.Equals(HeadsPrefix + context.Head.BranchName, targetRef, StringComparison.Ordinal);
@@ -599,7 +631,8 @@ public static class RepositoryMenus
                     Item(actions, MergeIntoWithCommit(source, target), () => actions.MergeAsync(sourceRef, MergeMode.NoFastForward), mergeReason),
                     Item(actions, FastForwardTo(target, source), () => actions.MergeAsync(sourceRef, MergeMode.FastForwardOnly), notAncestor ?? mergeReason),
                 ],
-                rebaseItems);
+                rebaseItems,
+                [DropCompareItem(context, sourceRef, targetRef, actions)]);
         }
 
         var worktree = context.OtherWorktreeOf(targetRef) is { } path ? CheckedOutInAnotherWorktree(target, path) : null;
@@ -609,7 +642,8 @@ public static class RepositoryMenus
                 Item(actions, FastForwardTo(target, source), () => actions.FastForwardBranchAsync(targetRef, sourceRef), notAncestor ?? worktree),
                 Item(actions, CheckOutAndMergeLabel(target, source), () => actions.CheckoutAndMergeAsync(targetRef, sourceRef), worktree),
             ],
-            rebaseItems);
+            rebaseItems,
+            [DropCompareItem(context, sourceRef, targetRef, actions)]);
     }
 
     /// <summary>
