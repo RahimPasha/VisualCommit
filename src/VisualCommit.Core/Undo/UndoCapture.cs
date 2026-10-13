@@ -5,9 +5,9 @@ namespace VisualCommit.Core.Undo;
 /// <summary>
 /// Collects, while a recorded action runs, what the reads before and after it cannot see
 /// (docs/phase-5-design.md 7.7 step 3): a reset's mode and snapshot, the stash a stash made, a
-/// push's remote values, the snapshot a discard saved or a restore put back, the files a hard
-/// reset changed, and every backup the action saved (the <c>.gitignore</c> the recorder reads
-/// itself, before and after the append). The
+/// push's remote values, the snapshot a discard saved or a restore put back, the index a restore
+/// from the backups list put back, the files a hard reset changed, and every backup the action
+/// saved (the <c>.gitignore</c> the recorder reads itself, before and after the append). The
 /// recorder begins one around the action (<see cref="Begin"/>); the operations report through the
 /// static methods, which do nothing when no capture runs in their flow. It flows with the
 /// action's awaits (an <see cref="AsyncLocal{T}"/>) into the git layer's pool threads, so it is
@@ -51,9 +51,27 @@ public sealed class UndoCapture
         return new Restore(previous);
     }
 
-    /// <summary>A reset ran in <paramref name="mode"/>, with its <c>-changes</c> snapshot or none.</summary>
-    public static void Reset(ResetMode mode, string? snapshot) =>
-        Change(captured => captured with { ResetMode = mode, ResetSnapshot = snapshot });
+    /// <summary>
+    /// A reset ran in <paramref name="mode"/>, with its <c>-changes</c> snapshot or none. A hard
+    /// reset's undo also needs the snapshot's second parent (<paramref name="snapshotIndex"/>, none
+    /// when the index had conflicts) and its files (<paramref name="snapshotFiles"/>): given here
+    /// when the operation read them, otherwise completed by the recorder from the snapshot commit.
+    /// </summary>
+    public static void Reset(ResetMode mode, string? snapshot, string? snapshotIndex = null, DiscardSnapshot? snapshotFiles = null) =>
+        Change(captured => captured with
+        {
+            ResetMode = mode,
+            ResetSnapshot = snapshot,
+            ResetIndex = snapshotIndex ?? captured.ResetIndex,
+            Snapshot = snapshotFiles ?? captured.Snapshot,
+        });
+
+    /// <summary>A restore from the backups list put the index to <paramref name="commit"/>'s tree (7.10).</summary>
+    public static void IndexRestored(string commit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
+        Change(captured => captured with { IndexSource = commit });
+    }
 
     /// <summary>A stash was made (<paramref name="stash"/>, null when git had nothing to stash), with or without untracked files, with the user's message or none.</summary>
     public static void Stash(string? stash, bool includedUntracked, string? message) =>

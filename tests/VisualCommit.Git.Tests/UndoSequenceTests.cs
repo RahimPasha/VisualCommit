@@ -45,16 +45,40 @@ public class UndoSequenceTests
         Assert.Equal([new MoveHead("main", N, O, MoveMode.Soft), new IndexTo(O, N)], Undo(clean));
 
         // Hard: the move keeping files, the index, then the snapshot's files; the redo resets again.
+        // The Keep move leaves the index at O, which the index's check compares with.
         var snapshot = new DiscardSnapshot("refs/visualcommit/backup/reset-1-changes", T, ["a.txt"], new HashSet<string> { "a.txt" });
         var after = new UndoState { Head = Head("main", N), Files = [new RecordedFile("a.txt", "blob", "hash"), new RecordedFile("other.txt", "blob2", "hash2")] };
-        var hard = new UndoEntry(UndoKind.Reset, "reset", "op-1", new UndoState { Head = Head("main", O) }, after, new UndoCaptured { ResetMode = ResetMode.Hard, ResetIndex = "index", Snapshot = snapshot });
+        var hard = new UndoEntry(UndoKind.Reset, "reset", "op-1", new UndoState { Head = Head("main", O) }, after, new UndoCaptured { ResetMode = ResetMode.Hard, ResetSnapshot = T, ResetIndex = "index", Snapshot = snapshot });
         var undo = Undo(hard);
         Assert.Equal(3, undo.Count);
         Assert.Equal(new MoveHead("main", N, O, MoveMode.Keep), undo[0]);
-        Assert.Equal(new IndexTo("index", N), undo[1]);
+        Assert.Equal(new IndexTo("index", O), undo[1]);
         var restore = Assert.IsType<RestoreSnapshot>(undo[2]);
         Assert.Same(snapshot, restore.Snapshot);
         Assert.Equal([new RecordedFile("a.txt", "blob", "hash")], restore.From);
+        Assert.Equal([new HardReset("main", O, N)], Redo(hard));
+
+        // An index with conflicts has no snapshot of its own: the files alone come back after the move.
+        var conflicted = hard with { Captured = hard.Captured with { ResetIndex = null } };
+        Assert.Equal([typeof(MoveHead), typeof(RestoreSnapshot)], Undo(conflicted).Select(effect => effect.GetType()));
+
+        // A hard reset that discarded nothing saved no snapshot: the move alone.
+        var nothingDiscarded = hard with { Captured = new UndoCaptured { ResetMode = ResetMode.Hard } };
+        Assert.Equal([new MoveHead("main", N, O, MoveMode.Keep)], Undo(nothingDiscarded));
+    }
+
+    [Fact]
+    public void A_hard_reset_with_a_snapshot_whose_files_were_not_recorded_has_no_undo()
+    {
+        // Without the snapshot's files the undo would move the branch back and leave the
+        // discarded work lost, without a word.
+        var hard = Entry(UndoKind.Reset, Head("main", O), Head("main", N), captured: new UndoCaptured { ResetMode = ResetMode.Hard, ResetSnapshot = T, ResetIndex = "index" });
+        Assert.Throws<InvalidOperationException>(() => Undo(hard));
+
+        var other = new DiscardSnapshot("refs/visualcommit/backup/discard-1", N, ["a.txt"], new HashSet<string>());
+        Assert.Throws<InvalidOperationException>(() => Undo(hard with { Captured = hard.Captured with { Snapshot = other } }));
+
+        // Its redo resets again and needs nothing recorded of the snapshot.
         Assert.Equal([new HardReset("main", O, N)], Redo(hard));
     }
 
@@ -243,6 +267,49 @@ public class UndoSequenceTests
             [new SetRef("refs/remotes/origin/main", O, null), new BranchConfig("main", branch, []), new RemoteConfig("origin", remote, [])],
             Redo(entry),
             EffectComparer.Instance);
+    }
+
+    [Fact]
+    public void The_backups_lists_restores_are_undone_by_their_kinds()
+    {
+        // "Restore stash": the stash stored again is dropped; the redo stores it again.
+        var listed = new UndoStash(T, "On main: wip");
+        var stash = new UndoEntry(UndoKind.RestoreStash, "restore of stash \"On main: wip\"", "op-1", new UndoState { Head = Head("main", O) }, new UndoState { Head = Head("main", O), Stashes = [listed] }, UndoCaptured.None);
+        Assert.Equal([new StashDrop(T)], Undo(stash));
+        Assert.Equal([new StashStore(T, "On main: wip")], Redo(stash));
+
+        // "Restore the staged changes…": the index goes back to HEAD's commit, and to the snapshot again.
+        var staged = Entry(UndoKind.RestoreStagedChanges, Head("main", O), Head("main", O), captured: new UndoCaptured { IndexSource = T });
+        Assert.Equal([new IndexTo(O, T)], Undo(staged));
+        Assert.Equal([new IndexTo(T, O)], Redo(staged));
+        Assert.Throws<InvalidOperationException>(() => Undo(staged with { Captured = UndoCaptured.None }));
+
+        // "Restore the changes…" that put a hard reset's index back first: the files, then the index.
+        var snapshot = new DiscardSnapshot("refs/visualcommit/backup/reset-1-changes", T, ["a.txt"], new HashSet<string> { "a.txt" });
+        IReadOnlyList<RecordedFile> before = [new RecordedFile("a.txt", null, null)];
+        IReadOnlyList<RecordedFile> after = [new RecordedFile("a.txt", "blob", "hash")];
+        var changes = new UndoEntry(
+            UndoKind.Restore,
+            "restore of the changes",
+            "op-1",
+            new UndoState { Head = Head("main", O), Files = before },
+            new UndoState { Head = Head("main", O), Files = after },
+            new UndoCaptured { Snapshot = snapshot, IndexSource = N });
+        Assert.Equal([new FilesTo(after, before), new IndexTo(O, N)], Undo(changes));
+        Assert.Equal([new IndexTo(N, O), new RestoreSnapshot(snapshot, before)], Redo(changes));
+
+        // The restore bar's Restore puts back no index.
+        var bar = changes with { Captured = new UndoCaptured { Snapshot = snapshot } };
+        Assert.Equal([new FilesTo(after, before)], Undo(bar));
+        Assert.Equal([new RestoreSnapshot(snapshot, before)], Redo(bar));
+
+        // The others are recorded as the kinds that undo them, with texts of their own.
+        Assert.Equal((UndoKind.CreateBranch, "restore of branch feature/x"), (UndoScope.RestoreBranch("feature/x").Kind, UndoScope.RestoreBranch("feature/x").Text));
+        Assert.Equal((UndoKind.CreateTag, "restore of tag v1"), (UndoScope.RestoreTag("v1").Kind, UndoScope.RestoreTag("v1").Text));
+        Assert.Equal((UndoKind.Restore, "restore of the discarded files"), (UndoScope.RestoreChanges(["a.txt"], discarded: true).Kind, UndoScope.RestoreChanges(["a.txt"], discarded: true).Text));
+        Assert.Equal("restore of the changes", UndoScope.RestoreChanges(["a.txt"], discarded: false).Text);
+        Assert.Equal((UndoKind.Push, "push of topic back to origin"), (UndoScope.PushBack("topic", "origin").Kind, UndoScope.PushBack("topic", "origin").Text));
+        Assert.Equal((UndoKind.PushTag, "push of tag v1 back to origin"), (UndoScope.PushTagBack("v1", "origin").Kind, UndoScope.PushTagBack("v1", "origin").Text));
     }
 
     [Fact]

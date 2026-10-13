@@ -81,8 +81,25 @@ public static class UndoTexts
     /// <summary>A discard of a hunk or of lines: <c>discard of lines in notes.txt</c>.</summary>
     public static string DiscardLines(string path) => $"discard of lines in {FileName(path)}";
 
-    /// <summary>The restore bar's Restore.</summary>
+    /// <summary>The restore bar's Restore, and the backups list's "Restore the discarded files…".</summary>
     public const string Restore = "restore of the discarded files";
+
+    // The backups list's other restores (7.10).
+
+    public static string RestoreBranch(string branch) => $"restore of branch {branch}";
+
+    public static string RestoreTag(string tag) => $"restore of tag {tag}";
+
+    public static string RestoreStash(string message) => $"restore of stash \"{message}\"";
+
+    /// <summary>"Restore the changes…" of a hard reset's, an abort's or a skip's snapshot.</summary>
+    public const string RestoreChanges = "restore of the changes";
+
+    public const string RestoreStagedChanges = "restore of the staged changes";
+
+    public static string PushBack(string branch, string remote) => $"push of {branch} back to {remote}";
+
+    public static string PushTagBack(string tag, string remote) => $"push of tag {tag} back to {remote}";
 
     public static string Ignore(string pattern) => $"ignore of {pattern}";
 

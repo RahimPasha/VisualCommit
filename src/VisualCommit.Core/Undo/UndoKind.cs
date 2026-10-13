@@ -6,6 +6,15 @@ namespace VisualCommit.Core.Undo;
 /// kind's action did in detail (a checkout that created a tracking branch, a pop that conflicted
 /// and kept its stash) is read from the entry's recorded states, not from more kinds.
 /// </summary>
+/// <remarks>
+/// The backups list's restores (7.10) are recorded like any action, each as the kind whose
+/// sequences undo it, with a text of its own (<see cref="UndoScope"/>'s restore scopes):
+/// "Restore branch" as <see cref="CreateBranch"/>, "Restore tag" as <see cref="CreateTag"/>,
+/// "Restore stash" as <see cref="RestoreStash"/>, "Restore the discarded files…" and "Restore
+/// the changes…" as <see cref="Restore"/>, "Restore the staged changes…" as
+/// <see cref="RestoreStagedChanges"/>, "Push {b} back to {r}…" as <see cref="Push"/> and a tag's
+/// as <see cref="PushTag"/>; "Create branch here…" and "Check out this commit" as theirs.
+/// </remarks>
 public enum UndoKind
 {
     /// <summary>The stage panel's Commit.</summary>
@@ -76,8 +85,17 @@ public enum UndoKind
     /// <summary>A discard of files, of a hunk, of lines or of everything (D62).</summary>
     Discard,
 
-    /// <summary>The restore bar's Restore (D62, D75), when it is not the undo of its discard (7.9).</summary>
+    /// <summary>
+    /// The restore bar's Restore (D62, D75), when it is not the undo of its discard (7.9), and the
+    /// backups list's restores of files (7.10), which may put the index back first.
+    /// </summary>
     Restore,
+
+    /// <summary>The backups list's "Restore stash" (7.10): a dropped or popped stash stored in the list again.</summary>
+    RestoreStash,
+
+    /// <summary>The backups list's "Restore the staged changes…" (7.10): the index put back from a mixed reset's snapshot.</summary>
+    RestoreStagedChanges,
 
     /// <summary>"Ignore {name}" or "Ignore all *.{ext} files".</summary>
     Ignore,

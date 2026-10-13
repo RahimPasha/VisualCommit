@@ -85,7 +85,8 @@ public class UndoScopeTests
         UndoCapture capture;
         using (UndoCapture.Begin(out capture))
         {
-            UndoCapture.Reset(ResetMode.Hard, "snapshot");
+            UndoCapture.Reset(ResetMode.Hard, "snapshot", snapshotIndex: "index");
+            UndoCapture.IndexRestored("restored");
             await Task.Run(() => UndoCapture.Backups(["refs/visualcommit/backup/rebase-1/main"]), TestContext.Current.CancellationToken);
             UndoCapture.Backups(["refs/visualcommit/backup/rebase-1/main", "refs/visualcommit/backup/reset-1"]);
             UndoCapture.Push("origin", new PushOutcome([new PushedRef("refs/heads/topic", null, "new")]));
@@ -96,7 +97,8 @@ public class UndoScopeTests
 
         Assert.Null(UndoCapture.Current);
         var captured = capture.Captured;
-        Assert.Equal((ResetMode.Hard, "snapshot"), (captured.ResetMode, captured.ResetSnapshot));
+        Assert.Equal((ResetMode.Hard, "snapshot", "index", "restored"), (captured.ResetMode, captured.ResetSnapshot, captured.ResetIndex, captured.IndexSource));
+        Assert.Null(captured.Snapshot);
         Assert.Equal(["refs/visualcommit/backup/rebase-1/main", "refs/visualcommit/backup/reset-1"], captured.Backups);
         Assert.Equal("origin", captured.Remote);
         Assert.Equal(["a.txt", "b.txt"], captured.ChangedFiles);

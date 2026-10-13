@@ -128,6 +128,47 @@ public class UndoHistoryTests
     }
 
     [Fact]
+    public void An_action_recorded_while_an_entry_is_pending_goes_before_it_so_that_continue_completes_it_last()
+    {
+        var history = new UndoHistory();
+        history.Add(Entry("commit"));
+        history.Add(Entry("merge of x into main") with { State = UndoEntryState.Pending });
+
+        // A tag made while the merge waits: the merge stays the pending one, last.
+        history.Add(Entry("creation of tag v1"));
+        Assert.Equal(["commit", "creation of tag v1", "merge of x into main"], history.Entries.Select(entry => entry.Text));
+        Assert.Equal((3, "merge of x into main"), (history.Cursor, history.Pending?.Text));
+        Assert.Throws<InvalidOperationException>(() => history.Undone());
+
+        // Continue: the merge ended after the tag, so it is undone first.
+        history.Complete(new UndoState { Head = new HeadState("main", "merged") });
+        Assert.Null(history.Pending);
+        Assert.Equal("merge of x into main", history.ToUndo?.Text);
+        history.Undone();
+        Assert.Equal("creation of tag v1", history.ToUndo?.Text);
+    }
+
+    [Fact]
+    public void Abort_removes_the_pending_entry_and_keeps_what_was_recorded_while_it_waited()
+    {
+        var history = new UndoHistory();
+        history.Add(Entry("rebase of topic onto main") with { State = UndoEntryState.Pending });
+        history.Add(Entry("deletion of old"));
+
+        history.RemovePending();
+
+        Assert.Equal(["deletion of old"], history.Entries.Select(entry => entry.Text));
+        Assert.Equal((1, "deletion of old"), (history.Cursor, history.ToUndo?.Text));
+        Assert.Null(history.Pending);
+
+        // A new stop while one is still pending: the old one ended outside the app and goes.
+        history.Add(Entry("merge of a into main") with { State = UndoEntryState.Pending });
+        history.Add(Entry("cherry-pick of b2c3d4e") with { State = UndoEntryState.Pending });
+        Assert.Equal(["deletion of old", "cherry-pick of b2c3d4e"], history.Entries.Select(entry => entry.Text));
+        Assert.Equal((2, "cherry-pick of b2c3d4e"), (history.Cursor, history.Pending?.Text));
+    }
+
+    [Fact]
     public void Changed_is_raised_for_every_change_and_the_backups_are_every_entrys()
     {
         var history = new UndoHistory();

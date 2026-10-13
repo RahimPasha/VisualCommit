@@ -409,6 +409,66 @@ public sealed record UndoScope
         Text = UndoTexts.DeleteRemoteTag(tag, remote),
     };
 
+    // The backups list's restores (7.10): each recorded as the kind whose sequences undo it.
+
+    /// <summary>"Restore branch {b}": the branch created at the backup's commit, without upstream keys (the backup has none); undone as a creation.</summary>
+    public static UndoScope RestoreBranch(string branch) => new()
+    {
+        Kind = UndoKind.CreateBranch,
+        Text = UndoTexts.RestoreBranch(branch),
+        Refs = BranchRefs(branch),
+        Config = [ConfigScope.Branch(branch)],
+    };
+
+    /// <summary>"Restore tag {t}": the tag created at the backup's object; undone as a creation.</summary>
+    public static UndoScope RestoreTag(string tag) => new()
+    {
+        Kind = UndoKind.CreateTag,
+        Text = UndoTexts.RestoreTag(tag),
+        Refs = [TagsPrefix + tag],
+    };
+
+    /// <summary>"Restore stash": the backup's stash stored in the list again with <paramref name="message"/>, its commit's subject.</summary>
+    public static UndoScope RestoreStash(string message) => new()
+    {
+        Kind = UndoKind.RestoreStash,
+        Text = UndoTexts.RestoreStash(message),
+        StashList = true,
+    };
+
+    /// <summary>
+    /// "Restore the discarded files…" (<paramref name="discarded"/>) or "Restore the changes…" of a
+    /// snapshot's <paramref name="paths"/>; the index the restore puts back first is captured
+    /// (<see cref="UndoCapture.IndexRestored"/>).
+    /// </summary>
+    public static UndoScope RestoreChanges(IReadOnlyList<string> paths, bool discarded) => new()
+    {
+        Kind = UndoKind.Restore,
+        Text = discarded ? UndoTexts.Restore : UndoTexts.RestoreChanges,
+        Files = paths,
+    };
+
+    /// <summary>"Restore the staged changes…": the index put back from a mixed reset's snapshot, which is captured (<see cref="UndoCapture.IndexRestored"/>).</summary>
+    public static UndoScope RestoreStagedChanges() => new()
+    {
+        Kind = UndoKind.RestoreStagedChanges,
+        Text = UndoTexts.RestoreStagedChanges,
+    };
+
+    /// <summary>"Push {b} back to {r}…": <paramref name="branch"/> (its name on the remote) pushed back with a lease, the remote's values captured as a push's.</summary>
+    public static UndoScope PushBack(string branch, string remote) => new()
+    {
+        Kind = UndoKind.Push,
+        Text = UndoTexts.PushBack(branch, remote),
+    };
+
+    /// <summary>"Push {t} back to {r}…": the tag pushed back with a lease.</summary>
+    public static UndoScope PushTagBack(string tag, string remote) => new()
+    {
+        Kind = UndoKind.PushTag,
+        Text = UndoTexts.PushTagBack(tag, remote),
+    };
+
     /// <summary>The branches' full names; a null or <c>HEAD</c> (how texts name a detached HEAD, never a branch's name) is left out.</summary>
     private static IReadOnlyList<string> BranchRefs(params string?[] branches) =>
         [.. branches.OfType<string>().Where(branch => branch != "HEAD").Distinct(StringComparer.Ordinal).Select(branch => HeadsPrefix + branch)];

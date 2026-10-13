@@ -8,6 +8,14 @@ namespace VisualCommit.Core.Undo;
 /// <see cref="Capacity"/> entries are kept, the oldest dropped first. Nothing is written to disk.
 /// Use it on one thread: the app's is the UI thread, where operations record and step.
 /// </summary>
+/// <remarks>
+/// At most one entry is pending (7.2): that of an action that stopped (a merge, a pick, a revert
+/// or a rebase with the banner showing). It is always the last entry, with the cursor after it:
+/// Undo and Redo are off while an operation is in progress (7.4), and an action recorded while it
+/// waits (a tag, a branch, a discard) goes before it, since the stopped action ends after that
+/// one, when Continue, Skip or the stage panel's Commit completes it. A new pending entry
+/// replaces one still pending, whose action must have ended outside the app.
+/// </remarks>
 public sealed class UndoHistory
 {
     /// <summary>How many entries a history keeps (7.1): it is for recent mistakes, and the bound keeps the backups it holds back from the clean-up bounded.</summary>
@@ -38,8 +46,8 @@ public sealed class UndoHistory
     /// <summary>The entry Redo would apply: the one just after the cursor, or null.</summary>
     public UndoEntry? ToRedo => Cursor < _entries.Count ? _entries[Cursor] : null;
 
-    /// <summary>The entry of the action that stopped and is not finished yet (7.2), or null: it is always the one before the cursor.</summary>
-    public UndoEntry? Pending => ToUndo is { State: UndoEntryState.Pending } entry ? entry : null;
+    /// <summary>The entry of the action that stopped and is not finished yet (7.2), or null: the last entry, when it is pending.</summary>
+    public UndoEntry? Pending => PendingIndex() is >= 0 and var index ? _entries[index] : null;
 
     /// <summary>The backup refs every entry needs (7.8): the clean-up keeps them while they are in the history.</summary>
     public IReadOnlySet<string> Backups => _entries.SelectMany(entry => entry.Backups).ToHashSet(StringComparer.Ordinal);
@@ -47,13 +55,21 @@ public sealed class UndoHistory
     /// <summary>
     /// Records a new action: every entry after the cursor goes (there is nothing to redo after a
     /// new action), then <paramref name="entry"/> is added and the cursor moves past it; past
-    /// <see cref="Capacity"/>, the oldest entry goes.
+    /// <see cref="Capacity"/>, the oldest entry goes. While an entry is pending, a finished one goes
+    /// before it, so that the pending one stays last; a new pending one replaces it.
     /// </summary>
     public void Add(UndoEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         _entries.RemoveRange(Cursor, _entries.Count - Cursor);
-        _entries.Add(entry);
+        var pending = PendingIndex();
+        if (pending >= 0 && entry.State == UndoEntryState.Pending)
+        {
+            _entries.RemoveAt(pending);
+            pending = -1;
+        }
+
+        _entries.Insert(pending >= 0 ? pending : _entries.Count, entry);
         if (_entries.Count > _capacity)
         {
             _entries.RemoveRange(0, _entries.Count - _capacity);
@@ -114,8 +130,13 @@ public sealed class UndoHistory
     public void Complete(UndoState after)
     {
         ArgumentNullException.ThrowIfNull(after);
-        var pending = Pending ?? throw new InvalidOperationException("No entry is pending.");
-        _entries[Cursor - 1] = pending with { After = after, State = UndoEntryState.Done };
+        var index = PendingIndex();
+        if (index < 0)
+        {
+            throw new InvalidOperationException("No entry is pending.");
+        }
+
+        _entries[index] = _entries[index] with { After = after, State = UndoEntryState.Done };
         RaiseChanged();
     }
 
@@ -125,15 +146,23 @@ public sealed class UndoHistory
     /// </summary>
     public void RemovePending()
     {
-        if (Pending is null)
+        var index = PendingIndex();
+        if (index < 0)
         {
             return;
         }
 
-        _entries.RemoveAt(Cursor - 1);
-        Cursor--;
+        _entries.RemoveAt(index);
+        if (index < Cursor)
+        {
+            Cursor--;
+        }
+
         RaiseChanged();
     }
+
+    /// <summary>Where the pending entry is, or -1: found by its state, though it is kept last.</summary>
+    private int PendingIndex() => _entries.FindLastIndex(entry => entry.State == UndoEntryState.Pending);
 
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 }

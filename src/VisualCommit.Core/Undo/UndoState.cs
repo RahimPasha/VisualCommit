@@ -97,8 +97,9 @@ public sealed record GitignoreState(bool Exists, long Length, string? Sha256);
 /// <summary>
 /// What the reads before and after an action cannot see, captured while it ran (7.7 step 3,
 /// <see cref="UndoCapture"/>): a reset's mode and snapshot, the new stash, a push's remote
-/// values, the snapshot a discard saved or a restore restored, the files whose bytes the
-/// after-read records, the bytes appended to <c>.gitignore</c>, and every backup the action saved.
+/// values, the snapshot a discard saved or a restore restored, the index a restore from the
+/// backups list put back, the files whose bytes the after-read records, the bytes appended to
+/// <c>.gitignore</c>, and every backup the action saved.
 /// </summary>
 public sealed record UndoCaptured
 {
@@ -110,12 +111,21 @@ public sealed record UndoCaptured
 
     /// <summary>
     /// A reset's <c>-changes</c> snapshot commit (a hard reset's files and index, a mixed reset's
-    /// index), or null when the reset saved none (nothing to save, or the index equalled HEAD).
+    /// index), or null when the reset saved none (nothing to save, or the index equalled HEAD). A
+    /// hard reset's entry that has one also has its files (<see cref="Snapshot"/>) and, unless the
+    /// index had conflicts, <see cref="ResetIndex"/>: its undo needs all three.
     /// </summary>
     public string? ResetSnapshot { get; init; }
 
     /// <summary>A hard reset's index before it: its snapshot's second parent, or null when the index had conflicts and the snapshot has none.</summary>
     public string? ResetIndex { get; init; }
+
+    /// <summary>
+    /// The commit whose tree a restore from the backups list put the index to (7.10): a mixed
+    /// reset's snapshot ("Restore the staged changes…"), or a hard reset's snapshot's second parent
+    /// when "Restore the changes…" put the index back first; null otherwise.
+    /// </summary>
+    public string? IndexSource { get; init; }
 
     /// <summary>The stash commit a stash made: <see cref="IGitRepository.StashAsync"/>'s result.</summary>
     public string? Stash { get; init; }
@@ -134,7 +144,8 @@ public sealed record UndoCaptured
 
     /// <summary>
     /// The snapshot a discard saved, the one a restore put back, or a hard reset's <c>-changes</c>
-    /// snapshot as its files are put back (its paths from its message, those present from its tree).
+    /// snapshot as its files are put back (its ref, its paths from its message, those present from
+    /// its tree).
     /// </summary>
     public DiscardSnapshot? Snapshot { get; init; }
 

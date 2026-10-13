@@ -48,9 +48,9 @@ public static class UndoSequence
             UndoKind.Discard => undo
                 ? [new RestoreSnapshot(Snapshot(entry), entry.After.Files)]
                 : [new FilesTo(entry.Before.Files, entry.After.Files)],
-            UndoKind.Restore => undo
-                ? [new FilesTo(entry.After.Files, entry.Before.Files)]
-                : [new RestoreSnapshot(Snapshot(entry), entry.Before.Files)],
+            UndoKind.Restore => RestoreFiles(entry, undo),
+            UndoKind.RestoreStash => RestoreStash(entry, undo),
+            UndoKind.RestoreStagedChanges => RestoreStagedChanges(entry, undo),
             UndoKind.Ignore => [Gitignore(entry, undo)],
             UndoKind.Upstream => BranchConfigs(entry, undo),
             UndoKind.AddRemote or UndoKind.RemoveRemote => Remote(entry, undo),
@@ -84,8 +84,12 @@ public static class UndoSequence
     /// A reset: soft as a commit; mixed moves back softly, then puts the index back from its
     /// snapshot (or the commit itself when the index equalled HEAD); hard moves back keeping the
     /// files, then the index from the snapshot's second parent, then the snapshot's files, in this
-    /// order (restored files would make the move refuse). A hard reset's redo is the app's own
-    /// hard reset with a new snapshot.
+    /// order (restored files would make the move refuse). The Keep move leaves the index at the
+    /// commit moved back to, so the index's check compares with that commit, not with the one the
+    /// reset went to; the snapshot's files are compared with what the reset left, a file the move
+    /// changed holding the move's version, which the move's own check kept free of local changes.
+    /// A hard reset that saved no snapshot (it discarded nothing) is the move alone. A hard
+    /// reset's redo is the app's own hard reset with a new snapshot.
     /// </summary>
     private static IReadOnlyList<UndoEffect> Reset(UndoEntry entry, bool undo)
     {
@@ -110,16 +114,22 @@ public static class UndoSequence
                 }
 
                 List<UndoEffect> effects = [Move(entry, undo, MoveMode.Keep)];
+                if (captured.ResetSnapshot is not { } changes)
+                {
+                    return effects;
+                }
+
+                // The files and the index of the snapshot the reset saved: the recording must have
+                // them, or the undo would move the branch back and leave the discarded work lost.
+                var snapshot = captured.Snapshot is { } files && string.Equals(files.Commit, changes, StringComparison.Ordinal)
+                    ? files
+                    : throw Missing(entry, "the files of the reset's snapshot");
                 if (captured.ResetIndex is { } index)
                 {
-                    effects.Add(new IndexTo(index, after));
+                    effects.Add(new IndexTo(index, before));
                 }
 
-                if (captured.Snapshot is { } snapshot)
-                {
-                    effects.Add(new RestoreSnapshot(snapshot, FilesOf(entry.After, snapshot.Paths)));
-                }
-
+                effects.Add(new RestoreSnapshot(snapshot, FilesOf(entry.After, snapshot.Paths)));
                 return effects;
         }
     }
@@ -278,6 +288,41 @@ public static class UndoSequence
     }
 
     /// <summary>
+    /// A restore of files (the restore bar's, the backups list's): the files go back to what they
+    /// held before it, then the index it put back first goes back to HEAD's commit; the redo puts
+    /// the index back again, then the snapshot's files.
+    /// </summary>
+    private static IReadOnlyList<UndoEffect> RestoreFiles(UndoEntry entry, bool undo)
+    {
+        IReadOnlyList<UndoEffect> index = entry.Captured.IndexSource is { } source
+            ? [undo ? new IndexTo(HeadCommit(entry), source) : new IndexTo(source, HeadCommit(entry))]
+            : [];
+        return undo
+            ? [new FilesTo(entry.After.Files, entry.Before.Files), .. index]
+            : [.. index, new RestoreSnapshot(Snapshot(entry), entry.Before.Files)];
+    }
+
+    /// <summary>A stash stored in the list again (the backups list's "Restore stash") is dropped; the redo stores it again with its message.</summary>
+    private static IReadOnlyList<UndoEffect> RestoreStash(UndoEntry entry, bool undo)
+    {
+        var stored = entry.After.Stashes.FirstOrDefault(stash => !entry.Before.Stashes.Any(was => string.Equals(was.Sha, stash.Sha, StringComparison.Ordinal)))
+            ?? throw Missing(entry, "the stash stored");
+        return undo ? [new StashDrop(stored.Sha)] : [new StashStore(stored.Sha, stored.Message)];
+    }
+
+    /// <summary>
+    /// The index put back from a mixed reset's snapshot (the backups list's "Restore the staged
+    /// changes…", offered while the index equals HEAD) goes back to HEAD's commit; the redo puts
+    /// the snapshot back.
+    /// </summary>
+    private static IReadOnlyList<UndoEffect> RestoreStagedChanges(UndoEntry entry, bool undo)
+    {
+        var source = entry.Captured.IndexSource ?? throw Missing(entry, "the snapshot the index was put back from");
+        var head = HeadCommit(entry);
+        return [undo ? new IndexTo(head, source) : new IndexTo(source, head)];
+    }
+
+    /// <summary>
     /// A created tag is kept in a <c>tag-undone</c> backup, then deleted; a deleted tag is created
     /// again at its object. Either redo brings the same tag object back, or deletes it again.
     /// </summary>
@@ -395,6 +440,10 @@ public static class UndoSequence
 
     private static DiscardSnapshot Snapshot(UndoEntry entry) =>
         entry.Captured.Snapshot ?? throw Missing(entry, "the snapshot");
+
+    /// <summary>HEAD's commit before the action, which a restore of the index leaves as it found it.</summary>
+    private static string HeadCommit(UndoEntry entry) =>
+        entry.Before.Head.Sha ?? throw Missing(entry, "HEAD's commit");
 
     private static IReadOnlyList<RecordedFile> FilesOf(UndoState state, IReadOnlyList<string> paths) =>
         [.. state.Files.Where(file => paths.Contains(file.Path, StringComparer.Ordinal))];
