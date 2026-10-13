@@ -118,6 +118,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Details = new CommitDetailsViewModel(repository, settings, dates, _log);
         Details.ParentActivated += (_, sha) => Select(sha, reveal: true);
         Details.FileActivated += (_, file) => OpenCommitDiff(file);
+
+        // "All files": a file the shown commit did not change opens its blame (docs/phase-5-design.md 4.5).
+        Details.BlameRequested += (_, request) => _ = MenuActions.ShowBlameAsync(request);
+
         Changes = new WorkingChangesViewModel(this, settings);
     }
 
@@ -640,6 +644,13 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     public async Task<string?> RestoreAsync()
     {
         if (_disposed || _lastSnapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        // While the discard is the entry before the undo history's cursor, Restore is its Undo
+        // (docs/phase-5-design.md 7.9), which shows its own failure.
+        if (await Operations.TryRestoreAsUndoAsync(snapshot))
         {
             return null;
         }

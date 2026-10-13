@@ -1,6 +1,7 @@
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Session;
 
 namespace VisualCommit.App.ViewModels.Menus;
 
@@ -139,6 +140,14 @@ public sealed record RepositoryMenuContext(
     /// merge tool" is disabled.
     /// </summary>
     public string? MergeTool { get; init; }
+
+    /// <summary>
+    /// What the graph hides and solos (docs/phase-5-design.md 8.1, 8.3): the hidden and soloed
+    /// branches, the hidden remotes, by full names, for the labels and disabled reasons of Hide or
+    /// Show, Solo or Stop soloing, and the sections' and remotes' items. Null while nothing is
+    /// hidden or soloed.
+    /// </summary>
+    public RepositoryGraphFilter? Filters { get; init; }
 
     public HeadState Head => Refs.Head;
 

@@ -52,9 +52,11 @@ public interface IToolbarActions
 /// (<c>ToolTip.ShowOnDisabled</c>): the first reason that holds, in 4d's order. An enabled button
 /// has no tooltip. The states follow the repository's refs (<see cref="RepositoryViewModel.Refs"/>)
 /// and its working-tree status; until the refs have been read every button is disabled, without a
-/// reason. Phase 5's Undo, Redo and Search (docs/phase-5-design.md 1.1) are here as commands that
-/// stay disabled, without a tooltip, as the toolbar draws them today: the lead gives them their
-/// states from the undo history and the graph area, and WP5 binds the buttons to them.
+/// reason. Phase 5's Undo and Redo (docs/phase-5-design.md 1.1, 7.4) take their states from the
+/// repository's operations (<see cref="RepositoryOperations.ReadUndoAvailability"/>, WP3's), read
+/// with the others and again on <see cref="UpdateUndoStates"/>; until WP3 builds them they are
+/// disabled without a tooltip, as the toolbar draws them today. Search (11.2) stays disabled until
+/// the lead gives it its state from the graph area. WP5 binds the buttons to them.
 /// </summary>
 public sealed partial class ToolbarViewModel : ObservableObject
 {
@@ -310,8 +312,20 @@ public sealed partial class ToolbarViewModel : ObservableObject
     private static bool HasConflicts(WorkingTreeStatus status) =>
         status.Unstaged.Any(file => file.Kind == FileChangeKind.Conflicted) || status.Staged.Any(file => file.Kind == FileChangeKind.Conflicted);
 
+    /// <summary>
+    /// Reads Undo's and Redo's states again (7.4): when the undo history, the queue or the checks
+    /// made after a refresh changed them without a change of the refs or the status.
+    /// </summary>
+    public void UpdateUndoStates()
+    {
+        var undo = Repository?.Operations.ReadUndoAvailability() ?? UndoAvailability.Disabled;
+        (UndoToolTip, CanUndo) = (undo.UndoToolTip, undo.CanUndo);
+        (RedoToolTip, CanRedo) = (undo.RedoToolTip, undo.CanRedo);
+    }
+
     private void Update()
     {
+        UpdateUndoStates();
         if (Repository?.Refs is not { } refs)
         {
             // No repository, or its refs are not read yet.
@@ -380,4 +394,18 @@ public sealed partial class ToolbarViewModel : ObservableObject
         (StashToolTip, CanStash) = (stash, enabled && stash is null);
         (PopToolTip, CanPop) = (pop, enabled && pop is null);
     }
+}
+
+/// <summary>
+/// The toolbar's Undo and Redo now (docs/phase-5-design.md 1.1, 7.4): each enabled or not, with
+/// its tooltip, <c>Undo {text}</c> while enabled or the first reason it is disabled.
+/// </summary>
+/// <param name="CanUndo">Undo is enabled.</param>
+/// <param name="UndoToolTip">Its tooltip; null while its state is not known.</param>
+/// <param name="CanRedo">Redo is enabled.</param>
+/// <param name="RedoToolTip">Its tooltip; null while its state is not known.</param>
+public sealed record UndoAvailability(bool CanUndo, string? UndoToolTip, bool CanRedo, string? RedoToolTip)
+{
+    /// <summary>Both disabled, without a tooltip: a tab without a repository, or a state not known yet.</summary>
+    public static UndoAvailability Disabled { get; } = new(false, null, false, null);
 }

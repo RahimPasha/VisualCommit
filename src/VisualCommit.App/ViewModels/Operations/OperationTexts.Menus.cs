@@ -12,8 +12,8 @@ public static partial class OperationTexts
 {
     /// <summary>
     /// The menus' texts, apart from the operations' own so that their names never meet. Phase 5's
-    /// are in two more parts: <c>OperationTexts.Menus.Pages.cs</c> (WP6) and
-    /// <c>OperationTexts.Menus.Filters.cs</c> (WP7).
+    /// are in three more parts: <c>OperationTexts.Menus.Pages.cs</c> (WP6),
+    /// <c>OperationTexts.Menus.Filters.cs</c> (WP7) and <c>OperationTexts.Menus.ActivityLog.cs</c> (WP5).
     /// </summary>
     public static partial class MenuTexts
     {

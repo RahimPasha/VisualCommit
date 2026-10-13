@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Conflicts;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -313,8 +314,8 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             async _ =>
             {
                 // CleanUpBackupsAsync logs its own failure at Warning and never throws.
-                await Operations.CleanUpBackupsAsync();
-                return OperationReport.Done(string.Empty);
+                var removed = await Operations.CleanUpBackupsAsync();
+                return OperationReport.Done(CleanUpBackupsResult(removed.Count));
             })
         {
             IsBackground = true,
@@ -328,6 +329,13 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     /// <summary>The background operation's title (10.1): never shown, only logged.</summary>
     public const string CleanUpBackupsTitle = "Clean up backups";
+
+    /// <summary>
+    /// The background operation's message (docs/phase-5-design.md 2.3): <c>Removed 1 backup</c>,
+    /// <c>Removed {N} backups</c>. The status bar never shows it (D139); the activity log does.
+    /// </summary>
+    public static string CleanUpBackupsResult(int removed) =>
+        removed == 1 ? "Removed 1 backup" : string.Create(CultureInfo.InvariantCulture, $"Removed {removed} backups");
 
     // The list's host (2.2, IInteractiveRebaseHost).
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -154,6 +155,22 @@ public partial class CommitDetailsViewModel : ObservableObject
 
     /// <summary>A file of the list was clicked: its diff should open (D63).</summary>
     public event EventHandler<ChangedFile>? FileActivated;
+
+    /// <summary>
+    /// With "All files" on (docs/phase-5-design.md 4.5, D164), a file the shown commit did not
+    /// change was clicked: its blame at that commit should open, as a page. Work package WP6
+    /// raises it; the repository opens the page.
+    /// </summary>
+    public event EventHandler<BlameRequest>? BlameRequested;
+
+    /// <summary>Asks for the blame of <paramref name="path"/> at the shown commit (<see cref="BlameRequested"/>); nothing while no commit is shown.</summary>
+    private void RequestBlame(string path)
+    {
+        if (Details is { } commit)
+        {
+            BlameRequested?.Invoke(this, new BlameRequest(path, commit.Sha));
+        }
+    }
 
     /// <summary>Opens the diff of a file row's file; does nothing for a folder.</summary>
     [RelayCommand]

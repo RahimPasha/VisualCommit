@@ -5,10 +5,11 @@
 // in progress) and D120 (a drop's entries that would check out a branch of another worktree).
 // Each builder is a pure function of a RepositoryMenuContext; its items start IRepositoryActions
 // on the objects captured when the menu opened. Tests: tests/VisualCommit.App.Tests/RepositoryMenusTests.cs.
-// Phase 5's items and builders are in two more parts (docs/phase-5-design.md 13.1, section 16):
-// RepositoryMenus.Pages.cs (file history, blame, the reflog and the backups; WP6) and
-// RepositoryMenus.Filters.cs (compare, hide and solo; WP7). The builders here call their hooks
-// where 13.1 puts the items; a hook that gives nothing leaves its menu as it was.
+// Phase 5's items and builders are in three more parts (docs/phase-5-design.md 13.1, section 16):
+// RepositoryMenus.Pages.cs (file history, blame, the reflog and the backups; WP6),
+// RepositoryMenus.Filters.cs (compare, hide and solo; WP7) and RepositoryMenus.ActivityLog.cs (the
+// activity log's rows; WP5). The builders here call the hooks of the first two where 13.1 puts
+// the items; a hook that gives nothing leaves its menu as it was.
 
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Operations;

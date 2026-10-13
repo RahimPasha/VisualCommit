@@ -134,6 +134,10 @@ public class RepositoryOperationsTests
         Assert.False(dialog.HasExtraAction);
         Assert.Equal("Check out feature/addfile failed", app.StatusText);
         app.AssertScriptFollowed();
+
+        // The operation's record keeps the dialog's summary, for the activity log (docs/phase-5-design.md 2.3).
+        var record = app.Services.Operations.Snapshot()[^1];
+        Assert.Equal(("Check out feature/addfile", dialog.Summary), (record.Title, record.FailureSummary));
     }
 
     [Fact]

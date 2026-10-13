@@ -558,11 +558,9 @@ public sealed partial class GitRepository
         var removedBackups = new List<RemovedBackup>(removed.Count);
         foreach (var (backup, reason) in removed)
         {
-            var why = reason == BackupRemovalReason.OlderThanDays
-                ? $"older than {Count(retention.Days, "day")}"
-                : $"more than {Count(retention.Count, "backup")}";
-            _log.Info($"{Name}: Removed backup {backup.Name} ({why})");
-            removedBackups.Add(new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason));
+            var removedBackup = new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason);
+            _log.Info($"{Name}: {removedBackup.Describe(retention)}");
+            removedBackups.Add(removedBackup);
         }
 
         return removedBackups;

@@ -88,6 +88,15 @@ public sealed partial class CommitGraphControl : Control
     public static readonly StyledProperty<string?> WorkingRowTextProperty =
         AvaloniaProperty.Register<CommitGraphControl, string?>(nameof(WorkingRowText), DefaultWorkingRowText);
 
+    /// <summary>
+    /// What a search marks (docs/phase-5-design.md 3.3): while it is active, each matching row is
+    /// marked and every other commit row dimmed. Bound to the repository's
+    /// <see cref="ViewModels.RepositoryViewModel.SearchMarks"/>. Work package WP2b draws it; until
+    /// then the control draws as without a search.
+    /// </summary>
+    public static readonly StyledProperty<GraphSearchMarks> SearchProperty =
+        AvaloniaProperty.Register<CommitGraphControl, GraphSearchMarks>(nameof(Search), GraphSearchMarks.None);
+
     /// <summary>The typeface family of every text the control draws: inherited, so it is the app's Inter (D28).</summary>
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
         TextElement.FontFamilyProperty.AddOwner<CommitGraphControl>();
@@ -215,6 +224,13 @@ public sealed partial class CommitGraphControl : Control
     {
         get => GetValue(WorkingRowTextProperty);
         set => SetValue(WorkingRowTextProperty, value);
+    }
+
+    /// <summary>What a search marks (3.3); <see cref="GraphSearchMarks.None"/> without a search.</summary>
+    public GraphSearchMarks Search
+    {
+        get => GetValue(SearchProperty);
+        set => SetValue(SearchProperty, value);
     }
 
     public FontFamily FontFamily

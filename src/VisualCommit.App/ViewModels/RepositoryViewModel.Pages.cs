@@ -6,17 +6,20 @@ using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Graph;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
-/// The lead's hooks of phase 5 (docs/phase-5-design.md 11.1 to 11.3, 3.1, 6.2, 8.2): the pages that
-/// open in place of the graph and their host, a commit shown in the right panel from a page or a
-/// comparison, the graph's commit shown or revealed, and the places of the comparison, the search
-/// and the graph's filter. The pages (WP6), the comparison and the search (WP7) and the filter's
-/// session (WP7) fill them; until then no page opens, the filter is none, and the comparison and the
-/// search throw.
+/// The lead's hooks of phase 5 (docs/phase-5-design.md 11.1 to 11.3, 3.1, 3.3, 6.2, 7.9, 8.2 to
+/// 8.4): the pages that open in place of the graph and their host, a commit shown in the right
+/// panel from a page or a comparison, the graph's commit shown or revealed, the places of the
+/// comparison and the search with the search's marks, what the graph hides or solos with its
+/// reload, and the restore bar's tie to the undo history. The pages (WP6), the comparison, the
+/// search and the filters (WP7) and the undo (WP3) fill them; until then no page opens, nothing is
+/// searched, hidden or soloed, the restore bar is as in phase 4, and the comparison and the search
+/// throw.
 /// </summary>
 public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 {
@@ -35,10 +38,58 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     public bool ShowsPage => Page is not null && !IsDiffOpen && !IsResolverOpen;
 
     /// <summary>
+    /// The search bar's view model (3.1), shown above the graph's column headers while the bar is
+    /// open, with the view the view locator finds for it (WP7's); null while it is closed. The lead
+    /// opens it (<see cref="OpenSearch"/>).
+    /// </summary>
+    [ObservableProperty]
+    public partial object? Search { get; private set; }
+
+    /// <summary>
+    /// What the graph marks of the search (3.3), which <c>CommitGraphControl.Search</c> binds to:
+    /// <see cref="GraphSearchMarks.None"/> while nothing is searched. The lead gives it from the
+    /// search's view model.
+    /// </summary>
+    [ObservableProperty]
+    public partial GraphSearchMarks SearchMarks { get; private set; } = GraphSearchMarks.None;
+
+    /// <summary>
+    /// What the graph hides and solos (8.1, 8.4, D159), as the session keeps it for this repository,
+    /// or null while nothing is. The menus read it (<see cref="RepositoryMenuContext.Filters"/>);
+    /// WP7's operations change it through <see cref="ApplyGraphFilterAsync"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial RepositoryGraphFilter? Filters { get; private set; }
+
+    /// <summary>
     /// What the graph hides or solos (8.2, D178), which the history loads with, or null to load
-    /// everything as before phase 5. WP7 and the lead give it from the session.
+    /// everything as before phase 5. The lead gives it from <see cref="Filters"/> when it joins WP7.
     /// </summary>
     public GraphFilter? GraphFilter => null;
+
+    /// <summary>
+    /// The graph reloads for a change of filter (8.2): a 2-px bar runs under the column headers, so
+    /// that the click is seen to take effect on a large history. False until the lead joins WP7.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsReloadingGraph { get; private set; }
+
+    /// <summary>
+    /// What the graph hides or solos changed (8.1 to 8.4): WP7's operations call it once they have
+    /// written the session (<see cref="TabServices.Session"/>). The menus see the new state at once.
+    /// The graph's reload through the refresh (<see cref="GraphFilter"/>, the filter's key in the
+    /// refresh's comparison, <see cref="IsReloadingGraph"/>) comes when the lead joins WP7; until
+    /// then the graph stays as it is.
+    /// </summary>
+    public Task ApplyGraphFilterAsync(RepositoryGraphFilter? filters)
+    {
+        if (!_disposed)
+        {
+            Filters = filters;
+        }
+
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// Opens <paramref name="page"/> in place of the graph (11.1): what the graph area shows is
@@ -76,7 +127,7 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
             return;
         }
 
-        if (sha.All(c => c == '0'))
+        if (IsNotCommitted(sha))
         {
             IsWorkingRowSelected = HasWorkingChanges;
             return;
@@ -95,17 +146,35 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
         _ = Details.ShowAsync(sha, null, _lifetime.Token);
     }
 
-    /// <summary>"Show in graph" (11.3): closes the page, selects the commit and reveals it; nothing for a commit the graph does not have (its item is disabled).</summary>
+    /// <summary>
+    /// "Show in graph" (11.3): closes the page, selects the commit and reveals it; nothing for a
+    /// commit the graph does not have (its item is disabled). The zero id of a blame's line not
+    /// committed yet selects the working-changes row at the top (4.2, 4.3).
+    /// </summary>
     public void ShowInGraph(string sha)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sha);
-        if (_disposed || Graph.IndexOf(sha) < 0)
+        if (_disposed || !HasRow(sha))
         {
             return;
         }
 
-        ClosePage();
-        Select(sha, reveal: true);
+        if (IsNotCommitted(sha))
+        {
+            // The working-changes row takes the place of a commit picked on the page: that one is
+            // not revealed.
+            _revealOnPageClose = false;
+            ClosePage();
+            CloseDiff(returnFocus: false);
+            IsWorkingRowSelected = true;
+            ScrollOffset = 0;
+        }
+        else
+        {
+            ClosePage();
+            Select(sha, reveal: true);
+        }
+
         GraphFocusRequested?.Invoke(this, GraphFocusRequest.Graph);
     }
 
@@ -133,6 +202,40 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     /// </summary>
     public void OpenSearch() =>
         throw new NotImplementedException("The search's place is the lead's, with work package WP7 (docs/phase-5-design.md 3.1).");
+
+    /// <summary>
+    /// The restore bar's tie to its discard (7.9): the Undo of the discard that saved
+    /// <paramref name="snapshot"/> put its files back, so its bar goes. A bar that shows another
+    /// discard's snapshot stays. WP3's undo calls it.
+    /// </summary>
+    public void HideRestoreBar(DiscardSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (_lastSnapshot is { } shown && string.Equals(shown.Ref, snapshot.Ref, StringComparison.Ordinal))
+        {
+            _lastSnapshot = null;
+            _afterDiscard = null;
+            Changes.HideRestore();
+        }
+    }
+
+    /// <summary>
+    /// The restore bar's tie to its discard (7.9): the Redo of the discard that saved
+    /// <paramref name="snapshot"/> discarded again, so its bar shows again with the same snapshot,
+    /// and what the files hold now is kept for Restore's question (D75), as after the discard
+    /// itself. WP3's redo calls it inside its operation.
+    /// </summary>
+    public Task ShowRestoreBarAsync(DiscardSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return RememberDiscardAsync(snapshot, cancellationToken);
+    }
+
+    /// <summary>The zero id that blame gives a line not committed yet (4.2): the working-changes row stands for it.</summary>
+    private static bool IsNotCommitted(string sha) => sha.All(c => c == '0');
+
+    /// <summary>Whether the graph has a row for <paramref name="sha"/>: a commit's, or the working-changes row for the zero id while it shows.</summary>
+    private bool HasRow(string sha) => IsNotCommitted(sha) ? HasWorkingChanges : Graph.IndexOf(sha) >= 0;
 
     /// <summary>
     /// Closes the open page without asking (it holds no work). The focus stays where the caller
@@ -166,7 +269,7 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 
     IRepositoryActions IGraphAreaPageHost.Actions => MenuActions;
 
-    bool IGraphAreaPageHost.HasCommit(string sha) => Graph.IndexOf(sha) >= 0;
+    bool IGraphAreaPageHost.HasCommit(string sha) => HasRow(sha);
 
     void IGraphAreaPageHost.Close(IGraphAreaPage page)
     {
@@ -180,9 +283,9 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
         GraphFocusRequested?.Invoke(this, GraphFocusRequest.Graph);
     }
 
-    void IFileHistoryHost.OpenBlame(BlameRequest request) =>
-        throw new NotImplementedException("The blame page is work package WP6's (docs/phase-5-design.md 4.2).");
+    // A page opened from a page replaces it (11.1), as one opened from a menu does.
 
-    void IBlameHost.OpenFileHistory(FileHistoryRequest request) =>
-        throw new NotImplementedException("The file history page is work package WP6's (docs/phase-5-design.md 4.1).");
+    void IFileHistoryHost.OpenBlame(BlameRequest request) => _ = MenuActions.ShowBlameAsync(request);
+
+    void IBlameHost.OpenFileHistory(FileHistoryRequest request) => _ = MenuActions.ShowFileHistoryAsync(request);
 }

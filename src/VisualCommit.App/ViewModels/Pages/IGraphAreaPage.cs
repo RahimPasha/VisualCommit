@@ -59,7 +59,11 @@ public interface IGraphAreaPageHost
     /// <summary>The repository's state as the menus see it, read when a menu opens.</summary>
     RepositoryMenuContext MenuContext { get; }
 
-    /// <summary>Whether the graph shows the commit <paramref name="sha"/>: "Show in graph" is disabled otherwise ("This commit is not in the graph", 4.3).</summary>
+    /// <summary>
+    /// Whether the graph shows the commit <paramref name="sha"/>: "Show in graph" is disabled
+    /// otherwise ("This commit is not in the graph", 4.3). For the zero id of a blame's line not
+    /// committed yet, whether the working-changes row shows.
+    /// </summary>
     bool HasCommit(string sha);
 
     /// <summary>
@@ -69,7 +73,10 @@ public interface IGraphAreaPageHost
     /// </summary>
     void ShowCommit(string sha);
 
-    /// <summary>"Show in graph" (11.3): closes the page, selects the commit and reveals it.</summary>
+    /// <summary>
+    /// "Show in graph" (11.3): closes the page, selects the commit and reveals it. The zero id of a
+    /// blame's line not committed yet selects the working-changes row (4.2).
+    /// </summary>
     void ShowInGraph(string sha);
 
     /// <summary>Closes <paramref name="page"/> when it is the one shown; another page is left alone.</summary>

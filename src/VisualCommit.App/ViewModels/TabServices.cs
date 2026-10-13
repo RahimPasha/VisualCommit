@@ -41,6 +41,7 @@ public sealed class TabServices
         Settings = settings;
         Dates = dates;
         Log = log ?? NullAppLog.Instance;
+        Session = session;
         Clock = clock ?? TimeProvider.System;
         Recent = new RecentRepositories(session, Clock);
         Dialogs = dialogs ?? new DialogHostViewModel();
@@ -65,6 +66,13 @@ public sealed class TabServices
     public IAppLog Log { get; }
 
     public RecentRepositories Recent { get; }
+
+    /// <summary>
+    /// The session file (D46): the tabs, the recent list, the panels' sizes, and phase 5's graph
+    /// filters per repository and the activity log's height (docs/phase-5-design.md 8.4, 2.1),
+    /// which are written when they change.
+    /// </summary>
+    public ISessionStore Session { get; }
 
     /// <summary>The window's confirmations (D69).</summary>
     public IDialogService Dialogs { get; }

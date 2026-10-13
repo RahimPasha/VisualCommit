@@ -458,17 +458,29 @@ public sealed partial class RepositoryOperations
     /// section 9, D139): the backups older than 30 days, then the oldest beyond 50, never the
     /// restore bar's snapshot (<see cref="RepositoryViewModel.BackupsToKeep"/>). It never fails the
     /// operation and shows nothing: the git layer logs each backup it removed, or why it waits;
-    /// a failure is logged at Warning.
+    /// a failure is logged at Warning. Each removal is also a note of the operation it runs in, for
+    /// the activity log (docs/phase-5-design.md 2.3). Returns what it removed, empty after a failure.
     /// </summary>
-    public async Task CleanUpBackupsAsync()
+    public async Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync()
     {
         try
         {
-            await Git.CleanUpBackupsAsync(BackupRetention.Default, Repository.BackupsToKeep, options: null, cancellationToken: CancellationToken.None);
+            var retention = BackupRetention.Default;
+            var removed = await Git.CleanUpBackupsAsync(retention, Repository.BackupsToKeep, options: null, cancellationToken: CancellationToken.None);
+            if (GitOperationScope.Current is { } operationId && Services?.Operations is { } operations)
+            {
+                foreach (var backup in removed)
+                {
+                    operations.Note(operationId, backup.Describe(retention));
+                }
+            }
+
+            return removed;
         }
         catch (Exception ex)
         {
             Log.Warning($"{Repository.Name}: the backups' clean-up failed; the backups stay.", ex);
+            return [];
         }
     }
 
@@ -479,13 +491,22 @@ public sealed partial class RepositoryOperations
     /// in the "&lt;Title&gt; cancelled" dialog (1.8). A success, a conflict (the banner shows it)
     /// and a plain cancel show nothing here. After the tab closed, a failure is only logged.
     /// <paramref name="operationId"/> names the operation, whose last git call the lock-file dialog
-    /// shows as its command (4f: "the cancelled git call").
+    /// shows as its command (4f: "the cancelled git call"), and whose record in the operation log
+    /// gets the failure's summary as the dialog gives it, also when no dialog opens
+    /// (docs/phase-5-design.md 2.3).
     /// </summary>
     public async Task ShowResultAsync(OperationText text, OperationResult result, RunOptions? options = null, string? operationId = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(result);
         options ??= RunOptions.Default;
+        var failure = result.Outcome == OperationOutcome.Failed ? result.Failure : null;
+        var display = failure is null ? null : options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
+        if (display is not null && operationId is not null)
+        {
+            Services?.Operations.SetFailureSummary(operationId, display.Summary);
+        }
+
         if (IsClosed)
         {
             if (result.Outcome == OperationOutcome.Failed)
@@ -496,9 +517,9 @@ public sealed partial class RepositoryOperations
             return;
         }
 
-        if (result is { Outcome: OperationOutcome.Failed, Failure: { } failure } && options.ShowsErrorDialog)
+        if (failure is not null && display is not null && options.ShowsErrorDialog)
         {
-            await ShowFailureAsync(options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure), failure);
+            await ShowFailureAsync(display, failure);
         }
         else if (result is { Outcome: OperationOutcome.Cancelled, StaleLockFiles.Count: > 0 })
         {
