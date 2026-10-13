@@ -181,14 +181,21 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3, the design in `docs/phase-5-design.md`: the git facts are being derived by a research
-workflow (notes in the session's scratch folder; what the design relies on is copied into its
-section 0). Step 4 (phase 4's leftovers) runs beside it in a worktree.
+Step 3: `docs/phase-5-design.md` is drafted (`493fe54`) from a code map and seven research notes
+(section 0 holds every git fact it relies on); five independent reviews, each checked by an
+adversarial verifier, are running. Then: revise the design from the confirmed findings, record
+D164 on, and tick step 3. Step 4 (phase 4's leftovers, D160) runs beside it in a worktree
+(`wip/p5-leftovers`), not merged yet.
 
 ### Notes for whoever resumes
 
 - Phase 5 started on 2026-10-12 on the Windows machine. No worktree, `wip/*` or `worktree-*`
   branch existed at its start; two git file-system monitor daemons were running.
+- **Git 2.55 (CI's version) is on the development machine**, inside Visual Studio:
+  `C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team Explorer/Git/mingw64/bin/git.exe`.
+  Put that `mingw64/bin` first on `PATH` (otherwise its child processes fall back to the 2.36 on
+  `PATH`). Phase 5's research used it to check what 2.55 writes differently, which phase 4 could only
+  learn from CI runs.
 - Phases 1 to 4 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
   (git-ignored); the phase 3 and phase 4 handoffs' "Things that cost time" say what to watch
   for: a worktree starts from `master` and its agent must create its branch from the phase
