@@ -207,17 +207,26 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP0 (design 16): the contracts, records, stubs and every operation's undo call points as no-ops,
-so that the first wave can build against them: the Core types, `IGitRepository`'s new members
-with one stub file per package, the queue's and runner's record fields, the app contracts
-(`IGraphAreaPage`, `RunOptions.Undo`, the recording hook, `RepositoryViewModel`'s hooks), the
-split menu files, the icons and the token, the two clocks in `GitIsolation` and `RealApp`. Then the
-first wave side by side in worktrees: WP-S (step 5), WP1, WP2a and WP3's git half. Step 6 (the
-report's checks, from design 15.4) is written once WP-S has pinned the scenarios, reviewed, and
-committed before any UI it tests.
+WP0 (design 16) is merged (`e5e25ee`): the contracts, records, stubs and every operation's undo
+call points, built, reviewed three ways (19 findings, all fixed) and run in full in its worktree
+(2,470 tests passed in 25 min 13 s; the walk-through pictures unchanged but for those step 4 names).
+The first wave runs in worktrees under `.claude/worktrees/p5-*`, each built, reviewed and fixed by
+its own agents: WP-S (`wip/p5-s`, step 5), WP1 (`wip/p5-wp1`), WP2a (`wip/p5-wp2a`), WP3's git half
+(`wip/p5-wp3g`) and the flaky test below (`wip/p5-flaky`). Then: merge each with `--no-ff`, remove
+its worktree, run the full default tests once on the merged branch, push, read CI. Then step 6 (the
+report's checks, from design 15.4, on the scenarios WP-S pinned), reviewed and committed before
+the second wave builds any UI.
 
 ### Notes for whoever resumes
 
+- **A flaky test, older than phase 5**: `StatusBarTests.While_the_merge_tool_runs_Cancel_says_it_stops_git_and_the_merge_tool`
+  (added with the leftovers in `279dd8c`) hangs until the 3-minute watchdog kills App.Tests in
+  about half the runs under load, also on `c319578` before WP0: the click on Cancel does not reach
+  the button. Being fixed on `wip/p5-flaky`. If a full run dies with `HANG WATCHDOG` naming it,
+  run it again; it is not a failure of what was changed.
+- If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
+  work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
+  after building them; ask the owner before discarding any.
 - Phase 5 started on 2026-10-12 on the Windows machine. No worktree, `wip/*` or `worktree-*`
   branch existed at its start; two git file-system monitor daemons were running.
 - **Git 2.55 (CI's version) is on the development machine**, inside Visual Studio:
