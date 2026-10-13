@@ -395,7 +395,8 @@ log file (operations.md sections 3 and 4). Phase 5 changes:
 - **Backup names and the clean-up's "now" in tests.** `GitRepository.BackupClock` (today the system
   clock) is given by `AppSession.Start` to every repository the app opens (`backupClock`), and both
   harnesses give one that says it is 2026-01-02 09:00:00.000 UTC for the clean-up and names each
-  backup one second after the last (`VISUALCOMMIT_BACKUP_CLOCK=fixed` for the real window): backups
+  backup one second after the last (its "now" moves forward with each name, so no backup is in the
+  clock's future; `BackupClock` is a class of its own, since one `TimeProvider` cannot give both) (`VISUALCOMMIT_BACKUP_CLOCK=fixed` for the real window): backups
   the checks make get the same names in every run and both passes, still in order, and a scenario's
   backups are judged against a fixed day (15.1). Phase 3's and 4's checks and App tests that make
   backups or age them by the wall clock are adjusted in the same commit (`RepositoryOperationsBackupCleanupTests`
@@ -872,7 +873,7 @@ its tip before, `N` after):
 |---|---|---|
 | Commit, amend, soft reset | `MoveHead(B, N, O, Soft)` (the initial commit: delete) | `MoveHead(B, O, N, Soft)` |
 | Mixed reset | `MoveHead(B, N, O, Soft)`, then `IndexTo(<snapshot> or O, N)`: the index snapshot the reset saved, or `O` itself when the index equalled HEAD and none was saved | `IndexTo(N, <the source>)` (the index only), then `MoveHead(B, O, N, Soft)` |
-| Hard reset | `MoveHead(B, N, O, Keep)`, then `IndexTo(<snapshot>^2, N)`, then `RestoreSnapshot(<snapshot>)` (in this order: restored files would make the move refuse) | the app's own hard reset to `N` with a **new** snapshot (the files may have changed since the undo), checked by HEAD on `B` and `B` at `O`; **the entry takes the new snapshot** |
+| Hard reset | `MoveHead(B, N, O, Keep)`, then `IndexTo(<snapshot>^2, O)` (after the move the index is at `O`), then `RestoreSnapshot(<snapshot>)` (in this order: restored files would make the move refuse) | the app's own hard reset to `N` with a **new** snapshot (the files may have changed since the undo), checked by HEAD on `B` and `B` at `O`; **the entry takes the new snapshot** |
 | Merge, fast-forward, cherry-pick, revert (one or a list), rebase onto, interactive rebase, squash, pull, a finished stopped action | `MoveHead(B, N, O, Keep)`; for a plain rebase also `SetRef` back for every other branch git moved (a user's `rebase.updateRefs`, 7.7) | the mirror |
 | Checkout of a branch, or of a commit or tag (no automatic stash) | `Switch(now, before)` | the mirror |
 | Checkout that created a tracking branch; create a branch and check it out | `Switch(B, before)`, then `SetRef(refs/heads/B, tip, absent)`, then `BranchConfig(B, written, none)` | `SetRef(refs/heads/B, absent, tip)` and `BranchConfig(B, none, written)` (`switch --create … --track` would fail with a SHA), then `Switch(before, B)` |
@@ -994,6 +995,7 @@ An entry's text names the action as the user knows it:
 | Stash, apply, pop, drop | `stash "{message}"`, `apply of stash "{message}"`, `pop of stash "{message}"`, `drop of stash "{message}"` (never `stash@{n}`, which renumbering reuses) |
 | Tags | `creation of tag {t}`, `deletion of tag {t}` |
 | Discard, Restore | `discard of {N} files` / `of {name}` / `of lines in {name}`; `restore of the discarded files` |
+| The backups list's restores (7.10) | `restore of branch {b}`, `restore of tag {t}`, `restore of stash "{message}"`, `restore of the changes`, `restore of the staged changes`, `push of {b} back to {r}`, `push of tag {t} back to {r}` |
 | Ignore | `ignore of {pattern}` |
 | Upstream | `upstream change of {b}` |
 | Remotes | `addition of remote {r}`, `rename of remote {old} to {new}`, `removal of remote {r}`, `URL change of {r}` |
@@ -1705,6 +1707,7 @@ only the files named for it; anything else goes through the lead. Every file has
 |---|---|
 | WP-L (done, `279dd8c`) | Phase 4's leftovers (D160) and the two waits of the baseline run |
 | WP0 (lead) | **Core**: `Undo/` (`UndoEntry`, `UndoSequence`, the effect records, `UndoHistory`, `UndoScope`), `Graph/GraphFilter`, the result records of history, blame, reflog, backups, the tree's files, compare and search, `OperationRecord`'s fields and `IOperationLog`'s events, `GraphLine.IsDashed`, `SessionState.GraphFilters` and `ActivityLogHeight`, `AppSettings.ShowAllFiles`. **Git**: `IGitRepository`'s new members (`ReadFileHistoryAsync`, `ReadBlameAsync`, `ReadTreeFilesAsync`, `ReadReflogAsync`, `FindLostCommitsAsync`, `ReadBackupsAsync`, `CompareAsync`, `SearchAsync`, `ReadRefStatesAsync`, `RunUndoStepAsync`, the filter parameter of `LoadCommitsAsync`, `PushAsync`'s and `PushTagAsync`'s `PushOutcome`), `FakeRepositoryBase`, one stub file per package. **Queue and runner**: the record clock, the sequence numbers, `Started`, the record's fields, `GitCommand.RecordsStandardInput`. **App contracts**: `IGraphAreaPage`, the pages' host interfaces, `IRepositoryActions` additions, `RunOptions.Undo` with **every operation's scope and its `UndoCapture` call points as no-ops at every `RunAsync` and `WriteAsync` call site**, the recording hook in `RepositoryOperations.Run.cs` and `RepositoryViewModel.WriteAsync`, `RepositoryViewModel`'s hooks stubbed (`Page`, `ShowCommit`, `ShowInGraph`, `Reveal`, `Compare`, `Search`, `UndoHistory`), `EscapeOrder` 340, 370, 390, `ToolbarViewModel`'s new commands as stubs, `RepositoryMenus` and `OperationTexts.Menus` split into partial files (`.Pages.cs` for WP6, `.Filters.cs` for WP7). **Theme**: `Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `Tokens.axaml`, `VcFlatButton`'s `selected`. **Tests**: `GitIsolation`/`RealApp` (the two clocks) |
+| WP0's later additions | `RepositoryMenus.ActivityLog.cs` and `OperationTexts.Menus.ActivityLog.cs` (WP5); `Core/Undo/UndoChecks.cs` and `RepositoryOperations.Undo.cs` (WP3); the C12 stubs in `GitRepository.Branches.cs` and the checkouts' error display moved into `RepositoryOperations.Branches.cs` (WP4); `GraphSearchMarks` (WP7 fills it, WP2b draws it); `LeftPanelViewModel`'s hidden and soloed marks (WP7) |
 | WP-S | 15.1's scenarios and `Phase5ScenarioTests`; the two projects (15.3); the driver files of 15.2 as their views arrive; `scripts/time-scripted-check.sh`; CLAUDE.md's rows |
 | WP1 (Git: reading) | `GitRepository.FileHistory.cs` (file history, blame, the tree's files), `.Reflog.cs` (reflog, lost commits, the backups' reader on phase 4's parser), `.Compare.cs`, `.Search.cs`; their tests |
 | WP2a (graph, data; first wave) | `GraphFilter` in `LoadCommitsAsync` and `CommitPager` (8.2), `GraphLayout`'s dashed stash lanes (10), `CommitGraphData`'s label filter; their tests and phase 1's graph tests that change |
