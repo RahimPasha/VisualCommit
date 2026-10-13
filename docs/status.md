@@ -60,7 +60,18 @@ could not (Git 2.55's own files and words, a background clean-up that held the q
 read the screen too early); the runs were red until each was fixed (phase 4's report, "Other
 platforms", and its handoff, "Things that cost time").
 
-The run for the merge on `master` is recorded here once it has run.
+The run for the merge on `master` is
+[38336234442](https://github.com/RahimPasha/VisualCommit/actions/runs/38336234442), for `50cf35c`
+(the merge commit `ce5f337` and the commit that set phase 4 to "Done"). Its first attempt had four
+jobs succeed with 2,411 tests each (`macos-latest` 15 min 33 s, `ubuntu-latest` 3 min 40 s, the
+two "bare ubuntu container" jobs 3 min 48 s and 3 min 7 s) and `windows-latest` fail: 2,410 of
+2,411 passed, and the one failure was phase 1's
+`RepositoryWatcherTests.A_burst_of_changes_raises_changed_once` (a burst of 20 file writes raised
+the watcher's Changed twice, not once: on the loaded runner a pause between the writes outlasted
+the 1-second quiet period). Re-running that job passed, 2,411 of 2,411 (15 min 40 s), so all five
+jobs are green on attempt 2. Phase 4 did not change the watcher or that test; the test depends on
+the wall clock, and the proper fix (the watcher's quiet period on a clock the test holds) is listed
+for phase 5's first code commits in phase 4's handoff.
 
 Before phase 4, the last run on `master` was
 [38213858149](https://github.com/RahimPasha/VisualCommit/actions/runs/38213858149), for `d74c99e`
