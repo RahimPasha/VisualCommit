@@ -255,8 +255,9 @@ public class PanelViewTests
         using var host = Host.Show(new RightPanelView { DataContext = details }, 400, fontSize, theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light);
 
         // a3d's SHA, whose last "f" wrapped; forty 4s, the widest hex digit (321 wide at 12.5
-        // against 287 of room); forty 1s, which fit at the panel's size.
-        foreach (var (full, fits) in new[] { ("14e607bf248c8917ab93680c48cba392f60546ff", false), (new string('4', 40), false), (new string('1', 40), true) })
+        // against 287 of room); forty a's (282 wide), which fit at the panel's size but would not
+        // at Avalonia's default of 14, so that the size the fit starts from is the panel's.
+        foreach (var (full, fits) in new[] { ("14e607bf248c8917ab93680c48cba392f60546ff", false), (new string('4', 40), false), (new string('a', 40), true) })
         {
             await details.ShowAsync(full, cancellationToken: TestContext.Current.CancellationToken);
             host.Settle();
