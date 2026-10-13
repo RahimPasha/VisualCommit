@@ -54,9 +54,9 @@ and tested that commit with the same 2,411 tests, and all five jobs succeeded: w
 58 s) and the two bare ubuntu containers (2 min 23 s and 2 min 31 s). Four of CI's macOS and
 Linux pictures were opened (the report's "Other platforms").
 
-The commits after the gate's commit change only docs. The phase is "Awaiting acceptance" on
-`phase/4-rebase-conflicts`; nothing is merged into `master` yet. Only the real window at 1920×1080
-(D18) could not run, as the plan allows on this screen.
+The commits after the gate's commit change only docs. The owner accepted phase 4 on 2026-10-12,
+and `phase/4-rebase-conflicts` was merged into `master` (merge commit `ce5f337`). Only the real
+window at 1920×1080 (D18) could not run, as the plan allows on this screen.
 
 Before the gate, an independent review of the code (a workflow of five reviewers, each finding
 verified by a second agent) confirmed 31 findings, 5 major and 26 minor, none a blocker; they were
@@ -290,10 +290,10 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- Phase 4 is "Awaiting acceptance": say "Phase 4 accepted" to merge it into `master`.
+- Phase 4 was accepted on 2026-10-12 and merged into `master` (`ce5f337`).
 - When you have a Mac at hand: the eight-step checklist at the end of the
   [phase 4 test report](../test-reports/phase-4.md), and the checklists of phases 0 to 3, still
-  open.
+  open. The owner will do them at the end of the project (2026-10-12).
 - The cosmetic issues above (the details panel's SHA, the resolver's disabled arrows) can go into
   phase 5's first commits if you agree; none affects a result.
 - When the project is over: whether a CI run of 30 minutes or more is reasonable (D134, D152).
