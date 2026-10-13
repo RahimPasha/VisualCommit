@@ -14,7 +14,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 2. Diff and commit workflow | Done | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
 | 3. Branch, remote, stash and tag operations | Done | `phase/3-operations` | [phase-3](handoffs/phase-3.md) | [phase-3](test-reports/phase-3.md) |
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
-| 5. History, traceability and undo | Not started | `phase/5-history` | | |
+| 5. History, traceability and undo | In progress | `phase/5-history` | | [phase-5](test-reports/phase-5.md) (to be written) |
 | 6. Multi-repo and productivity | Not started | `phase/6-multi-repo` | | |
 | 7. Hosting | Not started | `phase/7-hosting` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
@@ -25,11 +25,18 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 4 was accepted by the owner on 2026-10-12 and merged into `master`
-(merge commit `ce5f337`); its gate ran on `6badab7`. Phase 3 was accepted on 2026-10-11 (merge
-commit `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge
-commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is
-phase 5.
+Phase 5, History, traceability and undo, is in progress on `phase/5-history`, started on
+2026-10-12 from `master` at `0883669` on the Windows machine. At its start the owner settled C12
+and the matter-of-taste points (D153 to D160): C12 is built in this phase; undo reaches many steps
+back within a session; undoing a change to a remote asks, then pushes back with a lease; the
+activity log is a panel under the graph; search marks its matches in the graph; file history and
+blame open in place of the graph; hidden and soloed branches are remembered across restarts; the
+cosmetic issues phase 4 left are fixed first.
+
+Phase 4 was accepted by the owner on 2026-10-12 and merged into `master` (merge commit
+`ce5f337`); its gate ran on `6badab7`. Phase 3 was accepted on 2026-10-11 (merge commit
+`8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
+`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
@@ -37,11 +44,83 @@ after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
-in the commit that completes it. Number the steps plainly; do not label them C1, C2 and so on,
-which are requirement numbers.
+Each item is ticked in the commit that completes it. The numbers are plain step numbers, not
+requirement numbers. The design (step 3) may split the Git-layer and App steps further; it then
+says how its work packages map onto them.
+
+Start:
+
+- [x] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers
+  recorded (D153 to D160) and carried into `plan.md` and `requirements.md`.
+- [ ] 2. Baseline: the default run on `master` (`0883669`) as inherited, its result and time.
+- [ ] 3. Design in `docs/phase-5-design.md`: every git fact derived with Git 2.36, the texts,
+  the layouts, the work packages; reviewed independently; decisions from D161 on.
+- [ ] 4. Phase 4's leftovers (D160): the watcher's quiet period on a clock its test holds
+  (`RepositoryWatcherTests.A_burst_of_changes_raises_changed_once`), the details panel's wrapping
+  SHA, the resolver's disabled arrow buttons, the status bar's Cancel tooltip while the merge tool
+  runs, the stale comments of `IGitRepository.ReadRebaseListAsync` and of the real-window
+  project's csproj.
+- [ ] 5. Harness: phase 5's scenario repos (a file renamed across its history, blame with lines
+  from several commits, a reflog with commits no ref reaches, branches to solo and hide, commits
+  to search and compare, changes that block a checkout), pinned by tests; the project
+  `VisualCommit.VisualTests.Phase5` in the solution, `scripts/time-scripted-check.sh` and
+  CLAUDE.md's Commands; the real-window project's link to `Phase5Expectations*.cs`; the driver
+  helpers the checks need.
+- [ ] 6. Phase 5's visual checks written into `docs/test-reports/phase-5.md`, each marked for the
+  real-window pass or not, reviewed independently, and committed before the UI they test.
+
+Git layer:
+
+- [ ] 7. File history following renames, a file's diff at each of its commits, and blame. Tests.
+- [ ] 8. The reflog of HEAD and of each branch, and restoring from it. Tests.
+- [ ] 9. Commit search by message, author, SHA and file, and inside changes. Tests.
+- [ ] 10. Compare two commits or branches: the files changed between them and a file's diff.
+  Tests.
+- [ ] 11. Undo and redo (D154, D155): each app action recorded with what it changed and how it
+  is reversed, from the backups and what was recorded; a step refused when the repository has
+  changed since; a remote put back with a lease after a question. Tests for each destructive
+  action of phases 2 to 4.
+- [ ] 12. Solo and hide: the history of the chosen refs only. Tests.
+- [ ] 13. C12 (D153): the refusal before a checkout that would overwrite uncommitted changes, and
+  the automatic stash before checking out a commit the current branch reaches. Tests.
+
+App:
+
+- [ ] 14. The activity log panel under the graph, from the status bar (D156): operations, their
+  git calls with output, exit code and time, warnings, the backups' clean-up lines.
+- [ ] 15. File history and blame in place of the graph (D158), from the file menus, with
+  click-through to commits.
+- [ ] 16. The reflog view with restore.
+- [ ] 17. Search over the graph (D157): the toolbar's Search and Ctrl+F, matches marked, the rest
+  dimmed, a count, next and previous; search inside changes.
+- [ ] 18. Compare: two selected commits, and a branch with another; the files in the right panel
+  and their diffs.
+- [ ] 19. The toolbar's Undo and Redo, naming the action they would undo or redo.
+- [ ] 20. Solo and hide in the branch menus and the left panel, kept in the session (D159).
+- [ ] 21. C12 on screen: the refusal's message and button, the automatic stash in the graph and
+  the left panel.
+- [ ] 22. Phases 0 to 4's checks updated for what phase 5 changes on purpose (new menu items, the
+  toolbar's Undo, Redo and Search, the status bar's toggle), recorded under "Changes to expected
+  results" in the phase 5 report.
+
+Visual checks:
+
+- [ ] 23. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase5`,
+  screenshots under `artifacts/visual/phase-5/scripted/`.
+- [ ] 24. Real-window pass for the checks marked for it (`Phase5RealWindowPass`).
+
+Closing:
+
+- [ ] 25. An independent review of the code before the gate; what it finds fixed, with tests.
+- [ ] 26. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed.
+- [ ] 27. CI run of the gate's commit read, every job.
+- [ ] 28. `architecture.md` describes what is built.
+- [ ] 29. `plan.md`: anything not delivered moved, risks updated.
+- [ ] 30. Handoff `docs/handoffs/phase-5.md`.
+- [ ] 31. Cold-read check by a fresh agent; gaps fixed.
+- [ ] 32. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [ ] 33. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -93,17 +172,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 5". Its first steps, and the open points to settle before
-its checks are written (C12 among them, which the owner decides first), are in the
-[phase 4 handoff](handoffs/phase-4.md) under "For the next phase".
-
-Once a phase is running, this always names the single next thing to do and is kept accurate in
-every commit.
+Step 2: read the result of the baseline default run on `master` (`0883669`), started at the
+beginning of the session. Then step 3, the design in `docs/phase-5-design.md`, with the code map
+the session's first workflow made.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean, and no worktree,
-  `wip/*` or `worktree-*` branch was left, when phase 4 was merged.
+- Phase 5 started on 2026-10-12 on the Windows machine. No worktree, `wip/*` or `worktree-*`
+  branch existed at its start; two git file-system monitor daemons were running.
 - Phases 1 to 4 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
   (git-ignored); the phase 3 and phase 4 handoffs' "Things that cost time" say what to watch
   for: a worktree starts from `master` and its agent must create its branch from the phase
@@ -137,9 +213,13 @@ every commit.
 
 ## Waiting on the owner
 
-- Optional, for phase 5's first commits if you agree: the cosmetic issues the gate's inspection
-  noticed (a details panel's SHA that wraps one character onto a second line, the resolver's
-  arrow buttons that look the same when disabled; the handoff's Known issues).
+- Answered at the start of phase 5 on 2026-10-12 (D153 to D160): C12 is built in phase 5, its
+  refusal keeps the "Stash changes and check out" button, the automatic stash is taken always
+  when there are changes and only for a commit the current branch reaches, and it is kept until
+  popped or dropped; undo reaches many steps back within a session; undoing a change to a remote
+  asks, then pushes back with a lease; the activity log is a panel under the graph; search marks
+  its matches in the graph; file history and blame open in place of the graph; hidden and soloed
+  branches are remembered across restarts; the cosmetic issues phase 4 left are fixed first.
 - Answered for phase 4 on 2026-10-12, before its design: git's
   own list of commits for several picks (D136, replacing a sentence of D88); automatic cleanup of
   the backups after 30 days or when more than a set number exist (D137); then, asked at the start
@@ -154,9 +234,6 @@ every commit.
 - Settled on 2026-10-12: the working-changes row's dashed line crossing another branch's node
   (06f) is left for now; case-only branch renames on Windows and macOS stay refused (D131);
   auto-fetch gets no ssh timeout, only Cancel by hand (D125).
-- **For phase 5 (C12, D138):** protect uncommitted changes as GitKraken does, with automatic
-  stashes drawn in the graph. The owner says which phase when phase 5 is planned; the proposal is
-  phase 5, and "Start phase 5" asks first.
 - When you have a Mac at hand: the eight-step checklist at the end of the
   [phase 4 test report](test-reports/phase-4.md), the eleven-step one at the end of the
   [phase 3 test report](test-reports/phase-3.md), the seven-step one at the end of the

@@ -266,17 +266,21 @@ default run's 2,411 tests in 21 min 52 s, and the real-window pass of phases 0 t
 14 min 4 s, every picture inspected; CI run 38320711773 on that commit succeeded in all five jobs. What was built and proven is in [handoffs/phase-4.md](handoffs/phase-4.md), the gate in
 [test-reports/phase-4.md](test-reports/phase-4.md).
 
-### Phase 5 — History, traceability and undo (M)
+### Phase 5 — History, traceability and undo (L)
 
-Covers T1–T5, O2, O6, O7, O8.
+Covers T1–T5, O2, O6, O7, O8, C12.
+
+The owner's answers of 2026-10-12, given when the phase started, are D153 to D160.
 
 Delivers:
-- File history (following renames) and blame, with click-through to commits.
-- Reflog viewer with restore; activity log panel.
-- Commit search by message, author, SHA and file; search inside changes.
+- File history (following renames) and blame, with click-through to commits, in place of the graph (D158).
+- Reflog viewer with restore; activity log panel under the graph, opened from the status bar (D156).
+- Commit search by message, author, SHA and file; search inside changes. Matches are marked in the graph (D157).
 - Compare any two commits or branches.
-- Undo and redo of the last git action.
-- Solo and hide branches in the graph.
+- Undo and redo of the app's git actions, many steps back within the session (D154); undoing a change to a remote asks, then pushes back with a lease (D155).
+- Solo and hide branches in the graph, remembered per repository across restarts (D159).
+- From the backlog (D138, D153): C12, protect uncommitted changes. A checkout that would overwrite them does not start and says why ("1 conflict prevents checkout. Commit, stash, or discard your changes first.") with a "Stash changes and check out" button; checking out a commit the current branch reaches stashes them automatically ("Auto stash before checking out …"), and that stash is kept, drawn in the graph as a hollow circle joined to its commit, until the user pops or drops it.
+- From phase 4 (D160): the details panel's SHA that wraps one character, the resolver's arrow buttons that look the same when disabled, the status bar's Cancel tooltip while the merge tool runs, two stale comments, and the watcher's quiet period on a clock its test holds (a flaky test on CI).
 - From phases 3 and 4: undo reads the backup refs that phases 2 to 4 write before every destructive operation, `refs/visualcommit/backup/<kind>-<UTC time>[-<n>][/<name>]`, one timestamp per operation (D67, D83, D127). The kinds are `discard` (also the snapshots the conflict resolver saves before it overwrites or deletes a file it cannot otherwise keep, D148), `reset` (with `reset-<time>-changes` after a hard reset, and after a mixed one when the index differed from HEAD), `abort` (with its own `-changes`), `detached`, `branch`, `stash`, `tag`, `force-push`, `remote-branch`, `remote`, `remote-tag`, and phase 4's `rebase` (`rebase-<time>/<b>`, the branch's old tip before every rebase, D142) and `skip` (with its own `-changes`, D144); `architecture.md` says what each holds. They keep their commits from git's garbage collection, and phase 4 cleans them up (D139): a backup goes after 30 days, then the oldest while more than 50 exist, never while an operation is in progress in any worktree; undo offers what is left. The clean-up says nothing on screen: the activity log is to show the app log's `Removed backup <kind>-<time>[-<n>] (older than 30 days)` and `(more than 50 backups)` lines.
 - From phase 3: the activity log reads `OperationLog` (`IOperationLog`: the last 500 `OperationRecord`s of the session, in memory, with title, start, duration, outcome and the status bar's message) and groups the git call records of `IGitCallLog` under them by `GitCallRecord.OperationId`. From phase 4: the background operation "Clean up backups" is recorded there too (with an empty message: what it removed is only in the app log), and a success can be a warning (`OperationReport.Warning`, `OperationResult.IsWarning`), which `OperationRecord` does not carry yet.
 - From phase 3 (D77, D92): compare on a multi-selection (`RepositoryMenus.ForCommits`), file history and blame in the file menus (`ForUnstagedFile`, `ForStagedFile`, `ForCommitFile`, `ForDiff`), and solo and hide in the branch menus.
@@ -287,8 +291,9 @@ Visual checks:
 - Reflog restore; activity log entries; search results; compare view.
 - Undo and redo for each destructive action from phases 2–4.
 - Solo and hide change the graph as expected.
+- C12: a refused checkout's message and its button; the automatic stash in the graph after an older commit of the branch is checked out.
 
-Done when: any line of any file can be traced to its commit in two clicks, each destructive action can be undone, and the visual gate passes.
+Done when: any line of any file can be traced to its commit in two clicks, each destructive action can be undone, no checkout loses uncommitted changes, and the visual gate passes.
 
 ### Phase 6 — Multi-repo and productivity (M)
 
@@ -352,11 +357,6 @@ Visual checks:
 Done when: a new user on each platform can install, open a repo and receive an update without help.
 
 ## Backlog (not scheduled)
-
-C12, protect uncommitted changes (the owner's wish, D138): refuse an operation that could lose them, and
-stash them automatically when another commit of the same branch is checked out, drawing the stash
-as a hollow circle joined to its commit. Not phase 4. Proposal: phase 5, which already reworks
-checkout's neighbours (undo, the activity log); the owner decides when phase 5 is planned.
 
 O10 submodules, O11 worktrees, O12 Git LFS, O13 built-in terminal, O14 built-in file editor,
 O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.

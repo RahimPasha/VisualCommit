@@ -37,7 +37,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | C9 | Stash and tags | Stash, apply, pop, drop; create, delete and push tags |
 | C10 | Conflict resolution | Conflicted-file list; built-in three-pane resolver (pick ours, theirs or both per hunk, edit the result); take a whole file from one side; continue or abort |
 | C11 | Remote sign-in | HTTPS through Git Credential Manager; SSH keys; prompts shown as in-app dialogs |
-| C12 | Protect uncommitted changes | An operation that could lose uncommitted changes does not start and says why; checking out another commit on the same branch stashes them automatically, and the stash shows in the graph as a hollow circle joined to the commit it was taken on (D138). Not scheduled yet |
+| C12 | Protect uncommitted changes | An operation that could lose uncommitted changes does not start and says why; checking out another commit on the same branch stashes them automatically, and the stash shows in the graph as a hollow circle joined to the commit it was taken on (D138). Phase 5, as D153 settles it |
 
 ## Main window layout
 
@@ -83,7 +83,7 @@ Every object has a context menu. Every common action takes two clicks at most.
 | # | Feature | Status |
 |---|---|---|
 | O1 | Interactive rebase (drag to reorder, squash, fixup, reword, drop) | Included |
-| O2 | Undo / redo of the last git action | Included |
+| O2 | Undo / redo of git actions, many steps back within a session (D154) | Included |
 | O3 | Multi-repo dashboard: status of all repos at a glance, bulk fetch/pull | Included |
 | O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests | Included |
 | O5 | Command palette and keyboard shortcuts | Included |
