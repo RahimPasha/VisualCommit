@@ -251,6 +251,24 @@ public class FileHistoryTests(FileHistoryTests.History history) : IClassFixture<
     }
 
     [Fact]
+    public async Task A_staged_rename_has_no_history_under_its_new_name_and_an_unborn_head_throws()
+    {
+        // The menus open a staged rename's history under its old path (4.4).
+        using var repo = await TempRepo.CreateAsync("history-staged");
+        var commit = await repo.CommitFileAsync("old.txt", "one\n", "Add old");
+        await repo.GitAsync("mv", "old.txt", "new.txt");
+        var repository = await OpenAsync(repo);
+
+        Assert.Empty(await ReadAsync(repository, commit, "new.txt"));
+        Assert.Equal([(commit, FileChangeKind.Added, "old.txt", (string?)null)], Shape(await ReadAsync(repository, commit, "old.txt")));
+
+        using var unborn = await TempRepo.CreateAsync("history-unborn");
+        var unbornRepository = await OpenAsync(unborn);
+        var ex = await Assert.ThrowsAsync<GitException>(() => ReadAsync(unbornRepository, "HEAD", "f.txt"));
+        Assert.Equal(128, ex.ExitCode);
+    }
+
+    [Fact]
     public async Task A_start_that_looks_like_an_option_is_refused()
     {
         await Assert.ThrowsAsync<ArgumentException>(() => ReadAsync(history.Repository, "--all", "other.txt"));
