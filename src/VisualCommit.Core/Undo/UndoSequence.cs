@@ -448,15 +448,16 @@ public static class UndoSequence
     private static IReadOnlyList<RecordedFile> FilesOf(UndoState state, IReadOnlyList<string> paths) =>
         [.. state.Files.Where(file => paths.Contains(file.Path, StringComparer.Ordinal))];
 
-    private static IReadOnlyList<ConfigEntry> BranchKeys(UndoState state, string branch) =>
+    /// <summary>A branch's keys: <c>branch.&lt;b&gt;.*</c>, in the order read.</summary>
+    internal static IReadOnlyList<ConfigEntry> BranchKeys(UndoState state, string branch) =>
         [.. state.Config.Where(ConfigScope.Branch(branch).Covers)];
 
     /// <summary>A remote's keys, and <c>remote.pushdefault</c> when it names the remote.</summary>
-    private static IReadOnlyList<ConfigEntry> RemoteKeys(UndoState state, string remote) =>
+    internal static IReadOnlyList<ConfigEntry> RemoteKeys(UndoState state, string remote) =>
         [.. state.Config.Where(key => ConfigScope.Remote(remote).Covers(key)
             || (string.Equals(key.Key, "remote.pushdefault", StringComparison.OrdinalIgnoreCase) && string.Equals(key.Value, remote, StringComparison.Ordinal)))];
 
-    private static IEnumerable<string> RemoteNames(UndoState state) =>
+    internal static IEnumerable<string> RemoteNames(UndoState state) =>
         state.Config.Where(key => string.Equals(key.Section, "remote", StringComparison.OrdinalIgnoreCase)).Select(key => key.Subsection).OfType<string>().Distinct(StringComparer.Ordinal);
 
     /// <summary>The subsections of <paramref name="section"/> whose keys differ between the two states, in order.</summary>
