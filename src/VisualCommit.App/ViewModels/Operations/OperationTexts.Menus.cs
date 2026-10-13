@@ -10,8 +10,12 @@ namespace VisualCommit.App.ViewModels.Operations;
 /// </summary>
 public static partial class OperationTexts
 {
-    /// <summary>The menus' texts, apart from the operations' own so that their names never meet.</summary>
-    public static class MenuTexts
+    /// <summary>
+    /// The menus' texts, apart from the operations' own so that their names never meet. Phase 5's
+    /// are in two more parts: <c>OperationTexts.Menus.Pages.cs</c> (WP6) and
+    /// <c>OperationTexts.Menus.Filters.cs</c> (WP7).
+    /// </summary>
+    public static partial class MenuTexts
     {
         // Headers.
 

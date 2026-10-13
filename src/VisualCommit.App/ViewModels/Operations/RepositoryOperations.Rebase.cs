@@ -14,6 +14,7 @@ using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 using VisualCommit.Git;
 
 namespace VisualCommit.App.ViewModels.Operations;
@@ -67,7 +68,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.RebaseAsync(onto.Sha, NetworkOptions.From(context));
                     return await RebaseReportAsync(context, result, branch, onto.Name, selection, notice);
                 },
-                new RunOptions { DescribeFailure = RebaseFailureDisplay });
+                new RunOptions { DescribeFailure = RebaseFailureDisplay, Undo = UndoScope.Rebase(branch, onto.Name) });
             await FinishAsync(notice, selection);
         });
     }
@@ -155,7 +156,7 @@ public sealed partial class RepositoryOperations
 
                     return await RebaseReportAsync(context, result, branch, onto.Name, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = _ => display });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = _ => display, Undo = UndoScope.CheckoutAndRebase(branch, onto.Name) });
             await FinishAsync(notice, selection);
         });
     }
@@ -313,7 +314,12 @@ public sealed partial class RepositoryOperations
                         selection.NewTip = tip;
                         return Rebased(OperationTexts.InteractiveRebased(branch, await Git.CountCommitsAsync(plan.Onto, tip)), result.AutostashConflicted);
                     },
-                    new RunOptions { HasSeveralSteps = request.CheckoutFirst, DescribeFailure = _ => display });
+                    new RunOptions
+                    {
+                        HasSeveralSteps = request.CheckoutFirst,
+                        DescribeFailure = _ => display,
+                        Undo = UndoScope.InteractiveRebase(branch, Refs?.Head.BranchName),
+                    });
                 await FinishAsync(notice, selection);
                 return started;
             },
@@ -392,7 +398,7 @@ public sealed partial class RepositoryOperations
                     selection.NewTip = squashed;
                     return Rebased(OperationTexts.Squashed(count, squashed), result.AutostashConflicted);
                 },
-                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text, squash: true) });
+                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text, squash: true), Undo = UndoScope.Squash(count, current) });
             await FinishAsync(notice, selection);
         });
     }
@@ -444,7 +450,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.ContinueAsync(now, message, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: false, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text), Undo = UndoScope.Continuation });
             await FinishAsync(notice, selection);
         });
     }
@@ -495,7 +501,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.SkipAsync(now, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: true, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text), Undo = UndoScope.Continuation });
             await FinishAsync(notice, selection);
         });
     }

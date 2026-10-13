@@ -24,6 +24,9 @@ public sealed record UndoEntry(
     /// <summary>Finished, or stopped with the banner showing (7.2).</summary>
     public UndoEntryState State { get; init; } = UndoEntryState.Done;
 
+    /// <summary>What the action's operation declared (7.7 step 1): a pending entry is completed by reading it again, and a step reads the entry's refs by it (7.5 step 2).</summary>
+    public UndoScope Scope { get; init; } = UndoScope.None;
+
     /// <summary>
     /// The backup refs the entry needs, which the clean-up keeps while the entry is in a history
     /// (7.8, D171): those the action saved, and the snapshot it saved or restored.

@@ -241,6 +241,12 @@ public sealed record FileMenuTarget(ChangedFile File, bool IsUntracked, bool Exi
 
     /// <summary>An untracked folder git lists with a slash: a repository of its own, never discarded (D75).</summary>
     public bool IsNestedRepository => Path.EndsWith('/');
+
+    /// <summary>
+    /// The conflict resolver's header menu (docs/phase-5-design.md 4.4): it leaves out File history
+    /// and Blame, since opening a page would close the resolver.
+    /// </summary>
+    public bool InConflictResolver { get; init; }
 }
 
 /// <summary>A right-click in the diff view (4b): which file and side, and what is selected or under the pointer.</summary>

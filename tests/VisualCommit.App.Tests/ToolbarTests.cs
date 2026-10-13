@@ -403,6 +403,10 @@ public class ToolbarTests
 
         public Task PopAsync() => Record("pop");
 
+        public Task UndoAsync() => Record("undo");
+
+        public Task RedoAsync() => Record("redo");
+
         private Task Record(string call)
         {
             Calls.Add(call);

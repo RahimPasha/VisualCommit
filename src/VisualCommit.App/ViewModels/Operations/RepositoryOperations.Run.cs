@@ -3,6 +3,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -48,6 +49,13 @@ public sealed record RunOptions
     /// the operation has ended, so an operation can also hand over a display it chose while it ran.
     /// </summary>
     public Func<GitFailure, FailureDisplay?>? DescribeFailure { get; init; }
+
+    /// <summary>
+    /// What the undo history records of the operation (docs/phase-5-design.md 7.2, 7.7): its kind,
+    /// its entry's text and what it may change, read inside the operation before and after its
+    /// work; <see cref="UndoScope.None"/> (the default) for an operation that is not recorded.
+    /// </summary>
+    public UndoScope Undo { get; init; } = UndoScope.None;
 }
 
 /// <summary>
@@ -66,7 +74,8 @@ public sealed record RunOptions
 ///     var confirmation = OperationTexts.ConfirmDeleteBranch(branch, …);
 ///     await ConfirmAndRunAsync(confirmation, text, OperationKind.Local, RefreshScope.Refs,
 ///         _ =&gt; Task.FromResult&lt;BackupRequest?&gt;(new BackupRequest("branch", [new BackupEntry(branch, branchRef)])),
-///         async (context, _) =&gt; { await Git.DeleteBranchAsync(branch); return OperationReport.Done(OperationTexts.DeletedBranch(branch)); });
+///         async (context, _) =&gt; { await Git.DeleteBranchAsync(branch); return OperationReport.Done(OperationTexts.DeletedBranch(branch)); },
+///         new RunOptions { Undo = UndoScope.DeleteBranch(branch) });
 /// });
 /// </code>
 /// </para>
@@ -290,15 +299,27 @@ public sealed partial class RepositoryOperations
             // section 9, D139): a rebase git refused still leaves its backup.
             var saved = new StrongBox<bool>();
             _backupSaved.Value = saved;
-            try
+
+            // The undo history (docs/phase-5-design.md 7.7): what the operation's scope names is
+            // read before its work and after it, inside the operation, also when the work failed
+            // half-way; what the reads cannot see is captured while it runs. The entry is added
+            // before the clean-up, which then keeps the backups it needs.
+            var recording = await BeginRecordingAsync(options.Undo, context, text.Title);
+            OperationReport? report = null;
+            using (UndoCapture.Begin(out var capture))
             {
-                return await run(context);
-            }
-            finally
-            {
-                if (saved.Value)
+                try
                 {
-                    await CleanUpBackupsAsync();
+                    report = await run(context);
+                    return report;
+                }
+                finally
+                {
+                    await EndRecordingAsync(recording, capture.Captured, report, text.Title);
+                    if (saved.Value)
+                    {
+                        await CleanUpBackupsAsync();
+                    }
                 }
             }
         })
@@ -376,7 +397,60 @@ public sealed partial class RepositoryOperations
             flag.Value = true;
         }
 
+        // The undo entry needs it: the clean-up keeps it while the entry exists (7.8, D171).
+        UndoCapture.Backups(saved.Refs);
         return saved;
+    }
+
+    // The undo history's recording (docs/phase-5-design.md 7.7, D167), around the work of every
+    // operation of RunAsync and of the stage panel's writes (RepositoryViewModel.WriteAsync).
+    // Work package WP3 implements the two hooks in RepositoryOperations.Undo.cs.
+
+    /// <summary>
+    /// Hook (7.7 steps 1 and 2): inside the operation, before its work, reads what
+    /// <paramref name="scope"/> names (HEAD always) and returns what
+    /// <see cref="EndUndoRecordingAsync"/> needs, or null when nothing is recorded
+    /// (<see cref="UndoScope.None"/>, and no pending entry to complete or remove).
+    /// </summary>
+    internal partial Task<UndoRecording?> BeginUndoRecordingAsync(UndoScope scope, OperationContext context);
+
+    /// <summary>
+    /// Hook (7.7 steps 4 and 5): after the work, still inside the operation, reads the same again
+    /// and, when anything changed, adds the entry with <paramref name="captured"/> (Done, or Pending
+    /// while the action stopped) and drops what lay after the cursor; or completes or removes the
+    /// pending entry. <paramref name="report"/> is null when the work threw: what changed is still
+    /// recorded (7.2). Runs on the operation's context, the UI's.
+    /// </summary>
+    internal partial Task EndUndoRecordingAsync(UndoRecording? recording, UndoCaptured captured, OperationReport? report);
+
+    /// <summary>
+    /// <see cref="BeginUndoRecordingAsync"/>, which never fails the operation: a failure is logged
+    /// and nothing is recorded. The stage panel's writes call it too.
+    /// </summary>
+    internal async Task<UndoRecording?> BeginRecordingAsync(UndoScope scope, OperationContext context, string title)
+    {
+        try
+        {
+            return await BeginUndoRecordingAsync(scope, context);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"{Repository.Name}: {title}: the undo history could not read the state before it; it is not recorded.", ex);
+            return null;
+        }
+    }
+
+    /// <summary><see cref="EndUndoRecordingAsync"/>, which never fails the operation: a failure is logged.</summary>
+    internal async Task EndRecordingAsync(UndoRecording? recording, UndoCaptured captured, OperationReport? report, string title)
+    {
+        try
+        {
+            await EndUndoRecordingAsync(recording, captured, report);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"{Repository.Name}: {title}: the undo history could not record it.", ex);
+        }
     }
 
     /// <summary>

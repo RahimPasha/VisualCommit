@@ -37,6 +37,12 @@ public interface IToolbarActions
 
     /// <summary>Pop: pops the newest stash, <c>stash@{0}</c> (2.25).</summary>
     Task PopAsync();
+
+    /// <summary>Undo: the entry before the undo history's cursor, applied backwards as one operation (docs/phase-5-design.md 7.5).</summary>
+    Task UndoAsync();
+
+    /// <summary>Redo: the entry after the cursor, applied forwards as one operation.</summary>
+    Task RedoAsync();
 }
 
 /// <summary>
@@ -46,7 +52,9 @@ public interface IToolbarActions
 /// (<c>ToolTip.ShowOnDisabled</c>): the first reason that holds, in 4d's order. An enabled button
 /// has no tooltip. The states follow the repository's refs (<see cref="RepositoryViewModel.Refs"/>)
 /// and its working-tree status; until the refs have been read every button is disabled, without a
-/// reason. Undo, Redo and Search are placeholders until phase 5 and are not here.
+/// reason. Phase 5's Undo, Redo and Search (docs/phase-5-design.md 1.1) are here as commands that
+/// stay disabled, without a tooltip, as the toolbar draws them today: the lead gives them their
+/// states from the undo history and the graph area, and WP5 binds the buttons to them.
 /// </summary>
 public sealed partial class ToolbarViewModel : ObservableObject
 {
@@ -143,6 +151,33 @@ public sealed partial class ToolbarViewModel : ObservableObject
     public partial bool CanPop { get; private set; }
 
     /// <summary>
+    /// Undo's tooltip (1.1): <c>Undo {text}</c> while it is enabled, otherwise its first reason
+    /// (7.4); null while its state is not given yet.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? UndoToolTip { get; private set; }
+
+    /// <summary>Redo's tooltip (1.1): <c>Redo {text}</c>, or its first reason; null while its state is not given yet.</summary>
+    [ObservableProperty]
+    public partial string? RedoToolTip { get; private set; }
+
+    /// <summary>Search's tooltip (1.1): <c>Search commits (Ctrl+F)</c>, or why it is disabled (11.2); null while its state is not given yet.</summary>
+    [ObservableProperty]
+    public partial string? SearchToolTip { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
+    public partial bool CanUndo { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RedoCommand))]
+    public partial bool CanRedo { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
+    public partial bool CanSearch { get; private set; }
+
+    /// <summary>
     /// The name of what is in progress as the reason "Finish or abort the &lt;kind&gt; first"
     /// names it (design 2.8, 5): "merge", "cherry-pick", "revert", "rebase", "git am".
     /// </summary>
@@ -193,6 +228,16 @@ public sealed partial class ToolbarViewModel : ObservableObject
 
     [RelayCommand(CanExecute = nameof(CanPop), AllowConcurrentExecutions = true)]
     private Task Pop() => RunAsync("Pop", actions => actions.PopAsync());
+
+    [RelayCommand(CanExecute = nameof(CanUndo), AllowConcurrentExecutions = true)]
+    private Task Undo() => RunAsync("Undo", actions => actions.UndoAsync());
+
+    [RelayCommand(CanExecute = nameof(CanRedo), AllowConcurrentExecutions = true)]
+    private Task Redo() => RunAsync("Redo", actions => actions.RedoAsync());
+
+    /// <summary>Search opens the search bar (3.1): not an operation.</summary>
+    [RelayCommand(CanExecute = nameof(CanSearch))]
+    private void Search() => Repository?.OpenSearch();
 
     private async Task RunAsync(string button, Func<IToolbarActions, Task> action)
     {

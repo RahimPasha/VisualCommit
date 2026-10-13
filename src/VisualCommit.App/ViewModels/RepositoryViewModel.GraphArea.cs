@@ -44,11 +44,12 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsGraph))]
     [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
+    [NotifyPropertyChangedFor(nameof(ShowsPage))]
     [NotifyPropertyChangedFor(nameof(ShowsDiff))]
     public partial bool IsResolverOpen { get; private set; }
 
-    /// <summary>The graph area shows the graph: no diff, list or resolver is open in its place.</summary>
-    public bool ShowsGraph => !IsDiffOpen && !IsInteractiveRebaseOpen && !IsResolverOpen;
+    /// <summary>The graph area shows the graph: no diff, list, resolver or page (docs/phase-5-design.md 11.1) is open in its place.</summary>
+    public bool ShowsGraph => !IsDiffOpen && !IsInteractiveRebaseOpen && !IsResolverOpen && Page is null;
 
     /// <summary>The graph area shows the list: it is open and no diff is open over it (2.2).</summary>
     public bool ShowsInteractiveRebase => IsInteractiveRebaseOpen && !IsDiffOpen && !IsResolverOpen;
@@ -137,13 +138,14 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     /// <summary>
     /// Closes what the graph area shows instead of the graph, without asking (after
-    /// <see cref="TryLeaveGraphAreaAsync"/>): the diff, the list and the resolver. The focus stays
-    /// where the caller puts it.
+    /// <see cref="TryLeaveGraphAreaAsync"/>): the diff, the list, a page (which holds no work) and
+    /// the resolver. The focus stays where the caller puts it.
     /// </summary>
     private void LeaveGraphArea()
     {
         CloseDiff(returnFocus: false);
         InteractiveRebase = null;
+        ClosePage();
         if (IsResolverOpen && _resolver is { } resolver)
         {
             _closingResolverQuietly = true;
@@ -171,6 +173,7 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             var resolver = Resolver;
             CloseDiff(returnFocus: false);
             InteractiveRebase = null;
+            ClosePage();
             resolver.Update(Status, CurrentName(), OntoNameOf(Status.InProgress));
             await resolver.OpenAsync(path);
             IsResolverOpen = resolver.IsOpen;
@@ -207,7 +210,7 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             MergeTool = _mergeTool,
             FileMenu = file => RepositoryMenus.ForUnstagedFile(
                 MenuContext,
-                new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: null),
+                new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: null) { InConflictResolver = true },
                 MenuActions),
         };
         resolver.Closed += OnResolverClosed;

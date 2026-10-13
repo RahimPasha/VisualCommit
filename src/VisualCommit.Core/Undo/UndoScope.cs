@@ -20,6 +20,15 @@ public sealed record UndoScope
     /// <summary>Not recorded.</summary>
     public static UndoScope None { get; } = new();
 
+    /// <summary>
+    /// Continue and Skip (7.2): no entry of their own; when the stopped action ends, its pending
+    /// entry is completed with the state after, as the stage panel's Commit that ends it does.
+    /// </summary>
+    public static UndoScope Continuation { get; } = new() { CompletesPending = true };
+
+    /// <summary>Abort (7.2, D165): no entry; the stopped action's pending entry goes, and the backups list is the way back.</summary>
+    public static UndoScope Abort { get; } = new() { RemovesPending = true };
+
     /// <summary>The recorded action's kind, or null for <see cref="None"/>.</summary>
     public UndoKind? Kind { get; init; }
 
@@ -52,6 +61,12 @@ public sealed record UndoScope
 
     /// <summary>The working tree's <c>.gitignore</c> is read.</summary>
     public bool Gitignore { get; init; }
+
+    /// <summary>The operation ends a stopped action: its pending entry is completed when it ends (<see cref="Continuation"/>).</summary>
+    public bool CompletesPending { get; init; }
+
+    /// <summary>The operation abandons a stopped action: its pending entry goes (<see cref="Abort"/>).</summary>
+    public bool RemovesPending { get; init; }
 
     /// <summary>The action is recorded.</summary>
     public bool IsRecorded => Kind is not null;
@@ -150,11 +165,14 @@ public sealed record UndoScope
         Refs = BranchRefs(branch),
     };
 
-    /// <summary>A merge (or fast-forward) of <paramref name="source"/> into the current branch <paramref name="current"/>.</summary>
-    public static UndoScope Merge(string source, string current) => new()
+    /// <summary>
+    /// A merge of <paramref name="source"/> into the current branch <paramref name="current"/>, or
+    /// with <paramref name="fastForwardOnly"/> the drop's fast-forward of it (<c>fast-forward of {b}</c>).
+    /// </summary>
+    public static UndoScope Merge(string source, string current, bool fastForwardOnly = false) => new()
     {
         Kind = UndoKind.Merge,
-        Text = UndoTexts.Merge(source, current),
+        Text = fastForwardOnly ? UndoTexts.FastForward(current) : UndoTexts.Merge(source, current),
         Refs = BranchRefs(current),
     };
 

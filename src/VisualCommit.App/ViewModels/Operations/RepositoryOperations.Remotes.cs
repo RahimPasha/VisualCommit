@@ -15,6 +15,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -22,9 +23,12 @@ public sealed partial class RepositoryOperations
 {
     private const string LocalRemote = ".";
 
-    /// <summary>The network operations' options: git's prompts reach the app's dialogs (3.3).</summary>
-    private static RunOptions NetworkRun(string? dedupeKey = null, Func<GitFailure, FailureDisplay?>? describeFailure = null) =>
-        new() { DedupeKey = dedupeKey, Prompts = PromptMode.Ask, DescribeFailure = describeFailure };
+    /// <summary>
+    /// The network operations' options: git's prompts reach the app's dialogs (3.3), and what the
+    /// undo history records of each (<paramref name="undo"/>, docs/phase-5-design.md 7.2).
+    /// </summary>
+    private static RunOptions NetworkRun(UndoScope undo, string? dedupeKey = null, Func<GitFailure, FailureDisplay?>? describeFailure = null) =>
+        new() { DedupeKey = dedupeKey, Prompts = PromptMode.Ask, DescribeFailure = describeFailure, Undo = undo };
 
     // 2.16: fetch.
 
@@ -40,7 +44,7 @@ public sealed partial class RepositoryOperations
                 await Git.FetchAsync(null, NetworkOptions.From(context), noAutoMaintenance: false, context.CancellationToken);
                 return OperationReport.Done(OperationTexts.FetchedAll);
             },
-            NetworkRun("fetch:*", FetchAllFailureDisplay)));
+            NetworkRun(UndoScope.None, "fetch:*", FetchAllFailureDisplay)));
     }
 
     public Task FetchAsync(string remote)
@@ -56,7 +60,7 @@ public sealed partial class RepositoryOperations
                 await Git.FetchAsync(remote, NetworkOptions.From(context), noAutoMaintenance: false, context.CancellationToken);
                 return OperationReport.Done(OperationTexts.Fetched(remote));
             },
-            NetworkRun("fetch:" + remote)));
+            NetworkRun(UndoScope.None, "fetch:" + remote)));
     }
 
     /// <summary>
@@ -125,7 +129,7 @@ public sealed partial class RepositoryOperations
                 branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
                 RefreshScope.Refs,
                 context => PullStepsAsync(context, branch, upstream, text, integration, notice),
-                NetworkRun(dedupeKey));
+                NetworkRun(UndoScope.Pull(branch.Name), dedupeKey));
             await FinishAsync(notice, new SelectionAfter());
         });
 
@@ -336,10 +340,11 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async context =>
             {
-                await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken);
+                UndoCapture.Push(remote, await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken));
                 return OperationReport.Done(OperationTexts.Pushed(branch.Name, target, setUpstream));
             },
             NetworkRun(
+                UndoScope.Push(branch.Name, remote, force: false),
                 dedupe ? $"push:{branch.FullName}->{remote}/{remoteRef}" : null,
                 failure => PushFailureDisplay(failure, branch.Name, remote, current)));
     }
@@ -397,10 +402,10 @@ public sealed partial class RepositoryOperations
             },
             async (context, _) =>
             {
-                await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken);
+                UndoCapture.Push(remote, await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken));
                 return OperationReport.Done(OperationTexts.ForcePushed(branch.Name, upstream));
             },
-            NetworkRun(describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
+            NetworkRun(UndoScope.Push(branch.Name, remote, force: true), describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
                 ? new FailureDisplay(OperationTexts.ForcePushStoppedTitle, OperationTexts.ForcePushStopped(upstream, branch.Name))
                 : null)));
     }
@@ -434,11 +439,16 @@ public sealed partial class RepositoryOperations
             }
 
             var target = remoteBranches.First(gitRef => gitRef.Name == picked).FullName;
-            await RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
-            {
-                await Git.SetUpstreamAsync(name, target);
-                return OperationReport.Done(OperationTexts.UpstreamSet(name, picked));
-            });
+            await RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Refs,
+                async _ =>
+                {
+                    await Git.SetUpstreamAsync(name, target);
+                    return OperationReport.Done(OperationTexts.UpstreamSet(name, picked));
+                },
+                new RunOptions { Undo = UndoScope.Upstream(name) });
         });
     }
 
@@ -453,11 +463,16 @@ public sealed partial class RepositoryOperations
 
         var upstream = UpstreamText(branch) ?? ShortName(upstreamRef);
         var text = OperationTexts.UnsetUpstream(branch.Name, upstream);
-        return GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
-        {
-            await Git.UnsetUpstreamAsync(branch.Name);
-            return OperationReport.Done(OperationTexts.UpstreamUnset(branch.Name, upstream));
-        }));
+        return GuardAsync(text, () => RunAsync(
+            text,
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async _ =>
+            {
+                await Git.UnsetUpstreamAsync(branch.Name);
+                return OperationReport.Done(OperationTexts.UpstreamUnset(branch.Name, upstream));
+            },
+            new RunOptions { Undo = UndoScope.Upstream(branch.Name) }));
     }
 
     // 2.22: delete a branch on a remote.
@@ -489,9 +504,10 @@ public sealed partial class RepositoryOperations
             async (context, _) =>
             {
                 await Git.DeleteRemoteBranchAsync(remote, name, expected!, NetworkOptions.From(context), context.CancellationToken);
+                UndoCapture.Push(remote, new PushOutcome([new PushedRef(HeadsPrefix + name, expected, null)]));
                 return OperationReport.Done(OperationTexts.DeletedRemoteBranch(name, remote));
             },
-            NetworkRun(describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
+            NetworkRun(UndoScope.DeleteRemoteBranch(name, remote), describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
                 ? new FailureDisplay(OperationTexts.DeletionStoppedTitle, OperationTexts.RemoteBranchChanged(name, remote))
                 : null)));
     }
@@ -577,7 +593,8 @@ public sealed partial class RepositoryOperations
                 {
                     await Git.RemoveRemoteAsync(remote);
                     return OperationReport.Done(OperationTexts.RemovedRemote(remote));
-                });
+                },
+                new RunOptions { Undo = UndoScope.RemoveRemote(remote) });
         });
     }
 
@@ -592,7 +609,7 @@ public sealed partial class RepositoryOperations
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(url);
-        var error = await RunRemoteFormAsync(OperationTexts.AddRemote(name), () => Git.AddRemoteAsync(name, url), OperationTexts.AddedRemote(name));
+        var error = await RunRemoteFormAsync(OperationTexts.AddRemote(name), () => Git.AddRemoteAsync(name, url), OperationTexts.AddedRemote(name), UndoScope.AddRemote(name));
         if (error is null && fetchNow)
         {
             // An operation of its own, waited for by nobody: its result shows in the status bar,
@@ -608,7 +625,7 @@ public sealed partial class RepositoryOperations
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(newName);
-        return RunRemoteFormAsync(OperationTexts.RenameRemote(name), () => Git.RenameRemoteAsync(name, newName), OperationTexts.RenamedRemote(name, newName));
+        return RunRemoteFormAsync(OperationTexts.RenameRemote(name), () => Git.RenameRemoteAsync(name, newName), OperationTexts.RenamedRemote(name, newName), UndoScope.RenameRemote(name, newName));
     }
 
     /// <summary>Changes a remote's URL and waits. Null, or git's message for the form.</summary>
@@ -616,11 +633,11 @@ public sealed partial class RepositoryOperations
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(url);
-        return RunRemoteFormAsync(OperationTexts.SetRemoteUrl(name), () => Git.SetRemoteUrlAsync(name, url), OperationTexts.ChangedRemoteUrl(name));
+        return RunRemoteFormAsync(OperationTexts.SetRemoteUrl(name), () => Git.SetRemoteUrlAsync(name, url), OperationTexts.ChangedRemoteUrl(name), UndoScope.SetRemoteUrl(name));
     }
 
-    /// <summary>One local operation of the Remotes form: null when it succeeded, otherwise what the form's <c>RemoteError</c> shows (git's own message).</summary>
-    private async Task<string?> RunRemoteFormAsync(OperationText text, Func<Task> write, string done)
+    /// <summary>One local operation of the Remotes form, recorded as <paramref name="undo"/> says: null when it succeeded, otherwise what the form's <c>RemoteError</c> shows (git's own message).</summary>
+    private async Task<string?> RunRemoteFormAsync(OperationText text, Func<Task> write, string done, UndoScope undo)
     {
         var result = await RunAsync(
             text,
@@ -631,7 +648,7 @@ public sealed partial class RepositoryOperations
                 await write();
                 return OperationReport.Done(done);
             },
-            new RunOptions { ShowsErrorDialog = false });
+            new RunOptions { ShowsErrorDialog = false, Undo = undo });
         return result.Outcome switch
         {
             OperationOutcome.Succeeded => null,
@@ -669,10 +686,10 @@ public sealed partial class RepositoryOperations
                 RefreshScope.Refs,
                 async context =>
                 {
-                    await Git.PushTagAsync(remote, tag, NetworkOptions.From(context), context.CancellationToken);
+                    UndoCapture.Push(remote, await Git.PushTagAsync(remote, tag, NetworkOptions.From(context), context.CancellationToken));
                     return OperationReport.Done(OperationTexts.PushedTag(tag, remote));
                 },
-                NetworkRun());
+                NetworkRun(UndoScope.PushTag(tag, remote)));
         });
     }
 
@@ -713,9 +730,10 @@ public sealed partial class RepositoryOperations
                 async (context, _) =>
                 {
                     await Git.DeleteRemoteTagAsync(remote, tag, expected!, NetworkOptions.From(context), context.CancellationToken);
+                    UndoCapture.Push(remote, new PushOutcome([new PushedRef(TagsPrefix + tag, expected, null)]));
                     return OperationReport.Done(OperationTexts.DeletedRemoteTag(tag, remote));
                 },
-                NetworkRun(describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
+                NetworkRun(UndoScope.DeleteRemoteTag(tag, remote), describeFailure: failure => failure.Kind == GitFailureKind.PushRejectedStale
                     ? new FailureDisplay(OperationTexts.DeletionStoppedTitle, OperationTexts.RemoteTagDiffers(remote, tag))
                     : null));
         });

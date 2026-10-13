@@ -8,6 +8,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -56,17 +57,24 @@ public sealed partial class RepositoryOperations
         }
 
         Services?.Settings.Update(settings => settings with { StashIncludeUntracked = answer.IsOptionChecked });
-        await RunAsync(OperationTexts.Stash, OperationKind.Local, RefreshScope.Refs, async context =>
-        {
-            // The status may have changed while the dialog was open or the operation waited.
-            if (StashRefusal(await Git.ReadStatusAsync()) is { } refused)
+        var message = string.IsNullOrEmpty(answer.Message) ? null : answer.Message;
+        await RunAsync(
+            OperationTexts.Stash,
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async context =>
             {
-                return Refusal(OperationTexts.Stash, refused);
-            }
+                // The status may have changed while the dialog was open or the operation waited.
+                if (StashRefusal(await Git.ReadStatusAsync()) is { } refused)
+                {
+                    return Refusal(OperationTexts.Stash, refused);
+                }
 
-            var stash = await Git.StashAsync(answer.Message, answer.IsOptionChecked, NetworkOptions.From(context));
-            return OperationReport.Done(stash is null ? OperationTexts.NothingToStash : OperationTexts.Stashed);
-        });
+                var stash = await Git.StashAsync(answer.Message, answer.IsOptionChecked, NetworkOptions.From(context));
+                UndoCapture.Stash(stash, answer.IsOptionChecked, message);
+                return OperationReport.Done(stash is null ? OperationTexts.NothingToStash : OperationTexts.Stashed);
+            },
+            new RunOptions { Undo = UndoScope.Stash(message) });
     });
 
     /// <summary>"Apply stash" (2.25): <c>git stash apply stash@{n}</c>, the stash found again by its commit.</summary>
@@ -137,7 +145,7 @@ public sealed partial class RepositoryOperations
                     await Git.DropStashAsync(stash);
                     return OperationReport.Done(OperationTexts.DroppedStash(now));
                 },
-                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name, pop: false) });
+                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name, pop: false), Undo = UndoScope.DropStash(entry.Message) });
         });
     }
 
@@ -169,11 +177,16 @@ public sealed partial class RepositoryOperations
 
         var tag = answer.Name;
         var message = answer.Message;
-        await RunAsync(OperationTexts.CreateTag(tag), OperationKind.Local, RefreshScope.Refs, async _ =>
-        {
-            await Git.CreateTagAsync(tag, commit, message);
-            return OperationReport.Done(OperationTexts.CreatedTag(tag));
-        });
+        await RunAsync(
+            OperationTexts.CreateTag(tag),
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async _ =>
+            {
+                await Git.CreateTagAsync(tag, commit, message);
+                return OperationReport.Done(OperationTexts.CreatedTag(tag));
+            },
+            new RunOptions { Undo = UndoScope.CreateTag(tag) });
     });
 
     /// <summary>"Delete &lt;t&gt;…" (2.28): confirms, backs the tag object up as <c>tag-&lt;time&gt;/&lt;t&gt;</c> and deletes the local tag.</summary>
@@ -201,7 +214,8 @@ public sealed partial class RepositoryOperations
                 {
                     await Git.DeleteTagAsync(tag);
                     return OperationReport.Done(OperationTexts.DeletedTag(tag));
-                });
+                },
+                new RunOptions { Undo = UndoScope.DeleteTag(tag) });
         });
     }
 
@@ -237,7 +251,11 @@ public sealed partial class RepositoryOperations
                         ? OperationReport.Conflicts(OperationTexts.ApplyStashConflicts(await CountConflictedFilesAsync(), pop))
                         : OperationReport.Done(pop ? OperationTexts.PoppedStash(now) : OperationTexts.AppliedStash(now));
                 },
-                new RunOptions { DescribeFailure = failure => StashFailureDisplay(text, failure, name, pop) });
+                new RunOptions
+                {
+                    DescribeFailure = failure => StashFailureDisplay(text, failure, name, pop),
+                    Undo = pop ? UndoScope.PopStash(stash, entry.Message) : UndoScope.ApplyStash(stash, entry.Message),
+                });
         });
     }
 
@@ -274,13 +292,13 @@ public sealed partial class RepositoryOperations
             ? reason
             : null;
 
-    /// <summary>A stash the menu named is no longer listed (2.25): the operation fails at once, without a git call.</summary>
+    /// <summary>A stash the menu named is no longer listed (2.25): the operation fails at once, without a git call, and changes nothing the undo history records.</summary>
     private Task StashGoneAsync(OperationText text) =>
-        RunAsync(text, OperationKind.Local, RefreshScope.Refs, _ => Task.FromResult(Refusal(text, OperationTexts.StashGone)));
+        RunAsync(text, OperationKind.Local, RefreshScope.Refs, _ => Task.FromResult(Refusal(text, OperationTexts.StashGone)), new RunOptions { Undo = UndoScope.None });
 
-    /// <summary>An operation refused before git runs (D119): "&lt;Title&gt; failed", and the error dialog with <paramref name="reason"/> and no git output.</summary>
+    /// <summary>An operation refused before git runs (D119): "&lt;Title&gt; failed", and the error dialog with <paramref name="reason"/> and no git output; nothing to record.</summary>
     private Task RefuseAsync(OperationText text, string reason, RefreshScope refresh) =>
-        RunAsync(text, OperationKind.Local, refresh, _ => Task.FromResult(Refusal(text, reason)));
+        RunAsync(text, OperationKind.Local, refresh, _ => Task.FromResult(Refusal(text, reason)), new RunOptions { Undo = UndoScope.None });
 
     private static OperationReport Refusal(OperationText text, string reason) =>
         Failed(text, new GitFailure(GitFailureKind.Other, reason, string.Empty, string.Empty, null));

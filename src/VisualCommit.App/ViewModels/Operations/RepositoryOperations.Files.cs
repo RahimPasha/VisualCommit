@@ -12,6 +12,7 @@ using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 using VisualCommit.Git;
 
 namespace VisualCommit.App.ViewModels.Operations;
@@ -175,6 +176,13 @@ public sealed partial class RepositoryOperations
         return CopyAsync("Copy path", path);
     }
 
+    /// <summary>The activity log's "Copy command", "Copy output" and "Copy title" (docs/phase-5-design.md 2.2): the text as the log shows it.</summary>
+    public Task CopyTextAsync(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return CopyAsync("Copy", text);
+    }
+
     /// <summary>"Copy branch name" and "Copy tag name" (2.32): the ref's short name.</summary>
     public Task CopyRefNameAsync(string fullRef)
     {
@@ -279,11 +287,16 @@ public sealed partial class RepositoryOperations
                 return;
             }
 
-            await RunAsync(text, OperationKind.Local, RefreshScope.Status, async _ =>
-            {
-                await Git.AppendToGitignoreAsync(line);
-                return OperationReport.Done(OperationTexts.Ignored(line));
-            });
+            await RunAsync(
+                text,
+                OperationKind.Local,
+                RefreshScope.Status,
+                async _ =>
+                {
+                    await Git.AppendToGitignoreAsync(line);
+                    return OperationReport.Done(OperationTexts.Ignored(line));
+                },
+                new RunOptions { Undo = UndoScope.Ignore(line) });
         });
     }
 

@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -263,4 +264,61 @@ public interface IRepositoryActions
 
     /// <summary>"Open in merge tool" (11.9, D149): runs git's configured merge tool on <paramref name="path"/> as an operation that can be cancelled.</summary>
     Task OpenMergeToolAsync(string path);
+
+    // Phase 5: history, traceability and undo (docs/phase-5-design.md 13.1). The pages' actions
+    // are in RepositoryOperations.Pages.cs (WP6), compare, hide and solo in .Filters.cs (WP7), the
+    // backups list's restores in .Undo.cs (WP3).
+
+    /// <summary>"File history" (4.1, 4.4): the history page of a file, in place of the graph.</summary>
+    Task ShowFileHistoryAsync(FileHistoryRequest request);
+
+    /// <summary>"Blame", "Blame at this commit", "Blame before this commit" (4.2, 4.4): the blame page of a file's version.</summary>
+    Task ShowBlameAsync(BlameRequest request);
+
+    /// <summary>"Show reflog" and "Show reflog of {b}" (5.1): the reflog page on HEAD's reflog (null) or a local branch's (its full name).</summary>
+    Task ShowReflogAsync(string? branchRef);
+
+    /// <summary>"Show backups" (5.1, 5.3): the reflog page on the backups list.</summary>
+    Task ShowBackupsAsync();
+
+    /// <summary>"Show in graph" (4.1, 5.2, 11.3): closes the page, selects the commit and reveals it.</summary>
+    Task ShowInGraphAsync(string sha);
+
+    /// <summary>
+    /// A backup's own restore in the backups list (7.10): its kind decides ("Restore branch {b}",
+    /// "Restore tag {t}", "Restore stash", "Restore the discarded files…", "Restore the changes…",
+    /// "Restore the staged changes…", "Push {b} back to {r}…"), as one operation recorded in the
+    /// undo history.
+    /// </summary>
+    Task RestoreBackupAsync(BackupInfo backup);
+
+    /// <summary>"Compare {b} with {cur}" and a drop's "Compare {A} with {B}" (6.2): the comparison of <paramref name="toRef"/> since it left <paramref name="fromRef"/>, in the right panel.</summary>
+    Task CompareBranchesAsync(string fromRef, string toRef);
+
+    /// <summary>"Hide {b}" (8.1): the branch (its full name), and a local branch's remote-tracking upstream with it.</summary>
+    Task HideBranchAsync(string branchRef);
+
+    /// <summary>"Show {b}" (8.1): shows a hidden branch again, and the upstream that was hidden with it.</summary>
+    Task ShowBranchAsync(string branchRef);
+
+    /// <summary>"Solo {b}" (8.1): the graph shows the soloed branches' histories and HEAD's; a local branch's upstream is soloed with it.</summary>
+    Task SoloBranchAsync(string branchRef);
+
+    /// <summary>"Stop soloing {b}" (8.1).</summary>
+    Task StopSoloingBranchAsync(string branchRef);
+
+    /// <summary>The sections' "Show all hidden branches" (8.3).</summary>
+    Task ShowAllHiddenBranchesAsync();
+
+    /// <summary>The sections' "Stop soloing" (8.3): solo mode ends.</summary>
+    Task StopSoloingAsync();
+
+    /// <summary>"Hide every branch of {r}" (8.1): the remote's branches, now and later.</summary>
+    Task HideRemoteAsync(string remote);
+
+    /// <summary>"Show every branch of {r}" (8.1).</summary>
+    Task ShowRemoteAsync(string remote);
+
+    /// <summary>The activity log's "Copy command", "Copy output" and "Copy title" (2.2): the text as shown.</summary>
+    Task CopyTextAsync(string text);
 }
