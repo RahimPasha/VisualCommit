@@ -56,6 +56,14 @@ internal static class RepositoryOperationsTestSupport
     /// </summary>
     public static readonly TimeSpan OperationChainTimeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// How long a test in the window waits for a write that saves a backup and then runs the
+    /// backups' clean-up (an abort, a reset, a discard; docs/phase-4-design.md section 9): 30
+    /// seconds, as phase 2's checks wait for a discard or a restore (<c>a7e9db3</c>). With the
+    /// default run's test processes side by side, 10 was not always enough (phase 5's baseline run).
+    /// </summary>
+    public static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>How many times the queue ran the operation <paramref name="title"/> to its end (its log line, 1.7).</summary>
     public static int Ran(OperationsHarness app, string title) =>
         app.Log.Messages.Count(message => message.Contains($": {title}: ", StringComparison.Ordinal) && message.Contains(" after ", StringComparison.Ordinal));

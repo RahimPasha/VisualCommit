@@ -408,8 +408,8 @@ public partial class Phase2Checks
         await WaitForDialogAsync(app);
         Assert.Equal("Discard this hunk of notes.txt?", app.Find<TextBlock>("ConfirmQuestion").Text);
         app.Click(app.Find<Button>("ConfirmButton"));
-        await WaitForStagePanelAsync(app, unstaged: 0, staged: 1);
-        await app.WaitForAsync(() => !app.Session.Shell.ActiveTab.Repository!.IsDiffOpen, "the emptied diff to close");
+        await WaitForStagePanelAsync(app, unstaged: 0, staged: 1, WriteTimeout);
+        await app.WaitForAsync(() => !app.Session.Shell.ActiveTab.Repository!.IsDiffOpen, "the emptied diff to close", WriteTimeout);
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "13b-crlf-staged-and-discarded");
         Assert.Equal(["M notes.txt"], FileRows(app, "StagedFileList"));
@@ -436,7 +436,7 @@ public partial class Phase2Checks
         Assert.True(app.FindByAutomationId("DiffView").IsEffectivelyVisible);
 
         app.Click(app.Find<Button>("ConfirmButton"));
-        await app.WaitForAsync(() => Rows(DiffText(app)).Count == 9, "the diff's one remaining hunk");
+        await app.WaitForAsync(() => Rows(DiffText(app)).Count == 9, "the diff's one remaining hunk", WriteTimeout);
         await SettleDiffAsync(app);
         app.MoveMouse(new Point(130, 900 - 13));
         app.Capture().Save(Phase, "19b-hunk-discarded");
@@ -444,7 +444,7 @@ public partial class Phase2Checks
         Assert.Equal(Scenarios.ChangesFiles.CalculatorCommitted.Replace("        return a + b;\n", "        return a + b + _offset;\n", StringComparison.Ordinal), File.ReadAllText(file));
 
         app.Click(app.Find<Button>("RestoreDiscardButton"));
-        await app.WaitForAsync(() => Rows(DiffText(app)).Count == CalculatorInline.Length, "both hunks again");
+        await app.WaitForAsync(() => Rows(DiffText(app)).Count == CalculatorInline.Length, "both hunks again", WriteTimeout);
         await SettleDiffAsync(app);
         Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(file));
         Assert.Equal(CalculatorInline, Rows(DiffText(app)));
@@ -458,7 +458,7 @@ public partial class Phase2Checks
         Assert.Equal("Discard 1 selected line of Calculator.cs?", app.Find<TextBlock>("ConfirmQuestion").Text);
 
         app.Click(app.Find<Button>("ConfirmButton"));
-        await app.WaitForAsync(() => Rows(DiffText(app)).Contains("@@ -29,4 +29,7 @@ public sealed class Calculator"), "the second hunk without the line");
+        await app.WaitForAsync(() => Rows(DiffText(app)).Contains("@@ -29,4 +29,7 @@ public sealed class Calculator"), "the second hunk without the line", WriteTimeout);
         await SettleDiffAsync(app);
         app.MoveMouse(new Point(130, 900 - 13));
         app.Capture().Save(Phase, "19d-line-discarded");

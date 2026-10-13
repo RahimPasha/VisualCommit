@@ -5,9 +5,11 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.Views;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -232,6 +234,61 @@ public class PanelViewTests
         Assert.Equal(PanelHeight, host.BoundsOf(files).Bottom, 0.5);
     }
 
+    /// <summary>
+    /// The details panel as the main window shows it at 1100×700: 400 wide, at the main window's
+    /// font size. A commit whose committer and commit date differ from its author's shows the
+    /// "Commit date" row, the widest label, and still its whole SHA on one line, in both themes.
+    /// Phase 4's pictures a3d, b8c and c11j showed the last character on a second line.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public async Task A_whole_sha_stays_on_one_line_beside_the_commit_date_row(string theme)
+    {
+        var repository = new CommitDetailsViewModelTests.FakeRepository(sha => Task.FromResult(CommitDetailsViewModelTests.Details(sha) with
+        {
+            CommitterName = "Other Committer",
+            CommitDate = new DateTimeOffset(2026, 1, 2, 9, 0, 0, TimeSpan.Zero),
+        }));
+        var details = new CommitDetailsViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+        var fontSize = MainWindowFontSize();
+        using var host = Host.Show(new RightPanelView { DataContext = details }, 400, fontSize, theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light);
+
+        // a3d's SHA, whose last "f" wrapped; forty 4s, the widest hex digit (321 wide at 12.5
+        // against 287 of room); forty a's (282 wide), which fit at the panel's size but would not
+        // at Avalonia's default of 14, so that the size the fit starts from is the panel's.
+        foreach (var (full, fits) in new[] { ("14e607bf248c8917ab93680c48cba392f60546ff", false), (new string('4', 40), false), (new string('a', 40), true) })
+        {
+            await details.ShowAsync(full, cancellationToken: TestContext.Current.CancellationToken);
+            host.Settle();
+
+            var sha = host.Find<SelectableTextBlock>("DetailsSha");
+            Assert.Equal(full, sha.Text);
+            Assert.Contains("Commit date", host.TextsInReadingOrder());
+            Assert.True(sha.TextLayout.TextLines.Count == 1, $"{full} takes {sha.TextLayout.TextLines.Count} lines at size {sha.FontSize} in {sha.Bounds.Width:F1}.");
+            Assert.Empty(LayoutAudit.FindClippedText(host.Window));
+
+            // Only a SHA that would wrap is drawn smaller; one that fits keeps the panel's size,
+            // so every picture whose SHA fitted is drawn as before.
+            Assert.Equal(!fits, sha.IsSet(Avalonia.Controls.Documents.TextElement.FontSizeProperty));
+            Assert.True(fits ? sha.FontSize == fontSize : sha.FontSize < fontSize, $"{full} is drawn at {sha.FontSize}; the panel's size is {fontSize}.");
+        }
+    }
+
+    /// <summary>The font size the main window gives everything in it, the details panel included.</summary>
+    private static double MainWindowFontSize()
+    {
+        var window = new MainWindow();
+        try
+        {
+            return window.FontSize;
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static IBrush? Brush(string key) =>
         Application.Current!.TryGetResource(key, Application.Current.ActualThemeVariant, out var value) ? value as IBrush : null;
 
@@ -245,9 +302,23 @@ public class PanelViewTests
 
         public Window Window { get; }
 
-        public static Host Show(Control view, double width)
+        /// <param name="fontSize">The window's font size; null: Avalonia's default, not the main window's.</param>
+        /// <param name="theme">The window's theme; null: the application's.</param>
+        public static Host Show(Control view, double width, double? fontSize = null, ThemeVariant? theme = null)
         {
             var window = new Window { Width = width, Height = PanelHeight, Content = view };
+            if (fontSize is { } size)
+            {
+                window.FontSize = size;
+            }
+
+            if (theme is not null)
+            {
+                // On the window, not the application: other tests on the same UI thread may
+                // change the application's theme.
+                window.RequestedThemeVariant = theme;
+            }
+
             window.Show();
             var host = new Host(window);
             host.Settle();
