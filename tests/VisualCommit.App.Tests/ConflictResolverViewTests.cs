@@ -46,6 +46,8 @@ public class ConflictResolverViewTests
     private static readonly Color Hunk = Color.Parse("#1C2130");
     private static readonly Color Danger = Color.Parse("#E5606B");
     private static readonly Color Accent = Color.Parse("#7C8CFF");
+    private static readonly Color TextSecondary = Color.Parse("#9BA3B0");
+    private static readonly Color TextDisabled = Color.Parse("#5F6775");
 
     // --- Layout (11.2; the report's part C, "The resolver") ------------------------------------
 
@@ -294,6 +296,47 @@ public class ConflictResolverViewTests
         host.Host.PressKey(Key.Left, RawInputModifiers.Alt);
         ResolverFixtures.Settle();
         Assert.Equal("a.txt", Text(host, "ResolverFileName"));
+    }
+
+    [AvaloniaFact]
+    public async Task A_disabled_arrow_is_drawn_in_the_disabled_text_colour_as_the_toolbar_s_buttons()
+    {
+        string[] arrows = ["ResolverPreviousFile", "ResolverNextFile", "ResolverPreviousConflict", "ResolverNextConflict"];
+
+        // One conflicted file: the file arrows have nowhere to go; the conflict arrows do.
+        using (var single = await ResolverHost.OpenMergeAsync())
+        {
+            AssertArrows(single, ["ResolverPreviousConflict", "ResolverNextConflict"], ["ResolverPreviousFile", "ResolverNextFile"]);
+        }
+
+        // Two files: all four are enabled, in the secondary colour.
+        var actions = new RecordingConflictActions();
+        actions.SetText("a.txt", Notes);
+        actions.SetText("b.txt", Notes);
+        using var host = await ResolverHost.OpenAsync(actions, Status(Merge(), Entry("a.txt"), Entry("b.txt")), "a.txt");
+        AssertArrows(host, arrows, []);
+
+        // While Mark resolved writes, all four are disabled, in the disabled colour.
+        actions.Hold = new TaskCompletionSource();
+        actions.Answer(true);
+        var marking = host.Resolver.MarkResolvedCommand.ExecuteAsync(null);
+        ResolverFixtures.Settle();
+        Assert.True(host.Resolver.IsBusy);
+        AssertArrows(host, [], arrows);
+
+        actions.Release();
+        await marking;
+
+        static void AssertArrows(ResolverHost host, string[] enabled, string[] disabled)
+        {
+            foreach (var (id, isEnabled) in enabled.Select(id => (id, true)).Concat(disabled.Select(id => (id, false))))
+            {
+                var button = (Button)host.Find(id);
+                Assert.True(button.IsEffectivelyEnabled == isEnabled, $"{id} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")}.");
+                var icon = button.GetVisualDescendants().OfType<VisualCommit.App.Controls.Icon>().Single();
+                DiffColors.AssertBrush(isEnabled ? TextSecondary : TextDisabled, icon.Foreground, $"{id}'s arrow, {(isEnabled ? "enabled" : "disabled")}");
+            }
+        }
     }
 
     [AvaloniaFact]
