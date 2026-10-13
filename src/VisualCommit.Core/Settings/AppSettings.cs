@@ -50,4 +50,11 @@ public sealed record AppSettings
 
     /// <summary>The stash dialog's "Include untracked files" starts with the last choice (phase 3 design 6.2).</summary>
     public bool StashIncludeUntracked { get; init; } = true;
+
+    /// <summary>
+    /// The details panel's "All files": the list shows every file of the shown commit's tree, the
+    /// unchanged ones without a status letter (docs/phase-5-design.md 4.5, D164). Off by default;
+    /// it stays as the user left it.
+    /// </summary>
+    public bool ShowAllFiles { get; init; }
 }

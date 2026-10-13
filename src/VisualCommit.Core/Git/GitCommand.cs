@@ -19,6 +19,14 @@ public sealed class GitCommand
     public string? StandardInput { get; init; }
 
     /// <summary>
+    /// The call record keeps <see cref="StandardInput"/> (<see cref="GitCallRecord.StandardInput"/>),
+    /// so that the activity log can show it. Set only for <c>update-ref --stdin</c>, whose lines name
+    /// refs and SHAs and carry no secret (docs/phase-5-design.md 2.3); a commit message or a patch on
+    /// standard input is never recorded.
+    /// </summary>
+    public bool RecordsStandardInput { get; init; }
+
+    /// <summary>
     /// How <see cref="StandardInput"/> and standard output are turned into bytes and back. Null
     /// means UTF-8. <see cref="Latin1"/> carries every byte as one character, for content that need
     /// not be UTF-8: diffs, patches and file contents (D66). Standard error is always UTF-8.
