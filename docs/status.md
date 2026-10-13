@@ -52,7 +52,14 @@ Start:
 
 - [x] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers
   recorded (D153 to D160) and carried into `plan.md` and `requirements.md`.
-- [ ] 2. Baseline: the default run on `master` (`0883669`) as inherited, its result and time.
+- [x] 2. Baseline: the default run on `master` (`0883669`) as inherited: 2,409 of 2,411 passed in
+  35 min 27 s, while six code-reading agents ran beside it (phase 4's gate: 21 min 52 s). The two
+  failures were waits of 10 s that ran out under that load, and both passed alone (8 s and 15 s):
+  phase 2's `Check_19_discard_a_hunk_and_a_line` (the diff after a discard, which also saves a
+  snapshot and runs the backups' clean-up, as check 18 did before `a7e9db3`) and
+  `RepositoryOperationsMergeTests.In_the_window_merge_abort_reset_create_delete_and_an_empty_pick_show_as_the_checks_say`
+  (the abort, which saves two backups and runs the clean-up). Step 4 gives such waits the longer
+  timeout phase 4 gave check 18.
 - [ ] 3. Design in `docs/phase-5-design.md`: every git fact derived with Git 2.36, the texts,
   the layouts, the work packages; reviewed independently; decisions from D161 on.
 - [ ] 4. Phase 4's leftovers (D160): the watcher's quiet period on a clock its test holds
@@ -172,9 +179,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 2: read the result of the baseline default run on `master` (`0883669`), started at the
-beginning of the session. Then step 3, the design in `docs/phase-5-design.md`, with the code map
-the session's first workflow made.
+Step 3, the design in `docs/phase-5-design.md`: the git facts are being derived by a research
+workflow (notes in the session's scratch folder; what the design relies on is copied into its
+section 0). Step 4 (phase 4's leftovers) runs beside it in a worktree.
 
 ### Notes for whoever resumes
 
