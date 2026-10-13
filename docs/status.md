@@ -62,8 +62,16 @@ Start:
   `RepositoryOperationsMergeTests.In_the_window_merge_abort_reset_create_delete_and_an_empty_pick_show_as_the_checks_say`
   (the abort, which saves two backups and runs the clean-up). Step 4 gives such waits the longer
   timeout phase 4 gave check 18.
-- [ ] 3. Design in `docs/phase-5-design.md`: every git fact derived with Git 2.36, the texts,
-  the layouts, the work packages; reviewed independently; decisions from D164 on.
+- [x] 3. Design in `docs/phase-5-design.md`: every git fact derived with Git 2.36 (and 2.55 where
+  words may differ), the texts, the layouts, the work packages. Five independent reviews (git
+  safety, code fit, UX, tests and gate, completeness) found 97 issues, each checked by an
+  adversarial verifier; the design was revised from every confirmed one. Three questions the
+  reviews raised went to the owner (D164 to D166); the design's own decisions are D167 to D181.
+  Its work packages map onto the steps below: WP-S step 5; WP1 steps 7 to 10; WP2a and WP2b the
+  graph's part of steps 12, 17 and 21 (the filter, the search marks, the dashed stash lines); WP3
+  steps 11 and 19; WP4 steps 13 and 21; WP5 step 14 and the toolbar's Search; WP6 steps 15 and 16
+  and "All files" (D164); WP7 steps 17, 18 and 20; WP8 steps 22 and 23; WP9 step 24. WP0 (the
+  contracts and stubs every package builds against) comes first.
 - [x] 4. Phase 4's leftovers (D160), merged in `279dd8c`: the watcher's quiet period and maximum
   delay on a `TimeProvider` (`ManualTimeProvider` in `VisualCommit.Testing`; both burst tests on
   it); the details panel's SHA drawn just small enough to stay on one line when it would wrap (only
@@ -79,9 +87,10 @@ Start:
   `32d` and phase 4 `a1a`.
 - [ ] 5. Harness: phase 5's scenario repos (a file renamed across its history, blame with lines
   from several commits, a reflog with commits no ref reaches, branches to solo and hide, commits
-  to search and compare, changes that block a checkout), pinned by tests; the project
-  `VisualCommit.VisualTests.Phase5` in the solution, `scripts/time-scripted-check.sh` and
-  CLAUDE.md's Commands; the real-window project's link to `Phase5Expectations*.cs`; the driver
+  to search and compare, changes that block a checkout), pinned by tests; the projects
+  `VisualCommit.VisualTests.Phase5` and `VisualCommit.VisualTests.Phase5Undo` in the solution
+  (D181), `scripts/time-scripted-check.sh` and CLAUDE.md's Commands; the real-window project's
+  link to `Phase5Expectations*.cs`; the record and backup clocks both harnesses fix; the driver
   helpers the checks need.
 - [ ] 6. Phase 5's visual checks written into `docs/test-reports/phase-5.md`, each marked for the
   real-window pass or not, reviewed independently, and committed before the UI they test.
@@ -122,8 +131,9 @@ App:
 
 Visual checks:
 
-- [ ] 23. Scripted walk-through: one test per check in `VisualCommit.VisualTests.Phase5`,
-  screenshots under `artifacts/visual/phase-5/scripted/`.
+- [ ] 23. Scripted walk-through: the checks of parts A, B, F and P in
+  `VisualCommit.VisualTests.Phase5`, part U in `VisualCommit.VisualTests.Phase5Undo` (one action
+  per test method), screenshots under `artifacts/visual/phase-5/scripted/`.
 - [ ] 24. Real-window pass for the checks marked for it (`Phase5RealWindowPass`).
 
 Closing:
@@ -156,7 +166,15 @@ could not (Git 2.55's own files and words, a background clean-up that held the q
 read the screen too early); the runs were red until each was fixed (phase 4's report, "Other
 platforms", and its handoff, "Things that cost time").
 
-The run for the merge on `master` is
+Phase 5's first run is
+[38350713964](https://github.com/RahimPasha/VisualCommit/actions/runs/38350713964), for `279dd8c`
+(phase 4's leftovers, D160): all five jobs succeeded with 2,421 tests each: `windows-latest` (16 min
+7 s; its Test step 13 min 51 s), `macos-latest` (13 min 28 s; Test step 12 min 3 s),
+`ubuntu-latest` (3 min 36 s) and the two "bare ubuntu container" jobs (4 min 14 s and 4 min 11 s).
+GitHub announced that `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19; the Linux job and the
+containers may then see other package versions.
+
+The run for phase 4's merge on `master` is
 [38336234442](https://github.com/RahimPasha/VisualCommit/actions/runs/38336234442), for `50cf35c`
 (the merge commit `ce5f337` and the commit that set phase 4 to "Done"). Its first attempt had four
 jobs succeed with 2,411 tests each (`macos-latest` 15 min 33 s, `ubuntu-latest` 3 min 40 s, the
@@ -189,11 +207,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: `docs/phase-5-design.md` is drafted (`493fe54`) from a code map and seven research notes
-(section 0 holds every git fact it relies on); five independent reviews, each checked by an
-adversarial verifier, are running. Then: revise the design from the confirmed findings, record
-D164 on, and tick step 3. Step 4 (phase 4's leftovers, D160) runs beside it in a worktree
-(`wip/p5-leftovers`): merged in `279dd8c`; its CI run is to be read.
+WP0 (design 16): the contracts, records, stubs and every operation's undo call points as no-ops,
+so that the first wave can build against them: the Core types, `IGitRepository`'s new members
+with one stub file per package, the queue's and runner's record fields, the app contracts
+(`IGraphAreaPage`, `RunOptions.Undo`, the recording hook, `RepositoryViewModel`'s hooks), the
+split menu files, the icons and the token, the two clocks in `GitIsolation` and `RealApp`. Then the
+first wave side by side in worktrees: WP-S (step 5), WP1, WP2a and WP3's git half. Step 6 (the
+report's checks, from design 15.4) is written once WP-S has pinned the scenarios, reviewed, and
+committed before any UI it tests.
 
 ### Notes for whoever resumes
 
@@ -237,6 +258,10 @@ D164 on, and tick step 3. Step 4 (phase 4's leftovers, D160) runs beside it in a
 
 ## Waiting on the owner
 
+- Answered during phase 5's design on 2026-10-12 (D164 to D166), after its reviews: the details
+  panel gains an "All files" switch so that any line of any file is two clicks from its commit;
+  an Abort is undone from the backups list, not by Undo; undoing the automatic stash's checkout
+  switches back and pops that stash.
 - Answered at the start of phase 5 on 2026-10-12 (D153 to D163): C12 is built in phase 5, its
   refusal keeps the "Stash changes and check out" button, the automatic stash is taken always
   when there are changes and only for a commit the current branch reaches, and it is kept until

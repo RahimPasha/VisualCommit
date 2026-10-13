@@ -344,3 +344,4 @@ lacks.
 | `docs/cloud-sessions.md` | For the owner: working on the project from a Claude Code cloud session |
 | `docs/phase-3-design.md` | Phase 3's design, kept as history; phase 3's decisions (D77 to D133), report and handoff cite its sections as "design N.N" |
 | `docs/phase-4-design.md` | Phase 4's design, kept as history; phase 4's decisions (D139 to D152), report, handoff, status and plan outcome cite its sections as "design N.N"; its sections 14.1 to 14.5 say what the build and the review settled |
+| `docs/phase-5-design.md` | Phase 5's design, written before its code; phase 5's decisions (D167 to D181), report, handoff and status cite its sections as "design N.N" |

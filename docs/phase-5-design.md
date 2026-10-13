@@ -4,11 +4,11 @@ Working design notes for phase 5, written on 2026-10-12 before any phase 5 code 
 builders implement from this file; its final facts are folded into `architecture.md` at the end of
 the phase, after which this file is kept as history, as `phase-3-design.md` and `phase-4-design.md`
 are. The last section lists the decisions this design makes; they are recorded in `decisions.md`
-from D164 on. Where this file and merged code differ later, the code's doc comments say what is
+from D167 on. Where this file and merged code differ later, the code's doc comments say what is
 built; tell the lead.
 
 Sources: `plan.md` "Phase 5", the phase 4 handoff's "For the next phase", decisions D47, D52, D54,
-D60, D62, D63, D67, D80, D81, D83, D88, D91, D95, D124, D137 to D139, D148 and D153 to D163, a code
+D60, D62, D63, D67, D80, D81, D83, D88, D91, D95, D124, D137 to D139, D148 and D153 to D166, a code
 map and seven research notes made by sub-agents on 2026-10-12 (the notes derived every git fact
 with Git 2.36 in throw-away repositories). Those notes lived in the session's scratch folder;
 everything this design relies on is copied into section 0.
@@ -46,6 +46,14 @@ The owner's answers, taken as given (2026-10-12, at the start of phase 5):
 11. (D163) **Ctrl+Z and Ctrl+Y** (Cmd+Z and Cmd+Shift+Z on macOS) undo and redo git actions when
     no text box, editor, dialog or menu takes them.
 
+Asked after the design's five reviews (2026-10-12):
+
+12. (D164) **The details panel gains an "All files" switch** beside Flat and Tree: every file of the
+    shown commit's tree, each with File history and Blame in its menu.
+13. (D165) **An Abort is undone from the backups list**, not by Undo: its files and commits come back,
+    the stopped operation does not. An Abort records no undo entry.
+14. (D166) **Undoing the automatic stash's checkout switches back and pops that stash.**
+
 Conventions, as in phase 4's design: `<b>` a local branch's short name, `<r>` a remote, `<sha>` a
 full commit id, "short SHA" its first 7 characters, `{cur}` what HEAD is on as menus name it
 (`RepositoryMenuContext.CurrentName`). The app passes git full ref names or full SHAs wherever git
@@ -59,7 +67,7 @@ environment; reads add `GIT_OPTIONAL_LOCKS=0` (D47). Counts in texts use the sin
 1. The shell: toolbar, status bar, keys
 2. The activity log
 3. Search
-4. File history and blame
+4. File history and blame, and "All files"
 5. The reflog and backups view
 6. Compare
 7. Undo and redo
@@ -140,13 +148,13 @@ indications.
 
 | What | Result |
 |---|---|
-| Moving the checked-out branch back with uncommitted work | `reset --merge` loses staged changes without a word; `reset --keep` keeps contents but replaces the index (a partly staged file loses its staged version); `switch -C` keeps everything but writes `checkout: moving from main to main`, which breaks `@{-1}`. **`git read-tree -m -u <now> <target>` then `git update-ref -m <msg> refs/heads/<b> <target> <now>`** keeps staged, partly staged and unstaged work, refuses (changing nothing) when a file the move changes has local changes or an untracked file is in the way, and is the only one with a compare-and-swap. If the update-ref then fails (a race), `read-tree -m -u <target> <now>` puts the files back exactly. `read-tree -n -m -u` is a dry run that writes nothing |
-| Refusals of read-tree | `error: Entry 'f.txt' not uptodate. Cannot merge.`, `error: Entry 'f.txt' would be overwritten by merge. Cannot merge.`, `error: Untracked working tree file 'd.txt' would be overwritten by merge.`, `… would be removed by merge.` (128); it stops at the first |
+| Moving the checked-out branch back with uncommitted work | `reset --merge` loses staged changes without a word; `reset --keep` keeps contents but replaces the index (a partly staged file loses its staged version); `switch -C` keeps everything but writes `checkout: moving from main to main`, which breaks `@{-1}`. **`git read-tree -m -u <now> <target>` then `git update-ref -m <msg> refs/heads/<b> <target> <now>`** keeps staged, partly staged and unstaged work, refuses (changing nothing) when a file the move changes has local changes or an untracked file is in the way, and is the only one with a compare-and-swap. **It must follow `git update-index -q --refresh`**: `switch` refreshes the index before its two-way merge, `read-tree` does not, and an unchanged file with stale stat data (touched, or edited and edited back; the app's reads never write a refreshed index, D47) refuses with `not uptodate`. **It overwrites an ignored file where the target has one and deletes an ignored folder where the target has a file, without a word** (2.36 and 2.55; Git 2.34 made read-tree treat ignored files as expendable, so 2.30 refuses instead, inferred); no option keeps them (`--exclude-per-directory` only allows overwriting), so the app checks for ignored paths in the way itself (7.3). `switch --no-overwrite-ignore` refuses in the same case. If the update-ref then fails (a race), `read-tree -m -u <target> <now>` puts the files back exactly. `read-tree -n -m -u` is a dry run that writes nothing |
+| Refusals of read-tree | `error: Entry 'f.txt' not uptodate. Cannot merge.`, `error: Entry 'f.txt' would be overwritten by merge. Cannot merge.`, `error: Untracked working tree file 'd.txt' would be overwritten by merge.`, `… would be removed by merge.` (128); it stops at the first, so a count of the paths in the way must come from the app's own reckoning (7.6) |
 | Compare-and-swap | `update-ref -m <msg> <ref> <new> <old>`: `fatal: update_ref failed for ref '<ref>': cannot lock ref '<ref>': is at <sha> but expected <sha>` (128). `<old>` empty = must not exist (`reference already exists`). `--stdin` with `update`/`create`/`delete`/`verify` lines is all or none. **Always name `refs/heads/<b>`**, never `HEAD`: after a terminal checkout of another branch at the same commit, `update-ref HEAD` moved that other branch. `update-ref` moves a branch checked out in another worktree without a word (`%(worktreepath)` of `for-each-ref` tells) |
 | Soft moves | Undo of a commit, an amend or a soft reset: `update-ref refs/heads/<b> <before> <after>`: the commit's changes come back staged, the working tree untouched; exact. The initial commit: `update-ref -d refs/heads/<b> <after>` (the branch becomes unborn, the index kept); redo `update-ref refs/heads/<b> <after> ""` |
 | In-progress states | `update-ref` refuses nothing during a merge, rebase or pick; `reset --soft` (`fatal: Cannot do a soft reset in the middle of a merge.`), `switch` (`fatal: cannot switch branch while merging`) and read-tree with conflicts do. The app's own in-progress check must come first |
-| Mixed and hard reset | Undo mixed: the move back, then `git restore --staged --source=<reset-…-changes> -- .` (exact, partly staged files included); precondition: the index unchanged since (`diff-index --cached --quiet <after>`). Undo hard: the move back (read-tree), then the index from the snapshot's second parent, then the files (`RestoreSnapshotAsync`), in that order; precondition: none of the snapshot's paths changed since (`git restore --worktree` overwrites without a word). `read-tree -m <tree>` refuses an index with a partly staged file; plain `read-tree <tree>` drops stat data |
-| Checkouts | Undo: `git switch --no-guess <before>` (or `--detach <sha>`): it carries work or refuses with the checkout texts. A checkout that created a tracking branch: switch back, `delete refs/heads/<b> <tip>` through `update-ref --stdin`, `config --remove-section branch.<b>` (`update-ref -d` leaves the config). Redo of that: `switch --no-track --create <b> <tip>` and the two config keys (`--track` with a SHA fails: `fatal: cannot set up tracking information; starting point … is not a branch`) |
+| Mixed and hard reset | A mixed reset leaves the old commit's files in the working tree, so its undo is a soft move (a Keep move refuses on every file the reset crossed), then `git restore --staged --source=<source> -- .` where `<source>` is the `reset-…-changes` snapshot or, when the app made none (the index equalled HEAD, `SnapshotIndexAsync` returns null), the commit moved back to: exact, partly staged files and files the reset made untracked included; precondition: the index unchanged since (`diff-index --cached --quiet <after>`). Undo hard: the move back (read-tree), then the index from the snapshot's second parent, then the files (`RestoreSnapshotAsync`), in that order; precondition: none of the snapshot's paths changed since (`git restore --worktree` overwrites without a word). `read-tree -m <tree>` refuses an index with a partly staged file; plain `read-tree <tree>` drops stat data |
+| Checkouts | Undo: `git switch --no-guess --no-overwrite-ignore <before>` (or `--detach`): it carries work or refuses with the checkout texts, and the option keeps it from overwriting ignored files as read-tree would. A checkout that created a tracking branch: switch back, `delete refs/heads/<b> <tip>` through `update-ref --stdin`, `config --remove-section branch.<b>` (`update-ref -d` leaves the config). Redo of that: `switch --no-track --create <b> <tip>` and the two config keys (`--track` with a SHA fails: `fatal: cannot set up tracking information; starting point … is not a branch`) |
 | Branches | Create: `delete … <tip>`, remove its config section; redo `create`. Rename: `branch --move <new> <old>` (refused when `<old>` exists again: `fatal: a branch named '<old>' already exists`); a case-only rename on Windows cannot be undone by a rename. Fast-forward of a branch not checked out: compare-and-swap, refused when it is checked out in a worktree |
 | Keeping undone commits | Branch and HEAD reflogs keep an undone commit for 30 days from the undo (`gc.reflogExpireUnreachable`), so a redo within the session finds it; backup refs keep snapshots and have no reflog, so only the clean-up can lose them (D139's `keep`) |
 | Cost | Every git call costs about one process start on this laptop (160 to 290 ms busy, about 40 to 70 ms quiet): an undo of 3 to 5 calls takes 0.5 to 1 s here |
@@ -197,7 +205,7 @@ indications.
 | Is it on the branch | `git merge-base --is-ancestor <target> HEAD` (0 yes, 1 no, 128 error), second parents included, tags peeled; 0.15 to 1 s on 100k. The graph's `IsReachableFromHead` answers the same for loaded rows, for free |
 | The automatic stash | `git stash push --include-untracked --message "Auto stash before checking out <name>"` (without `GIT_LITERAL_PATHSPECS`), then `git switch --detach <target>`: the stash list shows `On main: Auto stash before checking out <name>` with **first parent the branch's tip**; going back to the branch and `stash pop --index` gives the status back identical. Nothing to stash: `No local changes to save` (also with only ignored files, or only a staged submodule change). Conflicted files: the stash refuses (`<p>: needs merge`, exit 1). **During a merge without conflicts the stash succeeds and deletes `MERGE_HEAD`**, and the checkout then succeeds: the merge is lost without a word. Detached HEAD: `On (no branch): …`. Unborn HEAD: `You do not have the initial commit yet` |
 | Ignored files and the automatic stash | An ignored file that an old commit tracks is overwritten by the detached checkout and then deleted when the branch is checked out again: **lost**. With `--no-overwrite-ignore` the checkout is refused, and `stash pop --index` then restores everything |
-| Windows file locks | An untracked file opened exclusively by another program: the stash fails before saving anything. One open for reading only: the stash is saved, git says `warning: failed to remove <file>` and exits 1, and the working tree is **not** reset: the changes are in both places |
+| Windows file locks | An untracked file opened exclusively by another program: the stash fails before saving anything. One open for reading only: the stash is saved, git says `warning: failed to remove <file>` and exits 1 (2.36 and 2.55). Git's clean step **has already deleted every other untracked file** before failing on the locked one, and then skips its reset: the tracked changes and the locked file are in both places, the other untracked files only in the stash. `git restore --source=<stash>^3 --worktree -- <missing paths>` puts them back (9.2) |
 
 ## 1. The shell: toolbar, status bar, keys
 
@@ -207,32 +215,35 @@ Undo and Redo become real (section 7) and keep their places at the toolbar's lef
 real (section 3) and keeps its place at the right, left of Theme. They bind to the active tab's
 repository, as Fetch to Pop do (`ActiveTab.Toolbar`): `UndoCommand`, `UndoToolTip`, `RedoCommand`,
 `RedoToolTip`, `SearchCommand`, `SearchToolTip` on `ToolbarViewModel`, which reads them from the
-repository's undo history (7) and graph area (11). An empty tab's toolbar keeps every button
+repository's undo history (7.4) and graph area (11.2). An empty tab's toolbar keeps every button
 disabled, so phase 0's empty shell stays as it is (only Theme enabled).
 
-| Button | Enabled when | Tooltip, enabled | Tooltip, disabled (first that holds) |
+| Button | Enabled when | Tooltip, enabled | Tooltip, disabled |
 |---|---|---|---|
-| Undo | the repository's undo history has a step before its cursor that can be undone now (7.4) | `Undo {step}` (`{step}` is the step's own text, 7.6: `Undo commit "Fix the parser"`) | 7.4's reasons in their order: `Wait for {title} to finish`; `Finish or abort the {kind} first`; `Nothing to undo`; the step's check, e.g. `main has moved since (it is at 9f8e7d6)` |
-| Redo | a step after the cursor that can be redone now | `Redo {step}` | the same, with `Nothing to redo` |
-| Search | a repository is open and the graph area may show the graph (11.2) | `Search commits ({gesture})`, `{gesture}` being `Ctrl+F` or `Cmd+F` from the platform (1.3) | `Close the interactive rebase first`, `Close the conflict resolver first` |
+| Undo | the entry before the history's cursor can be undone now (7.4) | `Undo {text}` (7.6: `Undo commit "Fix the parser"`) | 7.4's first reason: `Wait for {title} to finish`, `Finish or abort the {kind} first`, `Resolve the conflicts first`, `Close the interactive rebase first`, `Nothing to undo`, or the entry's check (`main has moved since (it is at 9f8e7d6)`) |
+| Redo | the entry after the cursor can be redone now | `Redo {text}` | the same reasons, with `Nothing to redo` |
+| Search | a repository is open and neither the interactive list nor the resolver is open (11.2) | `Search commits ({gesture})`, `{gesture}` being `Ctrl+F` or `Cmd+F` from the platform (1.3) | `Close the interactive rebase first`, `Close the conflict resolver first` |
 
-Undo and Redo are the one exception to phase 3's rule that an enabled toolbar button has no
-tooltip (D90): the step a click acts on is not otherwise visible, and the first click must not
-surprise. Their tooltip is also their automation help text (`AutomationProperties.HelpText`), so
-the real-window pass can read it.
+Phase 3's design (4d) gave the toolbar the rule that an enabled button has no tooltip; Theme already
+breaks it. Undo, Redo and Search break it too, on purpose: what Undo and Redo would act on is not
+visible anywhere else and the first click must not surprise, and Search's key is worth showing. Their
+tooltips are also their automation help text (`AutomationProperties.HelpText`), which the real-window
+pass reads; the checks rest the pointer at the neutral point before a capture, as before, so no
+tooltip shows in a picture unless the step is about it.
 
-A click on Undo or Redo runs the step as one local operation of the repository's queue (7.5). A
-click on Search opens the search box (3.1).
+A click on Undo or Redo runs the step as one operation of the repository's queue (7.5). A click on
+Search opens the search bar (3.1).
 
 ### 1.2 The status bar's Activity log
 
 `ActivityLogToggle` becomes real: enabled while the active tab has a repository (an empty tab keeps
 it disabled, so phase 0's pictures stay as they are), tooltip `Show every git command the app has
 run` while the panel is closed and `Hide the activity log` while it is open. It toggles the panel
-(section 2) for the window: the panel's being open is the window's state, not a tab's, and shows
-the active tab's repository. The button draws its "open" state with the `selected` class of the
-flat button (the accent underline phase 1's tabs use is not reused: the button keeps its look, and
-`VcTextPrimaryBrush` replaces the secondary colour while the panel is open).
+(section 2) for the window: the panel's being open is the window's state, not a tab's, and shows the
+active tab's repository; on a tab without a repository the panel is hidden and the window keeps its
+state for the next repository tab. While the panel is open the button has the new `selected` class
+of `VcFlatButton`: text in `VcTextPrimaryBrush` on `VcControlBackgroundBrush`, so that it differs
+from the hover look (primary text only).
 
 ### 1.3 Keys
 
@@ -242,15 +253,15 @@ of the operating system), as `CommitGraphControl.CommandModifiers` is:
 
 | Keys | Does | Declines (the key goes on as before) when |
 |---|---|---|
-| the platform's `HotkeyConfiguration.Undo` (Ctrl+Z; Cmd+Z) | the toolbar's Undo (D163) | a dialog is open; a menu is open; a branch drag runs; the focus is in a `TextBox` (Avalonia's text undo) or anywhere in the conflict resolver (its own undo and redo, D148, whether it shows text or a card); the interactive rebase's list is open; Undo is disabled (nothing happens, the key is handled) |
-| every gesture in the platform's `HotkeyConfiguration.Redo` (the builders record the lists Avalonia 12.1.3 gives on Win32, macOS, X11 and headless; the owner's words were Ctrl+Y and Cmd+Shift+Z) | the toolbar's Redo | as Undo |
-| the command modifier with F (Ctrl+F; Cmd+F) | the toolbar's Search | a dialog or menu is open; Search is disabled. In the search box it selects the box's text |
+| the platform's `HotkeyConfiguration.Undo` (Ctrl+Z; Cmd+Z) | the toolbar's Undo (D163), when it is enabled | a dialog is open; a menu is open; a branch drag runs; the focus is in a `TextBox` (Avalonia's text undo) or anywhere in the conflict resolver (its own undo and redo, D148, whether it shows text or a card) |
+| every gesture in the platform's `HotkeyConfiguration.Redo` (the builders record the lists Avalonia 12.1.3 gives on Win32, macOS, X11 and headless; the owner's words were Ctrl+Y and Cmd+Shift+Z) | the toolbar's Redo, when it is enabled | as Undo |
+| the command modifier with F (Ctrl+F; Cmd+F) | the toolbar's Search, when it is enabled | a dialog or menu is open. In the search box it selects the box's text |
 
-Undo and Redo are handled on the window's bubbling `KeyDown` without `handledEventsToo`, so a text
-box or the resolver that took the key first keeps it; the declines above stop the keys that such a
-control does not mark handled (a text box without a change to undo). Search's key is handled in the
-tunnelling phase, as `OnShiftF10` is (D106), because the graph control and the diff's editor would
-not mark it handled anyway and nothing else uses it.
+A disabled Undo or Redo makes its key do nothing (the key is handled, so it does not reach the
+graph). Undo and Redo are handled on the window's bubbling `KeyDown` without `handledEventsToo`, so a
+text box or the resolver that took the key first keeps it; the declines above stop the keys that such
+a control does not mark handled (a text box with nothing to undo). Search's key is handled in the
+tunnelling phase, as `OnShiftF10` is (D106): nothing else uses it.
 
 `ShellDriver` presses them through new helpers `PressGitUndo()`, `PressGitRedo()` and
 `PressSearch()` (phase 4's `Undo()` and `Redo()` stay the text-undo gestures of C10 and C14).
@@ -271,26 +282,30 @@ while the resolver is open. The side panels keep their full height.
   the panel gives way first, down to 120, and then hides its rows below its header; it takes its
   height back when the window grows (as `PanelLayout.Fit` does for the side panels).
 - **Open or closed**: closed when the app starts; the status bar's button (1.2) opens and closes
-  it, and so do the panel's close button and Esc while the focus is inside it (`EscapeOrder.ActivityLog`
-  = 380: after the resolver and the list, before the diff). A closed panel takes no room, so every
-  picture of phases 0 to 4 keeps its layout.
-- **Which repository**: the active tab's. Switching tabs shows the other repository's log at once;
-  each repository keeps which rows are open and where it was scrolled.
+  it, and so do the panel's close button and Esc while the focus is inside it
+  (`EscapeOrder.ActivityLog` = 340: before the resolver, the list and a page, which would otherwise
+  take Esc wherever the focus is; the handler declines unless the focus is inside the panel).
+  Closing the panel while the focus is inside it gives the focus to the graph
+  (`GraphFocusRequested(Graph)`). A closed panel takes no room, so every picture of phases 0 to 4
+  keeps its layout.
+- **Which repository**: the active tab's, as one worktree (the key of 2.3). Switching tabs shows the
+  other repository's log at once; each keeps which rows are open and where it was scrolled.
 
 ### 2.2 What it shows
 
 A header 30 high (`ActivityLogHeader`): `Activity log`, then the repository's name in the secondary
 colour, then on the right a check box `Show reads` (`ActivityLogShowReads`, unchecked) and the close
 button (`ActivityLogClose`, `IconClose`). Below it a virtualised list (`ActivityLogList`) of rows 24
-high, oldest at the top and newest last (owner's answer 4); the list starts scrolled to the end and
-stays at the end while new rows come, unless the user scrolled up.
+high, **in the order the operations and calls started** (the sequence numbers of 2.3), oldest at the
+top and newest last (owner's answer 4); the list starts scrolled to the end and stays at the end while
+new rows come, unless the user scrolled up.
 
-**An operation's row** (`ActivityLogOperation`), left to right:
+**An operation's row** (`ActivityLogOperation`, automation name its title), left to right:
 
 | Part | Content |
 |---|---|
 | Chevron | `IconChevronRight`, `IconChevronDown` while open; the row opens and closes on a click anywhere on it or with Right and Left |
-| Outcome | a 10-px glyph in its tone: `IconCheck` in `VcSuccessBrush` (succeeded), `IconAlert` in `VcWarningBrush` (a warning or a stop with conflicts), `IconClose` in `VcDangerBrush` (failed), `IconMinus` in `VcTextSecondaryBrush` (cancelled); a running operation has none and shows `Running…` in its message |
+| Outcome | a 10-px glyph in its tone: `IconCheck` in `VcSuccessBrush` (succeeded), `IconAlert` in `VcWarningBrush` (a warning or a stop with conflicts), `IconClose` in `VcDangerBrush` (failed), `IconMinus` in `VcTextSecondaryBrush` (cancelled); a running operation has none and shows `Running…` as its message |
 | Time | when it started, `HH:mm:ss`, in the zone `DateDisplay` uses (D43) |
 | Title | the operation's title (D113), e.g. `Check out feature/alpha`, `Undo commit "Fix the parser"` |
 | Message | the status bar's text for it, in its tone; empty for the stage panel's writes (their message goes to the stage panel) |
@@ -300,100 +315,136 @@ Title and message are cut with "…" (`TrimmedTextBlock`), the whole text in the
 
 **Opened**, an operation shows under it, indented 24, in this order:
 
-1. Its notes (2.3), one line each, secondary: `Removed backup reset-20260102T090000000Z (older than 30 days)`.
-2. Its git calls, one row each (`ActivityLogCall`), 22 high: a chevron, the exit code (`exit 0` in
-   the secondary colour, another code in `VcDangerBrush`, `cancelled`, `failed to start`), the
-   command (`GitCallRecord.CommandText`, credentials hidden, in the code font, cut with "…"), the
-   duration. Opened, a call shows its standard output and standard error (as recorded: the first 16
+1. A failure's summary, as the error dialog showed it, in the danger colour.
+2. Its notes (2.3), one line each, secondary: `Removed backup reset-20260102T090000000Z (older than
+   30 days)`.
+3. Its git calls, one row each (`ActivityLogCall`, automation name its command), 22 high: a chevron,
+   the exit code (`exit 0` in the secondary colour, another code in `VcDangerBrush`, `cancelled`,
+   `failed to start`), the command (`GitCallRecord.CommandText`, credentials hidden, in the code
+   font, cut with "…"; a call made on a temporary index is followed by `(on a temporary index)`),
+   the duration. Opened, a call shows what it was given on standard input when the app records it
+   (only `update-ref --stdin`'s lines: ref names and SHAs, so that a backup's or an undo's
+   transaction can be read), then its standard output and standard error (as recorded: the first 16
    KiB of each, credentials hidden, D103) in a read-only box in the code font, 12 lines at most
-   before it scrolls, each stream titled `Output` and `Error` when not empty, and `No output` when
-   both are empty.
-3. When the call log no longer holds the operation's calls (it keeps the last 2,000 of the session,
-   reads included): `Its git commands are no longer kept.`
+   before it scrolls, each part titled `Input`, `Output` and `Error` when not empty, and `No output`
+   when all are empty.
+4. When the operation's calls are no longer kept (2.3): `Its git commands are no longer kept.`
 
-A failed operation also shows, before its calls, the error dialog's summary in the danger colour.
-
-**Reads**: with `Show reads` checked, the git calls that belong to no operation (the app's reads:
-refreshes, the details panel, diffs) show as rows of their own between the operations, by their
-start time, as calls: `ActivityLogCall` rows at the top level. Unchecked, they are hidden; a read
-made inside an operation (the operation's own `status`, `for-each-ref`) is one of its calls and
-always shows under it.
+**Reads**: with `Show reads` checked, the git calls of this worktree that belong to no operation (the
+app's reads: refreshes, the details panel, diffs, searches) show as rows of their own between the
+operations, in their start order: `ActivityLogCall` rows at the top level. Unchecked, they are
+hidden; a read made inside an operation (the operation's own `status`, the undo's reads) is one of
+its calls and always shows under it.
 
 **Context menu** on a row (`RepositoryMenus.ForActivityLogRow`): `Copy command` (a call), `Copy
 output` (a call with output), `Copy title` (an operation). No other action: the log only shows.
 
 **What it never shows**: an operation dropped before it started (a closed tab, D81's "Quit now"),
-which has no record; the credentials of a prompt (the call log never has them, D103, and
-`ShellDriver.WhereWritten` keeps proving it).
+which has no record; the welcome page's open, init and clone, which run before a repository's tab
+has one (their calls are in the log file); the credentials of a prompt (the call log never has them,
+D103, and `ShellDriver.WhereWritten` keeps proving it).
 
 ### 2.3 What the records must carry
 
 Today `OperationRecord` is `(Id, Repository, Title, StartedAt, Duration, Outcome, Message)` in a
 session-wide `OperationLog` of 500, with no event; `GitCallRecord` carries `OperationId`; the
-backups' clean-up's removals reach only the log file (operations.md sections 3 and 4). Phase 5
-changes:
+call log is one ring of 2,000 calls, reads included; the backups' clean-up's removals reach only the
+log file (operations.md sections 3 and 4). Phase 5 changes:
 
-- `OperationRecord` gains `RepositoryKey` (the repository's common git folder, full path: unique
-  across tabs, unlike the folder name), `IsWarning`, `Kind` (Local or Network), `IsBackground`,
-  `FailureSummary` (the summary the error dialog shows, or null) and `Notes` (a list of strings).
-  `OperationQueue.Record` fills them from the entry and the result.
-- `IOperationLog` gains an event `Added(OperationRecord)` (raised on the thread that adds; the
-  panel posts to the UI thread), `Note(operationId, text)` (kept until that operation's record is
-  added, then put in its `Notes`; a note for an id with no record after 10 minutes is dropped), and
-  a `Running` entry: `OperationQueue` tells the log when an operation starts (`Started(id, key,
-  title, startedAt)`) so the panel can show it as running.
-- The backups' clean-up returns what it removed (`IReadOnlyList<RemovedBackup>`, already returned by
-  `IGitRepository.CleanUpBackupsAsync`); `RepositoryOperations.CleanUpBackupsAsync` and the
+- **Keys and order.** `OperationRecord` gains `RepositoryKey` (the worktree's own git folder, as
+  7.1's histories: unique per worktree, unlike the folder name) and `Sequence`; `GitCallRecord`
+  gains `Sequence`. Both sequences come from one session-wide counter (`Interlocked`), taken when the
+  operation or call **starts**, so the panel orders rows by start whatever the times say (the
+  harnesses freeze them) and whenever the panel was opened. A read belongs to the worktree whose
+  working tree holds the call's `WorkingDirectory` (the first `rev-parse` of `OpenAsync` can run in a
+  subfolder).
+- **More of each operation.** `OperationRecord` gains `IsWarning`, `Kind` (Local or Network),
+  `IsBackground` and `Notes` (a list of strings), filled by `OperationQueue.Record`, and
+  `FailureSummary`, which the queue cannot know (the error dialog's summary is chosen after the
+  operation, by `RunOptions.DescribeFailure` or the text's own summary): `IOperationLog.SetFailureSummary(id,
+  summary)` is called by `RepositoryOperations.ShowResultAsync` once it has chosen the summary (also
+  when the tab has closed or no dialog is shown), and the panel updates the row.
+- **Events.** `IOperationLog` gains `Started(id, key, title, sequence)` (raised by the queue when an
+  operation starts, so the panel shows it running), `Added(record)`, `Note(operationId, text)` (kept
+  until that operation's record is added, then put in its `Notes`; a note for an id with no record
+  after 10 minutes is dropped), `Updated(id)` and `Evicted(id)`; all raised on the thread that acts,
+  the panel posting to the UI thread.
+- **Calls kept with their operation.** `GitCallLog` keeps the calls that carry an `OperationId` until
+  that operation's record leaves the 500 (`Evicted`), and the reads in a ring of 2,000 of their own,
+  so a burst of reads never takes an operation's commands away. A memory budget of 64 MB for the
+  kept operation calls (each output is already cut to 16 KiB) drops the oldest operation's calls
+  first, which then shows `Its git commands are no longer kept.`
+- **Input and temporary index.** `GitCommand` gains `RecordsStandardInput` (set only by
+  `update-ref --stdin`, whose lines name refs and SHAs and carry no secret) and the record keeps that
+  input; a command run with `GIT_INDEX_FILE` set is marked `OnTemporaryIndex`.
+- **The backups' clean-up** returns what it removed (`IReadOnlyList<RemovedBackup>`, already returned
+  by `IGitRepository.CleanUpBackupsAsync`); `RepositoryOperations.CleanUpBackupsAsync` and the
   background "Clean up backups" pass each removal to `IOperationLog.Note(GitOperationScope.Current,
   "Removed backup {name} ({reason})")`, with the same words as the log file's line. The background
-  operation's message becomes `Removed {N} backups` (still never shown in the status bar, D139).
-- `GitCallLog` keeps its 2,000 calls and its `Added` event; the panel indexes calls by
-  `OperationId` as they come.
-- **Times for pictures.** `OperationRecord.StartedAt` and `Duration`, and `GitCallRecord.StartedAt`
-  and `Duration`, come from a `RecordClock` (`TimeProvider`) that `AppSession.Start` passes to
-  every queue and to the runner, `TimeProvider.System` by default. Both harnesses give a frozen
-  clock at 2026-01-02 09:00:00 UTC (the app's commit time, D72): the headless one through
-  `AppSession.Start`'s new `recordClock` parameter, the real-window pass through the environment
-  variable `VISUALCOMMIT_RECORD_CLOCK=frozen` that `RealApp.Launch` sets. Every time then reads
-  `09:00:00` and every duration `0 ms`, so the panel's pictures are the same in every run and in
-  both harnesses. The real durations still go to the log file and Q1's measurements, which use
-  their own stopwatches.
+  operation's message becomes `Removed {N} backups` (`Removed 1 backup`; still never shown in the
+  status bar, D139).
+- **Times for pictures.** The times the panel shows (`OperationRecord.DisplayedStart` and
+  `DisplayedDuration`, `GitCallRecord.DisplayedStart` and `DisplayedDuration`) come from a
+  `RecordClock` (`TimeProvider`) that `AppSession.Start` passes to every queue and to the runner,
+  `TimeProvider.System` by default. The queue keeps its own system-clock start (`entry.StartedAt`)
+  for the stale-lock scan after a cancel (D126) and its stopwatch for the log file's `after {N} ms`;
+  the runner likewise. Both harnesses give a frozen record clock at 2026-01-02 09:00:00 UTC (the
+  app's commit time, D72): the headless one through `AppSession.Start`'s new `recordClock`
+  parameter, the real-window pass through `VISUALCOMMIT_RECORD_CLOCK=frozen`, which `RealApp.Launch`
+  sets. Every time then reads `09:00:00` and every duration `0 ms`.
+- **Backup names and the clean-up's "now" in tests.** `GitRepository.BackupClock` (today the system
+  clock) is given by `AppSession.Start` to every repository the app opens (`backupClock`), and both
+  harnesses give one that says it is 2026-01-02 09:00:00.000 UTC for the clean-up and names each
+  backup one second after the last (`VISUALCOMMIT_BACKUP_CLOCK=fixed` for the real window): backups
+  the checks make get the same names in every run and both passes, still in order, and a scenario's
+  backups are judged against a fixed day (15.1). Phase 3's and 4's checks and App tests that make
+  backups or age them by the wall clock are adjusted in the same commit (`RepositoryOperationsBackupCleanupTests`
+  dates its old backups against the clock it is given).
 
 ### 2.4 Tests
 
-`ActivityLogViewModelTests` (records and calls as they come, the grouping by id, reads shown and
-hidden, notes, an evicted operation's calls, the running row, per-repository state), `OperationLogTests`
-(the event, notes before and after the record, the 500 limit), `ActivityLogViewTests` (the header, a
-row opened by click and by Right, the splitter's limits, Esc, the session's height), and the
+`ActivityLogViewModelTests` (records and calls as they come, the grouping by id, the order by
+sequence with equal times and with the panel opened late, reads by worktree, shown and hidden, two
+tabs' reads, notes, the failure summary set after the record, an evicted operation's calls, a burst
+of reads that evicts no operation's call, the running row, per-worktree state), `OperationLogTests`
+(the events, notes before and after the record, the 500 limit, `Evicted`), `GitCallLogTests` (the
+two stores and the budget), `ActivityLogViewTests` (the header, a row opened by click and by Right,
+the splitter's limits, Esc with the resolver, the list or a page open, the session's height), and the
 scripted checks of section 15.
 
 ## 3. Search
 
-### 3.1 The box
+### 3.1 The bar
 
 The toolbar's Search, or its key (1.3), shows the graph (closing a diff or a page of section 11,
-which hold no work; disabled while the interactive list or the resolver is open) and opens the
-search bar (`SearchBar`, `SearchBarView`) at the top of `RepositoryGraphView`, under the banner and
-above the column headers. It is 36 high, `VcChromeBackgroundBrush` with a 1-px `VcBorderBrush` line
-along its bottom, and pushes the column headers and rows down by 36, as the banner does (D122: every
-harness takes row positions from the control's bounds; the real-window pass's `GraphRowsTop` learns
-the bar). Left to right, 8 from the edges, 6 apart:
+which hold no work) and opens the search bar (`SearchBar`, `SearchBarView`) at the top of
+`RepositoryGraphView`, under the banner and above the column headers. It is 36 high,
+`VcChromeBackgroundBrush` with a 1-px `VcBorderBrush` line along its bottom, and pushes the column
+headers and rows down by 36, as the banner does (D122: every harness takes row positions from the
+control's bounds; the real-window pass's `GraphRowsTop` learns the bar). Left to right, 8 from the
+edges, 6 apart:
 
-| Part | Automation id | What |
-|---|---|---|
-| Mode button | `SearchModeButton` | `VcActionButton` labelled with the mode and `IconChevronDown`: `Commits`, `Files` or `Changes`. A click opens the mode menu through the menu layer (D141's reason: a combo box's dropdown is a window outside the capture): `Commits: message, author or SHA`, `Files: a path or file name`, `Changes: text added or removed`. The mode is kept per repository for the session |
-| Text box | `SearchBox` | Takes the rest of the width (at least 120). Placeholder by mode: `Message, author or SHA`, `File name or path`, `Text added or removed` |
-| Count | `SearchCount` | Secondary text: empty while the box is empty; `Searching…` while a search runs and found nothing yet; `{n} so far…` while it runs with matches; then `No matches`, `{n} matches`, or `{k} of {n}` while the selected commit is the k-th match in row order |
-| Previous, next | `SearchPrevious`, `SearchNext` | `VcIconButton`s with `IconChevronUp` and `IconChevronDown`, tooltips `Previous match (Shift+Enter)` and `Next match (Enter)`; disabled without matches |
-| Close | `SearchClose` | `VcIconButton`, `IconClose`, tooltip `Close the search (Esc)` |
+| Part | Automation id | Width | What |
+|---|---|---|---|
+| Mode button | `SearchModeButton` | its text (about 90) | `VcActionButton` labelled with the mode and `IconChevronDown`: `Commits`, `Files` or `Changes`. A click opens the mode menu through the menu layer (D141's reason: a combo box's dropdown is a window outside the capture): `Commits: message, author or SHA`, `Files: a path or file name`, `Changes: text added or removed`. The mode is kept per repository for the session |
+| Text box | `SearchBox` | the rest, at least 120 | Placeholder by mode: `Message, author or SHA`, `File name or path (case ignored for A–Z)`, `Text added or removed (case ignored for A–Z)` |
+| Count | `SearchCount` | as its text needs, at most 110 | Secondary text, the first that holds: empty while the box is empty; `Searching…` while a search runs and found nothing yet; `{n} so far…` (`1 so far…`) while it runs with matches; `No matches`; `{k} of {n}` while the selected commit is the k-th match in row order; `{n} matches` (`1 match`) |
+| Previous, next | `SearchPrevious`, `SearchNext` | 22 each | `VcIconButton`s with `IconChevronUp` and `IconChevronDown`, tooltips `Previous match (Shift+Enter)` and `Next match (Enter)`; disabled without matches |
+| Close | `SearchClose` | 22 | `VcIconButton`, `IconClose`, tooltip `Close the search (Esc)` |
+
+At 1100×700 (440 wide) the parts take about 90 + 6 + box + 6 + count + 6 + 22 + 6 + 22 + 6 + 22 + 16;
+when the area is too narrow for the box's 120 the count is cut with "…" (its whole text in the
+tooltip), then hidden; the close button never moves out. While a Changes search runs, a 2-px
+determinate progress bar (`SearchProgress`, `VcAccentBrush`) lies along the bar's bottom edge, its
+help text and tooltip `Searched {k} of {n} commits`.
 
 Opening the bar puts the keyboard focus in the box with its text selected. The box searches as the
-user types, 300 ms after the last key (Commits) or 600 ms (Files, Changes), and at once on Enter
-when nothing ran for the text yet. A new search cancels the one running. An empty box clears the
-marks. Enter in the box goes to the next match, Shift+Enter to the previous one: "after" and
-"before" are in row order from the selected row (or from the top when nothing is selected),
-wrapping round; the match is selected as a click selects it (the right panel shows it) and
-scrolled into view (`ScrollIntoView`, not centred, so the eye can follow). Esc in the bar closes it
+user types, 300 ms after the last key (Commits) or 600 ms (Files, Changes), and at once on Enter when
+nothing ran for the text yet. A new text or mode cancels the search that runs. An empty box clears
+the marks. Enter in the box goes to the next match, Shift+Enter to the previous one: "after" and
+"before" are in row order from the selected row (or from the top when nothing is selected), wrapping
+round; the match is selected as a click selects it (the right panel shows it) and scrolled into view
+(`ScrollIntoView`, not centred, so the eye can follow). Esc in the bar closes it
 (`EscapeOrder.Search` = 390, before the diff's 400; the diff's handler declines in a text box
 anyway). Closing clears the marks, keeps the selection, and gives the focus to the graph.
 
@@ -411,13 +462,13 @@ other.
 | Mode | Matches | How |
 |---|---|---|
 | Commits | the whole message contains the text; or the author's name or e-mail contains it; or the SHA starts with it (4 to 40 hex digits). Case is ignored | message: git with `-F --regexp-ignore-case --grep=<text>`; author and SHA: in memory over the rows (`%aN`/`%aE` already apply the mailmap, as git's `--author` does); the union |
-| Files | the commit's own change (against its first parent, as the right panel lists it) touches a path containing the text; `\` in the text is read as `/`; case is ignored (ASCII letters only, as git folds them: the tooltip of the mode's menu item says so) | `--first-parent -- ":(glob,icase)**/*<t>*" ":(glob,icase)**/*<t>*/**"`, `<t>` with `*?[\` escaped, with `GIT_LITERAL_PATHSPECS` removed for this call (as `AllIgnoredAsync` removes it) |
-| Changes | the commit's own change adds or removes the text (the number of its occurrences changes, O7); case is ignored (ASCII letters) | `--first-parent --diff-merges=first-parent --root --find-renames --no-textconv -s --regexp-ignore-case -S<text>`; on a git older than 2.31 without `--diff-merges=first-parent` (`--first-parent` implies it from 2.29). Never with an empty text |
+| Files | the commit's own change (against its first parent, as the right panel lists it) touches a path containing the text; `\` in the text is read as `/`; case is ignored for the letters A to Z (git's `icase` folds ASCII only: the placeholder says so) | `--first-parent -- ":(glob,icase)**/*<t>*" ":(glob,icase)**/*<t>*/**"`, `<t>` with `*?[\` escaped, with `GIT_LITERAL_PATHSPECS` removed for this call (as `AllIgnoredAsync` removes it) |
+| Changes | the commit's own change adds or removes the text (the number of its occurrences changes, O7); case is ignored for A to Z | `--first-parent --diff-merges=first-parent --root --find-renames --no-textconv -s --regexp-ignore-case -S<text>`; on a git older than 2.31 without `--diff-merges=first-parent` (`--first-parent` implies it from 2.29). Never with an empty text |
 
 A match whose SHA is not a row (none should come) is dropped and logged at Debug. A call that fails
 with `fatal: bad object` (the graph is older than a `gc` that pruned) stops the search quietly; the
-next refresh runs it again. The Changes mode can take tens of seconds on a large history: its count
-shows `Searched {k} of {n} commits…` while it runs, and the graph stays usable.
+next refresh runs it again. The Changes mode can take tens of seconds on a large history (0.3); the
+graph stays usable meanwhile.
 
 ### 3.3 How the graph shows it
 
@@ -434,38 +485,40 @@ is not empty:
 - the selection and hover backgrounds are unchanged, so the match Enter went to is the selected
   row.
 
-With no search active the control draws exactly as today: every picture of phases 1 to 4 that has
-no search keeps its pixels (apart from section 10's stash lines and section 14's toolbar).
-Lookups are a hash set per visible row, within D50's frame budget.
+With no search active the control draws exactly as today. Lookups are a hash set per visible row,
+within D50's frame budget.
 
 ### 3.4 Results and reloads
 
-Matches arrive as SHAs while git prints them (3.2) and are applied in batches at most every 100 ms;
-the count follows. A SHA the graph does not have is ignored (none should come: the search names the
-graph's refs). A reload of the graph (a refresh after an operation or an outside change) runs the
-search again on the new graph, keeping the selection; closing the tab cancels it.
+Matches arrive as SHAs while git prints them and are applied in batches at most every 100 ms; the
+count follows. The results of the git-run part (message, files, changes) are kept by SHA, matched or
+not, for the current mode and text: a commit's message, its first-parent change and its pickaxe
+result never change. When the graph is swapped after a refresh (an operation, an outside change, a
+fetch that brought commits), the marks and the count stay; the author and SHA matches are made again
+in memory; and git is given only the new graph's rows not searched yet, in the same chunks, the
+count showing `{n} so far…` meanwhile. Only a new text or mode starts over. Closing the tab cancels
+the search.
 
 ## 4. File history and blame
 
 Both open in place of the graph as pages of the graph area (section 11, D158), from the file menus
-(4.4), and from each other.
+and the details panel's "All files" (4.4, 4.5), and from each other.
 
 `IGitRepository.ReadFileHistoryAsync(startSha, path, onRow, token)` runs 0.1's history command and
 hands over a `FileHistoryRow` (the commit as the graph's `CommitInfo`, the entry's status, the path
 at that commit, the old path of an `R` or `C`) for each commit as git prints it. No merge is listed,
 as `git log --follow` lists none (0.1); a file renamed on a branch while another branch edited the
-old name misses that branch's edits (git's own limit; the handoff says so). The start is resolved
-to a full SHA when the page opens and stays fixed.
+old name misses that branch's edits (git's own limit; the handoff says so). The start is resolved to
+a full SHA when the page opens and stays fixed.
 
 `IGitRepository.ReadBlameAsync(sha or null, path, token)` runs 0.1's blame command (no revision for
 the working tree) and returns a `BlameResult`: the lines' bytes (Latin-1 strings, as diff lines are)
-and, per line, its commit (`BlameCommit`: SHA, author, e-mail, author time and zone, summary, the
-path at that commit, `previous`); the zero SHA is "not committed yet". The parse is a three-state
-machine (a header, metadata lines, a tab line), checks that the final line numbers run 1 to N,
-C-unquotes `filename` and `previous`, decodes author and summary as UTF-8, and reads
-`summary (<sha>)` as an empty message. `blame.ignoreRevsFile` is honoured; when it names a missing
-file the page says `Blame stopped: the git setting blame.ignoreRevsFile names {file}, which does not
-exist.`
+and, per line, its commit (`BlameCommit`: SHA, author, e-mail, author time and zone, summary, the path
+at that commit, `previous`, `boundary`); the zero SHA is "not committed yet". The parse is a
+three-state machine (a header, metadata lines, a tab line), checks that the final line numbers run 1
+to N, C-unquotes `filename` and `previous`, decodes author and summary as UTF-8, and reads `summary
+(<sha>)` as an empty message. `blame.ignoreRevsFile` is honoured; when it names a missing file the
+page says `Blame stopped: the git setting blame.ignoreRevsFile names {file}, which does not exist.`
 
 ### 4.1 File history
 
@@ -477,19 +530,26 @@ index, and from the commit for a commit's file.
   folder in the secondary colour, `from {short}` when it starts at a commit other than HEAD, then
   on the right `Blame` (`FileHistoryBlame`, a `VcActionButton`: the blame of the selected row's
   version) and the close button (`FileHistoryClose`).
-- **The list** (`FileHistoryList`), rows 26 (`FileHistoryRow`): the status letter in the changed-file
-  list's colours (`A`, `M`, `D`, `R`, `C`, `T`), the short SHA in the code font, the subject, then
-  in the secondary colour `renamed from {old path}` (an `R` row), `copied from {path}` (a `C` row),
-  `added` or `deleted` (so a file deleted and added again reads as two lives), or `as {path}` on a
-  row whose path differs from the one the history opened for; the author; the date
-  (`DateDisplay`). Columns are hidden right to left as the graph's are (D49) when the width runs
-  short. Selecting a row shows that commit in the right panel
-  (11.3) and its change to the file in the diff part.
-- **The diff part**: the file's diff at the selected commit against its first parent (a merge: the
-  first parent), with the paths at that commit, through the same `DiffView` the graph area uses,
-  hosted by the page (its own `IDiffHost` that reads through the repository and has no write
-  action; Inline and Side by side as the setting says). The first row is selected when the list
-  loads.
+- **The list** (`FileHistoryList`), rows 26 (`FileHistoryRow`, automation name `{short} {subject}`),
+  left to right: the status letter in the changed-file list's colours (`A`, `M`, `D`, `R`, `C`,
+  `T`), the short SHA in the code font, the subject, then in the secondary colour `renamed from {old
+  path}` (an `R` row), `copied from {path}` (a `C` row), `added` or `deleted` (so a file deleted and
+  added again reads as two lives), or `as {path}` on a row whose path differs from the one the history
+  opened for; the author; the date (`DateDisplay`). When the width runs short the date goes first,
+  then the author, then the secondary text; the subject keeps at least 120 and is cut with "…", its
+  whole text in the tooltip.
+- **Selecting a row** loads its change into the diff part. Only the user's click or key on a row
+  also shows that commit in the right panel and selects it behind the page (11.3); the first row,
+  selected when the list loads, fills only the diff part, so the right panel keeps what it showed
+  (the stage panel, when the page was opened from it).
+- **The diff part** (`FileHistoryDiff`): the file's diff at the selected commit against its first
+  parent, with the paths at that commit (0.1), through phase 2's `DiffView` with its own
+  `DiffViewModel`, reused for every row (`LoadAsync` per row) and hosted by the page through its own
+  `IDiffHost`, which reads through the repository and has no write action. Two new properties keep it
+  from acting as the main diff: `DiffViewModel.ShowsClose` false (no `CloseDiffButton`: the page has
+  its own close) and `DiffView.TakesFocusOnOpen` false (the focus stays in the list, so Up and Down
+  walk it). It has no context menu, on purpose: the row's menu holds the commit's actions. Inline
+  and Side by side follow the setting.
 - **Layout**: list and diff side by side when the page is at least 760 wide (list 45 %, diff 55 %),
   otherwise the list above (40 % of the height, at least 3 rows) and the diff below: at 1100×700
   the graph area is 440 wide, at 1920×1080 it is 1260.
@@ -497,35 +557,42 @@ index, and from the commit for a commit's file.
   commit; disabled `This commit is not in the graph` when no shown ref reaches it), `Blame at this
   commit`, `Copy SHA`. A double-click on a row does `Show in graph`.
 - **Loading**: rows come as git prints them; `Loading…` (secondary) until the first one; `No commit
-  has touched {name} yet` when git lists none (4.4 disables the item for a file in no commit); a
-  failure shows git's message in the list's place. Closing the page cancels the read.
+  has touched {name} yet` when git lists none; a failure shows git's message in the list's place.
+  Closing the page cancels the read.
 
 ### 4.2 Blame
 
 `BlameViewModel` / `BlameView` (`Blame`). It shows the file with, for each line, the commit that last
-changed it: at a commit for a commit's file, in the working tree for a file of the working tree, in
-the index for a staged file.
+changed it: at a commit for a commit's file, in the working tree for a file of either stage list
+(lines staged or not are "not committed yet").
 
 - **Header** 36 (`BlameHeader`): `IconBlame`, `Blame of {name}` (`BlameTitle`), `at {short}
-  {subject}`, `in the working tree` or `in the index` in the secondary colour, then `History`
-  (`BlameHistory`, the file's history from the same commit) and the close button (`BlameClose`).
-- **The text** (`BlameText`): a read-only `CodeTextEditor` (phase 2's base) in the code font, with
-  the diff's syntax colours for the file's type (`DiffSyntax`), line numbers, and no caret.
-- **The gutter** (`BlameGutter`), left of the line numbers, 200 wide: lines are grouped in runs of
-  consecutive lines from one commit; the first line of a run shows the short SHA (code font), the
-  author (cut with "…") and the date (`yyyy-MM-dd`), the run's other lines nothing; runs alternate
-  between `VcPanelBackgroundBrush` and the window's background so a run's extent is visible; a line
-  not committed yet shows `Not committed yet` in `VcWarningBrush`. Hovering a run shows its whole
-  commit in a tooltip: the SHA, the author and e-mail, the date and the subject.
-- **Click-through** (D158): a click on a run, in the gutter or on its text, selects that commit in
-  the graph behind the page and the right panel shows it (11.3); the run's lines get
-  `VcSelectionBrush` in the gutter. A double-click does `Show in graph`. The gutter's menu
-  (`ForBlameRun`): `Show in graph`, `Blame before this commit` (the blame at the commit's first
-  parent, of the path it had there: how one goes further back), `History of {name}`, `Copy SHA`.
-  This makes D158's two clicks: right-click a file, `Blame` shows every line's commit.
+  {subject}` or `in the working tree` in the secondary colour, then `File history` (`BlameHistory`,
+  the file's history from the same commit) and the close button (`BlameClose`).
+- **The text** (`BlameText`): a read-only `CodeTextEditor` (phase 2's base) in the code font at 12
+  (a line 15.84 high, as the diff's), with the diff's syntax colours for the file's type
+  (`DiffSyntax`), line numbers, and no caret; its automation peer is a Document whose value is the
+  text, as the resolver's result's is.
+- **The gutter** (`BlameGutter`, a control element of its own), left of the line numbers, 200 wide
+  while the page is at least 700 wide and 130 below (then the author moves into the tooltip): lines
+  are grouped in runs of consecutive lines from one commit; the first line of a run shows the short
+  SHA (code font), the author (cut with "…") and the date (`yyyy-MM-dd`), the run's other lines
+  nothing; runs alternate between `VcPanelBackgroundBrush` and the window's background so a run's
+  extent is visible; a line not committed yet shows `Not committed yet` in `VcWarningBrush`.
+  Hovering a run shows its whole commit in a tooltip: the SHA, the author and e-mail, the date, the
+  subject, and `as {path}` when the line came from another path.
+- **Click-through** (D158): a click on a run, in the gutter or on its text, selects that commit in the
+  graph behind the page and the right panel shows it (11.3); the run's lines get `VcSelectionBrush`
+  in the gutter. A double-click does `Show in graph`. The gutter's menu (`ForBlameRun`): `Show in
+  graph`, `Blame before this commit` (the blame at the commit's first parent, of the path it had
+  there, from `previous`: how one goes further back; disabled `This is the file's first commit` on a
+  run without `previous`), `File history`, `Copy SHA`. On a run not committed yet the menu has only
+  `Show in graph`, which selects the working-changes row.
+- **Loading**: `Loading…` (secondary) in the text's place until git ends (blame prints only at its
+  end: 0.4 s for 3,000 lines, 1.9 s for an old line of the 100k repository); closing the page cancels
+  it.
 - **Large**: a file over phase 2's very-large limit (D65: 10,000 lines or 1 MiB) is shown without
   syntax colours.
-
 - **Binary, empty, failed**: a line with a NUL byte makes the page say `{name} is a binary file: it
   has no lines to blame`; no output says `{name} is empty`; git's failure is shown in the text's
   place with git's message.
@@ -541,9 +608,9 @@ panel then shows the changes).
 ### 4.4 Where they open
 
 `File history` and `Blame` are one group, before `Open file`, in the file menus (`ForUnstagedFile`,
-`ForStagedFile`, `ForCommitFile`, `ForDiff`, and the resolver's header menu, which is
-`ForUnstagedFile`), as items of D92's kind: left out where they cannot apply, disabled where the
-reason helps.
+`ForStagedFile`, `ForCommitFile`, `ForDiff`), as items of D92's kind: left out where they cannot
+apply, disabled where the reason helps. The conflict resolver's header menu (which is
+`ForUnstagedFile`) leaves them out: opening a page would close the resolver.
 
 | Place | File history from | Blame of |
 |---|---|---|
@@ -551,26 +618,39 @@ reason helps.
 | A file deleted in the working tree | HEAD | HEAD's version, titled `at HEAD` |
 | An untracked file, a staged new file | disabled: `This file is in no commit yet` | disabled, the same |
 | A nested repository | left out | left out |
-| A conflicted file | HEAD (empty for `AA`: `No commit has touched {name} yet`) | the working tree when the file exists (merge-aware, 0.1), else HEAD's version, else disabled |
-| A commit's file (`FileMenuTarget.CommitSha`), and a commit's diff | that commit, the path at it | that commit; a file the commit deleted: its first parent, titled `before {short}` |
+| A conflicted file (the stage list) | HEAD (empty for `AA`: `No commit has touched {name} yet`) | the working tree when the file exists (merge-aware, 0.1), else HEAD's version, else disabled |
+| A commit's file (`FileMenuTarget.CommitSha`), a commit's diff, a file of "All files" (4.5) | that commit, the path at it | that commit; a file the commit deleted: its first parent, titled `before {short}` |
 | A stash's file | the stash's base (`^1`); the stash row's details show the stash itself | the stash commit |
 | A row of the history page | — | `Blame at this commit`: that commit and the path at it (a `D` row: its parent) |
 | An unborn repository | disabled: `Make the first commit first` | disabled, the same |
 
-The two clicks of D158 ("any line of any file traced to its commit"): a right-click on the file and
-`Blame`.
+Plan.md's "Done when" (any line of any file traced to its commit in two clicks): with "All files"
+on, a right-click on any file of the shown commit and `Blame`, or a click on an unchanged file (4.5).
+
+### 4.5 All files (D164)
+
+The details panel's file list (`RightPanelView`) gains a third button, `All files`
+(`AllFilesButton`, a `FileListToggle` beside Flat and Tree, class `selected` while on). While it is
+on, the list shows every file of the shown commit's tree (`IGitRepository.ReadTreeFilesAsync(sha)`:
+`ls-tree -r -z --name-only <sha>`, read with the details): the commit's changed files with their
+status letters as today, and the unchanged ones without a letter, in the Flat or Tree arrangement the
+setting chooses; the title reads `All files ({N})`. It is a setting, `AppSettings.ShowAllFiles`
+(default false), so it stays as the user left it. A click on a changed file opens its diff as today
+(D63); a click on an unchanged file opens its blame at that commit (a page, 4.2). Every row's menu is
+`ForCommitFile`, with File history and Blame. A stash's details and the comparison's list (6.4) have
+no `All files`. With the button off, the panel is as in phase 1, apart from the button itself.
 
 ## 5. The reflog and backups view
 
 ### 5.1 Where it opens
 
-A page of the graph area (section 11), `ReflogViewModel` / `ReflogView` (`Reflog`), opened from:
-the empty graph area's menu and the working-changes row's menu, `Show reflog` (HEAD's); a local
-branch's menu, `Show reflog of {b}`; and the toolbar's Undo tooltip says, when nothing is left to
-undo in the session, `Nothing to undo. Older actions: Show reflog` (the words only; the menu item is
-the way in). The page's header has a selector (`ReflogSource`, a `VcActionButton` with the source's
-name and `IconChevronDown`, opening a menu through the menu layer) to switch between `HEAD`, each
-local branch, and `Backups`.
+A page of the graph area (section 11), `ReflogViewModel` / `ReflogView` (`Reflog`), opened on HEAD's
+reflog by `Show reflog`, on the backups by `Show backups`, both in menus that always exist: the Local
+branches section's menu (`ForSection`), the empty graph area's menu and the working-changes row's
+menu; and on a branch's reflog by `Show reflog of {b}` in a local branch's menu. The page's header
+has a selector (`ReflogSource`, a `VcActionButton` with the source's name and `IconChevronDown`,
+opening a menu through the menu layer) to switch between `HEAD`, each local branch, and `Backups`,
+and the close button (`ReflogClose`).
 
 ### 5.2 A reflog
 
@@ -585,14 +665,14 @@ placeholder gives an entry's time together with its index (0.2):
    <zone>}`, the entry's own time.
 
 The result is used only when both list the same SHAs in the same order; otherwise (a ref moved
-between the calls) both are read once more. A missing reflog (a deleted branch, an unborn HEAD) is
-no rows. Then `git rev-list --ignore-missing --stdin --not --branches --tags --remotes HEAD` with the
+between the calls) both are read once more. A missing reflog (a deleted branch, an unborn HEAD) is no
+rows. Then `git rev-list --ignore-missing --stdin --not --branches --tags --remotes HEAD` with the
 rows' distinct SHAs marks which are lost; it runs after the list shows and fills the column in. The
 page reads again on every refresh while it is open (some entries change no ref target: `checkout:
 moving from main to main`), and never while it is closed.
 
-Rows 26 (`ReflogRow`), newest first, in git's order (the tests' app commits all share 2026-01-02
-09:00, so time cannot order them):
+Rows 26 (`ReflogRow`, automation name its selector), newest first, in git's order (the tests' app
+commits all share 2026-01-02 09:00, so time cannot order them):
 
 | Part | Content |
 |---|---|
@@ -602,21 +682,25 @@ Rows 26 (`ReflogRow`), newest first, in git's order (the tests' app commits all 
 | Commit | the entry's commit: short SHA and subject |
 | Lost | `IconAlert` in `VcWarningBrush` with the tooltip `No branch, tag or remote branch reaches this commit` when that holds |
 
+When the width runs short the time goes first, then the selector; the action and the commit are
+`TrimmedTextBlock`s (cut with "…", the whole text in the tooltip).
+
 Selecting a row shows its commit in the right panel (11.3). The rows' menu (`ForReflogEntry`):
 `Create branch here…`, `Check out this commit`, `Reset {cur} to this commit…`, `Cherry-pick onto
 {cur}`, `Show in graph` (disabled when the graph does not have it), `Copy SHA`; each is phase 3's
 operation with its own question and backup, so nothing new restores; their disabled reasons come
 from the row (its parents, lost or not, HEAD at it), not from the graph. A double-click does `Show
-in graph`. A reflog that git keeps none of says `{name} has no reflog`. When git skipped entries
-(their numbers are missing: a commit that no longer exists, or the empty entry a rename of the
-checked-out branch writes), a last line says `{N} entries are not shown: they name no commit that
-exists`. Each restore action checks inside its operation that the commit still exists (`cat-file -e
-<sha>^{commit}`), since a `gc` may have run since the read. The page's empty state explains git's
-rules: `Git keeps a reflog entry for 90 days, and for 30 days when no branch holds its commit.`
+in graph`. A reflog that git keeps none of says `{name} has no reflog`. When git skipped entries (their
+numbers are missing: a commit that no longer exists, or the empty entry a rename of the checked-out
+branch writes), a last line (`ReflogFooter`) says `1 entry is not shown: it names no commit that
+exists` / `{N} entries are not shown: they name no commit that exists`. Each restore action checks
+inside its operation that the commit still exists (`cat-file -e <sha>^{commit}`), since a `gc` may
+have run since the read. The page's empty state explains git's rules: `Git keeps a reflog entry for 90
+days, and for 30 days when no branch holds its commit.`
 
-The source menu lists `HEAD`, the local branches (by name) and `Backups`; remote-tracking reflogs
-are left out (they start only at the first fetch and show what fetches did, which the activity log
-shows better), and so is `refs/stash` (its entries are the stash list the graph already shows).
+The source menu lists `HEAD`, the local branches (by name) and `Backups`; remote-tracking reflogs are
+left out (they start only at the first fetch and show what fetches did, which the activity log shows
+better), and so is `refs/stash` (its entries are the stash list the graph already shows).
 
 ### 5.3 Backups
 
@@ -626,14 +710,15 @@ The `Backups` source lists the backups under `refs/visualcommit/backup/` that th
 
 | Part | Content |
 |---|---|
-| Time | from its name, `yyyy-MM-dd HH:mm:ss` |
-| What | the backup in words, by kind (12.3): `Before discarding 3 files`, `Before a hard reset of main`, `Deleted branch feature/old`, `Dropped stash "WIP on main"`, `Before a force push of main to origin`, … |
+| Time | from its name (UTC), shown as `yyyy-MM-dd HH:mm:ss` in `DateDisplay`'s zone |
+| What | the backup in words, by kind (12.3) |
 | Commit | the commit it keeps (the first ref's), short SHA and subject |
 
-Its menu restores by kind (`ForBackup`, 7.10 lists each): `Restore branch {b}`, `Restore tag
-{t}`, `Restore stash`, `Restore the discarded files…`, `Restore the changes…`, `Push {b} back to
-{r}…`, and for every backup that holds a commit `Create branch here…`, `Check out this commit`,
-`Copy SHA`. These share the effects of the undo steps that do the same (7.3).
+Rows 26 (`BackupRow`, automation name the backup's name); the words and the subject are cut with
+"…" when the width runs short, their whole text in the tooltip. Its menu restores by kind
+(`ForBackup`, 7.10 lists each) and, for every backup that holds a commit, offers `Create branch
+here…`, `Check out this commit`, `Copy SHA`. These share the effects of the undo steps that do the
+same (7.3).
 
 ## 6. Compare
 
@@ -649,25 +734,28 @@ else ends the comparison. The two are ordered by the graph: the lower row is `Fr
 
 The branch menus offer `Compare {b} with {cur}` (local and remote branches other than the current
 one, and tags: `Compare {t} with {cur}`) and the drop menu `Compare {A} with {B}`. `From` is the
-current branch (or B), `To` the branch the menu is on (or A). It opens the same view in the right
-panel and stays until the user closes it (`CompareClose`), selects a single commit or the working
-row, or opens another comparison.
+current branch (or B), `To` the branch the menu is on (or A). Opening one leaves the working-changes
+row when it was selected (`IsWorkingRowSelected = false`; the stage panel's draft stays in memory),
+so that the details panel, which holds the comparison, shows. It stays until the user closes it
+(`CompareClose`), selects a single commit or the working row, or opens another comparison. Closing it
+shows the details of the graph's single selection, or the placeholder when there is none, and gives
+the focus to the graph.
 
 ### 6.3 What is compared
 
 - **Two commits**: their trees, `From` against `To` (two-dot): the user picked two snapshots. For
   commits on one line of history it is the same as "what happened between them".
 - **Two branches** (or a tag): by default the changes on `To` since it left `From` (three-dot: the
-  merge base against `To`, as a pull request shows them), with a switch `All differences` for the
-  two trees. Two-dot would show `From`'s own later changes reversed (0.3).
+  merge base against `To`, as a pull request shows them), with a switch `All differences` for the two
+  trees. Two-dot would show `From`'s own later changes reversed (0.3).
 - Commands (`IGitRepository.CompareAsync(from, to, threeDot, token)`): the names resolved to SHAs
-  first and kept, so that refs moving meanwhile change nothing; for three-dot `git merge-base
-  <from> <to>` (exit 1: no common history: three-dot is not offered, `No common history: showing
-  all differences`; several bases: the one git prints, and `Several merge bases: changes since
+  first and kept, so that refs moving meanwhile change nothing; for three-dot `git merge-base <from>
+  <to>` (exit 1: no common history: three-dot is not offered, `No common history: showing all
+  differences`; several bases: the one git prints, and `Several merge bases: changes since
   {short}`); then `diff-tree -r -z --name-status -M --no-ext-diff --no-color --no-commit-id <old>
-  <new>` with two SHAs, parsed by `ParseNameStatus`; and for branches `rev-list --left-right --count
-  <from>...<to>` beside it. Git's `rename detection was skipped` warning adds `Renames are shown as
-  removed and added files.`
+  <new>` with two SHAs (`<old>` the merge base in three-dot, `From` otherwise), parsed by
+  `ParseNameStatus`; and for branches `rev-list --left-right --count <from>...<to>` beside it. Git's
+  `rename detection was skipped` warning adds `Renames are shown as removed and added files.`
 - The same commit on both sides: `Both are {short}: nothing to compare`, without git.
 
 ### 6.4 The view
@@ -676,121 +764,209 @@ Header 36 (`CompareTitle` `Compare`, `CompareSwap` with `IconArrowDown` and `Ico
 `CompareClose` for a branch comparison), then:
 
 - `From {short} {subject}` and `To {short} {subject}` (`CompareFrom`, `CompareTo`), each a link that
-  selects that commit in the graph (as a parent link does); for branches the names: `From main`,
-  `To feature/alpha`, the counts `{a} commits only on {To}, {b} only on {From}`, and the switch
-  (`CompareAllDifferences`, a check box `All differences`);
+  **reveals** that commit's row in the graph without selecting it (a new `Reveal(sha)` that raises
+  `RevealRequested` and leaves the selection and the comparison alone; disabled, with the tooltip
+  `This commit is not in the graph`, when the graph lacks it); for branches the names: `From main`,
+  `To feature/alpha`, the counts (`CompareCounts`) `{a} commits only on {To}, {b} only on {From}` (`1
+  commit only on …`), and the switch (`CompareAllDifferences`, a check box `All differences`);
 - `Changed files ({N})` with Flat and Tree (the setting of D44), and the file list
   (`CompareFileList`, phase 1's `ChangedFileList` and rows);
-- a click on a file opens its diff between the two in the graph area (phase 2's diff view,
-  `DiffTarget(Commit, path, kind, oldPath, Commit: To, Parent: From)`), with the side label
-  `{from short}..{to short}`; the row keeps its selection while the diff is open; Esc closes the diff;
-- the files' menu: `Open file`, `Show in folder`, `Copy path`, and `File history`, `Blame` (at To).
+- a click on a file opens its diff in the graph area (phase 2's diff view, `DiffTarget(Commit, path,
+  kind, oldPath, Commit: To, Parent: <old>)`, `<old>` being the side the list was computed from: the
+  merge base in three-dot, `From` otherwise; the old path only from the list's own `R` or `C`
+  entry), with the side label `{old short}..{to short}`; the row keeps its selection while the diff
+  is open; Esc closes the diff;
+- the files' menu (`ForCompareFile`): `File history`, `Blame` (at To), then `Open file`, `Show in
+  folder`, `Copy path`.
 
-`No differences` when the two trees are the same.
+`Loading…` (secondary) shows under the header until the list is read; the counts fill in when
+ready. `No differences` when the two trees are the same.
 
-## 7. Undo and redo (D154, D155, D163)
+## 7. Undo and redo (D154, D155, D163, D165, D166)
 
 ### 7.1 The history
 
-Each repository has one `UndoHistory` for the app's session (`VisualCommit.Core.Undo`, pure, tested
-without git): a list of entries and a cursor between them. Undo applies the entry before the cursor
-backwards and moves the cursor back; Redo applies the entry after it forwards and moves it on; a new
-recorded action drops every entry after the cursor, then is added. `AppSession` keeps the histories
-in a dictionary keyed by the repository's common git folder (its full path), so closing a tab and
-opening the repository again in the same session keeps its history; nothing is written to disk or
-into the repository. At most 100 entries are kept per repository; the oldest goes first.
+Each worktree of a repository has one `UndoHistory` for the app's session (`VisualCommit.Core.Undo`,
+pure, tested without git): a list of entries and a cursor between them. Undo applies the entry before
+the cursor backwards and moves the cursor back; Redo applies the entry after it forwards and moves
+it on; a new recorded action drops every entry after the cursor, then is added. `AppSession` keeps
+the histories in a dictionary keyed by the worktree's own git folder (`IGitRepository.GitDirectory`,
+`.git/worktrees/<n>` for a linked worktree; full and normalised as `TabState`'s path): HEAD, the
+index and the files belong to a worktree, so two tabs on two worktrees of one repository never share
+a history, while closing a tab and opening the same worktree again in the session keeps its history.
+Two tabs on the same worktree share one. Nothing is written to disk or into the repository. At most
+100 entries are kept per worktree, the oldest dropped first: the history is for recent mistakes, and
+the bound keeps the backups the history holds back from the clean-up (7.8) bounded.
 
-An **entry** (`UndoEntry`): the action's text (7.6), the operation id it was recorded in, its
-effects in the order they happened (7.3), the backup refs its undo needs (7.8), and its state:
-`Done`, or `Pending` while the action it records is stopped (a merge, a pick, a revert or a rebase
-with the banner showing).
+An **entry** (`UndoEntry`): the action's kind and text (7.6), the operation id it was recorded in,
+its recorded values (the before and after states 7.3's sequences need), the backup refs it needs
+(7.8), and its state: `Done`, or `Pending` while the action it records is stopped (a merge, a pick, a
+revert or a rebase with the banner showing).
 
-### 7.2 What is recorded
+### 7.2 What is recorded, and how each destructive action is undone
 
 | Recorded (an entry each) | Not recorded |
 |---|---|
-| Commit and amend (the stage panel's Commit), checkout of every kind (a local branch, a remote branch into a tracking branch, a commit or tag, the automatic stash's checkout of 9.2), create, rename and delete a branch, fast-forward a branch, merge (both kinds, the drop's, "Check out and merge"), reset (soft, mixed, hard), cherry-pick and revert (one or a list), rebase onto, "Check out and rebase", interactive rebase, squash, pull (fast-forward, merge, rebase), stash, apply, pop, drop, create and delete a tag, discard (a file, a hunk, lines, all), the restore bar's Restore, ignore a file or an extension, set and stop tracking an upstream, add, rename and remove a remote, change a remote's URL, push a branch, force push, delete a branch on a remote, push a tag, delete a tag on a remote | Stage, unstage and applying lines to the index (the preparation of a commit, undone with one click in the stage panel; recording each would bury the actions people undo; GitKraken leaves them out too); fetch and auto-fetch (they change only remote-tracking refs, which no entry relies on except through a lease); the backups' clean-up; the conflict resolver's resolutions and the merge tool (they happen inside a stopped operation, during which undo is off, 7.4); open, show, copy; undo and redo themselves |
+| Commit and amend (the stage panel's Commit), checkout of every kind (a local branch, a remote branch into a tracking branch, a commit or tag, the automatic stash's checkout of 9.2, D91's "Stash changes and check out"), create (with or without checkout), rename and delete a branch, fast-forward a branch, merge (both kinds, the drop's), "Check out and merge", reset (soft, mixed, hard), cherry-pick and revert (one or a list), rebase onto, "Check out and rebase", interactive rebase, squash, pull (fast-forward, merge, rebase), stash, apply, pop, drop, create and delete a tag, discard (a file, a hunk, lines, all), the restore bar's Restore, ignore a file or an extension, set and stop tracking an upstream, add, rename and remove a remote, change a remote's URL, push a branch, force push, delete a branch on a remote, push a tag, delete a tag on a remote | Stage, unstage and applying lines to the index (the preparation of a commit, undone with one click in the stage panel; recording each would bury the actions people undo; GitKraken leaves them out too); fetch and auto-fetch (they change only remote-tracking refs, which no entry relies on except through a lease); the backups' clean-up; the conflict resolver's resolutions and the merge tool (they happen inside a stopped operation, during which undo is off, 7.4); Abort (D165: undone from the backups list); open, show, copy; undo and redo themselves |
 
 - An action that **changed nothing** (refused, up to date, `Everything up-to-date`, nothing to stash)
   records nothing.
 - An action that **stopped** (conflicts, an `edit` stop) records a `Pending` entry with its
   before-state. Continue, Skip and the stage panel's Commit that end the operation complete it with
   the after-state (one entry from before the action to the final result: a rebase with three stops
-  is one Undo); Abort removes it (the abort's own backups stay in the backups list, 5.3); an
-  operation that ends outside the app (a terminal) removes it at the next refresh.
-- **Failed half-way** (a multi-step operation whose second step failed: "Check out and merge" whose
-  merge failed): what changed is recorded (the checkout), as the effects are read, not assumed
-  (7.7).
+  is one Undo); Abort removes it (D165); an operation that ends outside the app (a terminal) removes
+  it at the next refresh. A Commit that ends an operation the app has no pending entry for (one
+  started in a terminal) records nothing.
+- **Failed half-way** (a "Check out and merge" whose merge failed): what changed is recorded (the
+  checkout), because the effects come from what was read, not from what was meant (7.7).
 
-### 7.3 Effects
+Every destructive action of phases 2 to 4 (D62, D83, D127, D142, D144, D148) and how it is undone:
 
-An entry is a list of **effects**, each with an exact way forward (redo) and back (undo) and its own
-check (`UndoEffect`, Core, a closed set of records; `GitRepository.Undo.cs` runs them). Undo runs the
-entry's effects backwards in reverse order, redo forwards in order. Every recorded action is made of
-these:
+| Destructive action | Undone by |
+|---|---|
+| Discard (file, hunk, lines, all) | Undo (7.3, discard), or the restore bar, or the backups list's `Restore the discarded files…` |
+| Reset (each mode) | Undo, or the backups list (`reset-…`: the commit; `-changes`: 7.10's restores) |
+| Delete a branch; delete a branch on a remote; remove a remote | Undo, or the backups list (`Restore branch {b}`; `Push {b} back to {r}…`; each remote branch's commit) |
+| Force push | Undo (asks), or the backups list's `Push {b} back to {r}…` |
+| Delete a tag; delete a tag on a remote | Undo, or the backups list (`Restore tag {t}`; `Push {t} back to {r}…`) |
+| Drop a stash | Undo, or the backups list's `Restore stash` |
+| Leaving a detached HEAD's commits | Undo of that checkout, or the backups list (`detached-…`: create a branch or check it out) |
+| Rebase of every kind (onto, interactive, squash, a pull's) | Undo, or the backups list (`rebase-…/<b>`: the old tip) |
+| Abort (merge, cherry-pick, revert, rebase, `git am`) | The backups list (D165): `Restore the changes…` from `abort-…-changes` and the commit of `abort-…`; the stopped operation does not come back |
+| Skip | Undo of the action it belongs to (the pending entry it completes), or the backups list (`skip-…`, `-changes`) |
+| The resolver's "Use ours/theirs" on a binary file, "Delete it" | The backups list's `Restore the discarded files…` (their `discard-…` snapshots) |
 
-| Effect | Forward (redo) | Back (undo) | Check before (undo; redo is the mirror) |
-|---|---|---|---|
-| `MoveBranch(branch, before, after, Mode)`, Mode `Soft` (commit, amend, soft reset) or `Keep` (everything else that moves the checked-out branch) | Soft: `update-ref -m <msg> refs/heads/<b> <after> <before>`; Keep: `read-tree -m -u <before> <after>`, then that update-ref; when the update-ref fails, `read-tree -m -u <after> <before>` puts the files back and the step is refused | the same, `<after>` → `<before>`; the initial commit: `update-ref -d refs/heads/<b> <after>` | HEAD is on `<b>` (`symbolic-ref -q HEAD`) and `<b>` is at `<after>`; Keep: git's two-way merge refuses a move over local changes (0.4) |
-| `MoveDetachedHead(before, after, Mode)` | as above on `--no-deref HEAD` | | HEAD detached at `<after>` |
-| `MoveRef(ref, before, after)` (either may be absent: created, deleted) | `update-ref --stdin` with `update`, `create` or `delete` and the expected value | the reverse | the ref is at the expected value; a branch is checked out in no worktree (`%(worktreepath)`) |
-| `SwitchHead(before, after)` (a branch's full name or a SHA) | `switch --no-guess <b>` / `switch --detach <sha>` | the same to `<before>` | HEAD is exactly `<after>`; `<before>` exists; a refusal over local changes shows 9.3's message |
-| `RenameBranch(old, new)` | `branch --move <old> <new>` | `branch --move <new> <old>` | `<new>` exists, `<old>` does not (a name differing only in case on Windows and macOS: refused, as D131) |
-| `BranchConfig(b, before, after)` (every `branch.<b>.*` key) | the keys of `after` written with `config --local`, the others unset | `before` likewise | the keys equal the side being left |
-| `RemoteConfig(r, before, after)` (`remote.<r>.*`, `remote.pushDefault`, the branches' `remote`/`merge`/`pushRemote` keys naming it) | replayed with `config --local --add` in order, or removed | likewise | the remote's keys equal the side being left |
-| `RemoteRename(old, new)`, `RemoteUrl(r, before, after)` | `remote rename`, `remote set-url --` | back | the side being left exists and the other name does not; one `url` value |
-| `IndexFromSnapshot(snapshot, after)` (a mixed or hard reset) | `reset -q --mixed <after>` | `restore --staged --source=<snapshot> -- .` (a hard reset's: the snapshot's second parent) | the index is unchanged since (`diff-index --cached --quiet <after>`) |
-| `FilesFromSnapshot(snapshot, paths, hashes)` (a hard reset's, a discard's) | the discard again (`restore --worktree`, deletion), or the hard reset with a new snapshot | `RestoreSnapshotAsync` | none of the paths changed since: SHA-256 of their raw bytes equal the recorded ones (as the restore bar checks, D75) |
-| `StashPushed(sha, options, statusAfter)` | `stash push [--include-untracked] [--message <m>]` without `GIT_LITERAL_PATHSPECS` | `stash pop --index stash@{n}` (found by SHA) | the SHA is listed; HEAD unchanged; the whole status equals the recorded one (a stash's pop mixes with anything changed since, 0.5); no untracked file of the stash exists |
-| `StashEntry(sha, message, present before, present after)` (a pop's or a drop's list change) | `stash drop stash@{k}` by SHA | `stash store -m "<message>" <sha>` (it comes back as `stash@{0}`) | listed or not as the side being left says |
-| `WorkingFiles(paths, before, after)` (apply and pop: each path's index entries from `ls-files --stage -z` and raw bytes from `hash-object -w --no-filters`) | the after entries through `update-index -z --index-info` and the after bytes written | the before ones | each path's index entries and bytes equal the side being left; no operation in progress; no path intent-to-add or skip-worktree (refused: git cannot restore those flags) |
-| `TagRef(name, object, before present)` | `update-ref refs/tags/<t> <object> ""` | `update-ref -d refs/tags/<t> <object>` (an undone create first saves `tag-<time>/<t>`, so the object stays for redo) | the tag is at the object, or absent |
-| `GitignoreBytes(existed, lengthBefore, appended, hashAfter)` | append the bytes | truncate to the old length, or delete a file it created | the file's hash equals the side being left; not a symbolic link |
-| `RemoteRef(remote, ref, before, after)` (a push, force push, remote deletion, tag push, remote tag deletion; the local remote-tracking ref follows) | `push --progress --force-with-lease=<ref>:<before or empty> <r> <after>:<ref>` or `--delete <ref>` | the reverse, with the lease the value the action left | the lease; `Everything up-to-date` on a push that must create counts as done. **Asks first** (7.5) |
+### 7.3 The sequences
+
+An entry is undone and redone by a **sequence of effects** fixed per action kind, not by a generic
+reverse of what happened: the order of a step matters (a branch cannot be deleted while it is checked
+out; a hard reset's files must come back after its move), and one git call can change several
+things at once. `UndoSequence` (Core) names each kind's undo and redo sequences; `GitRepository.Undo.cs`
+runs the effects. The effects:
+
+| Effect | What it runs | Its check (against the state the earlier effects of the step leave, 7.5) |
+|---|---|---|
+| `MoveHead(branch, from, to, Soft)` | `update-ref -m <msg> refs/heads/<b> <to> <from>` (the initial commit's undo: `update-ref -d refs/heads/<b> <from>`; its redo: `update-ref refs/heads/<b> <to> ""`) | HEAD is on `<b>` (`symbolic-ref -q HEAD`) and `<b>` is at `<from>` |
+| `MoveHead(branch, from, to, Keep)` | `update-index -q --refresh` (git's own checkout refreshes first; without it an unchanged file with stale stat data refuses), then `read-tree -m -u <from> <to>`, then that update-ref; when the update-ref fails, `read-tree -m -u <to> <from>` puts the files back and the step is refused | as Soft, and the **ignored-files guard**: no ignored file or folder lies where `<to>` adds a file (the paths of `diff-tree -r -z --no-renames --name-only --diff-filter=A <from> <to>` and their parent folders, checked on disk with `check-ignore`): `read-tree` would overwrite or delete them without a word, on every git from 2.34 |
+| `MoveDetachedHead(from, to, mode)` | as `MoveHead` on `--no-deref HEAD` | HEAD detached at `<from>` |
+| `SetRef(ref, from, to)` (either may be absent) | `update-ref --stdin` with `update`, `create` or `delete` and the expected value | the ref is at `<from>`; a branch is checked out in no worktree (`%(worktreepath)`) |
+| `Switch(from, to)` (a branch's short name, or a SHA) | `switch --no-guess --no-overwrite-ignore <b>` / `switch --detach --no-overwrite-ignore <sha>` (never with an automatic stash, 9.1) | HEAD is exactly `<from>`; `<to>` exists |
+| `RenameBranch(from, to)` | `branch --move <from> <to>` | `<from>` exists, `<to>` does not (a name differing only in case on Windows and macOS: refused, as D131) |
+| `BranchConfig(b, from, to)`, `RemoteConfig(r, from, to)` | the keys of `<to>` written with `config --local` (`--add` in order for a remote's), the others unset | the keys equal `<from>` |
+| `RemoteRename(from, to)`, `RemoteUrl(r, from, to)` | `remote rename`, `remote set-url --` | `<from>` exists and `<to>` does not; one `url` value |
+| `IndexTo(source, from)` | `restore --staged --source=<source> -- .` | the index equals `<from>` (`diff-index --cached --quiet <from>`) |
+| `FilesTo(paths, bytes)` | each path's recorded raw bytes written back (`cat-file blob` of a blob saved with `hash-object -w --no-filters`), or the file deleted when it was absent, folders left empty removed | each path's SHA-256 equals the recorded state being left |
+| `RestoreSnapshot(snapshot)` | `RestoreSnapshotAsync` | the snapshot's paths' SHA-256 equal the recorded state being left |
+| `StashPush(options, message)` | `stash push [--include-untracked] [--message <m>]` without `GIT_LITERAL_PATHSPECS`; **the entry takes the new stash's SHA** | the whole status equals the recorded one |
+| `StashPop(sha)` | `stash pop --index stash@{n}` (found by SHA) | the SHA is listed and exists (`cat-file -e`); the whole status equals the recorded one; no untracked path of the stash (`ls-tree -r -z --name-only <sha>^3`) exists |
+| `StashStore(sha, message)` / `StashDrop(sha)` | `stash store -m "<message>" <sha>` (it comes back as `stash@{0}`) / `stash drop stash@{k}` by SHA | not listed / listed; the commit exists |
+| `IndexEntries(paths, entries)` | `update-index -z --index-info` with a `0 <zeros> 0\t<path>` line, then the path's recorded entries (unmerged stages included) | the paths' current entries (`ls-files --stage -z`) equal the state being left; no path intent-to-add or skip-worktree |
+| `TagRef(name, object, present)` | `update-ref refs/tags/<t> <object> ""` / `update-ref -d refs/tags/<t> <object>` | the tag is absent / at the object |
+| `GitignoreBytes(existed, lengthBefore, appended)` | append the bytes / truncate to the old length, or delete a file it created | the file's SHA-256 equals the state being left; not a symbolic link |
+| `RemoteRef(remote, ref, from, to)` | `push --progress --force-with-lease=<ref>:<from, or empty> <r> <to>:<ref>` or `--delete <ref>`; the local remote-tracking ref follows | the lease (git's own check); `Everything up-to-date` on a push that must create counts as done |
+
+The sequences (undo first; redo is the mirror unless the table says otherwise; `B` the branch, `O`
+its tip before, `N` after):
+
+| Action | Undo | Redo |
+|---|---|---|
+| Commit, amend, soft reset | `MoveHead(B, N, O, Soft)` (the initial commit: delete) | `MoveHead(B, O, N, Soft)` |
+| Mixed reset | `MoveHead(B, N, O, Soft)`, then `IndexTo(<snapshot> or O, N)`: the index snapshot the reset saved, or `O` itself when the index equalled HEAD and none was saved | `IndexTo(N, <the source>)` (the index only), then `MoveHead(B, O, N, Soft)` |
+| Hard reset | `MoveHead(B, N, O, Keep)`, then `IndexTo(<snapshot>^2, N)`, then `RestoreSnapshot(<snapshot>)` (in this order: restored files would make the move refuse) | the app's own hard reset to `N` with a **new** snapshot (the files may have changed since the undo), checked by HEAD on `B` and `B` at `O`; **the entry takes the new snapshot** |
+| Merge, fast-forward, cherry-pick, revert (one or a list), rebase onto, interactive rebase, squash, pull, a finished stopped action | `MoveHead(B, N, O, Keep)`; for a plain rebase also `SetRef` back for every other branch git moved (a user's `rebase.updateRefs`, 7.7) | the mirror |
+| Checkout of a branch, or of a commit or tag (no automatic stash) | `Switch(now, before)` | the mirror |
+| Checkout that created a tracking branch; create a branch and check it out | `Switch(B, before)`, then `SetRef(refs/heads/B, tip, absent)`, then `BranchConfig(B, written, none)` | `SetRef(refs/heads/B, absent, tip)` and `BranchConfig(B, none, written)` (`switch --create … --track` would fail with a SHA), then `Switch(before, B)` |
+| Create a branch, no checkout | `SetRef` delete, `BranchConfig` removed | the mirror |
+| Rename | `RenameBranch(new, old)` | the mirror |
+| Delete a branch | `SetRef(refs/heads/B, absent, tip)` with `--create-reflog`, `BranchConfig(B, none, before)` | the mirror |
+| Fast-forward a branch not checked out | `SetRef(refs/heads/B, N, O)` | the mirror |
+| "Check out and merge", "Check out and rebase" (and the list's checkout first) | `MoveHead(B, N, O, Keep)` while HEAD is still on `B`, then `Switch(B, before)` | `Switch(before, B)`, then `MoveHead(B, O, N, Keep)`; when that move refuses after the switch, `Switch(B, before)` and the step is refused (9.3's text) |
+| D91's "Stash changes and check out" | `StashPush` (tracked files only, as D91), `Switch(target, before)`, `StashPop` | the mirror; a pop that conflicted when the action ran records no entry (its stash is kept and named, D91) |
+| The automatic stash's checkout (9.2, D166) | `Switch(target, branch)`, then `StashPop(sha)` | `StashPush(--include-untracked, its message)`, then `Switch(branch, target)`; when the switch refuses, `StashPop` back and the step is refused |
+| Stash | `StashPop(sha)` | `StashPush(options, message)`; the entry takes the new SHA |
+| Apply | `IndexEntries` and `FilesTo` back to the state before | forward to the state after |
+| Pop | `StashStore(sha, message)` first, then `IndexEntries` and `FilesTo` back (so a failure leaves the changes in the working tree) | `IndexEntries`/`FilesTo` forward, then `StashDrop(sha)` |
+| Drop | `StashStore(sha, message)` | `StashDrop(sha)` |
+| Create a tag | the object kept in a `tag-undone-<time>/<t>` backup, then `TagRef` delete | `TagRef` create (the same tag object) |
+| Delete a tag | `TagRef` create | `TagRef` delete |
+| Discard of a file, a hunk, lines, all | `RestoreSnapshot(snapshot)` | `FilesTo(paths, the bytes after the discard)`: a hunk or line discard keeps the file's other changes, which `restore --worktree` would throw away |
+| Restore (the restore bar) | `FilesTo(paths, the bytes before the restore)` (or the bar's own snapshot when it saved one) | `RestoreSnapshot` again |
+| Ignore | `GitignoreBytes` back | forward |
+| Set or stop tracking an upstream | `BranchConfig(B, after, before)` | the mirror |
+| Add, rename, remove a remote; change its URL | `RemoteConfig` and the remote branches' `SetRef`s from the `remote-…` backup; `RemoteRename`; `RemoteUrl` | the mirror |
+| Push of a branch (new or updated, with or without set-upstream), force push, delete a branch on a remote, push a tag, delete a tag on a remote | `RemoteRef(r, ref, after, before)` **first** (the only effect that can be refused by another machine), then `BranchConfig` | the mirror |
 
 Messages for `update-ref -m`: `VisualCommit: undo <text>` and `VisualCommit: redo <text>`, so the
-reflog view tells them apart (0.2). `switch` keeps git's own message (`@{-1}` keeps working).
+reflog page tells them apart (0.2). `switch` keeps git's own message, so `@{-1}` keeps working.
 
 ### 7.4 When Undo and Redo are enabled
 
 Undo is enabled when the entry before the cursor is `Done` and its checks pass against what the app
-last read, Redo likewise for the entry after it. After every refresh the repository evaluates those
-two entries in memory against `Refs` (HEAD, branch tips, tags, stashes), the status (staged
-changes, the paths of a snapshot), the remotes, and whether an operation runs or waits; the git
-reads that only the operation can do (file hashes, index entries, worktree paths, leases) are left
-to the operation. The first reason that holds, in this order:
+last read; Redo likewise for the entry after it. The checks that need no git (HEAD, branch tips,
+tags, stashes, the staged files, the worktrees' branches, the remotes) are made in memory after
+every refresh and kept; the rest (file hashes, index entries, the ignored-files guard, the lease) only
+inside the operation. The first reason that holds, in this order:
 
-1. An operation of the repository runs or waits: `Wait for {title} to finish`.
+1. A user operation of the repository runs or waits: `Wait for {title} to finish`. Evaluated again
+   on every `Changed` event of the queue (raised when an operation starts, waits, and after `Finish`
+   clears its slot), so that the state after an action shows at once; `RepositoryViewModel`
+   subscribes, posts to the UI context and raises the property the toolbar reads. A background
+   operation (auto-fetch, the clean-up) gives no reason: a click queues behind it.
 2. An operation is in progress (the banner shows): `Finish or abort the {kind} first` (D119's
-   texts; conflicts without one: `Resolve the conflicts first`).
-3. No entry: `Nothing to undo` / `Nothing to redo`.
-4. The entry's check fails (7.6's texts), e.g. `main has moved since the commit (it is at 9f8e7d6)`.
+   texts); conflicts without one: `Resolve the conflicts first`, except when the entry before the
+   cursor is an apply or a pop whose recorded paths hold every conflicted path (its undo restores
+   them as they were).
+3. The interactive rebase's list is open: `Close the interactive rebase first` (it holds work, and
+   moving its branch would disable its Start).
+4. No entry: `Nothing to undo` / `Nothing to redo`.
+5. The entry's in-memory check fails (7.6's texts), e.g. `main has moved since (it is at 9f8e7d6)`.
 
 The checks are strict in order: an entry that cannot be undone blocks the older ones (undoing them
-around it would apply effects to a state they were not recorded on). The backups and reflog view
-(section 5) is the way past it. Outside changes never remove entries: an unrelated change (a
-fetch, a commit on another branch) leaves the entry undoable; a conflicting one makes it refuse
-until the state is back.
+around it would apply effects to a state they were not recorded on); the backups list (5.3) is the
+way past it. Outside changes never remove entries: an unrelated change (a fetch, a commit on another
+branch) leaves the entry undoable; a conflicting one makes it refuse until the state is back.
 
 ### 7.5 Running a step
 
 Undo and Redo each run as one operation of the repository's queue (titles `Undo {text}` and `Redo
-{text}`, refresh `Refs`, prompts `Ask`), **Local**, or **Network** when an effect pushes (it can then
-be cancelled and prompts for credentials). Inside it, in this order (D124): refuse while an operation
-is in progress (the app's own check: `update-ref` refuses nothing, 0.4); read HEAD and the entry's
-refs (`rev-parse HEAD --symbolic-full-name HEAD`, one `for-each-ref` with `%(worktreepath)`), the
-status, and what each effect checks; refuse with the first failed check, having written nothing;
-then apply the effects. Several ref writes of one step go into one `update-ref --stdin` with
-`verify` lines, all or none; the steps that can refuse (switch, read-tree) come before the
-compare-and-swaps.
+{text}`, refresh `Refs`, prompts `Ask`), **Local**, or **Network** when the sequence has a
+`RemoteRef` (it can then be cancelled and prompts for credentials). Inside it, in this order:
 
-A step with a `RemoteRef` effect asks first, as D155 says, for every remote change in either
-direction (the owner named force pushes and deletions; an ordinary push's undo rewinds or deletes a
-remote branch in the same way): `Undo the push to {remote}?` / `{remote}'s {branch} goes back to
-{short}, which it was before your push. Anyone who fetched {short2} keeps it.`, or for a deletion
-`{remote} gets {branch} back at {short}.`; buttons `Undo` (or `Redo`) and `Cancel`; not destructive
-in style (it restores). A lease failure shows the push's error dialog with git's output and the
-summary `{branch} on {remote} has changed since: nothing was changed.`
+1. Refuse while an operation is in progress (the app's own check: `update-ref` refuses nothing,
+   0.4) and when HEAD or the entry's refs moved since the click (D124).
+2. Read HEAD and the entry's refs (`rev-parse HEAD --symbolic-full-name HEAD`, one `for-each-ref`
+   with `%(worktreepath)`), the status, and what the effects check.
+3. **Simulate the sequence**: each effect's check is evaluated against the state the effects before
+   it in the sequence will leave (HEAD after a `Switch`, a branch no longer checked out after
+   switching away, the status after a `StashPush` or `StashPop`), predicted from the recorded values.
+   A check that only git can make and that depends on an earlier effect (the two-way merge of a
+   `Keep` move after a `Switch`) runs at its place in step 4.
+4. Apply the effects in the sequence's order, grouped so that what another machine can refuse comes
+   first (`RemoteRef`), then what git can refuse locally (`Switch`, `read-tree`), then one
+   `update-ref --stdin` transaction with `verify` lines for every ref write, then config and file
+   writes. When an effect refuses after earlier ones were applied, those are reversed in reverse
+   order and the step is refused. The only write a refused step may leave is `update-index
+   --refresh`'s stat data.
+5. When an effect made a new object (a redo's stash, a redo's hard-reset snapshot, an undone tag
+   creation's backup), the entry is rewritten with it before the cursor moves.
+
+**Questions** (D155, extended by D170 to every remote change in either direction), one per step,
+naming the remote; confirm button `Undo` or `Redo` (`Push` for the backups list), not destructive in
+style (they restore):
+
+| Case | Title | Text |
+|---|---|---|
+| Undo a push that updated a branch (force push included) | `Undo the push to {r}?` | `{b} on {r} goes back to {short}, which it was before the push. Anyone who fetched {short2} keeps it.` |
+| Redo it | `Redo the push to {r}?` | `{b} on {r} moves to {short2} again.` |
+| Undo a push that created a branch on the remote | `Delete {b} on {r}?` | `Undoing the push deletes {b} on {r}. Anyone who fetched it keeps it.` |
+| Redo it | `Push {b} to {r} again?` | `{r} gets {b} back at {short}.` |
+| Undo a deletion of a branch on a remote | `Undo the deletion of {b} on {r}?` | `{r} gets {b} back at {short}.` |
+| Redo it | `Delete {b} on {r} again?` | `{b} is deleted on {r} again.` |
+| The same four for a tag | `… tag {t} …` | `… tag {t} …` |
+| The backups list's push back | `Push {b} back to {r}?` | `{r} gets {b} back at {short}.` |
+
+A lease failure shows the push's error dialog with git's output and the summary `{b} on {r} has
+changed since: nothing was changed.` (`{t}` for a tag).
 
 Undoing a commit or an amend leaves its changes staged (a soft move), so the stage panel's summary
 and description are filled with the undone commit's message when both are empty, as GitKraken does;
@@ -802,32 +978,43 @@ as every operation does. The step's result in the status bar: `Undid {text}` / `
 
 ### 7.6 Texts
 
-An entry's text is the operation's title (D113), except where the title does not say enough:
+An entry's text names the action as the user knows it:
 
 | Action | Entry text |
 |---|---|
-| Commit | `commit "{subject}"` (the title is "Commit") |
-| Amend | `amend "{subject}"` |
-| A discard from the stage panel | `discard of {N} files` / `discard of {name}`; lines: `discard of lines in {name}` |
-| Restore | `restore of the discarded files` |
+| Commit, amend | `commit "{subject}"`, `amend "{subject}"` |
+| Checkout (every kind) | `checkout of {name}` |
+| Create, rename, delete a branch | `creation of {b}`, `rename of {old} to {new}`, `deletion of {b}` |
+| Fast-forward | `fast-forward of {b}` |
+| Merge, "Check out and merge" | `merge of {source} into {b}` |
 | Reset | `reset of {b} to {short} ({soft|mixed|hard})` |
-| Everything else | the operation's title with its first letter in lower case: `check out feature/alpha`, `merge feature into main`, `rebase topic onto main`, `cherry-pick of 3 commits`, `force push of main`, … |
+| Cherry-pick, revert | `cherry-pick of {short}` / `of {N} commits`; `revert of {short}` / `of {N} commits` |
+| Rebase onto, "Check out and rebase", interactive, squash | `rebase of {b} onto {target}`, `interactive rebase of {b}`, `squash of {N} commits` |
+| Pull | `pull into {b}` |
+| Stash, apply, pop, drop | `stash "{message}"`, `apply of stash "{message}"`, `pop of stash "{message}"`, `drop of stash "{message}"` (never `stash@{n}`, which renumbering reuses) |
+| Tags | `creation of tag {t}`, `deletion of tag {t}` |
+| Discard, Restore | `discard of {N} files` / `of {name}` / `of lines in {name}`; `restore of the discarded files` |
+| Ignore | `ignore of {pattern}` |
+| Upstream | `upstream change of {b}` |
+| Remotes | `addition of remote {r}`, `rename of remote {old} to {new}`, `removal of remote {r}`, `URL change of {r}` |
+| Pushes | `push of {b} to {r}`, `force push of {b} to {r}`, `deletion of {b} on {r}`, `push of tag {t} to {r}`, `deletion of tag {t} on {r}` |
 
-The toolbar shows `Undo {text}` and `Redo {text}`. Check failures, each prefixed by `Can't undo
-{text}: ` or `Can't redo {text}: ` in the error dialog and shown without the prefix in the tooltip:
+The toolbar shows `Undo {text}` and `Redo {text}`. Check failures, prefixed by `Can't undo {text}: `
+or `Can't redo {text}: ` in the error dialog and shown without the prefix in the tooltip:
 
 | Check | Text |
 |---|---|
-| HEAD not on the branch | `HEAD is no longer on {b}` |
-| The branch moved | `{b} has moved since (it is at {short})` |
+| HEAD not where it was | `HEAD is no longer on {b}` / `HEAD is no longer at {short}` |
+| A branch moved | `{b} has moved since (it is at {short})` |
 | A ref moved or exists again | `{ref} has changed since` / `a branch named {b} exists again` / `a tag named {t} exists again` |
 | Checked out elsewhere | `{b} is checked out in {folder}` |
-| Local changes in the way (Keep move, switch) | 9.3's message: `{N} conflicts prevent it. Commit, stash, or discard your changes first.` |
+| Local changes in the way of a move or a switch | `1 conflict prevents it. Commit, stash, or discard your changes first.` / `{N} conflicts prevent it. …`, the count made by the app: the paths `diff-tree -r -z --no-renames --name-only <from> <to>` lists that the status shows changed or untracked (git's `read-tree` names only the first); git's line goes below the summary |
+| Ignored files in the way | `1 ignored file is in the way: {name}. Move it away first.` / `{N} ignored files are in the way: {first names}. …` |
 | Index changed | `you have staged changes since` |
-| Files changed | `{N} files have changed since: {first names}` |
+| Files changed | `1 file has changed since: {name}` / `{N} files have changed since: {first names}` |
 | Stash | `the stash is no longer in the list` / `the stash is in the list again` / `your changes have changed since the stash` |
 | Commits gone | `the commits no longer exist` (`cat-file -e` failed: an outside `gc`) |
-| A remote | `{b} on {r} has changed since` (from the lease) |
+| A remote | `{b} on {r} has changed since` (the lease) |
 | Intent-to-add, skip-worktree | `{name} has a flag git cannot restore` |
 
 ### 7.7 Recording, inside the action's own operation
@@ -836,21 +1023,27 @@ A `Run` delegate must not queue another operation (the queue would deadlock), an
 none: `RepositoryOperations.RunAsync`'s wrapper (where `_backupSaved` is set) and phase 2's
 `RepositoryViewModel.WriteAsync` (the stage panel's Commit, discard, Restore) do it around `run`:
 
-1. Each operation names what it may change through `RunOptions.Undo` (an `UndoScope`: HEAD always;
-   the branches, tags, remotes, stash, files or config keys it touches; `None` for the unrecorded
-   kinds of 7.2).
+1. Each operation names its kind and what it may change through `RunOptions.Undo` (an `UndoScope`:
+   HEAD always; the branches, tags, remotes, stash, files or config keys it touches; `None` for the
+   unrecorded kinds of 7.2). A plain rebase's scope (rebase onto, "Check out and rebase", a pull
+   that rebases) holds every `refs/heads/` ref, so branches a user's `rebase.updateRefs` moves (Git
+   2.38 and later) become part of its entry; the app passes no option that changes it (D142).
 2. Before `run`, inside the operation: HEAD (`rev-parse HEAD --symbolic-full-name HEAD`, or
-   `symbolic-ref -q HEAD` when unborn) and one `for-each-ref --format=%(refname)%1f%(objectname)%1f%(symref)`
-   of the scope's refs (exact names filtered in code: a pattern matches by path component), the
-   stash list when the scope has the stash, and the config keys when it has config.
+   `symbolic-ref -q HEAD` when unborn) and one `for-each-ref --format=%(refname)%1f%(objectname)`
+   of the scope's refs (exact names filtered in code: a pattern matches by path component), the stash
+   list when the scope has the stash, the config keys when it has config, and the files' raw bytes
+   (`hash-object -w --no-filters`) and index entries when it has files (apply, pop, Restore).
 3. What the reads cannot see goes through an `UndoCapture` (`AsyncLocal`, thread-safe, because
    `SaveRebaseBackupAsync` runs on a pool thread): a reset's mode and snapshot refs, the stash SHA
-   `StashAsync` returns, a push's old remote value from git's output line, the files' hashes after a
-   discard, the bytes appended to `.gitignore`.
+   `StashAsync` returns, a push's old remote value (`IGitRepository.PushAsync` and `PushTagAsync`
+   return a `PushOutcome` with each updated remote ref's old value, null when new, and new value,
+   read from git's summary line; never the remote-tracking ref, which can be stale), and the files'
+   bytes after a discard or a hard reset. The `.gitignore` is read by the recorder itself (whether it
+   existed, its length and SHA-256) before and after `AppendToGitignoreAsync`.
 4. After `run`, still inside the operation: the same reads again. The differences and the capture
-   become the entry's effects; no difference, no entry. The reads write nothing
-   (`GIT_OPTIONAL_LOCKS=0`), so a refused action still leaves HEAD's reflog as it was (phase 4's
-   check A5 counts it).
+   fill the kind's recorded values; no difference, no entry. The reads write nothing
+   (`GIT_OPTIONAL_LOCKS=0`), so a refused action still leaves HEAD's reflog as it was (phase 4's check
+   A5 counts it).
 5. Still inside the operation, on the UI context, the entry is added (`Done`, or `Pending` when an
    operation is now in progress) and the redo part is dropped. It is not carried through
    `OperationReport` (the queue drops fields it does not know).
@@ -863,35 +1056,39 @@ development laptop. Operations that already read HEAD for D124 share that read.
 - Commits left behind by an undo stay in the branch and HEAD reflogs (30 days, 0.4); a redo checks
   `cat-file -e` first.
 - Backup refs an entry needs (a reset's `reset-<time>` and `-changes`, `detached-<time>`,
-  `rebase-<time>/<b>`, a drop's `stash-<time>`, a deleted tag's or an undone tag creation's
-  `tag-<time>/<t>`, a deleted branch's `branch-<time>/<b>`, a removed remote's `remote-<time>/<r>/…`)
-  are passed to the backups' clean-up as `keep` through `RepositoryViewModel.BackupsToKeep` (today the
-  restore bar's snapshot only), for every entry of the repository's history. They still count toward
+  `rebase-<time>/<b>`, a drop's or a pop's `stash-<time>` (a pop saves one now, so the popped stash
+  outlives git's pruning), `tag-<time>/<t>` and `tag-undone-<time>/<t>`, `branch-<time>/<b>`,
+  `remote-<time>/<r>/…`, the discards' snapshots) are passed to the backups' clean-up as `keep`
+  through `RepositoryViewModel.BackupsToKeep` (today the restore bar's snapshot only): the union over
+  every history of the repository's worktrees (they share the backup refs). They still count toward
   D139's 50: a long session keeps more than 50, on purpose.
 - An entry dropped from the history (the 100 limit, or a new action after undos) no longer keeps
   them.
 
 ### 7.9 The restore bar
 
-The restore bar (D62, D75) stays. Its Restore is recorded as the undo of that discard when the
-discard is the entry before the cursor (the cursor moves; Redo discards again); otherwise it runs as
-today and is recorded as an entry of its own (`restore of the discarded files`), which Undo can
-discard again.
+The restore bar (D62, D75) stays and is tied to the discard it names, both ways: Undo of that discard
+closes the bar (the files are back); Redo of it shows the bar again with the same snapshot. Its
+Restore runs as that entry's Undo when the discard is the entry before the cursor (Redo discards
+again); otherwise it runs as today and is recorded as an entry of its own (`restore of the discarded
+files`). This amends D62's list of when the bar goes.
 
 ### 7.10 Restoring from the backups list
 
 The backups list (5.3) restores a backup outside the session's history with the same effects:
 
-| Backup | Restore item | Effects |
+| Backup | Restore item | What it runs |
 |---|---|---|
-| `branch-<t>/<b>` | `Restore branch {b}` | `MoveRef(refs/heads/<b>, absent, <tip>)` (the config is not in the backup: no upstream) |
-| `tag-<t>/<t>` | `Restore tag {t}` | `TagRef` create |
-| `stash-<t>` | `Restore stash` | `StashEntry` store, with the stash commit's subject as message |
-| `discard-<t>` | `Restore the discarded files…` | asks which files will be overwritten when any exist (`Restore discarded files?`, D75's question), then `FilesFromSnapshot` |
-| `reset-<t>-changes`, `abort-<t>-changes`, `skip-<t>-changes` | `Restore the changes…` | as a discard snapshot: the snapshot's files written into the working tree, after the same question |
-| `remote-branch-<t>/<r>/<b>` | `Push {b} back to {r}…` | `RemoteRef` create, with D155's question; the remote and branch split by the remote list's longest matching name, as the deletion did |
+| `branch-<t>/<b>` | `Restore branch {b}` (disabled `A branch named {b} exists`) | `SetRef` create (the config is not in the backup: no upstream) |
+| `tag-<t>/<t>`, `tag-undone-<t>/<t>` | `Restore tag {t}` (disabled `A tag named {t} exists`) | `TagRef` create |
+| `stash-<t>` | `Restore stash` | `StashStore`, with the stash commit's subject as message |
+| `discard-<t>` | `Restore the discarded files…` | asks D75's `Restore discarded changes?` when a file would be overwritten, then `RestoreSnapshot` |
+| `reset-<t>-changes` of a hard reset, `abort-<t>-changes`, `skip-<t>-changes` (paths in the message) | `Restore the changes…` | the same question, then the files (`RestoreSnapshot`); for a hard reset's, when nothing is staged now, the index from its second parent first |
+| `reset-<t>-changes` of a mixed reset (`VisualCommit: index before a mixed reset`, no paths) | `Restore the staged changes…` (disabled `Unstage your changes first` while the index differs from HEAD) | `IndexTo(<snapshot>, HEAD)` |
+| `remote-branch-<t>/<r>/<b>` | `Push {b} back to {r}…` (disabled `{r} no longer exists`) | `RemoteRef` create (lease: must not exist), after 7.5's question; the remote and branch split by the remote list's longest matching name, as the deletion did |
 | `remote-tag-<t>/<r>/<t>` | `Push {t} back to {r}…` | likewise for the tag |
-| `force-push-<t>/<name>` | `Push {b} back to {r}…` | the remote and its ref from the upstream that maps to `refs/remotes/<name>`, or from the fetch refspecs; when none or several map: disabled, `The remote this backup came from cannot be found` |
+| `force-push-<t>/<name>` | `Push {b} back to {r}…` | the remote and its ref from the upstream that maps to `refs/remotes/<name>`, or from the fetch refspecs; the lease is the commit the force push left, read from the remote-tracking reflog (the `update by push` entry whose older neighbour is the backup's commit); when none of these can be found: disabled, `The remote this backup came from cannot be found` or `The commit your force push left can no longer be found` |
+| `remote-<t>/<r>/…` | none of its own | the URL and configuration are not in the backup: each remote branch's commit has the generic items below |
 | every backup that holds a commit | `Create branch here…`, `Check out this commit`, `Copy SHA` | phase 3's operations |
 
 Each is one operation titled as its item (without the "…"), recorded in the history like any action.
@@ -899,13 +1096,17 @@ Each is one operation titled as its item (without the "…"), recorded in the hi
 ### 7.11 Tests
 
 `UndoHistoryTests` (Core: cursor, truncation, the 100 limit, pending entries completed and removed);
-`UndoEffectTests` (Git: every effect forward and back on real repositories, each check's refusal
-changing nothing, the race of a Keep move, the initial commit, the lease texts on a local bare
-remote); `UndoRecordingTests` (App: the entry each recorded action of 7.2 leaves, with its effects
-and text; no entry for a refused or empty action; the pending flow through Continue, Skip and
-Abort); `UndoToolbarTests` (enabled states and tooltips of 7.4 after refreshes and outside changes,
-the keys of 1.3 and their declines); and section 15's scripted checks, which undo and redo each
-destructive action of phases 2 to 4.
+`UndoSequenceTests` (Core: each kind's sequences and the simulation of 7.5 step 3); `UndoEffectTests`
+(Git: every effect forward and back on real repositories; each check's refusal changing nothing but
+stat data, compared with `ls-files --stage -z`, the refs and HEAD's reflog; the race of a Keep move;
+an unchanged file with stale stat data; an ignored file in the way of an undo and of a redo; the
+initial commit; the lease texts on a local bare remote; undo, redo, undo of a stash and of a hard
+reset with an edit between, `GIT_COMMITTER_DATE` advanced between steps so the stash's SHA changes);
+`UndoRecordingTests` (App: the entry each recorded action of 7.2 leaves; no entry for a refused or
+empty action; the pending flow through Continue, Skip and Abort; two worktrees of one repository);
+`UndoToolbarTests` (enabled states and tooltips of 7.4 after refreshes, after the queue's `Changed`
+without a refresh, and after outside changes; the keys of 1.3 and their declines); and section 15's
+checks, which undo and redo each destructive action of phases 2 to 4.
 
 ## 8. Solo and hide (O8, D159)
 
@@ -913,25 +1114,33 @@ destructive action of phases 2 to 4.
 
 Local and remote branches (O8 says branches; tags stay as they are). The state per repository is two
 sets of **full ref names**, `Hidden` and `Soloed` (short names collide across kinds: a tag and a
-branch can both be `x`, a local branch can be named `origin/x`), plus, for a hidden remote branch,
-its remote's name. A ref is never in both sets: soloing a hidden ref shows it, hiding a soloed one
-ends its solo.
+branch can both be `x`, a local branch can be named `origin/x`), a set of **hidden remotes** (every
+branch of the remote, now and later), and for each local branch hidden or soloed with its upstream,
+which upstream came with it. A ref is never in both sets: soloing a hidden ref shows it, hiding a
+soloed one ends its solo.
 
-- **Hiding a local branch hides its upstream too** (both names go into `Hidden`, each shown and
-  undone separately in the left panel): otherwise the upstream keeps most of the branch's commits on
-  screen (0.6). Hiding a remote branch hides only it. Soloing a local branch solos its upstream too,
-  so the commits a pull would bring stay visible.
+- **A local branch's remote-tracking upstream follows it**: `Hide {b}` hides the branch and its
+  upstream (`refs/remotes/…` only; a local upstream, D101, never follows), `Solo {b}` solos both;
+  otherwise the upstream keeps most of the branch's commits on screen (0.6), and the commits a pull
+  would bring stay visible under solo. `Show {b}` and `Stop soloing {b}` undo both, unless the
+  upstream was shown or hidden on its own since. The upstream's own row toggles it alone.
 - **The checked-out branch cannot be hidden** (`Hide` disabled: `The checked-out branch is always
   shown`). A hidden branch that becomes the checked-out one (a checkout in the app or a terminal) is
-  shown while it is, and keeps its flag; it hides again when HEAD leaves it.
+  shown while it is, through `HEAD` on git's command line, with its label; its flag stays, and its
+  upstream stays hidden by its own entry. It hides again when HEAD leaves it. The load's arguments
+  never depend on HEAD's branch, so the first load and later ones agree.
 - **Solo mode**: while `Soloed` is not empty, the graph shows the soloed refs' histories and HEAD's;
-  several refs can be soloed. `Hidden` is kept and applies again when solo mode ends. A branch the
-  app creates while solo mode is on is soloed too, so it does not vanish.
+  several refs can be soloed. `Hidden` is kept and applies again when solo mode ends. A branch the app
+  creates while solo mode is on is soloed too, so it does not vanish.
+- **A hidden remote** (`Hide every branch of {r}`) hides every branch of that remote, also those a
+  later fetch brings: it is expanded to the remote's current branches at each load. `Show every
+  branch of {r}` removes the remote and its branches' names.
 
 ### 8.2 What the graph loads (`LoadCommitsAsync` takes a `GraphFilter`)
 
 With no filter the command is byte-identical to today's, so every picture, the Q1 measurement and
-the real-window pass's `loaded N commits` waits are unchanged. With one (0.6):
+the real-window pass's `loaded N commits` waits are unchanged. With one (0.6), which amends D47's
+single command while a filter is on:
 
 - **Hide**: `--exclude=<b>` … `--branches`, `--exclude=<r>/<b>` … and `--exclude=<r>/HEAD` for every
   remote with a hidden branch, then `--remotes`, `--tags`, `--ignore-missing HEAD --`. Never `^ref`
@@ -941,53 +1150,65 @@ the real-window pass's `loaded N commits` waits are unchanged. With one (0.6):
   plain full names on stdin (2.30 to 2.41 accept no `--exclude` there): for solo the soloed names and
   `HEAD`; for hide the full names of every visible ref from the refs read, and `HEAD`, so this case
   waits for the refs (about 0.2 s).
-- The filter comes from the session, so git starts before the refs are read, as today (Q1).
+- The filter comes from the session (a hidden remote expanded from the session's last known branches
+  of that remote, the refs read correcting it at the next refresh), so git starts before the refs are
+  read, as today (Q1).
 - **Stashes**: with a filter, the pager keeps the set of SHAs it has seen as visible tips or parents;
   a stash whose base is in it is placed by D54's rule as today, otherwise it waits and is placed
   right above its base when the base comes, and is left out if the base never comes. Without a
   filter the pager is unchanged. (Amends D54 while a filter is on.)
-- **Labels**: `CommitGraphData` takes the filter; `BuildLabels` leaves out hidden refs' labels, and in
-  solo mode every branch label but the soloed refs' and HEAD's branch's; tags keep their labels on
-  the rows shown. `Refs` itself stays whole (the details panel and the HEAD walks use it).
+- **Labels**: `CommitGraphData` takes the filter; `BuildLabels` leaves out hidden refs' labels, except
+  the checked-out branch's, and in solo mode every branch label but the soloed refs' and HEAD's
+  branch's; tags keep their labels on the rows shown. `Refs` itself stays whole (the details panel
+  and the HEAD walks use it).
 - **A change of filter** reloads through the existing refresh: the filter's key joins the
   fingerprint's comparison (`RunRefreshesAsync`), and `RefreshAsync()` loads the new graph off screen
-  and swaps it when complete, as an outside change does. The left panel shows the new state at once.
+  and swaps it when complete, as an outside change does. The left panel shows the new state at once;
+  while the graph reloads for a filter, a 2-px indeterminate bar (`GraphReloading`, `VcAccentBrush`)
+  runs under the column headers, so the click is seen to take effect on a large history.
 
 ### 8.3 The left panel
 
 - Every ref stays listed. A hidden branch row draws its name in `VcTextDisabledBrush` and an
   `IconEyeOff` button (`RefHiddenToggle`, tooltip `Hidden in the graph. Click to show it`) at its
-  right, before the ahead and behind counts; a click shows it again. A soloed row draws an
-  `IconSolo` button (`RefSoloToggle`, `VcAccentBrush`, tooltip `Soloed. Click to stop soloing it`).
-  In solo mode the branch rows that are neither soloed nor HEAD's are drawn in `VcTextDisabledBrush`.
-- The toggles are `VcIconButton`s 18 by 18 that stop the press from starting a branch drag and a
-  double-click from checking out (the code map's pitfalls: `RefDrag.Source` on the row, the
-  double-click's `RowOf`), and are left out of the row's automation name.
+  right, before the ahead and behind counts; a click shows it again. A soloed row draws an `IconSolo`
+  button (`RefSoloToggle`, `VcAccentBrush`, tooltip `Soloed. Click to stop soloing it`). In solo mode
+  the branch rows that are neither soloed nor HEAD's are drawn in `VcTextDisabledBrush`. A remote
+  hidden as a whole draws `IconEyeOff` on its row too.
+- The toggles are `VcIconButton`s 18 by 18, marked with a new attached property
+  `RefDrag.IsExcluded`: `BranchDragService`'s walk from the pressed element (a tunnelling handler that
+  sees the press before the button) stops at such a control, so a press never arms a branch drag, and
+  `LeftPanelView`'s double-click `RowOf` skips it, so a double-click never checks out. They are left
+  out of the row's automation name.
 - A click on a hidden branch's row whose commit is a row of the graph (another ref reaches it)
   selects it as today; otherwise nothing is selected and the row's tooltip says `{b} is hidden in
   the graph`.
-- Menus: a local or remote branch's menu gains, in a group before `Copy branch name`: `Hide {b}`
-  (or `Show {b}`), `Solo {b}` (or `Stop soloing {b}`); the Local branches and Remotes sections'
-  menus gain `Show all hidden branches` (enabled when any is hidden) and `Stop soloing` (enabled in
-  solo mode). A remote's menu gains `Hide every branch of {r}` / `Show every branch of {r}`, which
-  adds or removes each of its branches by name.
+- Menus: a local or remote branch's menu gains, in a group before `Copy branch name`: `Compare {b}
+  with {cur}` (not on the current branch), `Show reflog of {b}` (local only), `Hide {b}` (or `Show
+  {b}`), `Solo {b}` (or `Stop soloing {b}`); the Local branches and Remotes sections' menus gain `Show
+  all hidden branches` (disabled `No branch is hidden`) and `Stop soloing` (disabled `No branch is
+  soloed`). A remote's menu gains `Hide every branch of {r}` / `Show every branch of {r}`.
 
 ### 8.4 The session (D159)
 
 `SessionState.GraphFilters`: a list of `RepositoryGraphFilter(RepositoryPath, Hidden, Soloed,
-HiddenRemotes)` with full names, keyed by the same normalised working-tree path as `TabState` and
-`Recent`, separate from the tabs so that closing a tab keeps the filter. It is written when a filter
+HiddenRemotes, Upstreams, LastUsed)` with full names, keyed by the same normalised working-tree path
+as `TabState` and `Recent`, separate from the tabs so that closing a tab keeps the filter, and bounded
+on its own: the 100 most recently used repositories' filters are kept (whatever the recent list
+holds), and an entry whose folder no longer exists is dropped at start-up. It is written when a filter
 changes. The app's own rename of a branch moves its entry, its delete removes it; after a
 repository's first refs read, names that no longer exist are dropped, and solo mode ends when no
-soloed name exists. Entries are kept only for repositories in open tabs or in the recent list. An
-outside rename shows the branch again under its new name.
+soloed name exists. An outside rename shows the branch again under its new name.
 
 ### 8.5 Tests
 
 `GraphFilterTests` (Git: the arguments for each filter, the shown SHAs equal to git's own for hide,
-solo, upstream, `<r>/HEAD`, a tag and branch of one name; the stdin fallback; the stashes' rule),
-`CommitGraphDataTests` (labels under a filter), `LeftPanelViewModelTests` (marks, toggles, menus),
-`SessionStoreTests` (the new field with an older file), and section 15's checks.
+solo, the upstream, a local upstream (not followed), `<r>/HEAD`, a hidden remote with a branch fetched
+later, a tag and a branch of one name, the checked-out hidden branch; the stdin fallback; the stashes'
+rule), `CommitGraphDataTests` (labels under a filter, the checked-out branch's label),
+`LeftPanelViewModelTests` (marks, toggles, menus), a view test that a press-and-move and a
+double-click on a toggle start no drag and no checkout, `SessionStoreTests` (the new field with an
+older file, the bound), and section 15's checks.
 
 ## 9. C12: protected changes and the automatic stash (D153)
 
@@ -995,41 +1216,49 @@ solo, upstream, `<r>/HEAD`, a tag and branch of one name; the stdin fallback; th
 
 | Checkout | When | What happens |
 |---|---|---|
-| Of a commit or a tag (it detaches: "Check out this commit", a tag's "Check out {t}", the reflog's and backups' "Check out this commit") | HEAD is on a branch, the target is not HEAD's own commit, the current branch reaches the target (any parent: `IsReachableFromHead` for a loaded row, else `merge-base --is-ancestor <sha> HEAD` inside the operation), and the status has changes (staged, unstaged, untracked or conflicted; ignored files are not changes) | **The automatic stash** (9.2), without a question |
-| Every other checkout (a branch, a remote branch, a commit the branch does not reach, a detached HEAD's checkout, "Create branch" with its box ticked, "Check out and merge", "Check out and rebase", the list's checkout, Abort's return) | always | Git runs it; when git refuses because changes would be overwritten, 9.3's message |
+| Of a commit or a tag that the current branch reaches (it detaches: "Check out this commit", a tag's "Check out {t}", the reflog's and backups' "Check out this commit") | HEAD is on a branch, the target is not HEAD's own commit, and the current branch reaches the target (any parent: `IsReachableFromHead` for a loaded row, else `merge-base --is-ancestor <sha> HEAD` inside the operation) | **Always** `git switch --detach --no-overwrite-ignore`: an old commit that tracks a file now ignored would otherwise overwrite it, and the way back would delete it (0.7), with or without the user's changes. When the status has changes (staged, unstaged, untracked or conflicted; ignored files are not changes): **the automatic stash** first (9.2), without a question |
+| Every other checkout (a branch, a remote branch, a commit the branch does not reach, a detached HEAD's checkout, "Create branch" with its box ticked, "Check out and merge", "Check out and rebase", the list's checkout, Abort's return) | always | Git runs it as today (its default for ignored files, Q5); when git refuses because changes would be overwritten, 9.3's message |
+| An undo or redo that switches HEAD (7.3's `Switch`) | always | never the automatic stash: `--no-overwrite-ignore`, and a refusal shows 7.6's text |
 
 The target being HEAD's own commit changes no file and is never refused, so no stash is taken there;
-a detached HEAD has no current branch, so nothing is stashed from one.
+a detached HEAD has no current branch, so nothing is stashed from one. A checkout that silently undoes
+an unstaged deletion of a file the target changes (git's own behaviour, 0.7) is accepted: the content
+is in HEAD and in the target; only the deletion is lost, which `git checkout` itself does.
 
 ### 9.2 The automatic stash
 
 One local operation of several steps, titled `Check out {name}` as phase 3's, `HasSeveralSteps`:
 
-1. A fresh status. Refuse before any git write: an operation in progress → `Finish or abort the
-   {kind} first` (a stash during a merge without conflicts would delete `MERGE_HEAD`, 0.7);
-   conflicted files → `Resolve the conflicts first`. No changes any more → a plain checkout.
+1. Read HEAD (`rev-parse HEAD --symbolic-full-name HEAD`) and a fresh status. When HEAD is not the
+   branch and commit the click saw (D124), decide again: still on a branch, not at the target, and
+   `merge-base --is-ancestor <target> HEAD`; otherwise refuse with `HEAD moved while this waited: it
+   was on {a} and is on {b} now. Nothing was checked out.` Refuse before any git write: an operation in
+   progress → `Finish or abort the {kind} first` (a stash during a merge without conflicts would
+   delete `MERGE_HEAD`, 0.7); conflicted files → `Resolve the conflicts first`. No changes any more →
+   step 4 alone.
 2. Note `refs/stash` (`rev-parse --verify --quiet refs/stash`).
 3. `git stash push --include-untracked --message "Auto stash before checking out {name}"` without
    `GIT_LITERAL_PATHSPECS` (D108). `{name}` is the short SHA or the tag's name. "No local changes to
-   save" → a plain checkout. A failure with `refs/stash` moved (Windows could not delete a locked
-   file): stop, check nothing out, keep the stash, and say so: `Your changes are also in the stash
-   "Auto stash before checking out {name}", but git could not clear them from the working tree:
-   nothing was checked out.` (error dialog "Checkout failed", git's output). A failure with
-   `refs/stash` unchanged: the failure, nothing changed.
-4. `git switch --detach --no-overwrite-ignore <sha>`: `--no-overwrite-ignore` on this checkout only,
-   because an old commit that tracks a file now ignored would otherwise overwrite it and the way
-   back would delete it (0.7). Other checkouts keep git's default (Q5).
+   save" → step 4 alone. A failure with `refs/stash` moved (Windows could not delete a file another
+   program held open; git then deleted the other untracked files and skipped resetting the tracked
+   ones): put back every untracked file of `<stash>^3` that is now missing (`git restore
+   --source=<stash>^3 --worktree -- <missing paths>`), check nothing out, keep the stash, and say so
+   in the error dialog "Checkout failed", with git's output: `Git could not clear your changes from
+   the working tree, so nothing was checked out. They are also saved in the stash "Auto stash before
+   checking out {name}".` (when every file was put back) or `Your changes are saved in the stash "Auto
+   stash before checking out {name}". Git could not finish clearing the working tree, so some of them
+   are still there too. Nothing was checked out. Keep the stash until you have checked your files.`
+   (when one could not be). A failure with `refs/stash` unchanged: the failure, nothing changed.
+4. `git switch --detach --no-overwrite-ignore <sha>`.
 5. A refusal: `git stash pop --index stash@{n}` (found by SHA; D91's plain-pop fallback), which
-   cannot overlap right after the push; then 9.3's message without the button; when the pop-back
-   fails, phase 3's `CheckoutFailedChangesKept` naming the stash.
-6. Done: the status bar says `HEAD is now detached at {short}. Your changes are in the stash "Auto
-   stash before checking out {name}".` The stash is drawn as every stash: a ring on the commit HEAD
-   was on, with a dashed line to it (section 10). Nothing pops it later (D153 (3)); checking the
-   branch out again and popping it gives the changes back without a conflict.
-
-The undo entry (7.3) is `StashPushed` then `SwitchHead`: Undo switches back and pops the stash, which
-is what the user had before (the undo asks nothing: D153 (3)'s "nothing applies it by itself" is
-about the app acting unasked).
+   cannot overlap right after the push; then the refusal's message without the button (9.3: after the
+   automatic stash only ignored files or a submodule can be in the way, so the ignored-files text
+   applies); when the pop-back fails, phase 3's `CheckoutFailedChangesKept` naming the stash.
+6. Done: the status bar says `Your changes are in the stash "Auto stash before checking out {name}".`
+   (it fits the status bar; the detached HEAD shows in its branch text; the tooltip has the same
+   sentence). The stash is drawn as every stash: a ring on the commit HEAD was on, with a dashed line
+   to it (section 10). Nothing pops it later (D153 (3)); checking the branch out again and popping it
+   gives the changes back without a conflict. Undo switches back and pops it (D166, 7.3).
 
 ### 9.3 The refusal message (D153 (1))
 
@@ -1038,38 +1267,41 @@ together), with the count of distinct paths under git's headers (0.7):
 
 | Git said | Error dialog (title `Checkout blocked`) | Button |
 |---|---|---|
-| only `Your local changes to the following files would be overwritten by checkout:` blocks | `{N} conflict prevents checkout. Commit, stash, or discard your changes first.` / `{N} conflicts prevent checkout. …` | `Stash changes and check out` (D80, D91), where phase 3 offers it (`offerStash`); never after an automatic stash's refusal |
-| any untracked block (`untracked working tree files would be overwritten by checkout:`, `would be removed by checkout:`, `Updating the following directories would lose untracked files in them:`) | the same sentence | none (D91) |
+| only `Your local changes to the following files would be overwritten by checkout:` blocks | `1 conflict prevents checkout. Commit, stash, or discard your changes first.` / `{N} conflicts prevent checkout. …` | `Stash changes and check out` (D80, D91), where phase 3 offers it (`offerStash`); never after an automatic stash's refusal |
+| any untracked block (`untracked working tree files would be overwritten by checkout:`, `would be removed by checkout:`, `Updating the following directories would lose untracked files in them:`) whose paths are not all ignored | the same sentence; git's output below names the files | none (D91) |
+| untracked blocks whose paths are all ignored (`check-ignore --stdin -z`; after an automatic stash or with `--no-overwrite-ignore`) | `1 ignored file is in the way: {short} tracks a file of the same name. Move it away first.` / `{N} ignored files are in the way: …` | none |
 | `you need to resolve your current index first` | refused before git: `Resolve the conflicts first` | none |
 | `cannot switch branch while …` | refused before git: `Finish or abort the {kind} first` | none |
 
 Git's output stays below the summary, so the names are one glance away. This replaces phase 3's
-`CheckoutBlockedByChanges` and `CheckoutBlockedByUntrackedFiles` summaries, gives "Create branch"
-with checkout the same display (today "Creating the branch failed"), and brings the folder block
-(today "Checkout failed") under C12. The classifier gains `CheckoutBlockedByUntrackedFolder` and a
-`BlockedPaths` count on `GitFailure`.
+`CheckoutBlockedByChanges` and `CheckoutBlockedByUntrackedFiles` summaries (D153's sentence replaces
+D91's own explanation, which git's output now carries), gives "Create branch" with checkout the same
+display (today "Creating the branch failed"), and brings the folder block (today "Checkout failed")
+under C12. The classifier gains `CheckoutBlockedByUntrackedFolder` and a `BlockedPaths` list on
+`GitFailure`.
 
-The same sentence covers the operations that refuse for the same reason (D153's "an operation that
-could lose uncommitted changes does not start and says why"):
+The same words cover the operations that refuse for the same reason (D153's "an operation that could
+lose uncommitted changes does not start and says why"):
 
 | Operation | Git said | Summary |
 |---|---|---|
-| Merge, the drop's merge, pull's merge and fast-forward, "Check out and merge"'s merge, cherry-pick, revert (one or a list) | the `by merge:` blocks | `{N} conflicts prevent the {merge|cherry-pick|revert}. Commit, stash, or discard your changes first.` |
+| Merge, the drop's merge, pull's merge and fast-forward, "Check out and merge"'s merge, cherry-pick, revert (one or a list) | the `by merge:` blocks | `1 conflict prevents the {merge|cherry-pick|revert}. Commit, stash, or discard your changes first.` / `{N} conflicts prevent the …` |
 | Merge, cherry-pick, revert with anything staged | ort's one-line form, or `your local changes would be overwritten by cherry-pick.` / `by revert.` (no names) | `Your staged changes prevent the {merge|cherry-pick|revert}. Commit, stash, or unstage them first.` |
 | Rebase of any kind | `cannot rebase: …` | phase 4's `Git rebases only a clean working tree: commit or stash your changes first.` (any change refuses; there is nothing to count) |
-| Apply or pop a stash (menus, the toolbar's Pop, a double-click) | checked by the app before git: the stash's changed paths (`diff --name-only <s>^1 <s>`) that have a local change, plus its untracked paths (`ls-tree -r --name-only <s>^3`) that exist | `{N} conflicts prevent applying the stash. Commit, stash, or discard your changes first.`; git is not run. Stricter than git on purpose: git's refusal restores the untracked files anyway and a staged overlap becomes a conflict (0.5). D91's own pop after "Stash changes and check out" keeps going to git |
+| Apply or pop a stash (menus, the toolbar's Pop, a double-click) | checked by the app before git: the stash's changed paths (`diff-tree -r -z --no-renames --name-only <s>^1 <s>`, both sides of a rename) that have a local change, plus its untracked paths (`ls-tree -r -z --name-only <s>^3`) that exist, compared with the status's raw (`-z`) paths | `1 conflict prevents applying the stash. Commit, stash, or discard your changes first.` / `{N} conflicts prevent applying the stash. …`; git is not run. Stricter than git on purpose: git's refusal restores the untracked files anyway and a staged overlap becomes a conflict (0.5). D91's own pop after "Stash changes and check out" keeps going to git |
 
 ### 9.4 Tests
 
-Git layer: a refused checkout of each of the four forms changes nothing (index bytes, HEAD's
-reflog, refs, files, status); the count over recorded texts (several blocks, the folder block's
-empty line, 43 names, names with a space and `é`); the automatic stash's round trip (the stash's
-`%gs` and first parent, ignored files untouched, the status identical after the way back); its
-refusals (in progress, conflicts, nothing to stash, a staged submodule change only); ignored files
-with `--no-overwrite-ignore`; `merge-base --is-ancestor` cases. App layer: the dialog for each
-refusal kind and every checkout path; the automatic stash's git calls, status text, stash row and
-its rules not taken; the half-made stash; the apply pre-check; nothing pops the automatic stash.
-Section 15's checks.
+Git layer: a refused checkout of each of the four forms changes nothing (index entries, HEAD's
+reflog, refs, files, status); the count over recorded texts (several blocks, the folder block's empty
+line, 43 names, names with a space and `é`); the automatic stash's round trip (the stash's `%gs` and
+first parent, ignored files untouched, the status identical after the way back); its refusals (in
+progress, conflicts, nothing to stash, a staged submodule change only); ignored files with
+`--no-overwrite-ignore`, also on a clean tree; the half-made stash with two untracked files, one held
+open; `merge-base --is-ancestor` cases. App layer: the dialog for each refusal kind and every checkout
+path; the automatic stash's git calls, status text, stash row and its rules not taken; HEAD moved
+while it waited; the apply pre-check with a renamed path and an `é` path; nothing pops the automatic
+stash. Section 15's checks.
 
 ## 10. Stashes drawn dashed (D161)
 
@@ -1083,7 +1315,7 @@ phase is taken from the line's absolute y (as `DrawWorkingRowLine` does), so a l
 viewport or drawn row by row keeps one pattern, curves included. Nothing else changes: lanes,
 colours, nodes and the stash's place are as D54 and D55 make them, so phase 1's
 `GraphLayoutTests` keep their lanes and only their `IsDashed` facts are added. Every picture with a
-stash changes (14.2).
+stash changes (14.1).
 
 ## 11. What the graph area holds now
 
@@ -1106,19 +1338,28 @@ leaving one never asks.
 | `ShowsDiff` | a diff, no resolver (over the graph, the list or a page) |
 | `IsResolverOpen` | the resolver |
 
+- **In `CommitGraphView.axaml` the pages' panel comes after the diff's and the resolver's**: hidden
+  views stay in the visual tree, `ShellDriver.Find<T>(name)` returns the first match whatever its
+  visibility, and the history page hosts a `DiffView` with phase 2's names, so phase 2's lookups must
+  find the main diff first (a `GraphAreaHooksTests` assertion pins it).
 - Opening a page: `TryLeaveGraphAreaAsync()` (the list asks if changed), then `LeaveGraphArea()`
   (which now also closes the page), then `Page = page`. Opening a page from a page (Blame from the
   history) replaces it. `OpenResolverAsync`, which closes the diff and the list itself, closes the
-  page too (the code map's pitfall: it does not call `LeaveGraphArea`).
+  page too (the code map's pitfall: it does not call `LeaveGraphArea`). Opening a page does not
+  change the right panel; the user's first click or key on a row of it does (4.1, 11.3).
 - A diff from the right panel (a commit's file) opens over a page as over the list; closing it
   returns to the page (`CloseDiff(returnFocus)` asks the page for the focus). A diff from the stage
   panel leaves the page first, as it leaves the list today.
 - Esc: a page registers `EscapeOrder.Page` = 370 and declines while a diff is open over it or the
   focus is in a text box; it closes the page and gives the focus to the graph
   (`GraphFocusRequested(Graph)`).
+- **Revealing on the way back**: when a page closes (Esc, its close button) after the graph's
+  selection was set from it, the selected row is revealed once the graph shows again (`Reveal`
+  posted at `Loaded` priority after `ShowsGraph` turns true, not while the control is hidden and has
+  no viewport), so the commit the user clicked in a blame, a history or a reflog is in view.
 - The search bar belongs to the graph view: Search closes a page and the diff first (they hold no
   work).
-- `RepoTabViewModel` forwards nothing new: pages stay in column 1, so the right panel is unchanged.
+- `RepoTabViewModel` forwards nothing new: pages stay in column 1.
 - The activity log lies under all of these (2.1).
 
 ### 11.2 When Search can show the graph
@@ -1128,19 +1369,26 @@ hold work, and leaving them asks); it closes a diff or a page first.
 
 ### 11.3 Showing a commit from a page or a comparison
 
-`RepositoryViewModel.ShowCommit(sha)`: when the graph has the commit, it selects it behind the page
-as `IInteractiveRebaseHost.ShowDetails` does (without closing a diff); otherwise it clears the
-graph's selection and shows the commit's details directly (`Details.ShowAsync(sha)`), and records
-the SHA as the shown one, so that selecting that row later (or another) reloads the panel (the code
-map's `_selectedSha` pitfall). `ShowInGraph(sha)` closes the page, selects the row and reveals it
-(`Select(sha, reveal: true)`); for a commit the graph does not have it does nothing and its menu
-item is disabled. The right panel's file menu for a commit shown this way takes the shown commit's
-SHA, not `Selection.Single` (the pitfall of `FileMenuTarget.CommitSha`).
+`RepositoryViewModel.ShowCommit(sha)`: it first leaves the working-changes row
+(`IsWorkingRowSelected = false`, the stage panel's draft staying in memory), so that the details
+panel shows; then, when the graph has the commit, it selects it behind the page as
+`IInteractiveRebaseHost.ShowDetails` does (without closing a diff); otherwise it clears the graph's
+selection and shows the commit's details directly (`Details.ShowAsync(sha)`), and records the SHA as
+the shown one, so that selecting that row later (or another) reloads the panel (the code map's
+`_selectedSha` pitfall). The zero SHA of an uncommitted blame line selects the working-changes row
+instead (4.3). `ShowInGraph(sha)` closes the page, selects the row and reveals it (`Select(sha,
+reveal: true)`); for a commit the graph does not have it does nothing and its menu item is disabled.
+The right panel's file menu for a commit shown this way takes the shown commit's SHA, not
+`Selection.Single` (the pitfall of `FileMenuTarget.CommitSha`). `Reveal(sha)` scrolls a row into view
+without selecting it (6.4's links).
 
 ## 12. Texts
 
-Texts given in the sections above are not repeated here. Counts use the singular for one (D113);
-`{N} files` means `1 file` for one.
+Texts given in the sections above are not repeated here. Counts use the singular for one (D113); every
+text with a count is written out in both forms where it is defined (`1 match` / `{n} matches`,
+`Removed 1 backup` / `Removed {N} backups`, `1 file has changed since` / `{N} files have changed
+since`, `1 conflict prevents …` / `{N} conflicts prevent …`, `1 entry is not shown: it names …` / `{N}
+entries are not shown: they name …`, `1 commit only on …` / `{a} commits only on …`).
 
 ### 12.1 Operations: title, running text, error dialog title, failure summary
 
@@ -1151,8 +1399,10 @@ Texts given in the sections above are not repeated here. Counts use the singular
 | Restore branch | `Restore branch {b}` | `Restoring {b}…` | `Restoring the branch failed` | `Git could not restore {b}.` |
 | Restore tag | `Restore tag {t}` | `Restoring {t}…` | `Restoring the tag failed` | `Git could not restore {t}.` |
 | Restore stash | `Restore stash` | `Restoring the stash…` | `Restoring the stash failed` | `Git could not restore the stash.` |
-| Restore files | `Restore files` | `Restoring files…` | `Restoring the files failed` | `Git could not restore the files.` |
-| Push back | `Push {b} back to {r}` | `Pushing {b} back to {r}…` | `Push failed` | `Git could not push {b} back to {r}.` |
+| Restore the discarded files | `Restore the discarded files` | `Restoring the discarded files…` | `Restoring the files failed` | `Git could not restore the files.` |
+| Restore the changes | `Restore the changes` | `Restoring the changes…` | `Restoring the changes failed` | `Git could not restore the changes.` |
+| Restore the staged changes | `Restore the staged changes` | `Restoring the staged changes…` | `Restoring the staged changes failed` | `Git could not restore the staged changes.` |
+| Push back | `Push {b} back to {r}`, `Push {t} back to {r}` | `Pushing {b} back to {r}…` | `Push failed` | `Git could not push {b} back to {r}.` |
 | The automatic stash's checkout | `Check out {name}` (phase 3's) | `Stashing your changes…`, then `Checking out {name}…` | `Checkout failed` | phase 3's, or 9.2's texts |
 
 ### 12.2 Results in the status bar
@@ -1160,24 +1410,25 @@ Texts given in the sections above are not repeated here. Counts use the singular
 | After | Text |
 |---|---|
 | Undo, Redo | `Undid {text}`, `Redid {text}` |
-| A restore | `Restored branch {b}`, `Restored tag {t}`, `Restored the stash as stash@{0}`, `Restored {N} files`, `Pushed {b} back to {r}` |
+| A restore | `Restored branch {b}`, `Restored tag {t}`, `Restored the stash as stash@{0}`, `Restored 1 file` / `Restored {N} files`, `Restored the staged changes`, `Pushed {b} back to {r}`, `Pushed {t} back to {r}` |
 | The automatic stash | 9.2's text |
-| A stash restored by undo below the top | `Restored the stash as stash@{0}` |
+| An undo of a pop or a drop | `Undid {text}`; the stash comes back as `stash@{0}` (the left panel shows it first) |
 
 ### 12.3 Backups in words (the backups list's "What")
 
 | Kind | Text |
 |---|---|
-| `discard` | `Before discarding {N} files` (the paths in the snapshot's message) |
-| `reset` with `-changes` | `Before a hard reset to {short}` or `Before a mixed reset` (from the snapshot's subject); without: `Before a reset` |
+| `discard` | `Before discarding 1 file` / `Before discarding {N} files` (the paths in the snapshot's message) |
+| `reset` | `Before a hard reset to {short}` or `Before a mixed reset` (from the `-changes` snapshot's subject); without one: `Before a reset` |
 | `detached` | `Commits a detached HEAD left behind` |
 | `branch` | `Deleted branch {b}` |
 | `remote-branch` | `Deleted {b} on {r}` |
 | `remote` | `Removed remote {r}` |
 | `force-push` | `Before a force push of {name}` |
-| `tag` | `Deleted tag {t}` (also the backup an undone tag creation saves: `Tag {t} before undo`) |
+| `tag` | `Deleted tag {t}` |
+| `tag-undone` | `Tag {t}, its creation undone` |
 | `remote-tag` | `Deleted tag {t} on {r}` |
-| `stash` | `Dropped stash "{subject}"` |
+| `stash` | `Dropped or popped stash "{subject}"` |
 | `abort` | `Before aborting` |
 | `rebase` | `Before rebasing {b}` |
 | `skip` | `Before skipping a commit` |
@@ -1187,14 +1438,24 @@ Texts given in the sections above are not repeated here. Counts use the singular
 
 | Item | Reason |
 |---|---|
+| Undo, Redo | 7.4's reasons |
 | `File history`, `Blame` | `This file is in no commit yet`; `Make the first commit first` |
-| `Show in graph` | `This commit is not in the graph` |
+| `Blame before this commit` | `This is the file's first commit` |
+| `Show in graph`, a compare link | `This commit is not in the graph` |
 | `Hide {b}` | `The checked-out branch is always shown` |
 | `Show all hidden branches` | `No branch is hidden` |
 | `Stop soloing` | `No branch is soloed` |
-| `Compare {b} with {cur}` | `HEAD is unborn` (no commit to compare) |
-| `Push {b} back to {r}…` (backups) | `The remote this backup came from cannot be found`; `{r} no longer exists` |
+| `Compare {b} with {cur}` | `HEAD is unborn` |
+| `Restore branch {b}`, `Restore tag {t}` | `A branch named {b} exists`, `A tag named {t} exists` |
+| `Restore the staged changes…` | `Unstage your changes first` |
+| `Push {b} back to {r}…` | `{r} no longer exists`; `The remote this backup came from cannot be found`; `The commit your force push left can no longer be found` |
 | Search | `Close the interactive rebase first`; `Close the conflict resolver first` |
+
+### 12.5 Loading states
+
+`Loading…` (secondary) in the place of the content: a history until its first row (4.1), a blame
+until git ends (4.2), a comparison's list (6.4). `Searching…` and the progress bar for a search
+(3.1). The 2-px bar under the column headers while a filter reloads the graph (8.2).
 
 ## 13. UI inventory: menus, questions, colours, icons, automation ids
 
@@ -1205,54 +1466,61 @@ disabled with it.
 
 | Builder | Change |
 |---|---|
-| `ForCommit`, `ForCommits`, `ForStash`, `ForWorkingChanges` | none (two selected commits compare without a menu, D162) |
+| `ForCommit`, `ForCommits`, `ForStash` | none (two selected commits compare without a menu, D162) |
+| `ForWorkingChanges` | `Show reflog` and `Show backups` in the last group, before `Show in folder` |
 | `ForLocalBranch` | a new group before `Copy branch name`: `Compare {b} with {cur}` (not on the current branch), `Show reflog of {b}`, `Hide {b}` or `Show {b}`, `Solo {b}` or `Stop soloing {b}` |
 | `ForRemoteBranch` | a new group before `Copy branch name`: `Compare {r}/{b} with {cur}`, `Hide {r}/{b}` or `Show {r}/{b}`, `Solo {r}/{b}` or `Stop soloing {r}/{b}` |
 | `ForTag` | `Compare {t} with {cur}` in a group before `Copy tag name` |
 | `ForRemote` | `Hide every branch of {r}` or `Show every branch of {r}`, in a group before `Copy URL` |
-| `ForSection` | Local branches and Remotes: `Show all hidden branches`, `Stop soloing` after their items |
-| `ForUnstagedFile`, `ForStagedFile`, `ForCommitFile`, `ForDiff` | a group `File history`, `Blame` before `Open file` (4.4) |
-| `ForEmptyGraphArea` | `Show reflog` in the last group, before `Manage remotes…` |
+| `ForSection` | Local branches: `Show reflog`, `Show backups`, `Show all hidden branches`, `Stop soloing` after its item; Remotes: `Show all hidden branches`, `Stop soloing` after its items |
+| `ForUnstagedFile`, `ForStagedFile`, `ForCommitFile`, `ForDiff` | a group `File history`, `Blame` before `Open file` (4.4); the resolver's header menu leaves them out (a flag) |
+| `ForEmptyGraphArea` | `Show reflog` and `Show backups` in the last group, before `Manage remotes…` |
 | `ForDrop` | `Compare {A} with {B}` in a group of its own at the end |
-| New | `ForActivityLogRow` (2.2), `ForFileHistoryRow` (4.1), `ForBlameRun` (4.2), `ForReflogEntry` (5.2), `ForBackup` (5.3, 7.10), `ForCompareFile` (6.4: `File history`, `Blame`, `Open file`, `Show in folder`, `Copy path`), the search mode menu (3.1), the reflog source menu (5.1) |
+| New | `ForActivityLogRow` (2.2), `ForFileHistoryRow` (4.1), `ForBlameRun` (4.2), `ForReflogEntry` (5.2), `ForBackup` (5.3, 7.10), `ForCompareFile` (6.4), the search mode menu (3.1), the reflog source menu (5.1) |
 
-Every changed menu's height and picture changes in phases 3 and 4 (14.1).
+The menu model needs nothing new: the Files mode's case note is in the box's placeholder, not in a
+menu item's tooltip (`MenuItem` has a tooltip only for a disabled reason). WP0 splits
+`RepositoryMenus.cs` and `OperationTexts.Menus.cs` into partial files per package (16).
 
 ### 13.2 Questions
 
-- Every undo or redo with a `RemoteRef` effect, and `Push {b} back to {r}…`: 7.5's question.
+- Every undo or redo with a `RemoteRef` effect, and `Push {b} back to {r}…`: 7.5's table.
 - `Restore the discarded files…` and `Restore the changes…` when a file would be overwritten: D75's
   `Restore discarded changes?` question, as the restore bar asks it.
-- Nothing else asks: Undo, Redo and the automatic stash change only what can be put back.
+- Nothing else asks: Undo, Redo and the automatic stash change only what can be put back, and refuse
+  instead of overwriting (7.3's checks, 9.2).
 
-### 13.3 New colours and icons
+### 13.3 New colours, styles and icons
 
 | Token (brush key) | Dark | Light | Used for |
 |---|---|---|---|
 | `VcSearchMatchBrush` | `#F2C94C` | `#B98900` | The 3-px mark of a search match (3.3) |
 
-The dimmed rows use opacity, the blame gutter's runs and the activity log existing brushes. New
-icons, Lucide's (ISC, in `THIRD-PARTY-NOTICES.md`): `IconHistory` ("history"), `IconBlame`
-("text-search"), `IconEyeOff` ("eye-off"), `IconSolo` ("crosshair").
+The dimmed rows use opacity; the blame gutter's runs, the activity log, the progress bars and the
+toggles use existing brushes. `VcFlatButton` gains a `selected` class (1.2). New icons, Lucide's
+(ISC, in `THIRD-PARTY-NOTICES.md`): `IconHistory` ("history"), `IconBlame` ("text-search"),
+`IconEyeOff` ("eye-off"), `IconSolo` ("crosshair").
 
-### 13.4 Automation ids
+### 13.4 Automation ids and names
 
-Toolbar and status bar: `UndoButton`, `RedoButton`, `SearchButton`, `ActivityLogToggle` (kept).
-Activity log: `ActivityLog`, `ActivityLogHeader`, `ActivityLogShowReads`, `ActivityLogClose`,
-`ActivityLogList`, `ActivityLogOperation`, `ActivityLogCall`, `ActivityLogOutput`,
-`ActivityLogSplitter`. Search: `SearchBar`, `SearchModeButton`, `SearchBox`, `SearchCount`,
-`SearchPrevious`, `SearchNext`, `SearchClose`. History: `FileHistory`, `FileHistoryHeader`,
-`FileHistoryTitle`, `FileHistoryBlame`, `FileHistoryClose`, `FileHistoryList`, `FileHistoryRow`,
-`FileHistoryDiff`. Blame: `Blame`, `BlameHeader`, `BlameTitle`, `BlameHistory`, `BlameClose`,
-`BlameText`, `BlameGutter`. Reflog: `Reflog`, `ReflogSource`, `ReflogClose`, `ReflogList`,
-`ReflogRow`, `BackupRow`, `ReflogFooter`. Compare: `Compare`, `CompareTitle`, `CompareSwap`,
-`CompareClose`, `CompareFrom`, `CompareTo`, `CompareAllDifferences`, `CompareCounts`,
-`CompareFileList`. Left panel: `RefHiddenToggle`, `RefSoloToggle`. Every page's root has an
-automation peer that makes it a control element (a pane named by its title), as phase 4's views do.
-Names stay unique: `ShellDriver.Find<T>(name)` returns the first match in the tree whatever its
-visibility (the code map's pitfall), so no new view reuses `DiffSideLabel` or another phase 2 name;
-the history page's diff part hosts phase 2's `DiffView`, whose names it shares, so the driver's
-history helpers look inside `FileHistory` only.
+Toolbar and status bar: `UndoButton`, `RedoButton`, `SearchButton`, `ActivityLogToggle` (kept), with
+`HelpText` their tooltips. Activity log: `ActivityLog`, `ActivityLogHeader`, `ActivityLogShowReads`,
+`ActivityLogClose`, `ActivityLogList`, `ActivityLogOperation` (named by its title),
+`ActivityLogCall` (named by its command), `ActivityLogOutput`, `ActivityLogSplitter`. Search:
+`SearchBar`, `SearchModeButton`, `SearchBox`, `SearchCount`, `SearchProgress`, `SearchPrevious`,
+`SearchNext`, `SearchClose`; `GraphReloading`. History: `FileHistory`, `FileHistoryHeader`,
+`FileHistoryTitle`, `FileHistoryBlame`, `FileHistoryClose`, `FileHistoryList`, `FileHistoryRow`
+(named `{short} {subject}`), `FileHistoryDiff`. Blame: `Blame`, `BlameHeader`, `BlameTitle`,
+`BlameHistory`, `BlameClose`, `BlameText` (a Document; line height 15.84, the text's left edge after
+the gutter and the line numbers, so the report can state a line's point as phase 4's `ResultPoint`
+does), `BlameGutter` (a control element). Reflog: `Reflog`, `ReflogSource`, `ReflogClose`,
+`ReflogList`, `ReflogRow` (named by its selector), `BackupRow` (named by the backup's name),
+`ReflogFooter`. Compare: `Compare`, `CompareTitle`, `CompareSwap`, `CompareClose`, `CompareFrom`,
+`CompareTo`, `CompareAllDifferences`, `CompareCounts`, `CompareFileList`. Details panel:
+`AllFilesButton`. Left panel: `RefHiddenToggle`, `RefSoloToggle`. Every page's root has an automation
+peer that makes it a control element (a pane named by its title), as phase 4's views do. No new view
+reuses a phase 2 name except the history page's hosted `DiffView`, which comes later in the tree than
+the main diff (11.1); the driver's history helpers look inside `FileHistory` only.
 
 ## 14. What changes for earlier phases
 
@@ -1264,182 +1532,217 @@ tests changed in the commit that changes the behaviour (plan.md's gate, step 6).
 | Change | Where it shows | Tests that pin today's state |
 |---|---|---|
 | Search enabled whenever a repository is open; Undo and Redo enabled after recorded actions, with tooltips; the Activity log toggle enabled with a repository | the toolbar and status bar of **every** window picture of phases 1 to 4 with a repository open; phase 0's empty shell is unchanged | `ToolbarTests` (lines 289 and 311), `Phase3Checks.A.Helpers.cs` (313), `ShellExpectations.cs` (the empty tab's states stay; the status bar's texts stay), `StatusBarTests` (38), `Phase0RealWindowPass` (125, 134) |
+| The details panel's `All files` button (4.5) | every picture of phases 1 to 4 showing a commit's details | `PanelViewTests`, `CommitDetailsViewModelTests`, the checks that assert the panel's buttons |
 | Every stash's line dashed (section 10) | phase 1's graph-scenario pictures (its `stash@{0}`), phase 2's check 23, phase 3's pictures of the ops scenario with its stash row | `GraphLayoutTests` (the `IsDashed` facts), `CommitGraphControlTests` (line 115's colour sample in the stash's lane, which a gap can now hit: sample a dash) |
-| New menu items (13.1) | the menu pictures and heights of phases 3 and 4 that show a branch, remote, tag, section, file, diff, empty-area or drop menu (the code map's list: about 60 pictures) | `RepositoryMenusTests`, `Phase3Expectations.*` and `Phase4Expectations.*` (lists and heights; the real-window pass links them) |
+| New menu items (13.1) | the menu pictures and heights of phases 3 and 4 of the changed builders: `ForLocalBranch` (02a, 02b, 02c, 02f, 02g, 05e, 08b, 09d, 13f, 13l, 18b1, 20b, 28a, 28c, 30a, 30f, 32c; a1d, a1f), `ForRemoteBranch` (02d, 02e, 02h, 06d, 08f, 08g, 13b1, 30c; a1e), `ForRemote` (03c), `ForTag` (03a, 16f), `ForSection` (03d), `ForEmptyGraphArea` (03f, 05b1, 23i), `ForWorkingChanges` (04l, 04m), the file menus (04a, 04c, 04d, 04f, 04g, 04h, 04j, 04k, 05b2, 09b2, 26b, 26d, 26f, 26g; c16a only if the stage list's menu is shown, the resolver's header has no new items), `ForDrop` (07b, 07c, 07d, 30g; a3a, a3b, a3c, c13i), and their real-window twins | `RepositoryMenusTests`, `Phase3Expectations.*` and `Phase4Expectations.*` (lists and heights; the real-window pass links them) |
 | Two selected commits show their comparison (D162) | phase 3's and phase 4's pictures with exactly two selected commits (the right panel) | `GraphSelectionTests`, the checks that assert `MultiSelectionView` with two commits |
 | C12's refusal message (9.3) | phase 3's check 14 (`14a` to `14h`, `14b1`) and its real-window `14c`; phase 3's check 15 when a stash's apply is refused by the app first | `OperationTextsTests`, `RepositoryOperationsCheckoutTests`, `RepositoryOperationsTests` (106 to 147), `DialogTests`, `FailureClassifierTests`, `RepositoryOperationsBranchesTests` (318), `RepositoryOperationsStashTagsTests`, `Phase3Expectations.C.cs` (286 to 311) |
-| Phase 4's leftovers (D160) | `a3d`, `b8c`, `c11j` (the SHA on one line); the resolver's pictures with a disabled arrow | as the leftovers' commits say |
+| Backup names from the fixed backup clock in the harnesses (2.3) | no picture (earlier phases never show a backup's name) | phase 3's and 4's checks and App tests that read backup times (`Phase4Checks.C.SkipAbort.cs` compares their order, which the clock keeps), `RepositoryOperationsBackupCleanupTests` |
+| Phase 4's leftovers (D160, merged) | `a3d`, `b8c`, `c11j` (the SHA on one line); the resolver's pictures with one conflicted file (the file arrows dimmer) | changed with them in `279dd8c` |
 
-Nearly every picture of phases 1 to 4 therefore changes, most of them only in the toolbar and status
-bar. The gate makes that inspection quick and exact (15.7).
+Nearly every picture of phases 1 to 4 therefore changes, most of them only in the toolbar, the status
+bar and the details panel's buttons. The gate makes that inspection quick and exact (15.7).
 
 ### 14.2 `plan.md` and the risks
 
-Risk 12 (the run time) grows: a sixth test process, and two git calls before and after every
-operation for the undo history (7.7). Risk 18 (the real-window pass) grows by phase 5's launches. A
-new risk: the inspection of nearly every earlier picture at this gate (15.7). Phase 6's settings
-screen may expose `--no-overwrite-ignore` for every checkout (9.2 uses it for the automatic stash
-only).
+Risk 12 (the run time) grows: two more test processes (15.3), and two git calls before and after every
+operation for the undo history (7.7). Risk 18 (the real-window pass) grows by about 18 launches. New
+risks: the inspection of nearly every earlier picture at this gate (15.7); `read-tree`'s treatment of
+ignored files changed in Git 2.34 (the ignored-files guard of 7.3 makes undo the same on every git).
+Phase 6's settings screen may expose `--no-overwrite-ignore` for every checkout (9.1 uses it for the
+checkouts of a commit the branch reaches only).
 
 ## 15. Tests and harness
 
 ### 15.1 Scenario repositories (`tests/VisualCommit.Testing/Scenarios.Phase5.cs`)
 
 Built once per process as templates, copied per test, every SHA pinned by
-`tests/VisualCommit.Git.Tests/Phase5ScenarioTests.cs`, every git state derived with Git 2.36 (and,
-where words may differ, also with the 2.55 on the development machine, 0):
+`tests/VisualCommit.Git.Tests/Phase5ScenarioTests.cs`, every git state derived with Git 2.36 and, where
+words may differ, also with the 2.55 on the development machine (0):
 
 | Scenario | Holds |
 |---|---|
-| `HistoryAsync` ("history") | three authors; `src/Parser.cs` created, edited, renamed to `src/Reader.cs` with an edit (over 50 % similar), edited again by another author, so blame has lines from four commits; `docs/notes.md` deleted and added again; an image; a merge of a side branch that edited `README.md`; commit messages with words only in their bodies, a pickaxe string added in one commit and removed in a later one; `main` and `feature/compare` diverged from a base, with a rename on `main`; a local bare `origin` |
-| `FiltersAsync` ("filters") | `main`; `feature/alpha` with an upstream `origin/feature/alpha` one commit ahead; `feature/beta` with a long history of its own; `feature/merged`, merged into `main`; `origin/HEAD` pointing at `origin/feature/beta`; a stash made on `feature/beta`'s tip; a tag `v1` |
-| `ReflogAsync` ("reflog") | a branch's reflog with a commit reset away (lost), an amended commit (the old one lost), a checkout of another branch and back, the checked-out branch renamed (a gap in HEAD's reflog), a branch deleted; backup refs of several kinds with fixed old names for the backups list (`branch-…`, `tag-…`, `stash-…`, `discard-…`, `remote-branch-…`), and backups older than 30 days for the activity log's clean-up notes |
-| `ProtectAsync` ("protect") | `main` with older commits and a tag on one; `other` changing files `main` has, adding a file, deleting one; a file `main` ignores that an older commit of `main` tracks; working-tree changes are made by each check |
+| `HistoryAsync` ("history") | three authors; `src/Parser.cs` created, edited, renamed to `src/Reader.cs` with an edit (over 50 % similar), edited again by another author, so blame has lines from four commits; `docs/notes.md` deleted and added again; an unchanged `LICENSE` for "All files"; an image; a merge of a side branch that edited `README.md`; commit messages with words only in their bodies; a pickaxe string added in one commit and removed in a later one; `main` and `feature/compare` diverged from a base, with a rename on `main`; a local bare `origin` |
+| `FiltersAsync` ("filters") | `main`; `feature/alpha` with an upstream `origin/feature/alpha` one commit ahead; `feature/beta` with a long history of its own; `feature/merged`, merged into `main`; `origin/HEAD` pointing at `origin/feature/beta`; a stash made on `feature/beta`'s tip and a second stash on a commit only `feature/alpha` reaches (so soloing `feature/beta` leaves it out); a tag `v1`; a local bare `origin` |
+| `ReflogAsync` ("reflog") | a branch's reflog with a commit reset away (lost), an amended commit (the old one lost), a checkout of another branch and back, the checked-out branch renamed (a gap in HEAD's reflog), a branch deleted; a local bare `origin` without the branch its `remote-branch-…` backup names; backup refs of every kind the list shows, with fixed names dated 2026-01-01 (younger than 30 days by the harnesses' backup clock, 2.3), among them a hard reset's and a mixed reset's `-changes`, an abort's and a skip's; and backups dated 2025-11 for the activity log's clean-up notes, plus a copy with 51 young backups for its `(more than 50 backups)` line |
+| `ProtectAsync` ("protect") | `main` with older commits and a tag on one; `other` changing files `main` has, adding a file, deleting one; a file `main` ignores now that an older commit of `main` tracks; working-tree changes are made by each check |
 
-The undo checks use phase 3's and phase 4's scenarios (ops, sync with its bare remote, rebase,
-conflicts) and these.
+The undo checks also use phase 3's and phase 4's scenarios (ops, sync with its bare remote, rebase,
+interactive, conflicts with the fake merge tool), and these.
 
 ### 15.2 Harness additions
 
 `ShellDriver.Phase5*.cs`: the activity log (open, rows as a snapshot, open a row, the splitter);
 search (open by button and key, type, Enter, Shift+Enter, the marks as a snapshot read from the
 control's `Search` and per-row state, not from pixels); the pages (history rows, the hosted diff,
-blame lines and gutter runs, reflog rows, backup rows, the source menu); compare (rows, swap, the
-switch); the left panel's toggles; the toolbar's Undo and Redo and their tooltips; `PressGitUndo`,
-`PressGitRedo`, `PressSearch` (1.3). `RealApp.Phase5*.cs` for the same by automation id. The record
-clock (2.3): `AppSession.Start(..., recordClock)` in `ShellDriver.Start`, and
-`VISUALCOMMIT_RECORD_CLOCK=frozen` in `RealApp.Launch`. Each driver addition is tested in
-App.Tests, as phase 4's are.
+blame lines and gutter runs, reflog rows, backup rows, the source menu); "All files"; compare (rows,
+swap, the switch, the links); the left panel's toggles; the toolbar's Undo and Redo and their
+tooltips; `PressGitUndo`, `PressGitRedo`, `PressSearch` (1.3). `RealApp.Phase5*.cs` for the same by
+automation id and name. The clocks (2.3): `AppSession.Start(..., recordClock, backupClock)` in
+`ShellDriver.Start`, and `VISUALCOMMIT_RECORD_CLOCK=frozen` and `VISUALCOMMIT_BACKUP_CLOCK=fixed` in
+`RealApp.Launch`. When a scenario holds backups due for the clean-up, the driver and `RealApp` wait for
+the `Clean up backups` record before a check's first input (the clean-up at opening is dropped when
+the queue is busy). Each driver addition is tested in App.Tests, as phase 4's are.
 
-### 15.3 The walk-through project
+### 15.3 The walk-through projects
 
-`tests/VisualCommit.VisualTests.Phase5`, as phase 4's (D133, D151, the code map's recipe): csproj,
-`AssemblyInfo.cs`, `Phase5Checks.cs`, `Phase5Checks.Support.cs` (phase 4's, with the part letters
-`a` to `e` in `PictureName()`), `Phase5Expectations.Common.cs` and one file per part, their tests
-named `Phase5ExpectationTests.<part>.cs` and `Phase5SupportTests.cs` (so the real-window link
-pattern takes only the expectations); the project in `VisualCommit.slnx`; the real-window csproj's
-link `..\VisualCommit.VisualTests.Phase5\Phase5Expectations*.cs`; `scripts/time-scripted-check.sh`
-taking phase 5 by default and `-ge 5` for the new project; CLAUDE.md's Commands rows.
+Two projects, decided now (D133 and D151's rule: a project's single UI thread sets a floor, and the
+undo checks alone are about 100 operations): `tests/VisualCommit.VisualTests.Phase5` (parts A, B, F
+and P) and `tests/VisualCommit.VisualTests.Phase5Undo` (part U), each as phase 4's (the code map's
+recipe): csproj, `AssemblyInfo.cs`, `Phase5Checks.cs`, `Phase5Checks.Support.cs` (phase 4's, with the
+part letters `a`, `b`, `f`, `p` and `u` in `PictureName()`; the undo project links the support and the
+common expectations), `Phase5Expectations.Common.cs` and one file per part, their tests named
+`Phase5ExpectationTests.<part>.cs` and `Phase5SupportTests.cs` (so the real-window link pattern takes
+only the expectations); both projects in `VisualCommit.slnx`; the real-window csproj's link
+`..\VisualCommit.VisualTests.Phase5*\Phase5Expectations*.cs`; `scripts/time-scripted-check.sh` taking
+phase 5 by default and the right project for each part; CLAUDE.md's Commands rows. Both projects save
+their pictures under `artifacts/visual/phase-5/scripted/`: the first picture of a run empties that
+folder only once per run of both projects (`VisualRun` keys the emptying by phase and run, not by
+process).
 
 ### 15.4 Proposed visual checks (the report's writers write them in full, step 6)
 
-"RW" marks what the real-window pass repeats: a picture of every new screen, and what only a real
-window shows (real keys, real typing, a real drag of the splitter, a real double-click, a real
-restart of the process). Window 1100×700, dark, unless said.
+Parts: **A** the shell and the activity log, **B** the pages and "All files", **F** finding (search,
+compare, solo and hide, dashed stashes), **U** undo and redo, **P** protected changes (C12). The
+letters avoid C, so that a check's name never reads as the requirement C12. "RW" marks what the
+real-window pass repeats: a picture of every new screen, and what only a real window shows (real
+keys, real typing, a real drag of the splitter, a real double-click, a real restart of the process).
+Window 1100×700, dark, unless said. Every U check is several test methods, one action with its undo
+and redo each, on a fresh copy, so that none comes near the hang watchdog's 3 minutes.
 
 | # | Check | RW |
 |---|---|---|
-| A1 | The toolbar and status bar: an empty tab (only Theme enabled); a repository open (Search and Activity log enabled, Undo and Redo disabled, `Nothing to undo`); after a commit, Undo enabled with `Undo commit "…"` | yes |
-| A2 | The activity log: opened from the status bar under the graph; operations with each outcome (succeeded, warning, failed with its summary, cancelled); a row opened to its git calls; a call opened to its output; `Show reads`; the clean-up's `Removed backup` notes at opening (old backups of the scenario); Esc closes it | yes |
-| A3 | The panel's height: the splitter dragged, the window restarted: the height kept | yes (a real drag and a real process restart) |
-| A4 | The keys: Ctrl+F opens the search; Ctrl+Z in the graph undoes a commit, Ctrl+Y redoes it; Ctrl+Z in the commit summary undoes typing only; in the resolver's result it is the resolver's undo | yes (real keys) |
-| B5 | File history across a rename, from the stage panel's file and from a commit's file: rows, the `renamed from` row, the diff of a step, the right panel showing the row's commit; the side-by-side layout at 1920×1080 (light theme); `Show in graph` | the page at 1100×700 |
-| B6 | Blame: the gutter's runs and dates, `Not committed yet` lines, a click on a run (details), a double-click (the graph, the commit revealed), `Blame before this commit`, `History` | yes (a real double-click) |
-| B7 | The reflog: HEAD's with the lost marks and the gap line, a branch's, `Create branch here…` from a lost commit (the branch in the graph) | yes |
-| B8 | The backups list and restores: a deleted branch, discarded files (with the question when a file changed), a deleted remote branch pushed back (the question) | the list |
-| C9 | Search, Commits mode: a word only in a commit body, an author, a SHA prefix: marks, dimmed rows, the count, Enter and Shift+Enter (the selection and the right panel), Esc | yes (real typing and Enter) |
-| C10 | Search, Files and Changes modes: a part of a file name (the renamed file's both names), a string added then removed (two matches) | n/a |
-| C11 | Compare two selected commits (two-dot): the right panel, a file's diff, Swap | yes |
-| C12 | Compare branches from a branch menu (three-dot) and with `All differences`, the counts; the drop menu's compare | n/a |
-| C13 | Hide `feature/alpha` (its upstream too): the graph without them, the left panel's marks, `Show`; solo `feature/beta`: the graph, labels, the stash whose base is hidden left out; `Stop soloing`; a restart keeps the hidden branch | yes (the restart) |
-| C14 | Stashes dashed: the graph scenario's stash and the filters scenario's (the dash pattern sampled) | n/a |
-| D15 | Undo and redo of a commit and an amend (the message back in the box), a discard of a file and of a hunk, Restore after them | yes (the toolbar's Undo) |
-| D16 | Undo and redo of resets: soft, mixed, hard (the files back from the snapshot) | n/a |
-| D17 | Undo and redo of branch operations: create, rename, delete (its upstream back), a checkout that created a tracking branch, a fast-forward | n/a |
-| D18 | Undo and redo of history operations: merge (both kinds), a cherry-pick of a list, a revert, a rebase, a squash, a pull | n/a |
-| D19 | Undo and redo of stash, pop, drop and tags (create annotated, delete) | n/a |
-| D20 | Undo of remote actions against a local bare remote: force push, delete a remote branch, delete a remote tag, a push (each with the question); a lease that fails | n/a |
-| D21 | Undo of local configuration: set upstream, remove remote (its branches and URL back), ignore | n/a |
-| D22 | Refusals: Undo after a terminal commit on the same branch (the tooltip, the button disabled), during a merge in progress, a Keep move over a local change in the way (9.3's text) | n/a |
-| E23 | Refused checkouts: a tracked change (`1 conflict prevents checkout…`, the button), several (`3 conflicts…`), an untracked file (no button), a folder in the way; "Create branch" with checkout | yes (the dialog) |
-| E24 | The automatic stash: `Check out this commit` on an older commit of `main` with staged, unstaged and untracked changes: no question, the stash row (ring, dashed line to `main`'s tip), the status text, the detached HEAD; `main` checked out again; Pop | yes |
-| E25 | When it is not taken: HEAD's own commit, a commit only `other` reaches (refused with 9.3's text); a file ignored now that the older commit tracks (refused after the stash, the stash popped back, the file intact) | n/a |
-| E26 | Other refusals: a merge and a cherry-pick over a changed file, over a staged file; a stash's apply refused by the app | n/a |
+| A1 | The toolbar and status bar: an empty tab (only Theme enabled); a repository open (Search and Activity log enabled, Undo and Redo disabled, `Nothing to undo`); after a commit, Undo enabled at once with `Undo commit "…"` | yes |
+| A2 | The activity log on the conflicts scenario with old and many backups: opened from the status bar under the graph; the clean-up's `Removed backup … (older than 30 days)` and `(more than 50 backups)` notes; operations with each outcome (succeeded, a stop with conflicts, failed with the dialog's summary, the merge tool cancelled); a row opened to its git calls; a call opened to its input and output; `Show reads` (asserted by structure: top-level call rows of no operation, in order); Esc in the log with a page open closes only the log | yes |
+| A3 | The panel's height: the splitter dragged, the app restarted: the height kept | yes (a real drag and a real process restart) |
+| A4 | The keys: Ctrl+F opens the search; Ctrl+Z in the graph undoes a commit and Ctrl+Y redoes it; Ctrl+Z in the commit summary undoes typing only; in the resolver's result it is the resolver's undo | yes (real keys) |
+| B5 | File history across a rename, from the stage panel's file, from a commit's file and from a diff's menu: rows, the `renamed from` row, the diff of a step, the right panel unchanged until a row is clicked, then showing it; the list walked with Down; the side-by-side layout at 1920×1080 (light theme); `Show in graph`; Esc: the clicked commit in view | the page at 1100×700 |
+| B6 | Blame: the gutter's runs and dates, `Not committed yet` lines, a click on a run (details), a double-click (the graph, the commit revealed), `Blame before this commit`, `File history` | yes (a real double-click on a run) |
+| B7 | "All files": the details panel's button, an unchanged file's blame by a click and by its menu (two clicks), the setting kept | yes |
+| B8 | The reflog from the Local branches section's menu: HEAD's with the lost marks and the gap line, a branch's, `Create branch here…` from a lost commit (the branch in the graph); Esc: the commit in view | yes |
+| B9 | The backups list from `Show backups` and its restores: a deleted branch, discarded files (with the question when a file changed), an abort's and a skip's changes, a mixed reset's staged changes, a deleted remote branch pushed back (the question) | the list |
+| F10 | Search, Commits mode: a word only in a commit body, an author, a SHA prefix: marks, dimmed rows, the count, Enter and Shift+Enter (the selection and the right panel), Esc | yes (real typing and Enter) |
+| F11 | Search, Files and Changes modes: a part of a file name (the renamed file's both names), a string added then removed (two matches); a refresh while the search is open keeps the marks | n/a |
+| F12 | Compare two selected commits (two-dot): the right panel, a file's diff, Swap, a link click (the comparison stays) | yes |
+| F13 | Compare branches from a branch menu (three-dot, the merge base's file diff) and with `All differences`, the counts; from a drop; with the working-changes row selected | n/a |
+| F14 | Hide `feature/alpha` (its upstream too): the graph without them, the left panel's marks, `Show`; solo `feature/beta`: the graph, labels, the stash on `feature/alpha`'s commit left out; `Stop soloing`; a restart keeps the hidden branch | yes (the restart) |
+| F15 | Stashes dashed: the graph scenario's stash and the filters scenario's (the dash pattern sampled) | n/a |
+| U16 | Undo and redo of a commit and an amend (the message back in the box), a discard of a file, of a hunk (the other hunk kept on redo), of lines and of all, the restore bar going and coming back | yes (the toolbar's Undo) |
+| U17 | Undo and redo of resets: soft, mixed (with and without staged changes), hard (the files back from the snapshot) | n/a |
+| U18 | Undo and redo of branch operations: create, create and check out, rename, delete (its upstream back), a checkout that created a tracking branch, a checkout from a detached HEAD that left a commit, a fast-forward, D91's "Stash changes and check out" | n/a |
+| U19 | Undo and redo of history operations: merge (both kinds), a cherry-pick of a list, a revert, a rebase, an interactive rebase with a drop and a reword, a squash, a pull | n/a |
+| U20 | Undo and redo of stash, apply, pop, drop and tags (create annotated, delete) | n/a |
+| U21 | Undo of remote actions against a local bare remote: force push, delete a remote branch, delete a remote tag, a push (each with its question); a lease that fails | n/a |
+| U22 | Undo of local configuration: set upstream, remove remote (its branches and URL back), ignore | n/a |
+| U23 | Refusals: Undo after a terminal commit on the same branch (the tooltip, the button disabled), during a merge in progress, a Keep move over two changed files in the way (the app's count), an ignored file in the way; a Keep undo on a fresh copy with stale stat data succeeds | n/a |
+| P24 | Refused checkouts: a tracked change (`1 conflict prevents checkout…`, the button), several (`3 conflicts…`), an untracked file (no button), a folder in the way; "Create branch" with checkout | yes (the dialog) |
+| P25 | The automatic stash: `Check out this commit` on an older commit of `main` with staged, unstaged and untracked changes: no question, the stash row (ring, dashed line to `main`'s tip), the status text, the detached HEAD; `main` checked out again; Pop; and Undo of such a checkout (switched back, changes back) | yes |
+| P26 | When it is not taken: HEAD's own commit, a commit only `other` reaches (refused with 9.3's text); a file ignored now that the older commit tracks (refused after the stash with the ignored-files text, the stash popped back, the file intact; and on a clean tree) | n/a |
+| P27 | Other refusals: a merge and a cherry-pick over a changed file, over a staged file; a stash's apply refused by the app | n/a |
 
 ### 15.5 Each "Delivers" item and what proves it
 
-| Delivers | Proven by |
+| Delivers (plan.md phase 5) | Proven by |
 |---|---|
-| File history following renames, and blame, with click-through | B5, B6; `FileHistoryTests`, `BlameParserTests`, `BlameTests` (Git), `FileHistoryViewModelTests`, `BlameViewModelTests` |
-| Reflog viewer with restore | B7, B8; `ReflogTests` (Git: both calls, gaps, missing reflogs, lost), `ReflogViewModelTests`, `BackupReaderTests` |
-| Activity log panel | A2, A3; `ActivityLogViewModelTests`, `OperationLogTests`, `ActivityLogViewTests` |
-| Commit search, search inside changes | C9, C10, A4; `SearchTests` (Git: each mode, chunks, merges, stashes, the empty text), `SearchViewModelTests`, `CommitGraphControlTests` (marks) |
-| Compare two commits or branches | C11, C12; `CompareTests` (Git: two-dot, three-dot, unrelated, criss-cross, renames), `CompareViewModelTests` |
-| Undo and redo, many steps; remote undo with a lease; the keys | A1, A4, D15 to D22; 7.11's tests |
-| Solo and hide, remembered | C13; 8.5's tests |
-| C12 | E23 to E26, C14; 9.4's tests |
-| Phase 4's leftovers | the leftovers' tests; `a3d`, `b8c`, `c11j` and the resolver's pictures |
+| File history following renames, and blame, with click-through | B5, B6, B7; `FileHistoryTests`, `BlameParserTests`, `BlameTests` (Git), `FileHistoryViewModelTests`, `BlameViewModelTests` |
+| Reflog viewer with restore; activity log panel | B8, B9, A2, A3; `ReflogTests` (Git: both calls, gaps, missing reflogs, lost), `ReflogViewModelTests`, `BackupReaderTests`, `ActivityLogViewModelTests`, `OperationLogTests`, `GitCallLogTests`, `ActivityLogViewTests` |
+| Commit search, search inside changes | F10, F11, A4; `SearchTests` (Git: each mode, chunks, merges, stashes, the empty text), `SearchViewModelTests`, `CommitGraphControlTests` (marks) |
+| Compare two commits or branches | F12, F13; `CompareTests` (Git: two-dot, three-dot, unrelated, criss-cross, renames), `CompareViewModelTests` |
+| Undo and redo, many steps; remote undo with a lease; the keys | A1, A4, U16 to U23; 7.11's tests |
+| Solo and hide, remembered | F14; 8.5's tests |
+| C12 | P24 to P27, F15; 9.4's tests |
+| Phase 4's leftovers | the leftovers' tests (`279dd8c`); `a3d`, `b8c`, `c11j` and the resolver's pictures |
+| Undo reads the backups, which the clean-up keeps; the clean-up's lines in the activity log | B9, A2; `BackupReaderTests`, `UndoRecordingTests` (the keep set), `RepositoryOperationsBackupCleanupTests` |
+| The activity log reads `OperationLog` and `IGitCallLog`, with the background clean-up and warnings | A2; `OperationLogTests`, `ActivityLogViewModelTests` |
+| Compare on a multi-selection (D162 makes it automatic), file history and blame in the file menus, solo and hide in the branch menus | F12, B5 (from the stage list, a commit's file, a diff), F14; `RepositoryMenusTests` (every changed builder, the resolver's header without the items) |
+| The toolbar's Undo, Redo and Search become real | A1, A4, F10; `UndoToolbarTests`, `ToolbarTests` |
+
+Every destructive action of phases 2 to 4 and the check that undoes or restores it (7.2's table):
+discard of a file, a hunk, lines, all (U16; B9 from the list); reset of each mode (U17); delete a
+branch (U18, B9), delete a branch on a remote (U21, B9), remove a remote (U22); force push (U21);
+delete a tag, on a remote (U20, U21); drop a stash (U20); leaving a detached HEAD's commits (U18);
+rebase of every kind (U19); abort (B9, D165); skip (B9); the resolver's binary side and "Delete it"
+(B9's discard restore, the same `discard-` path).
 
 ### 15.6 Run time
 
-The default run took 21 min 52 s at phase 4's gate, rested and alone. Phase 5 adds a sixth test
-process (about 26 checks: estimated 12 to 18 minutes alone, run beside the others), Git-layer and App
-tests of several git calls each, and two git calls before and after every operation of every
-earlier check (7.7). Expect the run to grow by several minutes; the CI rule of D152 stands (past
-20 minutes of the Windows Test step's 24, the lead raises the limit and records it). If the phase 5
-project alone passes 20 minutes, it is split in two as D133 and D151 split phases. The real-window
-pass gains about 14 launches (estimated 6 to 9 minutes on top of phase 4's 14).
+The default run took 21 min 52 s at phase 4's gate, rested and alone; the leftovers' run took 26 min
+56 s beside other agents. Phase 5 adds two test processes: about 14 test methods in the Phase 5 project
+(estimated 8 to 12 minutes alone) and about 30 in the undo project (about 100 operations at 8 to 15
+seconds each under the full run's load: 15 to 25 minutes), Git-layer and App tests of several git calls
+each, and two git calls before and after every operation of every earlier check (7.7). Expect the
+default run to reach 30 minutes or more on the laptop; D152's rule stands for CI (past 20 minutes of
+the Windows Test step's 24, the lead raises the limit and records it), and the owner's decision of
+D134 on CI's length comes at the project's end. The real-window pass gains about 18 launches (A1 to
+A4 with A3's restart, B5 to B9, F10, F12, F14 with its restart, U16, P24, P25): estimated 8 to 11
+minutes on top of phase 4's 14.
 
 ### 15.7 The gate's inspection of earlier pictures
 
-Nearly every earlier picture changes (14.1), mostly in the toolbar and status bar. So that the
-inspection compares rather than re-reads: before the gate, the phase 0 to 4 walk-throughs run on
-`master` in a worktree to make the reference pictures again (they must match
-`docs/test-reports/phase-4-pictures.sha256`, which proves them the inspected ones); a script makes,
-for each earlier picture, a difference picture and the bounding boxes of the changed pixels against
-that reference; the inspectors get the reference, the new picture and the difference, and say for
-each whether every change is one that 14.1 lists. A picture whose changes lie outside the regions
-14.1 names is opened and judged in full. Phase 5's own pictures are inspected in full, as every
-phase's are.
+Nearly every earlier picture changes (14.1), mostly in the toolbar, the status bar and the details
+panel's buttons. So that the inspection compares rather than re-reads, the lead, before the gate,
+runs the phase 0 to 4 walk-throughs on `master` in a worktree to make the reference pictures again
+(they must match `docs/test-reports/phase-4-pictures.sha256`, except the pictures phase 4's report and
+step 4 of `status.md` name as varying by nature, which are inspected in full) and keeps a copy of
+today's real-window pictures, checked against the same list, before phase 5's first real-window
+pass. A script the lead writes makes, for each earlier picture, a difference picture and the bounding
+boxes of the changed pixels against its reference; the inspectors get the reference, the new picture
+and the difference, and say for each whether every change is one that 14.1 lists. A picture whose
+changes lie outside the regions 14.1 names is opened and judged in full. Earlier real-window captures
+are judged against their new scripted twins through the pass's own difference pictures. Phase 5's own
+pictures are inspected in full, as every phase's are.
 
 ## 16. Work breakdown
 
 Each package is built in its own worktree on a branch made **from `phase/5-history`**
 (`wip/p5-<name>`; a worktree may start from `master`, so its agent creates the branch from the phase
 branch first), merged back with `--no-ff` after its tests pass and the solution builds, its worktree
-removed at once and its fsmonitor daemon stopped (phase 3 and 4 handoffs). A package edits only the
-files named for it; anything else goes through the lead. A package whose code changes an earlier
-phase's expected result edits that phase's tests and expectation files in the same commit.
+removed at once and its fsmonitor daemon stopped (phase 3 and 4 handoffs; this phase's first worktree
+had to be removed with `git worktree remove -f -f`, as its agent's lock outlived it). A package edits
+only the files named for it; anything else goes through the lead. Every file has one owner.
 
 | Package | Builds and owns |
 |---|---|
-| WP-L (started first, running) | Phase 4's leftovers (D160) and the two waits of the baseline run |
-| WP0 (lead) | **Core**: `Undo/` (`UndoEntry`, `UndoEffect` and its records, `UndoHistory`, `UndoScope`), `Graph/GraphFilter`, the result records of history, blame, reflog, backups, compare and search, `OperationRecord`'s fields and `IOperationLog`'s events and notes, `GraphLine.IsDashed`, `SessionState.GraphFilters` and `ActivityLogHeight`. **Git**: `IGitRepository`'s new members (`ReadFileHistoryAsync`, `ReadBlameAsync`, `ReadReflogAsync`, `FindLostCommitsAsync`, `ReadBackupsAsync`, `CompareAsync`, `SearchAsync`, `ReadRefStatesAsync`, `ApplyUndoAsync`, `CheckUndoAsync`, the filter parameter of `LoadCommitsAsync`), `FakeRepositoryBase`, one stub file per package. **Queue**: the record clock, `Started`, the record's fields. **App contracts**: `IGraphAreaPage`, the pages' host interfaces, `IRepositoryActions` additions, `RunOptions.Undo`, `UndoCapture`, `RepositoryViewModel`'s hooks stubbed (`Page`, `ShowCommit`, `ShowInGraph`, `Compare`, `Search`, `UndoHistory`), `EscapeOrder` 370, 380, 390, `ToolbarViewModel`'s new commands as stubs. **Theme**: `Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `Tokens.axaml`. **Tests**: `GitIsolation`/`RealApp` (the record clock) |
-| WP-S | 15.1's scenarios and `Phase5ScenarioTests`; the Phase 5 project (15.3); the driver files of 15.2 as their views arrive (shared with WP5 to WP7); `scripts/time-scripted-check.sh`; CLAUDE.md's rows |
-| WP1 (Git: reading) | `GitRepository.FileHistory.cs` (file history and blame), `.Reflog.cs` (reflog, lost commits, backups' reader on phase 4's parser), `.Compare.cs`, `.Search.cs`; their tests |
-| WP2 (graph) | `GraphFilter` in `LoadCommitsAsync` and `CommitPager` (8.2), `GraphLayout`'s dashed stash lanes (10), `CommitGraphData`'s label filter, `CommitGraphControl`'s dashes and search marks (3.3, 10); their tests and phase 1 to 3's graph tests and expectations that change |
-| WP3 (undo engine) | `GitRepository.Undo.cs` (every effect of 7.3 forward and back, the checks, the reads of 7.7), `RepositoryOperations.Undo.cs` (recording in `RunAsync` and `WriteAsync`, undo and redo operations, the history per repository, the toolbar's state and tooltips, the keys' handlers' targets, `BackupsToKeep`, the restore bar's tie, 7.10's restores), `OperationTexts.Undo.cs`; 7.11's tests; phase 0 to 4's toolbar tests that change |
-| WP4 (C12) | `GitFailureClassifier` (the count, the folder kind), `RepositoryOperations.Branches.cs`'s checkouts (9.1 to 9.3 on every path), the stash apply pre-check, `OperationTexts`; 9.4's tests; phase 3's check 14 and 15 expectations and tests that change |
-| WP5 (activity log and shell) | `OperationQueue`/`OperationLog` changes, `ActivityLogViewModel`/`ActivityLogView`, the grid under the graph area and its splitter and session height, the status bar's toggle, `MainWindow`'s keys (1.3), the toolbar's Search and Undo/Redo bindings; their tests |
-| WP6 (pages) | `FileHistoryViewModel`/`View`, `BlameViewModel`/`View` with the gutter, `ReflogViewModel`/`View` with the backups list, their menus and the file menus' new group (13.1), the hosted diff; their tests |
-| WP7 (search, compare, solo and hide) | `SearchViewModel`/`SearchBarView`, `CompareViewModel`/`CompareView` in the right panel's slot, the left panel's marks and toggles, the branch, remote, section, tag and drop menus' new items, the session's filters; their tests |
-| WP8 | The scripted checks of the report, part by part: `Phase5Checks.{A..E}*.cs`, `Phase5Expectations*.cs`, `Phase5ExpectationTests*.cs`; phase 0 to 4's expectation files for 14.1's changes |
-| WP9 | The real-window pass for the RW checks: `Phase5RealWindowPass*.cs`, `RealApp.Phase5*.cs`, the Phase 5 link in `RealWindowTests.csproj`, and phase 0 to 4's real-window expectations that change |
-| Lead | `RepositoryViewModel*.cs` (the hooks: pages, `ShowCommit`, `ShowInGraph`, compare's place, search's place, the filter's reload, `OnStatusApplied`/`ApplyRefs` feeding the pages and the undo state), `RepoTabViewModel.cs`, `MainWindow.axaml(.cs)`, `MainWindowViewModel.cs`, `CommitGraphView.axaml`, `AppSession.cs` (the histories, the record clock), the `.slnx`, CI, the docs, CLAUDE.md |
+| WP-L (done, `279dd8c`) | Phase 4's leftovers (D160) and the two waits of the baseline run |
+| WP0 (lead) | **Core**: `Undo/` (`UndoEntry`, `UndoSequence`, the effect records, `UndoHistory`, `UndoScope`), `Graph/GraphFilter`, the result records of history, blame, reflog, backups, the tree's files, compare and search, `OperationRecord`'s fields and `IOperationLog`'s events, `GraphLine.IsDashed`, `SessionState.GraphFilters` and `ActivityLogHeight`, `AppSettings.ShowAllFiles`. **Git**: `IGitRepository`'s new members (`ReadFileHistoryAsync`, `ReadBlameAsync`, `ReadTreeFilesAsync`, `ReadReflogAsync`, `FindLostCommitsAsync`, `ReadBackupsAsync`, `CompareAsync`, `SearchAsync`, `ReadRefStatesAsync`, `RunUndoStepAsync`, the filter parameter of `LoadCommitsAsync`, `PushAsync`'s and `PushTagAsync`'s `PushOutcome`), `FakeRepositoryBase`, one stub file per package. **Queue and runner**: the record clock, the sequence numbers, `Started`, the record's fields, `GitCommand.RecordsStandardInput`. **App contracts**: `IGraphAreaPage`, the pages' host interfaces, `IRepositoryActions` additions, `RunOptions.Undo` with **every operation's scope and its `UndoCapture` call points as no-ops at every `RunAsync` and `WriteAsync` call site**, the recording hook in `RepositoryOperations.Run.cs` and `RepositoryViewModel.WriteAsync`, `RepositoryViewModel`'s hooks stubbed (`Page`, `ShowCommit`, `ShowInGraph`, `Reveal`, `Compare`, `Search`, `UndoHistory`), `EscapeOrder` 340, 370, 390, `ToolbarViewModel`'s new commands as stubs, `RepositoryMenus` and `OperationTexts.Menus` split into partial files (`.Pages.cs` for WP6, `.Filters.cs` for WP7). **Theme**: `Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `Tokens.axaml`, `VcFlatButton`'s `selected`. **Tests**: `GitIsolation`/`RealApp` (the two clocks) |
+| WP-S | 15.1's scenarios and `Phase5ScenarioTests`; the two projects (15.3); the driver files of 15.2 as their views arrive; `scripts/time-scripted-check.sh`; CLAUDE.md's rows |
+| WP1 (Git: reading) | `GitRepository.FileHistory.cs` (file history, blame, the tree's files), `.Reflog.cs` (reflog, lost commits, the backups' reader on phase 4's parser), `.Compare.cs`, `.Search.cs`; their tests |
+| WP2a (graph, data; first wave) | `GraphFilter` in `LoadCommitsAsync` and `CommitPager` (8.2), `GraphLayout`'s dashed stash lanes (10), `CommitGraphData`'s label filter; their tests and phase 1's graph tests that change |
+| WP2b (graph, drawing; after the report) | `CommitGraphControl`'s dashes and search marks (3.3, 10), the reload bar (8.2); their tests |
+| WP3 (undo) | Git half (first wave): `GitRepository.Undo.cs` (every effect and sequence of 7.3, the checks, the reads of 7.7), `GitRepository.Remotes.cs`'s `PushOutcome`. App half (after the report): `RepositoryOperations.Undo.cs` (recording, undo and redo, the histories, the toolbar's state and tooltips, `BackupsToKeep`, 7.10's restores), filling every operation's `UndoCapture` call points (in the `RepositoryOperations.*.cs` files, after WP4's changes to `Branches.cs` are merged), `WorkingChangesViewModel.cs` (the message put back), the restore bar's tie, `OperationTexts.Undo.cs`; 7.11's tests |
+| WP4 (C12) | `GitFailureClassifier` (the count, the folder and ignored kinds), `GitRepository.Branches.cs` (`--no-overwrite-ignore`, the automatic stash's steps), `RepositoryOperations.Branches.cs`'s checkouts (9.1 to 9.3 on every path), the refusal texts of merge, pick, revert and pull (`RepositoryOperations.Remotes.cs`'s pull part), the stash apply pre-check (`RepositoryOperations.StashTags.cs`), `OperationTexts`; 9.4's tests |
+| WP5 (activity log and shell) | `OperationQueue`/`OperationLog`/`GitCallLog`/`GitRunner` changes, `ActivityLogViewModel`/`ActivityLogView`, `CommitGraphView.axaml`'s grid under the graph area with its splitter and the session's height, the status bar's toggle, `MainWindow`'s key handlers (1.3), the toolbar's Search and Undo/Redo bindings; their tests |
+| WP6 (pages and All files) | `FileHistoryViewModel`/`View` (with `DiffView.TakesFocusOnOpen` and `DiffViewModel.ShowsClose`), `BlameViewModel`/`View` with the gutter, `ReflogViewModel`/`View` with the backups list, "All files" in `CommitDetailsViewModel` and `RightPanelView`, `RepositoryMenus.Pages.cs`; their tests |
+| WP7 (search, compare, solo and hide) | `SearchViewModel`/`SearchBarView`, `CompareViewModel`/`CompareView` in the right panel's slot, the left panel's marks and toggles (`LeftPanelView.axaml(.cs)`, `BranchDragService.cs`), `RepositoryMenus.Filters.cs`, the session's filters; their tests |
+| WP8 | The scripted checks of the report, part by part (`Phase5Checks.*`, `Phase5Expectations*.cs`, `Phase5ExpectationTests*.cs`), and **every phase 0 to 4 test and expectation file that 14.1 changes** (the other packages send their changes to those files through the lead) |
+| WP9 | The real-window pass for the RW checks: `Phase5RealWindowPass*.cs`, `RealApp.Phase5*.cs`, the Phase 5 links in `RealWindowTests.csproj`, and phase 0 to 4's real-window files that change |
+| Lead | `RepositoryViewModel*.cs` (the hooks: pages, `ShowCommit`, `ShowInGraph`, `Reveal`, compare's place, search's place, the filter's reload, the undo state on the queue's `Changed`, `OnStatusApplied`/`ApplyRefs` feeding the pages), `RepoTabViewModel.cs`, `MainWindow.axaml`, `MainWindowViewModel.cs`, `AppSession.cs` and `TabServices.cs` (the histories, the clocks), the `.slnx`, CI, the docs, CLAUDE.md; before the gate, the reference run and the comparison script of 15.7 |
 
-**Order**: WP-L runs from the start. WP0 (contracts and stubs, so that packages build against each
-other: phase 4's lesson); then WP-S, WP1, WP2 and WP3's git half side by side; the report's checks
-(step 6) are written once WP-S has pinned the scenarios, and committed before WP5 to WP7 build UI;
-then WP3's app half, WP4, WP5, WP6 and WP7 side by side, the lead joining their hooks; then WP8 and
-WP9; then the review (step 25) and the gate.
+**Order**: WP0 first (contracts, stubs and every call point, so that packages build against each other:
+phase 4's lesson). Then, side by side, the first wave: WP-S, WP1, WP2a and WP3's git half (no UI).
+The report's checks (step 6) are written once WP-S has pinned the scenarios, reviewed, and committed
+before any UI the checks test is built. Then the second wave: WP2b, WP3's app half (after WP4's
+`Branches.cs`), WP4, WP5, WP6 and WP7, the lead joining their hooks. Then WP8 and WP9. Then the review
+(step 25) and the gate.
 
 ## 17. Decisions
 
-This design records these in `decisions.md`:
+This design records these in `decisions.md` (the owner's answers are D153 to D166):
 
-| # | Decision |
-|---|---|
-| D164 | The undo history (7): per repository and session in `AppSession`, at most 100 entries; an entry is a list of effects from a closed set, recorded by reading the declared refs and state before and after the action inside its own operation; undo and redo are one queued operation each that checks everything before writing; strict order; outside changes never remove entries |
-| D165 | What the undo history records and leaves out (7.2): stage, unstage, applying lines to the index, fetches, the clean-up and the resolver's resolutions are not recorded; a stopped action is one pending entry completed by Continue, Skip or Commit and removed by Abort; undo is off while an operation is in progress |
-| D166 | Moving the checked-out branch back keeps the user's later work: `read-tree -m -u` and a compare-and-swap `update-ref` on `refs/heads/<b>`, never `reset --merge`, `reset --keep` or `switch -C`, and never through `HEAD`'s link; `switch` keeps git's own reflog message; `GIT_REFLOG_ACTION` is never set (7.3) |
-| D167 | Every undo or redo that changes a remote asks first, not only a force push's and a deletion's (extends D155); the lease's expected value is given explicitly in both directions, and a push's old value comes from git's output line (7.3, 7.5) |
-| D168 | The backups an entry of the undo history needs are kept by the clean-up (`keep`) while the entry exists, and still count toward D139's 50 (7.8) |
-| D169 | The backups list in the reflog page restores backups outside the session with the undo history's effects (5.3, 7.10) |
-| D170 | The activity log reads structured records, never the log file: `OperationRecord` gains the repository's key, the warning, the kind, the failure's summary and notes; the backups' clean-up reports its removals as notes of the operation it ran in; the records' times come from a clock that both harnesses freeze (2.3) |
-| D171 | Search gives git the graph's rows' SHAs (`--no-walk=unsorted --stdin`, in chunks), so it searches exactly what is shown, hidden branches excepted; Files and Changes match a commit's change against its first parent; case is ignored (3.2) |
-| D172 | File history is git's `log --follow` from a fixed start, without merges; blame is `blame --porcelain --no-textconv` with the user's `blame.ignoreRevsFile` honoured; both are pages of the graph area with the history's diff beside or below the list by width (4) |
-| D173 | The graph area's pages (history, blame, reflog) hold no work, exclude the interactive list, and lie under a diff; `ShowCommit` shows any commit in the right panel, in the graph or not (11) |
-| D174 | Compare: two commits two-dot, branches three-dot by default with an "All differences" switch; names resolved to SHAs once (6.3) |
-| D175 | Solo and hide act on branches only; hiding or soloing a local branch includes its upstream; the checked-out branch is always shown; the filter is git's `--exclude` and named refs, with a stdin fallback past 30,000 characters; a stash whose base is hidden is left out (amends D54 while a filter is on) (8) |
-| D176 | C12's rules (9): the automatic stash only for a detaching checkout of a commit the current branch reaches, not HEAD's own commit, never from a detached HEAD, with `--no-overwrite-ignore` on its checkout only; every checkout path shows D153's message with git's count; merge, cherry-pick and revert refusals say the same; a stash's apply is checked by the app before git |
-| D177 | The reflog is read through git with two calls zipped by position; one reflog at a time (HEAD, a local branch); lost commits from one `rev-list --stdin` call (5.2) |
+| # | Decision | Reason |
+|---|---|---|
+| D167 | The undo history (7): per worktree and session in `AppSession`, at most 100 entries; each action kind has fixed undo and redo sequences of effects from a closed set; values recorded by reading the declared refs and state before and after the action inside its own operation; undo and redo one queued operation each that simulates its checks in order and writes in a fixed order; strict order; outside changes never remove entries | A generic reverse of what changed cannot order a step (a branch is deleted only after switching away; a hard reset's files come back after its move) and one git call changes several things; per-worktree keys because HEAD, the index and files belong to a worktree; 100 bounds memory and the backups held back from the clean-up |
+| D168 | What the history records and leaves out (7.2): stage, unstage, applying lines to the index, fetches, the clean-up, the resolver's resolutions and Abort (D165) are not recorded; a stopped action is one pending entry; undo is off while an operation is in progress; every destructive action of phases 2 to 4 has a stated way back (7.2's table) | Recording preparations would bury the actions people undo (GitKraken leaves them out); a stopped state cannot be recreated (D165) |
+| D169 | Moving the checked-out branch back keeps later work and never loses ignored files: `update-index --refresh`, the ignored-files guard, `read-tree -m -u` and a compare-and-swap `update-ref` on `refs/heads/<b>`; never `reset --merge`, `reset --keep` or `switch -C`, never through `HEAD`'s link; undo's switches pass `--no-overwrite-ignore`; `GIT_REFLOG_ACTION` is never set (7.3) | 0.4's experiments: the others lose staged or partly staged work or break `@{-1}`; read-tree refuses falsely on stale stat data and overwrites ignored files without a word from Git 2.34 |
+| D170 | Every undo or redo that changes a remote asks first (extends D155 beyond force pushes and deletions); the lease's expected value is explicit in both directions; a push's old value comes from git's output (`PushOutcome`), never from the remote-tracking ref (7.3, 7.5) | An ordinary push's undo rewinds or deletes a remote branch as a force push's does; the remote-tracking ref can be stale (0.5) |
+| D171 | The backups an entry needs are kept by the clean-up while the entry exists (the union over the repository's worktrees), and still count toward D139's 50; a pop saves a `stash-…` backup as a drop does; an undone tag creation keeps its object in a `tag-undone-…` backup (7.8) | Snapshots and backups have no reflog, so only the clean-up could lose what an undo needs; a popped stash is otherwise unreachable |
+| D172 | The backups list in the reflog page restores backups outside the session with the undo's effects (7.10); the restore bar is tied to its discard's entry both ways, which amends D62's list of when the bar goes (7.9) | D154's "older actions are restored from the reflog view and the backups"; a bar offering files Undo already put back would restore them twice and drop the redo |
+| D173 | The activity log reads structured records, never the log file: per-worktree keys, session-wide sequence numbers taken at start, the dialog's failure summary set after the fact, notes for the clean-up's removals, operation calls kept as long as their record (64 MB budget) apart from a ring of 2,000 reads, `update-ref --stdin`'s input recorded, calls on a temporary index marked; displayed times from a record clock that both harnesses freeze, and backup names and the clean-up's "now" from a backup clock they fix; the welcome page's commands are not shown (2.3) | T4 asks for every command an operation ran; the log file is shared by instances and kept 14 days; the queue cannot know the dialog's summary; frozen clocks make pictures repeatable but leave no order, hence the sequences |
+| D174 | Search gives git the graph's rows' SHAs (`--no-walk=unsorted --stdin`, in chunks): it searches exactly what is shown, hidden branches excepted; Files and Changes match a commit's change against its first parent; case is ignored (ASCII for paths and pickaxe); results are kept by SHA across graph reloads (3) | Hits arrive in graph order and never outside it; the first-parent rule matches what the right panel shows; a reload must not restart a long Changes search |
+| D175 | File history is git's `log --follow` from a fixed start, without merges; blame is `blame --porcelain --no-textconv` of a commit or the working tree, honouring `blame.ignoreRevsFile`; both are pages with the history's diff beside or below the list by width; the details panel's "All files" carries D164 (4) | git's own rules (Q5); a fixed start keeps the list from following another branch's file |
+| D176 | The graph area's pages (history, blame, reflog) hold no work, exclude the interactive list, lie under a diff and after it in the visual tree; opening one does not change the right panel until the user picks a row; closing one reveals the commit picked; `ShowCommit` shows any commit in the right panel, leaving the working row (11) | A page must not take the stage panel away unasked; a picked commit must be in view when the graph returns |
+| D177 | Compare: two commits two-dot, branches three-dot by default with an "All differences" switch; names resolved to SHAs once; a file's diff from the side the list was computed from; links reveal without selecting (6) | Two-dot shows the other side's later changes reversed; a selection would end the comparison |
+| D178 | Solo and hide act on branches only (and on whole remotes); hiding or soloing a local branch includes its remote-tracking upstream, recorded so that showing it again undoes both; the checked-out branch is always shown, with its label; the filter is git's `--exclude` and named refs, with a stdin fallback past 30,000 characters (amends D47 while a filter is on); a stash whose base is hidden is left out (amends D54 while a filter is on); filters of the 100 most recently used repositories are kept (8) | 0.6's measurements (the upstream keeps a hidden branch's commits on screen; `<r>/HEAD` too); D159's "remembered" must not end when a repository leaves the ten recent ones |
+| D179 | C12's rules (9): every checkout of a commit the current branch reaches uses `--no-overwrite-ignore`, and stashes first when there are changes (never from a detached HEAD, never at HEAD's own commit, never for an undo); D153's sentence with git's count on every checkout path and on merge, pick, revert and pull refusals, an ignored-files text of its own, and D153's sentence replacing D91's explanation (git's output carries it); a stash's apply is checked by the app before git; a half-made automatic stash puts back what git deleted; an unstaged deletion a checkout undoes is accepted as git does | 0.7's experiments: an old commit overwrites and then deletes a now-ignored file; git's stash apply refuses only partly; git deletes untracked files before failing on a locked one |
+| D180 | The reflog is read through git with two calls zipped by position; one reflog at a time (HEAD, a local branch); lost commits from one `rev-list --stdin` call; reached from menus that always exist (5) | No placeholder gives an entry's time with its index; reftable has no `.git/logs`; one call per SHA took 30 s or more |
+| D181 | Phase 5's walk-through is two projects, `VisualCommit.VisualTests.Phase5` and `.Phase5Undo` (as D133 and D151), with check parts A, B, F, U and P; every undo check is one action per test method (15.3, 15.4) | The undo checks alone are about 100 operations, which one project's UI thread would run for 15 to 25 minutes; the letters keep check names apart from requirement numbers |
