@@ -1676,7 +1676,7 @@ list and the sections above differ, this list holds:
 - **Skip** clears a message the user typed for the skipped commit
   (`WorkingChangesViewModel.SkipClearingMessageAsync`). "Check out and rebase"'s dirty-tree check
   leaves submodule entries out. A discard, a line discard and a Restore that saved a snapshot run
-  the backups' clean-up too (14.4's exception is gone).
+  the backups' clean-up too; the resolver's own snapshots (14.4) still run none.
 - **The resolver** (11.5): result blocks are matched to the panes' blocks keeping their order, by
   the most evidence (the same sides, then the lines around the block), ties to the nearer place in
   the file, a block a choice took out matched last, so identical blocks keep their own bars.

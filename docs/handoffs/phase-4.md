@@ -195,6 +195,8 @@ Rules worth keeping (phase 3's still hold: two gits, dates, paths, waits, clocks
 | `rebase.reapplyCherryPicks` (newer gits) is not followed by the list | Low; the list matches git's default | `GitRepository.Rebase.cs` (design 14.5) |
 | A text box's caret blinks in the real window, so a capture may catch it off (`b7f`) | Varies pictures only | D151 holds still only the result's caret |
 | A commit message in an encoding other than UTF-8 is not kept byte for byte by the interactive rebase's own-message copy | Low | design 14.2 |
+| The status bar's Cancel says "Stop git" while the merge tool runs; design 11.9 gives "Stop git and the merge tool" | Cosmetic; found by the docs' check after the gate, left so as not to change the gate's commit | `Views/Shell/StatusBarView.axaml` (line 73); fix with phase 5's first code commit |
+| `IGitRepository.ReadRebaseListAsync`'s doc comment still names `--cherry-pick`; the code reads `--cherry-mark` and keeps commits that start empty (design 14.5) | A stale comment | `src/VisualCommit.Core/Git/IGitRepository.cs`; fix with phase 5's first code commit |
 | Earlier phases' issues that remain (the tooltips that cover the next item, the first context menu's latency, the error output's URL wrapping, Q1 on a warm laptop): see phase 3's handoff | As there | |
 
 ## Things that cost time
