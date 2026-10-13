@@ -84,9 +84,11 @@ public sealed record GitOperation(
     public ErrorDisplay Errors { get; init; } = ErrorDisplay.Dialog;
 
     /// <summary>
-    /// Auto-fetch only: started with <see cref="IOperationQueue.TryStartInBackground"/>, never
-    /// pre-empted, shows no running text or progress (1.8, D85); the user can cancel it only while
-    /// an operation of theirs waits for it, which the status bar then offers.
+    /// A background operation: started with <see cref="IOperationQueue.TryStartInBackground"/>,
+    /// never pre-empted, shows no running text or progress (1.8, D85). Two are: auto-fetch, which
+    /// the user can cancel only while an operation of theirs waits for it (the status bar then
+    /// offers Cancel), and the backups' clean-up (docs/phase-4-design.md section 9, D139), a local
+    /// operation that cannot be cancelled and whose end the status bar does not show.
     /// </summary>
     public bool IsBackground { get; init; }
 

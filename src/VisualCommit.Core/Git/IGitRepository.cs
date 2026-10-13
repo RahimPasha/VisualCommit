@@ -403,12 +403,15 @@ public interface IGitRepository
     /// <summary>
     /// The commits an interactive rebase of <paramref name="branch"/> (a full ref name: HEAD's
     /// branch, or a drop's source that is not checked out) would replay, read when its list opens
-    /// (2.3). <paramref name="fromCommit"/> ("from here", 2.1): <c>git rev-list --reverse
+    /// (2.3). <paramref name="fromCommit"/> ("from here", 2.1): <c>git log --reverse
     /// --topo-order &lt;onto&gt;..&lt;branch&gt;</c>, <paramref name="onto"/> being the base
-    /// commit; otherwise the commits git's own todo would hold, <c>git rev-list --reverse
-    /// --topo-order --no-merges --right-only --cherry-pick &lt;onto&gt;...&lt;branch&gt;</c>, with
-    /// <c>git rev-list --merges --count &lt;onto&gt;..&lt;branch&gt;</c> for
-    /// <see cref="RebaseList.MergeCount"/>. A read: <c>GIT_OPTIONAL_LOCKS=0</c>.
+    /// commit; otherwise the commits git's own todo would hold, as git's sequencer chooses them:
+    /// <c>git log --reverse --topo-order --no-merges --right-only --cherry-mark
+    /// &lt;onto&gt;...&lt;branch&gt;</c>, less the commits marked <c>=</c> (their patch is already
+    /// upstream) that do not start empty; a commit that starts empty is kept even when marked, as
+    /// git keeps it (docs/phase-4-design.md 14.5). <c>git rev-list --merges --count
+    /// &lt;onto&gt;..&lt;branch&gt;</c> gives <see cref="RebaseList.MergeCount"/>. A read:
+    /// <c>GIT_OPTIONAL_LOCKS=0</c>.
     /// </summary>
     Task<RebaseList> ReadRebaseListAsync(string onto, string branch, bool fromCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
