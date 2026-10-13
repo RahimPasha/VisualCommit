@@ -27,11 +27,13 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 Phase 5, History, traceability and undo, is in progress on `phase/5-history`, started on
 2026-10-12 from `master` at `0883669` on the Windows machine. At its start the owner settled C12
-and the matter-of-taste points (D153 to D160): C12 is built in this phase; undo reaches many steps
+and the matter-of-taste points (D153 to D163): C12 is built in this phase; undo reaches many steps
 back within a session; undoing a change to a remote asks, then pushes back with a lease; the
 activity log is a panel under the graph; search marks its matches in the graph; file history and
 blame open in place of the graph; hidden and soloed branches are remembered across restarts; the
-cosmetic issues phase 4 left are fixed first.
+cosmetic issues phase 4 left are fixed first; every stash's line to its commit is dashed; two
+selected commits are compared at once; Ctrl+Z and Ctrl+Y undo and redo git actions outside text
+boxes.
 
 Phase 4 was accepted by the owner on 2026-10-12 and merged into `master` (merge commit
 `ce5f337`); its gate ran on `6badab7`. Phase 3 was accepted on 2026-10-11 (merge commit
@@ -51,7 +53,7 @@ says how its work packages map onto them.
 Start:
 
 - [x] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers
-  recorded (D153 to D160) and carried into `plan.md` and `requirements.md`.
+  recorded (D153 to D163) and carried into `plan.md` and `requirements.md`.
 - [x] 2. Baseline: the default run on `master` (`0883669`) as inherited: 2,409 of 2,411 passed in
   35 min 27 s, while six code-reading agents ran beside it (phase 4's gate: 21 min 52 s). The two
   failures were waits of 10 s that ran out under that load, and both passed alone (8 s and 15 s):
@@ -61,7 +63,7 @@ Start:
   (the abort, which saves two backups and runs the clean-up). Step 4 gives such waits the longer
   timeout phase 4 gave check 18.
 - [ ] 3. Design in `docs/phase-5-design.md`: every git fact derived with Git 2.36, the texts,
-  the layouts, the work packages; reviewed independently; decisions from D161 on.
+  the layouts, the work packages; reviewed independently; decisions from D164 on.
 - [ ] 4. Phase 4's leftovers (D160): the watcher's quiet period on a clock its test holds
   (`RepositoryWatcherTests.A_burst_of_changes_raises_changed_once`), the details panel's wrapping
   SHA, the resolver's disabled arrow buttons, the status bar's Cancel tooltip while the merge tool
@@ -220,13 +222,15 @@ section 0). Step 4 (phase 4's leftovers) runs beside it in a worktree.
 
 ## Waiting on the owner
 
-- Answered at the start of phase 5 on 2026-10-12 (D153 to D160): C12 is built in phase 5, its
+- Answered at the start of phase 5 on 2026-10-12 (D153 to D163): C12 is built in phase 5, its
   refusal keeps the "Stash changes and check out" button, the automatic stash is taken always
   when there are changes and only for a commit the current branch reaches, and it is kept until
   popped or dropped; undo reaches many steps back within a session; undoing a change to a remote
   asks, then pushes back with a lease; the activity log is a panel under the graph; search marks
   its matches in the graph; file history and blame open in place of the graph; hidden and soloed
-  branches are remembered across restarts; the cosmetic issues phase 4 left are fixed first.
+  branches are remembered across restarts; the cosmetic issues phase 4 left are fixed first;
+  every stash's line to its commit is dashed; two selected commits are compared at once in the
+  right panel; Ctrl+Z and Ctrl+Y undo and redo git actions outside text boxes.
 - Answered for phase 4 on 2026-10-12, before its design: git's
   own list of commits for several picks (D136, replacing a sentence of D88); automatic cleanup of
   the backups after 30 days or when more than a set number exist (D137); then, asked at the start
