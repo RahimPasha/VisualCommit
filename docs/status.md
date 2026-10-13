@@ -64,11 +64,19 @@ Start:
   timeout phase 4 gave check 18.
 - [ ] 3. Design in `docs/phase-5-design.md`: every git fact derived with Git 2.36, the texts,
   the layouts, the work packages; reviewed independently; decisions from D164 on.
-- [ ] 4. Phase 4's leftovers (D160): the watcher's quiet period on a clock its test holds
-  (`RepositoryWatcherTests.A_burst_of_changes_raises_changed_once`), the details panel's wrapping
-  SHA, the resolver's disabled arrow buttons, the status bar's Cancel tooltip while the merge tool
-  runs, the stale comments of `IGitRepository.ReadRebaseListAsync` and of the real-window
-  project's csproj.
+- [x] 4. Phase 4's leftovers (D160), merged in `279dd8c`: the watcher's quiet period and maximum
+  delay on a `TimeProvider` (`ManualTimeProvider` in `VisualCommit.Testing`; both burst tests on
+  it); the details panel's SHA drawn just small enough to stay on one line when it would wrap (only
+  then: other pictures unchanged); the resolver's disabled arrows in `VcTextDisabledBrush`; Cancel's
+  tooltip "Stop git and the merge tool" while the tool runs; three stale comments; the waits after a
+  write that saves a backup at 30 s (phase 2's checks 13, 17, 19, and the App merge window test).
+  Its worktree run: 2,421 tests passed in 26 min 56 s. Pictures changed: `a3d`, `b8c`, `c11j` (the
+  SHA), and the resolver pictures with one conflicted file (`c10e`–`c10j`, `c11d`, `c11e`, `c11h`,
+  `c11i`, `c12d`–`c12f`, `c14a`–`c14h`, `c15d`, `c16b`, `d18c`, `d18d`: the file arrows dimmer).
+  Found to vary from run to run on master too (for the gate's list of pictures that vary by
+  nature): phase 1 `13b`, `14b` and phase 3 `30g` (a temporary folder's name), phase 3 `13j`,
+  `27d`, `32b`, and 1 to 6 anti-aliased pixels in phase 3 `06e`, `10f`, `13l`, `22d`, `26e`, `28d`,
+  `32d` and phase 4 `a1a`.
 - [ ] 5. Harness: phase 5's scenario repos (a file renamed across its history, blame with lines
   from several commits, a reflog with commits no ref reaches, branches to solo and hide, commits
   to search and compare, changes that block a checkout), pinned by tests; the project
@@ -185,7 +193,7 @@ Step 3: `docs/phase-5-design.md` is drafted (`493fe54`) from a code map and seve
 (section 0 holds every git fact it relies on); five independent reviews, each checked by an
 adversarial verifier, are running. Then: revise the design from the confirmed findings, record
 D164 on, and tick step 3. Step 4 (phase 4's leftovers, D160) runs beside it in a worktree
-(`wip/p5-leftovers`), not merged yet.
+(`wip/p5-leftovers`): merged in `279dd8c`; its CI run is to be read.
 
 ### Notes for whoever resumes
 
