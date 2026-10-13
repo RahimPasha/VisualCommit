@@ -11,9 +11,10 @@ namespace VisualCommit.Git.Tests;
 /// The graph loaded with what it hides or solos (docs/phase-5-design.md 8.2, 0.6, D178), against
 /// real git: the commits are exactly those git shows for the refs the filter leaves, named one by
 /// one, in git's order; HEAD's history always shows; past the command line's limit the revisions
-/// go on standard input; a stash whose base is not shown is left out, one whose base is waits for
-/// it; and without a filter the command is today's. The arguments themselves are in
-/// <see cref="GraphFilterArgumentsTests"/>.
+/// go on standard input; a name that no longer exists changes nothing; a stash is placed by date
+/// when HEAD, a shown ref or a row already loaded names its base, waits for its base otherwise,
+/// and is left out when its base is not shown; and without a filter the command is today's. The
+/// arguments themselves are in <see cref="GraphFilterArgumentsTests"/>.
 /// </summary>
 public class GraphFilterTests(GraphFilterTests.FiltersScenario scenario) : IClassFixture<GraphFilterTests.FiltersScenario>
 {
@@ -21,6 +22,9 @@ public class GraphFilterTests(GraphFilterTests.FiltersScenario scenario) : IClas
     private const string OriginAlpha = "refs/remotes/origin/feature/alpha";
     private const string Beta = "refs/heads/feature/beta";
     private const string OriginBeta = "refs/remotes/origin/feature/beta";
+
+    /// <summary>A branch that no longer exists: a stale name the session still holds (8.4).</summary>
+    private const string Gone = "refs/heads/gone";
 
     /// <summary>
     /// A repository like phase 5's "filters" scenario (15.1), built here once for the class:
@@ -236,6 +240,106 @@ public class GraphFilterTests(GraphFilterTests.FiltersScenario scenario) : IClas
             [scenario.Sha["Alpha three"], scenario.Sha["Alpha two"], stash, scenario.Sha["Alpha one"], scenario.Sha["Merge"]],
             rows.Take(5).Select(row => row.Sha));
         Assert.Equal([stash], Stashes(rows));
+    }
+
+    [Fact]
+    public async Task A_stash_on_a_detached_HEADs_commit_is_placed_by_date_as_without_a_filter()
+    {
+        // HEAD's commit is always shown (0.6, 8.1), so the pager knows it from the start. Here only
+        // HEAD names Initial: without HEAD among the known commits, the stash on it would wait
+        // until X one, through the tag x, names Initial, and go in two rows down.
+        using var copy = await scenario.Repo.CopyAsync();
+        await copy.DetachAsync(scenario.Sha["Initial"]);
+        copy.WriteFile("README.md", "Work on Initial\n");
+        var stash = await copy.StashAsync("Stash on Initial");
+        var refs = await ReadRefsAsync(copy);
+        Assert.DoesNotContain(refs.Refs, gitRef => gitRef.TargetSha == scenario.Sha["Initial"]);
+
+        var today = await LoadTodayAsync(copy);
+        var rows = await LoadAsync(copy, new GraphFilter(["refs/heads/x"], [], ["origin"]));
+
+        Assert.Equal(0, today.FindIndex(row => row.Sha == stash));
+        Assert.Equal(0, rows.FindIndex(row => row.Sha == stash));
+        Assert.Equal(3, Stashes(rows).Count);
+        AssertStashesWhereTheirBaseIs(rows, refs);
+    }
+
+    /// <summary>
+    /// A name that no longer exists, hidden or soloed, with the names of the filter it belongs to
+    /// in <see cref="A_hidden_or_soloed_name_that_no_longer_exists_changes_nothing"/>: a branch, and
+    /// a remote branch of a known remote.
+    /// </summary>
+    public static TheoryData<bool, string> StaleNames => new()
+    {
+        { false, $"{Gone} {Alpha} {OriginAlpha} refs/remotes/origin/gone" },
+        { true, $"{Gone} {Beta}" },
+    };
+
+    [Theory]
+    [MemberData(nameof(StaleNames))]
+    public async Task A_hidden_or_soloed_name_that_no_longer_exists_changes_nothing(bool solo, string names)
+    {
+        // The session keeps a stale name until the repository's first refs read drops it (8.4), so
+        // the first load runs with it. Excluded, it matches nothing; soloed, --ignore-missing before
+        // it skips it (0.6), where git would otherwise stop at a bad revision.
+        var refs = await ReadRefsAsync(scenario.Repo);
+        var named = names.Split(' ');
+        var existing = named.Where(name => refs.Refs.Any(gitRef => gitRef.FullName == name)).ToList();
+        Assert.Equal(solo ? 1 : 2, existing.Count);
+        GraphFilter Filter(IEnumerable<string> refNames) => solo ? new([], refNames, ["origin"]) : new(refNames, [], ["origin"]);
+        var calls = new GitCallLog();
+
+        var rows = await LoadAsync(scenario.Repo, Filter(named), calls);
+
+        Assert.Contains(solo ? Gone : "--exclude=gone", Assert.Single(LogCalls(calls)), StringComparison.Ordinal);
+        var shown = solo ? existing : refs.Refs.Select(gitRef => gitRef.FullName).Where(name => !existing.Contains(name, StringComparer.Ordinal));
+        Assert.Equal(await GitShowsAsync(scenario.Repo, shown), Commits(rows));
+        Assert.Equal(Describe(await LoadAsync(scenario.Repo, Filter(existing))), Describe(rows));
+    }
+
+    [Fact]
+    public async Task Past_the_command_lines_limit_a_soloed_name_that_no_longer_exists_changes_nothing()
+    {
+        using var copy = await scenario.Repo.CopyAsync();
+        await AddManyBranchesAsync(copy);
+        var filter = new GraphFilter([], [.. ManyNames, Gone], ["origin"]);
+        Assert.True(filter.UsesStandardInput);
+        var calls = new GitCallLog();
+
+        var rows = await LoadAsync(copy, filter, calls);
+
+        // The stale name is on standard input, after --ignore-missing on the command line (0.6).
+        // Solo's input does not depend on the refs.
+        Assert.EndsWith(" --ignore-missing --stdin --", Assert.Single(LogCalls(calls)), StringComparison.Ordinal);
+        Assert.Contains(Gone + "\n", filter.StandardInput(await ReadRefsAsync(copy)), StringComparison.Ordinal);
+        Assert.Equal(Describe(await LoadAsync(copy, new GraphFilter([], ManyNames, ["origin"]))), Describe(rows));
+    }
+
+    [Fact]
+    public async Task Past_the_command_lines_limit_hiding_skips_a_ref_deleted_after_the_refs_were_read()
+    {
+        // Hiding this way names every ref of the refs read; one deleted before git log runs is a
+        // name that no longer exists, which --ignore-missing before --stdin skips (0.6).
+        using var copy = await scenario.Repo.CopyAsync();
+        await AddManyBranchesAsync(copy);
+        var read = await ReadRefsAsync(copy);
+        await copy.GitAsync("branch", "--quiet", "-D", "feature/local");
+        var filter = new GraphFilter(ManyNames, [], ["origin"]);
+        Assert.True(filter.UsesStandardInput);
+        var calls = new GitCallLog();
+
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), copy.Path, TestCancelled);
+        var pages = new List<IReadOnlyList<CommitInfo>>();
+        await repository.LoadCommitsAsync(Task.FromResult(read), filter, pages.Add, TestCancelled);
+        var rows = pages.SelectMany(page => page).ToList();
+
+        Assert.EndsWith(" --ignore-missing --stdin --", Assert.Single(LogCalls(calls)), StringComparison.Ordinal);
+        Assert.Contains("refs/heads/feature/local\n", filter.StandardInput(read), StringComparison.Ordinal);
+        var current = await ReadRefsAsync(copy);
+        Assert.Equal(
+            await GitShowsAsync(copy, current.Refs.Select(gitRef => gitRef.FullName).Where(name => !name.StartsWith("refs/heads/many/", StringComparison.Ordinal))),
+            Commits(rows));
+        Assert.DoesNotContain(scenario.Sha["Local work"], Commits(rows));
     }
 
     [Fact]
