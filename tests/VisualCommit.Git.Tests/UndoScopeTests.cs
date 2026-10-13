@@ -29,6 +29,11 @@ public class UndoScopeTests
         Assert.False(commit.Covers("refs/heads/main2"));
         Assert.True(commit.IsRecorded);
         Assert.False(UndoScope.None.IsRecorded);
+
+        // A detached HEAD's name in texts is no branch: HEAD itself is always read.
+        Assert.Empty(UndoScope.Reset("HEAD", new string('a', 40), ResetMode.Soft).Refs);
+        Assert.Empty(UndoScope.CherryPick([new string('a', 40)], null).Refs);
+        Assert.Equal(["refs/heads/topic", "refs/heads/main"], UndoScope.CreateBranch("topic", "main").Refs);
     }
 
     [Fact]

@@ -189,7 +189,7 @@ public sealed record UndoScope
     {
         Kind = UndoKind.Reset,
         Text = UndoTexts.Reset(branch, target, mode),
-        Refs = BranchRefs(branch == "HEAD" ? null : branch),
+        Refs = BranchRefs(branch),
     };
 
     /// <summary>A cherry-pick of <paramref name="commits"/> (full SHAs) onto <paramref name="current"/>.</summary>
@@ -409,8 +409,9 @@ public sealed record UndoScope
         Text = UndoTexts.DeleteRemoteTag(tag, remote),
     };
 
+    /// <summary>The branches' full names; a null or <c>HEAD</c> (how texts name a detached HEAD, never a branch's name) is left out.</summary>
     private static IReadOnlyList<string> BranchRefs(params string?[] branches) =>
-        [.. branches.OfType<string>().Distinct(StringComparer.Ordinal).Select(branch => HeadsPrefix + branch)];
+        [.. branches.OfType<string>().Where(branch => branch != "HEAD").Distinct(StringComparer.Ordinal).Select(branch => HeadsPrefix + branch)];
 }
 
 /// <summary>A part of the repository's own configuration that an <see cref="UndoScope"/> reads.</summary>
