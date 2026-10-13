@@ -28,13 +28,14 @@ public class AppClocksTests
     }
 
     [Fact]
-    public void The_fixed_backup_clock_names_each_backup_a_second_after_the_last_and_keeps_its_now()
+    public void The_fixed_backup_clock_names_each_backup_a_second_after_the_last_and_its_now_is_never_before_a_name()
     {
         var clock = BackupClock.Fixed(Nine);
+        Assert.Equal(Nine, clock.Now);
 
         Assert.Equal(Nine.AddSeconds(1), clock.NextName());
         Assert.Equal(Nine.AddSeconds(2), clock.NextName());
-        Assert.Equal(Nine, clock.Now);
+        Assert.Equal(Nine.AddSeconds(2), clock.Now);
         Assert.Equal(Nine.AddSeconds(3), clock.NextName());
     }
 
@@ -51,6 +52,25 @@ public class AppClocksTests
 
         Assert.Equal("20260102T090001000Z", first.Time);
         Assert.Equal("20260102T090002000Z", second.Time);
+    }
+
+    [Fact]
+    public async Task The_clean_up_with_the_fixed_clock_removes_the_backups_it_named_oldest_first()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        repository.BackupClock = BackupClock.Fixed(Nine);
+        var main = (await repo.GitAsync("rev-parse", "refs/heads/main")).StandardOutput.Trim();
+
+        // Named 09:00:01, 09:00:02 and 09:00:03: none lies in the clock's future, so none counts as
+        // made now, and the oldest goes first, whatever its kind.
+        await repository.SaveBackupRefsAsync(new BackupRequest("reset", [new BackupEntry(null, main)]), TestCancelled);
+        await repository.SaveBackupRefsAsync(new BackupRequest("branch", [new BackupEntry("main", main)]), TestCancelled);
+        await repository.SaveBackupRefsAsync(new BackupRequest("abort", [new BackupEntry(null, main)]), TestCancelled);
+        var removed = await repository.CleanUpBackupsAsync(new BackupRetention(30, 2), new HashSet<string>(StringComparer.Ordinal), cancellationToken: TestCancelled);
+
+        Assert.Equal(["reset-20260102T090001000Z"], removed.Select(backup => backup.Name));
+        Assert.Equal(BackupRemovalReason.BeyondCount, Assert.Single(removed).Reason);
     }
 
     [Fact]

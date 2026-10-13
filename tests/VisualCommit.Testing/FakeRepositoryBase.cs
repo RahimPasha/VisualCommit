@@ -11,8 +11,9 @@ namespace VisualCommit.Testing;
 /// Phase 3's reads give empty results (no remotes, no worktrees, nothing detached) and its
 /// writes throw <see cref="NotSupportedException"/>. So do phase 4's: its reads give an empty
 /// list or null (no merge tool, no operation message), the backups' clean-up removes nothing.
-/// Phase 5's reads find nothing (no history, blame, reflog, backups, differences or matches), the
-/// undo history's read sees HEAD alone, so that no action leaves an entry, and an undo step throws.
+/// Phase 5's reads find nothing (no history, blame, reflog, backups, differences, matches, ignored
+/// files or stash paths), the undo history's read sees HEAD alone, so that no action leaves an
+/// entry, and an undo step and C12's writes throw.
 /// </summary>
 public abstract class FakeRepositoryBase : IGitRepository
 {
@@ -106,6 +107,15 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public virtual Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.Ordinal));
+
     public virtual Task CreateBranchAsync(string name, string startPoint, bool checkout, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
@@ -177,6 +187,9 @@ public abstract class FakeRepositoryBase : IGitRepository
 
     public virtual Task DropStashAsync(string stashCommit, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
+
+    public virtual Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new StashPaths([], []));
 
     public virtual Task CreateTagAsync(string name, string target, string? message, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();

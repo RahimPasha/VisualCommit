@@ -217,6 +217,30 @@ public interface IGitRepository
     Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Detaches HEAD at <paramref name="commit"/>, with <paramref name="noOverwriteIgnore"/>
+    /// refusing where an ignored file is in the way: <c>git switch --detach --no-overwrite-ignore
+    /// &lt;sha&gt;</c> (docs/phase-5-design.md 9.1, D179). Every checkout of a commit the current
+    /// branch reaches uses it: git would otherwise overwrite an ignored file that the commit
+    /// tracks, and the way back would delete it. A refusal changes nothing.
+    /// </summary>
+    Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes <paramref name="paths"/> of <paramref name="source"/> (a tree-ish: <c>&lt;stash&gt;^3</c>)
+    /// into the working tree, leaving the index alone: <c>git restore --source=&lt;source&gt;
+    /// --worktree -- &lt;paths&gt;</c>. The automatic stash puts back the untracked files git deleted
+    /// before it failed half-way (9.2 step 3).
+    /// </summary>
+    Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Which of <paramref name="paths"/> (relative to the working tree, files or folders) git
+    /// ignores: <c>git check-ignore --stdin -z</c> (9.3). A checkout refused only for ignored files
+    /// in the way says so in words of its own. A read.
+    /// </summary>
+    Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates the branch <paramref name="name"/> at <paramref name="startPoint"/> (a full SHA,
     /// <c>refs/heads/…</c>, <c>refs/remotes/…</c> or <c>refs/tags/&lt;t&gt;^{commit}</c>):
     /// <c>git branch &lt;name&gt; &lt;start&gt;</c>, or with <paramref name="checkout"/>
@@ -374,6 +398,15 @@ public interface IGitRepository
 
     /// <summary>Drops the stash whose commit is <paramref name="stashCommit"/>, found by its id as <see cref="ApplyStashAsync"/> finds it: <c>git stash drop stash@{n}</c>. Save its backup first (2.26).</summary>
     Task DropStashAsync(string stashCommit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The paths the stash <paramref name="stashCommit"/> would write (docs/phase-5-design.md 9.2,
+    /// 9.3): those its changes touch, both sides of a rename (<c>git diff-tree -r -z --no-renames
+    /// --name-only &lt;s&gt;^1 &lt;s&gt;</c>), and its untracked files (<c>git ls-tree -r -z
+    /// --name-only &lt;s&gt;^3</c>, none without a third parent). The app checks an apply or a pop
+    /// against them before git runs. A read.
+    /// </summary>
+    Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a tag at <paramref name="target"/>: lightweight (<c>git tag &lt;t&gt; &lt;sha&gt;</c>),
@@ -671,7 +704,11 @@ public interface IGitRepository
     /// <c>--date=raw</c>), zipped by position and read again when the two disagree (the ref moved
     /// between them). A ref without a reflog gives <see cref="ReflogResult.Empty"/>.
     /// </summary>
-    /// <param name="fullRef"><c>HEAD</c> or a local branch's full name.</param>
+    /// <param name="fullRef">
+    /// <c>HEAD</c>, or the full name of any ref that has a reflog: a local branch's (the page's
+    /// sources), or a remote branch's (<c>refs/remotes/…</c>), whose <c>update by push</c> entries
+    /// give a force push's backup its lease (7.10); the page's source menu leaves those out.
+    /// </param>
     /// <param name="limit">The most entries to read (the page reads 500).</param>
     /// <param name="cancellationToken">Closing the page cancels the read.</param>
     Task<ReflogResult> ReadReflogAsync(string fullRef, int limit, CancellationToken cancellationToken = default);

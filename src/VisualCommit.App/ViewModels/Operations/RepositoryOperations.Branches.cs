@@ -202,6 +202,38 @@ public sealed partial class RepositoryOperations : IInProgressActions
         });
     }
 
+    // The checkouts' error dialog (2.31, 2.33), which C12 changes (docs/phase-5-design.md 9.3).
+
+    /// <summary>"Stash changes and check out" (2.31): only for a checkout blocked by tracked changes.</summary>
+    public ErrorAction StashAndCheckoutAction(string target) =>
+        new(OperationTexts.StashAndCheckOutButton, () => StashAndCheckoutAsync(target));
+
+    /// <summary>
+    /// The dialog of a checkout's failure (2.1 to 2.3): "Checkout blocked" for tracked changes, with
+    /// "Stash changes and check out" when <paramref name="offerStash"/> (not after 4g's drop), or
+    /// for untracked files in the way, without it; null for any other failure (2.33's default).
+    /// </summary>
+    /// <param name="failure">The failure.</param>
+    /// <param name="target">What is checked out, as <see cref="CheckoutAsync"/> names it.</param>
+    /// <param name="offerStash">Offer "Stash changes and check out".</param>
+    public FailureDisplay? CheckoutFailureDisplay(GitFailure failure, string target, bool offerStash)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        ArgumentNullException.ThrowIfNull(target);
+        var name = ShortName(target);
+        return failure.Kind switch
+        {
+            GitFailureKind.CheckoutBlockedByLocalChanges => new FailureDisplay(
+                OperationTexts.CheckoutBlockedTitle,
+                OperationTexts.CheckoutBlockedByChanges(name),
+                offerStash ? StashAndCheckoutAction(target) : null),
+            GitFailureKind.CheckoutBlockedByUntrackedFiles => new FailureDisplay(
+                OperationTexts.CheckoutBlockedTitle,
+                OperationTexts.CheckoutBlockedByUntrackedFiles(name)),
+            _ => null,
+        };
+    }
+
     // ---- Branches (2.4 to 2.7) --------------------------------------------------------------------
 
     /// <inheritdoc cref="IRepositoryActions.CreateBranchAsync"/>
