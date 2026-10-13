@@ -118,16 +118,27 @@ public sealed partial class ShellDriver
     /// <exception cref="InvalidOperationException">The panel has no such row; the message lists what it shows.</exception>
     public async Task<Control> RefRowAsync(params string[] path)
     {
-        var row = RefRowModel(path);
         var list = Find<ItemsControl>("RefList");
-        var rows = (IEnumerable<RefListRow>)list.ItemsSource!;
-        var index = rows.ToList().IndexOf(row);
-        list.ScrollIntoView(index);
+        var row = RefRowModel(path);
+        list.ScrollIntoView(((IEnumerable<RefListRow>)list.ItemsSource!).ToList().IndexOf(row));
         Control? found = null;
+
+        // A refresh can replace the panel's rows while this waits (the watcher reads the refs
+        // again), so the row is looked up by its path on every try, not kept from the first.
         await WaitForAsync(
-            () => (found = list.GetVisualDescendants().OfType<Button>()
-                    .FirstOrDefault(button => ReferenceEquals(button.DataContext, row) && button.IsEffectivelyVisible && button.Bounds.Height > 0)) is not null
-                && BoundsOf(found).Bottom <= BoundsOf(list).Bottom + 0.5,
+            () =>
+            {
+                var current = RefRowModel(path);
+                found = list.GetVisualDescendants().OfType<Button>()
+                    .FirstOrDefault(button => ReferenceEquals(button.DataContext, current) && button.IsEffectivelyVisible && button.Bounds.Height > 0);
+                if (found is null)
+                {
+                    list.ScrollIntoView(((IEnumerable<RefListRow>)list.ItemsSource!).ToList().IndexOf(current));
+                    return false;
+                }
+
+                return BoundsOf(found).Bottom <= BoundsOf(list).Bottom + 0.5;
+            },
             $"the left panel's row {string.Join(" › ", path)} to be laid out");
         return found!;
     }
@@ -195,14 +206,32 @@ public sealed partial class ShellDriver
             throw new InvalidOperationException($"{list} has no file {path}; it has: {string.Join(", ", rows.Where(row => row.IsFile).Select(row => row.Key))}.");
         }
 
-        var target = rows[index];
         items.ScrollIntoView(index);
         Control? found = null;
+
+        // A refresh can replace the list's rows while this waits (the watcher reads the status
+        // again), so the row is looked up by its path on every try, not kept from the first.
         await WaitForAsync(
-            () => (found = items.GetVisualDescendants().OfType<Button>()
-                    .FirstOrDefault(button => ReferenceEquals(button.DataContext, target) && button.IsEffectivelyVisible && button.Bounds.Height > 0)) is not null
-                && BoundsOf(found).Top >= BoundsOf(items).Top - 0.5
-                && BoundsOf(found).Bottom <= BoundsOf(items).Bottom + 0.5,
+            () =>
+            {
+                var current = ((IEnumerable<ChangedFileRow>)(items.ItemsSource ?? Array.Empty<ChangedFileRow>())).ToList();
+                var at = current.FindIndex(row => row.IsFile && row.Key == path);
+                if (at < 0)
+                {
+                    return false;
+                }
+
+                found = items.GetVisualDescendants().OfType<Button>()
+                    .FirstOrDefault(button => ReferenceEquals(button.DataContext, current[at]) && button.IsEffectivelyVisible && button.Bounds.Height > 0);
+                if (found is null)
+                {
+                    items.ScrollIntoView(at);
+                    return false;
+                }
+
+                return BoundsOf(found).Top >= BoundsOf(items).Top - 0.5
+                    && BoundsOf(found).Bottom <= BoundsOf(items).Bottom + 0.5;
+            },
             $"the row of {path} in {list} to be laid out");
         return found!;
     }

@@ -132,8 +132,11 @@ public sealed partial class ChangedFileRow : ObservableObject
     /// <summary>The whole path, and where it came from, for the tooltip of a row cut off by a narrow panel.</summary>
     public string ToolTip => HasOrigin ? $"{Key}\n{OriginText}" : Key;
 
-    /// <summary>What the tooltip of a conflicted file's row in the stage panel says (docs/phase-3-design.md section 5).</summary>
-    public const string ConflictToolTip = "Conflict: resolve it in your editor, then stage it";
+    /// <summary>
+    /// What the tooltip of a conflicted file's row in the stage panel says (docs/phase-3-design.md
+    /// section 5, docs/phase-4-design.md 5.3): a click opens the conflict resolver (D148).
+    /// </summary>
+    public const string ConflictToolTip = "Conflict: click to resolve it";
 
     /// <summary>
     /// The tooltip of a file row in the stage panel's unstaged list, which binds to it

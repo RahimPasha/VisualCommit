@@ -114,7 +114,10 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.OriginMainCheckedOutMenu);
         AssertHighlighted(menu, "Merge origin/main into main");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+
+        // 293 high with phase 4's rebase items, it no longer fits below the pointer: 4a's rule
+        // opens it above (phase 4's report: "the position only where its expected result states it").
+        AssertMenuPlaced(app, menu, pointer);
         AssertRowSelected(app, PartA.MainWorkRow);
         await AssertRefHighlightedAsync(app, null);
         app.PressKey(Key.Escape);
@@ -158,12 +161,14 @@ public sealed partial class Phase3ChecksA
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
-        // Step 7: side, checked out in the linked worktree: every item enabled, git decides.
+        // Step 7: side, checked out in the linked worktree: every item of phase 3 enabled, git
+        // decides; phase 4's "Rebase loc onto side" is disabled because loc is up to date with side
+        // (phase 4's report, "Phase 3's menus after phase 4": no longer "all enabled").
         pointer = app.BoundsOf(await app.RefRowAsync("Local branches", "side")).Center;
         app.RightClick(pointer);
         menu = app.Menu();
         AssertMenu(menu, PartA.SideMenu);
-        Assert.All(menu.Items, item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
+        Assert.All(menu.Items.Where(item => item.Label != "Rebase loc onto side"), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertHighlighted(menu, "Check out side");
         AssertMenuAtPointer(menu, pointer);
         app.PressKey(Key.Escape);

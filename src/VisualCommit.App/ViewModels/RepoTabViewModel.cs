@@ -49,6 +49,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasRepository), nameof(ShowsWelcome), nameof(LeftPanel), nameof(Details), nameof(BranchText), nameof(Changes), nameof(ShowsWorkingChanges))]
     [NotifyPropertyChangedFor(nameof(Toolbar), nameof(OperationStatus))]
+    [NotifyPropertyChangedFor(nameof(ShowsRightPanel), nameof(ShowsDetailsPanel), nameof(ShowsStagePanel), nameof(GraphColumnSpan))]
     public partial RepositoryViewModel? Repository { get; private set; }
 
     /// <summary>The toolbar's buttons (docs/phase-3-design.md 4d): the repository's, or a toolbar whose commands are all disabled.</summary>
@@ -78,6 +79,21 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>The right panel shows the stage panel: the working-changes row is selected.</summary>
     public bool ShowsWorkingChanges => Repository?.IsWorkingRowSelected == true;
+
+    /// <summary>
+    /// The right panel and its splitter are shown: not while the conflict resolver spans the graph
+    /// and right-panel columns (docs/phase-4-design.md 11.2).
+    /// </summary>
+    public bool ShowsRightPanel => Repository?.IsResolverOpen != true;
+
+    /// <summary>The right panel shows the commit's details.</summary>
+    public bool ShowsDetailsPanel => ShowsRightPanel && !ShowsWorkingChanges;
+
+    /// <summary>The right panel shows the stage panel.</summary>
+    public bool ShowsStagePanel => ShowsRightPanel && ShowsWorkingChanges;
+
+    /// <summary>The columns the graph area spans: the right panel's too while the resolver is open (11.2).</summary>
+    public int GraphColumnSpan => ShowsRightPanel ? 1 : 2;
 
     /// <summary>What the status bar shows for this tab.</summary>
     public string BranchText => Repository?.BranchText ?? "No repository";
@@ -224,6 +240,15 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         else if (e.PropertyName == nameof(RepositoryViewModel.IsWorkingRowSelected))
         {
             OnPropertyChanged(nameof(ShowsWorkingChanges));
+            OnPropertyChanged(nameof(ShowsDetailsPanel));
+            OnPropertyChanged(nameof(ShowsStagePanel));
+        }
+        else if (e.PropertyName == nameof(RepositoryViewModel.IsResolverOpen))
+        {
+            OnPropertyChanged(nameof(ShowsRightPanel));
+            OnPropertyChanged(nameof(ShowsDetailsPanel));
+            OnPropertyChanged(nameof(ShowsStagePanel));
+            OnPropertyChanged(nameof(GraphColumnSpan));
         }
     }
 }

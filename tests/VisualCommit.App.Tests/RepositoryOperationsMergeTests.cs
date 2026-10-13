@@ -402,7 +402,7 @@ public class RepositoryOperationsMergeTests
         Assert.Equal($"Cherry-picked {alphaOne[..7]} onto hotfix", TextOf(app, "OperationStatus"));
         var pick = operations.CherryPickAsync(alphaOne);
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
-        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on hotfix: its changes are already there. Abort the cherry-pick to go on."),
+        Assert.Equal(("Cherry-pick stopped", $"{alphaOne[..7]} changes nothing on hotfix: its changes are already there. Skip it to go on."),
             (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
         Assert.Equal($"Cherry-pick {alphaOne[..7]} failed", TextOf(app, "OperationStatus"));
 
@@ -414,7 +414,9 @@ public class RepositoryOperationsMergeTests
         app.Click(app.FindByAutomationId("ConfirmButton"));
         await pick;
         await app.WaitForIdleAsync();
-        Assert.Equal($"Cherry-picking {alphaOne[..7]} \"Alpha one\" changes nothing: its changes are already here. Abort to go on.", TextOf(app, "BannerText"));
+        // Phase 4 (design 5.2, 5.1): the banner says to skip it, and offers Skip.
+        Assert.Equal($"Cherry-picking {alphaOne[..7]} \"Alpha one\" changes nothing: its changes are already here. Skip it to go on.", TextOf(app, "BannerText"));
+        Assert.True(app.FindByAutomationId("BannerSkipButton").IsEffectivelyEnabled);
         TestPictures.Save(app, "wp7-25b-empty-pick-banner");
     }
 }

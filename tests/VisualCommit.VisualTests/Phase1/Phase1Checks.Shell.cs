@@ -28,6 +28,16 @@ public partial class Phase1Checks
     private const int Phase = 1;
     private static readonly TimeSpan CloneTimeout = TimeSpan.FromSeconds(90);
 
+    /// <summary>The percentage at which checks 13 and 14 hold the clone of the 100k-commit repo (D150).</summary>
+    private const int ClonePercent = 45;
+
+    /// <summary>
+    /// What the clone form shows while the clone is held at <see cref="ClonePercent"/>: git's last
+    /// line then is <c>remote: Counting objects:  45% (45001/100002)</c>, of which the form shows
+    /// the stage and the percentage.
+    /// </summary>
+    private const string HeldCloneProgressText = "Counting objects 45%";
+
     [AvaloniaFact]
     public async Task Check_10_welcome_page_and_tabs()
     {
@@ -158,7 +168,12 @@ public partial class Phase1Checks
     [AvaloniaFact]
     public async Task Check_13_clone_with_progress()
     {
-        var source = await LargeHistory.GetAsync();
+        // The clone is of a bare copy of the 100k-commit repo, served over HTTP and held at a
+        // fixed percentage instead of raced (D150): a fast CI runner once finished the clone of
+        // the file URL between two pictures. The server's fixed port, 47392 (a free one when it
+        // is taken), keeps the picture's URL the same (D97); 47391 is phase 3's, whose checks
+        // run in another process at the same time. Declared before the app, so that it outlives it.
+        await using var server = await StartCloneServerAsync();
         using var data = new TempDirectory("data");
         using var parent = new TempDirectory("clones");
 
@@ -179,7 +194,7 @@ public partial class Phase1Checks
             Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(app.Window).OfType<TextBlock>(),
             text => text.Text == "No repository open" && text.IsEffectivelyVisible);
 
-        app.Type(new Uri(source).AbsoluteUri);
+        app.Type(server.Url);
         app.Click(app.Find<TextBox>("CloneParentBox"));
         app.Type(parent.Path);
         app.Click(app.Find<TextBox>("CloneNameBox"));
@@ -187,51 +202,41 @@ public partial class Phase1Checks
         app.Type("cloned");
         Assert.Equal("cloned", welcome.CloneName);
 
+        // The server sends the response up to git's line of ClonePercent and keeps the rest: the
+        // clone stays at that line until the server lets go.
+        var held = server.HoldNextFetchPack(ClonePercent);
         app.Click(app.Find<Button>("CloneStartButton"));
-
-        // A capture first lets the UI thread apply the progress that arrived meanwhile, so the
-        // picture can show a later stage than the one waited for (100% once). What was drawn is
-        // read back after each capture, and the capture is taken again until it shows 1 to 99%.
         var bar = app.Find<ProgressBar>("CloneProgress");
         var stage = app.Find<TextBlock>("CloneProgressText");
-        Screenshot? during = null;
         await app.WaitForAsync(
-            () =>
-            {
-                if (!(welcome.IsCloning && welcome.CloneProgressValue is >= 1 and <= 99))
-                {
-                    return false;
-                }
-
-                var capture = app.Capture();
-                var shown = int.TryParse(stage.Text?.Split(' ')[^1].TrimEnd('%'), out var percent) ? percent : -1;
-                if (welcome.IsCloning && bar.Value is >= 1 and <= 99 && shown is >= 1 and <= 99)
-                {
-                    during = capture;
-                    return true;
-                }
-
-                return false;
-            },
-            "a screenshot of the clone showing a percentage between 1 and 99",
+            () => held.IsCompletedSuccessfully && welcome.IsCloning && welcome.CloneProgressValue == ClonePercent
+                && bar.Value == ClonePercent && stage.Text == HeldCloneProgressText,
+            $"the clone to be held at \"{HeldCloneProgressText}\"",
             CloneTimeout);
-        during!.Save(Phase, "13b-clone-in-progress");
+        app.Capture().Save(Phase, "13b-clone-in-progress");
+        Assert.Equal(server.Url, app.Find<TextBox>("CloneUrlBox").Text);
         Assert.False(app.Find<TextBox>("CloneUrlBox").IsEffectivelyEnabled);
         Assert.True(app.Find<Button>("CloneCancelButton").IsEffectivelyVisible);
-        Assert.Matches(@"^[A-Z][a-z]+( [a-z]+)* \d{1,3}%$", app.Find<TextBlock>("CloneProgressText").Text);
+        Assert.True(app.Find<Button>("CloneCancelButton").IsEffectivelyEnabled);
+        Assert.Equal(HeldCloneProgressText, app.Find<TextBlock>("CloneProgressText").Text);
 
+        server.Release();
         await WaitForGraphAsync(app, tab, LargeHistory.CommitCount, CloneTimeout);
         app.Capture().Save(Phase, "13c-cloned");
         Assert.Equal(["cloned"], Tabs(app));
         Assert.True(Directory.Exists(Path.Combine(parent.Path, "cloned", ".git")));
         Assert.Equal(LargeHistory.SubjectOf(LargeHistory.CommitCount), tab.Repository!.Graph.CommitAt(0).Subject);
         Assert.Contains(app.Session.Shell.ActiveTab.Welcome.Recent, item => item.Name == "cloned");
+        Assert.Single(server.Requests, request => request.Held);
+        Assert.Empty(server.Errors);
     }
 
     [AvaloniaFact]
     public async Task Check_14_a_failed_and_a_cancelled_clone()
     {
-        var source = await LargeHistory.GetAsync();
+        // The clone that is cancelled is held as check 13's is, so that Cancel comes while it
+        // runs, never after it ended (D150).
+        await using var server = await StartCloneServerAsync();
         using var data = new TempDirectory("data");
         using var parent = new TempDirectory("clones");
         var missing = new Uri(parent.Combine("does-not-exist")).AbsoluteUri;
@@ -253,15 +258,25 @@ public partial class Phase1Checks
 
         app.Click(app.Find<TextBox>("CloneUrlBox"));
         app.PressKey(Key.A, RawInputModifiers.Control);
-        app.Type(new Uri(source).AbsoluteUri);
+        app.Type(server.Url);
+        var held = server.HoldNextFetchPack(ClonePercent);
         app.Click(app.Find<Button>("CloneStartButton"));
-        await app.WaitForAsync(() => welcome.IsCloning && welcome.CloneProgressText != "Starting", "the clone to report progress", CloneTimeout);
+        await app.WaitForAsync(
+            () => held.IsCompletedSuccessfully && welcome.IsCloning && welcome.CloneProgressText == HeldCloneProgressText,
+            $"the clone to be held at \"{HeldCloneProgressText}\"",
+            CloneTimeout);
         app.Click(app.Find<Button>("CloneCancelButton"));
         await app.WaitForAsync(() => !welcome.IsCloning, "the clone to stop", CloneTimeout);
+
+        // The server may now send the rest of the held response, which nobody reads any more,
+        // and end that request.
+        server.Release();
         app.Capture().Save(Phase, "14b-clone-cancelled");
         Assert.Equal("Clone cancelled.", app.Find<TextBlock>("CloneError").Text);
         Assert.True(app.Find<TextBox>("CloneUrlBox").IsEffectivelyEnabled);
         Assert.False(Directory.Exists(parent.Combine("cloned")));
+        Assert.Single(server.Requests, request => request.Held);
+        Assert.Empty(server.Errors);
     }
 
     // Not an [AvaloniaFact]: each half runs with a new Application, as after a restart (D32).
@@ -438,6 +453,18 @@ public partial class Phase1Checks
 
     private static void AssertNoClippedText(ShellDriver app) =>
         Assert.Empty(LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true));
+
+    /// <summary>
+    /// The server of checks 13 and 14: the bare copy of the 100k-commit repo served in place on
+    /// <see cref="AuthRemoteServer.Phase1VisualChecksPort"/> (a free port when it is taken),
+    /// asking nobody to sign in. Dispose it after the app (declared before it).
+    /// </summary>
+    private static async Task<AuthRemoteServer> StartCloneServerAsync()
+    {
+        var server = await AuthRemoteServer.StartForVisualChecksAsync(await LargeHistory.GetBareAsync(), AuthRemoteServer.Phase1VisualChecksPort);
+        server.RequireAuth = false;
+        return server;
+    }
 
     private static async Task TypeCloneFormAsync(ShellDriver app, string url, string parent, string name)
     {

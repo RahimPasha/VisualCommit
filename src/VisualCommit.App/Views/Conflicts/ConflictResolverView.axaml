@@ -1,0 +1,271 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:cc="using:VisualCommit.App.Controls.Conflicts"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Conflicts"
+             xmlns:local="using:VisualCommit.App.Views.Conflicts"
+             x:Class="VisualCommit.App.Views.Conflicts.ConflictResolverView"
+             x:DataType="vm:ConflictResolverViewModel"
+             AutomationProperties.AutomationId="ConflictResolver"
+             AutomationProperties.Name="Conflict resolver">
+
+  <!-- The conflict resolver (docs/phase-4-design.md 11.2, D140): a header (36) with the file and
+       the files' navigation, a toolbar (36) with the conflicts' navigation and the actions, then
+       the ours and theirs panes side by side above the editable result, the halves splitting the
+       height equally with a 1-px line between; or, for a conflict without text, a card (11.8). -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock.strip">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Margin" Value="8,0" />
+    </Style>
+    <Style Selector="Border.strip">
+      <Setter Property="Background" Value="{DynamicResource VcChromeBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="36,36,*" Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- Header: the file, its kind, its place among the conflicted files, and the close button. -->
+    <Border Name="ResolverHeader"
+            Grid.Row="0"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto" Margin="12,0,4,0">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Background="Transparent" ToolTip.Tip="{Binding Path}">
+          <TextBlock Name="ResolverFileStatus"
+                     Text="{Binding StatusLetter}"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource VcDangerBrush}"
+                     VerticalAlignment="Center"
+                     Margin="0,0,6,0"
+                     AutomationProperties.AutomationId="ResolverFileStatus" />
+          <TextBlock Name="ResolverFileName"
+                     Text="{Binding FileName}"
+                     FontWeight="SemiBold"
+                     VerticalAlignment="Center"
+                     AutomationProperties.AutomationId="ResolverFileName" />
+          <TextBlock Name="ResolverFolder"
+                     Classes="secondary"
+                     Text="{Binding Folder}"
+                     VerticalAlignment="Center"
+                     Margin="8,0,0,0"
+                     AutomationProperties.AutomationId="ResolverFolder" />
+          <TextBlock Name="ResolverKind"
+                     Classes="secondary"
+                     Text="{Binding KindText}"
+                     VerticalAlignment="Center"
+                     Margin="16,0,0,0"
+                     AutomationProperties.AutomationId="ResolverKind" />
+          <TextBlock Name="ResolverFilePosition"
+                     Text="{Binding FilePositionText}"
+                     VerticalAlignment="Center"
+                     Margin="24,0,8,0"
+                     AutomationProperties.AutomationId="ResolverFilePosition" />
+          <Button Name="ResolverPreviousFile"
+                  Theme="{StaticResource VcIconButton}"
+                  Command="{Binding PreviousFileCommand}"
+                  ToolTip.Tip="Previous file"
+                  AutomationProperties.AutomationId="ResolverPreviousFile">
+            <c:Icon Data="{StaticResource IconChevronLeft}" Width="14" Height="14" />
+          </Button>
+          <Button Name="ResolverNextFile"
+                  Theme="{StaticResource VcIconButton}"
+                  Command="{Binding NextFileCommand}"
+                  ToolTip.Tip="Next file"
+                  Margin="2,0,0,0"
+                  AutomationProperties.AutomationId="ResolverNextFile">
+            <c:Icon Data="{StaticResource IconChevronRight}" Width="14" Height="14" />
+          </Button>
+        </StackPanel>
+        <Button Name="ResolverCloseButton"
+                Grid.Column="1"
+                Theme="{StaticResource VcIconButton}"
+                Width="28" Height="28" Padding="7"
+                Command="{Binding CloseResolverCommand}"
+                ToolTip.Tip="Close"
+                AutomationProperties.AutomationId="ResolverCloseButton">
+          <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- Toolbar: the conflicts' navigation, a whole side, the merge tool, Mark resolved. A card
+         keeps the row, with only Merge tool… for a binary file (11.8, 14.3). -->
+    <Border Name="ResolverToolbar"
+            Grid.Row="1"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0,8,0">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" IsVisible="{Binding ShowsConflictTools}" Margin="0,0,16,0">
+            <TextBlock Name="ResolverConflictPosition"
+                       Text="{Binding ConflictPositionText}"
+                       VerticalAlignment="Center"
+                       Margin="0,0,8,0"
+                       AutomationProperties.AutomationId="ResolverConflictPosition" />
+            <Button Name="ResolverPreviousConflict"
+                    Theme="{StaticResource VcIconButton}"
+                    Command="{Binding PreviousConflictCommand}"
+                    ToolTip.Tip="Previous conflict"
+                    AutomationProperties.AutomationId="ResolverPreviousConflict">
+              <c:Icon Data="{StaticResource IconChevronUp}" Width="14" Height="14" />
+            </Button>
+            <Button Name="ResolverNextConflict"
+                    Theme="{StaticResource VcIconButton}"
+                    Command="{Binding NextConflictCommand}"
+                    ToolTip.Tip="Next conflict"
+                    Margin="2,0,0,0"
+                    AutomationProperties.AutomationId="ResolverNextConflict">
+              <c:Icon Data="{StaticResource IconChevronDown}" Width="14" Height="14" />
+            </Button>
+          </StackPanel>
+          <Button Name="ResolverTakeOurs"
+                  Classes="tool"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Take ours"
+                  Command="{Binding TakeOursCommand}"
+                  IsVisible="{Binding ShowsConflictTools}"
+                  ToolTip.Tip="{Binding TakeOursReason}"
+                  Margin="0,0,6,0"
+                  AutomationProperties.AutomationId="ResolverTakeOurs"
+                  AutomationProperties.Name="Take ours" />
+          <Button Name="ResolverTakeTheirs"
+                  Classes="tool"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Take theirs"
+                  Command="{Binding TakeTheirsCommand}"
+                  IsVisible="{Binding ShowsConflictTools}"
+                  ToolTip.Tip="{Binding TakeTheirsReason}"
+                  Margin="0,0,6,0"
+                  AutomationProperties.AutomationId="ResolverTakeTheirs"
+                  AutomationProperties.Name="Take theirs" />
+          <Button Name="ResolverMergeTool"
+                  Classes="tool"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Merge tool…"
+                  Command="{Binding RunMergeToolCommand}"
+                  IsVisible="{Binding ShowsMergeTool}"
+                  ToolTip.Tip="{Binding MergeToolReason}"
+                  AutomationProperties.AutomationId="ResolverMergeTool"
+                  AutomationProperties.Name="Merge tool…" />
+        </StackPanel>
+        <Button Name="ResolverMarkResolved"
+                Grid.Column="2"
+                Classes="tool"
+                Theme="{StaticResource VcPrimaryButton}"
+                Content="Mark resolved"
+                Command="{Binding MarkResolvedCommand}"
+                IsVisible="{Binding ShowsConflictTools}"
+                AutomationProperties.AutomationId="ResolverMarkResolved"
+                AutomationProperties.Name="Mark resolved" />
+      </Grid>
+    </Border>
+
+    <!-- Body. -->
+    <Panel Grid.Row="2">
+
+      <!-- A text conflict: ours and theirs above the result (11.2, 11.3). -->
+      <Grid Name="ResolverText" RowDefinitions="*,1,*" IsVisible="{Binding ShowsText}">
+        <Grid Grid.Row="0" RowDefinitions="26,*" ColumnDefinitions="*,1,*">
+          <Border Name="OursTitleStrip" Grid.Row="0" Grid.Column="0" Classes="strip">
+            <TextBlock Name="ConflictOursTitle"
+                       Classes="strip"
+                       Text="{Binding OursTitle}"
+                       ToolTip.Tip="{Binding OursTitle}"
+                       AutomationProperties.AutomationId="ConflictOursTitle" />
+          </Border>
+          <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource VcBorderBrush}" />
+          <Border Name="TheirsTitleStrip" Grid.Row="0" Grid.Column="2" Classes="strip">
+            <TextBlock Name="ConflictTheirsTitle"
+                       Classes="strip"
+                       Text="{Binding TheirsTitle}"
+                       ToolTip.Tip="{Binding TheirsTitle}"
+                       AutomationProperties.AutomationId="ConflictTheirsTitle" />
+          </Border>
+          <cc:ConflictPanes Name="Panes"
+                            Grid.Row="1"
+                            Grid.ColumnSpan="3"
+                            Parts="{Binding Parts}"
+                            Bars="{Binding Bars}"
+                            FilePath="{Binding Path}"
+                            IsEnabled="{Binding IsIdle}" />
+        </Grid>
+
+        <Border Grid.Row="1" Background="{DynamicResource VcBorderBrush}" />
+
+        <Grid Grid.Row="2" RowDefinitions="26,*">
+          <Border Name="ResultTitleStrip" Grid.Row="0" Classes="strip">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Name="ConflictResultTitle"
+                         Classes="strip"
+                         Text="{Binding ResultTitle}"
+                         AutomationProperties.AutomationId="ConflictResultTitle" />
+              <TextBlock Name="ConflictResultCount"
+                         Grid.Column="1"
+                         Classes="strip"
+                         Text="{Binding ResultCountText}"
+                         AutomationProperties.AutomationId="ConflictResultCount" />
+            </Grid>
+          </Border>
+          <cc:ConflictResultEditor Name="Result"
+                                   Grid.Row="1"
+                                   IsReadOnly="{Binding IsBusy}"
+                                   AutomationProperties.AutomationId="ConflictResult"
+                                   AutomationProperties.Name="Result" />
+        </Grid>
+      </Grid>
+
+      <!-- A conflict without text: what happened, and buttons that resolve it at once (11.8). -->
+      <local:ConflictCardBorder Name="ConflictCard"
+              IsVisible="{Binding ShowsCard}"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              MaxWidth="480"
+              Margin="24"
+              Padding="20,16"
+              CornerRadius="6"
+              Background="{DynamicResource VcPanelBackgroundBrush}"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="1"
+              AutomationProperties.AutomationId="ConflictCard">
+        <StackPanel Spacing="16">
+          <TextBlock Name="ConflictCardText"
+                     Text="{Binding CardText}"
+                     TextWrapping="Wrap"
+                     AutomationProperties.AutomationId="ConflictCardText" />
+          <ItemsControl Name="CardButtons" ItemsSource="{Binding CardButtons}" HorizontalAlignment="Right" IsEnabled="{Binding IsIdle}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ConflictCardButton">
+                <Button Classes="tool"
+                        Theme="{StaticResource VcActionButton}"
+                        Content="{Binding Label}"
+                        Command="{Binding RunCommand}"
+                        AutomationProperties.AutomationId="{Binding AutomationId}"
+                        AutomationProperties.Name="{Binding Label}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </local:ConflictCardBorder>
+    </Panel>
+  </Grid>
+</UserControl>

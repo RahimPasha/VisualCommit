@@ -655,6 +655,32 @@ public class ContextMenuAdapterTests
     }
 
     /// <summary>A commit menu as 4b gives it, with a disabled item and a destructive one; <paramref name="ran"/> hears each item's label when it runs.</summary>
+    [AvaloniaFact]
+    public async Task A_menu_without_an_enabled_item_keeps_the_focus_and_Esc_gives_it_back()
+    {
+        // Phase 4's resolver pane menu is [Copy] with nothing selected: no item can take the
+        // focus. The focus stays with the menu while it is open, not on the first focusable
+        // control of the window, and goes back where it was when Esc closes it (phase 3's 4a).
+        using var data = new TempDirectory("data");
+        using var app = await StartAsync(data.Path);
+        var theme = app.FindByAutomationId("ThemeSwitch");
+        theme.Focus(NavigationMethod.Tab);
+        app.Settle();
+        var model = new MenuModel([new MenuHeader("Ours: main"), new Item("Copy", () => { }, false, "Select some text first", false)]);
+
+        app.Session.Shell.Menu.Open(model, new MenuPosition(300, 200));
+        app.Menu();
+        app.Settle();
+        var inMenu = app.Window.FocusManager?.GetFocusedElement() as Visual;
+        Assert.NotNull(inMenu);
+        Assert.Contains(inMenu.GetSelfAndVisualAncestors(), visual => visual is MenuFlyoutPresenter);
+
+        app.PressKey(Key.Escape);
+
+        Assert.False(app.IsMenuOpen);
+        Assert.Same(theme, app.Window.FocusManager?.GetFocusedElement());
+    }
+
     private static MenuModel Sample(string header, Action<string>? ran = null)
     {
         Item Make(string label, bool enabled = true, string? reason = null, bool destructive = false) =>

@@ -94,21 +94,52 @@ public sealed partial class RepositoryOperations
 
         var upstream = UpstreamText(branch) ?? ShortName(branch.UpstreamRef);
         var text = OperationTexts.Pull(upstream, branch.Name);
-        return GuardAsync(text, () => RunAsync(
-            text,
-            branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
-            RefreshScope.Refs,
-            context => PullStepsAsync(context, branch, upstream, text),
-            NetworkRun("pull:" + branch.FullName)));
+        return PullWithAsync(branch, upstream, text, PullIntegration.AsConfigured, "pull:" + branch.FullName);
     }
+
+    /// <summary>
+    /// "Pull from {up} (rebase)" (docs/phase-4-design.md section 6, D147): phase 3's pull with its
+    /// integration forced to a rebase, as <c>git pull --rebase</c>; git's pull settings are not
+    /// read. Its dedupe key <c>pull:&lt;ref&gt;:rebase</c> never merges it with a plain Pull.
+    /// </summary>
+    public Task PullRebaseAsync()
+    {
+        if (CurrentBranch is not { UpstreamRef: not null } branch)
+        {
+            Log.Info($"{Repository.Name}: Pull (rebase): not started, HEAD is not on a branch with an upstream.");
+            return Task.CompletedTask;
+        }
+
+        var upstream = UpstreamText(branch) ?? ShortName(branch.UpstreamRef);
+        var text = OperationTexts.PullRebase(upstream, branch.Name);
+        return PullWithAsync(branch, upstream, text, PullIntegration.Rebase, $"pull:{branch.FullName}:rebase");
+    }
+
+    /// <summary>A pull as one operation (2.18, section 6): a network one, or a local one for a local upstream, which skips the fetch.</summary>
+    private Task PullWithAsync(GitRef branch, string upstream, OperationText text, PullIntegration integration, string dedupeKey) =>
+        GuardAsync(text, async () =>
+        {
+            var notice = new StopNotice();
+            await RunAsync(
+                text,
+                branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
+                RefreshScope.Refs,
+                context => PullStepsAsync(context, branch, upstream, text, integration, notice),
+                NetworkRun(dedupeKey));
+            await FinishAsync(notice, new SelectionAfter());
+        });
 
     /// <summary>
     /// Pull's two steps (2.18, D84): the fetch of the upstream's remote, which can be cancelled
     /// (skipped for a local upstream); the end of the cancel window, which stops here when the
-    /// user had cancelled, so nothing is integrated after Cancel; then the integration git pull
-    /// would choose, never cancelled. The message counts what HEAD gained, read after the pull.
+    /// user had cancelled, so nothing is integrated after Cancel; then the integration, never
+    /// cancelled: git pull's choice, or a rebase chosen for this pull (section 6). Every pull that
+    /// rebases saves 1.2's backup first, through the git layer's callback (D147), and a rebase
+    /// that stops is told by the rebase folder, with or without conflicted files. The message
+    /// counts what HEAD gained, read after the pull; commits git's fork point left out are
+    /// reported (warning).
     /// </summary>
-    private async Task<OperationReport> PullStepsAsync(OperationContext context, GitRef branch, string upstream, OperationText text)
+    private async Task<OperationReport> PullStepsAsync(OperationContext context, GitRef branch, string upstream, OperationText text, PullIntegration integration, StopNotice notice)
     {
         // The pull may have waited in the queue: it pulls into the branch, from the upstream, that
         // the user saw when they chose it, or into nothing (design 1.3).
@@ -135,7 +166,12 @@ public sealed partial class RepositoryOperations
         PullResult pulled;
         try
         {
-            pulled = await Git.IntegratePullAsync(branch, options, CancellationToken.None);
+            pulled = await Git.IntegratePullAsync(
+                branch,
+                integration,
+                oldTip => SaveRebaseBackupAsync(branch.Name, oldTip),
+                options,
+                CancellationToken.None);
         }
         catch (GitException exception) when (exception.StandardError.TrimEnd().EndsWith(OperationTexts.SettingNotUnderstoodEnd, StringComparison.Ordinal))
         {
@@ -143,17 +179,41 @@ public sealed partial class RepositoryOperations
             return Failed(text, FailureOf(exception, exception.StandardError.Trim()));
         }
 
-        return pulled.Outcome switch
+        switch (pulled.Outcome)
         {
-            PullOutcome.UpToDate => OperationReport.Done(OperationTexts.PullUpToDate(branch.Name)),
-            PullOutcome.FastForward => OperationReport.Done(OperationTexts.PulledFastForward(pulled.CommitCount, branch.Name)),
-            PullOutcome.Merged => OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name)),
-            PullOutcome.Rebased => OperationReport.Done(OperationTexts.PulledRebased(branch.Name, upstream)),
-            PullOutcome.Conflicts => OperationReport.Conflicts(OperationTexts.PullConflicts(await CountConflictedFilesAsync())),
-            PullOutcome.UpstreamGone => OperationReport.Done(OperationTexts.PullUpstreamGone(
-                ShortName(branch.UpstreamRemoteRef ?? branch.UpstreamRef!), branch.UpstreamRemote ?? LocalRemote)),
-            _ => throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}."),
-        };
+            case PullOutcome.UpToDate:
+                return OperationReport.Done(OperationTexts.PullUpToDate(branch.Name));
+            case PullOutcome.FastForward:
+                return OperationReport.Done(OperationTexts.PulledFastForward(pulled.CommitCount, branch.Name));
+            case PullOutcome.Merged:
+                return OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name));
+            case PullOutcome.Rebased:
+                // Git's fork point left out commits the upstream once had (0.1): a success said in
+                // the warning colour (auto-fetch counts it as a fetch). Changes rebase.autoStash put
+                // back with conflicts make it 1.4's warning (the review's findings 12 and 19).
+                var rebased = pulled.LeftOutByForkPoint > 0
+                    ? OperationTexts.PulledRebasedLeftOut(branch.Name, upstream, pulled.LeftOutByForkPoint)
+                    : OperationTexts.PulledRebased(branch.Name, upstream);
+                return pulled.AutostashConflicted ? OperationReport.Conflicts(OperationTexts.WithAutostashConflicted(rebased))
+                    : pulled.LeftOutByForkPoint > 0 ? OperationReport.Warning(rebased)
+                    : OperationReport.Done(rebased);
+            case PullOutcome.Conflicts:
+                var conflicts = await CountConflictedFilesAsync();
+                var stopped = conflicts > 0 || (await Git.ReadStatusAsync()).InProgress.Kind != InProgressKind.Rebase
+                    ? OperationReport.Conflicts(OperationTexts.PullConflicts(conflicts))
+                    : await RebaseStopReportAsync(context, 0, notice); // A rebase stopped with no conflicted file (section 6, 1.4).
+
+                // Git's fork point left out commits the upstream once had, also when the rebase
+                // stopped (10.2, D147; the review's finding 20); the stop's own warning tone.
+                return pulled.LeftOutByForkPoint > 0
+                    ? stopped with { Message = OperationTexts.WithLeftOutByForkPoint(stopped.Message, upstream, pulled.LeftOutByForkPoint) }
+                    : stopped;
+            case PullOutcome.UpstreamGone:
+                return OperationReport.Done(OperationTexts.PullUpstreamGone(
+                    ShortName(branch.UpstreamRemoteRef ?? branch.UpstreamRef!), branch.UpstreamRemote ?? LocalRemote));
+            default:
+                throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}.");
+        }
     }
 
     /// <summary>

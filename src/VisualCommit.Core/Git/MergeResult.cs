@@ -91,4 +91,37 @@ public enum PullOutcome
 /// <summary>How a pull's integration ended (2.18).</summary>
 /// <param name="Outcome">What it did.</param>
 /// <param name="CommitCount">The commits HEAD gained: <c>git rev-list --count &lt;HEAD before&gt;..HEAD</c>.</param>
-public sealed record PullResult(PullOutcome Outcome, int CommitCount);
+public sealed record PullResult(PullOutcome Outcome, int CommitCount)
+{
+    /// <summary>
+    /// The branch's own commits that a pull's rebase left out because its upstream once held
+    /// them (git's fork point, docs/phase-4-design.md 0.1 and section 6): the commits that would
+    /// have been replayed onto the upstream, less those reachable from
+    /// <c>git merge-base --fork-point &lt;upstream&gt; HEAD</c>, counted before the rebase (both
+    /// without merges, commits already upstream by patch left out). 0 when the pull did not
+    /// rebase or git found no fork point. Set for <see cref="PullOutcome.Rebased"/> and for a
+    /// rebase that stopped (<see cref="PullOutcome.Conflicts"/>).
+    /// </summary>
+    public int LeftOutByForkPoint { get; init; }
+
+    /// <summary>
+    /// A pull's rebase that ended rebased, whose changes git stashed at its start
+    /// (<c>rebase.autoStash</c>) conflicted when put back: they are also kept in the stash
+    /// (docs/phase-4-design.md 1.4, <see cref="RebaseResult.AutostashConflicted"/>).
+    /// </summary>
+    public bool AutostashConflicted { get; init; }
+}
+
+/// <summary>How a pull integrates its upstream (docs/phase-4-design.md section 6, D147).</summary>
+public enum PullIntegration
+{
+    /// <summary>As git is configured (<c>pull.ff</c>, <c>branch.&lt;b&gt;.rebase</c>, <c>pull.rebase</c>): the toolbar's Pull (phase 3, D84).</summary>
+    AsConfigured,
+
+    /// <summary>
+    /// "Pull from {up} (rebase)", chosen for one pull: a fast-forward when the branch has nothing
+    /// of its own, otherwise <c>git rebase</c> without arguments (onto the upstream from its fork
+    /// point, as <c>git pull --rebase</c>); git's pull settings are not read.
+    /// </summary>
+    Rebase,
+}

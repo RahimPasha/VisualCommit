@@ -447,7 +447,8 @@ public sealed partial class Phase3ChecksB
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == unstagedTitle
-                && app.Find<TextBlock>("StagedTitle").Text == stagedTitle,
+                && app.Find<TextBlock>("StagedTitle").Text == stagedTitle
+                && app.StagePanelSettled,
             $"the stage panel with \"{unstagedTitle}\" and \"{stagedTitle}\"");
 
     /// <summary>

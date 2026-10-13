@@ -50,6 +50,60 @@ public sealed record InProgressState(
     /// </summary>
     public bool AbortKeepsHead { get; init; }
 
+    // Phase 4 (docs/phase-4-design.md section 8). Init properties with defaults, so that phase 3's
+    // constructions keep compiling; the in-progress read fills them (work package WP2).
+
+    /// <summary>
+    /// A cherry-pick or revert of a list: a <c>sequencer/</c> folder exists (8). With
+    /// <see cref="HasPickHead"/> false, the list is paused between commits and the stage panel
+    /// fills no message.
+    /// </summary>
+    public bool Sequenced { get; init; }
+
+    /// <summary>A pick head is there: <c>CHERRY_PICK_HEAD</c> or <c>REVERT_HEAD</c>, read as file or ref (8.1).</summary>
+    public bool HasPickHead { get; init; }
+
+    /// <summary>
+    /// For a rebase, why it stopped (8: <see cref="RebaseStopKind.Rescheduled"/>,
+    /// <see cref="RebaseStopKind.ExecFailed"/>, <see cref="RebaseStopKind.OwnAmendFailed"/>,
+    /// <see cref="RebaseStopKind.Edit"/>, <see cref="RebaseStopKind.Empty"/>, else
+    /// <see cref="RebaseStopKind.Pick"/>); null for any other operation.
+    /// </summary>
+    public RebaseStopKind? StopKind { get; init; }
+
+    /// <summary>
+    /// For a rebase, the first line of <c>git-rebase-todo</c> is <c>fixup</c>, <c>f</c>,
+    /// <c>squash</c> or <c>s</c>: the stopped commit is the target of a group (5.1).
+    /// </summary>
+    public bool NextIsSquash { get; init; }
+
+    /// <summary>
+    /// For a rebase stopped inside a group the app wrote (its <c>exec … vc-message-&lt;n&gt;</c>
+    /// line still waits in <c>git-rebase-todo</c> before the next <c>label</c>), the group's number
+    /// <c>&lt;n&gt;</c> (2.5, 5.3); null otherwise.
+    /// </summary>
+    public int? Group { get; init; }
+
+    /// <summary>
+    /// For a rebase, the commands that apply a commit (<c>pick</c>, <c>reword</c>, <c>edit</c>,
+    /// <c>squash</c>, <c>fixup</c>, <c>merge</c> and their letters) in <c>done</c>, a rescheduled
+    /// pick counted as the current one: the banner's <c>{k}</c> of <c>{k} of {n}</c> (5.2).
+    /// <c>label</c> and <c>exec</c> lines do not count. For a list of picks or reverts
+    /// (<see cref="Sequenced"/>), the commits it has made so far, the stopped one not counted until
+    /// it is committed: the <c>{K}</c> of 10.2's "Cherry-picked {K} of {N} commits". 0 for any
+    /// other operation.
+    /// </summary>
+    public int Done { get; init; }
+
+    /// <summary>
+    /// For a rebase, <see cref="Done"/> plus the same commands left in <c>git-rebase-todo</c>: the
+    /// banner's <c>{n}</c>. For a list, <see cref="Done"/> plus the commits left in
+    /// <c>sequencer/todo</c> (the stopped one included until it is committed): 10.2's <c>{N}</c>;
+    /// git keeps no record of a skipped commit, so one that was skipped is not counted. 0 for any
+    /// other operation.
+    /// </summary>
+    public int Total { get; init; }
+
     /// <summary>An operation is in progress.</summary>
     public bool IsActive => Kind != InProgressKind.None;
 }

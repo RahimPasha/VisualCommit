@@ -5,8 +5,9 @@
 
        Windows-only and opt-in: this project is NOT in VisualCommit.slnx, so "dotnet build" and
        "dotnet test" at the repo root never touch it. It is run on its own, with the real-window
-       command in the Commands section of CLAUDE.md. It takes over the mouse for about half a minute and
-       needs an unlocked desktop. -->
+       command in the Commands section of CLAUDE.md. It takes over the mouse for about 11 minutes
+       with phases 0 to 3 (11 min 11 s at phase 3's gate), more as phases add checks, and needs an
+       unlocked desktop. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -36,6 +37,13 @@
        nothing of VisualCommit.VisualTests.Phase3 but themselves. -->
   <ItemGroup>
     <Compile Include="..\VisualCommit.VisualTests.Phase3\Phase3Expectations*.cs" Link="Phase3\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Phase 4's expectations, likewise (docs/phase-4-design.md 13.3). The walk-through's own tests
+       of them, Phase4ExpectationTests.<part>.cs, are left out by their name, which the pattern
+       does not match. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase4\Phase4Expectations*.cs" Link="Phase4\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

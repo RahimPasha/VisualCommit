@@ -32,13 +32,19 @@ public sealed partial class GitRepository
     /// Reads <c>git status --porcelain=v2 -z</c>: ordinary entries (<c>1</c>), renames and copies
     /// (<c>2</c>, followed by the old path), unmerged entries (<c>u</c>) and untracked files
     /// (<c>?</c>). The first status letter is the index against HEAD, the second the working tree
-    /// against the index; <c>.</c> means unchanged.
+    /// against the index; <c>.</c> means unchanged. An unmerged entry is an unstaged
+    /// <see cref="FileChangeKind.Conflicted"/> file and a <see cref="ConflictEntry"/> of
+    /// <see cref="WorkingTreeStatus.Conflicts"/> with its kind, modes and stage ids as git prints
+    /// them (docs/phase-4-design.md 0.4). An ordinary or renamed entry whose <c>sub</c> field
+    /// starts with <c>S</c> is a submodule: its path is also in <see cref="WorkingTreeStatus.Submodules"/>.
     /// </summary>
     internal static WorkingTreeStatus ParseStatus(string output)
     {
         var staged = new List<ChangedFile>();
         var unstaged = new List<ChangedFile>();
         var untracked = new HashSet<string>(StringComparer.Ordinal);
+        var submodules = new HashSet<string>(StringComparer.Ordinal);
+        var conflicts = new List<ConflictEntry>();
         var entries = output.Split('\0');
         for (var i = 0; i < entries.Length; i++)
         {
@@ -59,7 +65,7 @@ public sealed partial class GitRepository
                         continue;
                     }
 
-                    AddEntry(fields[1], fields[8], oldPath: null);
+                    AddEntry(fields[1], fields[2], fields[8], oldPath: null);
                     break;
                 }
 
@@ -73,17 +79,31 @@ public sealed partial class GitRepository
                         continue;
                     }
 
-                    AddEntry(fields[1], fields[9], oldPath);
+                    AddEntry(fields[1], fields[2], fields[9], oldPath);
                     break;
                 }
 
                 case 'u':
                 {
-                    // u XY sub m1 m2 m3 mW h1 h2 h3 path
+                    // u XY sub m1 m2 m3 mW h1 h2 h3 path: stage 1 is the base, 2 ours, 3
+                    // theirs; a missing stage has zeros (docs/phase-4-design.md 0.4).
                     var fields = entry.Split(' ', 11);
                     if (fields.Length == 11)
                     {
                         unstaged.Add(new ChangedFile(fields[10], FileChangeKind.Conflicted));
+                        if (ConflictKindOf(fields[1]) is { } kind)
+                        {
+                            conflicts.Add(new ConflictEntry(
+                                fields[10],
+                                kind,
+                                IsSubmodule: fields[2].StartsWith('S'),
+                                BaseMode: fields[3],
+                                OursMode: fields[4],
+                                TheirsMode: fields[5],
+                                BaseId: fields[7],
+                                OursId: fields[8],
+                                TheirsId: fields[9]));
+                        }
                     }
 
                     break;
@@ -101,10 +121,19 @@ public sealed partial class GitRepository
 
         staged.Sort(ByPath);
         unstaged.Sort(ByPath);
-        return new WorkingTreeStatus(staged, unstaged, untracked);
+        conflicts.Sort((x, y) => string.CompareOrdinal(x.Path, y.Path));
+        return submodules.Count > 0
+            ? new WorkingTreeStatus(staged, unstaged, untracked) { Conflicts = conflicts, Submodules = submodules }
+            : new WorkingTreeStatus(staged, unstaged, untracked) { Conflicts = conflicts };
 
-        void AddEntry(string xy, string path, string? oldPath)
+        // sub is "N..." for a file, "S<c><m><u>" for a submodule.
+        void AddEntry(string xy, string sub, string path, string? oldPath)
         {
+            if (sub.StartsWith('S'))
+            {
+                submodules.Add(path);
+            }
+
             if (xy[0] != '.')
             {
                 var kind = KindOf(xy[0]);
@@ -126,6 +155,19 @@ public sealed partial class GitRepository
             'C' => FileChangeKind.Copied,
             'T' => FileChangeKind.TypeChanged,
             _ => FileChangeKind.Unknown,
+        };
+
+        // Git's seven unmerged states; any other pair keeps only the conflicted file entry.
+        static ConflictKind? ConflictKindOf(string xy) => xy switch
+        {
+            "UU" => ConflictKind.BothModified,
+            "AA" => ConflictKind.BothAdded,
+            "UD" => ConflictKind.DeletedByThem,
+            "DU" => ConflictKind.DeletedByUs,
+            "AU" => ConflictKind.AddedByUs,
+            "UA" => ConflictKind.AddedByThem,
+            "DD" => ConflictKind.BothDeleted,
+            _ => null,
         };
     }
 

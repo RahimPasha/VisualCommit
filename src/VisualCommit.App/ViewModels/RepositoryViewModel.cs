@@ -205,6 +205,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>The diff open in place of the graph, or null (D63).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDiffOpen))]
+    [NotifyPropertyChangedFor(nameof(ShowsGraph))]
+    [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
+    [NotifyPropertyChangedFor(nameof(ShowsDiff))]
     public partial DiffViewModel? Diff { get; private set; }
 
     public bool IsDiffOpen => Diff is not null;
@@ -272,6 +275,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             OnPropertyChanged(nameof(HasNoCommits));
 
             _started = true;
+            OnFirstLoadCompleted();
             if (_changedWhileStarting)
             {
                 await RefreshAsync();
@@ -425,7 +429,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>Selects the commit <paramref name="sha"/> in the graph; with <paramref name="reveal"/>, scrolls it into the middle of the view. An open diff closes.</summary>
     public void Select(string sha, bool reveal)
     {
-        CloseDiff();
+        CloseDiff(returnFocus: false);
         var index = Graph.IndexOf(sha);
         if (index < 0)
         {
@@ -462,10 +466,31 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     public void OnFrameDrawn(TimeSpan duration) =>
         (Graph.IsComplete ? _frameTimes : _loadingFrameTimes).Add(duration.TotalMilliseconds);
 
-    /// <summary>Opens a working-tree file's diff: unstaged or staged (D63).</summary>
+    /// <summary>
+    /// Opens a working-tree file's diff: unstaged or staged (D63). A conflicted file opens the
+    /// conflict resolver instead (docs/phase-4-design.md 11.1, D148); while the interactive list or
+    /// the resolver is open, they are left first (asking when changed).
+    /// </summary>
     public void OpenDiff(ChangedFile file, bool staged)
     {
         ArgumentNullException.ThrowIfNull(file);
+        if (!staged && file.Kind == FileChangeKind.Conflicted)
+        {
+            OpenResolver(file);
+            return;
+        }
+
+        if (IsInteractiveRebaseOpen || IsResolverOpen)
+        {
+            _ = OpenDiffAfterLeavingAsync(file, staged);
+            return;
+        }
+
+        ShowWorkingTreeDiff(file, staged);
+    }
+
+    private void ShowWorkingTreeDiff(ChangedFile file, bool staged)
+    {
         var target = new DiffTarget(
             staged ? DiffSide.Staged : DiffSide.Unstaged,
             file.Path,
@@ -477,13 +502,22 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Changes.ShowSelection(file.Path, staged);
     }
 
-    /// <summary>Closes the diff view and shows the graph again; the file row loses its selection.</summary>
-    public void CloseDiff()
+    /// <summary>
+    /// Closes the diff view and shows the graph again, or the interactive rebase's list it was
+    /// opened over, which takes the keyboard focus back (2.2); the file row loses its selection.
+    /// </summary>
+    public void CloseDiff() => CloseDiff(returnFocus: true);
+
+    private void CloseDiff(bool returnFocus)
     {
         if (Diff is { } diff)
         {
             Diff = null;
             diff.Dispose();
+            if (returnFocus)
+            {
+                InteractiveRebase?.RequestFocus();
+            }
         }
 
         Changes.ShowSelection(null, staged: false);
@@ -506,6 +540,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         _lifetime.Cancel();
         _watcher?.Dispose();
         Diff?.Dispose();
+        _resolver?.Dispose();
         LogFrameStatistics();
         _lifetime.Dispose();
     }
@@ -578,6 +613,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 var snapshot = await Repository.SaveSnapshotAsync(paths, cancellationToken);
                 await Repository.DiscardAsync(paths, untracked, cancellationToken);
                 await RememberDiscardAsync(snapshot, cancellationToken);
+
+                // The snapshot is a backup (design 9, D139): the clean-up follows, keeping it as
+                // the restore bar's (the review's finding 22).
+                await Operations.CleanUpBackupsAsync();
             });
     }
 
@@ -617,6 +656,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 _lastSnapshot = null;
                 _afterDiscard = null;
                 Changes.HideRestore();
+                if (changed.Count > 0)
+                {
+                    // The newer changes' snapshot is a backup too (D139).
+                    await Operations.CleanUpBackupsAsync();
+                }
             });
     }
 
@@ -713,6 +757,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 if (snapshot is not null)
                 {
                     await RememberDiscardAsync(snapshot, cancellationToken);
+                    await Operations.CleanUpBackupsAsync(); // As after a discard (D139).
                 }
             });
     }
@@ -849,6 +894,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         Changes.Update(status, HasHead);
         OnStatusApplied(status);
+        FollowStatusInGraphArea(status);
     }
 
     private async Task ShowStatusAsync(Task<WorkingTreeStatus> reading)
@@ -881,8 +927,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         var staged = diff.Target.Side == DiffSide.Staged;
         var list = staged ? Status.Staged : Status.Unstaged;
         var file = list.FirstOrDefault(candidate => candidate.Path == diff.Target.Path);
-        if (file is null)
+        if (file is null || file.Kind == FileChangeKind.Conflicted)
         {
+            // Gone from its list, or conflicted now: a conflicted file is the resolver's (11.1).
             CloseDiff();
             return;
         }
@@ -1104,6 +1151,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         };
         LeftPanel.Update(refs);
         Refs = refs;
+        InteractiveRebase?.ObserveRefs(refs);
     }
 
     private void SwapGraph(CommitGraphData data)

@@ -192,9 +192,13 @@ public sealed partial class RealApp : IDisposable
             startInfo.Environment.Remove(variable);
         }
 
-        // No askpass program, ssh command or proxy of this machine, and no auto-fetch, as in the
-        // scripted walk-through (D112).
+        // No askpass program, ssh command, editor or proxy of this machine, and no auto-fetch, as
+        // in the scripted walk-through (D112, D151).
         GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+
+        // The conflict resolver's caret does not blink, so that its pictures do not depend on the
+        // moment of the capture (docs/phase-4-design.md 11.3, D151).
+        startInfo.Environment["VISUALCOMMIT_CARET_BLINK"] = "0";
 
         // What the check itself asks for comes last.
         foreach (var (variable, value) in environment ?? new Dictionary<string, string?>())
@@ -505,7 +509,11 @@ public sealed partial class RealApp : IDisposable
     /// <summary>
     /// Presses a combination: the last key is pressed and released while the ones before it
     /// are held, for example <c>PressKeys(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_F)</c>
-    /// for Ctrl+F. The held keys are released even when the press fails.
+    /// for Ctrl+F. The held keys are released even when the press fails. A navigation key (an
+    /// arrow, Home, End, Page Up or Down, Insert, Delete) goes as its extended scan code, as the
+    /// keyboard's own keys do: FlaUI sends it as a virtual key without the extended flag, which
+    /// Windows takes for the number pad's key, and Shift with a number-pad arrow while Num Lock is
+    /// on cancels the Shift (Shift+Down moved the caret without selecting, phase 4's gate).
     /// </summary>
     public void PressKeys(params VirtualKeyShort[] keys)
     {
@@ -514,11 +522,35 @@ public sealed partial class RealApp : IDisposable
 
         using (Keyboard.Pressing(keys[..^1]))
         {
-            Keyboard.Type(keys[^1]);
+            if (ExtendedScanCode(keys[^1]) is { } scanCode)
+            {
+                Keyboard.PressScanCode(scanCode, isExtendedKey: true);
+                Keyboard.ReleaseScanCode(scanCode, isExtendedKey: true);
+            }
+            else
+            {
+                Keyboard.Type(keys[^1]);
+            }
         }
 
         WaitUntilIdle();
     }
+
+    /// <summary>The set-1 scan code of a key of the navigation cluster, which is an extended key; null for any other key.</summary>
+    private static ushort? ExtendedScanCode(VirtualKeyShort key) => key switch
+    {
+        VirtualKeyShort.UP => 0x48,
+        VirtualKeyShort.DOWN => 0x50,
+        VirtualKeyShort.LEFT => 0x4B,
+        VirtualKeyShort.RIGHT => 0x4D,
+        VirtualKeyShort.HOME => 0x47,
+        VirtualKeyShort.END => 0x4F,
+        VirtualKeyShort.PRIOR => 0x49,
+        VirtualKeyShort.NEXT => 0x51,
+        VirtualKeyShort.INSERT => 0x52,
+        VirtualKeyShort.DELETE => 0x53,
+        _ => null,
+    };
 
     /// <summary>Captures the client area from the screen, in real pixels.</summary>
     public Bitmap CaptureClient()

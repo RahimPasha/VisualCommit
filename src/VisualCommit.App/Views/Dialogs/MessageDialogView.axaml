@@ -1,0 +1,82 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.MessageDialogView"
+                  x:DataType="vm:MessageDialogViewModel"
+                  AutomationProperties.AutomationId="MessageDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The message dialog (docs/phase-4-design.md 7.2, 7.4) on the wide card (460): the summary
+       (32 high) with the counter of what is left of 72, the description (120 high, wrapping,
+       taking Return), Cancel and the confirm button, disabled with its reason while the summary
+       is blank. The boxes look as the stage panel's summary and description do. The summary takes
+       the focus with the caret at its end; Enter there confirms (DialogView's rule), Enter in the
+       description starts a new line, Esc cancels (the window's). -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="MessageDialogCard" Classes="dialogCard wide">
+      <StackPanel>
+        <TextBlock Name="MessageDialogTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="MessageDialogTitle" />
+        <TextBlock Name="DialogRepository"
+                   Classes="dialogRepository"
+                   Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
+                   AutomationProperties.AutomationId="DialogRepository" />
+        <Panel Height="32" Margin="0,12,0,0">
+          <TextBox Name="MessageSummary"
+                   Text="{Binding Summary}"
+                   PlaceholderText="Summary"
+                   Height="32"
+                   Padding="8,5,40,5"
+                   VerticalContentAlignment="Center"
+                   AutomationProperties.AutomationId="MessageSummary"
+                   AutomationProperties.Name="Summary" />
+          <TextBlock Name="MessageSummaryCounter"
+                     Classes="secondary"
+                     Classes.over="{Binding IsSummaryOverLimit}"
+                     Text="{Binding SummaryCounter}"
+                     HorizontalAlignment="Right"
+                     VerticalAlignment="Center"
+                     Margin="0,0,10,0"
+                     IsHitTestVisible="False"
+                     AutomationProperties.AutomationId="MessageSummaryCounter" />
+        </Panel>
+        <TextBox Name="MessageDescription"
+                 Text="{Binding Description}"
+                 PlaceholderText="Description"
+                 Height="120"
+                 Margin="0,8,0,0"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 VerticalContentAlignment="Top"
+                 AutomationProperties.AutomationId="MessageDescription"
+                 AutomationProperties.Name="Description" />
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  ToolTip.Tip="{Binding ConfirmToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <local:DialogView.Styles>
+    <Style Selector="TextBlock#MessageSummaryCounter.over">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

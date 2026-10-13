@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -8,7 +9,8 @@ namespace VisualCommit.Git;
 /// <summary>
 /// Phase 3's backup refs and the snapshots that join them (design 2.0, 2.11, 2.15, Q3, D83):
 /// one timestamp per operation, every ref in one <c>git update-ref --stdin</c> transaction, under
-/// <c>refs/visualcommit/backup/&lt;kind&gt;-&lt;UTC time&gt;[-&lt;n&gt;][/&lt;name&gt;]</c>.
+/// <c>refs/visualcommit/backup/&lt;kind&gt;-&lt;UTC time&gt;[-&lt;n&gt;][/&lt;name&gt;]</c>; and
+/// phase 4's clean-up of them (docs/phase-4-design.md section 9, D137, D139).
 /// </summary>
 public sealed partial class GitRepository
 {
@@ -18,11 +20,21 @@ public sealed partial class GitRepository
     /// <summary>How many names a batch tries before it gives up: the first, then the suffixes -2 to -20.</summary>
     private const int BackupAttempts = 20;
 
+    /// <summary>A backup's time in its name: UTC to the millisecond (D67).</summary>
+    private const string BackupTimeFormat = "yyyyMMdd'T'HHmmssfff'Z'";
+
     /// <summary>
-    /// The clock of the backup refs' timestamps. Tests set a fixed one to make two batches
-    /// collide (2.0's retry naming).
+    /// The clock of the backup refs' timestamps, the discard snapshots' included, and the clean-up's
+    /// "now". Tests set a fixed one to make two batches collide (2.0's retry naming) and to age
+    /// backups (section 9).
     /// </summary>
     internal TimeProvider BackupClock { get; set; } = TimeProvider.System;
+
+    /// <summary>
+    /// Called by the clean-up between its read of the backup refs and its deletion, for tests that
+    /// change a ref in between (section 9: the transaction then deletes nothing). Null in the app.
+    /// </summary>
+    internal Func<Task>? AfterBackupRefsRead { get; set; }
 
     public async Task<BackupResult> SaveBackupRefsAsync(BackupRequest request, CancellationToken cancellationToken = default)
     {
@@ -32,7 +44,7 @@ public sealed partial class GitRepository
         // One timestamp for the whole operation; a retry puts its suffix on the kind-and-time
         // part, never on the whole ref, so a "-changes" ref keeps its pair's name and a name with
         // slashes cannot clash with a folder of the same name (2.0).
-        var time = BackupClock.GetUtcNow().ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        var time = BackupClock.GetUtcNow().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
         var names = BackupNames(request.Entries);
         for (var attempt = 1; ; attempt++)
         {
@@ -492,5 +504,261 @@ public sealed partial class GitRepository
         }
 
         static string NulSeparated(IEnumerable<string> items) => string.Concat(items.Select(item => item + "\0"));
+    }
+
+    public async Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(retention);
+        ArgumentNullException.ThrowIfNull(keep);
+        ArgumentOutOfRangeException.ThrowIfNegative(retention.Days);
+        ArgumentOutOfRangeException.ThrowIfNegative(retention.Count);
+
+        var removed = await ChooseBackupsToCleanUpAsync(retention, keep, cancellationToken).ConfigureAwait(false);
+        if (removed.Count == 0)
+        {
+            return [];
+        }
+
+        if (AfterBackupRefsRead is { } hook)
+        {
+            await hook().ConfigureAwait(false);
+        }
+
+        // One transaction of "delete <ref> <old value>" lines: a ref changed since it was read
+        // fails the whole of it, and nothing is deleted.
+        var input = new StringBuilder();
+        foreach (var (backup, _) in removed)
+        {
+            foreach (var (refName, value) in backup.Refs)
+            {
+                input.Append("delete ").Append(refName).Append(' ').Append(value).Append('\n');
+            }
+        }
+
+        var command = new GitCommand("update-ref", "--stdin")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = (options ?? NetworkOptions.None).Environment,
+            StandardInput = input.ToString(),
+        };
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            _log.Warning($"{Name}: The backups' clean-up deleted nothing: {result.StandardError.Trim()}");
+            return [];
+        }
+
+        var removedBackups = new List<RemovedBackup>(removed.Count);
+        foreach (var (backup, reason) in removed)
+        {
+            var why = reason == BackupRemovalReason.OlderThanDays
+                ? $"older than {Count(retention.Days, "day")}"
+                : $"more than {Count(retention.Count, "backup")}";
+            _log.Info($"{Name}: Removed backup {backup.Name} ({why})");
+            removedBackups.Add(new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason));
+        }
+
+        return removedBackups;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<string>> FindBackupsToRemoveAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        NetworkOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(retention);
+        ArgumentNullException.ThrowIfNull(keep);
+        ArgumentOutOfRangeException.ThrowIfNegative(retention.Days);
+        ArgumentOutOfRangeException.ThrowIfNegative(retention.Count);
+        var removed = await ChooseBackupsToCleanUpAsync(retention, keep, cancellationToken).ConfigureAwait(false);
+        return [.. removed.Select(entry => entry.Backup.Name)];
+    }
+
+    /// <summary>
+    /// The read half of <see cref="CleanUpBackupsAsync"/>: nothing while an operation is in
+    /// progress in any worktree; otherwise the backups that go, by 9's rules, oldest first.
+    /// </summary>
+    private async Task<List<(Backup Backup, BackupRemovalReason Reason)>> ChooseBackupsToCleanUpAsync(
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        CancellationToken cancellationToken)
+    {
+        // The backup of an operation still in progress is never deleted: while any worktree has
+        // one, the whole clean-up waits for another time.
+        if (await OperationInProgressAnywhereAsync(cancellationToken).ConfigureAwait(false) is { } inProgress)
+        {
+            _log.Debug($"{Name}: The backups' clean-up waits: {inProgress}.");
+            return [];
+        }
+
+        var output = await ReadOutputAsync(cancellationToken, "for-each-ref", "--format=%(refname) %(objectname)", BackupRefPrefix).ConfigureAwait(false);
+        var now = BackupClock.GetUtcNow();
+        var backups = new Dictionary<string, Backup>(StringComparer.Ordinal);
+        foreach (var line in SplitLines(output))
+        {
+            var space = line.IndexOf(' ', StringComparison.Ordinal);
+            if (space < 0 || ParseBackupName(line[..space]) is not { } name)
+            {
+                // A ref under the prefix that fits no scheme is never deleted, and not counted.
+                continue;
+            }
+
+            if (!backups.TryGetValue(name.Backup, out var backup))
+            {
+                backup = new Backup(name.Backup, name.Kind, name.Number, name.When > now ? now : name.When);
+                backups.Add(name.Backup, backup);
+            }
+
+            backup.Refs.Add((line[..space], line[(space + 1)..]));
+        }
+
+        return ChooseBackupsToRemove(backups.Values, retention, keep, now);
+    }
+
+    /// <summary>
+    /// Which backups go (section 9): every one older than <see cref="BackupRetention.Days"/>, then,
+    /// while more than <see cref="BackupRetention.Count"/> remain, the oldest. A backup with a ref
+    /// in <paramref name="keep"/> never goes, but counts. Oldest first.
+    /// </summary>
+    private static List<(Backup Backup, BackupRemovalReason Reason)> ChooseBackupsToRemove(
+        IEnumerable<Backup> backups,
+        BackupRetention retention,
+        IReadOnlySet<string> keep,
+        DateTimeOffset now)
+    {
+        var oldestFirst = backups
+            .OrderBy(backup => backup.When)
+            .ThenBy(backup => backup.Number)
+            .ThenBy(backup => backup.Kind, StringComparer.Ordinal)
+            .ToList();
+        var removable = oldestFirst.Where(backup => !backup.Refs.Any(entry => keep.Contains(entry.Ref))).ToList();
+        var cutoff = now.AddDays(-retention.Days);
+        var removed = removable
+            .Where(backup => backup.When < cutoff)
+            .Select(backup => (backup, BackupRemovalReason.OlderThanDays))
+            .ToList();
+        var remaining = oldestFirst.Count - removed.Count;
+        foreach (var backup in removable.Where(backup => backup.When >= cutoff))
+        {
+            if (remaining <= retention.Count)
+            {
+                break;
+            }
+
+            removed.Add((backup, BackupRemovalReason.BeyondCount));
+            remaining--;
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// What makes the clean-up wait, or null: an operation in progress in any worktree of the
+    /// repository (section 9), in the main git folder (<see cref="CommonDirectory"/>) and every
+    /// <c>&lt;common&gt;/worktrees/*/</c>: <c>rebase-merge/</c>, <c>rebase-apply/</c>
+    /// (<c>git am</c> too), <c>MERGE_HEAD</c>, <c>sequencer/</c>, or a pick head. This worktree's
+    /// pick heads are read through <see cref="ReadPseudoRefAsync"/>, which also finds them as refs
+    /// under the reftable format; another worktree's are files, and under reftable, where they are
+    /// refs, a <c>MERGE_MSG</c> there (which every stopped pick or revert writes) counts as one.
+    /// </summary>
+    private async Task<string?> OperationInProgressAnywhereAsync(CancellationToken cancellationToken)
+    {
+        var folders = new List<string> { CommonDirectory };
+        var worktrees = Path.Combine(CommonDirectory, "worktrees");
+        if (Directory.Exists(worktrees))
+        {
+            folders.AddRange(Directory.EnumerateDirectories(worktrees).Order(StringComparer.Ordinal));
+        }
+
+        foreach (var folder in folders)
+        {
+            if (OperationInProgressIn(folder) is { } what)
+            {
+                return $"{what} is in progress in {folder}";
+            }
+        }
+
+        if (await ReadPseudoRefAsync("CHERRY_PICK_HEAD", cancellationToken).ConfigureAwait(false) is not null
+            || await ReadPseudoRefAsync("REVERT_HEAD", cancellationToken).ConfigureAwait(false) is not null)
+        {
+            return $"a cherry-pick or revert is in progress in {GitDirectory}";
+        }
+
+        var others = folders.Where(folder => !SameFolder(folder, GitDirectory) && File.Exists(Path.Combine(folder, "MERGE_MSG"))).ToList();
+        if (others.Count > 0 && await UsesReftableAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return $"a cherry-pick or revert may be in progress in {others[0]}";
+        }
+
+        return null;
+
+        static string? OperationInProgressIn(string folder) =>
+            Directory.Exists(Path.Combine(folder, "rebase-merge")) || Directory.Exists(Path.Combine(folder, "rebase-apply")) ? "a rebase"
+            : File.Exists(Path.Combine(folder, "MERGE_HEAD")) ? "a merge"
+            : Directory.Exists(Path.Combine(folder, "sequencer")) ? "a list of cherry-picks or reverts"
+            : File.Exists(Path.Combine(folder, "CHERRY_PICK_HEAD")) ? "a cherry-pick"
+            : File.Exists(Path.Combine(folder, "REVERT_HEAD")) ? "a revert"
+            : null;
+
+        static bool SameFolder(string one, string two) =>
+            string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(two)),
+                OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A backup ref's name read with section 9's pattern: the part after the prefix is
+    /// <c>&lt;kind&gt;-&lt;time&gt;[-&lt;n&gt;]</c>, then optionally <c>-changes</c> or
+    /// <c>/&lt;name&gt;</c>; a kind may have hyphens (<c>force-push</c>, <c>remote-branch</c>). Null
+    /// for a name that fits no scheme, or whose time is no real time.
+    /// </summary>
+    private static (string Backup, string Kind, int Number, DateTimeOffset When)? ParseBackupName(string refName)
+    {
+        if (!refName.StartsWith(BackupRefPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var match = BackupNamePattern().Match(refName[BackupRefPrefix.Length..]);
+        if (!match.Success
+            || !DateTimeOffset.TryParseExact(match.Groups["time"].Value, BackupTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var when)
+            || (match.Groups["n"].Success && !int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
+        {
+            return null;
+        }
+
+        var kind = match.Groups["kind"].Value;
+        var stem = $"{kind}-{match.Groups["time"].Value}";
+        return match.Groups["n"].Success
+            ? ($"{stem}-{match.Groups["n"].Value}", kind, int.Parse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture), when)
+            : (stem, kind, 1, when);
+    }
+
+    [GeneratedRegex(@"^(?<kind>[a-z]+(?:-[a-z]+)*)-(?<time>\d{8}T\d{9}Z)(?:-(?<n>\d+))?(?<rest>-changes|/.+)?$", RegexOptions.CultureInvariant)]
+    private static partial Regex BackupNamePattern();
+
+    /// <summary>One backup: the refs that share its kind, time and number (section 9).</summary>
+    private sealed class Backup(string name, string kind, int number, DateTimeOffset when)
+    {
+        /// <summary><c>&lt;kind&gt;-&lt;time&gt;[-&lt;n&gt;]</c>.</summary>
+        public string Name { get; } = name;
+
+        public string Kind { get; } = kind;
+
+        /// <summary>Its retry number (1 without one), which orders the backups of one millisecond.</summary>
+        public int Number { get; } = number;
+
+        /// <summary>The time in its name; a time later than now counts as now.</summary>
+        public DateTimeOffset When { get; } = when;
+
+        /// <summary>Its refs and the objects they held when read.</summary>
+        public List<(string Ref, string Value)> Refs { get; } = [];
     }
 }

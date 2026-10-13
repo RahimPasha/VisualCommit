@@ -53,8 +53,11 @@ public class RepositoryOperationsFilesTests
         using var app = await OperationsHarness.OpenAsync(repo);
         var conflicted = app.Operations.Status.Unstaged.Single(file => file.Kind == FileChangeKind.Conflicted);
 
+        // The file still has git's markers: phase 4 asks first (docs/phase-4-design.md 7.1, 7.2).
+        app.Dialogs.Confirm();
         await app.Operations.StageFilesAsync([conflicted]);
 
+        Assert.Equal("core.txt still has conflict markers.", Assert.Single(app.Dialogs.Confirmations).Title);
         Assert.Equal(string.Empty, (await repo.GitAsync("ls-files", "--unmerged")).StandardOutput);
         Assert.DoesNotContain(app.Operations.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted);
         Assert.Equal(InProgressKind.Merge, app.Operations.Status.InProgress.Kind);

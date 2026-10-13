@@ -31,9 +31,6 @@ public enum DiffBody
     /// <summary>A diff without hunks: "No changes to the file's content."</summary>
     Empty,
 
-    /// <summary>A conflicted file, which phase 4's resolver will show.</summary>
-    Conflict,
-
     /// <summary>The diff could not be read; <see cref="DiffViewModel.ErrorText"/> says why.</summary>
     Error,
 }
@@ -181,7 +178,7 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
     public FileDiff? TextDiff => Body == DiffBody.Text ? Diff : null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(ShowsVeryLarge), nameof(ShowsBinary), nameof(ShowsImage), nameof(ShowsEmpty), nameof(ShowsConflict), nameof(ShowsError), nameof(ShowsModeToggle), nameof(TextDiff), nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage))]
+    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(ShowsVeryLarge), nameof(ShowsBinary), nameof(ShowsImage), nameof(ShowsEmpty), nameof(ShowsError), nameof(ShowsModeToggle), nameof(TextDiff), nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage))]
     public partial DiffBody Body { get; private set; } = DiffBody.Loading;
 
     public bool ShowsText => Body == DiffBody.Text;
@@ -193,8 +190,6 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
     public bool ShowsImage => Body == DiffBody.Image;
 
     public bool ShowsEmpty => Body == DiffBody.Empty;
-
-    public bool ShowsConflict => Body == DiffBody.Conflict;
 
     public bool ShowsError => Body == DiffBody.Error;
 
@@ -272,13 +267,6 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
         Target = target;
         try
         {
-            if (target.Kind == FileChangeKind.Conflicted)
-            {
-                SetDiff(FileDiff.Empty);
-                Body = DiffBody.Conflict;
-                return;
-            }
-
             if (target.IsUntracked && target.Path.EndsWith('/'))
             {
                 // Git lists a repository inside the working tree as one untracked folder.

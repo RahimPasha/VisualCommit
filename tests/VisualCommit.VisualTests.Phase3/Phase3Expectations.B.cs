@@ -396,8 +396,13 @@ public static partial class Phase3Expectations
 
         private const string Sep = "—";
 
-        /// <summary>A commit's menu on main when the commit is already on it (checks 10 step 2, 11 step 2, 12 step 11).</summary>
-        public static string[] CommitMenuOnMain(string shortSha, string subject) =>
+        /// <summary>
+        /// A commit's menu on main when the commit is already on it, with phase 4's rebase items
+        /// (phase 4's report, "Phase 3's menus after phase 4"): OC2 for a commit below HEAD on
+        /// main's line (checks 10 steps 2 and 8, 12 step 11), OC3 for HEAD's own commit when
+        /// <paramref name="headsOwn"/> (check 11 step 2: "main has no commits after this one"); 284 high.
+        /// </summary>
+        public static string[] CommitMenuOnMain(string shortSha, string subject, bool headsOwn = false) =>
         [
             $"{shortSha} {subject}",
             "Check out this commit",
@@ -406,18 +411,22 @@ public static partial class Phase3Expectations
             Sep,
             "Cherry-pick onto main (disabled: \"This commit is already on main\")",
             "Revert this commit",
+            "Rebase main onto this commit (disabled: \"This commit is already on main\")",
+            headsOwn ? "Interactive rebase of main from here… (disabled: \"main has no commits after this one\")" : "Interactive rebase of main from here…",
             "Reset main to this commit…",
             Sep,
             "Copy SHA",
         ];
 
-        /// <summary>Check 8 step 2: the label feature/ff's menu (no upstream); 328 high.</summary>
+        /// <summary>Check 8 steps 2 and 4: the label feature/ff's menu (no upstream); 380 high (328 before phase 4).</summary>
         public static readonly string[] FeatureFfMenu =
         [
             "feature/ff",
             "Check out feature/ff",
             "Merge feature/ff into main",
             "Merge feature/ff into main (create a merge commit)",
+            "Rebase main onto feature/ff",
+            "Interactive rebase of main onto feature/ff…",
             Sep,
             "Push feature/ff…",
             Sep,
@@ -431,13 +440,15 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 8 step 6, the first menu: the remote branch origin/main, whose main is checked out; 241 high.</summary>
+        /// <summary>Check 8 step 6, the first menu: the remote branch origin/main, whose main is checked out; 293 high (241 before phase 4).</summary>
         public static readonly string[] RemoteMainMenu =
         [
             "origin/main",
             "Check out origin/main (disabled: \"main is already checked out\")",
             "Merge origin/main into main",
             "Merge origin/main into main (create a merge commit)",
+            "Rebase main onto origin/main (disabled: \"main is up to date with origin/main\")",
+            "Interactive rebase of main onto origin/main…",
             Sep,
             "Create branch here…",
             "Create tag here…",
@@ -447,13 +458,15 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 8 step 6, the second menu: the remote branch origin/feature/alpha; 241 high.</summary>
+        /// <summary>Check 8 step 6, the second menu: the remote branch origin/feature/alpha; 293 high (241 before phase 4).</summary>
         public static readonly string[] RemoteAlphaMenu =
         [
             "origin/feature/alpha",
             "Check out origin/feature/alpha",
             "Merge origin/feature/alpha into main",
             "Merge origin/feature/alpha into main (create a merge commit)",
+            "Rebase main onto origin/feature/alpha",
+            "Interactive rebase of main onto origin/feature/alpha…",
             Sep,
             "Create branch here…",
             "Create tag here…",
@@ -463,13 +476,15 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 9 step 5: the label feature/alpha's menu while the merge is stopped; 406 high.</summary>
+        /// <summary>Check 9 step 5: the label feature/alpha's menu while the merge is stopped; 458 high (406 before phase 4).</summary>
         public static readonly string[] AlphaMenuWhileMerging =
         [
             "feature/alpha",
             "Check out feature/alpha",
             "Merge feature/alpha into main (disabled: \"Finish or abort the merge first\")",
             "Merge feature/alpha into main (create a merge commit) (disabled: \"Finish or abort the merge first\")",
+            "Rebase main onto feature/alpha (disabled: \"Finish or abort the merge first\")",
+            "Interactive rebase of main onto feature/alpha… (disabled: \"Finish or abort the merge first\")",
             "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")",
             Sep,
             "Push feature/alpha to origin/feature/alpha",
@@ -486,10 +501,16 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 9b step 3: the conflicted src/core.txt's menu in the stage panel; 232 high.</summary>
+        /// <summary>
+        /// Check 9b step 3: the conflicted src/core.txt's menu in the stage panel, with phase 4's
+        /// "Resolve conflict" (highlighted) and "Open in merge tool" (no <c>merge.tool</c> set);
+        /// 284 high (232 before phase 4).
+        /// </summary>
         public static readonly string[] ConflictedFileMenu =
         [
             "core.txt",
+            "Resolve conflict",
+            "Open in merge tool (disabled: \"Set merge.tool in git's configuration to use a merge tool\")",
             "Mark as resolved",
             "Discard changes… (disabled: \"Resolve the conflict first\")",
             Sep,
@@ -501,37 +522,40 @@ public static partial class Phase3Expectations
             "Copy path",
         ];
 
-        /// <summary>Check 11 step 6: three commits, one of them on main; 119 high.</summary>
+        /// <summary>Check 11 step 6: three commits, one of them on main; 145 high (119 before phase 4).</summary>
         public static readonly string[] ThreeCommitsMenu =
         [
             "3 commits",
+            "Squash 3 commits… (disabled: \"Only commits of main can be squashed\")",
             "Cherry-pick 3 commits onto main (disabled: \"Some of these commits are already on main\")",
             "Revert 3 commits",
             Sep,
             "Copy SHAs",
         ];
 
-        /// <summary>Check 11 step 10: two commits that can be picked; 119 high.</summary>
+        /// <summary>Check 11 step 10 and check 11b step 2: two commits that can be picked; 145 high (119 before phase 4).</summary>
         public static readonly string[] TwoCommitsMenu =
         [
             "2 commits",
+            "Squash 2 commits… (disabled: \"Only commits of main can be squashed\")",
             "Cherry-pick 2 commits onto main",
             "Revert 2 commits",
             Sep,
             "Copy SHAs",
         ];
 
-        /// <summary>Check 12 step 4: the merge and "Main work"; 119 high.</summary>
+        /// <summary>Check 12 step 4: the merge and "Main work"; 145 high (119 before phase 4).</summary>
         public static readonly string[] MergeAndOtherMenu =
         [
             "2 commits",
+            "Squash 2 commits… (disabled: \"Merge commits cannot be squashed\")",
             "Cherry-pick 2 commits onto main (disabled: \"Merge commits and stashes cannot be cherry-picked\")",
             "Revert 2 commits (disabled: \"Revert merge commits one at a time\")",
             Sep,
             "Copy SHAs",
         ];
 
-        /// <summary>Check 12 step 5: the merge commit's menu; 232 high.</summary>
+        /// <summary>Check 12 step 5: the merge commit's menu (HEAD's own commit); 284 high (232 before phase 4).</summary>
         public static readonly string[] MergeCommitMenu =
         [
             "f19f50a Merge branch 'feature/alpha'",
@@ -541,12 +565,28 @@ public static partial class Phase3Expectations
             Sep,
             "Cherry-pick onto main (disabled: \"Merge commits cannot be cherry-picked here\")",
             "Revert this merge commit",
+            "Rebase main onto this commit (disabled: \"This commit is already on main\")",
+            "Interactive rebase of main from here… (disabled: \"main has no commits after this one\")",
             "Reset main to this commit…",
             Sep,
             "Copy SHA",
         ];
 
-        /// <summary>Check 32 step 2: the detached HEAD's commit menu; 232 high.</summary>
+        /// <summary>
+        /// Check 12 step 7: "Main work" and "Add core", a chain on main's linear line, so phase 4's
+        /// squash is enabled and highlighted first; the step still clicks "Revert 2 commits"; 145 high.
+        /// </summary>
+        public static readonly string[] TwoCommitsOnMainMenu =
+        [
+            "2 commits",
+            "Squash 2 commits…",
+            "Cherry-pick 2 commits onto main (disabled: \"Some of these commits are already on main\")",
+            "Revert 2 commits",
+            Sep,
+            "Copy SHAs",
+        ];
+
+        /// <summary>Check 32 step 2: the detached HEAD's commit menu; 284 high (232 before phase 4).</summary>
         public static readonly string[] DetachedCommitMenu =
         [
             "419190f Detached work",
@@ -556,18 +596,22 @@ public static partial class Phase3Expectations
             Sep,
             "Cherry-pick onto HEAD (disabled: \"This commit is already on HEAD\")",
             "Revert this commit",
+            "Rebase HEAD onto this commit (disabled: \"This commit is already on HEAD\")",
+            "Interactive rebase of HEAD from here… (disabled: \"HEAD has no commits after this one\")",
             "Reset HEAD to this commit…",
             Sep,
             "Copy SHA",
         ];
 
-        /// <summary>Check 32 step 3: main's menu while HEAD is detached; 406 high.</summary>
+        /// <summary>Check 32 step 3: main's menu while HEAD is detached on its child; 458 high (406 before phase 4).</summary>
         public static readonly string[] MainMenuWhileDetached =
         [
             "main",
             "Check out main",
             "Merge main into HEAD (disabled: \"Check out a branch to merge into\")",
             "Merge main into HEAD (create a merge commit) (disabled: \"Check out a branch to merge into\")",
+            "Rebase HEAD onto main (disabled: \"HEAD is up to date with main\")",
+            "Interactive rebase of HEAD onto main… (disabled: \"Check out a branch to rebase\")",
             "Fast-forward main to origin/main (disabled: \"main is up to date with origin/main\")",
             Sep,
             "Push main to origin/main",
@@ -595,14 +639,23 @@ public static partial class Phase3Expectations
 
         public const string RevertBanner = "Reverting 88d6b91 \"Main work\". 1 file has conflicts.";
 
-        /// <summary>Check 12 part E on a git that keeps REVERT_HEAD after an empty revert (D117's other case).</summary>
-        public const string EmptyRevertBanner = "Reverting 88d6b91 \"Main work\" changes nothing: it is already undone. Abort to go on.";
+        /// <summary>
+        /// Check 12 part E on a git that keeps REVERT_HEAD after an empty revert (D117's other
+        /// case), in phase 4's words (design 5.2: "Skip it to go on.").
+        /// </summary>
+        public const string EmptyRevertBanner = "Reverting 88d6b91 \"Main work\" changes nothing: it is already undone. Skip it to go on.";
 
-        /// <summary>The banner's tooltip (section 5), check 9 step 3.</summary>
-        public const string BannerToolTip = "Continue and Skip, and the conflict resolver, come in a later version. Resolve the files in your editor and stage them, or abort.";
+        /// <summary>The banner's tooltip of a merge (phase 4's design 10.3), check 9 step 3.</summary>
+        public const string BannerToolTip = "Continue commits the merge with the message in the stage panel. Abort puts main back where it was before the merge.";
 
-        /// <summary>The tooltip of a conflicted file's row in the stage panel (section 5).</summary>
-        public const string ConflictRowToolTip = "Conflict: resolve it in your editor, then stage it";
+        /// <summary>The tooltip of a conflicted file's row in the stage panel (phase 4's design 5.3).</summary>
+        public const string ConflictRowToolTip = "Conflict: click to resolve it";
+
+        /// <summary>The banner's Continue while one file conflicts (phase 4's design 10.4).</summary>
+        public const string ResolveConflictsFirst = "Resolve the conflicts first (1 file)";
+
+        /// <summary>The banner's Continue on an empty revert (phase 4's design 10.4), check 12 part E's alternative.</summary>
+        public const string RevertChangesNothing = "This revert changes nothing: skip it";
 
         public const string FinishMergeFirst = "Finish or abort the merge first";
 
@@ -652,6 +705,9 @@ public static partial class Phase3Expectations
         public const string AbortMergeQuestion = "Abort merging \"Merge branch 'feature/conflict'\"? Changes made to resolve conflicts are lost.";
         public const string AbortCherryPickTitle = "Abort the cherry-pick?";
         public const string AbortCherryPickQuestion = "Abort the cherry-pick? HEAD goes back to where it was before it started, and changes made to resolve conflicts are lost.";
+
+        /// <summary>Check 11b step 4: the pick of two is git's list (<c>sequencer/</c>), so the commits it made are dropped too (phase 4's report).</summary>
+        public const string AbortCherryPickListQuestion = AbortCherryPickQuestion + " Commits this cherry-pick already made are dropped too.";
         public const string AbortRevertTitle = "Abort the revert?";
         public const string AbortRevertQuestion = "Abort the revert? HEAD goes back to where it was before it started, and changes made to resolve conflicts are lost.";
         public const string LeaveTitle = "Leave these commits?";
@@ -671,7 +727,8 @@ public static partial class Phase3Expectations
         public const string StatusResetHard = "Reset main to 8beca34 (hard)";
         public const string StatusPickedAlphaOne = "Cherry-picked dff8fbf onto main";
         public const string StatusPickedTwo = "Cherry-picked 2 commits onto main";
-        public const string StatusPickStopped = "Cherry-picked 1 of 2 commits. 078ef05 stopped with conflicts in 1 file.";
+        /// <summary>Check 11b steps 2 and 3, in phase 4's words (design 10.2, a list stopped).</summary>
+        public const string StatusPickStopped = "Cherry-picked 1 of 2 commits; stopped at 078ef05 with conflicts in 1 file";
         public const string StatusAbortedPick = "Aborted the cherry-pick";
         public const string StatusRevertedMainWork = "Reverted 88d6b91";
         public const string StatusRevertedMerge = "Reverted f19f50a";
@@ -720,5 +777,8 @@ public static partial class Phase3Expectations
         public const string AbortMergeOperation = "Abort the merge";
         public const string ResetOperation = "Reset main";
         public const string CherryPickTwoOperation = "Cherry-pick 2 commits";
+
+        /// <summary>Check 12 step 7: phase 4's one git call for the two reverts, newest first (design section 4, D136).</summary>
+        public const string RevertTwoCommand = "git revert --no-edit " + Sha.MainWorkFull + " " + Sha.AddCoreFull;
     }
 }

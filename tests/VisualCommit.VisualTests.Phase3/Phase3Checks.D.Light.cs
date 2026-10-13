@@ -49,7 +49,11 @@ public sealed partial class Phase3ChecksD
         var shot = Shot(app, "27a-menu-light");
         Assert.Equal(PartD.AlphaTwoRow, graph.SelectedIndex);
         AssertMenu(menu, PartD.AlphaTwoMenu);
-        Assert.All(menu.Items, item => Assert.True(item.IsEnabled && !item.IsDestructive, $"\"{item.Label}\" is not an enabled ordinary item."));
+
+        // No longer "all enabled": phase 4's "Interactive rebase of main from here…" is disabled
+        // ("This commit is not on main"); none is destructive.
+        Assert.All(menu.Items, item => Assert.False(item.IsDestructive, $"\"{item.Label}\" is a destructive item."));
+        Assert.All(menu.Items.Where(item => item.Label != "Interactive rebase of main from here…"), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertHighlighted(menu, "Check out this commit");
         Assert.Equal(PartD.AlphaTwoMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
         AssertMenuShape(app, menu);
@@ -101,7 +105,9 @@ public sealed partial class Phase3ChecksD
         AssertStatus(app, PartD.MergeStopped, OperationStatusTone.Warning);
         Assert.Equal(Color.Parse("#B7791F"), palette.Warning);
         await AssertNoDialogAsync(app);
-        var banner = AssertBanner(app, PartD.MergeBanner, PartD.AbortMerge, oneLine: true);
+        // Phase 4's Continue (disabled while the file conflicts) joins Abort beside the text, and
+        // the banner keeps one line at 1920×1080 (phase 4's report, "Phase 3's banner").
+        var banner = AssertBanner(app, PartD.MergeBanner, PartD.AbortMerge, oneLine: true, continueButton: BannerButton.Disabled(PartD.ResolveConflictsFirst), buttonsBelow: false);
         var bannerControl = app.Window.GetVisualDescendants().OfType<Control>().Single(control => AutomationProperties.GetAutomationId(control) == "ConflictBanner");
         var bannerBorder = bannerControl.GetVisualDescendants().OfType<Border>().First();
         Assert.Equal(palette.BannerBackground, (bannerBorder.Background as ISolidColorBrush)?.Color);
@@ -134,8 +140,8 @@ public sealed partial class Phase3ChecksD
 
     /// <summary>
     /// Check 27 step 1's colours of the open menu in the light theme: its background, border and
-    /// shadow (brushes, and the background by pixel), the items' text, the header's, and the
-    /// highlighted item's background by pixel.
+    /// shadow (brushes, and the background by pixel), the items' text (a disabled item's in the
+    /// disabled colour), the header's, and the highlighted item's background by pixel.
     /// </summary>
     private static void AssertLightMenu(ShellDriver app, MenuSnapshot menu, Screenshot shot, Palette palette)
     {
@@ -144,7 +150,7 @@ public sealed partial class Phase3ChecksD
         Assert.Equal(palette.Border, (presenter.BorderBrush as ISolidColorBrush)?.Color);
         var root = presenter.GetVisualDescendants().OfType<Border>().First(border => border.Name == "LayoutRoot");
         Assert.Equal(BoxShadows.Parse(palette.MenuShadow), root.BoxShadow);
-        Assert.All(menu.Items, item => Assert.Equal(palette.TextPrimary, item.TextColor));
+        Assert.All(menu.Items, item => Assert.Equal(item.IsEnabled ? palette.TextPrimary : palette.TextDisabled, item.TextColor));
         var header = presenter.GetVisualDescendants().OfType<MenuItem>().Single(item => item.Classes.Contains("vcMenuHeader"));
         Assert.Equal(palette.TextSecondary, (header.Foreground as ISolidColorBrush)?.Color);
         AssertColour(palette.Panel, shot, new Point(menu.Bounds.Right - 20, menu.Bounds.Top + 16), "menu's background (the header row's right end)");

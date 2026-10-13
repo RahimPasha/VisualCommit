@@ -7,7 +7,9 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// Design 2.33's table as code (<see cref="OperationTexts"/>, D113): a representative set of its
 /// titles, running texts, error titles and summaries, the success and conflict messages of
-/// section 2 that the checks of docs/test-reports/phase-3.md expect, and the singular for one.
+/// section 2 that the checks of docs/test-reports/phase-3.md expect, and the singular for one; then
+/// phase 4's texts (docs/phase-4-design.md 10.1, 10.2 and Skip's question of 7.2) as
+/// OperationTexts.Rebase.cs and OperationTexts.Conflicts.cs hold them.
 /// </summary>
 public class OperationTextsTests
 {
@@ -143,22 +145,139 @@ public class OperationTextsTests
     }
 
     [Fact]
-    public void Several_commits_name_the_count_the_stopped_commit_and_the_ones_not_picked()
+    public void A_list_that_stops_names_what_was_applied_and_where_it_stopped()
     {
+        // Phase 4 runs a list as one git call (D136); its stops read as design 10.2 says.
         const string Stopped = "078ef05000000000000000000000000000000000";
-        const string Next = "b2c3d4e000000000000000000000000000000000";
 
         Assert.Equal(
-            "Cherry-picked 1 of 2 commits. 078ef05 stopped with conflicts in 1 file.",
-            OperationTexts.CherryPickSeveralStopped(1, 2, Stopped, 1, []));
+            "Cherry-picked 1 of 2 commits; stopped at 078ef05 with conflicts in 1 file",
+            OperationTexts.ListStoppedWithConflicts(InProgressKind.CherryPick, 1, 2, Stopped, 1));
         Assert.Equal(
-            "Cherry-picked 0 of 3 commits. 078ef05 stopped with conflicts in 2 files; not picked: b2c3d4e \"Alpha two\", a1b2c3d \"Add core\".",
-            OperationTexts.CherryPickSeveralStopped(0, 3, Stopped, 2, [(Next, "Alpha two"), (Sha, "Add core")]));
+            "Reverted 0 of 3 commits; stopped at 078ef05 with conflicts in 2 files",
+            OperationTexts.ListStoppedWithConflicts(InProgressKind.Revert, 0, 3, Stopped, 2));
+        Assert.Equal("Cherry-picked 2 of 3 commits; 078ef05 changes nothing", OperationTexts.ListStoppedEmpty(InProgressKind.CherryPick, 2, 3, Stopped));
+        Assert.Equal("Cherry-picked 0 of 1 commit; git could not pick 078ef05", OperationTexts.ListStoppedRefused(InProgressKind.CherryPick, 0, 1, Stopped));
+        Assert.Equal("Reverted 1 of 2 commits; git could not revert 078ef05", OperationTexts.ListStoppedRefused(InProgressKind.Revert, 1, 2, Stopped));
         Assert.Equal(
-            "Reverted 1 of 3 commits. 078ef05 stopped with conflicts in 1 file; not reverted: b2c3d4e \"Alpha two\".",
-            OperationTexts.RevertSeveralStopped(1, 3, Stopped, 1, [(Next, "Alpha two")]));
-        Assert.Equal("Cherry-picked 2 of 3 commits. Git could not cherry-pick 078ef05.", OperationTexts.CherryPickSeveralFailed(2, 3, Stopped));
-        Assert.Equal("Reverted 1 of 2 commits. Git could not revert 078ef05.", OperationTexts.RevertSeveralFailed(1, 2, Stopped));
+            "Git would overwrite your changes: commit or stash them first. Nothing was cherry-picked.",
+            OperationTexts.ListRefusedAtStart(InProgressKind.CherryPick));
+        Assert.Equal(
+            "Git would overwrite your changes: commit or stash them first. Nothing was reverted.",
+            OperationTexts.ListRefusedAtStart(InProgressKind.Revert));
+    }
+
+    [Fact]
+    public void Rebases_continue_skip_and_conflicts_have_the_texts_of_design_10_1()
+    {
+        Assert.Equal(
+            new OperationText("Rebase feature/topic onto main", "Rebasing feature/topic onto main…", "Rebase failed", "Rebase feature/topic onto main failed."),
+            OperationTexts.RebaseOnto("feature/topic", "main"));
+        Assert.Equal(
+            new OperationText("Check out feature/alpha and rebase it onto origin/main", "Checking out feature/alpha…", "Rebase failed", "Rebase feature/alpha onto origin/main failed."),
+            OperationTexts.CheckOutAndRebase("feature/alpha", "origin/main"));
+        Assert.Equal(
+            new OperationText("Interactive rebase of main", "Rebasing main…", "Interactive rebase failed", "Interactive rebase of main failed."),
+            OperationTexts.InteractiveRebase("main"));
+        Assert.Equal("Checking out feature/alpha…", OperationTexts.InteractiveRebaseWithCheckout("feature/alpha").RunningText);
+        Assert.Equal(
+            new OperationText("Squash 3 commits", "Squashing 3 commits…", "Squash failed", "Squash 3 commits failed."),
+            OperationTexts.Squash(3));
+        Assert.Equal(
+            new OperationText("Pull (rebase)", "Pulling origin/main into main…", "Pull failed", "Git could not pull origin/main into main."),
+            OperationTexts.PullRebase("origin/main", "main"));
+        Assert.Equal(
+            new OperationText("Continue the rebase", "Continuing the rebase…", "Continue failed", "Git could not continue the rebase."),
+            OperationTexts.Continue(InProgressKind.Rebase));
+        Assert.Equal("Continue the cherry-pick", OperationTexts.Continue(InProgressKind.CherryPick).Title);
+        Assert.Equal(
+            new OperationText("Skip a1b2c3d", "Skipping a1b2c3d…", "Skip failed", "Git could not skip a1b2c3d."),
+            OperationTexts.Skip(Sha));
+        Assert.Equal(
+            new OperationText("Resolve src/core.txt", "Resolving src/core.txt…", "Resolving failed", "src/core.txt could not be marked resolved."),
+            OperationTexts.Resolve("src/core.txt"));
+        Assert.Equal(
+            new OperationText("Merge tool for notes.txt", "Waiting for meld to close…", "Merge tool failed", "meld did not resolve notes.txt."),
+            OperationTexts.MergeTool("notes.txt", "meld"));
+
+        // The special summaries.
+        Assert.Equal("Git rebases only a clean working tree: commit or stash your changes first.", OperationTexts.RebaseNeedsCleanTree);
+        Assert.Equal("Untracked files are in the way: move or remove them first.", OperationTexts.RebaseUntrackedInTheWay);
+        Assert.Equal("main changed while the list was open: open it again. Nothing was rebased.", OperationTexts.ChangedWhileListOpen("main"));
+        Assert.Equal("main changed while this waited: select the commits again. Nothing was squashed.", OperationTexts.ChangedWhileSquashWaited("main"));
+        Assert.Equal("HEAD moved while this waited: select the commits again. Nothing was squashed.", OperationTexts.HeadMovedSinceSquash);
+        Assert.Equal(
+            "HEAD moved while this waited: it was on main and is on other now. Nothing was squashed.",
+            OperationTexts.HeadMoved(new HeadState("main", Sha), new HeadState("other", Sha), OperationTexts.NothingSquashed));
+        Assert.Equal(
+            "Stage or stash the other changed files first: git continues a rebase only when nothing else is unstaged",
+            OperationTexts.ContinueNeedsNothingUnstaged);
+        Assert.Equal("The rebase changed while this waited: look at it again. Nothing was continued.", OperationTexts.StateChangedWhileWaiting(InProgressKind.Rebase, OperationTexts.NothingContinued));
+    }
+
+    [Fact]
+    public void Rebases_continue_skip_and_conflicts_say_in_the_status_bar_what_design_10_2_says()
+    {
+        Assert.Equal("Rebased feature/topic onto main", OperationTexts.Rebased("feature/topic", "main"));
+        Assert.Equal("feature/topic is already up to date with main", OperationTexts.RebaseUpToDate("feature/topic", "main"));
+        Assert.Equal(
+            "Rebased feature/topic onto main; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.RebasedAutostashConflicted("feature/topic", "main"));
+        Assert.Equal(
+            "Rebased main: 2 commits; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.InteractiveRebased("main", 2)));
+        Assert.Equal(
+            "Squashed 2 commits into a1b2c3d; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.Squashed(2, Sha)));
+        Assert.Equal(
+            "Pulled and rebased main onto origin/main; your changes conflicted when put back: they are also kept in the stash",
+            OperationTexts.WithAutostashConflicted(OperationTexts.PulledRebased("main", "origin/main")));
+        Assert.Equal("Rebased main: 1 commit", OperationTexts.InteractiveRebased("main", 1));
+        Assert.Equal("Rebased main: 4 commits", OperationTexts.InteractiveRebased("main", 4));
+        Assert.Equal("Squashed 2 commits into a1b2c3d", OperationTexts.Squashed(2, Sha));
+        Assert.Equal("Rebase stopped: 1 file has conflicts", OperationTexts.RebaseStopped(1));
+        Assert.Equal("Rebase stopped: 2 files have conflicts", OperationTexts.RebaseStopped(2));
+        Assert.Equal("Rebase stopped at a1b2c3d \"Add core\"", OperationTexts.RebaseStoppedAt(Sha, "Add core"));
+        Assert.Equal("Merge committed", OperationTexts.ContinueDone(InProgressKind.Merge, "main", "x"));
+        Assert.Equal("Cherry-pick finished", OperationTexts.ContinueDone(InProgressKind.CherryPick, "main", "x"));
+        Assert.Equal("Revert finished", OperationTexts.ContinueDone(InProgressKind.Revert, "main", "x"));
+        Assert.Equal("Rebased feature/topic onto main", OperationTexts.ContinueDone(InProgressKind.Rebase, "feature/topic", "main"));
+        Assert.Equal("Skipped a1b2c3d", OperationTexts.Skipped(Sha));
+        Assert.Equal(
+            "Pulled and rebased main onto origin/main; git left out 1 commit that origin/main once had",
+            OperationTexts.PulledRebasedLeftOut("main", "origin/main", 1));
+        Assert.Equal(
+            "Pull stopped: 1 file has conflicts; git left out 2 commits that origin/main once had",
+            OperationTexts.WithLeftOutByForkPoint(OperationTexts.PullConflicts(1), "origin/main", 2));
+        Assert.Equal("Resolved notes.txt", OperationTexts.Resolved("notes.txt"));
+        Assert.Equal("Resolved notes.txt in meld", OperationTexts.ResolvedInTool("notes.txt", "meld"));
+        Assert.Equal("meld closed without resolving notes.txt", OperationTexts.ToolClosedWithoutResolving("meld", "notes.txt"));
+    }
+
+    [Fact]
+    public void Skip_asks_with_the_subject_the_kind_and_the_backup()
+    {
+        var question = OperationTexts.ConfirmSkip(new InProgressState(InProgressKind.Rebase, Sha, "Add core", "main", Sha, 0, false));
+
+        Assert.Equal(
+            ("Skip a1b2c3d?", "\"Add core\" is left out of the rebase, and changes made to resolve its conflicts are lost.", "A backup is saved first, so this can be undone.", "Skip", true),
+            (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
+        Assert.Contains("left out of the cherry-pick", OperationTexts.ConfirmSkip(new InProgressState(InProgressKind.CherryPick, Sha, "Add core", null, null, 0, false)).Question, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Skip_at_the_apps_failed_amend_asks_about_the_new_message_not_the_commit()
+    {
+        // The review's finding 18: Skip there keeps the commit with its old message (5.2's banner:
+        // "Skip goes on without it").
+        var state = new InProgressState(InProgressKind.Rebase, Sha, "Add login", "main", Sha, 0, false) { StopKind = RebaseStopKind.OwnAmendFailed, Group = 1 };
+
+        var question = OperationTexts.ConfirmSkip(state);
+
+        Assert.Equal(
+            ("Skip the new message of a1b2c3d?", "\"Add login\" keeps its old message, and the rebase goes on.", "A backup is saved first, so this can be undone.", "Skip", true),
+            (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
+        Assert.Contains("is left out of the rebase", OperationTexts.ConfirmSkip(state with { StopKind = RebaseStopKind.Pick }).Question, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -173,7 +292,7 @@ public class OperationTextsTests
         Assert.Equal("origin/published has commits that your published does not include. Pull or look at them before forcing.", OperationTexts.ForcePushStopped("origin/published", "published"));
         Assert.Equal("published on origin has changed since you last fetched. Fetch and look at it before deleting.", OperationTexts.RemoteBranchChanged("published", "origin"));
         Assert.Equal("origin has no tag v1.0, or its v1.0 is not the same as yours.", OperationTexts.RemoteTagDiffers("origin", "v1.0"));
-        Assert.Equal("a1b2c3d changes nothing on main: its changes are already there. Abort the cherry-pick to go on.", OperationTexts.CherryPickEmpty(Sha, "main"));
+        Assert.Equal("a1b2c3d changes nothing on main: its changes are already there. Skip it to go on.", OperationTexts.CherryPickEmpty(Sha, "main"));
         Assert.Equal("a1b2c3d changes nothing on main: it is already undone.", OperationTexts.RevertEmpty(Sha, "main"));
         Assert.Equal("Git could not fetch from origin and mirror.", OperationTexts.FetchFailed(["origin", "mirror"]));
         Assert.Equal("Git could not fetch from a, b and c.", OperationTexts.FetchFailed(["a", "b", "c"]));

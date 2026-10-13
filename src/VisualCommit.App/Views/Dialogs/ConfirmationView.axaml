@@ -27,6 +27,7 @@
                    AutomationProperties.AutomationId="DialogRepository" />
         <c:UrlTextBlock Name="ConfirmQuestion"
                    Text="{Binding Question}"
+                   IsVisible="{Binding HasQuestion}"
                    Margin="0,12,0,0"
                    TextWrapping="Wrap"
                    AutomationProperties.AutomationId="ConfirmQuestion" />
@@ -40,10 +41,10 @@
         <StackPanel Classes="dialogButtons">
           <Button Name="CancelButton"
                   Theme="{StaticResource VcActionButton}"
-                  Content="Cancel"
+                  Content="{Binding CancelText}"
                   Command="{Binding CancelCommand}"
                   AutomationProperties.AutomationId="CancelButton"
-                  AutomationProperties.Name="Cancel" />
+                  AutomationProperties.Name="{Binding CancelText}" />
           <Button Name="ConfirmButton"
                   Classes.danger="{Binding IsDestructive}"
                   Content="{Binding ConfirmText}"

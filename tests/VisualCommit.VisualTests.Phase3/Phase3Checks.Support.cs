@@ -42,9 +42,11 @@
 //   scripted run can measure (a label's centre, for check 7's drag) goes into the part's
 //   expectations as a constant that the scripted check asserts (±1) and the pass uses.
 // - Menus are asserted with AssertMenu (the report's notation), AssertHighlighted, AssertMenuShape
-//   and AssertMenuAtPointer; "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the
-//   input); the error dialog with AssertErrorDialogAsync (git's lines word for word only on
-//   Git 2.36); the status bar with AssertStatus and AssertBranch.
+//   and AssertMenuAtPointer (AssertMenuPlaced where phase 4's taller menus no longer fit below
+//   the pointer); "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the
+//   error dialog with AssertErrorDialogAsync (git's lines word for word only on Git 2.36); the
+//   in-progress banner with AssertBanner (its text, phase 4's Continue and Skip, Abort, and
+//   whether the buttons stand under the text); the status bar with AssertStatus and AssertBranch.
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Avalonia;
@@ -265,6 +267,32 @@ public abstract partial class Phase3Checks
     }
 
     /// <summary>
+    /// Asserts where a menu opened by the pointer at <paramref name="pointer"/> is, by 4a's placement
+    /// rule ("The menu", Placement), for a step that gives no position of its own: its top-left 2
+    /// right of and 2 below the pointer (<see cref="AssertMenuAtPointer"/>) when it fits there;
+    /// flipped to the left of the pointer (its right edge 2 left of it) when it would cross the
+    /// window's right edge, above it when it would cross the bottom; then kept 4 inside the window
+    /// (±2). Phase 4's items make some of phase 3's menus too high to fit below the pointer
+    /// (phase 4's report: "the position only where its expected result states it").
+    /// </summary>
+    protected static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(menu);
+        var window = app.Window.ClientSize;
+        var size = menu.Bounds.Size;
+        var gap = WindowLayout.MenuPointerGap;
+        var inset = WindowLayout.MenuEdgeInset;
+        var x = pointer.X + gap + size.Width > window.Width ? pointer.X - gap - size.Width : pointer.X + gap;
+        var y = pointer.Y + gap + size.Height > window.Height ? pointer.Y - gap - size.Height : pointer.Y + gap;
+        x = Math.Max(Math.Min(x, window.Width - inset - size.Width), inset);
+        y = Math.Max(Math.Min(y, window.Height - inset - size.Height), inset);
+        Assert.True(
+            Math.Abs(menu.Bounds.X - x) <= 2 && Math.Abs(menu.Bounds.Y - y) <= 2,
+            $"The menu's top-left is {menu.Bounds.TopLeft}; 4a places a {size} menu opened at {pointer} at ({x}, {y}).");
+    }
+
+    /// <summary>
     /// "No menu opens" / "no menu is open", as the conventions assert it: once the input is settled
     /// and the tab is idle, the menu layer has no menu (<c>Menu.IsOpen</c> false, <c>Current</c>
     /// null), no <c>Context menu opened</c> line was logged since <paramref name="logMark"/>
@@ -459,16 +487,35 @@ public abstract partial class Phase3Checks
     }
 
     /// <summary>
-    /// Asserts the in-progress banner (<c>ConflictBanner</c>, design section 5, D122): its text
-    /// (<c>BannerText</c>), its Abort button's label (<c>BannerAbortButton</c>; null for a banner
-    /// without one), and a height of at least 36, exactly 36 when <paramref name="oneLine"/> is
-    /// true (null: the check states no line count). Returns where the banner is.
+    /// Asserts the in-progress banner (<c>ConflictBanner</c>, design section 5, D122, with phase
+    /// 4's buttons: docs/phase-4-design.md 5.1 and 5.2, phase 4's report "Phase 3's banner"): its
+    /// text (<c>BannerText</c>); its Continue and Skip buttons (<c>BannerContinueButton</c>,
+    /// <c>BannerSkipButton</c>, labelled "Continue" and "Skip"), each shown as
+    /// <paramref name="continueButton"/> and <paramref name="skipButton"/> say (null: not shown),
+    /// enabled or disabled with its reason as its tooltip; its Abort button's label
+    /// (<c>BannerAbortButton</c>; null for a banner without one); the buttons left to right, 6
+    /// apart, the last 8 from the banner's right edge, beside the text or, when
+    /// <paramref name="buttonsBelow"/> is true, on a row of their own under it (5.2's layout; null:
+    /// the check states neither); and a height of at least 36, exactly 36 when
+    /// <paramref name="oneLine"/> is true (null: the check states no line count). Returns where the
+    /// banner is.
     /// </summary>
-    protected static Rect AssertBanner(ShellDriver app, string text, string? abortText, bool? oneLine = null)
+    protected static Rect AssertBanner(
+        ShellDriver app,
+        string text,
+        string? abortText,
+        bool? oneLine = null,
+        BannerButton? continueButton = null,
+        BannerButton? skipButton = null,
+        bool? buttonsBelow = null)
     {
         ArgumentNullException.ThrowIfNull(app);
+        app.Settle();
         var bounds = app.BannerBounds ?? throw new Xunit.Sdk.XunitException("No banner is shown.");
-        Assert.Equal(text, ((TextBlock)app.FindByAutomationId("BannerText")).Text);
+        var textBlock = (TextBlock)app.FindByAutomationId("BannerText");
+        Assert.Equal(text, textBlock.Text);
+        AssertBannerButton(app.BannerContinueButton, "Continue", continueButton);
+        AssertBannerButton(app.BannerSkipButton, "Skip", skipButton);
         var abort = (Button)app.FindByAutomationId("BannerAbortButton");
         Assert.Equal(abortText is not null, abort.IsEffectivelyVisible);
         if (abortText is not null)
@@ -476,13 +523,66 @@ public abstract partial class Phase3Checks
             Assert.Equal(abortText, abort.Content);
         }
 
+        var shown = new[] { app.BannerContinueButton, app.BannerSkipButton, abort }.Where(button => button.IsEffectivelyVisible).Select(app.BoundsOf).ToList();
+        for (var i = 1; i < shown.Count; i++)
+        {
+            Assert.True(
+                Math.Abs(shown[i].Left - shown[i - 1].Right - 6) < 0.5 && Math.Abs(shown[i].Top - shown[i - 1].Top) < 0.5,
+                $"The banner's buttons are not in a row 6 apart: {string.Join(", ", shown)}.");
+        }
+
+        if (shown.Count > 0)
+        {
+            Assert.True(Math.Abs(bounds.Right - 8 - shown[^1].Right) < 0.5, $"The banner's last button ends at {shown[^1].Right}, not 8 from the banner's right edge {bounds.Right}.");
+            if (buttonsBelow is { } below)
+            {
+                var layout = textBlock.GetVisualAncestors().OfType<VisualCommit.App.Views.Shell.BannerLayoutPanel>().First();
+                Assert.True(below == layout.ButtonsBelow, below ? "The banner's buttons stand beside its text, not under it." : "The banner's buttons stand under its text, not beside it.");
+                var textBounds = app.BoundsOf(textBlock);
+                Assert.True(
+                    below ? shown[0].Top >= textBounds.Bottom - 0.5 : shown[0].Left >= textBounds.Right - 0.5,
+                    $"The buttons at {shown[0]} are not {(below ? "under" : "beside")} the text at {textBounds}.");
+            }
+        }
+
         Assert.True(bounds.Height >= WindowLayout.BannerMinHeight - 0.5, $"The banner is {bounds.Height} high, less than 36 (D122).");
         if (oneLine is { } single)
         {
-            Assert.Equal(single, Math.Abs(bounds.Height - WindowLayout.BannerMinHeight) < 0.5);
+            Assert.True(single == Math.Abs(bounds.Height - WindowLayout.BannerMinHeight) < 0.5, $"The banner is {bounds.Height} high: {(single ? "not one line" : "one line")}.");
         }
 
         return bounds;
+    }
+
+    /// <summary>One of the banner's Continue and Skip as a check expects it (null: not shown): its label, enabled or not, and its reason as its tooltip, shown while disabled.</summary>
+    private static void AssertBannerButton(Button button, string label, BannerButton? expected)
+    {
+        Assert.True((expected is not null) == button.IsEffectivelyVisible, $"The banner's {label} is {(button.IsEffectivelyVisible ? "shown" : "not shown")}.");
+        if (expected is null)
+        {
+            return;
+        }
+
+        Assert.Equal(label, button.Content);
+        Assert.True(expected.IsEnabled == button.IsEffectivelyEnabled, $"The banner's {label} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")}.");
+        Assert.Equal(expected.DisabledReason, ToolTip.GetTip(button) as string);
+        Assert.True(ToolTip.GetShowOnDisabled(button), $"The banner's {label} does not show its tooltip while disabled.");
+    }
+
+    /// <summary>
+    /// The banner's Continue or Skip as a check expects it (docs/phase-4-design.md 5.1): enabled
+    /// (<see cref="Enabled"/>), or disabled with its reason (10.4) as its tooltip.
+    /// </summary>
+    protected sealed record BannerButton(string? DisabledReason)
+    {
+        /// <summary>Shown and enabled, with no tooltip.</summary>
+        public static BannerButton Enabled { get; } = new((string?)null);
+
+        /// <summary>Whether the button is enabled.</summary>
+        public bool IsEnabled => DisabledReason is null;
+
+        /// <summary>Shown and disabled, with <paramref name="reason"/> as its tooltip.</summary>
+        public static BannerButton Disabled(string reason) => new(reason);
     }
 
     /// <summary>Asserts that no text in the window is cut off, except shortened text that shows the whole in its tooltip (phase 2's rule).</summary>

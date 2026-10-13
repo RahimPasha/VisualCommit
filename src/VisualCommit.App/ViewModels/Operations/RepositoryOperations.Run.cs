@@ -29,6 +29,12 @@ public sealed record RunOptions
     /// <summary>A local operation of several git calls (<see cref="GitOperation.HasSeveralSteps"/>, 1.8).</summary>
     public bool HasSeveralSteps { get; init; }
 
+    /// <summary>
+    /// A local operation that only waits for another program and can be cancelled
+    /// (<see cref="GitOperation.CanBeCancelled"/>: the merge tool, docs/phase-4-design.md 11.9, D149).
+    /// </summary>
+    public bool CanBeCancelled { get; init; }
+
     /// <summary>The operation's <see cref="GitOperation.Prompts"/>; null for the queue's default (Ask).</summary>
     public PromptMode? Prompts { get; init; }
 
@@ -73,6 +79,9 @@ public sealed partial class RepositoryOperations
 
     /// <summary>The queue's tasks whose result a caller of <see cref="RunAsync"/> shows: a deduplicated second call does not show it again.</summary>
     private readonly ConditionalWeakTable<Task<OperationResult>, OperationText> _resultsShown = new();
+
+    /// <summary>Set while an operation of <see cref="RunAsync"/> runs: <see cref="SaveBackupAsync"/> marks it, and the operation then ends with the backups' clean-up (D139).</summary>
+    private readonly AsyncLocal<StrongBox<bool>?> _backupSaved = new();
 
     // The repository's state.
 
@@ -272,15 +281,32 @@ public sealed partial class RepositoryOperations
 
         // The operation's id, for the git call a "<Title> cancelled" dialog of lock files names (1.8, 4f).
         string? operationId = null;
-        var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, context =>
+        var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, async context =>
         {
             operationId = context.OperationId;
-            return run(context);
+
+            // An operation that saved a backup (SaveBackupAsync) ends with the backups' clean-up,
+            // inside it, after its work, whether the work succeeded or not (docs/phase-4-design.md
+            // section 9, D139): a rebase git refused still leaves its backup.
+            var saved = new StrongBox<bool>();
+            _backupSaved.Value = saved;
+            try
+            {
+                return await run(context);
+            }
+            finally
+            {
+                if (saved.Value)
+                {
+                    await CleanUpBackupsAsync();
+                }
+            }
         })
         {
             DedupeKey = options.DedupeKey,
             HasSeveralSteps = options.HasSeveralSteps,
             Prompts = options.Prompts,
+            CanBeCancelled = options.CanBeCancelled,
         };
         // A second call with the dedupe key of a waiting or running operation gets that
         // operation's task (1.2): only the first caller shows its result, so a failure opens one
@@ -345,7 +371,31 @@ public sealed partial class RepositoryOperations
 
         var saved = await Git.SaveBackupRefsAsync(request, CancellationToken.None);
         Log.Info($"{Repository.Name}: saved the backup {string.Join(", ", saved.Refs)}");
+        if (_backupSaved.Value is { } flag)
+        {
+            flag.Value = true;
+        }
+
         return saved;
+    }
+
+    /// <summary>
+    /// The backups' clean-up after an operation that saved a backup (docs/phase-4-design.md
+    /// section 9, D139): the backups older than 30 days, then the oldest beyond 50, never the
+    /// restore bar's snapshot (<see cref="RepositoryViewModel.BackupsToKeep"/>). It never fails the
+    /// operation and shows nothing: the git layer logs each backup it removed, or why it waits;
+    /// a failure is logged at Warning.
+    /// </summary>
+    public async Task CleanUpBackupsAsync()
+    {
+        try
+        {
+            await Git.CleanUpBackupsAsync(BackupRetention.Default, Repository.BackupsToKeep, options: null, cancellationToken: CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"{Repository.Name}: the backups' clean-up failed; the backups stay.", ex);
+        }
     }
 
     /// <summary>

@@ -36,4 +36,30 @@ public class ConfirmationViewTests
         Assert.True(dialogs.CancelCurrent());
         Assert.False(await asking);
     }
+
+    [AvaloniaFact]
+    public async Task The_cancel_button_says_Cancel_unless_the_question_names_its_own()
+    {
+        // Phase 4's questions about leaving changed work say "Keep editing" (docs/phase-4-design.md 7.2).
+        var dialogs = new DialogHostViewModel();
+        var plain = dialogs.ConfirmAsync(new ConfirmationRequest("Discard changes?", "Discard the changes to a.txt?", string.Empty, "Discard"));
+        var view = new ConfirmationView { DataContext = dialogs.Current };
+        using (DiffHost.Show(view, 800, 600, ThemeVariant.Dark))
+        {
+            var cancel = view.FindControl<Button>("CancelButton")!;
+            Assert.Equal(("Cancel", "Cancel"), (cancel.Content, Avalonia.Automation.AutomationProperties.GetName(cancel)));
+            Assert.True(dialogs.CancelCurrent());
+            Assert.False(await plain);
+        }
+
+        var leaving = dialogs.ConfirmAsync(new ConfirmationRequest("Discard the changes to this list?", string.Empty, string.Empty, "Discard") { CancelText = "Keep editing" });
+        view = new ConfirmationView { DataContext = dialogs.Current };
+        using (DiffHost.Show(view, 800, 600, ThemeVariant.Dark))
+        {
+            var cancel = view.FindControl<Button>("CancelButton")!;
+            Assert.Equal(("Keep editing", "Keep editing"), (cancel.Content, Avalonia.Automation.AutomationProperties.GetName(cancel)));
+            Assert.True(dialogs.CancelCurrent());
+            Assert.False(await leaving);
+        }
+    }
 }

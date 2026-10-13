@@ -11,7 +11,10 @@ panel lists branches, remotes, tags and stashes with ahead/behind counts and a f
 panel shows a commit's message and changed files, and changes made in a terminal appear by
 themselves. It stages and commits by file, hunk and line, and runs branch, merge, reset,
 cherry-pick, revert, fetch, pull, push, stash and tag operations from context menus,
-drag-and-drop and the toolbar. Rebase and the conflict resolver come next.
+drag-and-drop and the toolbar. It rebases (from the menus, by dragging a branch, or
+interactively: reorder, squash, fixup, reword, drop), continues, skips or aborts what git stopped,
+and resolves conflicts in its own resolver or an external merge tool. History, blame and undo come
+next.
 [docs/status.md](docs/status.md) says which phase is being built and [docs/plan.md](docs/plan.md)
 what each phase adds.
 
@@ -29,7 +32,7 @@ dotnet test
 
 `dotnet test` runs the unit and integration tests and a scripted walk-through of the whole app in
 a headless window; it saves screenshots under `artifacts/visual/`. It does not open a window and
-does not touch your settings. It takes about 20 minutes on the development laptop, and the first run builds a 100,000-commit
+does not touch your settings. It takes about 22 minutes on the development laptop, and the first run builds a 100,000-commit
 test repository in the temporary folder, which later runs reuse. The tests need Git 2.32 or
 newer. All commands, including the Windows-only real-window test pass, are
 listed in [CLAUDE.md](CLAUDE.md#commands).

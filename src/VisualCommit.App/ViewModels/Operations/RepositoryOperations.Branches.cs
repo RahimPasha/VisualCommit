@@ -1,6 +1,9 @@
 // Branches and history: docs/phase-3-design.md 2.0 to 2.15, 2.31, 4g's "Check out and merge",
 // section 5's Abort, and their texts in 2.33 (OperationTexts), built by WP7-branches on the helpers
 // of RepositoryOperations.Run.cs. Its tests are tests/VisualCommit.App.Tests/RepositoryOperations{Checkout,Branches,Merge,History}Tests.cs.
+// Phase 4 (WP4) picks and reverts several commits with one git call that takes the list
+// (docs/phase-4-design.md section 4, D136) and has Abort check out again the branch a "Check out
+// and rebase" left (1.3).
 
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
@@ -455,8 +458,38 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var current = HeadName;
         var seen = Refs?.Head;
         var text = OperationTexts.CherryPickSeveral(count);
-        FailureDisplay? display = null;
-        return GuardAsync(text, () => RunAsync(
+        return GuardAsync(text, () => RunListAsync(
+            text,
+            InProgressKind.CherryPick,
+            seen,
+            OperationTexts.NothingCherryPicked,
+            options => Git.CherryPickAsync(ordered, options),
+            OperationTexts.CherryPickedSeveral(count, current)));
+    }
+
+    /// <summary>
+    /// Several picks or reverts with one git call that takes the whole list (docs/phase-4-design.md
+    /// section 4, D136, D145): refused while an operation is in progress or HEAD moved since the
+    /// click; then <paramref name="apply"/> and how it ended, read from git's files: all applied
+    /// (<paramref name="done"/>), stopped with conflicts ("Cherry-picked {K} of {N} commits;
+    /// stopped at {short} with conflicts in {M} files"), on a commit that changes nothing ("…;
+    /// {short} changes nothing"), or on one git could not apply without a conflict ("…; git could
+    /// not pick {short}"), the last also in the error dialog "Cherry-pick stopped" with git's output
+    /// and the banner's text (5.1). Every stop is in the warning colour and leaves the rest in
+    /// git's list for the banner's Continue. A list git refused at its start was cleared by the
+    /// git layer with <c>--quit</c>, which keeps the user's changes: "Git would overwrite your
+    /// changes: commit or stash them first. Nothing was cherry-picked."
+    /// </summary>
+    private async Task RunListAsync(
+        OperationText text,
+        InProgressKind kind,
+        HeadState? seen,
+        string nothing,
+        Func<NetworkOptions, Task<SequenceResult>> apply,
+        string done)
+    {
+        var notice = new StopNotice();
+        await RunAsync(
             text,
             OperationKind.Local,
             RefreshScope.Refs,
@@ -467,42 +500,42 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     return refusal;
                 }
 
-                if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingCherryPicked) is { } moved)
+                if (await RefuseIfHeadMovedAsync(text, seen, nothing) is { } moved)
                 {
                     return moved;
                 }
 
-                // One git cherry-pick per commit, never git's sequencer (2.13, D88).
-                var options = NetworkOptions.From(context);
-                for (var done = 0; done < count; done++)
+                var result = await apply(NetworkOptions.From(context));
+                if (result.Stop == SequenceStop.None)
                 {
-                    var sha = ordered[done];
-                    ApplyResult result;
-                    try
-                    {
-                        result = await Git.CherryPickAsync(sha, options);
-                    }
-                    catch (GitException failure)
-                    {
-                        return Failed(text, FailureOf(failure, OperationTexts.CherryPickSeveralFailed(done, count, sha)));
-                    }
-
-                    switch (result)
-                    {
-                        case ApplyResult.Conflicts:
-                            var conflicts = await CountConflictedFilesAsync();
-                            var rest = await DescribeCommitsAsync(ordered.Skip(done + 1));
-                            return OperationReport.Conflicts(OperationTexts.CherryPickSeveralStopped(done, count, sha, conflicts, rest));
-
-                        case ApplyResult.Empty:
-                            display = new FailureDisplay(OperationTexts.CherryPickStoppedTitle, OperationTexts.CherryPickSeveralEmpty(done, count, sha, current));
-                            return Failed(text, FailureOfLastCall(context, command => IsCallOn(command, "cherry-pick", sha), display.Summary));
-                    }
+                    return OperationReport.Done(done);
                 }
 
-                return OperationReport.Done(OperationTexts.CherryPickedSeveral(count, current));
+                var (state, conflicts) = await FreshStateAsync();
+                var sha = state.Commit ?? string.Empty;
+                switch (result.Stop)
+                {
+                    case SequenceStop.Empty:
+                        return OperationReport.Conflicts(OperationTexts.ListStoppedEmpty(kind, result.Applied, result.Total, sha));
+
+                    case SequenceStop.Refused:
+                        var summary = ConflictBannerViewModel.TextFor(state, conflicts) ?? OperationTexts.ListStoppedRefused(kind, result.Applied, result.Total, sha);
+                        notice.Display = new FailureDisplay(kind == InProgressKind.Revert ? OperationTexts.RevertStoppedTitle : OperationTexts.CherryPickStoppedTitle, summary);
+                        notice.Failure = FailureOfLastCall(context, command => command.StartsWith($"git {(kind == InProgressKind.Revert ? "revert" : "cherry-pick")} ", StringComparison.Ordinal), summary);
+                        return OperationReport.Conflicts(OperationTexts.ListStoppedRefused(kind, result.Applied, result.Total, sha));
+
+                    default:
+                        return OperationReport.Conflicts(OperationTexts.ListStoppedWithConflicts(kind, result.Applied, result.Total, sha, conflicts));
+                }
             },
-            new RunOptions { HasSeveralSteps = true, DescribeFailure = _ => display }));
+            new RunOptions
+            {
+                HasSeveralSteps = true,
+                DescribeFailure = failure => failure.GitOutput.Contains("would be overwritten", StringComparison.Ordinal)
+                    ? new FailureDisplay(text.ErrorTitle, OperationTexts.ListRefusedAtStart(kind))
+                    : null,
+            });
+        await FinishAsync(notice, new SelectionAfter());
     }
 
     /// <inheritdoc cref="IRepositoryActions.RevertAsync"/>
@@ -563,71 +596,28 @@ public sealed partial class RepositoryOperations : IInProgressActions
         }
 
         var count = ordered.Count;
-        var current = HeadName;
         var seen = Refs?.Head;
         var text = OperationTexts.RevertSeveral(count);
         return GuardAsync(text, async () =>
         {
-            var merges = new HashSet<string>(StringComparer.Ordinal);
             foreach (var sha in ordered)
             {
                 if (await IsMergeAsync(sha))
                 {
-                    merges.Add(sha);
+                    // The menu disables it ("Revert merge commits one at a time", section 4).
+                    Log.Info($"{Repository.Name}: {text.Title}: not started, {OperationTexts.Short(sha)} is a merge commit.");
+                    return;
                 }
             }
 
-            await RunAsync(
+            // One git revert of the whole list, newest first (D136).
+            await RunListAsync(
                 text,
-                OperationKind.Local,
-                RefreshScope.Refs,
-                async context =>
-                {
-                    if (await RefuseWhileInProgressAsync(text) is { } refusal)
-                    {
-                        return refusal;
-                    }
-
-                    if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
-                    {
-                        return moved;
-                    }
-
-                    // One git revert per commit, newest first, never git's sequencer (2.14).
-                    var options = NetworkOptions.From(context);
-                    for (var done = 0; done < count; done++)
-                    {
-                        var sha = ordered[done];
-                        ApplyResult result;
-                        try
-                        {
-                            result = await Git.RevertAsync(sha, merges.Contains(sha), options);
-                        }
-                        catch (GitException failure) when (ChangesNothing(failure))
-                        {
-                            return Failed(text, FailureOf(failure, OperationTexts.RevertSeveralEmpty(done, count, sha, current)));
-                        }
-                        catch (GitException failure)
-                        {
-                            return Failed(text, FailureOf(failure, OperationTexts.RevertSeveralFailed(done, count, sha)));
-                        }
-
-                        switch (result)
-                        {
-                            case ApplyResult.Conflicts:
-                                var conflicts = await CountConflictedFilesAsync();
-                                var rest = await DescribeCommitsAsync(ordered.Skip(done + 1));
-                                return OperationReport.Conflicts(OperationTexts.RevertSeveralStopped(done, count, sha, conflicts, rest));
-
-                            case ApplyResult.Empty:
-                                // As one revert that changes nothing: a stop the banner shows, no dialog (D117).
-                                return OperationReport.Conflicts(OperationTexts.RevertSeveralEmpty(done, count, sha, current));
-                        }
-                    }
-
-                    return OperationReport.Done(OperationTexts.RevertedSeveral(count));
-                },
-                new RunOptions { HasSeveralSteps = true });
+                InProgressKind.Revert,
+                seen,
+                OperationTexts.NothingReverted,
+                options => Git.RevertAsync(ordered, options),
+                OperationTexts.RevertedSeveral(count));
         });
     }
 
@@ -645,14 +635,30 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
         return GuardAsync(OperationTexts.Abort(state.Kind), async () =>
         {
-            if (await ConfirmAsync(ConflictBannerViewModel.AbortConfirmation(state, HasSequencer())))
+            if (await ConfirmAsync(AbortConfirmation(state)))
             {
                 await AbortAsync(state);
             }
         });
     }
 
+    /// <summary>
+    /// The banner's Abort question for <paramref name="state"/> (section 5, D110), with the
+    /// branch a rebase begun with "Check out {A} and rebase it" checks out again (1.3, 14.3).
+    /// </summary>
+    public ConfirmationRequest AbortConfirmation(InProgressState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var returnBranch = state.Kind == InProgressKind.Rebase && ReadReturnBranch() is { } fullRef ? ShortName(fullRef) : null;
+        return ConflictBannerViewModel.AbortConfirmation(state, returnBranch);
+    }
+
     /// <inheritdoc cref="IInProgressActions.AbortAsync"/>
+    /// <remarks>
+    /// A rebase that "Check out {A} and rebase it onto {B}" began checks out again the branch the
+    /// user was on (<see cref="ReturnFileName"/>, read before git's abort, 1.3), so that
+    /// everything is where it was.
+    /// </remarks>
     public Task AbortAsync(InProgressState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -662,16 +668,43 @@ public sealed partial class RepositoryOperations : IInProgressActions
         }
 
         var text = OperationTexts.Abort(state.Kind);
-        return GuardAsync(text, () => RunAsync(text, OperationKind.Local, RefreshScope.Refs, async context =>
-        {
-            // abort-<time> keeps HEAD, so commits a sequence already made stay reachable; the
-            // -changes snapshot keeps what was done to resolve the conflicts (2.0, 2.15).
-            var head = await Git.ResolveAsync("HEAD");
-            var changes = await Git.SnapshotTrackedChangesAsync();
-            await SaveBackupAsync(new BackupRequest("abort", head is null ? [] : [new BackupEntry(null, head)]) { ChangesCommit = changes });
-            await Git.AbortAsync(state.Kind, NetworkOptions.From(context));
-            return OperationReport.Done(OperationTexts.Aborted(state.Kind));
-        }));
+        FailureDisplay? display = null;
+        return GuardAsync(text, () => RunAsync(
+            text,
+            OperationKind.Local,
+            RefreshScope.Refs,
+            async context =>
+            {
+                var options = NetworkOptions.From(context);
+                var returnBranch = state.Kind == InProgressKind.Rebase ? ReadReturnBranch() : null;
+
+                // abort-<time> keeps HEAD, so commits a sequence already made stay reachable; the
+                // -changes snapshot keeps what was done to resolve the conflicts (2.0, 2.15).
+                var head = await Git.ResolveAsync("HEAD");
+                var changes = await Git.SnapshotTrackedChangesAsync();
+                await SaveBackupAsync(new BackupRequest("abort", head is null ? [] : [new BackupEntry(null, head)]) { ChangesCommit = changes });
+                await Git.AbortAsync(state.Kind, options);
+
+                if (returnBranch is not null && ShortName(returnBranch) is var branch
+                    && !string.Equals((await Git.ReadHeadAsync()).BranchName, branch, StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        await Git.CheckoutBranchAsync(branch, options);
+                    }
+                    catch (GitException checkoutFailure)
+                    {
+                        // The rebase is aborted; only the way back failed.
+                        var failure = FailureOf(checkoutFailure, OperationTexts.CheckOut(branch).FailureSummary);
+                        display = CheckoutFailureDisplay(failure, returnBranch, offerStash: false)
+                            ?? new FailureDisplay(OperationTexts.CheckOut(branch).ErrorTitle, failure.Summary);
+                        return Failed(text, failure with { Summary = display.Summary });
+                    }
+                }
+
+                return OperationReport.Done(OperationTexts.Aborted(state.Kind));
+            },
+            new RunOptions { DescribeFailure = _ => display }));
     }
 
     // ---- Helpers -----------------------------------------------------------------------------------
@@ -959,31 +992,6 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var loaded = rows.Where(commit => commit.Row >= 0);
         var ordered = oldestFirst ? loaded.OrderByDescending(commit => commit.Row) : loaded.OrderBy(commit => commit.Row);
         return [.. ordered.Select(commit => commit.Sha), .. rows.Where(commit => commit.Row < 0).Select(commit => commit.Sha)];
-    }
-
-    /// <summary>The commits as 2.13's message lists them: SHA and subject.</summary>
-    private async Task<IReadOnlyList<(string Sha, string Subject)>> DescribeCommitsAsync(IEnumerable<string> shas)
-    {
-        var described = new List<(string Sha, string Subject)>();
-        foreach (var sha in shas)
-        {
-            described.Add((sha, await ReadSubjectAsync(sha) ?? string.Empty));
-        }
-
-        return described;
-    }
-
-    /// <summary>A cherry-pick or revert sequence started in a terminal is in progress (<c>sequencer/</c>, section 5).</summary>
-    private bool HasSequencer()
-    {
-        try
-        {
-            return Directory.Exists(Path.Combine(Git.GitDirectory, "sequencer"));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
     }
 
     /// <summary>A checkout's name in texts, and its git calls, which answer the success message.</summary>

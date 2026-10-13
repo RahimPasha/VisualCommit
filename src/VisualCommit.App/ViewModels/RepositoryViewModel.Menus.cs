@@ -43,9 +43,10 @@ public sealed partial class RepositoryViewModel
     /// <summary>
     /// The snapshot the menu builders read (<see cref="RepositoryMenuContext"/>), taken now: the
     /// refs, the status, the selected commits in row order with whether HEAD's history holds them
-    /// (4h), the toolbar's states, whether an operation runs, and the other worktrees as last read
-    /// by <see cref="ReadMenuContextAsync"/> (empty before). Before the refs are read: an unborn
-    /// HEAD without refs, every toolbar button disabled.
+    /// (4h) and where they are on HEAD's linear line (phase 4 design 2.1), the toolbar's states,
+    /// whether an operation runs, the other worktrees as last read by
+    /// <see cref="ReadMenuContextAsync"/> (empty before), and the branch tips HEAD reaches (1.1).
+    /// Before the refs are read: an unborn HEAD without refs, every toolbar button disabled.
     /// </summary>
     public RepositoryMenuContext MenuContext => new(
         Name,
@@ -57,6 +58,8 @@ public sealed partial class RepositoryViewModel
         Queue.Current is not null)
     {
         OtherWorktrees = _otherWorktrees,
+        TipsOnHead = BranchTipsOnHead(),
+        MergeTool = _mergeTool,
     };
 
     /// <summary>
@@ -284,10 +287,6 @@ public sealed partial class RepositoryViewModel
     /// release point, unless Esc, another menu, a dialog or another tab came first (4a). Completes
     /// with whether a menu opened.
     /// </summary>
-    /// <remarks>
-    /// <see cref="DropFacts.RemoteMapsBranchesDifferently"/> is not read: the Git layer has no read
-    /// of a remote's fetch refspec yet, so a drop onto a remote branch always offers the push.
-    /// </remarks>
     public async Task<bool> OpenDropMenuAsync(MenuLayerViewModel layer, string sourceRef, string targetRef, MenuPosition position)
     {
         ArgumentNullException.ThrowIfNull(layer);
@@ -300,26 +299,59 @@ public sealed partial class RepositoryViewModel
 
         var request = layer.Request(this);
         var context = await ReadMenuContextAsync();
+        if (await ReadDropFactsAsync(sourceRef, targetRef) is not { } drop)
+        {
+            return false;
+        }
+
+        context = context with { Drop = drop };
+        return OpenRequested(layer, request, RepositoryMenus.ForDrop(context, sourceRef, targetRef, MenuActions), position, MenuOpenedBy.Pointer);
+    }
+
+    /// <summary>
+    /// What a drop of <paramref name="sourceRef"/> onto <paramref name="targetRef"/> reads before
+    /// its menu opens (4g, phase 4 design 1.1), with one <c>git merge-base --is-ancestor
+    /// &lt;target&gt; &lt;source&gt;</c>: for a local or remote target whether the source
+    /// contains it (<see cref="DropFacts.SourceContainsTarget"/>, null when the read failed), and
+    /// for a local target whether it can be fast-forwarded to the source
+    /// (<see cref="DropFacts.TargetIsAncestorOfSource"/>, true when the read failed, so that git
+    /// decides). Null when the tab closed meanwhile.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DropFacts.RemoteMapsBranchesDifferently"/> is not read: the Git layer has no read
+    /// of a remote's fetch refspec yet, so a drop onto a remote branch always offers the push.
+    /// </remarks>
+    public async Task<DropFacts?> ReadDropFactsAsync(string sourceRef, string targetRef)
+    {
+        ArgumentNullException.ThrowIfNull(sourceRef);
+        ArgumentNullException.ThrowIfNull(targetRef);
         var ancestor = true;
-        if (targetRef.StartsWith("refs/heads/", StringComparison.Ordinal))
+        bool? sourceContainsTarget = null;
+        var localTarget = targetRef.StartsWith("refs/heads/", StringComparison.Ordinal);
+        if (localTarget || targetRef.StartsWith("refs/remotes/", StringComparison.Ordinal))
         {
             try
             {
-                ancestor = await Repository.IsAncestorAsync(targetRef, sourceRef, _lifetime.Token);
+                // B is an ancestor of A: A contains B (phase 4's rebase items, 1.1), and a local
+                // B can be fast-forwarded to A (2.7, 2.10).
+                sourceContainsTarget = await Repository.IsAncestorAsync(targetRef, sourceRef, _lifetime.Token);
+                if (localTarget)
+                {
+                    ancestor = sourceContainsTarget.Value;
+                }
             }
             catch (OperationCanceledException) when (IsClosed)
             {
-                return false;
+                return null;
             }
             catch (Exception ex)
             {
-                // The fast-forward stays enabled and git decides (2.7 refuses a non-fast-forward).
+                // The fast-forward and the rebase items stay enabled and git decides (2.7 refuses a non-fast-forward).
                 _log.Warning($"{Name}: whether {targetRef} is an ancestor of {sourceRef} could not be read for the drop's menu.", ex);
             }
         }
 
-        context = context with { Drop = new DropFacts(ancestor) };
-        return OpenRequested(layer, request, RepositoryMenus.ForDrop(context, sourceRef, targetRef, MenuActions), position, MenuOpenedBy.Pointer);
+        return new DropFacts(ancestor) { SourceContainsTarget = sourceContainsTarget };
     }
 
     /// <summary>
@@ -483,6 +515,8 @@ public sealed partial class RepositoryViewModel
     /// each (4h): <see cref="CommitGraphData.IsReachableFromHead"/>, the graph's walk over the
     /// parents from HEAD's commit through the rows loaded so far, cached per graph. A commit the
     /// walk has not reached counts as not on HEAD, so its item stays enabled and git decides (2.12).
+    /// Each also gets its place on HEAD's linear first-parent line (phase 4 design 2.1,
+    /// <see cref="CommitGraphData.DepthOnHeadLine"/>), likewise cached.
     /// </summary>
     private List<CommitMenuInfo> SelectedCommitsForMenus()
     {
@@ -494,8 +528,39 @@ public sealed partial class RepositoryViewModel
             .Select(entry =>
             {
                 var commit = graph.CommitAt(entry.Row);
-                var reachable = commit.Kind != CommitKind.Stash && graph.IsReachableFromHead(commit.Sha);
-                return new CommitMenuInfo(commit.Sha, commit.Subject, commit.Parents, commit.Kind, entry.Row, reachable);
+                var isCommit = commit.Kind != CommitKind.Stash;
+                var reachable = isCommit && graph.IsReachableFromHead(commit.Sha);
+                return new CommitMenuInfo(commit.Sha, commit.Subject, commit.Parents, commit.Kind, entry.Row, reachable)
+                {
+                    HeadLineDepth = isCommit ? graph.DepthOnHeadLine(commit.Sha) : null,
+                };
             })];
+    }
+
+    /// <summary>
+    /// The SHAs of the local and remote branch tips that HEAD reaches in the loaded graph (phase 4
+    /// design 1.1), by <see cref="CommitGraphData.IsReachableFromHead"/>: a tip the walk has not
+    /// reached counts as not on HEAD. Empty before the refs are read.
+    /// </summary>
+    private HashSet<string> BranchTipsOnHead()
+    {
+        var tips = new HashSet<string>(StringComparer.Ordinal);
+        if (Refs is not { } refs)
+        {
+            return tips;
+        }
+
+        var graph = Graph;
+        foreach (var gitRef in refs.Refs)
+        {
+            if (gitRef.Kind is RefKind.LocalBranch or RefKind.RemoteBranch
+                && !tips.Contains(gitRef.TargetSha)
+                && graph.IsReachableFromHead(gitRef.TargetSha))
+            {
+                tips.Add(gitRef.TargetSha);
+            }
+        }
+
+        return tips;
     }
 }

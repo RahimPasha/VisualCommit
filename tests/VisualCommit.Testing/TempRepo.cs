@@ -56,9 +56,10 @@ public sealed class TempRepo : IDisposable
     /// <paramref name="home"/> (created, with an empty <c>.gitconfig</c>, when missing) as its
     /// home folder: no system or user configuration, no search for a repository above the tests'
     /// own folder, none of the variables through which a surrounding process hands git extra
-    /// configuration or another repository, and <see cref="GitIsolation.MachineIndependence"/>
-    /// (no askpass program, ssh command or proxy of the machine, D112). <see cref="Environment"/>
-    /// is this plus the author.
+    /// configuration or another repository, <see cref="GitIsolation.MachineIndependence"/>
+    /// (no askpass program, ssh command, editor or proxy of the machine, D112), and
+    /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> set to <c>:</c>, so that no step waits
+    /// for an editor (docs/phase-4-design.md 0.5). <see cref="Environment"/> is this plus the author.
     /// </summary>
     public static IReadOnlyDictionary<string, string?> IsolatedEnvironment(string home)
     {
@@ -90,12 +91,16 @@ public sealed class TempRepo : IDisposable
             environment[variable] = null;
         }
 
-        // Nor an askpass program, an ssh command or a proxy of the machine (D112).
+        // Nor an askpass program, an ssh command, an editor or a proxy of the machine (D112).
         foreach (var (variable, value) in GitIsolation.MachineIndependence)
         {
             environment[variable] = value;
         }
 
+        // A step that wants an editor (git rebase --continue, a merge's message) goes on without
+        // one, as the app's own calls do (D102, docs/phase-4-design.md 0.5), whatever runs the call.
+        environment["GIT_EDITOR"] = ":";
+        environment["GIT_SEQUENCE_EDITOR"] = ":";
         return environment;
     }
 
@@ -175,8 +180,37 @@ public sealed class TempRepo : IDisposable
     /// </summary>
     public Task<GitResult> GitAllowingFailureAsync(params string[] arguments) => Runner.RunAsync(Command(null, arguments));
 
-    /// <summary>A git call in this repository, with its isolation and the clock's time as the author and committer date.</summary>
-    private GitCommand Command(string? input, string[] arguments)
+    /// <summary>
+    /// Runs git in the repository as <see cref="GitAsync"/> does, with the variables
+    /// <paramref name="extra"/> added for this call only (a null value removes one), such as a
+    /// <c>GIT_SEQUENCE_EDITOR</c> that writes the todo of an interactive rebase
+    /// (docs/phase-4-design.md 2.5, 13.2). The call keeps the isolation and the clock's dates as
+    /// its author and committer date, unless <paramref name="extra"/> names a date variable
+    /// itself. Throws when git reports an error.
+    /// </summary>
+    public async Task<GitResult> GitWithEnvironmentAsync(IReadOnlyDictionary<string, string?> extra, params string[] arguments)
+    {
+        ArgumentNullException.ThrowIfNull(extra);
+        var command = Command(null, arguments, extra);
+        var result = await Runner.RunAsync(command);
+        return result.EnsureSuccess(command);
+    }
+
+    /// <summary>
+    /// Runs git as <see cref="GitWithEnvironmentAsync"/> does, but returns its result also when git
+    /// reports an error: for a step with its own variables that is meant to stop.
+    /// </summary>
+    public Task<GitResult> GitWithEnvironmentAllowingFailureAsync(IReadOnlyDictionary<string, string?> extra, params string[] arguments)
+    {
+        ArgumentNullException.ThrowIfNull(extra);
+        return Runner.RunAsync(Command(null, arguments, extra));
+    }
+
+    /// <summary>
+    /// A git call in this repository, with its isolation and the clock's time as the author and
+    /// committer date, then the call's own <paramref name="extra"/> variables.
+    /// </summary>
+    private GitCommand Command(string? input, string[] arguments, IReadOnlyDictionary<string, string?>? extra = null)
     {
         var time = _clock.Now.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture);
         var environment = new Dictionary<string, string?>(Environment)
@@ -184,6 +218,11 @@ public sealed class TempRepo : IDisposable
             ["GIT_AUTHOR_DATE"] = time,
             ["GIT_COMMITTER_DATE"] = time,
         };
+
+        foreach (var (name, value) in extra ?? new Dictionary<string, string?>())
+        {
+            environment[name] = value;
+        }
 
         return new GitCommand(arguments) { WorkingDirectory = Path, Environment = environment, StandardInput = input };
     }

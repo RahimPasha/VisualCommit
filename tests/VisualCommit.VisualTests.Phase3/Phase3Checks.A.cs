@@ -41,7 +41,11 @@ public sealed partial class Phase3ChecksA : Phase3Checks
 
         AssertRowSelected(app, PartA.AlphaTwoRow, shot);
         AssertMenu(menu, PartA.AlphaTwoCommitMenu);
-        Assert.All(menu.Items, item => Assert.True(item.IsEnabled && !item.IsDestructive, $"\"{item.Label}\" is not an enabled ordinary item."));
+
+        // Every item is an ordinary one, enabled but for phase 4's "Interactive rebase of main from
+        // here…" (phase 4's report, OC1: "This commit is not on main").
+        Assert.All(menu.Items, item => Assert.False(item.IsDestructive, $"\"{item.Label}\" is a destructive item."));
+        Assert.All(menu.Items.Where(item => item.Label != "Interactive rebase of main from here…"), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertHighlighted(menu, "Check out this commit");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(PartA.CommitMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);

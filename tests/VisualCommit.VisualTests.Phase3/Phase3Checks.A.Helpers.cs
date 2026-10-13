@@ -209,28 +209,6 @@ public sealed partial class Phase3ChecksA
         }
     }
 
-    /// <summary>
-    /// Asserts where a menu opened by the pointer at <paramref name="pointer"/> is, by 4a's placement
-    /// rule ("The menu", Placement), for a step that gives no position of its own: its top-left 2
-    /// right of and 2 below the pointer; flipped to the left of the pointer (its right edge 2 left of
-    /// it) when it would cross the window's right edge, above it when it would cross the bottom;
-    /// then kept 4 inside the window (±2).
-    /// </summary>
-    private static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
-    {
-        var window = app.Window.ClientSize;
-        var size = menu.Bounds.Size;
-        var gap = WindowLayout.MenuPointerGap;
-        var inset = WindowLayout.MenuEdgeInset;
-        var x = pointer.X + gap + size.Width > window.Width ? pointer.X - gap - size.Width : pointer.X + gap;
-        var y = pointer.Y + gap + size.Height > window.Height ? pointer.Y - gap - size.Height : pointer.Y + gap;
-        x = Math.Max(Math.Min(x, window.Width - inset - size.Width), inset);
-        y = Math.Max(Math.Min(y, window.Height - inset - size.Height), inset);
-        Assert.True(
-            Math.Abs(menu.Bounds.X - x) <= 2 && Math.Abs(menu.Bounds.Y - y) <= 2,
-            $"The menu's top-left is {menu.Bounds.TopLeft}; 4a places a {size} menu opened at {pointer} at ({x}, {y}).");
-    }
-
     /// <summary>The name dialog as the report gives it (title, context, the boxes, the option, the buttons).</summary>
     private sealed record NameDialogExpected(
         string Title,
@@ -358,18 +336,44 @@ public sealed partial class Phase3ChecksA
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == $"Unstaged files ({unstaged})"
-                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})",
+                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})"
+                && app.StagePanelSettled,
             $"the stage panel with {unstaged} unstaged and {staged} staged files");
 
     /// <summary>The diff's text view.</summary>
     private static DiffTextView DiffText(ShellDriver app) => app.Find<DiffTextView>("DiffText");
 
-    /// <summary>Waits until the open diff of <paramref name="path"/> shows its text rows laid out.</summary>
-    private static Task WaitForTextDiffAsync(ShellDriver app, string path) =>
-        app.WaitForAsync(
-            () => Repo(app).Diff is { ShowsText: true } diff && diff.Target.Path == path
-                && app.Window.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.Name == "DiffText" && view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null),
-            $"the text diff of {path}");
+    /// <summary>
+    /// Waits until the open diff of <paramref name="path"/> shows its text rows laid out. Loading a
+    /// diff runs git, so the wait is the outside-change bound, not one step's 10 s: on CI's bare
+    /// container, with five test processes side by side, it took longer (run 38256873492).
+    /// When it times out on CI (Linux, run 38258811117) it says what the app showed instead, saves
+    /// the picture <c>04z-diff-timeout</c> and the log lines written meanwhile, then fails.
+    /// </summary>
+    private static async Task WaitForTextDiffAsync(ShellDriver app, string path)
+    {
+        var mark = app.LogMark();
+        try
+        {
+            await app.WaitForAsync(
+                () => Repo(app).Diff is { ShowsText: true } diff && diff.Target.Path == path
+                    && app.Window.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.Name == "DiffText" && view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null),
+                $"the text diff of {path}",
+                OutsideChangeTimeout);
+        }
+        catch (TimeoutException ex)
+        {
+            var diff = Repo(app).Diff;
+            var views = app.Window.GetVisualDescendants().OfType<DiffTextView>()
+                .Select(view => $"{view.Name} visible={view.IsEffectivelyVisible} rows={view.Rows.Count} row0={view.RowBounds(0)?.ToString() ?? "none"}");
+            var lines = app.LogLinesSince(mark);
+            app.Capture().Save(Phase, "04z-diff-timeout");
+            throw new TimeoutException(
+                $"{ex.Message} The app showed: diff open={Repo(app).IsDiffOpen}, target={diff?.Target.Path ?? "none"}, body={diff?.Body.ToString() ?? "none"}; views: {string.Join("; ", views)}; "
+                + $"{lines.Count(line => line.Contains("working tree:", StringComparison.Ordinal))} working-tree reads and {lines.Count} log lines since the click, the last: {string.Join(" || ", lines.TakeLast(12))}",
+                ex);
+        }
+    }
 
     /// <summary>
     /// The diff's rows as phase 2's checks write them: "K old/new text" inline (K the kind's letter,

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 4: its checks,
+       their expected values and support (docs/phase-4-design.md 13.3, D151). It drives the whole
+       app in Avalonia's headless mode and saves a screenshot after every step under
+       artifacts/visual/phase-4/ (VisualRun, in VisualCommit.Testing). A project of its own, as
+       phase 3's is (D133): a test assembly has one headless UI thread, on which its headless tests
+       run one at a time, and a second assembly is a second test process with a UI thread of its
+       own that "dotnet test" runs beside the others. The real-window pass compiles the
+       Phase4Expectations files from here. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

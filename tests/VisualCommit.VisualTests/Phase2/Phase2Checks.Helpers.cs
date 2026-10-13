@@ -116,12 +116,21 @@ public partial class Phase2Checks
     }
 
     /// <summary>Waits until the stage panel shows, with these numbers of files in its two lists.</summary>
-    private static Task WaitForStagePanelAsync(ShellDriver app, int unstaged, int staged) =>
+    private static Task WaitForStagePanelAsync(ShellDriver app, int unstaged, int staged, TimeSpan? timeout = null) =>
         app.WaitForAsync(
             () => app.FindByAutomationId("StagePanel").IsEffectivelyVisible
                 && app.Find<TextBlock>("UnstagedTitle").Text == $"Unstaged files ({unstaged})"
-                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})",
-            $"the stage panel with {unstaged} unstaged and {staged} staged files");
+                && app.Find<TextBlock>("StagedTitle").Text == $"Staged files ({staged})"
+                && app.StagePanelSettled,
+            $"the stage panel with {unstaged} unstaged and {staged} staged files",
+            timeout);
+
+    /// <summary>
+    /// How long a step waits for a write of the app's that runs several git calls (a discard of
+    /// many files with its snapshot and, since phase 4, the backups' clean-up; a restore): with the
+    /// default run's five test processes side by side, 10 s was not always enough (phase 4's gate).
+    /// </summary>
+    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>A list's rows as text: status letter, name, folder (flat) and origin, from the list's own rows, scrolled into view or not.</summary>
     private static List<string> FileRows(ShellDriver app, string list)

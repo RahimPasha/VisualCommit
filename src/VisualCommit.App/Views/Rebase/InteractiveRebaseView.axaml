@@ -1,0 +1,310 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:local="using:VisualCommit.App.Views.Rebase"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Rebase"
+             x:Class="VisualCommit.App.Views.Rebase.InteractiveRebaseView"
+             x:DataType="vm:InteractiveRebaseViewModel"
+             AutomationProperties.AutomationId="InteractiveRebaseView"
+             AutomationProperties.Name="Interactive rebase">
+
+  <!-- The interactive rebase's list in the graph area (docs/phase-4-design.md 2.2, D141), as
+       "The list's geometry" in docs/test-reports/phase-4.md lays it out: a header of 36, rows of
+       30 newest on top (a second line of 22 under a row whose message changes), the base row,
+       and a footer of 44 with Cancel and Start rebase. Within a row (x from the list's left
+       edge): the grip column 0 to 24, the action button at 28 (84 × 22), the short SHA at 120
+       (64 wide), the subject from 192, the author 140 wide at the right when the list is at least
+       520 wide; a squash or fixup row's content stands 16 further right, and the 2-px join line
+       at x 12 runs from its centre to its target's top edge. Colours are tokens only. -->
+  <UserControl.Styles>
+    <!-- No focus frame: the selected row has the focus and shows the selection background (the
+         theme sets a frame on every control by a style, which this one overrides). -->
+    <Style Selector="local|RebaseListRow">
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+
+    <!-- A commit row: the selection background, the hover background under the pointer. -->
+    <Style Selector="local|RebaseListRow.commit">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="local|RebaseListRow.commit:pointerover">
+      <Setter Property="Background" Value="{DynamicResource VcRowHoverBrush}" />
+    </Style>
+    <Style Selector="local|RebaseListRow.commit.selected">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+
+    <!-- The row's content, 12 from the right edge; a squash or fixup row's 16 further right. -->
+    <Style Selector="Grid.rowContent">
+      <Setter Property="Margin" Value="0,0,12,0" />
+    </Style>
+    <Style Selector="local|RebaseListRow.joined Grid.rowContent">
+      <Setter Property="Margin" Value="16,0,12,0" />
+    </Style>
+
+    <!-- The join line's part in this row: from the vertical centre down, or the whole row. -->
+    <Style Selector="Border.joinLine">
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="Width" Value="2" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Margin" Value="12,0,0,0" />
+      <Setter Property="Background" Value="{DynamicResource VcLane0Brush}" />
+    </Style>
+    <Style Selector="Border.joinLine.fromCentre">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="Height" Value="15" />
+    </Style>
+    <Style Selector="Border.joinLine.through">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <!-- A dropped row's SHA and subject: struck through, in the disabled colour. -->
+    <Style Selector="TextBlock.sha">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.subject">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="TextBlock.dropped">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      <Setter Property="TextDecorations" Value="Strikethrough" />
+    </Style>
+
+    <!-- The author column shows only while the list is at least 520 wide (class "wide"). -->
+    <Style Selector="TextBlock.author">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ItemsControl.wide TextBlock.author">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!-- The dragged row stays in its place at half opacity (2.2). -->
+    <Style Selector="StackPanel.dragged">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- Header, 36: what is rebased onto what, and the count on the right. -->
+    <Border Name="RebaseListHeaderBar"
+            DockPanel.Dock="Top"
+            Height="36"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1">
+      <DockPanel Margin="12,0">
+        <TextBlock Name="RebaseListCount"
+                   DockPanel.Dock="Right"
+                   Classes="secondary"
+                   Text="{Binding CountText}"
+                   IsVisible="{Binding !HasMessage}"
+                   Margin="12,0,0,0"
+                   VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="RebaseListCount" />
+        <c:TrimmedTextBlock Name="RebaseListHeader"
+                            Text="{Binding HeaderText}"
+                            FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="RebaseListHeader" />
+      </DockPanel>
+    </Border>
+
+    <!-- Footer, 44: Cancel and Start rebase, right-aligned, 8 apart, 12 from the right edge. -->
+    <Border Name="RebaseListFooter"
+            DockPanel.Dock="Bottom"
+            Height="44"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Margin="0,0,12,0">
+        <Button Name="RebaseCancelButton"
+                Theme="{StaticResource VcActionButton}"
+                Content="Cancel"
+                Command="{Binding CancelCommand}"
+                AutomationProperties.AutomationId="RebaseCancelButton"
+                AutomationProperties.Name="Cancel" />
+        <Button Name="RebaseStartButton"
+                Theme="{StaticResource VcPrimaryButton}"
+                Content="Start rebase"
+                Command="{Binding StartCommand}"
+                IsVisible="{Binding !HasMessage}"
+                ToolTip.Tip="{Binding StartToolTip}"
+                ToolTip.ShowOnDisabled="True"
+                AutomationProperties.AutomationId="RebaseStartButton"
+                AutomationProperties.Name="Start rebase" />
+      </StackPanel>
+    </Border>
+
+    <!-- The rows, scrolling between the header and the footer; the drag's target line over them;
+         or, for a list that cannot be made, its message in their place. -->
+    <Panel Name="RowsArea">
+      <ScrollViewer Name="RowsScroller"
+                    IsVisible="{Binding !HasMessage}"
+                    IsEnabled="{Binding IsInteractive}"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <ItemsControl Name="RowsList"
+                      ItemsSource="{Binding Items}"
+                      KeyboardNavigation.TabNavigation="Once"
+                      AutomationProperties.AutomationId="RebaseRows">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.DataTemplates>
+
+            <!-- A commit row (30), and its second line (22) when its message will change. -->
+            <DataTemplate DataType="vm:InteractiveRebaseRowViewModel">
+              <StackPanel Classes.dragged="{Binding IsDragged}">
+                <local:RebaseListRow Name="RebaseRowPart"
+                                     Classes="commit"
+                                     Classes.selected="{Binding IsSelected}"
+                                     Classes.joined="{Binding IsJoined}"
+                                     Height="30"
+                                     AutomationProperties.AutomationId="RebaseRow"
+                                     AutomationProperties.Name="{Binding Name}">
+                  <Border Name="RebaseJoinLine"
+                          Classes="joinLine"
+                          Classes.fromCentre="{Binding IsJoinLineFromCentre}"
+                          Classes.through="{Binding IsJoinLineThrough}" />
+                  <Grid Classes="rowContent" ColumnDefinitions="24,4,84,8,64,8,*,Auto">
+                    <c:Icon Name="RebaseRowGrip"
+                            Grid.Column="0"
+                            Data="{StaticResource IconGrip}"
+                            Width="14" Height="14"
+                            Foreground="{DynamicResource VcTextSecondaryBrush}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+                    <Button Name="RebaseActionButton"
+                            Grid.Column="2"
+                            Theme="{StaticResource VcActionButton}"
+                            Width="84" Height="22"
+                            Padding="8,0"
+                            FontSize="12"
+                            Focusable="False"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="RebaseActionButton"
+                            AutomationProperties.Name="{Binding ActionText}">
+                      <DockPanel>
+                        <c:Icon DockPanel.Dock="Right"
+                                Data="{StaticResource IconChevronDown}"
+                                Width="10" Height="10"
+                                VerticalAlignment="Center" />
+                        <TextBlock Name="RebaseActionText"
+                                   Text="{Binding ActionText}"
+                                   VerticalAlignment="Center" />
+                      </DockPanel>
+                    </Button>
+                    <TextBlock Name="RebaseRowSha"
+                               Grid.Column="4"
+                               Classes="sha"
+                               Classes.dropped="{Binding IsDropped}"
+                               Text="{Binding ShortSha}" />
+                    <c:TrimmedTextBlock Name="RebaseRowSubject"
+                                        Grid.Column="6"
+                                        Classes="subject"
+                                        Classes.dropped="{Binding IsDropped}"
+                                        Text="{Binding Subject}" />
+                    <TextBlock Name="RebaseRowAuthor"
+                               Grid.Column="7"
+                               Classes="author secondary"
+                               Width="140"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding AuthorName}" />
+                  </Grid>
+                </local:RebaseListRow>
+                <Grid Name="RebaseSecondLinePart"
+                      Height="22"
+                      ColumnDefinitions="*,Auto"
+                      IsVisible="{Binding HasSecondLine}">
+                  <TextBlock Name="RebaseRowSecondLine"
+                             Classes="secondary"
+                             Margin="120,0,8,0"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis"
+                             Text="{Binding SecondLine}"
+                             AutomationProperties.AutomationId="RebaseRowSecondLine" />
+                  <Button Name="RebaseEditMessageButton"
+                          Grid.Column="1"
+                          Theme="{StaticResource VcFlatButton}"
+                          Content="Edit…"
+                          Height="20"
+                          FontSize="12"
+                          Margin="0,0,12,0"
+                          Focusable="False"
+                          VerticalAlignment="Center"
+                          AutomationProperties.AutomationId="RebaseEditMessageButton"
+                          AutomationProperties.Name="Edit…" />
+                </Grid>
+              </StackPanel>
+            </DataTemplate>
+
+            <!-- The base row (30): "Base" in the action button's place, its SHA and subject. -->
+            <DataTemplate DataType="vm:InteractiveRebaseBaseRow">
+              <local:RebaseListRow Name="RebaseBaseRowPart"
+                                   Classes="base"
+                                   Height="30"
+                                   Focusable="False"
+                                   Background="Transparent"
+                                   AutomationProperties.AutomationId="RebaseBaseRow"
+                                   AutomationProperties.Name="{Binding Name}">
+                <Grid ColumnDefinitions="120,72,*" Margin="0,0,12,0">
+                  <TextBlock Name="RebaseBaseLabel"
+                             Grid.Column="0"
+                             Classes="secondary"
+                             Margin="36,0,0,0"
+                             VerticalAlignment="Center"
+                             Text="Base" />
+                  <TextBlock Name="RebaseBaseSha"
+                             Grid.Column="1"
+                             Classes="sha"
+                             Text="{Binding ShortSha}" />
+                  <c:TrimmedTextBlock Name="RebaseBaseSubject"
+                                      Grid.Column="2"
+                                      Classes="subject"
+                                      Text="{Binding Subject}" />
+                </Grid>
+              </local:RebaseListRow>
+            </DataTemplate>
+
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- The drag's target: a 2-px line on the gap nearest the pointer (2.2). Takes no input. -->
+      <Canvas Name="DragOverlay" IsHitTestVisible="False">
+        <Border Name="RebaseDragLine"
+                Height="2"
+                IsVisible="False"
+                Background="{DynamicResource VcDragTargetBrush}" />
+      </Canvas>
+
+      <TextBlock Name="RebaseListMessage"
+                 Text="{Binding Message}"
+                 IsVisible="{Binding HasMessage}"
+                 TextWrapping="Wrap"
+                 TextAlignment="Center"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Margin="24,0"
+                 AutomationProperties.AutomationId="RebaseListMessage" />
+    </Panel>
+  </DockPanel>
+</UserControl>

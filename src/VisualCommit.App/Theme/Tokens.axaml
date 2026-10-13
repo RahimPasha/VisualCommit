@@ -47,6 +47,13 @@
       <BoxShadows x:Key="VcMenuShadow">0 6 16 0 #80000000</BoxShadows>
       <SolidColorBrush x:Key="VcBannerBackgroundBrush" Color="#33291A" />
       <SolidColorBrush x:Key="VcDragTargetBrush" Color="#7C8CFF" />
+      <!-- Phase 4: the conflict resolver's sides, a diff3 base section, the marker lines of an
+           unresolved block, and a side once it is used in the result (VcDiffAddedBrush's colour). -->
+      <SolidColorBrush x:Key="VcConflictOursBrush" Color="#15323A" />
+      <SolidColorBrush x:Key="VcConflictTheirsBrush" Color="#2C2140" />
+      <SolidColorBrush x:Key="VcConflictBaseBrush" Color="#24272F" />
+      <SolidColorBrush x:Key="VcConflictMarkerBrush" Color="#3A2E16" />
+      <SolidColorBrush x:Key="VcConflictUsedBrush" Color="#1A2E24" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#272C36" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C36" />
@@ -102,6 +109,13 @@
       <BoxShadows x:Key="VcMenuShadow">0 6 16 0 #33000000</BoxShadows>
       <SolidColorBrush x:Key="VcBannerBackgroundBrush" Color="#FFF4DE" />
       <SolidColorBrush x:Key="VcDragTargetBrush" Color="#4353D8" />
+      <!-- Phase 4: the conflict resolver's sides, a diff3 base section, the marker lines of an
+           unresolved block, and a side once it is used in the result (VcDiffAddedBrush's colour). -->
+      <SolidColorBrush x:Key="VcConflictOursBrush" Color="#DCF1F5" />
+      <SolidColorBrush x:Key="VcConflictTheirsBrush" Color="#F0E6FA" />
+      <SolidColorBrush x:Key="VcConflictBaseBrush" Color="#EEF0F3" />
+      <SolidColorBrush x:Key="VcConflictMarkerBrush" Color="#FCEFD2" />
+      <SolidColorBrush x:Key="VcConflictUsedBrush" Color="#E6F6EC" />
       <!-- Text boxes: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />

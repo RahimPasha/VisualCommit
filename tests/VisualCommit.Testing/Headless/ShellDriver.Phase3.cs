@@ -262,13 +262,19 @@ public sealed partial class ShellDriver
             ?? throw new InvalidOperationException("The active tab has no repository whose operations could be waited for.");
         var queue = repo.Queue;
         await WaitForAsync(
-            () => queue.Current is null && queue.Waiting == 0 && queue.WhenIdleAsync().IsCompleted,
-            $"the operations of {repo.Name} to end",
+            () => queue.Current is null && queue.Waiting == 0 && queue.WhenIdleAsync().IsCompleted && !repo.Changes.IsFillingMessage,
+            $"the operations of {repo.Name} to end and the stage panel's message to be read",
             timeout);
 
         // The queue's Changed and Finished go to the views through the UI thread.
         Settle();
     }
+
+    /// <summary>
+    /// The active tab's stage panel has no read of the operation's message pending (phase 4 design
+    /// 5.3): it fills its message boxes after a read of its own, after the status is shown.
+    /// </summary>
+    public bool StagePanelSettled => Session.Shell.ActiveTab.Repository?.Changes.IsFillingMessage != true;
 
     /// <summary>Whether a context menu is in the window now, without waiting for one.</summary>
     public bool IsMenuOpen

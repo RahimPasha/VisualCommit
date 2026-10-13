@@ -15,21 +15,28 @@ it are not built yet, and "As built" says which are. The reasons behind the main
 - **Operation queue per repo (D81).** Every write to a repository runs through its queue
   (`OperationQueue`, Core): one at a time, first in first out, on the UI thread's context, with
   the watcher paused and a refresh afterwards. Network operations show progress and can be
-  cancelled; a local one, once started, runs all its steps to the end. A background slot runs
-  auto-fetch. Every operation is recorded (`IOperationLog`), and every git call names its
-  operation, for the activity log (T4, phase 5).
+  cancelled; a local one, once started, runs all its steps to the end, except the external merge
+  tool, which only waits for another program and can be cancelled too (D149). A background slot
+  runs auto-fetch and the backups' clean-up when a repository opens (D139). Every operation is
+  recorded (`IOperationLog`), and every git call names its operation, for the activity log (T4,
+  phase 5).
 - **Safety net.** Before a destructive operation the app stores a backup reference under
-  `refs/visualcommit/backup/`: a snapshot commit before every discard (D67, phase 2), and since
+  `refs/visualcommit/backup/`: a snapshot commit before every discard (D67, phase 2), since
   phase 3 a backup batch before every reset, branch, tag or remote deletion, force push, stash
-  drop, abort and checkout that leaves detached commits behind (D83). Phase 3 deletes none of
-  them. Undo/redo (O2, phase 5) restores from these and from the reflog.
+  drop, abort and checkout that leaves detached commits behind (D83), and since phase 4 one
+  before every rebase and every Skip (D142, D144). Since phase 4 they are cleaned up
+  automatically: a backup goes after 30 days, or when more than 50 exist, the oldest first, never
+  while an operation is in progress (D139). Undo/redo (O2, phase 5) restores from what is left
+  and from the reflog.
 - **Prompts.** Git's and ssh's credential, passphrase and host-key prompts reach the app through
   a helper program, `visualcommit-askpass`, set as `GIT_ASKPASS` and `SSH_ASKPASS`; it asks the
   running app over a named pipe, and the app answers through a dialog in the window (D82).
   Editors never open: every call runs with `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:` (D68,
-  D102); phase 4's interactive rebase sets its own sequence editor.
+  D102). The interactive rebase alone sets its own sequence editor, for its one call: a shell
+  function that copies a todo and message files the app wrote (D143).
 - **Editors.** Diff, blame and conflict views are built on AvaloniaEdit, with TextMate grammars
-  (TextMateSharp, called by the app's own code) for syntax highlighting (D64).
+  (TextMateSharp, called by the app's own code) for syntax highlighting (D64); the conflict
+  resolver's ours and theirs panes have it, its editable result has none (D148).
 - **Hosting.** One provider interface with GitHub, Azure DevOps and GitLab implementations.
   Tokens live in the OS keychain.
 - **Storage.** Settings and session state as JSON in the per-user app-data folder. Logs are local files.
@@ -52,23 +59,24 @@ in the phase that first needs it. Package versions are pinned centrally in
 
 | Project | Contents | State |
 |---|---|---|
-| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status and the operation in progress, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; ref-name rules (`RefNameRules`); `Operations/`: the operation queue, its contracts and the operation log, failure classification and output cleaning, the prompt contracts, the lock-file scan; no UI, no process calls | Built |
-| `src/VisualCommit.Git` | Git runner, git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit, and phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore), cloning, the repository watcher, the progress parser; `Prompts/`: the askpass broker, its locator and the prompt classifier | Built |
+| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status with its conflicts and the operation in progress, rebases, lists of picks, the backups' retention, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; ref-name rules (`RefNameRules`); the interactive rebase's todo (`Git/RebaseTodo`); `Conflicts/`: a conflicted file's blocks (`ConflictText`); `Operations/`: the operation queue, its contracts and the operation log, failure classification and output cleaning, the prompt contracts, the lock-file scan; no UI, no process calls | Built |
+| `src/VisualCommit.Git` | Git runner, git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit; phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore; phase 4's rebases, lists of picks and reverts, Continue and Skip, conflicts and the merge tool, the backups' clean-up), cloning, the repository watcher, the progress parser; `Prompts/`: the askpass broker, its locator and the prompt classifier | Built |
 | `src/VisualCommit.AskPass` | The askpass helper `visualcommit-askpass` (D82): a small framework-dependent console program with no project references, run by git and ssh; its pipe protocol (`AskPassProtocol`) is shared with the broker. `VisualCommit.Git` references it, so its app host lands next to the app and in every test project's output | Built |
-| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
+| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the conflict panes and result, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch; the interactive rebase's list, the conflict resolver, the message dialog. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
 | `src/VisualCommit.Hosting` | GitHub, Azure DevOps and GitLab clients; token store | Phase 7 |
 | `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, the credential test server, fakes (file launcher, clipboard, prompt handler, ssh), the hang watchdog, helpers that drive the app in headless mode, the window layout both harnesses share. Not a test project | Built |
 | `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos, the askpass helper and the test server included | Built |
 | `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, the operations against real git through scenarios, and headless UI tests of behaviour (menus, dialogs, drag, selection, toolbar, status bar, banner) | Built |
 | `tests/VisualCommit.VisualTests` | Scripted walk-throughs of phases 0 to 2 in headless mode with screenshots, for the visual test gate. Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase3` | Phase 3's scripted walk-through, a project of its own so that it runs beside phases 0 to 2's with a headless UI thread of its own. Part of the default test run and CI | Built |
+| `tests/VisualCommit.VisualTests.Phase4` | Phase 4's scripted walk-through, a project of its own for the same reason (D151). Part of the default test run and CI | Built |
 | `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI). Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25) | Built |
 
 All projects target `net10.0`, except `VisualCommit.RealWindowTests` (`net10.0-windows`).
 `Directory.Build.props` turns on nullable reference types, implicit usings and warnings as errors
 for every project.
 
-## As built (after phase 3)
+## As built (after phase 4)
 
 Phase 0 built the foundation: an empty shell, the git runner, settings, the log and both test
 harnesses. Phase 1 added repositories in tabs: open, init and clone on a welcome page, the commit
@@ -84,8 +92,16 @@ revert and abort; fetch, pull, push, force push with lease, upstreams, remotes a
 stash, apply, pop, drop; tags; ignoring a file; backup refs before every destructive operation;
 git's and ssh's prompts as dialogs in the window; context menus on every object, double-click
 actions, dragging a branch onto a branch, multi-selection of commits; the toolbar's and the
-status bar's operation parts; the conflict banner; stacked dialogs. Rebase, the conflict
-resolver, continue and skip are phase 4's; undo, the activity log and search are phase 5's.
+status bar's operation parts; the conflict banner; stacked dialogs. Phase 4 added rebase and
+conflict resolution: rebase onto a commit or a branch from the menus and by drag, pull with
+rebase chosen for one pull, the interactive rebase's list in place of the graph (reorder, pick,
+reword, squash, fixup, drop) and the squash of selected commits; several picks and reverts as one
+git call that git's sequencer keeps; Continue, Skip and Abort in the banner for a merge, a
+cherry-pick, a revert and a rebase, and the stage panel's Continue; the conflict resolver across
+the graph and right-panel area (ours and theirs above the editable result, a choice per block, a
+whole side, a card for conflicts without text, mark resolved, the external merge tool); the
+backups of rebases and skips and the automatic clean-up of every backup; pick heads read under
+the reftable ref format too. Undo, the activity log and search are phase 5's.
 
 ### Start-up and composition
 
@@ -140,22 +156,28 @@ Program.Main                        src/VisualCommit.App/Program.cs
 | Type | Role |
 |---|---|
 | `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0; `Dialogs`, the window's dialog layer; `Menu`, the menu layer; `AutoFetch`; `NamesRepositoryInDialogs` (more than one tab has a repository: dialogs name their repository, "In &lt;repo&gt;"); `TryClose` and `ConfirmClose` (closing the window while operations run, see "Operation queue"). A tab closed while an operation the user started runs in it is kept until its queue is idle |
-| `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details`, `Changes` (the stage panel), `ShowsWorkingChanges`, `BranchText`, `Toolbar` and `OperationStatus` are the repository's, or empty ones (an empty toolbar has every command disabled; an empty status says "Ready"). A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it |
+| `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details`, `Changes` (the stage panel), `ShowsWorkingChanges`, `BranchText`, `Toolbar` and `OperationStatus` are the repository's, or empty ones (an empty toolbar has every command disabled; an empty status says "Ready"). Since phase 4 `ShowsRightPanel` (false while the conflict resolver is open), `ShowsDetailsPanel`, `ShowsStagePanel` and `GraphColumnSpan` (2 while the resolver is open, else 1) say what the right-hand columns show (D140). A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it |
 | `WelcomeViewModel` | The welcome page (D42): Open and Init through `IFolderPicker`, the clone form with its progress (`CloneProgress` from git's stderr) and Cancel, the shared recent list. A clone opens a prompt scope ("Clone", `PromptMode.Ask`) and passes its variables to `CloneAsync`, so an ssh or HTTPS clone asks in the window |
-| `RepositoryViewModel` | One open repository: its `Graph` (`CommitGraphData`), `SelectedIndex`, `Selection` (`GraphSelection`, by SHA, D88) and `MultiSelection`, `IsWorkingRowSelected` and `WorkingRowText`, `ScrollOffset` (kept per tab), `LeftPanel`, `Details`, `Status` (`WorkingTreeStatus`) with `HasWorkingChanges`, `Changes` (the stage panel), the open `Diff`, `Refs` as last read, `BranchText`, the watcher and the refreshes, the Q1 measurements; phase 3's `Queue`, `Operations` (`RepositoryOperations`), `OperationStatus`, `Toolbar`, `Banner` (`ConflictBannerViewModel`), `MenuContext` and the menus' entry points. Split over `RepositoryViewModel.cs`, `.Menus.cs` (menus, double-clicks, the drop), `.Selection.cs` (multi-selection) and `.InProgress.cs` (banner, working-row text, left-panel sync, `MERGE_MSG`). Disposing it (`IsClosed` from then on) disposes its queue and cancels all its other work |
+| `RepositoryViewModel` | One open repository: its `Graph` (`CommitGraphData`), `SelectedIndex`, `Selection` (`GraphSelection`, by SHA, D88) and `MultiSelection`, `IsWorkingRowSelected` and `WorkingRowText`, `ScrollOffset` (kept per tab), `LeftPanel`, `Details`, `Status` (`WorkingTreeStatus`) with `HasWorkingChanges`, `Changes` (the stage panel), the open `Diff`, `Refs` as last read, `BranchText`, the watcher and the refreshes, the Q1 measurements; phase 3's `Queue`, `Operations` (`RepositoryOperations`), `OperationStatus`, `Toolbar`, `Banner` (`ConflictBannerViewModel`), `MenuContext` and the menus' entry points; phase 4's `InteractiveRebase` (the list, or null), `Resolver` and `IsResolverOpen`, `ShowsGraph`, `ShowsInteractiveRebase` and `ShowsDiff` (what the graph area shows), `MergeTool`, `BackupsToKeep` (see "The graph area: the list and the resolver"). Split over `RepositoryViewModel.cs`, `.Menus.cs` (menus, double-clicks, the drop), `.Selection.cs` (multi-selection), `.InProgress.cs` (banner with Abort, Continue and Skip and their questions, working-row text, left-panel sync, the stopped commit's message, the questions about conflict markers) and `.GraphArea.cs` (phase 4's hooks: the list, the resolver, leaving the graph area, the focus when they close, `merge.tool`, the clean-up at opening). Disposing it (`IsClosed` from then on) disposes its queue and cancels all its other work |
 | `RecentRepositories` | The recent list, newest first, at most 10, kept in the session |
 | `GitRepositoryProvider` | `IRepositoryProvider` with real git: `OpenAsync`, `InitAsync`, `CloneAsync` (with the clone's prompt variables) through `GitRepository` |
 
 The window's regions show the active tab: `MainWindow.axaml` binds the left region to
 `ActiveTab.LeftPanel`, the graph region (`CommitGraphView`) to `ActiveTab`, and the right region
-to `ActiveTab.Details` (`RightPanelView`) or, while the working-changes row is selected,
-`ActiveTab.Changes` (`WorkingChangesView`); the status bar's branch to `ActiveTab.BranchText`.
-`CommitGraphView` shows `WelcomeView` for a tab without a repository, `RepositoryGraphView` for
-one with a repository (or `DiffView` in its place while a diff is open), with the conflict banner
-above either while one shows, and nothing while a restored tab is still opening. The toolbar binds
-to `ActiveTab.Toolbar`, the status bar's operation part to `ActiveTab.OperationStatus`. Over the
-main grid lie, in this order, the menu layer (`MenuLayer`), the drag layer (`DragLayer`) and the
-dialog layer (`DialogLayer`, an `ItemsControl` over `Dialogs.Open`), shown while a dialog is open.
+to `ActiveTab.Details` (`RightPanelView`, while `ShowsDetailsPanel`) or, while the working-changes
+row is selected, `ActiveTab.Changes` (`WorkingChangesView`, while `ShowsStagePanel`); the status
+bar's branch to `ActiveTab.BranchText`. `CommitGraphView` shows `WelcomeView` for a tab without a
+repository, and for one with a repository one of: `RepositoryGraphView` (`ShowsGraph`), the
+interactive rebase's list `InteractiveRebaseView` (`ShowsInteractiveRebase`), `DiffView`
+(`ShowsDiff`, also over the list) or the conflict resolver `ConflictResolverView`
+(`IsResolverOpen`), with the conflict banner above whichever shows, and nothing while a restored
+tab is still opening. While the resolver is open, `CommitGraphView`'s `Grid.ColumnSpan` is bound
+to `GraphColumnSpan` and covers the right panel's column too, which keeps its width, and the right
+panel and `RightSplitter` are hidden (D140), so `PanelLayout.Fit` and the widths in the session
+are unchanged. The toolbar binds to `ActiveTab.Toolbar`, the status bar's operation part to
+`ActiveTab.OperationStatus`. Over the main grid lie, in this order, the menu layer (`MenuLayer`),
+the drag layer (`DragLayer`) and the dialog layer (`DialogLayer`, an `ItemsControl` over
+`Dialogs.Open`), shown while a dialog is open.
 
 ### From a repository to the screen
 
@@ -192,12 +214,19 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `GitCommand` | One call: arguments (passed one by one, no shell quoting), working directory, optional standard input, extra environment variables (a null value removes a variable), optional line handlers for streamed output, and the `Encoding` of standard input and output (UTF-8, or `GitCommand.Latin1` for byte-exact content, D66). `DisplayText`, used in logs and errors, hides the credentials of a URL; `HideCredentials(text)` turns every URL's user information into `***`, `RemoveCredentials(text)` removes it (what "Copy URL" copies, D103) |
 | `IGitRunner` / `GitRunner` | Runs a command without blocking. A non-zero exit code is returned in the `GitResult`, not thrown; `GitResult.EnsureSuccess` turns it into a `GitException` that carries git's own standard error and, since phase 3, its standard output (`StandardOutput`: a merge writes its messages there) |
 | `GitResult` | Exit code, standard output, standard error, duration |
-| `GitCallRecord`, `IGitCallLog` / `GitCallLog` | The record of every call (command, folder, outcome, exit code, timing, the first 16 KB of each output stream with credentials hidden, D103, and `OperationId`, the queue's operation the call belongs to, or null for a read outside one). The activity log (T4, phase 5) will show these, grouped by operation |
+| `GitCallRecord`, `IGitCallLog` / `GitCallLog` | The record of every call, the last 2,000 kept in memory (`OperationLog` keeps the last 500 operations, so an old operation loses its calls first) (command, folder, outcome, exit code, timing, the first 16 KB of each output stream with credentials hidden, D103, and `OperationId`, the queue's operation the call belongs to, or null for a read outside one). The activity log (T4, phase 5) will show these, grouped by operation |
 | `GitLocator`, `GitSearchContext`, `GitDetection`, `GitVersion` | Finding git and checking its version |
-| `IGitRepository` / `GitRepository` | One open repository. Reads: `ReadRefsAsync`, `ReadHeadAsync`, `LoadCommitsAsync`, `ReadCommitDetailsAsync`, `ReadStatusAsync`, `ReadDiffAsync`, `ReadFileAsync`, `ReadFileSizeAsync`. Writes: `StageAsync`, `UnstageAsync`, `ApplyPatchAsync`, `SaveSnapshotAsync`, `DiscardAsync`, `RestoreSnapshotAsync`, `CommitAsync`. `CreateWatcher`; static `OpenAsync`, `InitAsync`, `CloneAsync`. Phase 3's members are listed in "Phase 3's repository members" below. Split over `GitRepository.cs`, `.Refs.cs`, `.Commits.cs`, `.Clone.cs`, `.Changes.cs` (status, diffs, file versions), `.Writes.cs`, and phase 3's `.Backups.cs`, `.Branches.cs`, `.History.cs`, `.InProgress.cs`, `.Remotes.cs`, `.Stash.cs`, `.Tags.cs` and `.Ignore.cs` |
-| `WorkingTreeStatus` | The staged files (HEAD → index), the unstaged ones (index → working tree, untracked as added, conflicted as `FileChangeKind.Conflicted`) and which are untracked, each list in byte order of the paths; from `git status --porcelain=v2 -z --untracked-files=all --renames`. `InProgress` (`InProgressState`) is the operation in progress, read from git's files (see "Toolbar, status bar, conflict banner and auto-fetch") |
-| `InProgressState`, `InProgressKind` | What is in progress: `Kind` (None, Merge, CherryPick, Revert, Rebase, ApplyMailbox), the commit and its subject, a rebase's branch and new base, `Remaining` (the commits a terminal's sequence or a rebase has left), `Empty` (a pick or revert that changes nothing), `AbortKeepsHead` (D110) |
-| `MergeResult`, `MergeMode`, `ApplyResult`, `ResetMode`, `StashApplyMode`, `PullOutcome`, `PullResult` | How phase 3's writes ended or what they run: a merge `UpToDate`, `FastForward`, `Merged` or `Conflicts`; a cherry-pick, revert or stash apply `Applied`, `Conflicts` or `Empty`; a pull's integration `UpToDate`, `FastForward`, `Merged`, `Rebased`, `Conflicts` or `UpstreamGone`, with the commits HEAD gained |
+| `IGitRepository` / `GitRepository` | One open repository. Reads: `ReadRefsAsync`, `ReadHeadAsync`, `LoadCommitsAsync`, `ReadCommitDetailsAsync`, `ReadStatusAsync`, `ReadDiffAsync`, `ReadFileAsync`, `ReadFileSizeAsync`. Writes: `StageAsync`, `UnstageAsync`, `ApplyPatchAsync`, `SaveSnapshotAsync`, `DiscardAsync`, `RestoreSnapshotAsync`, `CommitAsync`. `CreateWatcher`; static `OpenAsync`, `InitAsync`, `CloneAsync`. Phase 3's and phase 4's members are listed in "Phase 3's repository members" and "Phase 4's repository members" below. Split over `GitRepository.cs`, `.Refs.cs`, `.Commits.cs`, `.Clone.cs`, `.Changes.cs` (status, diffs, file versions), `.Writes.cs`, phase 3's `.Backups.cs`, `.Branches.cs`, `.History.cs`, `.InProgress.cs`, `.Remotes.cs`, `.Stash.cs`, `.Tags.cs` and `.Ignore.cs`, and phase 4's `.Rebase.cs`, `.Sequence.cs` and `.Conflicts.cs` |
+| `WorkingTreeStatus` | The staged files (HEAD → index), the unstaged ones (index → working tree, untracked as added, conflicted as `FileChangeKind.Conflicted`) and which are untracked, each list in byte order of the paths; from `git status --porcelain=v2 -z --untracked-files=all --renames`. `InProgress` (`InProgressState`) is the operation in progress, read from git's files (see "Toolbar, status bar, conflict banner and auto-fetch"). Since phase 4 `Conflicts` (a `ConflictEntry` per `u` line), `Submodules` (the paths whose `sub` field starts with `S`), `HasUnstagedTrackedChanges` (a tracked file that is not conflicted and not a submodule has unstaged changes: git's rebase Continue refuses then), `FindConflict(path)` and `SameAs` (both lists, the conflicts and the state compared) |
+| `InProgressState`, `InProgressKind` | What is in progress: `Kind` (None, Merge, CherryPick, Revert, Rebase, ApplyMailbox), the commit and its subject, a rebase's branch and new base, `Remaining` (the commits a terminal's sequence or a rebase has left), `Empty` (a pick or revert that changes nothing), `AbortKeepsHead` (D110). Phase 4's init properties: `Sequenced` (a `sequencer/` folder: a list), `HasPickHead` (a list with no pick head is paused between commits), for a rebase `StopKind` (`RebaseStopKind`), `NextIsSquash` (the stopped commit is the target of a fixup or squash) and `Group` (the app's group the stop is in), and `Done` and `Total` (a rebase's commit commands done and in all; a list's commits made and in all) |
+| `MergeResult`, `MergeMode`, `ApplyResult`, `ResetMode`, `StashApplyMode`, `PullOutcome`, `PullResult`, `PullIntegration` | How phase 3's writes ended or what they run: a merge `UpToDate`, `FastForward`, `Merged` or `Conflicts`; a cherry-pick, revert or stash apply `Applied`, `Conflicts` or `Empty`; a pull's integration `UpToDate`, `FastForward`, `Merged`, `Rebased`, `Conflicts` (every stop of its rebase, with or without conflicted files) or `UpstreamGone`, with the commits HEAD gained, and since phase 4 `LeftOutByForkPoint` and `AutostashConflicted`; `PullIntegration` `AsConfigured` (the toolbar's Pull) or `Rebase` (chosen for one pull, D147) |
+| `RebaseResult`, `RebaseOutcome`, `RebaseStopKind` | How a rebase the app ran ended (phase 4 design 1.4): `UpToDate`, `Rebased` (with the new tip, and `AutostashConflicted` when `rebase.autoStash`'s changes conflicted when put back) or `Stopped` (with the conflicted files); why a rebase stopped: `Pick`, `Rescheduled` (an untracked file was in the way), `ExecFailed`, `OwnAmendFailed` (the app's guarded amend failed: a hook refused the new message), `Edit`, `Empty` |
+| `RebaseAction`, `RebaseStep`, `RebasePlan`, `RebaseList`, `RebaseListEntry` | The interactive rebase: an action per commit (Pick, Reword, Squash, Fixup, Drop), a plan (onto, the branch's expected tip and full name, the steps oldest first with a reword's or a group's message) and the list read when it opens (onto, the branch's tip, the commits oldest first with subject, author and whole message, the merge count) |
+| `RebaseTodo` (Core) | Pure: the todo and message files of a plan (design 2.5, D143): full SHAs, LF, UTF-8 without BOM, an explicit `drop` per dropped commit; every reworded row and every group, fixup-only groups included, as `label vc-<n>`, `pick <target>`, `fixup <member>`… and the guarded amend (`GuardedAmend(n)`: `exec` a `git commit --amend --only --allow-empty --cleanup=whitespace --quiet --file=<rebase-merge/vc-message-n>` that runs only when `HEAD^` is `refs/rewritten/vc-<n>`), the message in `vc-message-<n>`. `SquashMessage` and `SquashPlan` build a squash of selected commits. `RebaseTodoTests` |
+| `SequenceResult`, `SequenceStop`, `ContinueResult`, `ContinueOutcome` | How a list of picks or reverts ended (`None`, `Conflicts`, `Empty`, `Refused`, with the commits applied and the list's length, D145); how Continue or Skip ended (`Done` or `Stopped`, the new tip, `AutostashConflicted`) |
+| `ConflictEntry`, `ConflictKind`, `ConflictSide`, `ConflictContent`, `MergeToolResult` | A conflicted path as `git status --porcelain=v2` prints its `u` line: the kind in git's words (both modified, both added, deleted by them or us, added by us or them, both deleted), whether it is a submodule, each stage's mode and id (`HasBase`, `HasOurs`, `HasTheirs`); what the resolver reads of it (the working-tree bytes, the marker size, whether a side is binary or a symbolic link); whether the merge tool staged it |
+| `ConflictText` (Core, `Conflicts/`) | Pure: a conflicted file split into common segments and blocks (`Parse(text, markerSize)`: a `<` line, an optional `|` base section, one `=` line, a `>` line, each of the marker size, as strictly as git's rerere reads them; anything else is common text), each block's ours, theirs and base lines and labels, `Choose(block, BlockChoice)` (`Ours`, `Theirs`, `OursThenTheirs`, `TheirsThenOurs`), the whole ours and theirs files, `HasMarkerLines` (any marker line of the size, the markers question's test), `Decode` and `Encode` byte for byte (UTF-8, else Latin-1, line ends kept). `ConflictTextTests` |
+| `BackupRetention`, `RemovedBackup`, `BackupRemovalReason` | The backups' clean-up (D139): `BackupRetention.Default` is 30 days and 50 backups; what it removed and why (older than the days, beyond the count) |
 | `NetworkOptions` | What a phase 3 call is given beyond its token: the prompt scope's variables (`Environment`), where progress goes (`Progress`), settings passed as `git -c` before a remote command (`Configuration`: auto-fetch's network timeout, D125), and `PromptCancelled`. `NetworkOptions.From(context)` builds it from a running operation. Local writes take it too: a filter or hook they run can prompt (git-lfs) |
 | `PushRequest` | One push of a local branch: remote, branch, the branch's full name on the remote, `SetUpstream`, `ForceWithLease` |
 | `RemoteInfo`, `WorktreeInfo` | A remote with its URLs as configured (`ShownUrl` hides credentials); a worktree and the branch it has checked out |
@@ -208,7 +237,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `FileDiff`, `DiffHunk`, `DiffLine`, `DiffParser` (Core, `Diff/`) | One file's diff as git prints it, parsed from Latin-1 text: git's header lines, the hunks with their ranges, and lines that keep their bytes (`Raw`) beside the text shown (`Text`, decoded as UTF-8, or Latin-1 when the file is not valid UTF-8). `IsBinary`, `IsNewFile`, `IsDeletedFile`, the modes, `IsVeryLarge` (D65) and `HasSameLines`. A type change, which git prints as a deletion and a creation, is read by `ParseTypeChange` into one diff of both, for showing only (D76) |
 | `PatchBuilder` (Core) | The patch for chosen added and removed lines (a whole hunk is all of its lines), forward to stage, in reverse to unstage or discard (D66). Unchosen changes stay as they are on the side the patch is applied to; hunks without a chosen line are left out and the ranges after them moved. Git's header lines are kept, except that a rename's, or a creation or deletion applied only in part, becomes the header of a change to the file at its path, and a patch of only some lines leaves a change of mode out. "\ No newline at end of file" stays on the side applied to as git wrote it; on the side built, a line lacks its line feed only while it is still that side's last line, and a kept line that ends the file on one side only is written as a removed and an added line. `PatchFuzzTests` checks random choices against git |
 | `WordDiff` (Core) | The words of a removed line and its paired added line that differ: a longest common sequence of words, ties matched early in the added line |
-| `DiscardSnapshot` | A snapshot taken before a discard (D67): its ref under `refs/visualcommit/backup/discard-<UTC time>`, its commit, the paths, and which of them existed |
+| `DiscardSnapshot` | A snapshot taken before a discard (D67): its ref under `refs/visualcommit/backup/discard-<UTC time>` (the time from the backups' clock since phase 4, D139), its commit, the paths, and which of them existed |
 | `RepoRefs`, `GitRef`, `HeadState`, `StashEntry` | What the refs are at one moment. `RepoRefs.Fingerprint` changes when HEAD, a ref's target or the stashes change (D52). A local branch's upstream is read as three values (D101): `UpstreamRef` (`%(upstream)`, `refs/remotes/origin/main`, or `refs/heads/main` for a local upstream), `UpstreamRemote` (`%(upstream:remotename)`, `.` for a local upstream: `HasLocalUpstream`) and `UpstreamRemoteRef` (`%(upstream:remoteref)`, the branch's name on the remote); phase 1's short `Upstream` stays for the left panel. Never cut out of `%(upstream:short)` |
 | `CommitInfo`, `CommitKind` | A row of the graph: a commit or a stash (one parent: the commit it was made on) |
 | `CommitDetails`, `ChangedFile`, `FileChangeKind` | What the details panel shows; files compared with the first parent, renames detected |
@@ -226,7 +255,10 @@ Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
   without one (D68, D102), and `GIT_LITERAL_PATHSPECS=1`, so a path is never read as a pattern
   (D74). Two calls run without it: `git check-ignore`, which refuses it, and `git stash push`
   (D108: git removes the stashed untracked files with `git clean … :/`, which the variable would
-  turn into a file name; the app passes stash push no path). Input and output
+  turn into a file name; the app passes stash push no path). A command's own variables override
+  these defaults for that call only: the interactive rebase's `GIT_SEQUENCE_EDITOR` (D143) and the
+  stopped commit's `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL` and `GIT_AUTHOR_DATE` for a rebase's
+  Continue (D144). Input and output
   are UTF-8, unless the command asks for Latin-1 (`GitCommand.Encoding`, D66): diffs, patches and
   blobs then travel byte for byte. Standard error is always UTF-8.
 - Calls that only read also get `GIT_OPTIONAL_LOCKS=0` (from `GitRepository`), so a read never
@@ -279,7 +311,7 @@ progress.
 | Reads (`GIT_OPTIONAL_LOCKS=0`) | `ReadHeadAsync` (HEAD's branch and commit only), `CountDetachedCommitsAsync` (`rev-list --count HEAD --not --branches --remotes --tags`), `IsAncestorAsync` (`merge-base --is-ancestor`), `CountCommitsAsync`, `ResolveAsync` (`rev-parse --verify --quiet`, unpeeled), `ReadWorktreesAsync` (`worktree list --porcelain`), `ReadRemotesAsync` (`git remote` and `git config --null --get-regexp` of every `remote.<name>.url` and `.pushurl`: URLs as configured, never `git remote -v`, which applies `insteadOf` rules, D129) |
 | Backups (`.Backups.cs`) | `SaveBackupRefsAsync`, `SnapshotForHardResetAsync`, `SnapshotIndexAsync`, `SnapshotTrackedChangesAsync` (see "Backup refs") |
 | Branches (`.Branches.cs`) | `CheckoutBranchAsync` (`switch --no-guess <b>`), `CheckoutTrackingBranchAsync` (`switch --create <b> --track refs/remotes/<r>/<b>`), `CheckoutDetachedAsync` (`switch --detach`), `CreateBranchAsync` (`branch <name> <start>`, or `switch --create` to check it out), `RenameBranchAsync` (`branch --move`), `DeleteBranchAsync` (`branch --delete --force`), `FastForwardBranchAsync` (`fetch --no-auto-maintenance --no-write-fetch-head . <target>:refs/heads/<b>`, which refuses a non-fast-forward and a branch checked out in any worktree, D94), `MergeAsync` (the message from `git fmt-merge-msg` for the short name, then `merge --no-edit --no-log -m <message> <full ref>`, with `--no-ff` or `--ff-only` for the other modes, D94) |
-| History (`.History.cs`, `.InProgress.cs`) | `ResetAsync` (`reset --soft <sha> --`, `reset --mixed --quiet <sha> --` or `reset --hard <sha> --`), `CherryPickAsync` (`cherry-pick <sha>`), `RevertAsync` (`revert --no-edit [-m 1] <sha>`), one commit per call, never git's sequencer (D88); `Empty` for a pick that changes nothing (`CHERRY_PICK_HEAD` left), while Git 2.36's empty revert leaves nothing and throws (D117). `AbortAsync(kind)` (`merge`, `cherry-pick`, `revert`, `rebase` or `am --abort`) |
+| History (`.History.cs`, `.InProgress.cs`) | `ResetAsync` (`reset --soft <sha> --`, `reset --mixed --quiet <sha> --` or `reset --hard <sha> --`), `CherryPickAsync(commit)` (`cherry-pick <sha>`), `RevertAsync(commit, isMerge)` (`revert --no-edit [-m 1] <sha>`) for one commit; several go through phase 4's list overloads with git's sequencer (D136, below). `Empty` for a pick that changes nothing (`CHERRY_PICK_HEAD` left), while Git 2.36's empty revert leaves nothing and throws (D117). `AbortAsync(kind)` (`merge`, `cherry-pick`, `revert`, `rebase` or `am --abort`) |
 | Remotes and the network (`.Remotes.cs`) | `FetchAsync(remote)`: `fetch --progress <r>`; for null one such call per remote in `git remote`'s order, without remotes whose `skipFetchAll` is set, every call but the last with `--no-auto-maintenance` (all of them for auto-fetch), going on after a failure and throwing one `GitException` at the end with an `error: Could not fetch <r>` line per failed remote; a prompt the user cancelled stops it (D109). Never `--prune` or `--tags` (D99). `IntegratePullAsync(branch)`: pull's second step (below). `PushAsync(PushRequest)`: `push --progress [--set-upstream] [--force-with-lease=<remote ref> --force-if-includes] <r> refs/heads/<b>:<remote ref>` (D100). `SetUpstreamAsync`, `UnsetUpstreamAsync`. `DeleteRemoteBranchAsync` and `DeleteRemoteTagAsync`: `push --progress --force-with-lease=<ref>:<expected> <r> --delete <ref>` (D100). `AddRemoteAsync` (`remote add -- <name> <url>`), `RenameRemoteAsync`, `SetRemoteUrlAsync`, `RemoveRemoteAsync`, `PushTagAsync` (`push --progress <r> refs/tags/<t>:refs/tags/<t>`). A local upstream (remote `.`) is never pushed to |
 | Stash (`.Stash.cs`) | `StashAsync` (`stash push [--include-untracked] [--message <m>]`, without `GIT_LITERAL_PATHSPECS`, D108; returns the new stash commit, or null for "No local changes to save"), `ApplyStashAsync` (`stash apply`, `stash pop`, or `stash pop --index` followed by a plain pop when git refuses the index part and changed nothing, D91), `DropStashAsync`. A stash is passed by its commit and found again in `git stash list` as `stash@{n}`; one no longer listed fails with "This stash no longer exists." |
 | Tags (`.Tags.cs`) | `CreateTagAsync` (`tag <t> <target>^{commit}`, or annotated `tag --annotate --cleanup=whitespace --file=- <t> <target>^{commit}` with the message on standard input; the target is peeled, D121), `DeleteTagAsync` (`tag --delete`) |
@@ -298,6 +330,101 @@ anything changes ("pull.rebase is set to preserve, which this app does not under
 the fetch marked nothing for merge (the upstream was deleted on the remote), nothing runs and
 the result is `UpstreamGone` (D129). `PullParityTests` compare the result with `git pull`'s for
 each setting.
+
+Since phase 4 (D147) `IntegratePullAsync(branch, integration, beforeRebase)` takes the
+integration: `AsConfigured` is the above (the toolbar's Pull, and phase 3's overload without a
+callback); `Rebase` ("Pull from {up} (rebase)") reads none of git's pull settings, as `git pull
+--rebase` ignores them: `merge --ff-only <head>` when the branch has nothing of its own,
+otherwise `git rebase` without arguments, which replays onto the upstream from its fork point
+(`git rebase FETCH_HEAD` would replay commits a force push removed upstream). Before either pull
+rebases, `beforeRebase(oldTip)` is called, where the app saves the rebase's backup. Both classify
+the rebase with `ClassifyRebaseAsync` (below), so every stop is `Conflicts`, with or without
+conflicted files. Before the rebase the commits git's fork point will leave out are counted:
+`rev-list --count --no-merges --right-only --cherry-pick <upstream>...HEAD` less the same count
+with `^$(git merge-base --fork-point <upstream> HEAD)`, kept as `PullResult.LeftOutByForkPoint`
+(0 without a fork point; counted before the rebase, so that a commit the rebase drops as empty is
+not taken for one the fork point left out). `PullRebaseParityTests`, `PullRebaseSettingsParityTests`
+and `PullRebaseForkPointParityTests` compare the chosen rebase pull with `git pull --rebase` (no
+settings, `pull.ff=only`, `pull.rebase=false`, `pull.rebase=merges`, a stop without a conflicted
+file, an autostash that conflicts, a force-pushed upstream, the fork point) on both gits; phase
+3's class for `pull.rebase=true` is now `PullRebaseTrueParityTests`.
+
+#### Phase 4's repository members
+
+As phase 3's: each runs inside one operation of the queue, takes the operation's `NetworkOptions`
+(a filter or hook can prompt) and a token, throws `GitException` with git's own text when git
+refuses and changes nothing, and returns a stop. `IGitRepository.cs` names each member's git
+command and design section.
+
+| Group | Members and their git commands |
+|---|---|
+| Rebase (`.Rebase.cs`) | `RebaseAsync(onto)`: `rebase <sha>`, never git's `<branch>` argument (`git rebase <upstream> refs/heads/<b>` rebases a detached HEAD, and `<b>` checks the branch out and stays there even after `--abort`) and no option that changes git's configured behaviour (`rebase.autoStash`, `rebase.backend`, `rebase.updateRefs`, the hooks are the user's, D142). `ReadRebaseAutoStashAsync` (`config --type=bool --get rebase.autoStash`). `ReadRebaseListAsync(onto, branch, fromCommit)`: "from here" `log --reverse --topo-order <onto>..<tip>`; onto a target `log --reverse --topo-order --no-merges --right-only --cherry-mark <onto>...<tip>`, less the commits marked `=` (their patch is upstream) that do not start empty, as git's sequencer leaves them out (an empty commit of the branch is kept), each with its subject, author and whole message (`%B`, re-encoded to UTF-8); `rev-list --merges --count <onto>..<tip>` for the merge check. `InteractiveRebaseAsync(plan)` (below) |
+| Lists (`.History.cs`) | `CherryPickAsync(IReadOnlyList<string>)` (`cherry-pick <A> <B> <C>`, oldest first) and `RevertAsync(IReadOnlyList<string>)` (`revert --no-edit <C> <B> <A>`, newest first, no merge commits), one call for the whole list (D136); how it ended is read from git's files (D145): exit 0 `None`; a pick head with conflicted files `Conflicts`; a pick head, nothing conflicted and the index equal to HEAD `Empty`, the index not equal (rerere, a refusing hook) `Conflicts` with 0 files; no pick head, `sequencer/` and `MERGE_MSG` an empty revert, `Empty`; no pick head, no `MERGE_MSG`, HEAD at `sequencer/head`: refused at its start, so `--quit` removes the `sequencer/` git wrote anyway and keeps the user's changes (`--abort` would drop staged ones), and git's failure is thrown; HEAD moved: `Refused` (a later commit git could not apply without a conflict). `QuitSequenceAsync(kind)` |
+| Continue and Skip (`.Sequence.cs`) | `ContinueAsync(state, message)`: a merge, or a pick or revert with its pick head, is committed with the message (`commit --file=- --cleanup=whitespace`, phase 3's commit; a list then runs `cherry-pick --continue` or `revert --continue`, which leaves the committed line out); a paused list runs `--continue` (one stopped on a refused commit throws: git would leave it out without a word); a rebase as below. `SkipAsync(state)`: `cherry-pick --skip`, `revert --skip`, `rebase --skip`, or for `OwnAmendFailed` `rebase --continue` without the new message. `ReadOperationMessageAsync(state)`: `MERGE_MSG` without git's trailing comment block (from a `{c} Conflicts:` line to the end, `{c}` being `core.commentChar`; the commit's own `#` lines stay, D68); a rebase's `rebase-merge/message` with no line removed beyond newer git's `# Conflicts:` block, or the group's `rebase-merge/vc-message-<n>` inside a group the app wrote, or without git's comment lines after a `fixup` or `squash` from elsewhere; null for a paused list and `git am` |
+| In progress (`.InProgress.cs`, `.Branches.cs`) | `ReadInProgressAsync` (part of `ReadStatusAsync`, below) and `ReadPseudoRefAsync(name)`, the one place that reads `CHERRY_PICK_HEAD` and `REVERT_HEAD` (D146): the file first; only when it is missing, `MERGE_MSG` or `sequencer/` exists and the repository's `extensions.refStorage` is `reftable` (read once per repository, lazily), `rev-parse --verify --quiet --symbolic-full-name <name>` must print exactly the name (a branch named `CHERRY_PICK_HEAD` must not answer), then `rev-parse --verify --quiet <name>`. A files repository with nothing in progress makes no git call. `PseudoRefTests` run a real reftable repository on a git of 2.45 or later (CI's) and assert on 2.36 that git refuses `--ref-format`; `PseudoRefProbeTests` check the rules with a recorded runner |
+| Conflicts (`.Conflicts.cs`) | `ReadConflictAsync(entry)`: the working-tree bytes (a link's target; none for a missing file), the marker size (`check-attr -z conflict-marker-size`, default 7), whether a side's blob is binary (a NUL in its first 8000 bytes, `cat-file blob`) or a symbolic link. `ReadConflictSideAsync(entry, side)`: `cat-file --filters --path=<p> <stage id>`, the working-tree form, writing nothing. `WriteResolutionAsync(path, bytes)`: writes the file byte for byte (never through a symbolic link) and `add -- <p>`. `TakeSideAsync(path, side)`: with both sides present (binary, link) `checkout --ours|--theirs -- <p>` then `add`, after a D67 snapshot when the file differs from that side (`hash-object`); with one side ("Keep the file") the file git left is staged as it is, and checked out from that side only when missing. `RemoveConflictedAsync(path)`: `rm -- <p>`, after a D67 snapshot when the file matches none of the stages. Never `git restore --ours`, which deletes a file whose side is missing. `ReadMergeToolAsync` (`config --get merge.tool`). `RunMergeToolAsync(path, tool)` (below). `ReadStagedConflictMarkersAsync(paths)`: `diff --cached --check -- <paths>`, its `leftover conflict marker` lines (exit 2 is a result) |
+| Backups (`.Backups.cs`) | `CleanUpBackupsAsync(retention, keep)` and its read half `FindBackupsToRemoveAsync` (see "Backup refs") |
+
+**The interactive rebase** (`InteractiveRebaseAsync(plan)`, D143): it refuses
+(`RebaseHeadMovedMessage`) unless HEAD is on the plan's branch at the tip the list was read from;
+reads the own messages the todo needs (`log -1 --encoding=UTF-8 -z --format=%B`, so a message in
+another encoding is not mangled); writes `RebaseTodo`'s todo and message files, UTF-8 without BOM,
+into a new folder `visualcommit-rebase-<guid>` under the system's temp folder; and runs `git rebase
+-i <onto>` with `GIT_SEQUENCE_EDITOR` set for this call to a shell function, `vc() { cp
+'<folder>/'vc-message-* "$(dirname "$1")/" && cp '<todo>' "$1"; }; vc` (git runs the editor as
+`sh -c '<editor> "$@"'`, so a plain chain of `cp`s would get the todo path as a third operand; one
+`cp` for every message file keeps the value under Windows' 32,767 characters; paths in forward
+slashes, single-quoted, `'` written `'\''`). The messages then live in `rebase-merge/` and go
+with it, so a Continue from a terminal works the same; the temp folder is deleted when git
+returns. When git refused the app's own todo (exit 1, a rebase folder it made, no `done`, `error:
+invalid line` or `rebase.missingCommitsCheck`'s warning), the app logs it at Error, runs `rebase
+--abort` and throws git's output. The todo has no `update-ref` lines, so other branches never
+move, even with `rebase.updateRefs`. A squash of selected commits is an interactive rebase of
+`RebaseTodo.SquashPlan`; the squashed commit is `NewTip~(list length − N)`.
+
+**How a rebase ended** (`ClassifyRebaseAsync`, `.Branches.cs`, shared by every rebase command:
+onto, interactive, squash, Continue, Skip, a pull's): whether `rebase-merge/` or `rebase-apply/`
+existed is read before the call. A folder after the call is `Stopped` with the conflicted files of
+`ls-files --unmerged`, whatever the exit code (an `edit` stop exits 0); when a folder was there
+before (Continue, Skip), a fatal exit (128 or more) and git's `You must edit all merge conflicts`
+throw instead, as they changed nothing. No folder, exit 0 and a whole line of standard output
+`Current branch <b> is up to date.` or `HEAD is up to date.` (never those words inside a subject
+git printed) is `UpToDate`; otherwise `Rebased` with HEAD as the new tip, and
+`AutostashConflicted` when files conflict after it (only putting back `rebase.autoStash`'s changes
+can leave them; told by the state, not by git's words, which differ between versions). No folder
+and a non-zero exit throws. Git's `ESC[K` before `Successfully rebased` is removed from both
+streams.
+
+**Continue of a rebase** (5.4, D144): first git's own check of `--continue` is made, so that the
+app never commits for a Continue git then refuses: `update-index -q --refresh`, then `diff-files
+--name-only -z --ignore-submodules`; a changed tracked file that is not conflicted refuses with
+`RebaseUnstagedChangesMessage` and the paths. Inside a group the app wrote, a given message is
+written to `rebase-merge/vc-message-<n>` first, so that the group's amend applies it. Then:
+`OwnAmendFailed` runs the amend again when `HEAD^` is `refs/rewritten/vc-<n>` (hooks run; a
+refusal leaves the rebase stopped) and removes the amend git rescheduled at the head of the todo
+under `rebase.rescheduleFailedExec`, then `rebase --continue`; a pick or reword stop with
+something staged and nothing conflicted is committed with `commit --no-verify
+--cleanup=whitespace --file=-` and the stopped commit's author from `rebase-merge/author-script`
+(as git's own Continue, which runs no hook there but strips the message's `#` lines), then `rebase
+--continue`, which takes that commit for the stopped one; anything else is `rebase --continue`.
+
+**The merge tool** (`RunMergeToolAsync`, D149): refuses a path that is not unmerged or is a
+submodule, then runs `git -c mergetool.keepBackup=false mergetool --tool=<tool> --no-prompt -- <p>`
+(the `-c` must come before the subcommand) and waits; `Staged` when the path is no longer unmerged
+afterwards. A tool git does not know or cannot find throws. Afterwards, also after a cancel or a
+failure, the files git leaves beside the file (`<name>_BACKUP_<n>.<ext>`, `_BASE_`, `_LOCAL_`,
+`_REMOTE_`) are deleted when they did not exist before, and after a cancel git's `_BACKUP_` copy
+goes back over the file while the path is unmerged. Cancelling stops git and, on Windows, the tool
+with it (the job object). Tests use a fake tool, `mergetool.fake.cmd` with `trustExitCode=true`
+(`MergeToolTests`).
+
+**Git 2.55's differences** that the code handles (CI runs 2.55, the development machine 2.36): at a
+conflict stop `rebase-merge/message` ends with a `# Conflicts:` block, left out of the message the
+stage panel fills; `done` and `git-rebase-todo` write each subject as a comment (`pick <sha> #
+Subject`), and the app reads only the command and the SHA; an autostash that conflicts is told in
+other words, so the app tells it by the conflicted files left after an exit 0; a rescheduled pick
+has no `stopped-sha` and is recognised by `done` ending with the same command; a reftable
+repository can exist (Git 2.45 and later).
 
 ### Lane layout (D48, D54, D55)
 
@@ -435,22 +562,37 @@ out in well under a second.
   `git apply --reverse` like any other file's), restore the last snapshot, and commit or amend
   (`git commit --file=- --cleanup=whitespace [--amend]`, D68). After a commit that leaves the
   tree clean, the new commit is selected.
-- During an operation in progress (D89): the unstaged list's title becomes "Unstaged files (N, M
-  with conflicts)" and a conflicted row has the tooltip "Conflict: resolve it in your editor, then
-  stage it" (`ChangedFileRow.RowToolTip`); while a merge, cherry-pick or revert is in progress and
-  the summary and description are empty, they are filled from `MERGE_MSG`
-  (`RepositoryViewModel.ReadMergeMessageAsync`) with its `#` lines removed; a merge with no
-  conflict left can be committed with nothing staged; a pick or revert that changes nothing
-  (`Empty`) keeps the commit button disabled with the tooltip "This cherry-pick changes nothing:
-  abort it". Committing concludes a merge or a single pick or revert, as in a terminal.
+- During an operation in progress (D89, D144): the unstaged list's title becomes "Unstaged files
+  (N, M with conflicts)" and a conflicted row has the tooltip "Conflict: click to resolve it"
+  (`ChangedFileRow.RowToolTip`); a click on it opens the conflict resolver. Once per stopped
+  commit, when the summary and description are empty, they are filled with the operation's
+  message (`IWorkingChangesHost.ReadOperationMessageAsync`, the git layer's
+  `ReadOperationMessageAsync`: `MERGE_MSG` without git's comment block, so a commit's own `#`
+  lines stay, a rebase's own message, or a group's), split as the message dialog splits it
+  (`SplitMessage`); `IsFillingMessage` is true while that read is pending. When the operation goes
+  on or ends, a message still as it was filled is cleared. A merge with no conflict left can be
+  committed with nothing staged; committing concludes a merge or a single pick or revert, as in a
+  terminal. For a list of picks or reverts, or a rebase, the commit button is the banner's Continue
+  instead (`ContinuesOperation`): "Continue cherry-pick", "Continue revert" or "Continue rebase",
+  enabled as Continue is, with its reason as tooltip, and the summary may be empty;
+  `ContinueMessage` is null (the operation's own message) while the boxes hold what was filled,
+  else the joined message. Amend is disabled during a list or a rebase stop ("Finish or abort the
+  {kind} first"). A pick or revert that changes nothing (`Empty`) keeps Commit disabled with "This
+  cherry-pick changes nothing: skip it". Skip clears a message the user typed for the skipped
+  commit (`SkipClearingMessageAsync`). Staging a conflicted file whose working-tree file still has
+  conflict markers, and the commit that concludes an operation with markers staged, ask first
+  through `IConflictMarkerQuestions` (D148).
 - Phase 3 added the files' context menus (see "Context menus"): stage, discard, ignore, open,
-  show in folder, copy path; the hover buttons of D70 stay.
+  show in folder, copy path, and phase 4 "Resolve conflict" and "Open in merge tool" for a
+  conflicted file; the hover buttons of D70 stay.
 - Discard and restore (D75): files with a conflict and nested repositories (untracked paths
   ending in `/`) are left out of a discard, with a word in the question or the panel's message.
   After a discard that succeeded, the view model keeps the snapshot and a SHA-256 of each of its
   files as the discard left them, and shows the restore bar. Restore compares the files again:
   when one has changed, it asks, and saves the changed files in a snapshot of their own before
-  `RestoreSnapshotAsync`; it hides the bar only when the files are back.
+  `RestoreSnapshotAsync`; it hides the bar only when the files are back. A discard, a line discard
+  and a Restore that saved a snapshot end with the backups' clean-up (D139), which keeps the
+  restore bar's snapshot.
 - `RefreshStatusAsync` reads the status (folded like `RefreshAsync`: a call during a run makes it
   run once more), shows it, logs `<name>: working tree: <N> staged, <N> unstaged` at Debug level
   (the real-window pass waits for it), and reads the open diff again; a working-tree diff whose
@@ -473,7 +615,9 @@ out in well under a second.
 - `ViewModels/Diff/DiffViewModel`: one open diff. Its `Target` (`DiffTarget`), the header's texts,
   `Mode` (the `DiffMode` setting), and `Body`: `Text`, `VeryLarge` (until "Show diff", which
   turns `Highlighting` off), `Binary` (sizes), `Image` (both versions' bytes, read whole up to
-  20 MB), `Empty`, `Conflict` or `Error`. It builds the actions on the file, a hunk or the
+  20 MB), `Empty` or `Error`. Phase 2's `Conflict` body ("This file has a merge conflict") is gone:
+  `RepositoryViewModel.OpenDiff` of a conflicted unstaged file opens the conflict resolver, and an
+  open diff whose file becomes conflicted closes (D148). It builds the actions on the file, a hunk or the
   selected lines (`SelectedChanges`, which the view keeps up to date) and hands them to the host.
   `LoadAsync(target)` reads it again for the file as the status now lists it; a newer load wins,
   and the selected lines are dropped unless the lines read are the same (`FileDiff.HasSameLines`,
@@ -502,6 +646,13 @@ out in well under a second.
   scrolls to the top; a new diff for the same path keeps the scroll position; a change of mode
   keeps the line at the top of the view at the top. AvaloniaEdit's
   search panel is removed (it took Esc even while closed).
+- Since phase 4 the panes are shared with the conflict resolver: `DiffPane` asks its owner
+  through the internal `IDiffPaneHost` (palette, syntax runs, word highlights, each row's
+  background, what each header row's bar holds with its buttons and automation ids, whether rows
+  can be selected and whether the sign column shows), which `DiffTextView` and `ConflictPanes`
+  both implement; `CodeTextEditor` is the editor base both use (AvaloniaEdit's `TextEditor` with
+  the search panel removed and scrolling through its scroll viewer), and `DiffPalette` the colours
+  both look up. Phase 2's 66 pictures stayed byte-identical through the change.
 - `DiffHighlighter`/`DiffSyntax`: TextMateSharp's registry, grammars and the Dark+ and Light+
   themes are loaded once per process; each side of a diff is tokenized on its own, in order, and
   a token's style is the first matching rule's colour and font style (D64). Diffs of up to 1,000
@@ -534,7 +685,7 @@ failure or a cancel (D71, D81); the app's reads never write (D47), so nothing re
 The files that say an operation is in progress (`MERGE_HEAD`, `rebase-merge/`, …) are in the git
 folder, so a merge started in a terminal refreshes the refs and the status, and the banner shows.
 
-### Operation queue (D81, D107, D123, D125, D126)
+### Operation queue (D81, D107, D123, D125, D126, D149)
 
 Contracts and the queue are in `src/VisualCommit.Core/Operations` (namespace
 `VisualCommit.Core.Operations`). The queue only schedules: it runs delegates, pauses and
@@ -543,10 +694,10 @@ or a UI (`OperationQueueTests`, `OperationQueueUiTests`).
 
 | Type | Role |
 |---|---|
-| `GitOperation` | One operation: `Title` ("Push main", "Fetch origin": the log line, the status bar's "&lt;Title&gt; failed" and "&lt;Title&gt; cancelled", the finishing dialog), `RunningText` ("Fetching from origin…"), `Kind` (`Local` or `Network`), `Refresh` (`RefreshScope`: `None`, `Status`, `Refs`), `Run` (the delegate). Init properties: `DedupeKey`, `Errors` (`ErrorDisplay.Dialog`, or `StagePanel` for phase 2's writes), `IsBackground` (auto-fetch), `Prompts` (`PromptMode`; null: `Ask`, or `Deny` for a background operation), `HasSeveralSteps` |
-| `OperationContext` | What `Run` is given: `OperationId` (`op-<n>`, unique in the process; also the prompt scope's id), `CancellationToken` (`CancellationToken.None` for a local operation, and after `EndCancelWindow`), `Environment` (the prompt scope's variables), `Progress` (at most one update per 100 ms reaches the queue's `Changed`), `EndCancelWindow()` (from now on Cancel is no longer offered; it throws `OperationCanceledException` when the user had already cancelled, so a pull never integrates after Cancel), `PromptCancelled` |
-| `OperationReport` | What `Run` returns: `Done(message)`, `Conflicts(message)` (a stop with conflicts is no failure, D95), `Failed(message, GitFailure)` (a failure the operation reports itself) |
-| `OperationResult`, `OperationSnapshot`, `OperationFinishedEventArgs` | How an operation ended (outcome `Succeeded`, `Conflicts`, `Failed` or `Cancelled`, the status bar's message, the `GitFailure`, and `StaleLockFiles` after a cancel); what runs now (title, running text, kind, `IsBackground`, progress, `CanCancel`, `HasSeveralSteps`) |
+| `GitOperation` | One operation: `Title` ("Push main", "Fetch origin": the log line, the status bar's "&lt;Title&gt; failed" and "&lt;Title&gt; cancelled", the finishing dialog), `RunningText` ("Fetching from origin…"), `Kind` (`Local` or `Network`), `Refresh` (`RefreshScope`: `None`, `Status`, `Refs`), `Run` (the delegate). Init properties: `DedupeKey`, `Errors` (`ErrorDisplay.Dialog`, or `StagePanel` for phase 2's writes), `IsBackground` (auto-fetch, the backups' clean-up at opening), `Prompts` (`PromptMode`; null: `Ask`, or `Deny` for a background operation), `HasSeveralSteps`, and since phase 4 `CanBeCancelled`: a local operation that only waits for another program (the merge tool, D149) |
+| `OperationContext` | What `Run` is given: `OperationId` (`op-<n>`, unique in the process; also the prompt scope's id), `CancellationToken` (`CancellationToken.None` for a local operation that cannot be cancelled, and after `EndCancelWindow`), `Environment` (the prompt scope's variables), `Progress` (at most one update per 100 ms reaches the queue's `Changed`), `EndCancelWindow()` (from now on Cancel is no longer offered; it throws `OperationCanceledException` when the user had already cancelled, so a pull never integrates after Cancel), `PromptCancelled`, and since phase 4 `SetRunningText(text)`: an operation of several steps names the step it is at ("Checking out {A}…", then "Rebasing {A} onto {B}…"); the progress of the step before is dropped, the title and log lines stay |
+| `OperationReport` | What `Run` returns: `Done(message)`, `Warning(message)` (since phase 4: a success the status bar shows in the warning colour, logged `Succeeded`, such as a pull whose rebase left out commits the upstream once had), `Conflicts(message)` (a stop with conflicts is no failure, D95), `Failed(message, GitFailure)` (a failure the operation reports itself) |
+| `OperationResult`, `OperationSnapshot`, `OperationFinishedEventArgs` | How an operation ended (outcome `Succeeded`, `Conflicts`, `Failed` or `Cancelled`, the status bar's message, `IsWarning`, the `GitFailure`, and `StaleLockFiles` after a cancel); what runs now (title, running text or the step's, kind, `IsBackground`, progress, `CanCancel`, `HasSeveralSteps`) |
 | `IOperationQueue` / `OperationQueue` | `RunAsync(operation)`, `TryStartInBackground(operation)`, `WhenIdleAsync()`, `Current`, `Waiting`, `LastResult` (the last non-background result), `CancelCurrent()`, `DropWaiting()`, the events `Changed` (any change, progress included) and `Finished` (every ended operation, background ones too), both raised on any thread. `OperationQueue(repositoryName, gitDirectory, pauseWatcher, refresh, prompts, operations, log, findLockFiles)` |
 | `GitFailure`, `GitFailureKind`, `GitFailureClassifier`, `GitOutputCleaner` | A failure as the error dialog shows it (C11): `Kind`, `Summary`, `GitOutput`, `CommandText`, `ExitCode`. `GitOutputCleaner.Clean(stderr, stdout)`: standard error split at carriage returns and line feeds, without progress lines that carry a percentage, `Cloning into` and empty lines, line ends trimmed (a leading space stays: ` ! [rejected]`), credentials hidden; the standard output cleaned the same way when nothing is left; never shortened. `GitFailureClassifier.Classify(stderr, stdout, exitCode)` reads git's English text: `CheckoutBlockedByUntrackedFiles` (untracked files in the way, alone or with tracked ones), `CheckoutBlockedByLocalChanges` (tracked files only), `PushRejectedStale` (a push's ` ! [rejected]` line with `stale info` or `remote ref updated since checkout`), `PushRejected` (`fetch first`, `non-fast-forward`; a rejected line counts only with `failed to push some refs`, so a refused `git fetch .` is no rejected push), `AuthenticationFailed`, `NotFastForward`, `IndexLocked`, `Other` |
 | `GitOperationScope` | The operation of the current asynchronous flow, which the runner records with each call |
@@ -582,19 +733,23 @@ rules:
   `pull:<full branch ref>`, `push:<full branch ref>-><r>/<remote ref>`; everything else always
   runs, so two stages of two files are two operations.
 - **Cancel.** `CancelCurrent` cancels the running operation's token while `CanCancel`: a network
-  operation before `EndCancelWindow`, not cancelled yet. A local operation has no token: once
-  started it runs every step to its end. The runner stops git (D31, D36, D37).
-- **The background slot (D85, D125).** `TryStartInBackground` starts an operation only when
+  operation, or a local one that `CanBeCancelled` (the merge tool, D149, amending D81), before
+  `EndCancelWindow`, not cancelled yet. Any other local operation has no token: once started it
+  runs every step to its end. The runner stops git (D31, D36, D37), and on Windows everything git
+  started, the merge tool included.
+- **The background slot (D85, D125, D139).** `TryStartInBackground` starts an operation only when
   nothing runs or waits. A background operation is never pre-empted: the user's operations wait
-  for it, and the status bar says "Waiting for auto-fetch…". While one of theirs waits, the user
-  can cancel it (`CanCancel`, the status bar's Cancel). It shows no running text or progress and
-  opens no dialog.
+  for it, and for auto-fetch the status bar says "Waiting for auto-fetch…". While one of theirs
+  waits, the user can cancel it (`CanCancel`, the status bar's Cancel). It shows no running text
+  or progress and opens no dialog. Two operations use it: auto-fetch and, since phase 4, the
+  backups' clean-up when a repository opens ("Clean up backups", see "Backup refs"); the status
+  bar's auto-fetch texts are shown only for auto-fetch's own operation, by its title.
 - **Tab close (`Dispose`).** The waiting operations end `Cancelled` without running (so does the
   next one whose start was posted but has not run); a running network operation the user started
-  is cancelled; a running local one goes on to its end, all its steps, without the refresh; a
-  background one is left to finish; the running operation's prompt scope closes, which closes its
-  dialog. `MainWindowViewModel` keeps a closed tab whose operation still runs until its queue is
-  idle.
+  is cancelled; a running local one goes on to its end, all its steps, without the refresh, the
+  merge tool too; a background one is left to finish; the running operation's prompt scope closes,
+  which closes its dialog. `MainWindowViewModel` keeps a closed tab whose operation still runs
+  until its queue is idle.
 - **App exit (1.8, D126).** `MainWindow.OnClosing` asks `MainWindowViewModel.TryClose`. While a
   repository of an open tab, or of a tab closed meanwhile, runs an operation that is not in the
   background, the close is cancelled: every open tab's waiting operations are dropped
@@ -606,8 +761,9 @@ rules:
   operations; a local one's running git call ends after the process has gone, but its later steps
   do not run. A background auto-fetch never holds the window.
 - **Stale locks after a cancel (D126).** A git that is killed while it updates refs leaves
-  `<name>.lock` files, after which every fetch fails. After a network operation ends `Cancelled`
-  (a background one only when the user cancelled it), the queue calls `findLockFiles(start)` off
+  `<name>.lock` files, after which every fetch fails. After a network operation, or a local one
+  that can be cancelled, ends `Cancelled` (a background one only when the user cancelled it), the
+  queue calls `findLockFiles(start)` off
   the UI thread: `LockFiles.FindSince` over the git folder and the common git folder lists only
   what a fetch or push can lock (`refs/**/*.lock`, `packed-refs.lock`, `shallow.lock`,
   `config.lock`), written since the operation started (a second's margin) and unchanged 0.5 s
@@ -617,25 +773,28 @@ rules:
   `<repo>: <Title>: <Outcome> after <N> ms: <Message>` (Info; Warning with git's first output line
   for a failure), which the real-window pass waits for, and `IOperationLog` an `OperationRecord`.
 
-### Operations (`RepositoryOperations`, D113, D124)
+### Operations (`RepositoryOperations`, D113, D124, D135 to D147)
 
 `ViewModels/Operations/RepositoryOperations` builds and starts every operation of one repository:
 it asks the confirmations, opens the dialogs, saves the backups inside the operation, runs it
 through the queue with its texts, and shows the result. One per `RepositoryViewModel`
 (`Operations`). It implements `IRepositoryActions` (every public operation; the menus and the
 double-clicks call it through `RepositoryViewModel.MenuActions`), `IToolbarActions` (the
-toolbar's six buttons), `IRemoteActions` (the Remotes dialog) and `IInProgressActions` (the
-banner's Abort). Tests give recording fakes for these interfaces.
+toolbar's six buttons), `IRemoteActions` (the Remotes dialog), `IInProgressActions` (the
+banner's Abort, Continue and Skip) and, since phase 4, `IConflictActions` (the conflict
+resolver's reads and writes). Tests give recording fakes for these interfaces.
 
 | File | What it holds |
 |---|---|
 | `RepositoryOperations.cs` | The constructor and the interfaces' mappings |
 | `RepositoryOperations.Run.cs` | The helpers every operation shares (below) |
-| `RepositoryOperations.Branches.cs` | Checkouts (local, remote into a tracking branch, a commit or tag detached), "Stash changes and check out", "Check out and merge" (the drop), create, rename, delete, fast-forward, merge, reset, cherry-pick and revert (one or several), abort |
-| `RepositoryOperations.Remotes.cs` | Fetch (one remote or all), pull, push (to the upstream, through the push dialog, onto a dropped remote branch), force push, set and stop tracking an upstream, delete a remote branch, the Remotes dialog and its add, rename, change URL and remove, push a tag, delete a tag on a remote |
+| `RepositoryOperations.Branches.cs` | Checkouts (local, remote into a tracking branch, a commit or tag detached), "Stash changes and check out", "Check out and merge" (the drop), create, rename, delete, fast-forward, merge, reset, cherry-pick and revert (one, or several as one git call with the list), abort (with the return to the branch a "Check out and rebase" left) |
+| `RepositoryOperations.Remotes.cs` | Fetch (one remote or all), pull and since phase 4 pull with rebase, push (to the upstream, through the push dialog, onto a dropped remote branch), force push, set and stop tracking an upstream, delete a remote branch, the Remotes dialog and its add, rename, change URL and remove, push a tag, delete a tag on a remote |
 | `RepositoryOperations.StashTags.cs` | Stash (the stash dialog), apply, pop, pop the newest, drop, create a tag (the tag dialog), delete a tag |
 | `RepositoryOperations.Files.cs` | The file menus' actions: stage, unstage and discard (through phase 2's writes), ignore a file or its extension, open a file, show in folder, copy a SHA, SHAs, a path, a ref name or a remote's URL |
-| `OperationTexts.cs` and `.Branches.cs`, `.Menus.cs`, `.Remotes.cs`, `.StashTags.cs` | Every text: an `OperationText(Title, RunningText, ErrorTitle, FailureSummary)` per operation (design 2.33), the success, conflict and refusal messages, the confirmations, the error dialogs' own titles and summaries, the menus' labels and disabled reasons. Counts use the singular for one ("1 file has conflicts", D113) |
+| `RepositoryOperations.Rebase.cs` | Phase 4: rebase onto (`RebaseAsync(RebaseTarget)`), "Check out and rebase" (`CheckoutAndRebaseAsync`), opening the interactive list (`OpenInteractiveRebaseAsync`) and its Start (`RunInteractiveRebaseAsync`), squash (`SquashAsync`), Continue and Skip (`IInProgressActions`), the return file, the selection after a rebase |
+| `RepositoryOperations.Conflicts.cs` | Phase 4: "Resolve conflict" and "Open in merge tool" from the file menu, `IConflictActions` (mark resolved with the "changed on disk" check, take a side, delete, the merge tool, the sides' names), the questions about conflict markers (staging, Continue), the paths that were conflicted at the stop |
+| `OperationTexts.cs` and `.Branches.cs`, `.Menus.cs`, `.Remotes.cs`, `.StashTags.cs`, `.Rebase.cs`, `.Conflicts.cs` | Every text: an `OperationText(Title, RunningText, ErrorTitle, FailureSummary)` per operation (design 2.33, phase 4 design section 10), the success, conflict and refusal messages, the confirmations, the error dialogs' own titles and summaries, the menus' labels and disabled reasons. Counts use the singular for one ("1 file has conflicts", D113) |
 
 The helpers of `.Run.cs`:
 
@@ -646,7 +805,10 @@ The helpers of `.Run.cs`:
   cancel. A success shows in the status bar only; a conflict in the banner. After a deduplicated
   second call only the first caller shows the result. After the tab closed it starts nothing.
   `RunOptions`: `DedupeKey`, `HasSeveralSteps`, `Prompts`, `ShowsErrorDialog` (false for the
-  Remotes form, which shows git's message in `RemoteError`), `DescribeFailure`.
+  Remotes form, which shows git's message in `RemoteError`), `DescribeFailure`, and since phase 4
+  `CanBeCancelled` (the merge tool). An operation that saved a backup (`SaveBackupAsync` marks it)
+  ends with the backups' clean-up inside it, after its work, whether the work succeeded or not
+  (`CleanUpBackupsAsync`, D139): phase 3's resets, deletions, force pushes, drops and aborts too.
 - `ConfirmAndRunAsync(confirmation, text, kind, refresh, backup, run)` asks the confirmation,
   then inside the operation saves the batch `backup` returns (`SaveBackupAsync`) and runs `run`;
   when the backup fails nothing else runs. The detail of every such confirmation is "A backup is
@@ -671,15 +833,19 @@ The helpers of `.Run.cs`:
 
 Kinds and prompts: fetch, pull (local when its upstream is a local branch), push, force push,
 deleting a remote branch, pushing and deleting a tag on a remote are network operations; every
-other operation is local. Phase 3's operations ask for prompts (`Ask`); phase 2's writes,
-`FastForwardBranchAsync`, every read and the watcher's `check-ignore` get none.
+other operation is local; the merge tool is a local one that can be cancelled. Phase 3's and
+phase 4's operations ask for prompts (`Ask`); phase 2's writes, `FastForwardBranchAsync`, every
+read, the watcher's `check-ignore` and the background clean-up get none.
 
 What an operation checks when it runs (D124), since it may have waited in the queue: merge,
-reset, cherry-pick, revert and pull read HEAD inside the operation and refuse when it is no longer
-on the branch (or detached state) the user saw ("HEAD moved while this waited: …"; reset also when
-its commit moved; pull also when the branch's upstream changed, and again after its fetch);
-merge, cherry-pick, revert and "Check out and merge" read a fresh status and refuse while an
-operation is in progress ("Finish or abort the merge first"); the stash checks its reason again
+reset, cherry-pick, revert, pull and every rebase read HEAD inside the operation and refuse when it
+is no longer on the branch (or detached state) the user saw ("HEAD moved while this waited: …";
+reset also when its commit moved; pull also when the branch's upstream changed, and again after
+its fetch; an interactive rebase or a squash also when the branch's tip moved since the list was
+read); merge, cherry-pick, revert, "Check out and merge" and every rebase read a fresh status and
+refuse while an operation is in progress ("Finish or abort the merge first") or, for a rebase,
+while files conflict; Continue and Skip refuse when the state changed since the click (another
+kind, another stopped commit, conflicts back); the stash checks its reason again
 (`ToolbarViewModel.StashReason`). A checkout from a detached HEAD whose commits nothing else
 reaches confirms first ("Leave these commits?", from `CountDetachedCommitsAsync`) and saves
 `detached-<time>` inside the operation; a checkout that finds such commits it never asked about
@@ -691,20 +857,82 @@ changes only (`--message "VisualCommit: before checking out <target>"`), checks 
 once; a pop that conflicts ends `Conflicts` and opens "Changes re-applied with conflicts" (the one
 conflict that opens a dialog, without git's output); a pop that fails otherwise opens "Changes
 not re-applied"; every outcome names the stash. Several commits are cherry-picked oldest first
-and reverted newest first, one git call each, stopping at the first that does not apply cleanly;
-the message names the commits not picked. A drop's "Check out and merge" checks out and merges
-in one operation. The toolbar's Pop, clicked again while the pop of the same stash has not ended,
-gets that pop's task instead of popping the next stash. "Open file" asks a plain confirmation
-first for a file that can run programs (`CanRunPrograms`: a fixed list of extensions on every
-platform, or an executable bit, D130). "Show in folder" starts `explorer.exe`, `open`, `dbus-send`
-(with `xdg-open` as the fallback) by absolute path (`FileLauncher`), never by bare name.
+and reverted newest first with one git call that takes the whole list (D136, D145), so that git's
+sequencer keeps what is left for the banner's Continue, Skip and Abort; a stop says "Cherry-picked
+{K} of {N} commits; stopped at {short} with conflicts in {M} files" (or "…; {short} changes
+nothing", "…; git could not pick {short}"), in the warning colour, and a list git refused at its
+start says "Git would overwrite your changes: commit or stash them first. Nothing was
+cherry-picked." A multi-revert with a merge commit is disabled. A drop's "Check out and merge"
+checks out and merges in one operation. The toolbar's Pop, clicked again while the pop of the same
+stash has not ended, gets that pop's task instead of popping the next stash. "Open file" asks a
+plain confirmation first for a file that can run programs (`CanRunPrograms`: a fixed list of
+extensions on every platform, or an executable bit, D130). "Show in folder" starts `explorer.exe`,
+`open`, `dbus-send` (with `xdg-open` as the fallback) by absolute path (`FileLauncher`), never by
+bare name.
 
-### Backup refs (D67, D83, D127)
+Phase 4's operations (design sections 1 to 6, D142 to D147), each one local operation that asks
+nothing before it starts (D135) except Skip:
+
+- **Rebase onto** ("Rebase {b} onto {target}", `RebaseTarget(Sha, Name)`: the SHA read when the
+  menu opened, the name for the texts): the refusals above, the backup `rebase-<time>/<b>` of the
+  branch's old tip, `git rebase <sha>`, and 1.4's outcome in the status bar: "Rebased {b} onto
+  {target}", "{b} is already up to date with {target}", a stop ("Rebase stopped: {N} files have
+  conflicts", warning; the banner shows it) or a failure in "Rebase failed" with git's output and
+  10.1's special summaries (a dirty tree, an untracked file in the way). A stop with nothing to look
+  at (rescheduled, a failed exec, the app's amend, a refused list) also opens the error dialog with
+  git's output ("Rebase stopped", or "Cherry-pick stopped" and "Revert stopped" for a list; D144
+  amends D95 for these). After a rebase that ended rebased,
+  started here or finished by Continue or Skip, the branch's new tip is selected when the selected
+  commit was one of the branch's (design 1.5).
+- **Check out and rebase** ("Check out {A} and rebase it onto {B}", several steps): unless
+  `rebase.autoStash` is set (`ReadRebaseAutoStashAsync`), it refuses a working tree with tracked
+  changes (submodules left out) before anything changes; then phase 3's checkout of A
+  (`SetRunningText` "Checking out {A}…"), the backup and the rebase ("Rebasing {A} onto {B}…"). When
+  the rebase stops, it writes the branch the user was on, as a full ref name and a line feed, into
+  the rebase folder as `visualcommit-return` (`ReturnFileName`); the app's Abort reads it before
+  `git rebase --abort` and checks that branch out again afterwards, and its question says so. An
+  abort from a terminal ignores the file, which goes with the folder.
+- **Interactive rebase**: `OpenInteractiveRebaseAsync(InteractiveRebaseRequest(Onto, BranchRef,
+  FromHere, CheckoutFirst))` reads the list (`ReadRebaseListAsync`) and opens it in the graph area
+  (see "The graph area"); its Start runs `RunInteractiveRebaseAsync(plan, request)`: "Interactive
+  rebase of {b}", with the dirty-tree check and the checkout first for a drop's source that is not
+  checked out, the backup, then `InteractiveRebaseAsync`. The list closes when the rebase is done
+  or stopped, and stays open as it was when git refused before anything started ("Interactive
+  rebase failed"). Done: "Rebased {b}: {N} commits".
+- **Squash** ("Squash {N} commits"): the message dialog filled with git's squash message (the
+  commits' messages oldest first, joined by a blank line), then the HEAD and tip checks, the backup
+  and an interactive rebase from the oldest selected commit's parent with `RebaseTodo.SquashPlan`;
+  "Squashed {N} commits into {short}", and the squashed commit is selected.
+- **Pull with rebase** ("Pull (rebase)", dedupe key `pull:<full branch ref>:rebase`, D147):
+  phase 3's pull steps with `PullIntegration.Rebase`; every pull that rebases, configured or
+  chosen, saves the backup through `IntegratePullAsync`'s callback. "Pulled and rebased {b} onto
+  {up}"; with commits the fork point left out "…; git left out {k} commits that {up} once had"
+  (`OperationReport.Warning`), also at a stop. Auto-fetch counts it as a fetch.
+- **Continue** ("Continue the {kind}") and **Skip** ("Skip {short}"), from the banner or the stage
+  panel: Continue first asks when the paths that were conflicted at the stop have conflict
+  markers staged (`ReadStagedConflictMarkersAsync`), then runs the git layer's `ContinueAsync` with
+  the stage panel's message (null for the operation's own); Skip's question is the repository's
+  (as Abort's), and inside the operation it saves `skip-<time>` (HEAD) and `skip-<time>-changes`
+  (`SnapshotTrackedChangesAsync`) before `SkipAsync` (D144 amends D83's "Nothing else confirms").
+  Each ends done ("Merge committed", "Cherry-pick finished", "Revert finished", "Rebased {b} onto
+  {onto}"), at the next stop, or failed ("Continue failed", "Skip failed"; a rebase's Continue
+  refused for other unstaged files says "Stage or stash the other changed files first: git
+  continues a rebase only when nothing else is unstaged.").
+- **An autostash that conflicted** is reported by every rebase the app runs (onto, interactive,
+  squash, pull, Continue, Skip): "…; your changes conflicted when put back: they are also kept in
+  the stash", as a stop with conflicts.
+- **Resolving** ("Resolve {file}"): mark resolved, take a side, keep or delete a file, each one
+  operation, "Resolved {file}"; and **the merge tool** ("Merge tool for {file}", running text
+  "Waiting for {tool} to close…", `CanBeCancelled`: the status bar's Cancel, whose tooltip stays
+  "Stop git", stops git and the tool): "Resolved {file} in {tool}" or "{tool} closed without
+  resolving {file}". See "The graph area: the list and the resolver".
+
+### Backup refs (D67, D83, D127, D139)
 
 Every backup is a ref under `refs/visualcommit/backup/` (`GitRepository.BackupRefPrefix`). They are
 outside `--branches --remotes --tags` (D47), so neither the graph nor the left panel shows them,
-and they keep their commits from git's garbage collection. Phase 3 deletes none of them; phase 5's
-undo (O2) reads them and decides how long they stay.
+and they keep their commits from git's garbage collection until the clean-up removes them (below,
+since phase 4); phase 5's undo (O2) reads what is left.
 
 - **Names.** `refs/visualcommit/backup/<kind>-<UTC time>[-<n>][/<name>]`, the time as
   `yyyyMMdd'T'HHmmssfff'Z'`. One operation takes one timestamp and writes all its refs
@@ -736,14 +964,53 @@ undo (O2) reads them and decides how long they stay.
 | `remote-tag-<time>/<r>/<t>` | the local tag object; also the lease's expected value | deleting a tag on a remote |
 | `stash-<time>` | the stash commit (its index and untracked parents with it; `git stash store` brings it back) | dropping a stash |
 | `abort-<time>` and `abort-<time>-changes` | HEAD's commit (so commits a terminal's sequence made stay reachable); `SnapshotTrackedChangesAsync()`, every changed tracked file ("VisualCommit: snapshot before an abort") | aborting a merge, cherry-pick, revert, rebase or `git am` |
+| `rebase-<time>/<b>` | the branch's old tip, read inside the operation (phase 4, D142) | every rebase the app starts: rebase onto, "Check out and rebase", an interactive rebase, a squash, a pull that rebases (configured or chosen, through `IntegratePullAsync`'s callback). Saved before git runs, so a rebase git refuses or finds up to date leaves one too |
+| `skip-<time>` and `skip-<time>-changes` | HEAD's commit; `SnapshotTrackedChangesAsync()` (phase 4, D144) | Skip of a stopped commit (its resolution is lost) |
+| `discard-<time>` from the resolver | D67's snapshot, saved by `TakeSideAsync` when a binary or link file differs from the side written over it, and by `RemoveConflictedAsync` when the file matches none of its stages (phase 4, D148) | "Use ours" or "Use theirs" on a binary file, "Delete it". The stage panel's restore bar does not offer these |
 
 What phase 5 needs to read them: the prefix and the name scheme above (kind, time, optional
 retry number, optional name; `-changes` pairs with the ref of the same kind, time and number);
 that a snapshot's first parent is HEAD at the time and, for a hard reset, its second parent the
-index; that the snapshot's paths are in its message; and that a remote branch's or tag's backup
-was also the lease of the deletion, so the remote held exactly that object when it was deleted.
+index; that the snapshot's paths are in its message; that a remote branch's or tag's backup was
+also the lease of the deletion, so the remote held exactly that object when it was deleted; and
+that since phase 4 the clean-up removes them, so undo offers only what is left (D137).
 `BackupRefTests` cover the batches, the retry naming, case clashes and every case of the hard
 reset's snapshot; `TempRepo.BackupRefsAsync()` lists the refs for tests.
+
+**The clean-up (phase 4, D139)**: `GitRepository.CleanUpBackupsAsync(retention, keep)`.
+
+- **A backup** is one operation's refs: the part of a name after the prefix is read with
+  `^(?<kind>[a-z]+(?:-[a-z]+)*)-(?<time>\d{8}T\d{9}Z)(?:-(?<n>\d+))?(?<rest>-changes|/.+)?$`, and
+  the refs that share kind, time and number are one backup (D83's scheme, D67's
+  `discard-<time>[-<n>]`, `rebase` and `skip`). Its time is the one in its name; a time later than
+  now counts as now. A ref that fits no scheme is never deleted and never counted. Counting
+  operations, not refs, keeps one removed remote (a ref per remote branch) from pushing out fifty
+  other backups.
+- **The rule** (`BackupRetention.Default`: 30 days, 50 backups): with "now" from the backups'
+  clock (`BackupClock`, which also names discard snapshots since phase 4, so that a test's fixed
+  clock orders and ages them all), every backup older than 30 days goes, then the oldest while more
+  than 50 remain. Nothing goes while an operation is in progress in any worktree of the repository
+  (the git folder and every `<common git folder>/worktrees/*/`: `rebase-merge/`, `rebase-apply/`,
+  `MERGE_HEAD`, `sequencer/`, a pick head); a Debug line says why it waits. A backup with a ref in
+  `keep` never goes: the app passes the restore bar's snapshot (`RepositoryViewModel.BackupsToKeep`).
+- **How**: one `for-each-ref --format=%(refname) %(objectname) refs/visualcommit/backup/`, then
+  one `update-ref --stdin` transaction of `delete <ref> <old value>` lines: a ref changed since the
+  read fails the whole transaction, nothing is deleted, and a Warning is logged.
+  `FindBackupsToRemoveAsync` is its read half, which deletes nothing.
+- **When**: at the end of every operation that saved a backup, inside it, after its work
+  (`RepositoryOperations.CleanUpBackupsAsync`, which logs a failure at Warning and never fails the
+  operation); after a discard, a line discard and a Restore that saved a snapshot; and when a
+  repository has opened and its first load is done (`OnFirstLoadCompleted`): the backups due are
+  read outside the queue with `FindBackupsToRemoveAsync`, and only when there are any does the
+  clean-up run, as the background operation "Clean up backups" (`IsBackground`, prompts `None`, no
+  refresh, `TryStartInBackground`: when the queue is busy then, the next backup or opening does
+  it). Its `Run` never ends failed or cancelled. The resolver's own snapshots (above) are saved
+  inside the git layer and start no clean-up; the next backup or opening takes them into account.
+- **What it says**: nothing on screen (the owner's answer). The app log gets one Info line per
+  backup removed, `<repo>: Removed backup <kind>-<time>[-<n>] (older than 30 days)` or `(more than
+  50 backups)`, which phase 5's activity log is to show.
+- `BackupCleanupTests` (Git, with a fixed clock) and `RepositoryOperationsBackupCleanupTests` (App:
+  at opening, after a backup, a failing clean-up shows nothing).
 
 ### Prompts and credentials (D82, D115, D118, D130)
 
@@ -775,9 +1042,10 @@ reset's snapshot; `TempRepo.BackupRefsAsync()` lists the refs for tests.
   the other's variables. `GIT_TERMINAL_PROMPT=0` stays as the fallback. Disposing a scope refuses
   its open prompt and closes its dialog; a helper that goes away (git stopped it) closes the
   dialog too. The token and the answers are never logged; the log names a prompt by its kind.
-- **Which calls ask:** user-started network operations and clone (`Ask`); phase 3's local
-  operations (`Ask`, not cancellable: a filter or hook such as git-lfs may ask); auto-fetch
-  (`Deny`); reads, phase 2's writes and the fast-forward's `git fetch .` (`None`). Credential
+- **Which calls ask:** user-started network operations and clone (`Ask`); phase 3's and phase 4's
+  local operations (`Ask`, not cancellable but for the merge tool: a filter or hook such as git-lfs
+  may ask, and a rebase's guarded amend runs the user's hooks); auto-fetch (`Deny`); reads, phase
+  2's writes, the fast-forward's `git fetch .` and the background clean-up of the backups (`None`). Credential
   helpers, Git Credential Manager included, are left as configured and asked first by git (Q5).
 - **Classification** (`GitPromptClassifier.Classify(prompt, sshPrompt)`, pure,
   `PromptClassifierTests`): `Username for '<url>': ` → `Username`; `Password for '<url>': ` →
@@ -807,7 +1075,7 @@ reset's snapshot; `TempRepo.BackupRefsAsync()` lists the refs for tests.
   21b's prompts through a fake `core.sshCommand`, D115). A real ssh server's host-key question and
   Git Credential Manager's own window are checked by hand (the report's manual checklist).
 
-### Context menus (D86, D92, D105, D106, D114, D131)
+### Context menus (D86, D92, D105, D106, D114, D131, D142)
 
 - **Menus are data.** `ViewModels/Menus/MenuModel` (no Avalonia types): `MenuHeader(Text,
   ToolTip)`, `MenuSeparator`, `MenuItem(Label, Invoke, IsEnabled, DisabledReason, IsDestructive)`.
@@ -822,8 +1090,27 @@ reset's snapshot; `TempRepo.BackupRefsAsync()` lists the refs for tests.
   are left out, not disabled (D77, D92); folder rows, "Pull requests" and repository tabs have no
   menu. `Build(header, groups…)` never leaves a separator after the header, at the end or two in a
   row. A disabled item's reason is its tooltip; reasons, where several apply, follow the design's
-  order. Items that open a dialog or ask first end in "…". Tested without a UI
-  (`RepositoryMenusTests`).
+  order (the object's own first, then HEAD's state). Items that open a dialog or ask first end in
+  "…". Tested without a UI (`RepositoryMenusTests`).
+- **Phase 4's items** (phase 4 design 7.1, D142, D147): the commit menu gains "Rebase {cur} onto
+  this commit" and "Interactive rebase of {cur} from here…" after "Revert this commit"; several
+  commits "Squash {N} commits…" first; a local branch other than the current one and a remote
+  branch "Rebase {cur} onto {b}" and "Interactive rebase of {cur} onto {b}…" after the two merges;
+  the current branch "Pull from {up} (rebase)" after "Pull from {up}", enabled as the toolbar's
+  Pull; a drop of a local branch A its rebase items in a group of their own ("Rebase {A} onto {B}"
+  and "Interactive rebase of {A} onto {B}…" when A is checked out, else "Check out {A} and rebase it
+  onto {B}" and "… interactively…", which check A out first and so stay enabled while HEAD is
+  detached; none for a remote source); a conflicted file "Resolve conflict" and, for text and
+  binary conflicts only, "Open in merge tool" (disabled without `merge.tool`: "Set merge.tool in
+  git's configuration to use a merge tool"). The facts they need: `RepositoryMenuContext.TipsOnHead`
+  (the branch tips HEAD reaches in the loaded graph: "{b} is up to date with {target}"),
+  `RepositoryMenuContext.MergeTool`, `CommitMenuInfo.HeadLineDepth` (the distance from HEAD on its
+  linear first-parent line, from `CommitGraphData.DepthOnHeadLine`; null off the line: "from here"
+  and Squash need it) and `DropFacts.SourceContainsTarget` (`merge-base --is-ancestor <B> <A>`,
+  read before a drop menu opens; null leaves the items enabled). `ConflictMenus` builds the
+  resolver's own menus: the result's (header `{file} (result)`; Undo, Redo; Cut, Copy, Paste,
+  Select all) and a pane's (its title; Copy). The interactive list's row menu
+  (`InteractiveRebaseViewModel.MenuFor`) opens through the same layer.
 - **Entry points.** Views handle Avalonia's `ContextRequested` (a right-click, the Menu key,
   Shift+F10) and call the repository's `OpenCommitMenu`, `OpenLabelMenu`,
   `OpenWorkingChangesMenu`, `OpenEmptyGraphAreaMenu`, `OpenRefRowMenu`, `OpenFileMenu`,
@@ -845,7 +1132,10 @@ reset's snapshot; `TempRepo.BackupRefsAsync()` lists the refs for tests.
   control type Menu with the automation id `ContextMenu`, the header `ContextMenuHeader` (Text) and
   the items `ContextMenuItem`; `PlacementMode.Custom` with the position rules below and a
   `MaxHeight` of the client height less 8, so a tall menu scrolls; the first enabled item
-  highlighted and focused when the menu opens, however it was opened; closing the menu when a
+  highlighted and focused when the menu opens, however it was opened (a menu without an enabled
+  item, such as a pane's Copy with nothing selected, keeps the focus on its presenter, so that it
+  does not go to the window's first focusable control, and gives it back where it was when it
+  closes, phase 4); closing the menu when a
   dialog opens, the active tab changes, the wheel turns outside it or the window loses activation.
   The stock flyout brings the keyboard (Down and Up skip the header, separators and disabled items
   and wrap; Home, End, Enter, Esc), light dismiss (a press outside closes it and is not
@@ -911,11 +1201,18 @@ reset's snapshot; `TempRepo.BackupRefsAsync()` lists the refs for tests.
 | `RemotesDialog` | `RemotesDialogViewModel` / `RemotesDialogView` | The remotes (`RemoteRow`) with their shown URLs (`RemoteUrl`, credentials hidden, D103); Edit and Add switch the card to a form whose Save waits for its operation (git's refusal in `RemoteError`); "Fetch now" queues a fetch it does not wait for; Remove opens its confirmation on top |
 | `ErrorDialog` | `ErrorDialogViewModel` / `ErrorDialogView` | `ErrorTitle`, `ErrorSummary`, `ErrorRepository` ("In &lt;repo&gt;", always), `ErrorOutput` (git's cleaned output in the code font), `ErrorCommand`, `ErrorCopyButton` ("Copy output"), the optional `ErrorExtraButton`, "Close". Answers true when the extra button was clicked. A dialog without git output leaves out the output, the command and "Copy output" (D114) |
 | `FinishingDialog` | `FinishingDialogViewModel` / `FinishingDialogView` | "Finishing operations": `FinishingItem` lines, "Keep open" and "Quit now" |
+| `MessageDialog` | `MessageDialogViewModel` (`DialogViewModel<string?>`) / `MessageDialogView` | Phase 4's message dialog (the `wide` card): "Reword {short}", "Message of the squashed commit" or "Squash {N} commits"; `MessageSummary` with `MessageSummaryCounter` (what is left of 72), `MessageDescription` (wrapping, accepting Return); "Save" or "Squash", disabled while the summary is blank ("Write a summary"). The message is split as the stage panel splits it and joined with a blank line between summary and description (the summary alone when the description is blank) |
 | `CredentialsDialog`, `PassphraseDialog`, `HostKeyDialog`, `PromptDialog` | `CredentialsViewModel`, `PassphraseViewModel`, `HostKeyViewModel`, `PromptViewModel` (base `PromptDialogViewModel`) / `CredentialsView`, `PassphraseView`, `HostKeyView`, `PromptView` | git's and ssh's prompts (see "Prompts and credentials") |
 
 Each title has an automation id of its own (`ConfirmTitle`, `NameDialogTitle`, `ResetTitle`,
-`PickTitle`, `ChoiceTitle`, `PushTitle`, `RemotesTitle`, `ErrorTitle`, `FinishingTitle`, and
-`DialogTitle` for the prompt dialogs), so both harnesses find the same elements.
+`PickTitle`, `ChoiceTitle`, `PushTitle`, `RemotesTitle`, `ErrorTitle`, `FinishingTitle`,
+`MessageDialogTitle`, and `DialogTitle` for the prompt dialogs), so both harnesses find the same
+elements. Since phase 4 a `ConfirmationRequest` has `CancelText` ("Cancel", or "Keep editing" for
+the questions about leaving changed work), and a confirmation without a question hides its
+question line (the list's "Discard the changes to this list?"). Phase 4's questions (design 7.2):
+Skip ("Skip {short}?"), leaving a changed list, staging or marking resolved with markers left,
+Continue with markers staged, leaving the resolver with a modified result, the merge tool over a
+modified result, Mark resolved over a file changed on disk.
 
 ### Drag a branch onto a branch (D87, D120)
 
@@ -935,9 +1232,129 @@ Each title has an automation id of its own (`ConfirmTitle`, `NameDialogTitle`, `
   reads the drop's facts and opens `RepositoryMenus.ForDrop` at the release point: onto the current
   branch merge, merge with a merge commit and fast-forward; onto another local branch fast-forward
   and "Check out &lt;B&gt; and merge &lt;A&gt; into it" (both disabled when B is checked out in another
-  worktree, D120); onto a remote branch push and push-and-track. Release elsewhere, Esc or losing
+  worktree, D120); onto a remote branch push and push-and-track; and since phase 4, for a local
+source, its rebase items in a group of their own (see "Context menus"). Release elsewhere, Esc or losing
   the pointer cancels. `PressFollowsDrag` keeps the press after a drag from counting as a
   double-click.
+
+### The graph area: the list and the resolver (D140, D141, D148)
+
+Phase 4 puts two more things in the graph area besides the graph and the diff. Both belong to the
+`RepositoryViewModel`, like the diff, so a tab switch keeps them (one view serves every tab).
+
+- **The hooks** (`RepositoryViewModel.GraphArea.cs`). `ShowsGraph`, `ShowsInteractiveRebase` and
+  `ShowsDiff` say what the area shows (a diff can open over the list; the resolver covers both).
+  Every path that would replace the list or the resolver (another list, the resolver, a diff from
+  the stage panel) first awaits `TryLeaveGraphAreaAsync()`, which asks the list's question when it
+  was changed and the resolver's when its result is modified, returns false on "Keep editing" and
+  declines at once, without a question, while the list's Start waits or runs; it closes nothing
+  itself. A diff of a commit's file from the right panel opens over the list without asking, and
+  closing it gives the focus back to the list; a selection from the left panel, a parent link or a
+  refresh moves the graph's selection behind the list or the resolver and closes neither. When the
+  list or the resolver closes, `GraphFocusRequested` (`Graph`, or `ContinueFirst`: the banner's
+  Continue when it is shown and enabled) tells `CommitGraphView` where the keyboard focus goes.
+  `OpenDiff` of a conflicted unstaged file opens the resolver (`OpenResolver`), and an open diff
+  whose file became conflicted closes. Every status read feeds the resolver (`Update(status,
+  currentName, ontoName)`) and, while files conflict, reads `merge.tool` again (`MergeTool`, kept
+  for the menus and the resolver).
+- **The interactive rebase's list** (`ViewModels/Rebase/InteractiveRebaseViewModel`,
+  `Views/Rebase/InteractiveRebaseView`, design 2.2, D141). It replaces the graph, newest commit on
+  top, and never runs git: everything goes through its `IInteractiveRebaseHost` (the repository:
+  `StartAsync(list, plan)`, `ShowDetails(sha)`, `ConfirmAsync`, `AskMessageAsync`, `Close(list)`;
+  Start and Close act only for the list the repository shows). Header 36 (`RebaseListHeader`,
+  `RebaseListCount`), rows 30 (`RebaseListRow`, automation id `RebaseRow`, named "{short}
+  {subject}": the grip `IconGrip`, the action button `RebaseActionButton`, the short SHA, the
+  subject, the author from 520 wide), a second line 22 under a reworded row or a group's target
+  ("New message: …" or "Message: …" with `Edit…`), the base row (`RebaseBaseRow`, never moved), the
+  footer 44 (`RebaseCancelButton`, `RebaseStartButton`); a list that cannot be made (merges in the
+  range, nothing of its own, more than 1,000 commits) shows `RebaseListMessage` and only Cancel.
+  The action button and the row's context menu open the actions through the menu layer (Pick,
+  Reword…, Squash, Fixup, Drop; Squash and Fixup disabled on the bottom row and on a row whose rows
+  below are all dropped); on the selected row git's letters `p`, `r`, `s`, `f`, `d` do the same.
+  Squash and fixup join the nearest Pick or Reword below, indented 16 with a 2-px `VcLane0Brush`
+  line to it; a group with a squash has a message (git's own, or edited with `Edit…` in the message
+  dialog), a fixup-only group keeps its target's. A row moves by a drag (4 px threshold, a
+  `VcDragTargetBrush` line at the gap, scrolling within 20 px of an edge) or Alt+Up and Alt+Down.
+  Selecting a row selects its commit in the graph behind (`ShowDetails`), so the right panel shows
+  it. Start is disabled while nothing changed ("Change an action or the order first") and when
+  HEAD moved ("HEAD moved: open the list again"); it builds a `RebasePlan` and closes the list when
+  the rebase is done or stopped. Esc (`EscapeOrder.InteractiveRebase`, 360) cancels a row drag
+  first, else closes the list, asking first when it was changed ("Discard the changes to this
+  list?", "Discard", "Keep editing"); Cancel asks the same. `InteractiveRebaseView.Rows` and
+  `Snapshot()` (`InteractiveRebaseSnapshot`) are its test surface.
+- **The conflict resolver** (`ViewModels/Conflicts/ConflictResolverViewModel`,
+  `Views/Conflicts/ConflictResolverView`, design section 11, D140, D148). It opens on a click on a
+  conflicted file in the stage panel, the file menu's "Resolve conflict" or `OpenDiff` of one, and
+  spans the graph and right-panel columns (see "Repository tabs"); the banner stays above it. It
+  writes nothing itself: its reads and every write go through `IConflictActions`, which
+  `RepositoryOperations` implements with queued operations ("Resolve {file}", "Merge tool for
+  {file}"), so that it is tested with a recording fake. It works on the working-tree file, which
+  git wrote in the user's conflict style and which holds a rerere resolution or the user's edits
+  (D148): read as bytes, decoded as the diff decodes (UTF-8, else
+  Latin-1), parsed by `ConflictText` with the path's marker size. Header 36 (`ResolverFileStatus`
+  "U", `ResolverFileName`, `ResolverFolder`, `ResolverKind` in git's words, `ResolverFilePosition`
+  "File {i} of {n}" with previous and next in the stage list's order, `ResolverCloseButton`),
+  toolbar 36 (`ResolverConflictPosition` "Conflict {k} of {m}" or "No conflicts left" with previous
+  and next, `ResolverTakeOurs`, `ResolverTakeTheirs`, `ResolverMergeTool` "Merge tool…",
+  `ResolverMarkResolved`), then two halves of equal height: `ConflictPanes` (the ours pane
+  `ConflictOurs` and the theirs pane `ConflictTheirs` side by side, each titled with its side's
+  name: "Ours: main", "Theirs: feature/x"; in a rebase "Ours: {onto} (the new base)" and "Theirs:
+  {short} {subject} (your commit)") above `ConflictResultEditor` (`ConflictResult`, titled
+  "Result" with "{m} conflicts left").
+  - The panes show the file with every block's ours side and with every block's theirs side,
+    their rows lined up with filler rows, a 26-high bar before each block (`ConflictUseOurs` and
+    `ConflictUseBothOursFirst` in the ours pane, `ConflictUseTheirs` and
+    `ConflictUseBothTheirsFirst` in the theirs pane, or `ConflictBarState` "Used in the result" /
+    "Not used" once the block is decided), scrolling together, syntax-coloured as the diff (a
+    synthetic one-hunk diff), tinted `VcConflictOursBrush`, `VcConflictTheirsBrush` and, for a side
+    used in the result, `VcConflictUsedBrush`. `RowsOf(side)`, `BarButton(block, side, choice)` and
+    `Bars` are their test surface.
+  - The result is the file itself, editable, in the code font without syntax colours: an
+    unresolved block's marker lines on `VcConflictMarkerBrush` in `VcWarningBrush`, its sections on
+    the ours, theirs and `VcConflictBaseBrush` tints; a chosen or typed line has no tint. A choice
+    replaces the block's text (from its `<` line to its `>` line) as one undo step, and so does
+    "Take ours" or "Take theirs" (the side's working-tree form, `ReadConflictSideAsync`; disabled
+    with "This side deleted the file" for a missing side). The document and its undo stack belong
+    to the view model; undo and redo are the resolver's own (`HotkeyConfiguration.Undo` and
+    `.Redo`, taken in the tunnel phase, applied through the document's `UndoStack`, never
+    AvaloniaEdit's routed bindings); typed text is parsed again 300 ms after the last key
+    (`IsParsePending`), and the bars, tints and counts follow (result blocks are matched to the
+    panes' blocks by their sides and surroundings, in order). AvaloniaEdit's caret is hidden and the
+    editor draws its own, blinking every 530 ms only while `ConflictResultEditor.CaretBlinks` is
+    true (false when `VISUALCOMMIT_CARET_BLINK=0` at start-up, or set by a test, D151). Its
+    automation peer is a Document whose Value is the text. `IsModified` compares the text with the
+    document's original.
+  - **Mark resolved** takes the result's text at the click; with blocks left (any marker line,
+    `ConflictText.HasMarkerLines`) it asks first. It is one queued operation "Resolve {file}"
+    (`IConflictActions.MarkResolvedAsync(entry, content, expected)`) that reads the file again just
+    before it writes: when the file changed on disk since the resolver read it, nothing is written,
+    the status says "{file} changed on disk: nothing was written" (warning) and the resolver asks
+    "Overwrite it with the result?"; otherwise it writes the result (a side taken whole byte for
+    byte, else in the encoding the file was read in, with the document's line ends) and stages it.
+    While it runs the result is read-only and the buttons, Esc and the close button do nothing.
+    Then the resolver moves to the next conflicted file, or closes when none is left, with the
+    focus on the banner's Continue.
+  - **Conflicts without text** (not both modified or both added, or binary, a symbolic link, a
+    submodule, a file moved aside by a file/folder clash) show a card (`ConflictCard`,
+    `ConflictCardText`) whose buttons (`ConflictCardButton`) resolve the file at once: "Keep the
+    file" or "Keep it" (`TakeSideAsync`: the file git left is staged as it is), "Delete it"
+    (`RemoveConflictedAsync`), "Use ours" or "Use theirs" for a binary file or a link, "Mark
+    resolved" for a file moved aside; a submodule has none ("resolve it in a terminal").
+  - **The merge tool** ("Merge tool…", for text and binary conflicts, disabled without
+    `merge.tool`): asks first over a modified result, then runs `IConflictActions.RunMergeToolAsync`;
+    while the tool runs (also one started from the file menu, `RunningMergeTool`,
+    `MergeToolStarted`) the result is read-only and its title says "Waiting for {tool} to close…";
+    afterwards it moves on when git staged the file, or reads the file again.
+  - **Leaving and refreshes**: the close button or Esc closes it, asking "Discard your changes to
+    {file}?" when the result is modified; Esc (`EscapeOrder.Resolver`, 350) does nothing while the
+    focus is inside the result, so a slip never loses work. Alt+Up and Alt+Down go to the previous
+    and next conflict, Alt+Left and Alt+Right to the previous and next file. For 500 ms after it
+    opens a press with a click count of 2 or more is ignored, so a double-click's second press does
+    not land on its buttons. A refresh that leaves the file conflicted reads an unmodified result
+    again and keeps a modified one; a file resolved elsewhere moves on, or with a modified result
+    stays with "Marked resolved elsewhere"; a refresh that ends the operation closes it. The
+    header's right-click opens the conflicted file's menu, the result's and a pane's their own
+    (`ConflictMenus`).
 
 ### Toolbar, status bar, conflict banner and auto-fetch
 
@@ -961,35 +1378,68 @@ Each title has an automation id of its own (`ConfirmTitle`, `NameDialogTitle`, `
   follows its queue's events on the UI thread: `Text` (`OperationStatus`): "Ready"; the running text,
   then the progress's stage and percentage ("Fetching from origin… Receiving objects 45%");
   "Waiting for auto-fetch…"; or the last result, which stays until the repository's next operation
-  starts (no timer). `Tone`: secondary, `VcWarningBrush` for a stop with conflicts, `VcDangerBrush`
+  starts (no timer); while an operation of several steps runs, the step's text
+  (`OperationContext.SetRunningText`). `Tone`: secondary, `VcWarningBrush` for a stop with
+  conflicts and, since phase 4, for a success reported as `OperationReport.Warning`, `VcDangerBrush`
   for "&lt;Title&gt; failed"; "&lt;Title&gt; cancelled" is secondary. A stage-panel operation leaves
-  "Ready"; a background operation shows nothing unless it fails ("Auto-fetch failed", git's first
-  error line as its tooltip). `OperationProgress` (80 by 4, visible while a user operation runs,
+  "Ready"; a background operation shows nothing, except that auto-fetch's own says "Auto-fetch
+  failed" when it fails (git's first error line as its tooltip) and "Waiting for auto-fetch…"
+  while an operation of the user waits for it; the backups' clean-up never changes the text.
+  `OperationProgress` (80 by 4, visible while a user operation runs,
   indeterminate without a percentage), `OperationCancelButton` ("Cancel", tooltip "Stop git",
   while `CanCancel`), `OperationWaiting` ("1 waiting"). While ssh shows a notice its text replaces
   the operation text.
-- **Conflict banner (D89, D110, D122).** `ViewModels/Operations/ConflictBannerViewModel`
-  (`RepositoryViewModel.Banner`) shows each status read (`OnStatusApplied` → `Show(state,
-  conflicts)`), and `Views/Shell/ConflictBanner` draws it above the graph or the diff while an
-  operation is in progress or files conflict: `IconAlert`, `BannerText`, and `BannerAbortButton`
-  ("Abort merge", "Abort cherry-pick", "Abort revert", "Abort rebase", "Abort" for `git am`; none
-  for conflicts without an operation); `VcBannerBackgroundBrush` with a 1 px `VcWarningBrush` line
-  along its bottom. Its text wraps and the banner grows with it: at least 36 high, exactly 36 when
-  the text fits on one line (D122); the graph's rows move down by its height. The texts and the
-  Abort question are its static methods (`AbortConfirmation`, D110's `AbortKeepsHead`), which
-  `RepositoryOperations.AbortAsync` shares; a rebase or a sequence started in a terminal is to be
-  continued there; the tooltip says that continue, skip and the resolver come later. Abort asks
-  the question and hands the abort to `IInProgressActions.AbortAsync` (backups `abort-<time>` and
-  `-changes`). The root is a UI Automation control element (`ConflictBanner`).
-- **What is in progress** is read by `GitRepository.ReadStatusAsync` from the repository's own git
-  folder, with no git call unless something is there, in this order: `rebase-merge/` (Rebase:
-  `head-name`, `onto`, the todo's lines left), `rebase-apply/` (with `applying`: `git am`;
-  otherwise Rebase), `MERGE_HEAD` (Merge, `MERGE_MSG`'s first line), `CHERRY_PICK_HEAD`,
-  `REVERT_HEAD`, `sequencer/todo` alone (a terminal's sequence stopped between commits).
-  `Remaining` for a pick or revert is `sequencer/todo`'s lines less one; `AbortKeepsHead` is set
-  when HEAD differs from `sequencer/abort-safety` (D110); `Empty` when the index equals HEAD's tree
-  without a conflict. Known issue: under the reftable ref format (Git 2.45 and later) a stopped
-  pick or revert is not seen (D128).
+- **Conflict banner (D89, D110, D122, D144).** `ViewModels/Operations/ConflictBannerViewModel`
+  (`RepositoryViewModel.Banner`, constructed with the repository's Abort, Continue and Skip) shows
+  each status read (`OnStatusApplied` → `Show(state, conflicts, ontoName, currentName,
+  otherUnstaged)`: `ontoName` is a local branch at a rebase's new base, else a remote one, else
+  null for its short SHA), and `Views/Shell/ConflictBanner` draws it above the graph, the list, the
+  diff or the resolver while an operation is in progress or files conflict: `IconAlert`,
+  `BannerText`, and since phase 4 `BannerContinueButton` ("Continue") and `BannerSkipButton`
+  ("Skip") left of `BannerAbortButton` ("Abort merge", "Abort cherry-pick", "Abort revert", "Abort
+  rebase", "Abort" for `git am`; none for conflicts without an operation), each shown, enabled or
+  disabled with its reason as tooltip as design 5.1 says per state (`ContinueFor`, `SkipFor`:
+  merge, single pick or revert, a pick or revert in a list, an empty one, a paused list, a list
+  stopped on a refused commit, and a rebase stopped on a pick, a group's target, an empty commit, a
+  rescheduled pick, the app's failed amend, another failed exec, an `edit`). Continue is disabled
+  while files conflict ("Resolve the conflicts first ({N} files)") and, at a rebase stop, while
+  other tracked files are unstaged; it is never offered where git would drop a commit without a
+  word, nor Skip where it would join commits to the wrong one. `git am` keeps phase 3's "continue in
+  a terminal"; a rebase or a list started in a terminal is continued from the app.
+  `VcBannerBackgroundBrush` with a 1 px `VcWarningBrush` line along its bottom. The layout is
+  `BannerLayoutPanel` (amends D122): the buttons (`VcActionButton`, 26 high, 6 apart, 8 from the
+  right edge) stand right of the text while it keeps at least 240 px, otherwise on a row of their
+  own under it, right-aligned, with 8 above and below; the text wraps and the banner grows: at least
+  36 high, exactly 36 when text and buttons fit on one line; the graph's rows move down by its
+  height. The texts, the icon's tooltip (design 10.3) and the Abort question are its static methods
+  (`TextFor`, `ToolTipFor`, `AbortConfirmation` with D110's `AbortKeepsHead`; the rebase texts say
+  "Rebasing {b} onto {onto}: stopped at {short} "{subject}" ({k} of {n})."), which
+  `RepositoryOperations` and the stage panel share. Abort asks the question (for a rebase begun
+  with "Check out and rebase": "…, and {branch} is checked out again") and hands the abort to
+  `IInProgressActions.AbortAsync` (backups `abort-<time>` and `-changes`); Skip asks "Skip
+  {short}?" and hands it to `SkipAsync`; Continue hands the stage panel's `ContinueMessage` to
+  `ContinueAsync`. The root is a UI Automation control element (`ConflictBanner`).
+- **What is in progress** is read by `GitRepository.ReadStatusAsync` (`ReadInProgressAsync`) from
+  the repository's own git folder, with no git call unless something is there, in this order:
+  `rebase-merge/` (Rebase: `head-name`, `onto`, `stopped-sha` and its subject, and since phase 4
+  the stop's kind, read in this order: `Rescheduled` when the todo's first line is pick-like and
+  names `stopped-sha` (on newer git, which writes no `stopped-sha` then, when `done` ends with the
+  same command); `ExecFailed` when `done` ends with an `exec` and there is no `stopped-sha`
+  (`OwnAmendFailed` when that exec names `vc-message-`, also when `rebase.rescheduleFailedExec`
+  put it back first in the todo); `Edit` when `amend` exists and `done` ends with `edit`; `Empty`
+  when `CHERRY_PICK_HEAD` sits beside the folder, or `done` ends with a pick-like command for
+  `stopped-sha` with nothing staged and nothing conflicted; `Pick` otherwise; `NextIsSquash`,
+  `Group`, and `Done` and `Total` counting the commit commands, not `label` and `exec`),
+  `rebase-apply/` (with `applying`: `git am`; otherwise Rebase under the apply backend),
+  `MERGE_HEAD` (Merge, `MERGE_MSG`'s first line), the pick heads `CHERRY_PICK_HEAD` and
+  `REVERT_HEAD` (through `ReadPseudoRefAsync`, so a reftable repository is read too, D146),
+  `sequencer/todo` alone (a list paused between commits, an empty revert of a list with
+  `MERGE_MSG`, or a list stopped on a commit git could not apply; its `Commit` is the todo's first
+  line, resolved). `Sequenced` is set while `sequencer/` exists; `Remaining` for a pick or revert is
+  `sequencer/todo`'s lines less one; a list's `Done` is `rev-list --count <sequencer/head>..HEAD`
+  and `Total` adds the commands left (git keeps no record of a skipped commit, so a Skip makes `N`
+  smaller); `AbortKeepsHead` is set when HEAD differs from `sequencer/abort-safety` (D110); `Empty`
+  when the index equals HEAD's tree without a conflict.
 - **Auto-fetch (D79, D85, D109, D125).** `ViewModels/Operations/AutoFetchScheduler`, one per
   window, made and started by `MainWindowViewModel`: every 30 seconds of its `TimeProvider` it
   calls `Tick(now)`, which, for the active tab's repository only, starts the auto-fetch with
@@ -1000,8 +1450,9 @@ Each title has an automation id of its own (`ConfirmTitle`, `NameDialogTitle`, `
   `VISUALCOMMIT_AUTO_FETCH_MINUTES` (both harnesses set 0). The operation, titled "Auto-fetch", is
   the fetch of every remote, every call with `--no-auto-maintenance` and the network timeout
   `-c http.lowSpeedLimit=1 -c http.lowSpeedTime=60`, `PromptMode.Deny`, a refresh of the refs
-  afterwards. It learns of fetches from the queues' `Finished` events; after a user's cancel that
-  left lock files it opens "Auto-fetch cancelled". Tests call `Tick` with chosen times.
+  afterwards. It learns of fetches from the queues' `Finished` events (a Fetch, a Pull, and since
+  phase 4 a "Pull (rebase)", by title or dedupe key); after a user's cancel that left lock files it
+  opens "Auto-fetch cancelled". Tests call `Tick` with chosen times.
 
 ### Q1 measurements (D50)
 
@@ -1038,7 +1489,8 @@ temperature, so the pass is started after a rest (see phase 1's test report).
   preferred widths. `JsonSessionStore` (App) keeps it like the settings: written through a
   temporary file, an unreadable file set aside as `session.unreadable.json`, a tab with a blank
   folder read as an empty tab. `JsonSessionStore.Write` lets tests start the app with tabs open.
-  Phase 3 added nothing to the session.
+  Phase 3 added nothing to the session, and phase 4 nothing to the session or the settings (the
+  merge tool is git's own `merge.tool`, D149).
 - `JsonSettingsStore` (App) writes camel-case JSON with enums as text, through a temporary file,
   so a crash cannot leave half a file. A file it cannot read is moved to
   `settings.unreadable.json` and the defaults apply. A failed save is logged and does not throw.
@@ -1060,8 +1512,8 @@ region is a `UserControl` in `Views/Shell`.
 | Repo tabs | `RepoTabsView` | 36 high | `RepoTabs` | Real: one tab per repository (`RepoTab` buttons named by title, `CloseTabButton`), and "+" (`AddRepoButton`) for a new tab |
 | Toolbar | `ToolbarView` | 52 high | `Toolbar` | `FetchButton`, `PullButton`, `PushButton`, `BranchButton`, `StashButton`, `PopButton` are real (see "Toolbar, status bar, conflict banner and auto-fetch"); `UndoButton`, `RedoButton` and `SearchButton` are disabled placeholders (phase 5). `ThemeSwitch` works |
 | Left panel | `LeftPanelView` | 260 wide by default; 180 to 520 | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`), with menus, double-clicks and branch drags; "Pull requests" stays empty until phase 7 |
-| Commit graph | `CommitGraphView` | The rest; at least 320 | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form), `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`), or in its place `DiffView` (`DiffView`, `DiffText`, see "Diff view"); above either, while one shows, `ConflictBanner` (`BannerText`, `BannerAbortButton`) |
-| Right panel | `RightPanelView` or `WorkingChangesView` | 400 wide by default; 280 to 720 | `RightPanel` or `StagePanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList` with `ChangedFile` rows), `MultiSelectionView` while several commits are selected, or the placeholder; while the working-changes row is selected, the stage panel (`UnstagedFileList` and `StagedFileList` with `StageFileRow` rows and their `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`; `CommitSummary`, `CommitDescription`, `AmendCheckBox`, `CommitButton`, `RestoreBar`) |
+| Commit graph | `CommitGraphView` | The rest; at least 320; while the resolver is open, the right panel's column too | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form), `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`), or in its place `InteractiveRebaseView` (`InteractiveRebaseView`, `RebaseRow`, …), `DiffView` (`DiffView`, `DiffText`, see "Diff view") or `ConflictResolverView` (`ConflictResolver`, `ConflictOurs`, `ConflictTheirs`, `ConflictResult`, …, see "The graph area"); above any of them, while one shows, `ConflictBanner` (`BannerText`, `BannerContinueButton`, `BannerSkipButton`, `BannerAbortButton`) |
+| Right panel | `RightPanelView` or `WorkingChangesView` | 400 wide by default; 280 to 720; hidden while the resolver is open | `RightPanel` or `StagePanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList` with `ChangedFile` rows), `MultiSelectionView` while several commits are selected, or the placeholder; while the working-changes row is selected, the stage panel (`UnstagedFileList` and `StagedFileList` with `StageFileRow` rows and their `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`; `CommitSummary`, `CommitDescription`, `AmendCheckBox`, `CommitButton`, which reads "Continue …" during a list or a rebase, `RestoreBar`) |
 | Status bar | `StatusBarView` | 26 high | `StatusBar` | `CurrentBranch`, `GitStatus`, `OperationStatus`, `OperationProgress`, `OperationCancelButton` and `OperationWaiting` are real. `ActivityLogToggle` is a disabled placeholder (phase 5) |
 
 - The window opens at 1280×800, or at the size and place the session saved, and cannot be made
@@ -1072,11 +1524,13 @@ region is a `UserControl` in `Views/Shell`.
   the session. `PanelLayout.Fit` gives the drawn widths: when the window is too narrow for both
   preferred widths and the graph's 320, both panels give way in proportion to their room above
   their minimums, and take their preferred widths back when it grows.
-- The diff view replaces the graph while a file's diff is open (D63); the menu layer, the drag
-  layer and the dialog layer lie over the whole window, in that order (D69, D104, D105, D87).
+- The diff view replaces the graph while a file's diff is open (D63), and so do the interactive
+  rebase's list and the conflict resolver (D140, D141); the menu layer, the drag layer and the
+  dialog layer lie over the whole window, in that order (D69, D104, D105, D87).
 - `MainWindow`'s Esc chain (`AddEscapeHandler(IEscapeHandler, order)`, `Views/IEscapeHandler`):
-  on Esc the handlers are asked in their `EscapeOrder` (Menu 100, Drag 200, Dialog 300, Diff 400)
-  until one takes it. The menu layer and the drag layer register their own.
+  on Esc the handlers are asked in their `EscapeOrder` (Menu 100, Drag 200, Dialog 300, Resolver
+  350, InteractiveRebase 360, Diff 400) until one takes it. The menu layer, the drag layer, the
+  resolver and the list register their own; the list's declines while a diff is open over it.
 
 Custom controls, in `Controls/`:
 
@@ -1087,6 +1541,9 @@ Custom controls, in `Controls/`:
   `Theme/Controls.axaml`; its label is also its name for screen readers and UI Automation.
 - `CommitGraphControl`: see "Commit graph".
 - `ContextMenuItem`: see "Context menus". `SecretTextBox`: see "Prompts and credentials".
+- `Diff/CodeTextEditor`, `Diff/DiffPane` and `Diff/DiffTextView`: see "Diff view";
+  `Conflicts/ConflictPanes` and `Conflicts/ConflictResultEditor` (with `ConflictTint`, the
+  background a row or line is drawn on, which tests read instead of pixels): see "The graph area".
 - `TrimmedTextBlock` shows its whole text as its tooltip while it is cut with "…" (a menu
   item's label); `UrlTextBlock` wraps without breaking a line inside a URL or an ssh address
   (the confirmation's question, the error dialog's summary, the prompt dialogs' texts). Both are
@@ -1113,7 +1570,9 @@ their own, `Theme/Menus.axaml` and `Theme/Dialogs.axaml`, included in `App.axaml
   is JetBrains Mono NL (OFL), shipped with the app in `Assets/Fonts` and named by the resource
   `VcCodeFontFamily` (D64).
 - Phase 3 added the icon `IconAlert` (Lucide's triangle-alert, in `THIRD-PARTY-NOTICES.md`), the
-  conflict banner's. Menus have no icons.
+  conflict banner's. Menus have no icons. Phase 4 added `IconGrip` (grip-vertical, the list's drag
+  handle), `IconChevronLeft` and `IconChevronUp` (the resolver's previous file and previous
+  conflict), all Lucide's, and the five conflict tokens below.
 
 | Token (brush key) | Dark | Light | Used for |
 |---|---|---|---|
@@ -1143,7 +1602,12 @@ their own, `Theme/Menus.axaml` and `Theme/Dialogs.axaml`, included in `App.axaml
 | `VcBackdropBrush` | `#99000000` | `#66000000` | The dimmed window behind a dialog |
 | `VcMenuShadow` (`BoxShadows`) | `0 6 16 0 #80000000` | `0 6 16 0 #33000000` | The context menu's shadow |
 | `VcBannerBackgroundBrush` | `#33291A` | `#FFF4DE` | The conflict banner |
-| `VcDragTargetBrush` | `#7C8CFF` | `#4353D8` | The outline of a drop target while a branch is dragged (the accent's colour, a token of its own so that it can change apart from it) |
+| `VcDragTargetBrush` | `#7C8CFF` | `#4353D8` | The outline of a drop target while a branch is dragged (the accent's colour, a token of its own so that it can change apart from it); the gap line while a row of the interactive list is dragged |
+| `VcConflictOursBrush` | `#15323A` | `#DCF1F5` | The ours side of a conflict block: its rows in the ours pane and its section of the result |
+| `VcConflictTheirsBrush` | `#2C2140` | `#F0E6FA` | The theirs side, likewise |
+| `VcConflictBaseBrush` | `#24272F` | `#EEF0F3` | A `diff3` base section in the result |
+| `VcConflictMarkerBrush` | `#3A2E16` | `#FCEFD2` | The marker lines of an unresolved block in the result (their text in `VcWarningBrush`) |
+| `VcConflictUsedBrush` | `#1A2E24` | `#E6F6EC` | In the ours and theirs panes, a block's side once it is used in the result (`VcDiffAddedBrush`'s colours) |
 | `VcLane0Brush` ... `VcLane7Brush` | `#7C8CFF` `#3FB97F` `#E0A23B` `#E5606B` `#4FB3D9` `#B07CE8` `#D97EB6` `#8FB84A` | `#4353D8` `#1E8E5A` `#B7791F` `#C93A46` `#1F86B0` `#8048C7` `#B54A8C` `#5F8A1E` | Lane colours 0 to 7 (D48) |
 
 ### Conventions
@@ -1158,12 +1622,17 @@ their own, `Theme/Menus.axaml` and `Theme/Dialogs.axaml`, included in `App.axaml
   Automation does not see a text inside a button, so buttons carry their text as their name. A
   `Panel` or templated control is no UI Automation control element by default, so a root the pass
   waits for has an automation peer that makes it one (every dialog's `DialogView`, the
-  `ConflictBanner`, `MultiSelectionView`, `DialogRow`), as `CommitGraphControl` has.
+  `ConflictBanner`, `MultiSelectionView`, `DialogRow`, and since phase 4 `InteractiveRebaseView`,
+  its rows `RebaseListRow`, the `ConflictResolver` and its card, `ConflictPanes`), as
+  `CommitGraphControl` has; the resolver's result is a Document with a read-only Value pattern.
 - Every write to a repository is an operation of its queue. A new operation is a method of
   `RepositoryOperations` built on `RunAsync`, `ConfirmAndRunAsync` and `GuardAsync`, with its texts
   in `OperationTexts` (an `OperationText` per operation) and its git calls in `GitRepository`; it
   never throws, and it checks what it acts on when it runs, not at the click (D124). A menu item
-  calls it through `IRepositoryActions`.
+  calls it through `IRepositoryActions`. One that destroys something saves its backup with
+  `SaveBackupAsync` inside the operation, which also schedules the backups' clean-up (D139).
+- A view model that can be replaced in the graph area while it holds work (the list, the
+  resolver) is left through `RepositoryViewModel.TryLeaveGraphAreaAsync`, never closed directly.
 - Async code in the Core and Git projects uses `ConfigureAwait(false)`, and so do App services
   whose tasks the app may wait for while it closes (`GitRepositoryProvider`); view models do not,
   so they continue on the UI thread.
@@ -1181,13 +1650,13 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | Helper | Where | What it is for |
 |---|---|---|
 | `TempDirectory` | `tests/VisualCommit.Testing` | A folder under the system temp folder, deleted on dispose |
-| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy (http URLs left alone, linked worktrees joined to the copy) and a clock that carries on from the template's; anything else goes through `GitAsync`, `GitWithInputAsync` or `GitAllowingFailureAsync` (a step meant to stop). Phase 3 added `ConfigAsync`, `RefTargetAsync`, `BackupRefsAsync`, `StashListAsync`, `CloneSiblingAsync` and `OpenSibling` (siblings share the clock), `IsolatedEnvironment(home)`, `ClockTime` and `MoveClockTo` (forward only, for a step that must look newer in the reflog than an app operation, D111). Its git calls drop the machine's askpass, ssh and proxy variables too (D116) |
-| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration) and `ConflictAsync` (phase 2: a merge stopped with a conflict). Phase 3's, in `Scenarios.Phase3.cs`: `OperationsAsync` ("ops": branches, tags, a stash, a bare `origin`), `StoppedAsync(kind)` (an ops copy stopped in a merge, cherry-pick sequence, revert, rebase, or with stash conflicts, as a terminal would leave it; built each time), `RemoteSyncAsync` ("sync": published, unpushed and local branches) with `PushFromElsewhereAsync`, `CheckoutBlockedAsync` ("blocked"), `EdgeCasesAsync` ("edges": a detached HEAD, a linked worktree, a local upstream, a branch named like a remote branch, a tag named like a branch), `AuthRemoteAsync(server)` ("auth": a clone of what `AuthRemoteServer` serves). `GraphAsync`, `ChangesAsync` and phase 3's (except `StoppedAsync`) are built once per test process as templates and copied for each test; `Phase3ScenarioTests` pins their refs, SHAs and graphs |
+| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy (http URLs left alone, linked worktrees joined to the copy) and a clock that carries on from the template's; anything else goes through `GitAsync`, `GitWithInputAsync` or `GitAllowingFailureAsync` (a step meant to stop). Phase 3 added `ConfigAsync`, `RefTargetAsync`, `BackupRefsAsync`, `StashListAsync`, `CloneSiblingAsync` and `OpenSibling` (siblings share the clock), `IsolatedEnvironment(home)`, `ClockTime` and `MoveClockTo` (forward only, for a step that must look newer in the reflog than an app operation, D111). Its git calls drop the machine's askpass, ssh and proxy variables too (D116), and since phase 4 run with `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:`, so that a step such as `git rebase --continue` never starts the machine's editor (D151); `GitWithEnvironmentAsync(extra, args)` and its "allowing failure" twin add variables for one call (a sequence editor that writes a todo) and keep the clock's dates |
+| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration) and `ConflictAsync` (phase 2: a merge stopped with a conflict). Phase 3's, in `Scenarios.Phase3.cs`: `OperationsAsync` ("ops": branches, tags, a stash, a bare `origin`), `StoppedAsync(kind)` (an ops copy stopped in a merge, cherry-pick sequence, revert, rebase, or with stash conflicts, as a terminal would leave it; built each time), `RemoteSyncAsync` ("sync": published, unpushed and local branches) with `PushFromElsewhereAsync`, `CheckoutBlockedAsync` ("blocked"), `EdgeCasesAsync` ("edges": a detached HEAD, a linked worktree, a local upstream, a branch named like a remote branch, a tag named like a branch), `AuthRemoteAsync(server)` ("auth": a clone of what `AuthRemoteServer` serves). Phase 4's, in `Scenarios.Phase4.cs`: `RebaseAsync` ("rebase": `feature/topic` and `feature/other` to rebase onto `main` without a conflict, a bare `origin`), `InteractiveAsync` ("interactive": one line of eight commits on `main`, one a fixup candidate, one with a `#42 is the issue` body line), `ConflictsAsync` ("conflicts": `main` and `feature/theirs`, `feature/rebase`, `feature/picks`, `feature/kinds`, with notes.txt, other.txt, image.png and new.txt) and `ConflictsStoppedAsync(ConflictsStop.Merge | Rebase | CherryPicks | MergeKinds, mergeTool)` (stopped as a terminal would leave it, built each time, optionally with the fake merge tool of `ConfigureFakeMergeToolAsync`); their files in `RebaseFiles`, `InteractiveFiles` and `ConflictsFiles`, whose lines are short enough for a resolver pane at 1100×700. `GraphAsync`, `ChangesAsync`, phase 3's and phase 4's (except the stopped ones) are built once per test process as templates and copied for each test; `Phase3ScenarioTests` and `Phase4ScenarioTests` pin their refs, SHAs, graphs and stopped states |
 | `TestImages` | same | Small PNGs whose bytes depend only on their pixels (stored deflate blocks), for scenario repos |
-| `FakeRepositoryBase` | same | The start of a fake `IGitRepository` for view-model tests: a clean working tree, every write refused; phase 3's reads give empty results (no remotes, no worktrees, nothing detached) and its writes throw `NotSupportedException` |
-| `LargeHistory` | same | The 100k-commit repo (D51), built once per machine with `git fast-import` under `%TEMP%/VisualCommit.Tests/shared/` and shared read-only; what each row shows follows from its number |
-| `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC; since phase 3 also no askpass program or ssh command of the machine (`GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `GCM_INTERACTIVE`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`), no proxy (`no_proxy` set to `127.0.0.1,localhost`) and auto-fetch off (`VISUALCOMMIT_AUTO_FETCH_MINUTES=0`) (D112, D116). `ApplyMachineIndependence` does the same for a process about to start (the real-window pass's app). The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly |
-| `AuthRemoteServer` | same | The credential test server (D97): a `TcpListener` on 127.0.0.1 serving `git http-backend` through `GitRunner` as CGI for one bare repository (its own `remote.git`, or an existing one in place), asking for HTTP Basic auth (alice/s3cret) unless `RequireAuth` is false. Port 0 (the system picks) by default; `StartForVisualChecksAsync` uses 47391 so the pictures do not change, falling back to a free port (`PortWasTaken`). `Requests`, `Errors`; `HoldNextFetchPack()` holds the next fetch's pack after its first progress line with a percentage until `Release()`, so a check can show and cancel a running fetch |
+| `FakeRepositoryBase` | same | The start of a fake `IGitRepository` for view-model tests: a clean working tree, every write refused; phase 3's and phase 4's reads give empty results (no remotes, no worktrees, nothing detached, no merge tool, no operation message, a clean-up that removes nothing) and their writes throw `NotSupportedException` |
+| `LargeHistory` | same | The 100k-commit repo (D51), built once per machine with `git fast-import` under `%TEMP%/VisualCommit.Tests/shared/` and shared read-only; what each row shows follows from its number. Since phase 4 `GetBareAsync()` gives a bare copy made once beside it (`large-history-v1.git`), which `AuthRemoteServer` serves in place for phase 1's clone checks (D150) |
+| `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC; since phase 3 also no askpass program or ssh command of the machine (`GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `GCM_INTERACTIVE`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`), no proxy (`no_proxy` set to `127.0.0.1,localhost`) and auto-fetch off (`VISUALCOMMIT_AUTO_FETCH_MINUTES=0`) (D112, D116); since phase 4 no editor of the machine (`EDITOR`, `VISUAL`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, D151). `ApplyMachineIndependence` does the same for a process about to start (the real-window pass's app). The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly |
+| `AuthRemoteServer` | same | The credential test server (D97): a `TcpListener` on 127.0.0.1 serving `git http-backend` through `GitRunner` as CGI for one bare repository (its own `remote.git`, or an existing one in place), asking for HTTP Basic auth (alice/s3cret) unless `RequireAuth` is false. Port 0 (the system picks) by default; `StartForVisualChecksAsync` uses 47391 (`VisualChecksPort`) so the pictures do not change, or since phase 4 47392 (`Phase1VisualChecksPort`) for phase 1's clone checks, which run in another process at the same time as phase 3's (D150), falling back to a free port (`PortWasTaken`). `Requests`, `Errors`; `HoldNextFetchPack(atPercent)` holds the next fetch's pack until `Release()`, so a check can show and cancel a running fetch: with 0 after its first progress line with a percentage, with a percentage right after the first whole progress line at or above it, the packet re-framed so that git's last line shows exactly that percentage (phase 1's clone is held at 45 %, so it cannot race) |
 | `FakeFileLauncher`, `FakeClipboard` | `tests/VisualCommit.Testing/Headless` | Record what the app asked to open, show or copy, and touch nothing on the machine; `ShellDriver.Start` injects them (`Launcher`, `Clipboard`) |
 | `ScriptedPromptHandler` | `tests/VisualCommit.Testing` | Answers prompts from a queue of answers and records every prompt; a prompt without an answer is refused. Injected through `AppSession.Start` or `ShellDriver.Start` (`promptHandler`), or given to a broker |
 | `AskPassRunner` | same | Runs the real helper as OpenSSH runs `SSH_ASKPASS` (the prompt as its argument, `SSH_ASKPASS_PROMPT` when ssh sets it, an open scope's environment) for the prompt dialogs no ssh server can reach |
@@ -1195,12 +1664,12 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | `AppLogFile` | same | The app's log as checks read it, and the patterns of the lines they wait for or count, in both harnesses |
 | `WindowLayout` | same | The window's fixed layout in logical pixels, copied from the reports (tab strip, toolbar, panels, column headers, rows 26 high, the banner's minimum, the menu's heights and gaps) and the neutral point (760, 687) where both harnesses rest the pointer before a capture that is not about a hover. Both harnesses compute positions from it |
 | `HeadlessTestApp` | `tests/VisualCommit.Testing/Headless` | Builds the real `App` for headless mode with Skia rendering. Each UI test assembly names it in `AssemblyInfo.cs` |
-| `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot`. Partial since phase 3: `ShellDriver.Phase3.cs` (clicks with modifiers, a drag in steps, `Menu()` as a `MenuSnapshot`, `ClickMenuItem`, `MenuItemBounds`, the open dialog, `TypeInto`, `WaitForIdleAsync` for the queue and its refresh), `.Pointer.cs` (the neutral point, resting the pointer until a tooltip opens), `.Log.cs` (the app's log lines, git's call records, step times), `.Checks.cs` (opening a repository, rows below the banner, left-panel and file rows, the error dialog as an `ErrorDialogSnapshot`, progress, closing the window). `FindByAutomationId` looks in the open menu first, then in the top dialog, then in the whole window |
+| `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot`. Partial since phase 3: `ShellDriver.Phase3.cs` (clicks with modifiers, a drag in steps, `Menu()` as a `MenuSnapshot`, `ClickMenuItem`, `MenuItemBounds`, the open dialog, `TypeInto`, `WaitForIdleAsync` for the queue and its refresh), `.Pointer.cs` (the neutral point, resting the pointer until a tooltip opens), `.Log.cs` (the app's log lines, git's call records, step times), `.Checks.cs` (opening a repository, rows below the banner, left-panel and file rows, the error dialog as an `ErrorDialogSnapshot`, progress, closing the window); phase 4's `.Phase4.cs` (`Undo()` and `Redo()` by the first gesture of `HotkeyConfiguration.Undo` and `.Redo`, the banner's Continue and Skip, the result's caret held still: `ConflictResultEditor.CaretBlinks = false` in `Start`), `.Phase4.Rebase.cs` (the list as a snapshot, a row's point, a drag of a row in steps, a row's action through its menu) and `.Phase4.Conflicts.cs` (the resolver as a snapshot, a bar's button, the result's text, caret and modified state, typing into it, a click at a line and column). `WaitForIdleAsync` also waits for the stage panel's read of the stopped commit's message (`StagePanelSettled`: `IsFillingMessage` false), which fills its boxes after the status is shown. `FindByAutomationId` looks in the open menu first, then in the top dialog, then in the whole window |
 | `FakeFolderPicker` | same | Answers the app's folder dialogs with folders the test queued (D42) |
 | `Screenshot` | same | A captured frame: save as PNG, read pixel colours |
 | `LayoutAudit` | same | `FindClippedText` lists every visible text that is not shown in full; with `allowShortenedWithToolTip` it lets through text cut with "…" on purpose whose whole text is in a tooltip, and with `allowScrolledOutOfView` text cut only by a scrolling list's edge. A wrapped line's trailing space is not counted |
 | `FreshApplication` | same | Runs part of a test with a new Avalonia application object: how a scripted check crosses a restart (D32). Its wait for its turn on the headless UI thread does not count against the test (D132) |
-| `VisualRun`, `VisibleTexts` | same | Where the walk-throughs save their pictures (`artifacts/visual/phase-N/scripted/`); the texts a region shows, as a person reads them. Shared by both walk-through projects |
+| `VisualRun`, `VisibleTexts` | same | Where the walk-throughs save their pictures (`artifacts/visual/phase-N/scripted/`); the texts a region shows, as a person reads them. Shared by the walk-through projects |
 | `HangWatchdogAttribute`, `HangClock` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process. `VISUALCOMMIT_TEST_HANG_SECONDS` changes the limit. A test's wait for a shared preparation (`SharedPreparationAsync`: a scenario template, the 100k-commit repo, the pull-parity templates) and for its turn on the headless UI thread (`WaitingForTurn`) is left out of its time; a preparation is held to the limit on its own (D132). `HangClock` holds these rules apart from the watchdog, so they are tested with a clock moved by hand |
 | `GitIsoDates` | same | Reads git's strict ISO dates as instants: Git 2.36 writes `+00:00` for UTC, CI's Git 2.55 `Z` |
 
@@ -1230,12 +1699,35 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `Phase3Expectations.Common.cs` and `Phase3Expectations.A.cs` to `.D.cs` (nested `PartA` to
   `PartD`). A test is named `Check_<NN>[<suffix>]_<what>`, one per app start; every wait is on a
   condition, never a fixed time. `scripts/time-scripted-check.sh` times chosen checks alone and
-  prints each step's time.
+  prints each step's time (its second argument picks the phase and the project: 4 when left out).
+- Phase 4's walk-through is the project `VisualCommit.VisualTests.Phase4` (D151), built the same
+  way: the abstract base `Phase4Checks` (`Phase4Checks.Support.cs`, a copy of what phase 3's
+  support offers, plus what phase 3 repeated in each part: a graph assertion, the backups,
+  `AssertCalled`, `WaitForOperationAsync`, and `AssertBanner`, which knows Continue, Skip and the
+  banner's layout), one class per part (`Phase4ChecksA` to `Phase4ChecksD`, partial over files
+  `Phase4Checks.<part>.<topic>.cs`), 26 test methods for its 18 checks, one per app start
+  (`Check_A2_rebase_onto_a_branch`, …), and its expectations in `Phase4Expectations.Common.cs` and
+  `.A.cs`, `.B.cs`, `.C.cs`, `.C2.cs`, `.D.cs`. The tests of the expectations and the support are
+  named so that the real-window project's link pattern (`Phase4Expectations*.cs`) does not take
+  them (`Phase4ExpectationTests.<part>.cs`, `Phase4SupportTests.cs`). No part starts a server.
+- **The two gits** (phase 3's rule, carried into phase 4's checks): the report quotes git's own
+  texts and files as Git 2.36 writes them, and the checks assert them word for word only on that
+  git (`Phase4Expectations.IsReportGitAsync()`); on any other git (CI's 2.55) they assert the
+  classifying parts, and the `rebase-merge/` files are compared after 2.55's additions are taken
+  out (the subject written as a comment in `done` and `git-rebase-todo`, the `# Conflicts:` block
+  at the end of `message`). Nothing is skipped: the version decides what is asserted. The
+  Git-layer tests follow the same rule (`PseudoRefTests` asserts on 2.36 that git refuses
+  `--ref-format`).
 - xunit runs the tests of one class (or of one `[Collection]`) one after another and different
   ones side by side, so big test classes are split by subject: `ScenarioTests` and
   `Phase3ScenarioTests`, the pull parity classes by group of settings, and
   `RepositoryOperations*Tests` (helpers in `RepositoryOperationsTestSupport`), whose twelve
-  classes run in four collections, one per WP7 sub-package. The default run is bound by the
+  classes run in four collections, one per WP7 sub-package; phase 4's are split the same way (in
+  Git.Tests `ContinueSkipTests` and `ContinueSkipRebaseTests`, `InteractiveRebaseTests`,
+  `InteractiveRebaseGuardTests`, `InteractiveRebaseRefusalTests`, `InteractiveRebaseListParityTests`,
+  the three pull-rebase parity classes; in App.Tests `RepositoryOperationsRebaseTests`,
+  `…SequenceTests`, `…PullRebaseTests`, `…ConflictsTests`, `…BackupCleanupTests`, the resolver's
+  and the list's view-model, view and control tests). The default run is bound by the
   processors (git's processes and the virus scanner): more git-heavy tests side by side only make
   every git call slower, and the waits of the headless tests (10 seconds by default) closer to
   their limit.
@@ -1246,7 +1738,8 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   small text is drawn with, and sample colours of shapes and large text only.
 - `VisualCommit.RealWindowTests`: `RealApp` starts the built app with the same isolation as the
   headless tests (also `VISUALCOMMIT_TIME_ZONE=UTC`, and `GitIsolation.ApplyMachineIndependence`:
-  no askpass, ssh or proxy variables of the machine, auto-fetch off), optionally with a session file
+  no askpass, ssh, proxy or editor variables of the machine, auto-fetch off; since phase 4 also
+  `VISUALCOMMIT_CARET_BLINK=0`), optionally with a session file
   (`Launch(data, session)`), finds elements through UI Automation, gives real mouse, wheel and
   keyboard input, chooses a folder in the native folder dialog (`ChooseFolderInDialog`), moves
   and sizes the window, reads the app's log, and captures the window from the screen.
@@ -1254,7 +1747,8 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   the scripted screenshot of the same step (at most 3% of pixels may differ, a pixel counting only when nothing within a pixel of it matches: D33, D58), saves a
   picture of the differing pixels, and writes `run.txt`. The project references
   `VisualCommit.Testing`, so it uses the same scenario repos, and compiles the scripted run's
-  `Phase3Expectations*.cs`, so both harnesses use the same constants and texts. Its tests never
+  `Phase3Expectations*.cs` and `Phase4Expectations*.cs`, so both harnesses use the same constants
+  and texts. Its tests never
   run in parallel (they share the desktop and the mouse).
 - Phase 3's pass: `Phase3RealWindowPass.cs` (the run, `Phase3Run`, one folder and one `run.txt`
   for the whole pass; launching the app on a scenario and at a server; waiting for an operation's
@@ -1270,6 +1764,20 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   (D49): the pass right-clicks and drags them at positions computed from `WindowLayout` and the
   expectations. No step invokes an item that acts outside the window ("Copy …", "Open file",
   "Show in folder").
+- Phase 4's pass: `Phase4RealWindowPass.cs` (the run, `Phase4Run`, launching on a scenario,
+  waiting for an operation's log line, `Compare`) and `.A.cs` (A1 to A3), `.B.cs` (B6, B7), `.C.cs`
+  (C10, C11), `.C2.cs` (C14 to C16): 10 launches, one test method each, for the steps the report
+  marks "RW" (a picture of every new screen, a real drag of a list row, real typing into the
+  result, a real double-click on a conflicted file, a real process for the merge tool), all at
+  1100×700. `RealApp.Phase4.cs` (the banner), `.Phase4.Rebase.cs` (the list), `.Phase4.Conflicts.cs`
+  (the resolver) and `.Phase4.Checks.cs` (the pass's own waits) find them through the automation
+  ids of phase 4 design 7.4; the project compiles `Phase4Expectations*.cs` too. `RealApp.Launch`
+  sets `VISUALCOMMIT_CARET_BLINK=0` and removes the machine's editor variables.
+- `RealApp.PressKeys` sends a navigation key held in a chord (an arrow, Home, End, Page Up or
+  Down, Insert, Delete) as its extended scan code, as the keyboard's own keys do: FlaUI sends a
+  virtual key without the extended flag, which Windows takes for the number pad's key, and Shift
+  with a number-pad arrow while Num Lock is on cancels the Shift (Shift+Down moved the caret
+  without selecting, found by phase 4's gate).
 
 ### CI
 
@@ -1278,9 +1786,11 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 more than docs. On Windows it also builds, but does not run, the real-window pass. Each job
 uploads `artifacts/visual/` as `visual-<os>`, so the scripted screenshots of all three platforms
 can be downloaded and looked at. A newer push to the same branch cancels the run before it
-(`concurrency`). Time limits: 22 minutes for each of these jobs and 25 for each container job,
-and 14 minutes for the test step of every job, so that a hang cannot use up the job's time
-(phase 3 took the default run on CI from about 3.5 to 7 or 8 minutes).
+(`concurrency`). Time limits: 32 minutes for each of these jobs with 24 for its test step (D152,
+amending D134: the Windows test step passed 12 of the old 14 minutes once phase 4's fifth test
+process ran), and 25 for each container job with 14 for its test step, so that a hang cannot use
+up the job's time. A test project added to the solution is picked up with no change to the
+workflow.
 
 Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`
 container, run `scripts/setup-linux.sh` in it twice (the second run has to find everything in
@@ -1309,4 +1819,5 @@ Phase 2 added Avalonia.AvaloniaEdit 12.0.0 (built against Avalonia 12.0.0, used 
 TextMateSharp 2.0.4 and TextMateSharp.Grammars 2.0.4 (with Onigwrap, which ships Oniguruma for
 every platform CI runs on), and the font JetBrains Mono NL 2.304 as a file in the repo. Phase 3
 added no packages: the askpass helper, the menus (Avalonia's own `MenuFlyout`) and the test
-server use what was there.
+server use what was there. Phase 4 added none either: the resolver is built on AvaloniaEdit
+12.0.0 and the list on Avalonia's own controls.

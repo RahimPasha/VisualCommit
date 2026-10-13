@@ -132,6 +132,77 @@ public sealed class CommitGraphData
 
     private ReachabilityWalk? _reachable;
 
+    /// <summary>
+    /// HEAD's linear first-parent line over the rows loaded so far (docs/phase-4-design.md 2.1):
+    /// HEAD's commit, its first parent, and so on until the first merge commit, which is
+    /// included, or the root. "Interactive rebase of {cur} from here…" is offered for a commit on
+    /// it, and a squash takes commits of it (section 3). The walk runs when it is first asked for
+    /// and is cached per graph, as <see cref="IsReachableFromHead"/>'s is; rows that arrive later
+    /// extend it. Empty when HEAD is unborn or its row is not loaded yet; on a complete graph, a
+    /// parent that is never loaded (a shallow history) ends it. Call on the UI thread.
+    /// </summary>
+    /// <returns>The line's SHAs, HEAD's first.</returns>
+    public IReadOnlyList<string> LinearLineFromHead()
+    {
+        var line = _headLine ??= new HeadLine(Refs.Head.Sha);
+        line.Extend(this);
+        return line.Shas;
+    }
+
+    /// <summary>
+    /// Where <paramref name="sha"/> is on <see cref="LinearLineFromHead"/>: 0 for HEAD's commit,
+    /// 1 for its first parent, …; null when it is not on the line as far as the rows are loaded.
+    /// Call on the UI thread.
+    /// </summary>
+    public int? DepthOnHeadLine(string sha)
+    {
+        ArgumentNullException.ThrowIfNull(sha);
+        LinearLineFromHead();
+        return _headLine!.DepthOf(sha);
+    }
+
+    private HeadLine? _headLine;
+
+    /// <summary>HEAD's linear first-parent line as far as it is loaded, and the commit it waits for.</summary>
+    private sealed class HeadLine(string? head)
+    {
+        private readonly List<string> _shas = [];
+        private readonly Dictionary<string, int> _depths = new(StringComparer.Ordinal);
+
+        /// <summary>The next commit of the line, whose row is not loaded yet; null once the line has ended.</summary>
+        private string? _next = head;
+
+        public IReadOnlyList<string> Shas => _shas;
+
+        public int? DepthOf(string sha) => _depths.TryGetValue(sha, out var depth) ? depth : null;
+
+        /// <summary>Follows the first parents from where the last walk stopped, while their rows are loaded.</summary>
+        public void Extend(CommitGraphData data)
+        {
+            while (_next is { } sha)
+            {
+                var index = data.IndexOf(sha);
+                if (index < 0)
+                {
+                    // Not loaded yet; on a complete graph it never will be (a shallow history).
+                    if (data.IsComplete)
+                    {
+                        _next = null;
+                    }
+
+                    return;
+                }
+
+                _depths[sha] = _shas.Count;
+                _shas.Add(sha);
+
+                // A merge commit ends the line, and so does the root.
+                var parents = data.CommitAt(index).Parents;
+                _next = parents.Count == 1 ? parents[0] : null;
+            }
+        }
+    }
+
     /// <summary>The commits reached from HEAD so far, and the parents the walk waits for because their rows are not loaded yet.</summary>
     private sealed class ReachabilityWalk
     {

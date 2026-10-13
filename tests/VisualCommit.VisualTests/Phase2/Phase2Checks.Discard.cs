@@ -114,8 +114,8 @@ public partial class Phase2Checks
         app.Click(app.Find<Button>("DiscardAllButton"));
         await WaitForDialogAsync(app);
         app.Click(app.Find<Button>("ConfirmButton"));
-        await WaitForStagePanelAsync(app, unstaged: 0, staged: 3);
-        await app.WaitForAsync(() => app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar");
+        await WaitForStagePanelAsync(app, unstaged: 0, staged: 3, WriteTimeout);
+        await app.WaitForAsync(() => app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar", WriteTimeout);
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "18b-all-discarded");
         Assert.True(app.Find<TextBlock>("NoUnstaged").IsEffectivelyVisible);
@@ -131,7 +131,7 @@ public partial class Phase2Checks
         Assert.Equal(index, (await repo.GitAsync("write-tree")).StandardOutput.Trim());
 
         app.Click(app.Find<Button>("RestoreDiscardButton"));
-        await WaitForStagePanelAsync(app, unstaged: 7, staged: 3);
+        await WaitForStagePanelAsync(app, unstaged: 7, staged: 3, WriteTimeout);
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "18c-all-restored");
         Assert.Equal(before, WorkingTreeBytes(repo));
