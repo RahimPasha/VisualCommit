@@ -361,6 +361,10 @@ checkout's neighbours (undo, the activity log); the owner decides when phase 5 i
 O10 submodules, O11 worktrees, O12 Git LFS, O13 built-in terminal, O14 built-in file editor,
 O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
 
+Left out of phase 4 on purpose (design 14.4, D143, D148): an interactive rebase that includes the
+root commit (`--root`); syntax colours in the resolver's editable result; a splitter between the
+resolver's halves; Continue and Skip for `git am`, which the banner leaves to a terminal.
+
 ## Risks and open decisions
 
 | # | Item | Needed by |

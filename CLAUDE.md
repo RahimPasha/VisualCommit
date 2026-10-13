@@ -48,7 +48,7 @@ machine".
      one left is named in no `docs/status.md`, and the `docs/status.md` files do not make clear
      which is current, ask the owner.
 2. Read `docs/status.md`: which phase is current and where work stopped.
-3. Read `docs/plan.md`: the Workflow, Visual test gate and Risks sections, and the section for the current phase.
+3. Read `docs/plan.md`: the Workflow, Visual test gate and "Risks and open decisions" sections, and the section for the current phase.
 4. Read `docs/architecture.md`, `docs/decisions.md`, and the parts of `docs/requirements.md` the phase covers.
 5. Read the previous phase's handoff, `docs/handoffs/phase-<N-1>.md`. None exists until Phase 0 is closed.
 6. If code exists, build it and run the default tests to see the state you inherited, before
@@ -67,7 +67,8 @@ Then, to **start a phase**:
    the new branch with `origin/master` from then on.
 3. In `docs/status.md`, set the phase to "In progress" and build the Progress checklist: the
    phase's "Delivers" items split into steps small enough to finish in one sitting, then its
-   visual checks, then the closing steps below. Commit.
+   visual checks, then the closing steps below, with a step for reading the CI run of the gate's
+   commit. Commit.
 4. Write the phase's visual checks into `docs/test-reports/phase-N.md` from the template, each
    with concrete steps and a concrete expected result, and each marked with whether it is
    repeated in the real window. Commit this before building the UI the checks test.
@@ -80,7 +81,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md`, commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built; the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built; the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -149,9 +150,11 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 2. Update `docs/architecture.md` so it describes what is actually built.
 3. Update `docs/plan.md`: move anything this phase did not deliver into the phase that now owns it, and update the risks.
 4. Write `docs/handoffs/phase-N.md` from `docs/handoffs/TEMPLATE.md`.
-5. Cold-read check: start a fresh agent with no conversation context and give it only the repo.
-   Tell it to assume this phase has been accepted and merged, and ask it how to build, run and
-   test the app and how it would begin the next phase. Fix every gap it hits in the docs. Commit.
+5. Cold-read check: first bring `docs/status.md`'s checklist and "Next step" up to date, because
+   the cold reader reads it as it stands. Then start a fresh agent with no conversation context
+   and give it only the repo. Tell it to assume this phase has been accepted and merged, and ask
+   it how to build, run and test the app and how it would begin the next phase. Fix every gap it
+   hits in the docs. Commit.
 6. Update `docs/status.md`: links to the handoff and report, the last CI run of the branch with
    its result in each job, the "Gate commit" (the commit both passes of the gate ran on), and
    anything waiting on the owner.
@@ -294,7 +297,10 @@ What to know about them:
   phase N's gate inspected; in Git Bash at the repo root,
   `tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | sha256sum -c` shows which pictures of
   a later run are the same files (the `tr` removes the line endings a Windows checkout adds,
-  which `sha256sum` would take as part of each name).
+  which `sha256sum` would take as part of each name); with `--quiet` it prints only those that
+  differ, and a picture new since the list is not named at all. A gate writes its list, after
+  inspecting and before anything else runs, with
+  `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-N-pictures.sha256`.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
   app on the desktop and moves the real mouse for about 14 minutes (phases 0 to 4): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
@@ -336,4 +342,5 @@ lacks.
 | `docs/handoffs/phase-N.md` | What phase N built and what the next phase must know |
 | `docs/test-reports/phase-N.md` | Visual checks for phase N: expected results, then outcomes |
 | `docs/cloud-sessions.md` | For the owner: working on the project from a Claude Code cloud session |
-| `docs/phase-3-design.md` | Phase 3's design, kept as history; decisions and the report cite its sections as "design N.N" |
+| `docs/phase-3-design.md` | Phase 3's design, kept as history; phase 3's decisions (D77 to D133), report and handoff cite its sections as "design N.N" |
+| `docs/phase-4-design.md` | Phase 4's design, kept as history; phase 4's decisions (D139 to D152), report, handoff, status and plan outcome cite its sections as "design N.N"; its sections 14.1 to 14.5 say what the build and the review settled |

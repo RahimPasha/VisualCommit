@@ -16,9 +16,9 @@ C17, D18); its section "What proves each Delivers item" is the longer form of th
 | Delivered | Proven by |
 |---|---|
 | Rebase onto a commit or a branch from the commit, branch and drop menus, also by drag; pull with rebase for one pull | A1 to A5; `RebaseOperationTests` (Git), `RepositoryOperationsRebaseTests`, `RepositoryOperationsPullRebaseTests`, `PullRebaseParityTests`, `RepositoryMenusTests` |
-| Interactive rebase (reorder, squash, fixup, reword, drop) in a list in the graph area; squash of selected commits | B6 to B9, D18; `RebaseTodoTests` (Core), `InteractiveRebaseTests`, `InteractiveRebaseListParityTests` (Git), `InteractiveRebaseViewModelTests`, `InteractiveRebaseViewTests`, `MessageDialogViewModelTests`, `GraphAreaHooksTests` |
+| Interactive rebase (reorder, squash, fixup, reword, drop) in a list in the graph area; squash of selected commits | B6 to B9, D18; `RebaseTodoTests` (of Core's pure code, in `VisualCommit.Git.Tests`), `InteractiveRebaseTests`, `InteractiveRebaseListParityTests` (Git), `InteractiveRebaseViewModelTests`, `InteractiveRebaseViewTests`, `MessageDialogViewModelTests`, `GraphAreaHooksTests` |
 | The banner's Continue, Skip and Abort for merge, rebase, cherry-pick and revert, one commit or a list, also an operation started in a terminal; the stage panel's Continue | C10 to C13, C17, and phase 3's checks 9, 9b, 11b, 12, 25 as changed; `ContinueSkipTests`, `InProgressTests` (Git), `ConflictBannerTests`, `WorkingChangesInProgressTests`, `RepositoryOperationsSequenceTests` |
-| The conflict resolver: ours and theirs above the editable result, per block, a whole side, mark resolved, the next file, the external merge tool, cards for conflicts without text | C10 to C16, D18; `ConflictTextTests` (Core), `ConflictOperationTests`, `MergeToolTests` (Git), `ConflictResolverViewModelTests`, `ConflictResolverViewTests`, `ConflictResolverRealGitTests`, `ConflictPanesTests`, `ConflictResultEditorTests`, `RepositoryOperationsConflictsTests` |
+| The conflict resolver: ours and theirs above the editable result, per block, a whole side, mark resolved, the next file, the external merge tool, cards for conflicts without text | C10 to C16, D18; `ConflictTextTests` (of Core's pure code, in `VisualCommit.Git.Tests`), `ConflictOperationTests`, `MergeToolTests` (Git), `ConflictResolverViewModelTests`, `ConflictResolverViewTests`, `ConflictResolverRealGitTests`, `ConflictPanesTests`, `ConflictResultEditorTests`, `RepositoryOperationsConflictsTests` |
 | Several picks and reverts with git's list (D136) | C12, C13; `HistoryOperationTests`, `RepositoryOperationsHistoryTests`, `RepositoryOperationsSequenceTests` |
 | Pick heads under the reftable ref format (D128, D146) | `PseudoRefTests` (a real reftable repository on CI's git 2.55; on 2.36, which has no reftable, it asserts that git refuses the option), `PseudoRefProbeTests` |
 | The app's own sequence editor | B7, B8; `InteractiveRebaseTests` |
@@ -30,8 +30,10 @@ fixed before the final run (the report's "Found by the gate"): a phase 2 check's
 under load once a discard ran the backups' clean-up (`a7e9db3`), and the real-window driver's
 Shift+arrow, which Windows turned into a number-pad arrow (`6badab7`).
 
-Nothing was moved to a later phase. The cosmetic things the inspection noticed are under Known
-issues.
+Nothing was moved to a later phase. Left out on purpose and put in plan.md's Backlog: an
+interactive rebase that includes the root commit, syntax colours in the resolver's editable
+result, a splitter between the resolver's halves, and Continue and Skip for `git am` (which the
+banner leaves to a terminal). The cosmetic things the inspection noticed are under Known issues.
 
 ## State of the repo
 
@@ -104,8 +106,12 @@ dotnet test --project tests/VisualCommit.RealWindowTests -c Release
 
 ## Running the visual gate
 
-As in phase 3's handoff (step 0 there: worktrees removed, the git fsmonitor daemons stopped; this
-phase found 27 running before its gate), with a fifth project and a longer real-window pass.
+As in phase 3's handoff (step 0 there: worktrees removed, the git fsmonitor daemons stopped), with
+a fifth project and a longer real-window pass. This phase found 27 daemons still running before its
+gate, most for worktrees already removed; in PowerShell,
+`Get-CimInstance Win32_Process -Filter "Name='git.exe'" | Where-Object { $_.CommandLine -match 'fsmonitor--daemon run' }`
+lists them and `| ForEach-Object { Stop-Process -Id $_.ProcessId -Force }` stops them (git starts
+them again when needed; they only cache file changes).
 
 1. Let the laptop rest a few minutes, then `dotnet test` at the repo root: about 22 minutes. It
    writes `artifacts/visual/phase-{0,1,2,3,4}/scripted/`, emptying each first.
@@ -115,12 +121,20 @@ phase found 27 running before its gate), with a fifth project and a longer real-
    nothing may run a partial walk-through in between. Phase 4's part is
    `Phase4RealWindowPass.cs` and `.A.cs` to `.C2.cs`, with `RealApp.Phase4*.cs`; a capture that
    times out saves what the window showed under `real-window/failures/` (C14 only so far).
-3. Save `sha256sum` of the pictures before anything else runs, then open every picture of both
-   passes that changed: `tr -d '\r' < docs/test-reports/phase-4-pictures.sha256 | sha256sum -c`
-   shows which of a later run differ from phase 4's gate. Real-window pictures are never
-   byte-identical and must all be opened. Phase 4's gate inspected 317 pictures with 12 inspector
-   agents in one workflow, each batch given its pictures and the report's sections to compare
-   with; the list of batches is the shape to reuse.
+3. Save `sha256sum` of the pictures before anything else runs (CLAUDE.md gives the command that
+   writes `phase-N-pictures.sha256`), then open every picture of both passes that changed:
+   `tr -d '\r' < docs/test-reports/phase-4-pictures.sha256 | sha256sum -c --quiet` names those of a
+   later run that differ from phase 4's gate (a new picture is not named: open those too).
+   Real-window pictures are never byte-identical and must all be opened. Phase 4's gate inspected
+   317 pictures with 12 inspector agents started side by side by one Claude Code workflow (a
+   script that runs sub-agents), each batch given its pictures and the report's sections to
+   compare with; the report's Run section says how they were split (the new phase's pictures by
+   part, the changed ones of earlier phases, the real-window captures with their scripted twins).
+
+Running only part of the real-window pass works with `--filter-method`: at the gate,
+`dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*Check_C14_typing_into_the_result"`
+ran one test (about 40 seconds of the mouse). It empties that phase's `real-window/` folder, so the
+whole pass runs again afterwards; tell the owner first, as for the whole pass.
 
 ## What changed in the code
 
@@ -195,8 +209,10 @@ Rules worth keeping (phase 3's still hold: two gits, dates, paths, waits, clocks
 | `rebase.reapplyCherryPicks` (newer gits) is not followed by the list | Low; the list matches git's default | `GitRepository.Rebase.cs` (design 14.5) |
 | A text box's caret blinks in the real window, so a capture may catch it off (`b7f`) | Varies pictures only | D151 holds still only the result's caret |
 | A commit message in an encoding other than UTF-8 is not kept byte for byte by the interactive rebase's own-message copy | Low | design 14.2 |
-| The status bar's Cancel says "Stop git" while the merge tool runs; design 11.9 gives "Stop git and the merge tool" | Cosmetic; found by the docs' check after the gate, left so as not to change the gate's commit | `Views/Shell/StatusBarView.axaml` (line 73); fix with phase 5's first code commit |
+| The status bar's Cancel button's tooltip says "Stop git" while the merge tool runs; design 11.9 gives "Stop git and the merge tool" | Cosmetic; found by the docs' check after the gate, left so as not to change the gate's commit | `Views/Shell/StatusBarView.axaml` (line 73); fix with phase 5's first code commit |
 | `IGitRepository.ReadRebaseListAsync`'s doc comment still names `--cherry-pick`; the code reads `--cherry-mark` and keeps commits that start empty (design 14.5) | A stale comment | `src/VisualCommit.Core/Git/IGitRepository.cs`; fix with phase 5's first code commit |
+| The comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` says the pass takes about 11 minutes with phases 0 to 3; it is about 14 with phases 0 to 4 | A stale comment | fix with phase 5's first code commit |
+| `scripts/time-scripted-check.sh` sends every phase from 4 up to the Phase 4 project (`if [ "$phase" -ge 4 ]`) | Wrong for phase 5 until changed | change it when phase 5's walk-through project is added |
 | Earlier phases' issues that remain (the tooltips that cover the next item, the first context menu's latency, the error output's URL wrapping, Q1 on a warm laptop): see phase 3's handoff | As there | |
 
 ## Things that cost time
@@ -237,6 +253,32 @@ Do first:
    phase 5).
 4. Write phase 5's checks into `docs/test-reports/phase-5.md` before the UI, deriving every git
    state with real git 2.36, and decide which steps the real window repeats.
+5. Give phase 5's walk-through a project of its own, as phase 4 did (D133, D151; WP-S in design
+   13.3): `tests/VisualCommit.VisualTests.Phase5` with its csproj, `AssemblyInfo.cs` and
+   `Phase5Checks.Support.cs` copied from phase 4's, added to `VisualCommit.slnx` (CI picks up
+   every test project of the solution with no change); a `Phase5Expectations*.cs` link in
+   `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` beside phase 4's;
+   `scripts/time-scripted-check.sh` taught phase 5; CLAUDE.md's Commands rows for it.
+
+Open points for phase 5 (record each as a decision; ask the owner those that are a matter of
+taste, before its design, as phases 3 and 4 did; phase 4 wrote its design into
+`docs/phase-4-design.md` and phase 5 may do the same):
+
+- **C12, protecting uncommitted changes** (D138, plan.md's Backlog): the owner proposed it for
+  phase 5 and decides when phase 5 is planned. Ask first.
+- **Undo's scope**: O2 and the plan's Delivers say "undo and redo of the last git action", while
+  "Done when" says "each destructive action can be undone". Settle which, and what redo means.
+- **Undo of what reached a remote**: a force push, a deleted remote branch or tag. The backups
+  hold the old commits (`force-push`, `remote-branch`, `remote-tag`), but undoing means pushing
+  again; decide whether and how it asks.
+- **The activity log's sources**: it reads `OperationLog` (the last 500 records, in memory) and
+  `IGitCallLog` (the last 2,000 calls); the clean-up's `Removed backup` lines are only in the app's
+  log file, and a clean-up inside another operation has no record of its own; `OperationRecord`
+  does not carry `OperationReport.Warning` yet. Decide where the log reads them from.
+- **Where the activity log and search show**: the toolbar's Search and the status bar's
+  "Activity log" are placeholders (D53, D90).
+- **The cosmetic issues above** (the details panel's SHA, the resolver's disabled arrows) if the
+  owner wants them in phase 5.
 
 Risks to watch:
 
