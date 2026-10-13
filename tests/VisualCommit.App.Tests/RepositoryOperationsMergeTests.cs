@@ -355,7 +355,7 @@ public class RepositoryOperationsMergeTests
             (TextOf(app, "ConfirmTitle"), TextOf(app, "ConfirmQuestion")));
         TestPictures.Save(app, "wp7-09b-abort-question");
         app.Click(app.FindByAutomationId("ConfirmButton"));
-        await app.WaitForAsync(() => app.TopDialogView is null && repository.OperationStatus.Text == "Aborted the merge", "the abort");
+        await app.WaitForAsync(() => app.TopDialogView is null && repository.OperationStatus.Text == "Aborted the merge", "the abort", WriteTimeout);
         await app.WaitForIdleAsync();
         Assert.False(app.FindByAutomationId("ConflictBanner").IsEffectivelyVisible);
         Assert.Equal(2, (await repo.BackupRefsAsync()).Count);

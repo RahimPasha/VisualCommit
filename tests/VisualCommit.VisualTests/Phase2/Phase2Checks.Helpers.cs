@@ -126,9 +126,11 @@ public partial class Phase2Checks
             timeout);
 
     /// <summary>
-    /// How long a step waits for a write of the app's that runs several git calls (a discard of
-    /// many files with its snapshot and, since phase 4, the backups' clean-up; a restore): with the
-    /// default run's five test processes side by side, 10 s was not always enough (phase 4's gate).
+    /// How long a step waits for a write of the app's that runs several git calls (a discard of a
+    /// file, a hunk or a line with its snapshot and, since phase 4, the backups' clean-up; a
+    /// restore): with the default run's five test processes side by side, 10 s was not always
+    /// enough (check 18 at phase 4's gate, check 19 in phase 5's baseline run). Checks 13, 17, 18
+    /// and 19 wait this long after each discard and restore.
     /// </summary>
     private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
 
