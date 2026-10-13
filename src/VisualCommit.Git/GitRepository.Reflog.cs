@@ -60,7 +60,8 @@ public sealed partial class GitRepository
                 return result;
             }
 
-            // The two walks list different commits: the ref moved between them. Once more, then it is git's to explain.
+            // The two walks list different commits: the ref moved between them. Both are read once
+            // more; a ref that moves again meanwhile fails the read, which the page's next refresh repeats.
             if (attempt == 2)
             {
                 throw new GitException($"git log --walk-reflogs {fullRef}", 0, $"The reflog of {fullRef} changed while it was being read. Read it again.");
@@ -215,25 +216,21 @@ public sealed partial class GitRepository
                 backups.Add(name.Backup, backup);
             }
 
-            var rest = refName[(BackupRefPrefix.Length + name.Backup.Length)..];
-            var isChanges = rest == "-changes";
-            var refEntry = type switch
+            // The commit a ref keeps: its own, a tag object's, or none for a tree or a blob.
+            var (commit, commitSubject) = type switch
             {
-                "commit" => new BackupRefInfo(refName, target, null, isChanges, subject, body, target, subject),
-                "tag" when peeledType == "commit" => new BackupRefInfo(refName, target, null, isChanges, subject, body, peeled, peeledSubject),
-                _ => new BackupRefInfo(refName, target, null, isChanges, subject, body, string.Empty, string.Empty),
+                "commit" => (target, subject),
+                "tag" when peeledType == "commit" => (peeled, peeledSubject),
+                _ => (string.Empty, string.Empty),
             };
-            if (rest.StartsWith('/'))
-            {
-                refEntry = refEntry with { Name = rest[1..] };
-            }
-
             if (type == "tag" && peeledType == "tag")
             {
                 nested.Add((name.Backup, backup.Refs.Count));
             }
 
-            backup.Refs.Add(refEntry);
+            // What follows "<kind>-<time>[-<n>]": nothing, "-changes" or "/<name>".
+            var rest = refName[(BackupRefPrefix.Length + name.Backup.Length)..];
+            backup.Refs.Add(new BackupRefInfo(refName, target, rest.StartsWith('/') ? rest[1..] : null, rest == "-changes", subject, body, commit, commitSubject));
         }
 
         foreach (var (name, index) in nested)

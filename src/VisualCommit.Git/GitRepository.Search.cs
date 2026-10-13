@@ -11,7 +11,7 @@ namespace VisualCommit.Git;
 /// </summary>
 public sealed partial class GitRepository
 {
-    /// <summary>What a search line of the Files mode starts with: the record separator, which git C-quotes in a path.</summary>
+    /// <summary>What a commit's line starts with in the Files mode (<c>%x1e</c>): the record separator, which git C-quotes in a path.</summary>
     private const char SearchHeaderMark = '\x1e';
 
     /// <summary>
@@ -140,7 +140,7 @@ public sealed partial class GitRepository
                 // matches a folder does not match the files under it, hence the second pathspec.
                 var glob = EscapeGlob(text.Replace('\\', '/'));
                 arguments.AddRange([
-                    "--format=" + SearchHeaderMark + "%H", "--first-parent", "--root", "--no-renames", "--name-only",
+                    "--format=%x1e%H", "--first-parent", "--root", "--no-renames", "--name-only",
                     "--", $":(glob,icase)**/*{glob}*", $":(glob,icase)**/*{glob}*/**"]);
                 environment = new Dictionary<string, string?>(ReadEnvironment) { ["GIT_LITERAL_PATHSPECS"] = null };
                 string? pending = null;

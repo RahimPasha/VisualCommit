@@ -1,6 +1,6 @@
 using System.Text;
-using VisualCommit.Core.Logging;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
 
 namespace VisualCommit.Git;
 
@@ -10,7 +10,7 @@ namespace VisualCommit.Git;
 /// </summary>
 public sealed partial class GitRepository
 {
-    /// <summary>The setting whose missing file stops a blame, as git names it in its message.</summary>
+    /// <summary>What git says when the file a <c>blame.ignoreRevsFile</c> setting names cannot be opened; the file follows.</summary>
     private const string IgnoreRevsFileMissing = "could not open object name list: ";
 
     public async Task ReadFileHistoryAsync(string startSha, string path, Action<FileHistoryRow> onRow, CancellationToken cancellationToken = default)
