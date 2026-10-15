@@ -17,8 +17,8 @@ public sealed partial class RepositoryViewModel
     /// <summary>The key of the filter the graph shown was loaded with (null: none), which a refresh compares (8.2).</summary>
     private string? _loadedFilterKey;
 
-    /// <summary>The graph the left panel's marks follow until it is complete.</summary>
-    private CommitGraphData? _markedGraph;
+    /// <summary>The graph shown while it still loads, whose pages the left panel's marks and the comparison's links follow.</summary>
+    private CommitGraphData? _loadingGraph;
 
     /// <summary>
     /// The key of the filter the graph shown was loaded with (<see cref="Core.Graph.GraphFilter.Key"/>),
@@ -129,18 +129,21 @@ public sealed partial class RepositoryViewModel
 
     partial void OnFiltersChanged(RepositoryGraphFilter? value) => LeftPanel.UpdateFilters(value);
 
-    /// <summary>A hidden branch's row says whether its commit is a row (8.3): the marks follow the graph shown until it is complete.</summary>
-    private void FollowGraphForLeftPanel(CommitGraphData graph)
+    /// <summary>
+    /// A hidden branch's row says whether its commit is a row (8.3), and so does a comparison's
+    /// link (docs/phase-5-design.md 6.4): both follow the graph shown, page by page while it loads.
+    /// </summary>
+    private void FollowLoadingGraph(CommitGraphData graph)
     {
-        if (_markedGraph is not null)
+        if (_loadingGraph is not null)
         {
-            _markedGraph.Changed -= OnMarkedGraphChanged;
+            _loadingGraph.Changed -= OnLoadingGraphChanged;
         }
 
-        _markedGraph = graph.IsComplete ? null : graph;
-        if (_markedGraph is not null)
+        _loadingGraph = graph.IsComplete ? null : graph;
+        if (_loadingGraph is not null)
         {
-            _markedGraph.Changed += OnMarkedGraphChanged;
+            _loadingGraph.Changed += OnLoadingGraphChanged;
         }
 
         if (Filters is not null)
@@ -149,13 +152,26 @@ public sealed partial class RepositoryViewModel
         }
     }
 
-    private void OnMarkedGraphChanged(object? sender, EventArgs e)
+    private void OnLoadingGraphChanged(object? sender, EventArgs e)
     {
-        if (sender is CommitGraphData { IsComplete: true } graph)
+        if (sender is not CommitGraphData graph)
         {
-            graph.Changed -= OnMarkedGraphChanged;
-            _markedGraph = null;
-            if (Filters is not null && ReferenceEquals(graph, Graph))
+            return;
+        }
+
+        var shown = ReferenceEquals(graph, Graph);
+        if (shown)
+        {
+            // A page came: a link whose commit it brought reveals that commit now.
+            Comparison?.UpdateLinks();
+        }
+
+        if (graph.IsComplete)
+        {
+            // The left panel asks once the graph is whole: until then a hidden branch's commit may still come.
+            graph.Changed -= OnLoadingGraphChanged;
+            _loadingGraph = null;
+            if (Filters is not null && shown)
             {
                 LeftPanel.RefreshMarks();
             }

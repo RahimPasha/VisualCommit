@@ -12,6 +12,9 @@ namespace VisualCommit.App.ViewModels;
 /// </summary>
 public sealed partial class RepositoryViewModel
 {
+    /// <summary>A reloaded history's rows are taking the selection over (<c>OnGraphSwapped</c>): the user selected nothing.</summary>
+    private bool _remappingSelection;
+
     /// <summary>
     /// Makes the menu for a branch dropped onto a branch (4g), which the window's drag service
     /// opens at the drop point; null, or a function that returns null, opens nothing. The menus'
@@ -50,14 +53,23 @@ public sealed partial class RepositoryViewModel
             _ => new GraphSelection(kept, selection.Anchor, selection.Focus),
         };
 
-        if (mapped.Equals(selection))
+        // No selection of the user's: a branch comparison shown over it stays (docs/phase-5-design.md 6.2).
+        _remappingSelection = true;
+        try
         {
-            // The same commits on other rows: the list follows the new order.
-            ShowMultiSelection(selection);
+            if (mapped.Equals(selection))
+            {
+                // The same commits on other rows: the list follows the new order.
+                ShowMultiSelection(selection);
+            }
+            else
+            {
+                Selection = mapped;
+            }
         }
-        else
+        finally
         {
-            Selection = mapped;
+            _remappingSelection = false;
         }
     }
 }

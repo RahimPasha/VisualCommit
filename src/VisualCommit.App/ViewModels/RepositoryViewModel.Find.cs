@@ -113,11 +113,17 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
     /// The right panel's slot for <paramref name="selection"/> (docs/phase-3-design.md 4h,
     /// docs/phase-5-design.md 6.1, D162): exactly two commits show their comparison, the same two
     /// keeping the one shown (a reload maps them again); three or more show phase 3's list. A
-    /// branch comparison stays while nothing is selected (a reload took the selected commit away)
-    /// and ends when one or more commits are selected.
+    /// branch comparison stays until the user selects (6.2): while a reload maps the selection
+    /// onto its rows or takes it away, and while nothing is selected; it ends when the user
+    /// selects one or more commits.
     /// </summary>
     private void ShowMultiSelection(GraphSelection selection)
     {
+        if (Comparison is { IsBranches: true } && (selection.IsEmpty || _remappingSelection))
+        {
+            return;
+        }
+
         if (ComparedCommits(selection) is var (older, newer))
         {
             if (Comparison is { } shown && shown.Compares(older.Sha, newer.Sha))
@@ -130,11 +136,6 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
             var comparison = new CompareViewModel(this, new CompareSide(older.Sha, Label(older)), new CompareSide(newer.Sha, Label(newer)), isBranches: false);
             ShowComparison(comparison);
             _ = comparison.LoadAsync();
-            return;
-        }
-
-        if (selection.IsEmpty && Comparison is { IsBranches: true })
-        {
             return;
         }
 
@@ -207,13 +208,14 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
 
     /// <summary>
     /// A reloaded or newly loading graph is searched where it left off (3.4), the comparison's links
-    /// follow its rows, and so do the left panel's marks of hidden branches (8.3).
+    /// follow its rows, also as its pages come, and so do the left panel's marks of hidden branches
+    /// (8.3).
     /// </summary>
     partial void OnGraphChanged(CommitGraphData value)
     {
         SearchBar?.OnGraphReplaced();
         Comparison?.UpdateLinks();
-        FollowGraphForLeftPanel(value);
+        FollowLoadingGraph(value);
     }
 
     partial void OnSelectedIndexChanged(int oldValue, int newValue) => SearchBar?.OnSelectionChanged();
