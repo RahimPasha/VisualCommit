@@ -112,7 +112,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(remoteMenu, PartD.RemoteMainMenu);
         AssertHighlighted(remoteMenu, "Merge origin/main into main");
         AssertMenuShape(app, remoteMenu);
-        AssertMenuAtPointer(remoteMenu, remotePointer);
+        AssertMenuPlaced(app, remoteMenu, remotePointer);
         var mark = app.LogMark();
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, mark);
@@ -122,7 +122,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.CurrentMainMenu);
         AssertHighlighted(menu, "Pull from origin/main");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         AssertNothingSelected(app);
 
         // Step 2: a fast-forward.
@@ -264,7 +264,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.DivergedPublishedMenu);
         AssertHighlighted(menu, "Check out published");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Force push published…");
         await app.WaitForDialogAsync<ConfirmationViewModel>();
         Shot(app, "20c-force-push-confirmation");

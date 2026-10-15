@@ -200,6 +200,7 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
+        /// <summary>Check 13 step 10: the current branch hotfix, with phase 5's hide and solo items; 302 high (241 before phase 5).</summary>
         public static readonly string[] Check13HotfixMenu =
         [
             "hotfix",

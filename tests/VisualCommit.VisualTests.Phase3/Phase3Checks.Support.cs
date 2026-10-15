@@ -42,8 +42,8 @@
 //   scripted run can measure (a label's centre, for check 7's drag) goes into the part's
 //   expectations as a constant that the scripted check asserts (±1) and the pass uses.
 // - Menus are asserted with AssertMenu (the report's notation), AssertHighlighted, AssertMenuShape
-//   and AssertMenuAtPointer (AssertMenuPlaced where phase 4's taller menus no longer fit below
-//   the pointer); "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the
+//   and AssertMenuAtPointer (AssertMenuPlaced where phase 4's and phase 5's taller menus no
+//   longer fit below the pointer: every branch, tag, remote, section-header and drop menu); "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the
 //   error dialog with AssertErrorDialogAsync (git's lines word for word only on Git 2.36); the
 //   in-progress banner with AssertBanner (its text, phase 4's Continue and Skip, Abort, and
 //   whether the buttons stand under the text); the status bar with AssertStatus and AssertBranch.
@@ -272,8 +272,9 @@ public abstract partial class Phase3Checks
     /// right of and 2 below the pointer (<see cref="AssertMenuAtPointer"/>) when it fits there;
     /// flipped to the left of the pointer (its right edge 2 left of it) when it would cross the
     /// window's right edge, above it when it would cross the bottom; then kept 4 inside the window
-    /// (±2). Phase 4's items make some of phase 3's menus too high to fit below the pointer
-    /// (phase 4's report: "the position only where its expected result states it").
+    /// (±2). Phase 4's items, and phase 5's Compare, Hide and Solo, make some of phase 3's menus
+    /// too high to fit below the pointer (phase 4's report: "the position only where its expected
+    /// result states it").
     /// </summary>
     protected static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
     {

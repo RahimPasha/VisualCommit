@@ -181,7 +181,7 @@ public sealed partial class Phase3ChecksC : Phase3Checks
         menu = app.Menu();
         menuShot = app.Capture();
         AssertMenuAt(app, menu, menuShot, pointer, "Push hotfix…", PartC.Check13HotfixMenu);
-        Assert.Equal(241, menu.Bounds.Height, 2.0);
+        Assert.Equal(302, menu.Bounds.Height, 2.0);
         var tip = await app.RestPointerOnMenuItemAsync("Delete hotfix…");
         shot = Shot(app, "13l-delete-current-disabled", keepPointer: true);
         AssertSelection(app, shot, 2);
