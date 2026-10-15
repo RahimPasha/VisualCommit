@@ -19,23 +19,19 @@ public sealed partial class RepositoryOperations
     // ---- 9.1: which checkouts stash first -----------------------------------------------------------
 
     /// <summary>
-    /// Whether a checkout of <paramref name="target"/> is 9.1's first row, the automatic stash's:
-    /// a commit or a tag (not a branch), HEAD on a branch at another commit, and the branch reaches
-    /// the target through any parent. The graph answers for a loaded row of HEAD's graph (a
-    /// date-ordered log loads every commit between HEAD and a loaded ancestor); otherwise
-    /// <c>git merge-base --is-ancestor</c>. The operation decides again when HEAD moved meanwhile
-    /// (<see cref="RefuseIfAutoStashTargetMovedAsync"/>). Null for every other checkout, which git
+    /// Whether a checkout of <paramref name="target"/> is 9.1's first row, the automatic stash's,
+    /// with HEAD as the click sees it (<paramref name="seen"/>): a commit or a tag (not a branch),
+    /// HEAD on a branch at another commit, and the branch reaches the target through any parent.
+    /// The graph answers for a loaded row of HEAD's graph (a date-ordered log loads every commit
+    /// between HEAD and a loaded ancestor); otherwise <c>git merge-base --is-ancestor</c>. Either
+    /// operation decides again when HEAD moved meanwhile (<see cref="RefuseIfAutoStashTargetMovedAsync"/>,
+    /// <see cref="RefuseIfNowAutoStashTargetAsync"/>). Null for every other checkout, which git
     /// runs as before: HEAD's own commit too (D179, the report's PD7), a detached or unborn HEAD,
     /// and a commit the branch does not reach.
     /// </summary>
-    private async Task<AutoStashTarget?> AutoStashTargetAsync(string target)
+    private async Task<AutoStashTarget?> AutoStashTargetAsync(string target, HeadState? seen)
     {
-        if (target.StartsWith(HeadsPrefix, StringComparison.Ordinal) || target.StartsWith(RemotesPrefix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        if (Refs?.Head is not { BranchName: not null, Sha: { } head } seen)
+        if (IsBranchTarget(target) || seen is not { BranchName: not null, Sha: { } head })
         {
             return null;
         }
@@ -165,23 +161,58 @@ public sealed partial class RepositoryOperations
     {
         var seen = target.Seen;
         var now = await Git.ReadHeadAsync();
-        if (string.Equals(now.BranchName, seen.BranchName, StringComparison.Ordinal) && string.Equals(now.Sha, seen.Sha, StringComparison.Ordinal))
+        if (now == seen || await ReachesFromBranchAsync(now, target.Commit))
         {
             return null;
         }
 
-        if (now is { BranchName: not null, Sha: { } head }
-            && !string.Equals(head, target.Commit, StringComparison.Ordinal)
-            && await Git.IsAncestorAsync(target.Commit, "HEAD"))
+        return Refused(text, CheckoutHeadMoved(seen, now));
+    }
+
+    /// <summary>
+    /// 9.1's choice made again inside a checkout the click gave no automatic stash (D124): when
+    /// HEAD is no longer where the click saw it (<paramref name="seen"/>) and is now on a branch,
+    /// not at the commit or tag <paramref name="target"/>, that reaches it (<c>git merge-base
+    /// --is-ancestor</c>), the checkout would need the automatic stash and
+    /// <c>--no-overwrite-ignore</c>, without which git overwrites an ignored file the target tracks
+    /// (0.7). Refused before any write, as the automatic stash's own operation refuses a target it
+    /// no longer reaches: "HEAD moved while this waited: it was detached at 41f8398 and is on main
+    /// now. Nothing was checked out." (or "main moved while this waited: …" for the same branch).
+    /// Null for a branch or a remote branch, when HEAD is where the click saw it or no refs had
+    /// been read then, and when the target still takes no stash.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfNowAutoStashTargetAsync(OperationText text, string target, HeadState? seen)
+    {
+        if (IsBranchTarget(target) || seen is null)
         {
             return null;
         }
 
-        var summary = string.Equals(now.BranchName, seen.BranchName, StringComparison.Ordinal) && seen.BranchName is not null
+        var now = await Git.ReadHeadAsync();
+        if (now == seen || now.BranchName is null || await Git.ResolveAsync(target + "^{commit}") is not { } commit
+            || !await ReachesFromBranchAsync(now, commit))
+        {
+            return null;
+        }
+
+        return Refused(text, CheckoutHeadMoved(seen, now));
+    }
+
+    /// <summary>Whether HEAD, read as <paramref name="now"/>, is on a branch at another commit than <paramref name="commit"/> that reaches it (<c>git merge-base --is-ancestor</c>).</summary>
+    private async Task<bool> ReachesFromBranchAsync(HeadState now, string commit) =>
+        now is { BranchName: not null, Sha: { } head }
+        && !string.Equals(head, commit, StringComparison.Ordinal)
+        && await Git.IsAncestorAsync(commit, "HEAD");
+
+    /// <summary>D124's refusal of a checkout whose HEAD moved from <paramref name="seen"/> to <paramref name="now"/>: the branch's own sentence when it is the same branch.</summary>
+    private static string CheckoutHeadMoved(HeadState seen, HeadState now) =>
+        string.Equals(now.BranchName, seen.BranchName, StringComparison.Ordinal) && seen.BranchName is not null
             ? OperationTexts.HeadCommitMoved(seen.BranchName, seen.Sha ?? string.Empty, now.Sha ?? string.Empty, OperationTexts.NothingCheckedOut)
             : OperationTexts.HeadMoved(seen, now, OperationTexts.NothingCheckedOut);
-        return Refused(text, summary);
-    }
+
+    /// <summary>A branch or a remote branch, which 9.1 never gives the automatic stash.</summary>
+    private static bool IsBranchTarget(string target) =>
+        target.StartsWith(HeadsPrefix, StringComparison.Ordinal) || target.StartsWith(RemotesPrefix, StringComparison.Ordinal);
 
     /// <summary>
     /// 9.2 step 3's failure: when <c>refs/stash</c> did not move from <paramref name="before"/>,

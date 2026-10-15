@@ -26,7 +26,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
     /// C12 (docs/phase-5-design.md 9.1): a commit or a tag the current branch reaches is checked out
     /// after the automatic stash (<see cref="CheckoutWithAutoStashAsync"/>); every other checkout
     /// runs as phase 3's, refused before git while an operation is in progress or files conflict,
-    /// and a refusal for changes in the way is shown with 9.3's message.
+    /// or when HEAD moved while it waited onto a branch that reaches the commit or tag
+    /// (<see cref="RefuseIfNowAutoStashTargetAsync"/>), and a refusal for changes in the way is
+    /// shown with 9.3's message.
     /// </remarks>
     public Task CheckoutAsync(string target)
     {
@@ -40,7 +42,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 return;
             }
 
-            if (await AutoStashTargetAsync(target) is { } autoStash)
+            // 9.1's choice is made on HEAD as the click sees it, and made again inside the
+            // operation when HEAD is no longer there (D124).
+            var seen = Refs?.Head;
+            if (await AutoStashTargetAsync(target, seen) is { } autoStash)
             {
                 await CheckoutWithAutoStashAsync(plan.Name, autoStash, text);
                 return;
@@ -62,6 +67,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     {
                         display = blocked.Display;
                         return blocked.Report;
+                    }
+
+                    if (await RefuseIfNowAutoStashTargetAsync(text, target, seen) is { } moved)
+                    {
+                        return moved;
                     }
 
                     if (await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)

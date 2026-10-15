@@ -336,6 +336,64 @@ public class RepositoryOperationsProtectTests
         app.AssertScriptFollowed();
     }
 
+    [Fact]
+    public async Task A_checkout_the_click_gave_no_stash_is_refused_when_HEAD_moved_onto_a_branch_that_reaches_it()
+    {
+        using var repo = await Scenarios.ProtectAsync();
+        await repo.GitAsync("checkout", "--quiet", "--detach", "main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError().CloseError();
+        var calls = app.Calls.Snapshot().Count;
+
+        // HEAD detached at the click (no automatic stash), on main when the checkout runs: phase 3's
+        // checkout of Add the guide would overwrite the ignored settings.local.json (0.7), so it is
+        // refused before any write (9.1, D124).
+        var (hold, ahead) = HoldQueue(app, () => repo.GitAsync("checkout", "--quiet", "main"));
+        var checkout = app.Operations.CheckoutAsync(AddTheGuide);
+        await WaitUntilAsync(() => app.Repository.Queue.Waiting == 1, "the checkout to wait");
+        hold.SetResult();
+        await Task.WhenAll(ahead, checkout).WaitAsync(OperationChainTimeout, TestContext.Current.CancellationToken);
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Checkout failed", "HEAD moved while this waited: it was detached at 41f8398 and is on main now. Nothing was checked out."),
+            (dialog.Title, dialog.Summary));
+        Assert.False(dialog.HasOutput || dialog.HasCommand || dialog.HasExtraAction);
+        Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git switch", StringComparison.Ordinal) || IsStashCall(call));
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+        Assert.Equal(["!! settings.local.json"], await StatusWithIgnoredAsync(repo));
+        Assert.Equal(Protect.SettingsLocal, Read(repo, "settings.local.json"));
+        Assert.Empty(await repo.BackupRefsAsync());
+
+        // HEAD's own commit takes no stash at the click; main moved on meanwhile and now reaches it.
+        await app.Repository.RefreshAsync();
+        (hold, ahead) = HoldQueue(app, () => repo.CommitFileAsync("notes.txt", "later\n", "Later work"));
+        checkout = app.Operations.CheckoutAsync(MainWork);
+        await WaitUntilAsync(() => app.Repository.Queue.Waiting == 1, "the checkout to wait");
+        hold.SetResult();
+        await Task.WhenAll(ahead, checkout).WaitAsync(OperationChainTimeout, TestContext.Current.CancellationToken);
+
+        var later = await repo.HeadAsync();
+        Assert.Equal(
+            ("Checkout failed", $"main moved while this waited: it was at 41f8398 and is at {later[..7]} now. Nothing was checked out."),
+            (app.Dialogs.Errors[1].Title, app.Dialogs.Errors[1].Summary));
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+
+        // HEAD moved where the target still takes no stash (Other edits is not on main): phase 3's checkout.
+        await app.Repository.RefreshAsync();
+        (hold, ahead) = HoldQueue(app, () => repo.CommitFileAsync("notes.txt", "later again\n", "More work"));
+        checkout = app.Operations.CheckoutAsync(OtherEdits);
+        await WaitUntilAsync(() => app.Repository.Queue.Waiting == 1, "the checkout to wait");
+        hold.SetResult();
+        await Task.WhenAll(ahead, checkout).WaitAsync(OperationChainTimeout, TestContext.Current.CancellationToken);
+
+        Assert.Equal(OtherEdits, await repo.HeadAsync());
+        Assert.Equal("HEAD is now detached at 4f5e821", app.StatusText);
+        Assert.Equal(["git switch --detach " + OtherEdits], CallsSince(app, calls).Where(call => call.StartsWith("git switch", StringComparison.Ordinal) || IsStashCall(call)));
+        Assert.Equal(2, app.Dialogs.Errors.Count);
+        app.AssertScriptFollowed();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
