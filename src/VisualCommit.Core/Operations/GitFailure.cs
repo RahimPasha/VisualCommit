@@ -32,6 +32,21 @@ public enum GitFailureKind
 
     /// <summary>Another git holds the index lock.</summary>
     IndexLocked,
+
+    /// <summary>
+    /// A merge, cherry-pick, revert or pull refused because changes are in the way of the files it
+    /// writes: git's <c>… would be overwritten by merge:</c> blocks, which name them
+    /// (<see cref="GitFailure.BlockedPaths"/>; docs/phase-5-design.md 9.3).
+    /// </summary>
+    MergeBlockedByLocalChanges,
+
+    /// <summary>
+    /// A merge, cherry-pick or revert refused because something is staged, naming no conflict:
+    /// ort's <c>Your local changes to the following files would be overwritten by merge:</c> with
+    /// the names indented by two spaces, or <c>your local changes would be overwritten by
+    /// cherry-pick.</c> (<c>by revert.</c>) (docs/phase-5-design.md 9.3, the report's PD10).
+    /// </summary>
+    MergeBlockedByStagedChanges,
 }
 
 /// <summary>
@@ -48,7 +63,8 @@ public sealed record GitFailure(GitFailureKind Kind, string Summary, string GitO
     /// <summary>
     /// The paths git named under the headers of a refusal for local changes or files in the way
     /// (docs/phase-5-design.md 9.3), each once, raw, in git's order: what the error dialog counts.
-    /// Empty for any other failure.
+    /// Read from <see cref="GitOutput"/> by <see cref="GitFailureClassifier.BlockedPaths"/>, so
+    /// every failure has them however it was made; empty for any other failure.
     /// </summary>
-    public IReadOnlyList<string> BlockedPaths { get; init; } = [];
+    public IReadOnlyList<string> BlockedPaths { get; init; } = GitFailureClassifier.BlockedPaths(GitOutput);
 }
