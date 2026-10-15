@@ -245,7 +245,7 @@ public partial class RepositoryMenusTests
         var entry = new ReflogEntry("HEAD@{9}", 9, Shortcut, [WriteNotes], "commit: Try a shortcut", "Try a shortcut", default);
 
         // Report B8 step 5: 206 high.
-        var menu = RepositoryMenus.ForReflogEntry(Context(refs), entry, inGraph: false, actions);
+        var menu = RepositoryMenus.ForReflogEntry(Context(refs), entry, inGraph: false, onHead: false, actions);
         Assert.Equal(
             ["d07c677 Try a shortcut", "Create branch here…", "Check out this commit", "—", "Reset main to this commit…", "Cherry-pick onto main", "—", "Show in graph (disabled: \"This commit is not in the graph\")", "Copy SHA"],
             Lines(menu));
@@ -257,11 +257,18 @@ public partial class RepositoryMenusTests
 
         // HEAD's own commit, and a merge commit.
         var head = entry with { Sha = WriteNotes, Subject = "Write the notes" };
-        Assert.Contains("Cherry-pick onto main (disabled: \"This commit is already on main\")", Lines(RepositoryMenus.ForReflogEntry(Context(refs), head, true, actions)));
+        Assert.Contains("Cherry-pick onto main (disabled: \"This commit is already on main\")", Lines(RepositoryMenus.ForReflogEntry(Context(refs), head, true, false, actions)));
         var merge = entry with { Parents = [WriteNotes, AddParser] };
-        Assert.Contains("Cherry-pick onto main (disabled: \"Merge commits cannot be cherry-picked here\")", Lines(RepositoryMenus.ForReflogEntry(Context(refs), merge, true, actions)));
+        Assert.Contains("Cherry-pick onto main (disabled: \"Merge commits cannot be cherry-picked here\")", Lines(RepositoryMenus.ForReflogEntry(Context(refs), merge, true, false, actions)));
         var detached = refs with { Head = new HeadState(null, WriteNotes) };
-        Assert.Contains("Check out this commit (disabled: \"HEAD is already at this commit\")", Lines(RepositoryMenus.ForReflogEntry(Context(detached), head, true, actions)));
+        Assert.Contains("Check out this commit (disabled: \"HEAD is already at this commit\")", Lines(RepositoryMenus.ForReflogEntry(Context(detached), head, true, false, actions)));
+
+        // HEAD@{12} names 316166a "Clash notes", an ancestor of main: already on it, as phase 3's
+        // commit menu says (2.12); HEAD@{13}'s 362fbd6 is topic's alone, so it can be picked.
+        var ancestor = new ReflogEntry("HEAD@{12}", 12, "316166adc8e550ebb513a7f8c0ea99ecbdd88983", ["6d7a40b76bb9156c0969e533b292cbe2357e6783"], "checkout: moving from topic to main", "Clash notes", default);
+        Assert.Contains("Cherry-pick onto main (disabled: \"This commit is already on main\")", Lines(RepositoryMenus.ForReflogEntry(Context(refs), ancestor, inGraph: true, onHead: true, actions)));
+        var topic = new ReflogEntry("HEAD@{13}", 13, "362fbd633bc18c7553bf271ad7d31f1db055af2d", ["316166adc8e550ebb513a7f8c0ea99ecbdd88983"], "checkout: moving from main to topic", "Topic work", default);
+        Assert.Contains("Cherry-pick onto main", Lines(RepositoryMenus.ForReflogEntry(Context(refs), topic, inGraph: true, onHead: false, actions)));
     }
 
     [Fact]
@@ -356,6 +363,19 @@ public partial class RepositoryMenusTests
         // A force push of a remote-tracking name no upstream maps and no remote prefixes.
         var unknown = Backup("force-push-20260101T120901000Z", "force-push", Ref("force-push-20260101T120901000Z/mirror/topic", WriteNotes, "mirror/topic"));
         Assert.Equal("Push topic back to mirror… (disabled: \"The remote this backup came from cannot be found\")", Lines(RepositoryMenus.ForBackup(Context(ReflogRefs()), unknown, actions))[1]);
+        Assert.Equal("Push topic back to mirror… (disabled: \"The remote this backup came from cannot be found\")", Lines(RepositoryMenus.ForBackup(Context(ReflogRefs()), unknown, actions, hasForcePushLease: false))[1]);
+
+        // 7.10: once the remote-tracking reflog no longer has the commit the force push left (its
+        // lease, which the backups list reads), the push back is disabled.
+        var forced = Backup("force-push-20260101T120901000Z", "force-push", Ref("force-push-20260101T120901000Z/origin/topic", "f7a69be38486b8b82fa0f12b0a6c0482af8a0424", "origin/topic"));
+        Assert.Equal("Push topic back to origin…", Lines(RepositoryMenus.ForBackup(Context(ReflogRefs()), forced, actions, hasForcePushLease: true))[1]);
+        Assert.Equal(
+            "Push topic back to origin… (disabled: \"The commit your force push left can no longer be found\")",
+            Lines(RepositoryMenus.ForBackup(Context(ReflogRefs()), forced, actions, hasForcePushLease: false))[1]);
+        var untracked = ReflogRefs() with { Refs = [Local("main") with { IsHead = true }] };
+        Assert.Equal(
+            "Push topic back to origin… (disabled: \"The commit your force push left can no longer be found\")",
+            Lines(RepositoryMenus.ForBackup(Context(untracked), forced, actions, hasForcePushLease: false))[1]);
     }
 
     // --- Helpers ------------------------------------------------------------------------------

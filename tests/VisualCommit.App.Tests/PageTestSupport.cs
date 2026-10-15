@@ -59,7 +59,12 @@ internal sealed class RecordingPageHost(IGitRepository repository) : IFileHistor
     /// <summary>The histories the blame page opened.</summary>
     public List<FileHistoryRequest> Histories { get; } = [];
 
+    /// <summary>The commits HEAD's history holds, as the graph's walk knows them.</summary>
+    public HashSet<string> OnHead { get; } = new(StringComparer.Ordinal);
+
     public bool HasCommit(string sha) => InGraph.Contains(sha);
+
+    public bool IsOnHead(string sha) => OnHead.Contains(sha);
 
     public void ShowCommit(string sha) => Shown.Add(sha);
 
@@ -92,6 +97,9 @@ internal sealed class PageFakeRepository : FakeRepositoryBase
 
     /// <summary>The commits no ref reaches.</summary>
     public HashSet<string> Lost { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>When set, the walk for lost commits waits for it, then answers from <see cref="Lost"/> as it is then.</summary>
+    public TaskCompletionSource? LostGate { get; set; }
 
     /// <summary>The backups.</summary>
     public List<BackupInfo> Backups { get; } = [];
@@ -164,16 +172,30 @@ internal sealed class PageFakeRepository : FakeRepositoryBase
         return Task.FromResult(Reflogs.TryGetValue(fullRef, out var reflog) ? reflog : ReflogResult.Empty);
     }
 
-    public override Task<IReadOnlySet<string>> FindLostCommitsAsync(IReadOnlyCollection<string> shas, CancellationToken cancellationToken = default)
+    public override async Task<IReadOnlySet<string>> FindLostCommitsAsync(IReadOnlyCollection<string> shas, CancellationToken cancellationToken = default)
     {
         Count("lost");
-        return Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(shas.Where(Lost.Contains), StringComparer.Ordinal));
+        if (LostGate is { } gate)
+        {
+            await gate.Task.WaitAsync(cancellationToken);
+        }
+
+        return new HashSet<string>(shas.Where(Lost.Contains), StringComparer.Ordinal);
     }
 
     public override Task<IReadOnlyList<BackupInfo>> ReadBackupsAsync(CancellationToken cancellationToken = default)
     {
         Count("backups");
         return Task.FromResult<IReadOnlyList<BackupInfo>>([.. Backups]);
+    }
+
+    /// <summary>How many times <paramref name="read"/> has run.</summary>
+    public int ReadCount(string read)
+    {
+        lock (Reads)
+        {
+            return Reads.GetValueOrDefault(read);
+        }
     }
 
     private void Count(string read)

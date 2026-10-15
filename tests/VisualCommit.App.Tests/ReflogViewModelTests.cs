@@ -93,6 +93,54 @@ public class ReflogViewModelTests
         Assert.Equal(
             ["d07c677 Try a shortcut", "Create branch here…", "Check out this commit", "—", "Reset main to this commit…", "Cherry-pick onto main", "—", "Show in graph (disabled: \"This commit is not in the graph\")", "Copy SHA"],
             RepositoryMenusTests.Lines(page.MenuFor(page.Rows[1])));
+
+        // A commit HEAD's history holds cannot be picked onto it again (2.12), whatever the graph has selected.
+        host.OnHead.Add(Shortcut);
+        Assert.Contains("Cherry-pick onto main (disabled: \"This commit is already on main\")", RepositoryMenusTests.Lines(page.MenuFor(page.Rows[1])));
+    }
+
+    [Fact]
+    public async Task A_read_again_keeps_the_rows_it_did_not_change_and_their_lost_marks_until_the_walk_ends()
+    {
+        var repository = new PageFakeRepository();
+        repository.Reflogs["HEAD"] = new ReflogResult([Entry("HEAD@{0}", 0, Notes, "a", "Write the notes", 27), Entry("HEAD@{1}", 1, Shortcut, "b", "Try a shortcut", 23)], 0);
+        repository.Lost.Add(Shortcut);
+        var host = new RecordingPageHost(repository);
+        using var page = new ReflogViewModel(host, "HEAD");
+        await page.LoadAsync();
+        var rows = page.Rows.ToList();
+        Assert.Same(host.Refs, page.ShownFor);
+
+        // The refresh's read: the same entries keep their rows (and the list its containers and
+        // focus); the lost mark stays until the new walk ends, then follows it.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        repository.LostGate = gate;
+        repository.Lost.Clear();
+        var refreshed = host.Refs with { Remotes = ["origin"] };
+        page.OnRefsRead(refreshed);
+        await WaitForAsync(() => repository.ReadCount("lost") == 2);
+        Assert.Equal(rows, page.Rows);
+        Assert.True(Assert.IsType<ReflogRowViewModel>(page.Rows[1]).IsLost);
+        Assert.Same(host.Refs, page.ShownFor);
+        gate.SetResult();
+        await WaitForAsync(() => page.ReadsShown == 2);
+        Assert.Same(rows[1], page.Rows[1]);
+        Assert.False(Assert.IsType<ReflogRowViewModel>(page.Rows[1]).IsLost);
+        Assert.Same(refreshed, page.ShownFor);
+
+        // A new entry on top shifts every selector: those rows are new, and a row's commit keeps
+        // the mark it had until the walk says otherwise.
+        repository.LostGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Assert.IsType<ReflogRowViewModel>(page.Rows[0]).IsLost = true;
+        repository.Reflogs["HEAD"] = new ReflogResult([Entry("HEAD@{0}", 0, Shortcut, "c", "Try a shortcut", 28), Entry("HEAD@{1}", 1, Notes, "a", "Write the notes", 27), Entry("HEAD@{2}", 2, Shortcut, "b", "Try a shortcut", 23)], 0);
+        page.OnRefsRead(host.Refs);
+        await WaitForAsync(() => repository.ReadCount("lost") == 3);
+        Assert.Equal(["HEAD@{0}", "HEAD@{1}", "HEAD@{2}"], page.Rows.Select(row => row.Name));
+        Assert.DoesNotContain(page.Rows, row => rows.Contains(row));
+        Assert.Equal([false, true, false], page.Rows.Cast<ReflogRowViewModel>().Select(row => row.IsLost));
+        repository.LostGate.SetResult();
+        await WaitForAsync(() => page.ReadsShown == 3);
+        Assert.All(page.Rows.Cast<ReflogRowViewModel>(), row => Assert.False(row.IsLost));
     }
 
     [Fact]
@@ -139,6 +187,43 @@ public class ReflogViewModelTests
         page.SelectedRow = row;
         Assert.Equal(["44e646bdcb1d920659f2b28b1b44e19f6ae45a7b"], host.Shown);
         Assert.Equal("Deleted branch doomed", RepositoryMenusTests.Lines(page.MenuFor(row))[0]);
+    }
+
+    [Fact]
+    public async Task A_force_pushs_backup_is_restored_only_while_the_remote_tracking_reflog_has_the_commit_the_push_left()
+    {
+        const string Before = "f7a69be38486b8b82fa0f12b0a6c0482af8a0424";
+        const string Pushed = "362fbd633bc18c7553bf271ad7d31f1db055af2d";
+        var repository = new PageFakeRepository();
+        repository.Backups.Add(new BackupInfo(
+            "force-push-20260101T120901000Z",
+            "force-push",
+            new DateTimeOffset(2026, 1, 1, 12, 9, 1, TimeSpan.Zero),
+            null,
+            [new BackupRefInfo("refs/visualcommit/backup/force-push-20260101T120901000Z/origin/topic", Before, "origin/topic", false, "Topic work", string.Empty, Before, "Topic work")]));
+        var remote = new ReflogResult([Entry("refs/remotes/origin/topic@{0}", 0, Pushed, "update by push", "Topic work", 9), Entry("refs/remotes/origin/topic@{1}", 1, Before, "update by push", "Topic work", 2)], 0);
+        repository.Reflogs["refs/remotes/origin/topic"] = remote;
+        var host = new RecordingPageHost(repository);
+        using var page = new ReflogViewModel(host, source: null);
+
+        // 7.10: the lease is the "update by push" entry whose older neighbour is the backup's commit.
+        Assert.Equal(Pushed, ReflogViewModel.ForcePushLease(remote, Before));
+        Assert.Null(ReflogViewModel.ForcePushLease(remote, Pushed));
+        Assert.Null(ReflogViewModel.ForcePushLease(remote with { Entries = [remote.Entries[0] with { Message = "fetch: forced-update" }, remote.Entries[1]] }, Before));
+
+        await page.LoadAsync();
+        var row = Assert.IsType<BackupRowViewModel>(Assert.Single(page.Rows));
+        Assert.True(row.HasForcePushLease);
+        Assert.Equal("Push topic back to origin…", RepositoryMenusTests.Lines(page.MenuFor(row))[1]);
+        Assert.Equal(1, repository.ReadCount("reflog refs/remotes/origin/topic"));
+
+        // The remote-tracking reflog no longer has it (expired, or the ref was fetched over).
+        repository.Reflogs.Remove("refs/remotes/origin/topic");
+        page.OnRefsRead(host.Refs);
+        await WaitForAsync(() => page.ReadsShown == 2);
+        row = Assert.IsType<BackupRowViewModel>(Assert.Single(page.Rows));
+        Assert.False(row.HasForcePushLease);
+        Assert.Equal("Push topic back to origin… (disabled: \"The commit your force push left can no longer be found\")", RepositoryMenusTests.Lines(page.MenuFor(row))[1]);
     }
 
     [Fact]

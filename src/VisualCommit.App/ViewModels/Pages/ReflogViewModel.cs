@@ -11,10 +11,12 @@ namespace VisualCommit.App.ViewModels.Pages;
 /// <summary>
 /// The reflog page (docs/phase-5-design.md 5.1 to 5.3, D180): one reflog at a time (HEAD's or a
 /// local branch's), read through git with its lost commits marked once the list shows, or the
-/// backups list. The source changes through the header's source menu. The page reads again on
-/// every refresh while it is open (some entries move no ref), and never while it is closed. A
-/// click or a key on a row shows its commit in the right panel (11.3, BD9); each row's menu
-/// starts phase 3's operations or a backup's restore.
+/// backups list, each force push's with whether its lease can still be found (7.10). The source
+/// changes through the header's source menu. The page reads again on every refresh while it is
+/// open (some entries move no ref), and never while it is closed; a read again keeps the rows it
+/// did not change, so that their marks, the selection and the keyboard focus stay. A click or a
+/// key on a row shows its commit in the right panel (11.3, BD9); each row's menu starts phase 3's
+/// operations or a backup's restore.
 /// </summary>
 public sealed partial class ReflogViewModel : GraphAreaPageViewModel
 {
@@ -37,6 +39,9 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
 
     private int _version;
     private bool _selectingQuietly;
+
+    /// <summary>The refs as last read (every refresh hands them over), which the next read is made for.</summary>
+    private RepoRefs? _refs;
 
     /// <param name="host">The repository.</param>
     /// <param name="source"><c>HEAD</c>, a local branch's full name, or null for the backups.</param>
@@ -95,6 +100,14 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
     [ObservableProperty]
     public partial int ReadsShown { get; private set; }
 
+    /// <summary>
+    /// The refs the last read shown was made for (the repository's after the refresh that asked
+    /// for it), lost marks included; null while the source's first read has not ended. A check
+    /// that waits for an operation's effect waits until these are the repository's refs now, so
+    /// that a read asked for before the operation does not count.
+    /// </summary>
+    public RepoRefs? ShownFor { get; private set; }
+
     /// <summary>The selected row. The list binds to it both ways: a change from the list is the user's.</summary>
     [ObservableProperty]
     public partial PageListRow? SelectedRow { get; set; }
@@ -109,12 +122,17 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
     public bool ShowsSelector => PageWidth >= SelectorFromWidth;
 
     /// <summary>Reads the source (5.2, 5.3) and shows it.</summary>
-    public Task LoadAsync() => ReadAsync();
+    public Task LoadAsync()
+    {
+        _refs ??= Host.MenuContext.Refs;
+        return ReadAsync();
+    }
 
     /// <summary>The refs were read again (every refresh): the page reads again while it is open (5.2).</summary>
     public override void OnRefsRead(RepoRefs refs)
     {
         base.OnRefsRead(refs);
+        _refs = refs;
         if (!IsClosed)
         {
             _ = ReadAsync();
@@ -135,6 +153,7 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
         Message = null;
         Detail = null;
         Footer = null;
+        ShownFor = null;
         IsLoading = true;
         OnPropertyChanged(nameof(ShowsLoading));
         _ = ReadAsync();
@@ -151,8 +170,8 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
         var context = Host.MenuContext;
         return row switch
         {
-            ReflogRowViewModel entry => RepositoryMenus.ForReflogEntry(context, entry.Entry, Host.HasCommit(entry.Sha), Host.Actions),
-            BackupRowViewModel backup => RepositoryMenus.ForBackup(context, backup.Backup, Host.Actions),
+            ReflogRowViewModel entry => RepositoryMenus.ForReflogEntry(context, entry.Entry, Host.HasCommit(entry.Sha), !entry.IsLost && Host.IsOnHead(entry.Sha), Host.Actions),
+            BackupRowViewModel backup => RepositoryMenus.ForBackup(context, backup.Backup, Host.Actions, backup.HasForcePushLease),
             _ => throw new ArgumentException($"Not a row of this page: {row.GetType().Name}.", nameof(row)),
         };
     }
@@ -198,14 +217,17 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
     {
         var version = ++_version;
         var source = Source;
+        var refs = _refs;
         try
         {
             if (source is null)
             {
                 var backups = await Host.Repository.ReadBackupsAsync(Lifetime);
+                var leases = await ReadForcePushLeasesAsync(backups);
                 if (version == _version && !IsClosed)
                 {
-                    ShowBackupsList(backups);
+                    ShowBackupsList(backups, leases);
+                    Shown(refs);
                 }
 
                 return;
@@ -220,6 +242,7 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
             ShowReflog(reflog);
 
             // The lost marks come once the list shows (5.2): one walk for every distinct commit.
+            // Until it ends, every row keeps the mark it had, so that the marks do not flicker.
             var shas = reflog.Entries.Select(entry => entry.Sha).Distinct(StringComparer.Ordinal).ToList();
             var lost = shas.Count == 0 ? new HashSet<string>(StringComparer.Ordinal) : await Host.Repository.FindLostCommitsAsync(shas, Lifetime);
             if (version == _version && !IsClosed)
@@ -229,7 +252,7 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
                     row.IsLost = lost.Contains(row.Sha);
                 }
 
-                ReadsShown++;
+                Shown(refs);
             }
         }
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested)
@@ -242,14 +265,26 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
             {
                 var reason = ex is GitException { StandardError: { } error } && !string.IsNullOrWhiteSpace(error) ? error.Trim() : ex.Message;
                 Replace([], reason, null, isError: true);
-                ReadsShown++;
+                Shown(refs);
             }
         }
     }
 
+    /// <summary>A read is shown, its lost marks included: what it was made for, and one more read counted.</summary>
+    private void Shown(RepoRefs? refs)
+    {
+        ShownFor = refs;
+        ReadsShown++;
+    }
+
     private void ShowReflog(ReflogResult reflog)
     {
-        var rows = reflog.Entries.Select(entry => (PageListRow)new ReflogRowViewModel(entry, DisplayedSelector(entry.Selector), Host.Dates.Format(entry.Time))).ToList();
+        // A row the read brings anew keeps the lost mark its commit had until the walk ends.
+        var lostBefore = Rows.OfType<ReflogRowViewModel>().Where(row => row.IsLost).Select(row => row.Sha).ToHashSet(StringComparer.Ordinal);
+        var rows = reflog.Entries.Select(entry => (PageListRow)new ReflogRowViewModel(entry, DisplayedSelector(entry.Selector), Host.Dates.Format(entry.Time))
+        {
+            IsLost = lostBefore.Contains(entry.Sha),
+        }).ToList();
         Replace(rows, rows.Count == 0 ? $"{SourceLabel} has no reflog" : null, rows.Count == 0 ? ExpiryText : null, isError: false);
         Footer = reflog.Skipped switch
         {
@@ -259,33 +294,95 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
         };
     }
 
-    private void ShowBackupsList(IReadOnlyList<BackupInfo> backups)
+    private void ShowBackupsList(IReadOnlyList<BackupInfo> backups, IReadOnlyDictionary<string, bool> leases)
     {
         var remotes = Host.MenuContext.Remotes;
         var zone = Host.Dates.TimeZone;
         var rows = backups.Select(backup => (PageListRow)new BackupRowViewModel(
             backup,
             TimeZoneInfo.ConvertTime(backup.Time, zone).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-            BackupWords(backup, remotes))).ToList();
+            BackupWords(backup, remotes))
+        {
+            HasForcePushLease = leases.TryGetValue(backup.Name, out var found) ? found : null,
+        }).ToList();
         Replace(rows, rows.Count == 0 ? NoBackupsText : null, null, isError: false);
         Footer = null;
-        ReadsShown++;
     }
 
-    /// <summary>Shows a read's rows, keeping the selected row (by its key) when the read still has it.</summary>
+    /// <summary>
+    /// For each force push's backup, whether the remote-tracking reflog of its ref still has the
+    /// commit the force push left (7.10, <see cref="ForcePushLease"/>): its restore is disabled
+    /// otherwise. A reflog that cannot be read leaves the backup out: the restore decides.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, bool>> ReadForcePushLeasesAsync(IReadOnlyList<BackupInfo> backups)
+    {
+        var leases = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var backup in backups)
+        {
+            if (backup is not { Kind: "force-push", Main: { Name: { Length: > 0 } name, Commit: { Length: > 0 } commit } })
+            {
+                continue;
+            }
+
+            try
+            {
+                var reflog = await Host.Repository.ReadReflogAsync("refs/remotes/" + name, Limit, Lifetime);
+                leases[backup.Name] = ForcePushLease(reflog, commit) is not null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Host.Log.Warning($"The reflog of refs/remotes/{name} could not be read for the backup {backup.Name}.", ex);
+            }
+        }
+
+        return leases;
+    }
+
+    /// <summary>
+    /// The commit a force push left on the remote (7.10), the lease of its backup's restore: in the
+    /// remote-tracking ref's reflog (newest first), the <c>update by push</c> entry whose older
+    /// neighbour is <paramref name="backupCommit"/>, the commit the push replaced. Null when the
+    /// reflog no longer has it.
+    /// </summary>
+    public static string? ForcePushLease(ReflogResult remoteReflog, string backupCommit)
+    {
+        ArgumentNullException.ThrowIfNull(remoteReflog);
+        ArgumentNullException.ThrowIfNull(backupCommit);
+        var entries = remoteReflog.Entries;
+        for (var index = 0; index + 1 < entries.Count; index++)
+        {
+            if (string.Equals(entries[index].Message, "update by push", StringComparison.Ordinal)
+                && string.Equals(entries[index + 1].Sha, backupCommit, StringComparison.Ordinal))
+            {
+                return entries[index].Sha;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Shows a read's rows. A row the read did not change keeps its instance and its place in the
+    /// list, and with them the list's container, the keyboard focus on it and its lost mark; the
+    /// selected row is kept, or found again by its key when the read made it anew.
+    /// </summary>
     private void Replace(IReadOnlyList<PageListRow> rows, string? message, string? detail, bool isError)
     {
-        var selectedKey = SelectedRow?.Key;
+        var selected = SelectedRow;
         _selectingQuietly = true;
         try
         {
-            Rows.Clear();
-            foreach (var row in rows)
+            var before = new Dictionary<string, PageListRow>(StringComparer.Ordinal);
+            foreach (var row in Rows)
             {
-                Rows.Add(row);
+                before.TryAdd(row.Key, row);
             }
 
-            SelectedRow = selectedKey is null ? null : rows.FirstOrDefault(row => row.Key == selectedKey);
+            var wanted = rows.Select(row => before.TryGetValue(row.Key, out var old) && old.SameAs(row) ? old : row).ToList();
+            Synchronize(Rows, wanted);
+            SelectedRow = selected is null ? null
+                : wanted.Contains(selected) ? selected
+                : wanted.FirstOrDefault(row => row.Key == selected.Key);
         }
         finally
         {
@@ -297,6 +394,48 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
         Detail = detail;
         IsError = isError;
         OnPropertyChanged(nameof(ShowsLoading));
+    }
+
+    /// <summary>Makes <paramref name="rows"/> hold <paramref name="wanted"/> in its order, removing, moving and inserting rows rather than clearing the list.</summary>
+    private static void Synchronize(ObservableCollection<PageListRow> rows, IReadOnlyList<PageListRow> wanted)
+    {
+        var keep = new HashSet<PageListRow>(wanted);
+        if (!rows.Any(keep.Contains))
+        {
+            rows.Clear();
+            foreach (var row in wanted)
+            {
+                rows.Add(row);
+            }
+
+            return;
+        }
+
+        for (var index = rows.Count - 1; index >= 0; index--)
+        {
+            if (!keep.Contains(rows[index]))
+            {
+                rows.RemoveAt(index);
+            }
+        }
+
+        for (var index = 0; index < wanted.Count; index++)
+        {
+            if (index < rows.Count && ReferenceEquals(rows[index], wanted[index]))
+            {
+                continue;
+            }
+
+            var at = rows.IndexOf(wanted[index]);
+            if (at > index)
+            {
+                rows.Move(at, index);
+            }
+            else
+            {
+                rows.Insert(index, wanted[index]);
+            }
+        }
     }
 
     /// <summary>The selector as the page shows it (5.2): git's <c>refs/heads/main@{0}</c> as <c>main@{0}</c>.</summary>
@@ -318,6 +457,9 @@ public abstract partial class PageListRow : ObservableObject
 
     /// <summary>The commit the row stands for, shown in the right panel when it is picked; empty for a backup that keeps none.</summary>
     public abstract string Sha { get; }
+
+    /// <summary>Whether <paramref name="other"/>, a later read's row with the same key, shows the same: then this row stays in the list in its place.</summary>
+    internal abstract bool SameAs(PageListRow other);
 }
 
 /// <summary>One entry of a reflog (5.2, BD3): selector, time, action, commit, and whether it is lost.</summary>
@@ -350,6 +492,15 @@ public sealed partial class ReflogRowViewModel(ReflogEntry entry, string selecto
     public override string Name => Selector;
 
     public override string Sha => Entry.Sha;
+
+    internal override bool SameAs(PageListRow other) =>
+        other is ReflogRowViewModel row
+        && row.Selector == Selector
+        && row.TimeText == TimeText
+        && row.Entry.Sha == Entry.Sha
+        && row.Entry.Message == Entry.Message
+        && row.Entry.Subject == Entry.Subject
+        && row.Entry.Parents.SequenceEqual(Entry.Parents, StringComparer.Ordinal);
 }
 
 /// <summary>One backup of the backups list (5.3, BD4): time, words, commit.</summary>
@@ -368,9 +519,25 @@ public sealed class BackupRowViewModel(BackupInfo backup, string timeText, strin
     /// <summary>The subject of the commit it keeps.</summary>
     public string Subject => Backup.Main?.CommitSubject ?? string.Empty;
 
+    /// <summary>
+    /// For a force push's backup, whether the remote-tracking reflog still has the commit the
+    /// force push left, its restore's lease (7.10): its restore is disabled when it has not. Null
+    /// for another kind, or when the reflog could not be read.
+    /// </summary>
+    public bool? HasForcePushLease { get; init; }
+
     public override string Key => Backup.Name;
 
     public override string Name => Backup.Name;
 
     public override string Sha => Backup.Main?.Commit ?? string.Empty;
+
+    internal override bool SameAs(PageListRow other) =>
+        other is BackupRowViewModel row
+        && row.TimeText == TimeText
+        && row.Words == Words
+        && row.HasForcePushLease == HasForcePushLease
+        && row.Backup.Kind == Backup.Kind
+        && row.Backup.Refs.Select(entry => (entry.FullName, entry.Target, entry.Commit, entry.CommitSubject))
+            .SequenceEqual(Backup.Refs.Select(entry => (entry.FullName, entry.Target, entry.Commit, entry.CommitSubject)));
 }

@@ -279,6 +279,8 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 
     bool IGraphAreaPageHost.HasCommit(string sha) => HasRow(sha);
 
+    bool IGraphAreaPageHost.IsOnHead(string sha) => !IsNotCommitted(sha) && Graph.IsReachableFromHead(sha);
+
     void IGraphAreaPageHost.Close(IGraphAreaPage page)
     {
         // A page left for something else (another page, a diff from the stage panel, the resolver) closes nothing and takes no focus.

@@ -91,9 +91,11 @@ public static partial class RepositoryMenus
     /// A row of the reflog page (5.2, BD8): header <c>{short} {subject}</c>; create branch here…,
     /// check out this commit — reset {cur} to this commit…, cherry-pick onto {cur} — show in
     /// graph, copy SHA. Each is phase 3's operation with its own question and backup; their
-    /// reasons come from the entry (its parents, HEAD at it), not from the graph.
+    /// reasons come from the entry (its parents, HEAD at it), not from the graph's selection.
+    /// <paramref name="onHead"/> says whether HEAD's history holds the entry's commit (a lost one
+    /// never is): its cherry-pick is disabled then, as phase 3's commit menu's is (2.12).
     /// </summary>
-    public static MenuModel ForReflogEntry(RepositoryMenuContext context, ReflogEntry entry, bool inGraph, IRepositoryActions actions)
+    public static MenuModel ForReflogEntry(RepositoryMenuContext context, ReflogEntry entry, bool inGraph, bool onHead, IRepositoryActions actions)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(entry);
@@ -102,7 +104,7 @@ public static partial class RepositoryMenus
         var current = context.CurrentName;
         var headIsHere = string.Equals(context.Head.Sha, sha, StringComparison.Ordinal);
         var pickReason = entry.Parents.Count > 1 ? MergeCommitsCannotBePicked
-            : headIsHere ? AlreadyOn(current)
+            : headIsHere || onHead ? AlreadyOn(current)
             : context.IsUnborn ? ToolbarViewModel.UnbornText
             : InProgressReason(context);
         return Build(
@@ -125,8 +127,11 @@ public static partial class RepositoryMenus
     /// A row of the backups list (5.3, 7.10, BD8): header the backup in words (12.3); its own
     /// restore, by kind — then, for a backup that holds a commit (a <c>discard-</c> snapshot
     /// included), create branch here…, check out this commit — copy SHA.
+    /// <paramref name="hasForcePushLease"/> is, for a force push's backup, whether the
+    /// remote-tracking reflog still has the commit the force push left (the list reads it,
+    /// <see cref="ReflogViewModel.ForcePushLease"/>); false disables its restore, null leaves it to the restore.
     /// </summary>
-    public static MenuModel ForBackup(RepositoryMenuContext context, BackupInfo backup, IRepositoryActions actions)
+    public static MenuModel ForBackup(RepositoryMenuContext context, BackupInfo backup, IRepositoryActions actions, bool? hasForcePushLease = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(backup);
@@ -134,7 +139,7 @@ public static partial class RepositoryMenus
         var commit = backup.Main?.Commit is { Length: > 0 } kept ? kept : null;
         return Build(
             Header(BackupWords(backup, context.Remotes)),
-            [RestoreItem(context, backup, actions)],
+            [RestoreItem(context, backup, actions, hasForcePushLease)],
             commit is null
                 ? []
                 : [
@@ -263,7 +268,7 @@ public static partial class RepositoryMenus
     /// without its snapshot, <c>detached</c>, <c>rebase</c>, <c>remote</c>). Each runs
     /// <see cref="IRepositoryActions.RestoreBackupAsync"/>, which decides by the kind.
     /// </summary>
-    private static MenuItem? RestoreItem(RepositoryMenuContext context, BackupInfo backup, IRepositoryActions actions)
+    private static MenuItem? RestoreItem(RepositoryMenuContext context, BackupInfo backup, IRepositoryActions actions, bool? hasForcePushLease)
     {
         var name = backup.Main?.Name ?? string.Empty;
         var changes = backup.Refs.FirstOrDefault(entry => entry.IsChanges);
@@ -288,7 +293,7 @@ public static partial class RepositoryMenus
                 var (remote, rest, configured) = SplitRemote(name, context.Remotes);
                 return Restore(PushBackTo(rest, remote), configured ? null : NoLongerExists(remote));
             case "force-push":
-                return ForcePushRestore(context, name, Restore);
+                return ForcePushRestore(context, name, hasForcePushLease, Restore);
             default:
                 return null;
         }
@@ -297,20 +302,21 @@ public static partial class RepositoryMenus
     /// <summary>
     /// A force push's backup (7.10): <c>refs/remotes/&lt;name&gt;</c> maps back to its remote and
     /// branch through the local branch whose upstream it is, otherwise by the remote list's longest
-    /// matching name (the default fetch refspec); disabled when neither finds it. Whether the
-    /// remote-tracking reflog still has the commit the force push left is read by the restore
-    /// itself, which says so when it does not.
+    /// matching name (the default fetch refspec); disabled when neither finds it, then when the
+    /// remote-tracking reflog no longer has the commit the force push left (its lease,
+    /// <paramref name="hasLease"/> false). The restore reads the lease again inside its operation.
     /// </summary>
-    private static MenuItem ForcePushRestore(RepositoryMenuContext context, string name, Func<string, string?, MenuItem> restore)
+    private static MenuItem ForcePushRestore(RepositoryMenuContext context, string name, bool? hasLease, Func<string, string?, MenuItem> restore)
     {
+        var leaseReason = hasLease == false ? ForcePushCommitNotFound : null;
         var tracking = context.LocalBranches.FirstOrDefault(branch =>
             string.Equals(branch.UpstreamRef, "refs/remotes/" + name, StringComparison.Ordinal) && branch is { UpstreamRemote: not null, UpstreamRemoteRef: not null });
         if (tracking is { UpstreamRemote: { } upstreamRemote, UpstreamRemoteRef: { } remoteRef })
         {
-            return restore(PushBackTo(ShortName(remoteRef), upstreamRemote), null);
+            return restore(PushBackTo(ShortName(remoteRef), upstreamRemote), leaseReason);
         }
 
         var (remote, rest, configured) = SplitRemote(name, context.Remotes);
-        return restore(PushBackTo(rest, remote), configured ? null : RemoteOfBackupNotFound);
+        return restore(PushBackTo(rest, remote), configured ? leaseReason : RemoteOfBackupNotFound);
     }
 }
