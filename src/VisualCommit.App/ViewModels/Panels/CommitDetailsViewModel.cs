@@ -202,8 +202,9 @@ public partial class CommitDetailsViewModel : ObservableObject
 
         if (row.IsUnchanged)
         {
-            SelectedFilePath = file.Path;
+            // After the request: opening the page closes a diff, which clears the selected row.
             RequestBlame(file.Path);
+            SelectedFilePath = file.Path;
             return;
         }
 

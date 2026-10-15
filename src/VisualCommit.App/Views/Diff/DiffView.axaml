@@ -50,6 +50,7 @@
                 Theme="{StaticResource VcIconButton}"
                 Width="28" Height="28" Padding="7"
                 Command="{Binding CloseCommand}"
+                IsVisible="{Binding ShowsClose}"
                 ToolTip.Tip="Close"
                 AutomationProperties.AutomationId="CloseDiffButton">
           <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />

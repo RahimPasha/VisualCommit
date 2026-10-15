@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:blame="using:VisualCommit.App.Controls.Blame"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Pages"
+             x:Class="VisualCommit.App.Views.Pages.BlameView"
+             x:DataType="vm:BlameViewModel"
+             AutomationProperties.AutomationId="Blame"
+             AutomationProperties.Name="{Binding Title}">
+
+  <!-- The blame page in place of the graph (docs/phase-5-design.md 4.2, D158): a header of 36
+       with the title, what is blamed, File history and close; then the gutter of runs (200 wide
+       on a page at least 700 wide, otherwise 130) and the file's text with its line numbers, both
+       from the header's bottom and with the code font's line height (decision BD12). Colours are
+       tokens only. -->
+  <DockPanel Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- Header, 36. -->
+    <Border Name="BlameHeader"
+            DockPanel.Dock="Top"
+            Height="36"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1"
+            AutomationProperties.AutomationId="BlameHeader">
+      <DockPanel Margin="12,0,4,0">
+        <Button DockPanel.Dock="Right"
+                Name="BlameClose"
+                Theme="{StaticResource VcIconButton}"
+                Width="28" Height="28" Padding="7"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="Close"
+                AutomationProperties.AutomationId="BlameClose"
+                AutomationProperties.Name="Close">
+          <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+        </Button>
+        <Button DockPanel.Dock="Right"
+                Name="BlameHistory"
+                Theme="{StaticResource VcActionButton}"
+                Padding="10,3"
+                Margin="8,0,6,0"
+                VerticalAlignment="Center"
+                Content="File history"
+                Command="{Binding ShowFileHistoryCommand}"
+                AutomationProperties.AutomationId="BlameHistory"
+                AutomationProperties.Name="File history" />
+        <c:Icon DockPanel.Dock="Left"
+                Data="{StaticResource IconBlame}"
+                Width="14" Height="14"
+                Margin="0,0,8,0"
+                Foreground="{DynamicResource VcTextSecondaryBrush}"
+                VerticalAlignment="Center" />
+        <c:TrimmedTextBlock DockPanel.Dock="Left"
+                            Name="BlameTitle"
+                            Text="{Binding Title}"
+                            FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="BlameTitle" />
+        <c:TrimmedTextBlock Name="BlameCaption"
+                            Classes="secondary"
+                            Text="{Binding Caption}"
+                            Margin="8,0,0,0"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="BlameCaption" />
+      </DockPanel>
+    </Border>
+
+    <Panel>
+      <TextBlock Name="BlameLoading"
+                 Classes="secondary"
+                 Text="Loading…"
+                 IsVisible="{Binding ShowsLoading}"
+                 Margin="12,10"
+                 HorizontalAlignment="Left" VerticalAlignment="Top" />
+      <TextBlock Name="BlameMessage"
+                 Classes="secondary"
+                 Classes.error="{Binding IsError}"
+                 Text="{Binding Message}"
+                 IsVisible="{Binding ShowsMessage}"
+                 TextWrapping="Wrap"
+                 Margin="12,10"
+                 HorizontalAlignment="Left" VerticalAlignment="Top"
+                 AutomationProperties.AutomationId="BlameMessage" />
+
+      <!-- The gutter and the text share their top and line height; the code-behind keeps the
+           gutter's width and fills both from the view model. -->
+      <Grid Name="BlameBody" IsVisible="{Binding ShowsText}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="130" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <blame:BlameGutter Grid.Column="0"
+                           Name="BlameGutter"
+                           AutomationProperties.AutomationId="BlameGutter"
+                           AutomationProperties.Name="Blame gutter" />
+        <blame:BlameTextEditor Grid.Column="1"
+                               Name="BlameText"
+                               AutomationProperties.AutomationId="BlameText"
+                               AutomationProperties.Name="{Binding FileName}" />
+      </Grid>
+    </Panel>
+  </DockPanel>
+</UserControl>

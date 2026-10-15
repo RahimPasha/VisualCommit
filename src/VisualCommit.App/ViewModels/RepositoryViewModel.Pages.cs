@@ -16,10 +16,10 @@ namespace VisualCommit.App.ViewModels;
 /// 8.4): the pages that open in place of the graph and their host, a commit shown in the right
 /// panel from a page or a comparison, the graph's commit shown or revealed, the places of the
 /// comparison and the search with the search's marks, what the graph hides or solos with its
-/// reload, and the restore bar's tie to the undo history. The pages (WP6), the comparison, the
-/// search and the filters (WP7) and the undo (WP3) fill them; until then no page opens, nothing is
-/// searched, hidden or soloed, the restore bar is as in phase 4, and the comparison and the search
-/// throw.
+/// reload, and the restore bar's tie to the undo history. The pages (WP6's file history, blame and
+/// reflog) open here; the comparison, the search and the filters (WP7) and the undo (WP3) fill
+/// the rest; until then nothing is searched, hidden or soloed, the restore bar is as in phase 4,
+/// and the comparison and the search throw.
 /// </summary>
 public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 {
@@ -251,6 +251,14 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 
         Page = null;
         page.Dispose();
+
+        // The details' unchanged file whose blame the page was ("All files", BD14) loses its
+        // selection background, as a diff's file row does when the diff closes.
+        if (!IsDiffOpen)
+        {
+            Details.SelectedFilePath = null;
+        }
+
         if (_revealOnPageClose && Selection.Single is { } sha && Graph.IndexOf(sha) is >= 0 and var index)
         {
             RevealRequested?.Invoke(this, index);
