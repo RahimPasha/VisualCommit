@@ -246,8 +246,8 @@ public sealed partial class GitRepository
     /// <summary>
     /// The files under a folder of the working tree (<paramref name="folder"/>, a repository path),
     /// as repository paths in byte order: what git would lose with it. A symbolic link is a file to
-    /// git, also one to a folder, and is not followed. The walk of the undo's
-    /// <c>UndoStepRun.FilesIn</c>, here for the checkout's refusal (9.3), which has no undo step.
+    /// git, also one to a folder, and is not followed. For the checkout's refusal (9.3) and the
+    /// undo's switch and Keep moves (<c>UndoStepRun</c>, 7.3).
     /// </summary>
     private List<string> FilesUnder(string folder)
     {

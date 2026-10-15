@@ -47,6 +47,29 @@ public class UndoStepRefusalTests
         Assert.False(File.Exists(Path.Combine(repo.Path, "f.txt")));
     }
 
+    /// <summary>
+    /// An undo whose switch git refuses with its "would be removed by checkout" block (a file the
+    /// target lacks, untracked since): refused with the paths counted, as C12 reads git's blocks
+    /// (<c>GitFailureClassifier.BlockedPaths</c>), not with git's raw failure.
+    /// </summary>
+    [Fact]
+    public async Task An_undo_whose_switch_git_refuses_as_removing_an_untracked_file_is_refused_with_its_count()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var checkout = await RecordAsync(repository, UndoScope.Checkout("feature", "main"), () => repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled));
+
+        // f.txt, which main lacks, taken out of the index: the switch back to main would remove it.
+        await repo.GitAsync("rm", "--quiet", "--cached", "f.txt");
+        var still = await StillAsync(repo);
+        var refusal = await RefusedAsync(repository, checkout, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.LocalChangesInTheWay, refusal.Kind);
+        Assert.Equal(["f.txt"], refusal.Paths);
+        Assert.Contains("would be removed by checkout:", refusal.GitOutput, StringComparison.Ordinal);
+        Assert.Equal("f1\n", ReadText(repo, "f.txt"));
+        Assert.Equal(still, await StillAsync(repo));
+    }
+
     [Fact]
     public async Task An_ignored_file_where_the_undo_adds_one_refuses_it_and_stays()
     {

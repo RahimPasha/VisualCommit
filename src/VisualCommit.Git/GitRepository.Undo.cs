@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Undo;
 using static VisualCommit.Core.Undo.UndoEffect;
 
@@ -298,8 +299,9 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// The paths of <paramref name="paths"/> that git ignores: <c>check-ignore --stdin -z</c>, which
-    /// leaves tracked files out and exits 1 when it ignores none. Only paths that exist are asked
-    /// about: a pattern matches a path whether it exists or not.
+    /// leaves tracked files out and exits 1 when it ignores none. The undo's guards and C12's
+    /// refusal ask only about paths that exist (a pattern matches a path whether it exists or not);
+    /// the watcher asks about the paths of a burst (<see cref="AllIgnoredAsync"/>).
     /// </summary>
     private async Task<IReadOnlyList<string>> IgnoredAmongAsync(IReadOnlyCollection<string> paths, CancellationToken cancellationToken)
     {
@@ -633,41 +635,12 @@ public sealed partial class GitRepository
                 }
                 else if (Directory.Exists(full))
                 {
-                    candidates.UnionWith(FilesIn(path));
+                    candidates.UnionWith(_repository.FilesUnder(path));
                 }
             }
 
             var ignored = await _repository.IgnoredAmongAsync(candidates, Token).ConfigureAwait(false);
             return ignored.Count > 0 ? new UndoRefusal(UndoRefusalKind.IgnoredFilesInTheWay, Paths: ignored) : null;
-        }
-
-        /// <summary>
-        /// The files under a folder of the working tree, as repository paths in byte order: what
-        /// git would lose with it. A symbolic link is a file to git, also one to a folder, and is
-        /// not followed.
-        /// </summary>
-        private List<string> FilesIn(string folder)
-        {
-            var files = new List<string>();
-            var folders = new Stack<string>([folder]);
-            while (folders.TryPop(out var relative))
-            {
-                foreach (var entry in new DirectoryInfo(_repository.WorkingTreePath(relative)).EnumerateFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }))
-                {
-                    var path = relative + "/" + entry.Name;
-                    if (entry is DirectoryInfo && entry.LinkTarget is null)
-                    {
-                        folders.Push(path);
-                    }
-                    else
-                    {
-                        files.Add(path);
-                    }
-                }
-            }
-
-            files.Sort(StringComparer.Ordinal);
-            return files;
         }
 
         /// <summary>
@@ -1192,7 +1165,10 @@ public sealed partial class GitRepository
                 return null;
             }
 
-            var blocked = BlockedPaths(result.StandardError);
+            // Every block of git's checkout refusal (0.7, 9.3), C12's reading of it: "would be
+            // overwritten by checkout", "would be removed by checkout" (an untracked file where the
+            // target has a folder) and "would lose untracked files in them".
+            var blocked = GitFailureClassifier.BlockedPaths(result.StandardError);
             if (blocked.Count == 0)
             {
                 result.EnsureSuccess(command);
@@ -1203,43 +1179,13 @@ public sealed partial class GitRepository
             // in the way as ignored files only when every file in it is ignored.
             var files = blocked.ToDictionary(
                 path => path,
-                path => !IsFileOrLink(_repository.WorkingTreePath(path)) && Directory.Exists(_repository.WorkingTreePath(path)) ? FilesIn(path) : [path],
+                path => !IsFileOrLink(_repository.WorkingTreePath(path)) && Directory.Exists(_repository.WorkingTreePath(path)) ? _repository.FilesUnder(path) : [path],
                 StringComparer.Ordinal);
             var ignored = (await _repository.IgnoredAmongAsync([.. files.Values.SelectMany(inside => inside)], Token).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
             var local = blocked.Where(path => files[path].Count == 0 || !files[path].All(ignored.Contains)).ToList();
             return local.Count > 0
                 ? new UndoRefusal(UndoRefusalKind.LocalChangesInTheWay, Paths: local, GitOutput: result.StandardError.Trim())
                 : new UndoRefusal(UndoRefusalKind.IgnoredFilesInTheWay, Paths: [.. blocked.SelectMany(path => files[path])], GitOutput: result.StandardError.Trim());
-        }
-
-        /// <summary>
-        /// The paths of git's checkout refusal (0.7): each tab-indented line under <c>error: Your local
-        /// changes to the following files would be overwritten by checkout:</c>, <c>error: The
-        /// following untracked working tree files would be overwritten by checkout:</c> or
-        /// <c>error: Updating the following directories would lose untracked files in them:</c>.
-        /// </summary>
-        internal static IReadOnlyList<string> BlockedPaths(string standardError)
-        {
-            var paths = new List<string>();
-            var inBlock = false;
-            foreach (var raw in standardError.Split('\n'))
-            {
-                var line = raw.TrimEnd('\r');
-                if (line.StartsWith("error: ", StringComparison.Ordinal) && line.EndsWith(':'))
-                {
-                    inBlock = line.Contains("would be overwritten by", StringComparison.Ordinal) || line.Contains("would lose untracked files", StringComparison.Ordinal);
-                }
-                else if (inBlock && line.StartsWith('\t'))
-                {
-                    paths.Add(line[1..]);
-                }
-                else
-                {
-                    inBlock = false;
-                }
-            }
-
-            return [.. paths.Distinct(StringComparer.Ordinal)];
         }
 
         /// <summary>
