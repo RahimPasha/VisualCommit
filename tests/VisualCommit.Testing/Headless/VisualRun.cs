@@ -122,8 +122,10 @@ public static class VisualRun
         {
             if (ParentProcessId() is { } parentId)
             {
+                // A parent that started after this process is another that took the exited
+                // parent's id: Windows hands out the ids of processes that have ended again.
                 using var parent = Process.GetProcessById(parentId);
-                if (string.Equals(parent.ProcessName, "dotnet", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(parent.ProcessName, "dotnet", StringComparison.OrdinalIgnoreCase) && parent.StartTime <= self.StartTime)
                 {
                     return KeyOf(parent);
                 }
