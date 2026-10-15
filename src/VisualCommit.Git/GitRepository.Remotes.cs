@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
@@ -844,8 +845,8 @@ public sealed partial class GitRepository
         return lines;
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^ (?<flag>[ +*=!-]) (?<summary>\[[^\]]+\]|(?<range>(?<old>[0-9a-f]{4,})\.\.\.?(?<new>[0-9a-f]{4,})))\s+(?<refs>\S+(?: -> \S+)?)(?: \((?<reason>[^)]*)\))?$")]
-    private static partial System.Text.RegularExpressions.Regex PushSummaryPattern();
+    [GeneratedRegex(@"^ (?<flag>[ +*=!-]) (?<summary>\[[^\]]+\]|(?<range>(?<old>[0-9a-f]{4,})\.\.\.?(?<new>[0-9a-f]{4,})))\s+(?<refs>\S+(?: -> \S+)?)(?: \((?<reason>[^)]*)\))?$")]
+    private static partial Regex PushSummaryPattern();
 
     /// <summary>One ref line of a push's summary (<see cref="ReadPushSummary"/>).</summary>
     /// <param name="Flag">git's flag: <c>' '</c> a fast-forward, <c>'+'</c> a forced update, <c>'*'</c> a new ref, <c>'-'</c> a deletion, <c>'!'</c> rejected, <c>'='</c> up to date.</param>
