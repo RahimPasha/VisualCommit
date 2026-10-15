@@ -125,8 +125,11 @@ public class SearchViewModelTests
         host.Match = (_, _, sha) => sha == Sha(2) || sha == Sha(6) || sha == Sha(9);
         search.Text = "zzz";
 
-        // Enter before the delay has passed searches at once (3.1).
+        // Enter before the delay has passed searches at once (3.1), and goes to the first match once
+        // git has searched the rows above it.
         search.Enter(backwards: false);
+        Assert.True(search.IsSearching);
+        Assert.Equal(-1, host.SelectedRow);
         await search.Completion;
         Assert.Single(host.Calls);
         Assert.Equal(2, host.SelectedRow);
@@ -149,6 +152,76 @@ public class SearchViewModelTests
         search.Enter(backwards: true);
         Assert.Equal(9, host.SelectedRow);
         Assert.Single(host.Calls);
+    }
+
+    [AvaloniaFact]
+    public async Task Enter_while_git_searches_waits_until_no_nearer_match_can_come()
+    {
+        var host = new FakeHost(Graph(8));
+        var clock = new ManualTimeProvider();
+        using var search = new SearchViewModel(host, SearchMode.Changes, clock);
+        host.Search = search;
+        host.SelectedRow = 3;
+        host.Match = (_, _, sha) => sha == Sha(1) || sha == Sha(5);
+        var release = new TaskCompletionSource();
+        host.Blocking = release.Task;
+        host.FirstChunk = 4;
+
+        // Git has searched rows 0 to 3 and found row 1: the next match after row 3 is not known
+        // yet, so Enter waits rather than wrap round to row 1.
+        search.Text = "zzz";
+        search.Enter(backwards: false);
+        await WaitUntilAsync(() => search.ProgressValue == 4);
+        Assert.Equal([1], search.MatchRows);
+        Assert.Equal(3, host.SelectedRow);
+
+        release.SetResult();
+        await search.Completion;
+        Assert.Equal(5, host.SelectedRow);
+        Assert.Equal("2 of 2", search.CountText);
+
+        // Backwards from row 5, once rows 2 to 4 are searched, row 1 is known at once.
+        host.Blocking = new TaskCompletionSource().Task;
+        search.Text = "again";
+        search.Enter(backwards: true);
+        await WaitUntilAsync(() => search.ProgressValue == 4);
+        Assert.Equal(5, host.SelectedRow);
+        Assert.Equal([1], search.MatchRows);
+        host.SelectedRow = 4;
+        search.Enter(backwards: true);
+        Assert.Equal(1, host.SelectedRow);
+    }
+
+    [AvaloniaFact]
+    public async Task A_new_search_applies_its_matches_in_batches_while_the_last_ones_batch_is_still_due()
+    {
+        var host = new FakeHost(Graph(6));
+        var clock = new ManualTimeProvider();
+        using var search = new SearchViewModel(host, SearchMode.Changes, clock);
+        host.Search = search;
+        host.Match = (_, text, sha) => text == "second" ? sha == Sha(1) || sha == Sha(4) : sha == Sha(2);
+        var release = new TaskCompletionSource();
+        host.Blocking = release.Task;
+
+        // The first text's match has arrived and waits for its batch when Enter starts the next.
+        search.Text = "first";
+        clock.Advance(TimeSpan.FromMilliseconds(600));
+        await WaitUntilAsync(() => host.Handed == 1);
+        search.Text = "second";
+        search.Enter(backwards: false);
+        await WaitUntilAsync(() => host.Handed == 3);
+
+        // The new search's matches get a batch of their own, 100 ms on (3.4).
+        Assert.Equal(SearchViewModel.SearchingText, search.CountText);
+        clock.Advance(SearchViewModel.BatchInterval);
+        await WaitUntilAsync(() => search.CountText == "2 so far…");
+        Assert.Equal([1, 4], search.MatchRows);
+
+        // Git ends: the rows above the first match are searched, and Enter goes to it.
+        release.SetResult();
+        await search.Completion;
+        Assert.Equal(1, host.SelectedRow);
+        Assert.Equal("1 of 2", search.CountText);
     }
 
     [AvaloniaFact]
@@ -378,7 +451,17 @@ public class SearchViewModelTests
         /// <summary>How many rows the first search reports searched before it is released and ends early; null reports all.</summary>
         public int? ReportFirst { get; set; }
 
+        /// <summary>
+        /// How many rows a search hands over the matches of and reports searched before it waits for
+        /// <see cref="Blocking"/>, as git's first call of 2,000 rows does; then the rest. Null: every
+        /// row's matches before it waits.
+        /// </summary>
+        public int? FirstChunk { get; set; }
+
         public List<(SearchMode Mode, string Text, IReadOnlyList<string> Shas)> Calls { get; } = [];
+
+        /// <summary>How many matches the searches have handed over.</summary>
+        public int Handed { get; private set; }
 
         public GraphSearchMarks Marks { get; private set; } = GraphSearchMarks.None;
 
@@ -387,9 +470,19 @@ public class SearchViewModelTests
         public async Task SearchAsync(SearchMode mode, string text, IReadOnlyList<string> shas, Action<string> onMatch, IProgress<int>? progress, CancellationToken cancellationToken)
         {
             Calls.Add((mode, text, [.. shas]));
-            foreach (var sha in shas.Where(sha => Match(mode, text, sha)))
+
+            // As git's process does, the matches come later than the call, never within it.
+            await Task.Yield();
+            var chunk = Math.Min(FirstChunk ?? shas.Count, shas.Count);
+            foreach (var sha in shas.Take(chunk).Where(sha => Match(mode, text, sha)))
             {
+                Handed++;
                 onMatch(sha);
+            }
+
+            if (FirstChunk is not null)
+            {
+                progress?.Report(chunk);
             }
 
             if (ReportFirst is { } first)
@@ -400,6 +493,12 @@ public class SearchViewModelTests
             if (Blocking is { } blocking)
             {
                 await blocking.WaitAsync(cancellationToken);
+            }
+
+            foreach (var sha in shas.Skip(chunk).Where(sha => Match(mode, text, sha)))
+            {
+                Handed++;
+                onMatch(sha);
             }
 
             if (ReportFirst is null)

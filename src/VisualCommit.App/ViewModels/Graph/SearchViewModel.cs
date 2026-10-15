@@ -84,9 +84,16 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     private CommitGraphData? _memoryGraph;
     private int _memoryScanned;
 
-    /// <summary>Matches from git not applied yet, and whether a batch is due.</summary>
+    /// <summary>Matches from git not applied yet, and whether a batch is due; both of the search of <see cref="_generation"/>, under <see cref="_gate"/>.</summary>
     private readonly List<string> _arrived = [];
     private bool _batchDue;
+
+    /// <summary>
+    /// Enter, Shift+Enter, previous or next waiting for the match they go to (backwards for
+    /// Shift+Enter and previous), or null: while git still searches the rows before it, the match
+    /// nearest the selected row is not known yet (3.1).
+    /// </summary>
+    private bool? _goWhenKnown;
 
     private CancellationTokenSource? _pending;
     private CancellationTokenSource? _running;
@@ -240,7 +247,8 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Enter in the box (3.1): the search starts at once when its delay has not passed yet, then the
-    /// next match is selected; with <paramref name="backwards"/> (Shift+Enter) the previous one.
+    /// next match is selected; with <paramref name="backwards"/> (Shift+Enter) the previous one. A
+    /// search that runs selects it once git has searched the rows between the selected row and it.
     /// </summary>
     public void Enter(bool backwards)
     {
@@ -254,14 +262,7 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
             Start();
         }
 
-        if (backwards)
-        {
-            Previous();
-        }
-        else
-        {
-            Next();
-        }
+        GoToMatch(backwards);
     }
 
     /// <summary>
@@ -301,6 +302,7 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        _goWhenKnown = null;
         Cancel(ref _pending);
         Cancel(ref _running);
         Watch(null);
@@ -310,23 +312,32 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
 
     /// <summary>Selects the first match after the selected row in row order, wrapping round (3.1).</summary>
     [RelayCommand(CanExecute = nameof(HasMatches))]
-    private void Next()
-    {
-        var rows = MatchRows;
-        if (rows.Count == 0)
-        {
-            return;
-        }
-
-        var from = _host.SelectedRow;
-        var next = rows.FirstOrDefault(row => row > from, rows[0]);
-        _host.SelectMatch(next);
-    }
+    private void Next() => GoToMatch(backwards: false);
 
     /// <summary>Selects the last match before the selected row in row order, wrapping round (3.1); from the top it wraps to the last.</summary>
     [RelayCommand(CanExecute = nameof(HasMatches))]
-    private void Previous()
+    private void Previous() => GoToMatch(backwards: true);
+
+    /// <summary>Goes to the next or the previous match: at once when it is known, otherwise as soon as it is (<see cref="GoWhenKnown"/>).</summary>
+    private void GoToMatch(bool backwards)
     {
+        _goWhenKnown = backwards;
+        GoWhenKnown();
+    }
+
+    /// <summary>
+    /// Selects the match Enter, previous or next waits for, once it is known: the search has ended,
+    /// or git has searched every row between the selected row and it, so that no nearer match can
+    /// come (3.1). A search with no match selects nothing.
+    /// </summary>
+    private void GoWhenKnown()
+    {
+        if (_goWhenKnown is not { } backwards || (IsSearching && !IsKnown(backwards)))
+        {
+            return;
+        }
+
+        _goWhenKnown = null;
         var rows = MatchRows;
         if (rows.Count == 0)
         {
@@ -334,8 +345,53 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
         }
 
         var from = _host.SelectedRow;
-        var previous = from < 0 ? rows[^1] : rows.LastOrDefault(row => row < from, rows[^1]);
-        _host.SelectMatch(previous);
+        var row = backwards
+            ? (from < 0 ? rows[^1] : rows.LastOrDefault(row => row < from, rows[^1]))
+            : rows.FirstOrDefault(row => row > from, rows[0]);
+        _host.SelectMatch(row);
+    }
+
+    /// <summary>
+    /// Whether the match after (or before) the selected row is known while the search runs: going
+    /// from the selected row that way, wrapping round, a match is reached before any row git has
+    /// not searched yet. Wrapping round needs the whole graph, since rows still to come lie between.
+    /// </summary>
+    private bool IsKnown(bool backwards)
+    {
+        var graph = _host.Graph;
+        var matches = MatchRows.ToHashSet();
+        var count = graph.Count;
+        if (count == 0)
+        {
+            return graph.IsComplete;
+        }
+
+        var row = _host.SelectedRow;
+        for (var step = 0; step < count; step++)
+        {
+            row += backwards ? -1 : 1;
+            if (row < 0 || row >= count)
+            {
+                if (!graph.IsComplete)
+                {
+                    return false;
+                }
+
+                row = row < 0 ? count - 1 : 0;
+            }
+
+            if (matches.Contains(row))
+            {
+                return true;
+            }
+
+            if (!_searched.Contains(graph.CommitAt(row).Sha))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>The close button and Esc (3.1).</summary>
@@ -364,6 +420,7 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
 
         Cancel(ref _pending);
         Cancel(ref _running);
+        _goWhenKnown = null;
         IsSearching = false;
         if (Text.Length == 0)
         {
@@ -410,10 +467,12 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     /// <summary>Forgets every match and makes <paramref name="text"/> in <see cref="Mode"/> the search's.</summary>
     private void Reset(string text)
     {
-        _generation++;
         lock (_gate)
         {
+            // A batch the last search left due is not this one's: its matches get their own.
+            _generation++;
             _arrived.Clear();
+            _batchDue = false;
         }
 
         _searched.Clear();
@@ -462,7 +521,7 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
                     continue;
                 }
 
-                var progress = new SearchProgress(this, generation, _searched.Count(sha => graph.IndexOf(sha) >= 0));
+                var progress = new SearchProgress(this, generation, rows, _searched.Count(sha => graph.IndexOf(sha) >= 0));
                 await _host.SearchAsync(mode, text, rows, sha => Arrived(generation, sha), progress, token);
                 if (generation != _generation || token.IsCancellationRequested)
                 {
@@ -502,6 +561,7 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
             ApplyArrived();
             IsSearching = false;
             UpdateCount();
+            GoWhenKnown();
         }
     }
 
@@ -623,6 +683,7 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
         ProgressValue = _searched.Count(sha => graph.IndexOf(sha) >= 0);
         ProgressMaximum = graph.Count;
         UpdateCount();
+        GoWhenKnown();
     }
 
     /// <summary>
@@ -769,9 +830,11 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// How far git got through the rows given, reported after each of its calls: what was searched
-    /// is read when the search returns, and a Changes search's progress bar follows it meanwhile.
+    /// is read when the search returns, and meanwhile the rows git has searched are known with the
+    /// matches it handed over for them, so that Enter can go on (<see cref="IsKnown"/>), and a
+    /// Changes search's progress bar follows.
     /// </summary>
-    private sealed class SearchProgress(SearchViewModel search, int generation, int searchedBefore) : IProgress<int>
+    private sealed class SearchProgress(SearchViewModel search, int generation, IReadOnlyList<string> rows, int searchedBefore) : IProgress<int>
     {
         private int _reported;
 
@@ -785,8 +848,16 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
             {
                 if (generation == search._generation && !search._disposed)
                 {
+                    // Git hands over a call's matches before it reports the call's rows searched.
+                    for (var i = 0; i < Math.Min(value, rows.Count); i++)
+                    {
+                        search._searched.Add(rows[i]);
+                    }
+
+                    search.ApplyArrived();
                     search.ProgressValue = searchedBefore + value;
                     search.ProgressMaximum = search._host.Graph.Count;
+                    search.GoWhenKnown();
                 }
             });
         }
