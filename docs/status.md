@@ -224,6 +224,11 @@ the second wave builds any UI.
   about half the runs under load, also on `c319578` before WP0: the click on Cancel does not reach
   the button. Being fixed on `wip/p5-flaky`. If a full run dies with `HANG WATCHDOG` naming it,
   run it again; it is not a failure of what was changed.
+- **CI's Windows runner moved to Git 2.56.0.windows.2** on 2026-10-15 (run 38723225901; 2.55.0
+  before). There a `git stash pop` refused by local changes exits 128, not 1: phase 3's check 15b
+  now accepts both (`281dd69`). Phase 5's report lists this under "Changes to expected results"
+  (phase 3's report says "exit 1" in 15b's step 2 and in T5). Only 2.36 and 2.55 are on the
+  development machine; CI is the only check on 2.56 so far.
 - If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
   work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
   after building them; ask the owner before discarding any.
