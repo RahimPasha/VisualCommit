@@ -1158,7 +1158,10 @@ single command while a filter is on:
 - **Stashes**: with a filter, the pager keeps the set of SHAs it has seen as visible tips or parents;
   a stash whose base is in it is placed by D54's rule as today, otherwise it waits and is placed
   right above its base when the base comes, and is left out if the base never comes. Without a
-  filter the pager is unchanged. (Amends D54 while a filter is on.)
+  filter the pager is unchanged. (Amends D54 while a filter is on.) What counts as seen: the shown
+  refs' tips and HEAD's commit, taken from the refs read, plus the parents of every row added while
+  a stash still waits. A filter that hides and solos nothing loads exactly as no filter, stashes
+  included; solo's standard input does not wait for the refs (WP2a).
 - **Labels**: `CommitGraphData` takes the filter; `BuildLabels` leaves out hidden refs' labels, except
   the checked-out branch's, and in solo mode every branch label but the soloed refs' and HEAD's
   branch's; tags keep their labels on the rows shown. `Refs` itself stays whole (the details panel
