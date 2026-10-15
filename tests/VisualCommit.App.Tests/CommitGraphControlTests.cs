@@ -27,7 +27,7 @@ namespace VisualCommit.App.Tests;
 /// Headless tests of the commit graph control and the repository graph view (D49), drawn with
 /// Skia and checked pixel by pixel against the phase 1 test report. The expected values (the
 /// graph scenario's table, the colours, the sizes) are copied from the report, not from the app.
-/// Phase 5's dashed stash lines are in CommitGraphControlTests.Phase5.cs.
+/// Phase 5's dashed stash lines and search marks are in CommitGraphControlTests.Phase5.cs.
 /// </summary>
 public partial class CommitGraphControlTests
 {

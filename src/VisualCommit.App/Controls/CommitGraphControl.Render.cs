@@ -105,6 +105,7 @@ public sealed partial class CommitGraphControl
 
         var columns = Columns;
         var selection = Selection;
+        var search = ActiveSearch;
 
         for (var display = first; display <= last; display++)
         {
@@ -113,6 +114,11 @@ public sealed partial class CommitGraphControl
             {
                 context.FillRectangle(background, new Rect(0, RowTop(display, offset), size.Width, RowHeight));
             }
+        }
+
+        if (search is not null)
+        {
+            DrawSearchMarks(context, data, search, first, last, offset, palette);
         }
 
         using (context.PushClip(new Rect(columns.Graph.X, 0, columns.Graph.Width, size.Height)))
@@ -135,7 +141,7 @@ public sealed partial class CommitGraphControl
                 else
                 {
                     var index = display - rowOffset;
-                    DrawGraphCell(context, data, index, top, dashOrigin, background, palette);
+                    DrawGraphCell(context, data, index, top, dashOrigin, background, palette, IsDimmed(data, index, search));
                 }
             }
         }
@@ -148,6 +154,7 @@ public sealed partial class CommitGraphControl
                 if (data.LabelsAt(index).Count > 0)
                 {
                     var dimmed = _draggedLabel is { } dragged && dragged.Sha == data.CommitAt(index).Sha ? dragged.RefName : null;
+                    using var opacity = IsDimmed(data, index, search) ? context.PushOpacity(SearchDimmedOpacity) : default(DrawingContext.PushedState?);
                     DrawLabels(context, GetRowVisual(data, index), data.RowAt(index).NodeColor, RowTop(display, offset), palette, dimmed);
                 }
             }
@@ -162,7 +169,9 @@ public sealed partial class CommitGraphControl
             }
             else
             {
-                DrawTextCells(context, GetRowVisual(data, display - rowOffset), RowTop(display, offset), columns);
+                var index = display - rowOffset;
+                using var opacity = IsDimmed(data, index, search) ? context.PushOpacity(SearchDimmedOpacity) : default(DrawingContext.PushedState?);
+                DrawTextCells(context, GetRowVisual(data, index), RowTop(display, offset), columns);
             }
         }
 
@@ -242,9 +251,10 @@ public sealed partial class CommitGraphControl
     /// The lines and the node of one row: lines first, so the node lies on top of them. A stash's
     /// line down to its base is dashed from <paramref name="dashOrigin"/> (<see cref="DashOrigin"/>);
     /// a curve into the base's node takes the pattern where it starts and carries it along its
-    /// length.
+    /// length. A row the search dims (3.3) has its node at <see cref="SearchDimmedOpacity"/>; its
+    /// lines stay at full strength, so the history's shape stays readable.
     /// </summary>
-    private void DrawGraphCell(DrawingContext context, CommitGraphData data, int index, double top, double dashOrigin, IBrush rowBackground, Palette palette)
+    private void DrawGraphCell(DrawingContext context, CommitGraphData data, int index, double top, double dashOrigin, IBrush rowBackground, Palette palette, bool dimmed)
     {
         var row = data.RowAt(index);
         var middle = top + (RowHeight / 2);
@@ -277,16 +287,25 @@ public sealed partial class CommitGraphControl
         var center = new Point(LaneCenterX(row.NodeLane), middle);
         var color = Modulo(row.NodeColor);
         var commit = data.CommitAt(index);
-        if (commit.Kind == CommitKind.Stash)
+        var isStash = commit.Kind == CommitKind.Stash;
+        var outerRadius = (isStash || commit.Parents.Count < 2 ? NodeDiameter : MergeNodeDiameter) / 2;
+        if (dimmed)
+        {
+            // A dimmed node still covers the lines that meet in it, as a node at full strength
+            // does: the row's background first, then the node faded over it.
+            context.DrawEllipse(rowBackground, null, center, outerRadius, outerRadius);
+        }
+
+        using var opacity = dimmed ? context.PushOpacity(SearchDimmedOpacity) : default(DrawingContext.PushedState?);
+        if (isStash)
         {
             // A ring 10 across and 2 wide: the stroke is centred 1 inside the outer edge.
-            var radius = (NodeDiameter / 2) - (RingThickness / 2);
+            var radius = outerRadius - (RingThickness / 2);
             context.DrawEllipse(rowBackground, palette.RingPens[color], center, radius, radius);
         }
         else
         {
-            var radius = (commit.Parents.Count > 1 ? MergeNodeDiameter : NodeDiameter) / 2;
-            context.DrawEllipse(palette.Lanes[color], null, center, radius, radius);
+            context.DrawEllipse(palette.Lanes[color], null, center, outerRadius, outerRadius);
         }
     }
 
@@ -460,7 +479,8 @@ public sealed partial class CommitGraphControl
         var typeface = CellTypeface;
 
         var messageBrush = commit.Kind == CommitKind.Stash ? palette.TextSecondary : palette.TextPrimary;
-        var message = CellLayout(commit.Subject, typeface, messageBrush, columns.Message);
+        var messageTypeface = SearchStateOf(data, index, ActiveSearch) == GraphSearchRowState.Marked ? MatchTypeface : typeface;
+        var message = CellLayout(commit.Subject, messageTypeface, messageBrush, columns.Message);
         var author = AuthorLayout(commit.AuthorName, typeface, palette, columns.Author);
         var date = CellLayout(dates.Format(commit.AuthorDate), typeface, palette.TextSecondary, columns.Date);
         var sha = CellLayout(commit.ShortSha, typeface, palette.TextSecondary, columns.Sha);
@@ -717,6 +737,9 @@ public sealed partial class CommitGraphControl
 
         public required IPen BorderPen { get; init; }
 
+        /// <summary>The mark at the left edge of a row a search matches (docs/phase-5-design.md 3.3).</summary>
+        public required IBrush SearchMatch { get; init; }
+
         public required IImmutableBrush[] Lanes { get; init; }
 
         /// <summary>Lines in each lane colour, 2 wide.</summary>
@@ -784,6 +807,7 @@ public sealed partial class CommitGraphControl
                 LabelText = labelText,
                 ControlBackground = Brush("VcControlBackgroundBrush"),
                 BorderPen = new ImmutablePen(Brush("VcBorderBrush"), 1),
+                SearchMatch = Brush("VcSearchMatchBrush"),
                 IconPenOnFill = new ImmutablePen(labelText, iconStroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round),
                 IconPenOnControl = new ImmutablePen(textPrimary, iconStroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round),
                 Lanes = lanes,
