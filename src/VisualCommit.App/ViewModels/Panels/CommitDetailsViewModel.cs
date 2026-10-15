@@ -34,8 +34,12 @@ public partial class CommitDetailsViewModel : ObservableObject
     private int _version;
     private readonly ChangedFileList _fileList = new();
 
-    /// <summary>What the last <see cref="ShowAsync"/> was cancelled with: "All files" reads the shown commit's tree again with it.</summary>
-    private CancellationToken _shownToken;
+    /// <summary>
+    /// The latest <see cref="ShowAsync"/> that asked for a commit, guarded by <see cref="_gate"/>:
+    /// "All files" reads that commit again with its tree, also while its load has not ended (the
+    /// commit shown may then be an older one).
+    /// </summary>
+    private (string Sha, StashEntry? Stash, CancellationToken Token)? _requested;
 
     public CommitDetailsViewModel(IGitRepository? repository, ISettingsStore settings, DateDisplay dates, IAppLog? log = null)
     {
@@ -212,8 +216,10 @@ public partial class CommitDetailsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// "All files" on or off (4.5): the setting is saved, and the shown commit's list changes at
-    /// once: its tree is read with the details again, or its changed files show as before.
+    /// "All files" on or off (4.5): the setting is saved, and the list changes at once. On, the
+    /// commit asked for last is read again with its tree (a load still running for it is replaced,
+    /// so that a newer selection is never undone); off, the shown commit's changed files show as
+    /// before, or the running load shows them when it ends. A stash has no "All files".
     /// </summary>
     [RelayCommand]
     private void ToggleAllFiles()
@@ -221,14 +227,27 @@ public partial class CommitDetailsViewModel : ObservableObject
         var on = !ShowsAllFiles;
         ShowsAllFiles = on;
         _settings.Update(settings => settings with { ShowAllFiles = on });
-        if (Details is not { } shown || IsStash)
+        (string Sha, StashEntry? Stash, CancellationToken Token)? requested;
+        bool loading;
+        lock (_gate)
+        {
+            requested = _requested;
+            loading = _loading is not null;
+        }
+
+        if (requested is not { Stash: null } latest)
         {
             return;
         }
 
         if (on)
         {
-            _ = ShowAsync(shown.Sha, null, _shownToken);
+            _ = ShowAsync(latest.Sha, null, latest.Token);
+            return;
+        }
+
+        if (loading || Details is not { } shown || IsStash)
+        {
             return;
         }
 
@@ -262,6 +281,7 @@ public partial class CommitDetailsViewModel : ObservableObject
             }
 
             _loading = loading;
+            _requested = sha is null ? null : (sha, stash, cancellationToken);
         }
 
         // Outside the lock: cancelling can run the earlier load's continuation right here.
@@ -278,7 +298,6 @@ public partial class CommitDetailsViewModel : ObservableObject
         }
 
         // Another tab may have switched between flat and tree, or "All files", since this one last showed a commit.
-        _shownToken = cancellationToken;
         FileList = _settings.Current.FileList;
         _fileList.SetMode(FileList);
         ShowsAllFiles = _settings.Current.ShowAllFiles;
@@ -397,10 +416,11 @@ public partial class CommitDetailsViewModel : ObservableObject
 
         Details = details;
         _fileList.SelectedPath = null;
-        if (tree is not null)
+        if (tree is not null && ShowsAllFiles)
         {
+            // The title counts what the list shows: the tree's files and the commit's deletions.
             _fileList.ShowAll(details.Files, tree);
-            ChangedFilesTitle = string.Create(CultureInfo.InvariantCulture, $"All files ({tree.Count})");
+            ChangedFilesTitle = string.Create(CultureInfo.InvariantCulture, $"All files ({_fileList.Files.Count})");
         }
         else
         {

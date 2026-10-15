@@ -57,9 +57,10 @@ public sealed class ChangedFileList
 
     /// <summary>
     /// Shows every file of a commit's tree (docs/phase-5-design.md 4.5, "All files"):
-    /// <paramref name="tree"/>'s paths in its order (git's), each that <paramref name="changed"/>
-    /// lists with its status letter, the others without one. A changed file the tree no longer
-    /// has (a deletion) is not in it. Every folder starts open.
+    /// <paramref name="tree"/>'s paths in its order (git's, by path), each that
+    /// <paramref name="changed"/> lists with its status letter, the others without one. A changed
+    /// file the tree no longer has (a deletion) is listed too, with its letter, at its path's
+    /// place, so that its diff still opens from the list. Every folder starts open.
     /// </summary>
     public void ShowAll(IReadOnlyList<ChangedFile> changed, IReadOnlyList<string> tree)
     {
@@ -71,8 +72,24 @@ public sealed class ChangedFileList
             byPath.TryAdd(file.Path, file);
         }
 
+        var inTree = new HashSet<string>(tree, StringComparer.Ordinal);
+        var gone = changed.Where(file => !inTree.Contains(file.Path)).OrderBy(file => file.Path, StringComparer.Ordinal).ToList();
         var unchanged = new HashSet<string>(StringComparer.Ordinal);
-        _files = [.. tree.Select(path => byPath.TryGetValue(path, out var file) ? file : Unchanged(path, unchanged))];
+        var files = new List<ChangedFile>(tree.Count + gone.Count);
+        var next = 0;
+        foreach (var path in tree)
+        {
+            // Git lists a tree by path, byte by byte: a deleted path goes before the first that sorts after it.
+            for (; next < gone.Count && string.CompareOrdinal(gone[next].Path, path) < 0; next++)
+            {
+                files.Add(gone[next]);
+            }
+
+            files.Add(byPath.TryGetValue(path, out var file) ? file : Unchanged(path, unchanged));
+        }
+
+        files.AddRange(gone.Skip(next));
+        _files = files;
         _unchanged = unchanged;
         _closedFolders.Clear();
         Rebuild();
