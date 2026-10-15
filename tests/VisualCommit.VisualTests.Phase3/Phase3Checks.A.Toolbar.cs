@@ -25,7 +25,7 @@ public sealed partial class Phase3ChecksA
 
         // Step 1: the toolbar with a clean ops repository; the pointer rests on Stash.
         Shot(app, "23a-toolbar-with-repository");
-        AssertToolbar(app, new Dictionary<string, string> { ["StashButton"] = PartA.NoChangesToStash }, undo: NothingToUndo);
+        AssertToolbar(app, new Dictionary<string, string> { ["StashButton"] = PartA.NoChangesToStash }, NothingToUndo, NothingToRedo);
         AssertStatus(app, "Ready");
         var tip = await app.RestPointerOnAsync(ToolbarButton(app, "StashButton"));
         Shot(app, "23b-stash-disabled-tooltip", keepPointer: true);
@@ -51,17 +51,27 @@ public sealed partial class Phase3ChecksA
         AssertStatus(app, PartA.BranchCreatedMessage);
         Assert.Equal(["▾ Local branches 5", "  ▸ feature", "  ▾ topic", "    new (head)", "  main"], LeftPanelLines(app).Take(5));
         Assert.Equal(PaletteOf(app).Accent, await RefNameColourAsync(app, "Local branches", "topic", "new"));
-        AssertToolbar(app, new Dictionary<string, string>
-        {
-            ["PullButton"] = PartA.TopicNoUpstream,
-            ["StashButton"] = PartA.NoChangesToStash,
-        });
+
+        // From here on each step follows a recorded action (docs/phase-5-design.md 7.2): once WP3's
+        // app half records them, Undo is enabled with 7.6's text of the last one, here `Undo
+        // creation of topic/new`, and Redo stays `Nothing to redo` (UndoUntilRecorded).
+        AssertToolbar(
+            app,
+            new Dictionary<string, string>
+            {
+                ["PullButton"] = PartA.TopicNoUpstream,
+                ["StashButton"] = PartA.NoChangesToStash,
+            },
+            UndoUntilRecorded,
+            NothingToRedo);
 
         // Step 3: changes made outside the app; Stash with the dialog.
         repo.WriteFile("README.md", PartA.ToolbarReadme).WriteFile("scratch.txt", PartA.Scratch);
         await app.WaitForAsync(() => Graph(app).ShowsWorkingRow, "the working-changes row", OutsideChangeTimeout);
         await app.WaitForIdleAsync();
-        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream });
+
+        // Changes outside the app leave the branch's creation undoable (7.4): `Undo creation of topic/new`.
+        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, UndoUntilRecorded, NothingToRedo);
         app.Click(ToolbarButton(app, "StashButton"));
         await AssertNameDialogAsync(app, new NameDialogExpected(
             "Stash changes", null, null, "Message (optional)", false, "Include untracked files", true, "Stash", true));
@@ -85,11 +95,17 @@ public sealed partial class Phase3ChecksA
         AssertGitDate(AppCommitTime, await GitTextAsync(repo, "log", "-1", "--format=%aI", "stash@{0}"));
         Assert.Equal(WindowLayout.GraphColumnWidth(4), Graph(app).Columns.Graph.Width);
         Assert.False(Graph(app).Columns.Date.IsVisible);
-        AssertToolbar(app, new Dictionary<string, string>
-        {
-            ["PullButton"] = PartA.TopicNoUpstream,
-            ["StashButton"] = PartA.NoChangesToStash,
-        });
+
+        // After the stash: `Undo stash "{message}"` (7.6), the stash's listed message.
+        AssertToolbar(
+            app,
+            new Dictionary<string, string>
+            {
+                ["PullButton"] = PartA.TopicNoUpstream,
+                ["StashButton"] = PartA.NoChangesToStash,
+            },
+            UndoUntilRecorded,
+            NothingToRedo);
 
         // Step 4: Pop: the stash found by its id, popped; the files back.
         app.Click(ToolbarButton(app, "PopButton"));
@@ -107,7 +123,9 @@ public sealed partial class Phase3ChecksA
         Assert.True(Graph(app).Columns.Date.IsVisible);
         Assert.Equal(Graph(app).WorkingRowBounds.Bottom, Graph(app).RowBounds(0).Top, 0.5);
         AssertWorkingRingOnly(app, shot, 0, PaletteOf(app).Lane(0));
-        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream });
+
+        // After the pop: `Undo pop of stash "{message}"` (7.6).
+        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, UndoUntilRecorded, NothingToRedo);
     }
 
     /// <summary>Check 23, step 5: an unborn repository with a remote and an untracked file.</summary>
@@ -137,7 +155,7 @@ public sealed partial class Phase3ChecksA
             ["BranchButton"] = PartA.MakeFirstCommit,
             ["StashButton"] = PartA.MakeFirstCommit,
             ["PopButton"] = PartA.NoStashes,
-        }, undo: NothingToUndo);
+        }, NothingToUndo, NothingToRedo);
 
         var pointer = new Point(PartA.UnbornAreaPoint.X, PartA.UnbornAreaPoint.Y);
         app.RightClick(pointer);
@@ -168,7 +186,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.AddRemoteFirst,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        }, undo: NothingToUndo);
+        }, NothingToUndo, NothingToRedo);
     }
 
     /// <summary>Check 23, step 7: the edges scenario, HEAD detached.</summary>
@@ -188,7 +206,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.DetachedPush,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        }, undo: NothingToUndo);
+        }, NothingToUndo, NothingToRedo);
     }
 
     /// <summary>Check 23, step 8: the edges scenario with loc checked out, whose upstream is local.</summary>
@@ -208,7 +226,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.LocTracksLocal,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        }, undo: NothingToUndo);
+        }, NothingToUndo, NothingToRedo);
     }
 
     /// <summary>Check 23, step 9: a merge stopped by a conflict.</summary>
@@ -224,11 +242,18 @@ public sealed partial class Phase3ChecksA
         var tip = await app.RestPointerOnAsync(ToolbarButton(app, "PullButton"));
         Shot(app, "23m-merge-in-progress-pull-tooltip", keepPointer: true);
         Assert.Equal(PartA.FinishMerge, tip);
-        AssertToolbar(app, new Dictionary<string, string>
-        {
-            ["PullButton"] = PartA.FinishMerge,
-            ["StashButton"] = PartA.FinishMerge,
-        });
+
+        // With WP3's app half, Undo and Redo give 7.4's second reason here, PartA.FinishMerge both
+        // (phase 5's report, "Design 14.1's rows": every banner picture, a merge in progress).
+        AssertToolbar(
+            app,
+            new Dictionary<string, string>
+            {
+                ["PullButton"] = PartA.FinishMerge,
+                ["StashButton"] = PartA.FinishMerge,
+            },
+            UndoUntilRecorded,
+            RedoUntilRecorded);
     }
 
     /// <summary>Check 24: the left panel's highlighted ref follows the graph's selection (D98; ops).</summary>

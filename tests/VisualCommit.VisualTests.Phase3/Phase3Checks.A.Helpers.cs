@@ -285,12 +285,12 @@ public sealed partial class Phase3ChecksA
     /// the disabled colour; the other repository buttons enabled in the primary colour with no
     /// tooltip; Theme enabled. Phase 5 changed Undo, Redo and Search on purpose (docs/phase-5-design.md
     /// 1.1, 7.4 and 14.1; phase 5's report, "Changes to expected results"): Search is enabled in the
-    /// primary colour with <c>Search commits (Ctrl+F)</c>; Redo is disabled with <c>Nothing to redo</c>,
-    /// as no check of phase 3 undoes a git action; Undo shows the undo history as it stands, disabled
-    /// with its reason (<paramref name="undo"/> when given) or enabled with <c>Undo {text}</c> after a
-    /// recorded action. Each one's tooltip is its help text.
+    /// primary colour with <c>Search commits (Ctrl+F)</c>; Undo and Redo show <paramref name="undo"/>
+    /// and <paramref name="redo"/> as their tooltips, enabled in the primary colour when the tooltip
+    /// is <c>Undo {text}</c> (<c>Redo {text}</c>), otherwise disabled with it as their reason (7.4).
+    /// Each one's tooltip is its help text.
     /// </summary>
-    private static void AssertToolbar(ShellDriver app, IReadOnlyDictionary<string, string> disabled, string? undo = null)
+    private static void AssertToolbar(ShellDriver app, IReadOnlyDictionary<string, string> disabled, string undo, string redo)
     {
         var palette = PaletteOf(app);
         foreach (var id in RepositoryButtons)
@@ -322,24 +322,14 @@ public sealed partial class Phase3ChecksA
         Assert.Equal(searchText, AutomationProperties.GetHelpText(search));
         Assert.Equal(palette.TextPrimary, (search.Foreground as ISolidColorBrush)?.Color);
 
-        var redo = ToolbarButton(app, "RedoButton");
-        Assert.False(redo.IsEffectivelyEnabled, "Redo is enabled.");
-        AssertTip(redo, NothingToRedo);
-        Assert.Equal(NothingToRedo, AutomationProperties.GetHelpText(redo));
-
-        // Undo as the toolbar has it from the undo history (7.4): the button shows that state, with
-        // a tooltip whatever it is.
-        var toolbar = Repo(app).Toolbar;
-        var undoButton = ToolbarButton(app, "UndoButton");
-        Assert.NotNull(toolbar.UndoToolTip);
-        Assert.Equal(toolbar.CanUndo, undoButton.IsEffectivelyEnabled);
-        AssertTip(undoButton, toolbar.UndoToolTip);
-        Assert.Equal(toolbar.UndoToolTip, AutomationProperties.GetHelpText(undoButton));
-        Assert.Equal(toolbar.CanUndo, toolbar.UndoToolTip!.StartsWith("Undo ", StringComparison.Ordinal));
-        Assert.Equal(toolbar.CanUndo ? palette.TextPrimary : palette.TextDisabled, (undoButton.Foreground as ISolidColorBrush)?.Color);
-        if (undo is not null)
+        foreach (var (id, tip, enabledPrefix) in new[] { ("UndoButton", undo, "Undo "), ("RedoButton", redo, "Redo ") })
         {
-            AssertTip(undoButton, undo);
+            var button = ToolbarButton(app, id);
+            var enabled = tip.StartsWith(enabledPrefix, StringComparison.Ordinal);
+            Assert.True(enabled == button.IsEffectivelyEnabled, $"{id} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")} with \"{ToolTip.GetTip(button)}\", expected \"{tip}\".");
+            AssertTip(button, tip);
+            Assert.Equal(tip, AutomationProperties.GetHelpText(button));
+            Assert.Equal(enabled ? palette.TextPrimary : palette.TextDisabled, (button.Foreground as ISolidColorBrush)?.Color);
         }
 
         Assert.True(app.FindByAutomationId("ThemeSwitch").IsEffectivelyEnabled);
@@ -348,8 +338,21 @@ public sealed partial class Phase3ChecksA
     /// <summary>Undo before any recorded action, with no operation running or in progress (docs/phase-5-design.md 7.4's reason 4).</summary>
     private const string NothingToUndo = "Nothing to undo";
 
-    /// <summary>Redo while nothing was undone (7.4's reason 4): in every check of phase 3.</summary>
+    /// <summary>Redo while nothing was undone (7.4's reason 4).</summary>
     private const string NothingToRedo = "Nothing to redo";
+
+    /// <summary>
+    /// Undo's tooltip at a step where phase 5's report gives another state than today's code can:
+    /// after a recorded action (<c>Undo {text}</c>, 7.6) or while a merge is in progress
+    /// (<c>PartA.FinishMerge</c>). Until work package WP3's app half fills
+    /// <c>RepositoryOperations.ReadUndoAvailability</c>, nothing is recorded and Undo stays
+    /// <c>Nothing to undo</c> everywhere. The commit that fills it replaces each use with the value
+    /// its comment names (the report's "Design 14.1's rows") and removes this constant.
+    /// </summary>
+    private const string UndoUntilRecorded = NothingToUndo;
+
+    /// <summary>Redo's tooltip at such a step (<see cref="UndoUntilRecorded"/>): only check 23's merge step, where the report gives <c>PartA.FinishMerge</c>.</summary>
+    private const string RedoUntilRecorded = NothingToRedo;
 
     /// <summary>
     /// A stage or details file list's rows as text: status letter, name, folder (flat) and where a
