@@ -167,6 +167,82 @@ public class CommitDetailsViewModelTests(CommitDetailsViewModelTests.GraphScenar
     }
 
     [Fact]
+    public async Task All_files_lists_the_commits_whole_tree_with_the_unchanged_files_without_a_letter_and_is_saved()
+    {
+        var details = Create(out var settings);
+        var sha = await scenario.FullShaAsync("47e6ec7");
+        await details.ShowAsync(sha, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(details.OffersAllFiles);
+        Assert.False(details.ShowsAllFiles);
+
+        details.ToggleAllFilesCommand.Execute(null);
+        await WaitForAsync(() => details.ChangedFilesTitle.StartsWith("All files", StringComparison.Ordinal) && !details.IsLoading);
+
+        // docs/phase-5-design.md 4.5: every file of the tree in git's order, the changed ones with
+        // their letters; a file the commit deleted is not in its tree.
+        var tree = (await scenario.Repo.GitAsync("ls-tree", "-r", "--name-only", sha)).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.True(details.ShowsAllFiles);
+        Assert.True(settings.Current.ShowAllFiles);
+        Assert.Equal($"All files ({tree.Length})", details.ChangedFilesTitle);
+        Assert.Equal(tree, details.Files.Select(row => row.Key));
+        Assert.Equal("M README.md", Describe(details)[Array.IndexOf(tree, "README.md")]);
+        Assert.DoesNotContain(details.Files, row => row.Key == "docs/notes.txt");
+        var unchanged = details.Files.Where(row => row.IsUnchanged).ToList();
+        Assert.Equal(tree.Length - 4, unchanged.Count);
+        Assert.All(unchanged, row => Assert.Equal(string.Empty, row.StatusLetter));
+
+        // A new panel on the same settings shows the whole tree at once (B7's restart).
+        var next = new CommitDetailsViewModel(scenario.Repository, settings, Utc);
+        Assert.True(next.ShowsAllFiles);
+        await next.ShowAsync(sha, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal($"All files ({tree.Length})", next.ChangedFilesTitle);
+
+        // Off again: the changed files, as in phase 1, and the setting saved.
+        details.ToggleAllFilesCommand.Execute(null);
+        Assert.False(settings.Current.ShowAllFiles);
+        Assert.Equal("Changed files (5)", details.ChangedFilesTitle);
+        Assert.Equal(["M README.md", "D notes.txt | docs", "R main-app.txt | src | renamed from src/app.txt", "A defaults.txt | src/settings", "A page.txt | src/settings"], Describe(details));
+    }
+
+    [Fact]
+    public async Task With_all_files_a_click_on_an_unchanged_file_asks_for_its_blame_and_a_changed_one_for_its_diff()
+    {
+        var details = Create(out var settings);
+        settings.Update(current => current with { ShowAllFiles = true });
+        var sha = await scenario.FullShaAsync("47e6ec7");
+        await details.ShowAsync(sha, cancellationToken: TestContext.Current.CancellationToken);
+        var blamed = new List<ViewModels.Pages.BlameRequest>();
+        var diffs = new List<ChangedFile>();
+        details.BlameRequested += (_, request) => blamed.Add(request);
+        details.FileActivated += (_, file) => diffs.Add(file);
+
+        var unchanged = details.Files.First(row => row.IsUnchanged);
+        details.ActivateFileCommand.Execute(unchanged);
+        details.ActivateFileCommand.Execute(details.Files.Single(row => row.Key == "README.md"));
+
+        Assert.Equal([new ViewModels.Pages.BlameRequest(unchanged.Key, sha)], blamed);
+        Assert.Equal(["README.md"], diffs.Select(file => file.Path));
+
+        // The unchanged file's row has the selection background, as a diff's file row has (BD14).
+        Assert.Equal(unchanged.Key, details.SelectedFilePath);
+        Assert.True(unchanged.IsSelected);
+    }
+
+    [Fact]
+    public async Task A_stashs_details_have_no_all_files_and_list_its_changed_files()
+    {
+        var details = Create(out var settings);
+        settings.Update(current => current with { ShowAllFiles = true });
+        var stash = Assert.Single(scenario.Refs.Stashes);
+
+        await details.ShowAsync(stash.Sha, stash, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(details.OffersAllFiles);
+        Assert.Equal("Changed files (1)", details.ChangedFilesTitle);
+        Assert.Equal(["M README.md"], Describe(details));
+    }
+
+    [Fact]
     public async Task Clicking_a_parent_raises_ParentActivated_with_its_full_id()
     {
         var details = Create(out _);
@@ -286,6 +362,17 @@ public class CommitDetailsViewModelTests(CommitDetailsViewModelTests.GraphScenar
         Assert.False(details.HasError);
     }
 
+    /// <summary>Waits until <paramref name="condition"/> holds: a load that a command started without waiting for it.</summary>
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < until, "Timed out waiting for the details.");
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+    }
+
     private CommitDetailsViewModel Create(out MainWindowViewModelTests.FakeSettings settings, FileListMode mode = FileListMode.Flat)
     {
         settings = new MainWindowViewModelTests.FakeSettings();
@@ -346,8 +433,14 @@ public class CommitDetailsViewModelTests(CommitDetailsViewModelTests.GraphScenar
 
         public override string Name => "fake";
 
+        /// <summary>Every commit's tree, for "All files" (docs/phase-5-design.md 4.5): none unless a test sets it.</summary>
+        public IReadOnlyList<string> Tree { get; set; } = [];
+
         public override Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default) =>
             ReadWithToken is { } read ? read(sha, cancellationToken) : Read(sha);
+
+        public override Task<IReadOnlyList<string>> ReadTreeFilesAsync(string sha, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Tree);
 
         public override Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

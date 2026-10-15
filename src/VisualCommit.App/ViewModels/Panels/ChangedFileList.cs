@@ -13,6 +13,7 @@ public sealed class ChangedFileList
 {
     private readonly HashSet<string> _closedFolders = new(StringComparer.Ordinal);
     private IReadOnlyList<ChangedFile> _files = [];
+    private IReadOnlySet<string> _unchanged = new HashSet<string>(StringComparer.Ordinal);
     private string? _selectedPath;
 
     /// <summary>The rows the view shows.</summary>
@@ -45,12 +46,42 @@ public sealed class ChangedFileList
     {
         ArgumentNullException.ThrowIfNull(files);
         _files = files;
+        _unchanged = new HashSet<string>(StringComparer.Ordinal);
         if (!keepFolders)
         {
             _closedFolders.Clear();
         }
 
         Rebuild();
+    }
+
+    /// <summary>
+    /// Shows every file of a commit's tree (docs/phase-5-design.md 4.5, "All files"):
+    /// <paramref name="tree"/>'s paths in its order (git's), each that <paramref name="changed"/>
+    /// lists with its status letter, the others without one. A changed file the tree no longer
+    /// has (a deletion) is not in it. Every folder starts open.
+    /// </summary>
+    public void ShowAll(IReadOnlyList<ChangedFile> changed, IReadOnlyList<string> tree)
+    {
+        ArgumentNullException.ThrowIfNull(changed);
+        ArgumentNullException.ThrowIfNull(tree);
+        var byPath = new Dictionary<string, ChangedFile>(StringComparer.Ordinal);
+        foreach (var file in changed)
+        {
+            byPath.TryAdd(file.Path, file);
+        }
+
+        var unchanged = new HashSet<string>(StringComparer.Ordinal);
+        _files = [.. tree.Select(path => byPath.TryGetValue(path, out var file) ? file : Unchanged(path, unchanged))];
+        _unchanged = unchanged;
+        _closedFolders.Clear();
+        Rebuild();
+
+        static ChangedFile Unchanged(string path, HashSet<string> unchanged)
+        {
+            unchanged.Add(path);
+            return new ChangedFile(path, FileChangeKind.Unknown);
+        }
     }
 
     /// <summary>Shows the files flat or as a tree.</summary>
@@ -68,7 +99,7 @@ public sealed class ChangedFileList
         List<ChangedFileRow> rows;
         if (Mode == FileListMode.Flat)
         {
-            rows = [.. _files.Select(file => ChangedFileRow.ForFile(file, depth: 0, showFolder: true))];
+            rows = [.. _files.Select(file => ChangedFileRow.ForFile(file, depth: 0, showFolder: true, _unchanged.Contains(file.Path)))];
         }
         else
         {
@@ -119,7 +150,7 @@ public sealed class ChangedFileList
 
         foreach (var file in folder.Files.OrderBy(file => file.Path[(file.Path.LastIndexOf('/') + 1)..], NameOrder.Instance))
         {
-            rows.Add(ChangedFileRow.ForFile(file, depth, showFolder: false));
+            rows.Add(ChangedFileRow.ForFile(file, depth, showFolder: false, _unchanged.Contains(file.Path)));
         }
     }
 

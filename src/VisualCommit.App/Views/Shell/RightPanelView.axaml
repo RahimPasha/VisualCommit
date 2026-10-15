@@ -219,6 +219,18 @@
                   <TextBlock Text="Tree" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
+              <!-- Every file of the commit's tree (docs/phase-5-design.md 4.5, D164; BD14): no icon.
+                   A stash's details have none. -->
+              <Button Name="AllFilesButton"
+                      Theme="{StaticResource FileListToggle}"
+                      Classes.selected="{Binding ShowsAllFiles}"
+                      Command="{Binding ToggleAllFilesCommand}"
+                      IsVisible="{Binding OffersAllFiles}"
+                      ToolTip.Tip="Show every file of the commit"
+                      AutomationProperties.AutomationId="AllFilesButton"
+                      AutomationProperties.Name="All files">
+                <TextBlock Text="All files" VerticalAlignment="Center" />
+              </Button>
             </StackPanel>
             <TextBlock Name="ChangedFilesTitle"
                        Classes="heading"
