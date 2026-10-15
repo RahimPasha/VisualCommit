@@ -134,7 +134,7 @@ indications.
 | Message | `-F --regexp-ignore-case --grep=<text>`: the whole message (subject and body, not headers), Unicode case folded. `-F` also guards against the user's `grep.patternType` (with `extended`, `--grep='(issue'` fails: `fatal: … Unmatched ( or \(`) |
 | Author | Git matches `Name <email>` with the mailmap applied, as the graph's `%aN`/`%aE` already are: the same result in memory, no process |
 | SHA | In memory: the graph holds every row's SHA (stashes included); a prefix may match several rows |
-| File | Needs `GIT_LITERAL_PATHSPECS` removed for the call (as `AllIgnoredAsync` does): `":(glob,icase)**/*<t>*"` and `":(glob,icase)**/*<t>*/**"` (a glob matching a folder does not match files under it, so two pathspecs), with `\` turned into `/` and `*?[\` escaped by `\`. With the variable set the magic is read as a file name and finds nothing, silently; `git --glob-pathspecs` and `GIT_GLOB_PATHSPECS` refuse to combine with it (`fatal: global 'literal' pathspec setting is incompatible…`). `icase` folds ASCII only. Finds deleted files and both names of a rename commit. **Git 2.55.0 ignores the path under `--no-walk`** and prints every commit it is given (a regression, fixed upstream by 32c4ed70; 2.36 filters), so the app lists the paths instead and counts a commit only when a path line follows it: `--format=%x1e%H --first-parent --root --no-renames --name-only -- <the two globs>` (WP1, `SearchTests`) |
+| File | Needs `GIT_LITERAL_PATHSPECS` removed for the call (as `AllIgnoredAsync` does): `":(glob,icase)**/*<t>*"` and `":(glob,icase)**/*<t>*/**"` (a glob matching a folder does not match files under it, so two pathspecs), with `\` turned into `/` and `*?[\` escaped by `\`. With the variable set the magic is read as a file name and finds nothing, silently; `git --glob-pathspecs` and `GIT_GLOB_PATHSPECS` refuse to combine with it (`fatal: global 'literal' pathspec setting is incompatible…`). `icase` folds ASCII only. Finds deleted files and both names of a rename commit. **Git 2.55.0 ignores the path under `--no-walk`** and prints every commit it is given (a regression, fixed upstream by 32c4ed70; 2.36 filters, and so does CI's macOS git 2.56.0, while Git for Windows 2.56.0.windows.2 does not), so the app lists the paths instead and counts a commit only when a path line follows it: `--format=%x1e%H --first-parent --root --no-renames --name-only -- <the two globs>` (WP1, `SearchTests`) |
 | Merges in path and pickaxe searches | Default simplification prunes side-branch commits whose effect was undone; `--full-history` adds merges that differ only from their second parent. **`--first-parent` with `--no-walk --stdin` gives exactly "the commit's own change as the right panel shows it"** (a merge against its first parent, the right panel's rule) |
 | Changes | `-S<text>`: a commit whose number of occurrences of the text changes (added or removed: O7's wording); fixed string; searches binary files; `-i` folds ASCII only. `-G<regex>` matches any changed line containing it (extended regex, skips binary). Merges never match without a merge option; `--diff-merges=first-parent -s` (2.31+) or `--first-parent` (2.29+ implies first-parent diffs, UNVERIFIED on 2.30) matches a merge's first-parent change once. `log.showRoot=false` misses the root (pass `--root`); `diff.renames=false` makes a rename look like delete-and-add (pass `--find-renames`); textconv applies (pass `--no-textconv`). An empty `-S` is exit 129 or a `BUG` (exit 3): never pass one |
 | Search timings | Message on 100k: 1.6 s first hit, 1.8 s all (chunked: 70 ms first). File glob on 100k: 1.9 s. `-S` costs about 0.4 to 1 ms per commit with real changes (`-G` 2 to 3 times that): tens of seconds on a large real history |
@@ -1111,6 +1111,49 @@ empty action; the pending flow through Continue, Skip and Abort; two worktrees o
 `UndoToolbarTests` (enabled states and tooltips of 7.4 after refreshes, after the queue's `Changed`
 without a refresh, and after outside changes; the keys of 1.3 and their declines); and section 15's
 checks, which undo and redo each destructive action of phases 2 to 4.
+
+### 7.12 What the git half settled (WP3, merged in `b0e8710`)
+
+Building and reviewing the git half against Git 2.36 and 2.55 corrected or added these; the code's
+doc comments and `UndoEffectTests`, `UndoStep*Tests` and `UndoSequenceTests` pin them.
+
+- **A stash is popped back only onto the commit it was made on.** `StashPop` carries `Onto` (the
+  head the stash was made at; for a step's own stash, the commit its switch goes to). Its check adds
+  "HEAD is at that commit": a commit made since in a terminal leaves the status clean, and the pop
+  would conflict (`UU`, exit 1). Refused as `{b} has moved since (it is at {short})` when HEAD is on
+  the stash's branch, `HEAD is no longer at {short}` otherwise; another branch at the same commit is
+  allowed. The Stash, automatic stash and D91 rows of 7.3 all use it.
+- **Folders in the way.** read-tree also refuses with `error: Updating '<d>' would lose untracked
+  files in it` (128, both gits). 7.6's count names such a folder once; an untracked file where the
+  move puts a folder counts once. A switch blocked by a folder (`Updating the following directories
+  would lose untracked files in them`) is checked by the files inside it: when every one is
+  ignored, the refusal is 7.6's ignored-files text naming those files; otherwise the folder is local
+  work. The Keep move's ignored-files guard lists the files inside a folder at a path the move adds,
+  as well as the parent folders. A symbolic link counts as a file, as git counts it.
+- **A remote's symbolic `HEAD`.** `git remote remove` deletes `refs/remotes/<r>/HEAD` too, and 2.36's
+  `update-ref --stdin` has no symref commands. The reads of 7.7 keep symbolic refs apart
+  (`UndoState.SymbolicRefs`, from `%(symref)`), and a new effect `SymbolicRef(ref, from, to)` (the
+  closed set of 7.3 gains it) recreates one with `symbolic-ref -m` after the transaction has written
+  its target, or deletes one with `update-ref --no-deref -d`; its check is the ref it points at.
+  "Remove a remote" uses it both ways.
+- **"Add a remote" after "Fetch now".** The undo's `RemoteConfig` that removes the remote also
+  deletes, in the step's transaction, every ref under `refs/remotes/<r>/` that no earlier effect of
+  the step writes (symbolic ones at once); refs of a remote whose name goes on from this one
+  (`mirror/eu` after `mirror`) stay, as git keeps them. The redo leaves the state right after the
+  add, without the fetched refs. Git 2.55's `remote add` refuses a name that is a prefix of an
+  existing remote's or has one as its prefix; 2.36 allows it.
+- **More refusal kinds.** `UndoRefusalKind` gains `Conflicts` (7.4's `Resolve the conflicts first`),
+  `ConfigChanged` (`the settings of {b|r} have changed since`), `RemoteExists` (`a remote named {r}
+  exists again`) and `GitRefused` (git's own line as the reason); `StatusChanged` may name the
+  stash's untracked files that are in the way (`{N} files are in the way: {first names}`). The
+  app half (`RepositoryOperations.Undo.cs`) words them; 7.6's table is extended with these texts.
+- **Where checks are made.** A hard reset's undo checks the index before anything is written,
+  against the commit the move leaves (the move carries the index), not at its place in step 4. The
+  exception that an apply's or a pop's own conflicts do not refuse its undo (7.4) is made inside the
+  step as well as in memory.
+- **A push's old value** comes from git's summary line, whose abbreviation is expanded with
+  `rev-parse --disambiguate`; a value this repository does not have leaves that ref out of the
+  record, so its undo is not offered.
 
 ## 8. Solo and hide (O8, D159)
 
