@@ -1,0 +1,279 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
+             xmlns:shell="using:VisualCommit.App.Views.Shell"
+             x:Class="VisualCommit.App.Views.Shell.ActivityLogView"
+             x:DataType="vm:ActivityLogViewModel"
+             AutomationProperties.AutomationId="ActivityLog"
+             AutomationProperties.Name="Activity log">
+
+  <!-- The activity log under the graph area (docs/phase-5-design.md 2.1, 2.2; the report's part A):
+       a header of 30 ("Activity log", the repository's name, "Show reads" and the close button),
+       then one virtualised list of rows in the order the operations and calls started, newest
+       last: an operation's row 24 high (chevron, outcome glyph, time, title, message, duration),
+       and, under an opened one, indented 24, its failure's summary, its notes and its calls, 22
+       high each; under an opened call its output box. Colours are tokens only. -->
+  <UserControl.Styles>
+    <!-- A row: the hover background under the pointer, the selection background while it has the
+         keyboard focus from the keyboard; no focus frame. -->
+    <Style Selector="shell|ActivityLogRowPanel">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+    <Style Selector="shell|ActivityLogRowPanel.row:pointerover">
+      <Setter Property="Background" Value="{DynamicResource VcRowHoverBrush}" />
+    </Style>
+    <Style Selector="shell|ActivityLogRowPanel:focus-visible">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+
+    <!-- The chevron: right while closed, down while open. -->
+    <Style Selector="c|Icon.chevron">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="c|Icon.chevron.open">
+      <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+    </Style>
+
+    <!-- The outcome glyph, 10 px, in its tone (2.2); none while running. -->
+    <Style Selector="c|Icon.outcome">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="c|Icon.outcome.succeeded">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="Data" Value="{StaticResource IconCheck}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcSuccessBrush}" />
+    </Style>
+    <Style Selector="c|Icon.outcome.warning">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="Data" Value="{StaticResource IconAlert}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="c|Icon.outcome.failed">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="Data" Value="{StaticResource IconClose}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="c|Icon.outcome.cancelled">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="Data" Value="{StaticResource IconMinus}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+
+    <!-- Texts in a row: one line, cut with "…" (the whole text in the tooltip, AD3). -->
+    <Style Selector="TextBlock.cell">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cell.secondary">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cell.warning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cell.danger">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.code">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+    </Style>
+
+    <!-- The output box: a read-only box in the code font, 12 lines before it scrolls. -->
+    <Style Selector="TextBlock.partTitle">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="Margin" Value="0,2,0,1" />
+    </Style>
+    <Style Selector="SelectableTextBlock.partText">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="LineHeight" Value="16" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel Background="{DynamicResource VcPanelBackgroundBrush}">
+
+    <!-- Header, 30: "Activity log", the repository's name; "Show reads" and the close button on the right. -->
+    <Border Name="ActivityLogHeader"
+            DockPanel.Dock="Top"
+            Height="30"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1"
+            AutomationProperties.AutomationId="ActivityLogHeader">
+      <DockPanel Margin="10,0,4,0">
+        <Button Name="ActivityLogClose"
+                DockPanel.Dock="Right"
+                Theme="{StaticResource VcIconButton}"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="Close the activity log"
+                AutomationProperties.AutomationId="ActivityLogClose">
+          <c:Icon Data="{StaticResource IconClose}" Width="12" Height="12" />
+        </Button>
+        <CheckBox Name="ActivityLogShowReads"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcCheckBox}"
+                  IsChecked="{Binding ShowReads}"
+                  Margin="0,0,12,0"
+                  VerticalAlignment="Center"
+                  AutomationProperties.AutomationId="ActivityLogShowReads"
+                  AutomationProperties.Name="Show reads">
+          <TextBlock Text="Show reads" FontSize="12" VerticalAlignment="Center" />
+        </CheckBox>
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Name="ActivityLogTitle" Text="Activity log" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <c:TrimmedTextBlock Name="ActivityLogRepository"
+                              Classes="secondary"
+                              Text="{Binding RepositoryName}"
+                              TextTrimming="CharacterEllipsis"
+                              VerticalAlignment="Center" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- The rows, newest last; the list keeps to its end while it grows (AD15). -->
+    <ScrollViewer Name="ActivityLogList"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto"
+                  AutomationProperties.AutomationId="ActivityLogList"
+                  AutomationProperties.Name="Activity log">
+      <ItemsControl Name="ActivityLogRows"
+                    ItemsSource="{Binding Current.Rows, FallbackValue={x:Null}}"
+                    KeyboardNavigation.TabNavigation="Once">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.DataTemplates>
+
+          <!-- An operation (24): chevron, outcome, time, title and message, duration. -->
+          <DataTemplate DataType="vm:ActivityLogOperationRow">
+            <shell:ActivityLogRowPanel Classes="row"
+                                       Height="24"
+                                       AutomationProperties.AutomationId="ActivityLogOperation"
+                                       AutomationProperties.Name="{Binding Title}">
+              <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="8,0,10,0">
+                <c:Icon Name="ActivityLogChevron" Grid.Column="0" Classes="chevron" Classes.open="{Binding IsOpen}" />
+                <Panel Grid.Column="1" Width="10" Margin="6,0,0,0">
+                  <c:Icon Name="ActivityLogOutcome"
+                          Classes="outcome"
+                          Classes.succeeded="{Binding Outcome, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogOutcome.Succeeded}}"
+                          Classes.warning="{Binding Outcome, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogOutcome.Warning}}"
+                          Classes.failed="{Binding Outcome, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogOutcome.Failed}}"
+                          Classes.cancelled="{Binding Outcome, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogOutcome.Cancelled}}" />
+                </Panel>
+                <TextBlock Name="ActivityLogTime" Grid.Column="2" Classes="cell secondary" Text="{Binding Time}" Margin="8,0,0,0" />
+                <shell:ActivityLogTextsPanel Grid.Column="3" Margin="10,0,0,0">
+                  <c:TrimmedTextBlock Name="ActivityLogOperationTitle" Classes="cell" Text="{Binding Title}" />
+                  <c:TrimmedTextBlock Name="ActivityLogMessage"
+                                      Classes="cell secondary"
+                                      Classes.warning="{Binding MessageTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogTone.Warning}}"
+                                      Classes.danger="{Binding MessageTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogTone.Danger}}"
+                                      Text="{Binding Message}"
+                                      Margin="10,0,0,0" />
+                </shell:ActivityLogTextsPanel>
+                <TextBlock Name="ActivityLogDuration" Grid.Column="4" Classes="cell secondary" Text="{Binding Duration}" Margin="10,0,0,0" />
+              </Grid>
+            </shell:ActivityLogRowPanel>
+          </DataTemplate>
+
+          <!-- A line under an opened operation (22): its failure's summary, a note, or that its calls are gone. -->
+          <DataTemplate DataType="vm:ActivityLogLineRow">
+            <shell:ActivityLogRowPanel Height="22"
+                                       AutomationProperties.AutomationId="ActivityLogLine"
+                                       AutomationProperties.Name="{Binding Text}">
+              <Grid ColumnDefinitions="Auto,*" Margin="8,0,10,0">
+                <Border Grid.Column="0" Width="{Binding Indent}" />
+                <c:TrimmedTextBlock Name="ActivityLogLineText"
+                                    Grid.Column="1"
+                                    Classes="cell secondary"
+                                    Classes.danger="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogTone.Danger}}"
+                                    Text="{Binding Text}" />
+              </Grid>
+            </shell:ActivityLogRowPanel>
+          </DataTemplate>
+
+          <!-- A call (22): chevron, exit, command (and "(on a temporary index)"), duration. -->
+          <DataTemplate DataType="vm:ActivityLogCallRow">
+            <shell:ActivityLogRowPanel Classes="row"
+                                       Height="22"
+                                       AutomationProperties.AutomationId="ActivityLogCall"
+                                       AutomationProperties.Name="{Binding Command}">
+              <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="8,0,10,0">
+                <Border Grid.Column="0" Width="{Binding Indent}" />
+                <c:Icon Name="ActivityLogChevron" Grid.Column="1" Classes="chevron" Classes.open="{Binding IsOpen}" />
+                <TextBlock Name="ActivityLogExit"
+                           Grid.Column="2"
+                           Classes="cell secondary"
+                           Classes.danger="{Binding ExitTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:ActivityLogTone.Danger}}"
+                           Text="{Binding ExitText}"
+                           Margin="6,0,0,0" />
+                <shell:ActivityLogTextsPanel Grid.Column="3" Margin="10,0,0,0" SecondKeepsItsWidth="True">
+                  <c:TrimmedTextBlock Name="ActivityLogCommand" Classes="cell code" Text="{Binding Command}" />
+                  <TextBlock Name="ActivityLogTemporaryIndex"
+                             Classes="cell secondary"
+                             Text="{x:Static vm:ActivityLogViewModel.TemporaryIndexText}"
+                             IsVisible="{Binding OnTemporaryIndex}"
+                             Margin="6,0,0,0" />
+                </shell:ActivityLogTextsPanel>
+                <TextBlock Name="ActivityLogDuration" Grid.Column="4" Classes="cell secondary" Text="{Binding Duration}" Margin="10,0,0,0" />
+              </Grid>
+            </shell:ActivityLogRowPanel>
+          </DataTemplate>
+
+          <!-- An opened call's box: its titled parts, or "No output". -->
+          <DataTemplate DataType="vm:ActivityLogOutputRow">
+            <shell:ActivityLogRowPanel AutomationProperties.Name="Output" Focusable="False">
+              <Grid ColumnDefinitions="Auto,*" Margin="8,2,10,4">
+                <Border Grid.Column="0" Width="{Binding Indent}" />
+                <shell:ActivityLogOutputBox Name="ActivityLogOutput"
+                                            Grid.Column="1"
+                                            Text="{Binding Text}"
+                                            Background="{DynamicResource VcWindowBackgroundBrush}"
+                                            BorderBrush="{DynamicResource VcBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            AutomationProperties.AutomationId="ActivityLogOutput"
+                                            AutomationProperties.Name="Output">
+                  <ScrollViewer Name="ActivityLogOutputScroller"
+                                MaxHeight="200"
+                                HorizontalScrollBarVisibility="Disabled"
+                                VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8,3,8,4">
+                      <TextBlock Classes="cell secondary" Text="{x:Static vm:ActivityLogViewModel.NoOutputText}" IsVisible="{Binding IsEmpty}" />
+                      <ItemsControl ItemsSource="{Binding Parts}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate DataType="vm:ActivityLogOutputPart">
+                            <StackPanel>
+                              <TextBlock Classes="partTitle" Text="{Binding Title}" />
+                              <SelectableTextBlock Classes="partText" Text="{Binding Text}" />
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </ScrollViewer>
+                </shell:ActivityLogOutputBox>
+              </Grid>
+            </shell:ActivityLogRowPanel>
+          </DataTemplate>
+
+        </ItemsControl.DataTemplates>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

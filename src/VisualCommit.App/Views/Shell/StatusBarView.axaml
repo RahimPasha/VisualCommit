@@ -11,8 +11,9 @@
        operations are doing (the running text with git's progress, the result of the last one, or
        "Ready"); the progress bar while one the user started runs (indeterminate until git gives a
        percentage); Cancel while it can be stopped; how many wait. Hidden parts take no room, so
-       an idle bar reads as in phases 0 to 2. Right: the git version, and the activity-log toggle,
-       a placeholder until phase 5 (D53). -->
+       an idle bar reads as in phases 0 to 2. Right: the git version, and the activity log's toggle
+       (docs/phase-5-design.md 1.2): enabled while the active tab has a repository, "selected" while
+       the panel shows, its tooltip also its help text. -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,1,0,0">
@@ -26,9 +27,11 @@
                    AutomationProperties.AutomationId="GitStatus" />
         <Button Name="ActivityLogToggle"
                 Theme="{StaticResource VcFlatButton}"
-                IsEnabled="False"
+                Command="{Binding ActivityLog.ToggleCommand}"
+                Classes.selected="{Binding ActivityLog.IsShown}"
                 CornerRadius="0"
-                ToolTip.Tip="Show every git command the app has run"
+                ToolTip.Tip="{Binding ActivityLog.ToggleToolTip}"
+                AutomationProperties.HelpText="{Binding ActivityLog.ToggleToolTip}"
                 AutomationProperties.AutomationId="ActivityLogToggle">
           <StackPanel Orientation="Horizontal" Spacing="5">
             <c:Icon Data="{StaticResource IconActivityLog}" Width="13" Height="13" />

@@ -13,12 +13,14 @@
 
   <!-- The graph area of the active tab: the welcome page when it has no repository (D42), the
        repository's graph or a file's diff when it has one, and nothing while a restored tab is
-       still opening. -->
-  <Panel Background="{DynamicResource VcWindowBackgroundBrush}">
-    <Panel IsVisible="{Binding ShowsWelcome}">
+       still opening. Under it the activity log (docs/phase-5-design.md 2.1) while the window has
+       it open and the tab has a repository: a 5-high splitter with its 1-px line, then the panel,
+       whose height the code-behind fits; a closed panel takes no room. -->
+  <Grid Name="GraphAreaGrid" RowDefinitions="*,Auto,Auto" Background="{DynamicResource VcWindowBackgroundBrush}">
+    <Panel Grid.Row="0" IsVisible="{Binding ShowsWelcome}">
       <shell:WelcomeView DataContext="{Binding Welcome}" />
     </Panel>
-    <DockPanel IsVisible="{Binding HasRepository}">
+    <DockPanel Name="GraphAreaContent" Grid.Row="0" IsVisible="{Binding HasRepository}">
       <!-- The conflict banner above the graph or the diff while an operation is in progress or
            files have conflicts (docs/phase-3-design.md section 5). -->
       <Panel DockPanel.Dock="Top" IsVisible="{Binding Repository.Banner.IsVisible, FallbackValue=False}">
@@ -57,5 +59,29 @@
         </Panel>
       </Panel>
     </DockPanel>
-  </Panel>
+
+    <!-- The activity log's splitter: a 1-px line at the bottom of a 5-px grab area (the theme's
+         least height of a splitter, 6, is lifted). -->
+    <Border Name="ActivityLogSplitterLine"
+            Grid.Row="1"
+            Height="1"
+            VerticalAlignment="Bottom"
+            Background="{DynamicResource VcBorderBrush}"
+            IsHitTestVisible="False"
+            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ActivityLog.IsShown, FallbackValue=False}" />
+    <GridSplitter Name="ActivityLogSplitter"
+                  Grid.Row="1"
+                  Height="5"
+                  MinHeight="0"
+                  ResizeDirection="Rows"
+                  ResizeBehavior="PreviousAndNext"
+                  Background="Transparent"
+                  Cursor="SizeNorthSouth"
+                  IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ActivityLog.IsShown, FallbackValue=False}"
+                  AutomationProperties.AutomationId="ActivityLogSplitter" />
+    <shell:ActivityLogView Name="ActivityLog"
+                           Grid.Row="2"
+                           DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ActivityLog, FallbackValue={x:Null}}"
+                           IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ActivityLog.IsShown, FallbackValue=False}" />
+  </Grid>
 </UserControl>
