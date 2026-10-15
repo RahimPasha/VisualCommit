@@ -11,9 +11,11 @@ namespace VisualCommit.Git.Tests;
 /// Recorded actions whose undo or redo meets a repository that changed since (docs/phase-5-design.md
 /// 7.4 to 7.6): stale stat data is no reason, two changed files in the way are counted by the app,
 /// an ignored file in the way refuses an undo and a redo, a remote's lease refuses, a branch
-/// checked out in another worktree refuses, and a redo whose move refuses after its switch puts
-/// the switch back. A refused step leaves HEAD, the refs, the index's entries, the files and
-/// HEAD's reflog as they were (the switch put back aside, which writes its two entries).
+/// checked out in another worktree refuses, a redo whose move refuses after its switch puts
+/// the switch back, and a stash is not popped onto a commit other than the one it was made on (a
+/// stash's, the automatic stash's and D91's undo). A refused step leaves HEAD, the refs, the
+/// index's entries, the files and HEAD's reflog as they were (the switch put back aside, which
+/// writes its two entries).
 /// </summary>
 public class UndoStepRefusalTests
 {
@@ -130,6 +132,78 @@ public class UndoStepRefusalTests
         Assert.Equal(["src/c.txt"], refusal.Paths);
         Assert.Equal(start, await PictureAsync(repo));
         Assert.Equal("main", await repo.CurrentBranchAsync());
+    }
+
+    [Fact]
+    public async Task A_stash_is_not_popped_back_onto_a_commit_made_since()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        repo.WriteFile("a.txt", "a-unstaged\n").WriteFile("u.txt", "untracked\n");
+        var stash = await RecordAsync(repository, UndoScope.Stash("wip"), async () =>
+        {
+            var made = await repository.StashAsync("wip", includeUntracked: true, cancellationToken: TestCancelled);
+            UndoCapture.Stash(made, includedUntracked: true, "wip");
+        });
+
+        // A terminal commits another a.txt: the status is still the clean one recorded, but the
+        // pop would conflict there and leave its untracked file behind (0.5).
+        var moved = await repo.CommitFileAsync("a.txt", "a-other\n", "c4");
+        var start = await PictureAsync(repo);
+        var still = await StillAsync(repo);
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: moved), await RefusedAsync(repository, stash, UndoDirection.Undo));
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(still, await StillAsync(repo));
+        Assert.False(File.Exists(Path.Combine(repo.Path, "u.txt")));
+    }
+
+    [Fact]
+    public async Task The_automatic_stashs_checkout_is_not_undone_onto_a_branch_moved_since()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var feature = (await repo.GitAsync("rev-parse", "feature")).StandardOutput.Trim();
+        repo.WriteFile("b.txt", "b-unstaged\n").WriteFile("notes/u.txt", "untracked\n");
+        var target = (await repo.GitAsync("rev-parse", "HEAD~2")).StandardOutput.Trim();
+        var message = $"Auto stash before checking out {target[..7]}";
+        var auto = await RecordAsync(repository, UndoScope.AutoStashCheckout(target[..7], "main"), async () =>
+        {
+            var made = await repository.StashAsync(message, includeUntracked: true, cancellationToken: TestCancelled);
+            UndoCapture.Stash(made, includedUntracked: true, message);
+            await repository.CheckoutDetachedAsync(target, cancellationToken: TestCancelled);
+        });
+
+        // main moved to feature's tip, whose b.txt differs from the one the stash was made on.
+        await repo.GitAsync("branch", "--force", "main", "feature");
+        var start = await PictureAsync(repo);
+        var still = await StillAsync(repo);
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: feature), await RefusedAsync(repository, auto, UndoDirection.Undo));
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(still, await StillAsync(repo));
+    }
+
+    [Fact]
+    public async Task Stash_changes_and_check_out_is_not_undone_onto_a_branch_moved_since()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var feature = (await repo.GitAsync("rev-parse", "feature")).StandardOutput.Trim();
+        repo.WriteFile("a.txt", "a-unstaged\n");
+        var entry = await RecordAsync(repository, UndoScope.StashAndCheckout("behind", "main"), async () =>
+        {
+            var made = await repository.StashAsync("Stash before checking out behind", includeUntracked: false, cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("behind", cancellationToken: TestCancelled);
+            Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(made!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
+        });
+
+        // The undo stashes, switches back to main and pops there: main moved, so it is refused
+        // before the stash, which the pop would otherwise merge onto feature's tip.
+        await repo.GitAsync("branch", "--force", "main", "feature");
+        var start = await PictureAsync(repo);
+        var still = await StillAsync(repo);
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: feature), await RefusedAsync(repository, entry, UndoDirection.Undo));
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(still, await StillAsync(repo));
     }
 
     /// <summary>What a refused step must leave as it was (7.5): every ref (the backups too), the index's entries, the files, the stash list and HEAD's reflog.</summary>

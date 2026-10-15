@@ -86,10 +86,20 @@ public abstract record UndoEffect
     /// <summary>
     /// Pops a stash with its index: <c>stash pop --index stash@{n}</c>, found by its commit
     /// <paramref name="Sha"/> (null: the one the step's <see cref="StashPush"/> made). Check: it is
-    /// listed and exists, the whole status equals <paramref name="Status"/> (null: as the step's
-    /// earlier effects leave it), and none of its untracked files exists.
+    /// listed and exists, HEAD is at <see cref="Onto"/>'s commit, the whole status equals
+    /// <paramref name="Status"/> (null: as the step's earlier effects leave it), and none of its
+    /// untracked files exists.
     /// </summary>
-    public sealed record StashPop(string? Sha, string? Status) : UndoEffect;
+    public sealed record StashPop(string? Sha, string? Status) : UndoEffect
+    {
+        /// <summary>
+        /// Where HEAD must be for the pop (its branch names the refusal): the commit the stash was
+        /// made on, or the one a step's own stash is popped onto after its switch. A pop onto
+        /// another commit merges the stash there and can conflict after every other check passed,
+        /// leaving conflict markers and the stash's untracked files behind (0.5). Null: not checked.
+        /// </summary>
+        public HeadState? Onto { get; init; }
+    }
 
     /// <summary>Puts a stash back in the list with its message: <c>stash store -m &lt;message&gt; &lt;sha&gt;</c> (it comes back as <c>stash@{0}</c>). Check: not listed, and the commit exists.</summary>
     public sealed record StashStore(string Sha, string Message) : UndoEffect;

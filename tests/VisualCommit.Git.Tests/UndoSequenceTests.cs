@@ -178,7 +178,7 @@ public class UndoSequenceTests
             new UndoState { Head = Head("main", O), Status = "before" },
             new UndoState { Head = Head("main", O), Status = "after" },
             new UndoCaptured { Stash = T, StashIncludedUntracked = true, StashMessage = "wip" });
-        Assert.Equal([new StashPop(T, "after")], Undo(stash));
+        Assert.Equal([new StashPop(T, "after") { Onto = Head("main", O) }], Undo(stash));
         Assert.Equal([new StashPush(true, "wip", "before")], Redo(stash));
 
         var listed = new UndoStash(T, "On main: wip");
@@ -209,8 +209,59 @@ public class UndoSequenceTests
             new UndoState { Head = Head("main", O), Status = "dirty" },
             new UndoState { Head = Head(null, T), Status = "clean" },
             new UndoCaptured { Stash = N, StashMessage = "Auto stash before checking out a1b2c3d" });
-        Assert.Equal([new Switch(Head(null, T), Head("main", O)), new StashPop(N, "clean")], Undo(entry));
+        Assert.Equal([new Switch(Head(null, T), Head("main", O)), new StashPop(N, "clean") { Onto = Head("main", O) }], Undo(entry));
         Assert.Equal([new StashPush(true, "Auto stash before checking out a1b2c3d", "dirty"), new Switch(Head("main", O), Head(null, T))], Redo(entry));
+    }
+
+    [Fact]
+    public void A_stash_is_popped_only_onto_the_commit_it_was_made_on()
+    {
+        // A commit made since leaves the status as it was: only HEAD's commit tells (0.5's conflicts).
+        var stash = new UndoEntry(
+            UndoKind.Stash,
+            "stash \"wip\"",
+            "op-1",
+            new UndoState { Head = Head("main", O), Status = "1 .M x\0" },
+            new UndoState { Head = Head("main", O), Status = string.Empty },
+            new UndoCaptured { Stash = T });
+        var listed = new UndoState { Head = Head("main", O), Stashes = [new UndoStash(T, "On main: wip")], Status = string.Empty };
+        Assert.Null(UndoChecks.FirstRefusal(Step(stash, UndoDirection.Undo), listed));
+        Assert.Equal(
+            new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: N),
+            UndoChecks.FirstRefusal(Step(stash, UndoDirection.Undo), listed with { Head = Head("main", N) }));
+        Assert.Equal(
+            new UndoRefusal(UndoRefusalKind.HeadNotAtCommit, Sha: O),
+            UndoChecks.FirstRefusal(Step(stash, UndoDirection.Undo), listed with { Head = Head(null, N) }));
+
+        // Another branch at the same commit takes the stash as it was made.
+        Assert.Null(UndoChecks.FirstRefusal(Step(stash, UndoDirection.Undo), listed with { Head = Head("other", O) }));
+
+        // The automatic stash's undo pops after its switch back: main must be where it was, in memory too.
+        var auto = new UndoEntry(
+            UndoKind.AutoStashCheckout,
+            "checkout of a1b2c3d",
+            "op-1",
+            new UndoState { Head = Head("main", O), Status = "1 .M x\0" },
+            new UndoState { Head = Head(null, T), Status = string.Empty },
+            new UndoCaptured { Stash = N });
+        var moved = new UndoState { Head = Head(null, T), Refs = Refs(new() { ["refs/heads/main"] = T }), Stashes = [new UndoStash(N, "On main: auto")], Status = string.Empty };
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: T), UndoChecks.FirstRefusal(Step(auto, UndoDirection.Undo), moved));
+        Assert.Null(UndoChecks.FirstRefusal(Step(auto, UndoDirection.Undo), moved with { Refs = Refs(new() { ["refs/heads/main"] = O }) }));
+        var refs = new RepoRefs(Head(null, T), [new GitRef("refs/heads/main", "main", RefKind.LocalBranch, T)], [new StashEntry(0, N, O, "On main: auto", "A", "a@example.com", default, default)], []);
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: T), UndoChecks.FirstRefusalInMemory(Step(auto, UndoDirection.Undo), refs, WorkingTreeStatus.Clean, []));
+
+        // D91's pops land where its switch goes: the undo's on main, the redo's on topic.
+        var d91 = new UndoEntry(
+            UndoKind.StashAndCheckout,
+            "checkout of topic",
+            "op-1",
+            new UndoState { Head = Head("main", O), Refs = Refs(new() { ["refs/heads/main"] = O, ["refs/heads/topic"] = T }), Status = "1 .M x\0" },
+            new UndoState { Head = Head("topic", T), Refs = Refs(new() { ["refs/heads/main"] = O, ["refs/heads/topic"] = T }), Status = "1 .M x\0" },
+            UndoCaptured.None);
+        Assert.Equal(Head("main", O), Assert.IsType<StashPop>(Undo(d91)[^1]).Onto);
+        Assert.Equal(Head("topic", T), Assert.IsType<StashPop>(Redo(d91)[^1]).Onto);
+        var onTopic = Now(Head("topic", T), new() { ["refs/heads/main"] = N, ["refs/heads/topic"] = T }) with { Status = "1 .M x\0" };
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchMoved, Name: "main", Sha: N), UndoChecks.FirstRefusal(Step(d91, UndoDirection.Undo), onTopic));
     }
 
     [Fact]

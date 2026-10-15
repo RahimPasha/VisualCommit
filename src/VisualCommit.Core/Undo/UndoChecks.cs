@@ -105,12 +105,13 @@ public static class UndoChecks
     }
 
     /// <summary>
-    /// The checks that need no git (7.4): HEAD, the branch tips, the tags, the stashes, the staged
-    /// files, the branches the other worktrees have checked out and the remotes, against what the
-    /// app last read. The app makes them after every refresh and keeps the result for the
-    /// toolbar's Undo and Redo; the others (file hashes, index entries, configuration keys, an
-    /// annotated tag's object, the ignored files in the way, a remote's lease) wait for the step's
-    /// operation. An operation in progress and conflicts are the app's own reasons, before these (7.4).
+    /// The checks that need no git (7.4): HEAD (where a stash is popped too), the branch tips, the
+    /// tags, the stashes, the staged files, the branches the other worktrees have checked out and
+    /// the remotes, against what the app last read. The app makes them after every refresh and
+    /// keeps the result for the toolbar's Undo and Redo; the others (file hashes, index entries,
+    /// configuration keys, an annotated tag's object, the ignored files in the way, a remote's
+    /// lease) wait for the step's operation. An operation in progress and conflicts are the app's
+    /// own reasons, before these (7.4).
     /// </summary>
     /// <param name="step">The step the toolbar would run.</param>
     /// <param name="refs">The refs as last read.</param>
@@ -642,6 +643,15 @@ public static class UndoChecks
             if (listed < 0)
             {
                 return new UndoRefusal(UndoRefusalKind.StashGone);
+            }
+
+            // Popped onto another commit, the stash is merged there and can conflict after every
+            // check passed (0.5). The status cannot tell: a commit made since can leave it clean.
+            if (pop.Onto is { } onto && !string.Equals(_head.Sha, onto.Sha, StringComparison.Ordinal))
+            {
+                return onto.BranchName is { } branch && string.Equals(_head.BranchName, branch, StringComparison.Ordinal)
+                    ? new UndoRefusal(UndoRefusalKind.BranchMoved, Name: branch, Sha: _head.Sha)
+                    : new UndoRefusal(UndoRefusalKind.HeadNotAtCommit, Sha: onto.Sha);
             }
 
             if (pop.Status is { } expected && _status is { } status && !string.Equals(status, expected, StringComparison.Ordinal))

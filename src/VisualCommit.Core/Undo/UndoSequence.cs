@@ -202,22 +202,25 @@ public static class UndoSequence
 
     /// <summary>
     /// D91's "Stash changes and check out": the carried changes are stashed again (tracked files
-    /// only, as D91), HEAD switches back, the stash is popped; the redo is the mirror.
+    /// only, as D91), HEAD switches back, the stash is popped onto the commit HEAD was at; the redo
+    /// is the mirror.
     /// </summary>
     private static IReadOnlyList<UndoEffect> StashAndCheckout(UndoEntry entry, bool undo)
     {
         var (from, to) = undo ? (entry.After, entry.Before) : (entry.Before, entry.After);
         var created = Created(entry, HeadsPrefix).FirstOrDefault();
         IReadOnlyList<UndoEffect> branch = created is null ? [] : CreatedBranch(entry, created, undo);
+        var pop = new StashPop(null, null) { Onto = to.Head };
         return undo
-            ? [new StashPush(IncludeUntracked: false, Message: null, from.Status), new Switch(from.Head, to.Head), .. branch, new StashPop(null, null)]
-            : [new StashPush(IncludeUntracked: false, Message: null, from.Status), .. branch, new Switch(from.Head, to.Head), new StashPop(null, null)];
+            ? [new StashPush(IncludeUntracked: false, Message: null, from.Status), new Switch(from.Head, to.Head), .. branch, pop]
+            : [new StashPush(IncludeUntracked: false, Message: null, from.Status), .. branch, new Switch(from.Head, to.Head), pop];
     }
 
     /// <summary>
     /// The automatic stash's checkout (9.2, D166): HEAD switches back to the branch and the stash
-    /// it made is popped; the redo stashes again, untracked files included, with its message, and
-    /// switches to the commit. Without a stash (nothing was left to stash) it is a switch alone.
+    /// it made is popped onto the commit it was made on (the branch must not have moved since);
+    /// the redo stashes again, untracked files included, with its message, and switches to the
+    /// commit. Without a stash (nothing was left to stash) it is a switch alone.
     /// </summary>
     private static IReadOnlyList<UndoEffect> AutoStashCheckout(UndoEntry entry, bool undo)
     {
@@ -228,7 +231,7 @@ public static class UndoSequence
         }
 
         return undo
-            ? [new Switch(entry.After.Head, entry.Before.Head), new StashPop(stash, entry.After.Status)]
+            ? [new Switch(entry.After.Head, entry.Before.Head), new StashPop(stash, entry.After.Status) { Onto = entry.Before.Head }]
             : [new StashPush(IncludeUntracked: true, captured.StashMessage, entry.Before.Status), new Switch(entry.Before.Head, entry.After.Head)];
     }
 
@@ -253,12 +256,12 @@ public static class UndoSequence
             : [new BranchConfig(branch, keysBefore, keysAfter), new SetRef(fullName, tip, null)];
     }
 
-    /// <summary>A stash is popped back with its index; the redo stashes again with the same options and message (the entry takes the new stash).</summary>
+    /// <summary>A stash is popped back with its index onto the commit it was made on; the redo stashes again with the same options and message (the entry takes the new stash).</summary>
     private static IReadOnlyList<UndoEffect> Stash(UndoEntry entry, bool undo)
     {
         var captured = entry.Captured;
         return undo
-            ? [new StashPop(captured.Stash ?? throw Missing(entry, "the stash made"), entry.After.Status)]
+            ? [new StashPop(captured.Stash ?? throw Missing(entry, "the stash made"), entry.After.Status) { Onto = entry.After.Head }]
             : [new StashPush(captured.StashIncludedUntracked, captured.StashMessage, entry.Before.Status)];
     }
 
