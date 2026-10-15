@@ -120,7 +120,10 @@ public sealed class AppSession : IDisposable
         themes.Apply(settings.Current.Theme);
 
         var session = new JsonSessionStore(paths.SessionFile, log);
-        var gitCalls = new GitCallLog();
+
+        // An operation's git calls are kept as long as its record (docs/phase-5-design.md 2.3).
+        var operations = new OperationLog();
+        var gitCalls = new GitCallLog(operations: operations);
 
         // Git is looked for once the window exists (MainWindowViewModel.InitializeAsync); the
         // services that need it wait for that search through GitAccess (D45).
@@ -161,7 +164,7 @@ public sealed class AppSession : IDisposable
             DateDisplay.Resolve(),
             log,
             dialogs: dialogs,
-            operations: new OperationLog(),
+            operations: operations,
             prompts: prompts,
             launcher: launcher ?? new FileLauncher(() => mainWindow, log),
             clipboard: clipboard ?? new ClipboardService(() => mainWindow),

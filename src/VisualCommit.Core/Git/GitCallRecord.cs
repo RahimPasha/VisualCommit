@@ -67,14 +67,31 @@ public sealed record GitCallRecord(
     public bool OnTemporaryIndex { get; init; }
 }
 
-/// <summary>Collects the record of every git call. Safe to use from any thread.</summary>
+/// <summary>
+/// Collects the record of every git call. Safe to use from any thread. Phase 5's activity log
+/// (docs/phase-5-design.md 2.3, D173) keeps an operation's calls as long as the operation's record
+/// and the reads in a ring of their own, so records leave it (<see cref="Removed"/>).
+/// </summary>
 public interface IGitCallLog
 {
     /// <summary>Raised after a call is recorded, on the thread that finished the call.</summary>
     event EventHandler<GitCallRecord>? Added;
 
+    /// <summary>
+    /// Raised after records left the log, oldest first: reads past the ring's capacity, an
+    /// operation's calls once its record left the operation log, or the oldest operation's calls
+    /// past the memory budget (<see cref="HasDroppedCalls"/>). Raised on the thread that acted.
+    /// </summary>
+    event EventHandler<IReadOnlyList<GitCallRecord>>? Removed;
+
     void Add(GitCallRecord record);
 
-    /// <summary>The recorded calls, oldest first.</summary>
+    /// <summary>The recorded calls that are kept, in the order they were recorded (oldest first).</summary>
     IReadOnlyList<GitCallRecord> Snapshot();
+
+    /// <summary>
+    /// Whether the memory budget dropped calls of the operation <paramref name="operationId"/> while
+    /// its record is still kept: the activity log then says that its git commands are no longer kept.
+    /// </summary>
+    bool HasDroppedCalls(string operationId);
 }

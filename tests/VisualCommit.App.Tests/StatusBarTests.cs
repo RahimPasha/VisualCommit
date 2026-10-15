@@ -40,6 +40,11 @@ public class StatusBarTests
                 .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
                 .OrderBy(text => app.BoundsOf(text).X)
                 .Select(text => text.Text!));
+
+        // Phase 0's toggle on a tab without a repository, which phase 5 keeps (docs/phase-5-design.md 1.2).
+        var toggle = app.FindByAutomationId("ActivityLogToggle");
+        Assert.False(toggle.IsEffectivelyEnabled);
+        Assert.Equal("Show every git command the app has run", ToolTip.GetTip(toggle));
     }
 
     [AvaloniaFact]
@@ -51,6 +56,9 @@ public class StatusBarTests
         await app.WaitUntilReadyAsync();
         var repository = await GraphShownAsync(app);
         var parts = Parts(app);
+
+        // Phase 5 (docs/phase-5-design.md 1.2, 14.1): with a repository the activity log's toggle is enabled.
+        Assert.True(app.FindByAutomationId("ActivityLogToggle").IsEffectivelyEnabled);
 
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var fetching = repository.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async context =>

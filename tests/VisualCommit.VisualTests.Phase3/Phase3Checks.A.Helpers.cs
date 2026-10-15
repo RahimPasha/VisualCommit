@@ -283,9 +283,14 @@ public sealed partial class Phase3ChecksA
     /// Asserts the toolbar as 4d gives it: the buttons in <paramref name="disabled"/> disabled, each
     /// with its tooltip (<c>ToolTip.GetTip</c>, also shown while disabled) and its icon and label in
     /// the disabled colour; the other repository buttons enabled in the primary colour with no
-    /// tooltip; Undo, Redo and Search disabled without a tooltip; Theme enabled.
+    /// tooltip; Theme enabled. Phase 5 changed Undo, Redo and Search on purpose (docs/phase-5-design.md
+    /// 1.1, 7.4 and 14.1; phase 5's report, "Changes to expected results"): Search is enabled in the
+    /// primary colour with <c>Search commits (Ctrl+F)</c>; Undo and Redo show <paramref name="undo"/>
+    /// and <paramref name="redo"/> as their tooltips, enabled in the primary colour when the tooltip
+    /// is <c>Undo {text}</c> (<c>Redo {text}</c>), otherwise disabled with it as their reason (7.4).
+    /// Each one's tooltip is its help text.
     /// </summary>
-    private static void AssertToolbar(ShellDriver app, IReadOnlyDictionary<string, string> disabled)
+    private static void AssertToolbar(ShellDriver app, IReadOnlyDictionary<string, string> disabled, string undo, string redo)
     {
         var palette = PaletteOf(app);
         foreach (var id in RepositoryButtons)
@@ -310,15 +315,44 @@ public sealed partial class Phase3ChecksA
             }
         }
 
-        foreach (var id in new[] { "UndoButton", "RedoButton", "SearchButton" })
+        var search = ToolbarButton(app, "SearchButton");
+        var searchText = $"Search commits ({(app.CommandModifier == Avalonia.Input.KeyModifiers.Meta ? "Cmd" : "Ctrl")}+F)";
+        Assert.True(search.IsEffectivelyEnabled, $"Search is disabled: \"{ToolTip.GetTip(search)}\".");
+        AssertTip(search, searchText);
+        Assert.Equal(searchText, AutomationProperties.GetHelpText(search));
+        Assert.Equal(palette.TextPrimary, (search.Foreground as ISolidColorBrush)?.Color);
+
+        foreach (var (id, tip, enabledPrefix) in new[] { ("UndoButton", undo, "Undo "), ("RedoButton", redo, "Redo ") })
         {
-            var button = (Control)app.FindByAutomationId(id);
-            Assert.False(button.IsEffectivelyEnabled, $"{id} is enabled.");
-            AssertTip(button, null);
+            var button = ToolbarButton(app, id);
+            var enabled = tip.StartsWith(enabledPrefix, StringComparison.Ordinal);
+            Assert.True(enabled == button.IsEffectivelyEnabled, $"{id} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")} with \"{ToolTip.GetTip(button)}\", expected \"{tip}\".");
+            AssertTip(button, tip);
+            Assert.Equal(tip, AutomationProperties.GetHelpText(button));
+            Assert.Equal(enabled ? palette.TextPrimary : palette.TextDisabled, (button.Foreground as ISolidColorBrush)?.Color);
         }
 
         Assert.True(app.FindByAutomationId("ThemeSwitch").IsEffectivelyEnabled);
     }
+
+    /// <summary>Undo before any recorded action, with no operation running or in progress (docs/phase-5-design.md 7.4's reason 4).</summary>
+    private const string NothingToUndo = "Nothing to undo";
+
+    /// <summary>Redo while nothing was undone (7.4's reason 4).</summary>
+    private const string NothingToRedo = "Nothing to redo";
+
+    /// <summary>
+    /// Undo's tooltip at a step where phase 5's report gives another state than today's code can:
+    /// after a recorded action (<c>Undo {text}</c>, 7.6) or while a merge is in progress
+    /// (<c>PartA.FinishMerge</c>). Until work package WP3's app half fills
+    /// <c>RepositoryOperations.ReadUndoAvailability</c>, nothing is recorded and Undo stays
+    /// <c>Nothing to undo</c> everywhere. The commit that fills it replaces each use with the value
+    /// its comment names (the report's "Design 14.1's rows") and removes this constant.
+    /// </summary>
+    private const string UndoUntilRecorded = NothingToUndo;
+
+    /// <summary>Redo's tooltip at such a step (<see cref="UndoUntilRecorded"/>): only check 23's merge step, where the report gives <c>PartA.FinishMerge</c>.</summary>
+    private const string RedoUntilRecorded = NothingToRedo;
 
     /// <summary>
     /// A stage or details file list's rows as text: status letter, name, folder (flat) and where a
