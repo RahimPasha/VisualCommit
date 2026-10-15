@@ -19,6 +19,14 @@ public sealed record UndoStep(UndoEntry Entry, UndoDirection Direction, IReadOnl
 
     /// <summary>The step changes a remote (a <see cref="UndoEffect.RemoteRef"/>): a network operation that can be cancelled and asks first (D155, D170).</summary>
     public bool ChangesRemote => Effects.Any(effect => effect is UndoEffect.RemoteRef);
+
+    /// <summary>
+    /// The reflog message of the refs the step writes; null for 7.3's <c>VisualCommit: undo
+    /// &lt;text&gt;</c> or <c>VisualCommit: redo &lt;text&gt;</c>. The backups list's restores run
+    /// their effects as a step of their own and write <c>VisualCommit: &lt;entry text&gt;</c>
+    /// (7.10, the report's BD17): <c>VisualCommit: restore of branch doomed</c>.
+    /// </summary>
+    public string? Message { get; init; }
 }
 
 /// <summary>How a step ended.</summary>

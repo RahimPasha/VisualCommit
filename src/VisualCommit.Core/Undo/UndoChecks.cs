@@ -582,13 +582,14 @@ public static class UndoChecks
         private UndoRefusal? Index(IndexTo index)
         {
             // Whether the index holds a commit's tree is git's to tell (diff-index), unless it is
-            // known: in memory, from the staged files against HEAD.
-            if (string.Equals(IndexDiffersFrom, index.From, StringComparison.Ordinal))
+            // known: in memory, from the staged files against HEAD. A difference elsewhere says
+            // nothing of the paths a restore of some paths compares (the report's BD16).
+            if (index.Paths is null && string.Equals(IndexDiffersFrom, index.From, StringComparison.Ordinal))
             {
                 return new UndoRefusal(UndoRefusalKind.IndexChanged);
             }
 
-            IndexEquals = index.Source;
+            IndexEquals = index.Paths is null ? index.Source : null;
             IndexDiffersFrom = null;
             ForgetIndexEntries();
             return null;

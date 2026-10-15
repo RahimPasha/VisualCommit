@@ -66,11 +66,14 @@ public sealed class UndoCapture
             Snapshot = snapshotFiles ?? captured.Snapshot,
         });
 
-    /// <summary>A restore from the backups list put the index to <paramref name="commit"/>'s tree (7.10).</summary>
-    public static void IndexRestored(string commit)
+    /// <summary>
+    /// A restore from the backups list put the index to <paramref name="commit"/>'s tree (7.10), for
+    /// <paramref name="paths"/> only, or the whole index when null (the report's BD16).
+    /// </summary>
+    public static void IndexRestored(string commit, IReadOnlyList<string>? paths = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
-        Change(captured => captured with { IndexSource = commit });
+        Change(captured => captured with { IndexSource = commit, IndexPaths = paths });
     }
 
     /// <summary>A stash was made (<paramref name="stash"/>, null when git had nothing to stash), with or without untracked files, with the user's message or none.</summary>

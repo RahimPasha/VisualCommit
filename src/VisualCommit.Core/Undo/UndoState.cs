@@ -129,10 +129,16 @@ public sealed record UndoCaptured
 
     /// <summary>
     /// The commit whose tree a restore from the backups list put the index to (7.10): a mixed
-    /// reset's snapshot ("Restore the staged changes…"), or a hard reset's snapshot's second parent
+    /// reset's snapshot ("Restore the staged changes"), or a hard reset's snapshot's second parent
     /// when "Restore the changes…" put the index back first; null otherwise.
     /// </summary>
     public string? IndexSource { get; init; }
+
+    /// <summary>
+    /// The paths of <see cref="IndexSource"/> the restore put back (the report's BD16: a
+    /// snapshot's own paths), or null for the whole index.
+    /// </summary>
+    public IReadOnlyList<string>? IndexPaths { get; init; }
 
     /// <summary>The stash commit a stash made: <see cref="IGitRepository.StashAsync"/>'s result.</summary>
     public string? Stash { get; init; }

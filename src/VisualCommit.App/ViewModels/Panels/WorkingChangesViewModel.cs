@@ -472,6 +472,39 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Undo of a commit or an amend left its changes staged (docs/phase-5-design.md 7.5): the
+    /// summary and the description get the undone commit's message when both are empty, as
+    /// GitKraken does, so that committing again needs no typing.
+    /// </summary>
+    public void PutBackUndoneMessage(string summary, string description)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        ArgumentNullException.ThrowIfNull(description);
+        if (Summary.Length > 0 || Description.Length > 0)
+        {
+            return;
+        }
+
+        Summary = summary;
+        Description = description;
+    }
+
+    /// <summary>
+    /// Redo of that commit (7.5): boxes that still hold its message are emptied again, as after the
+    /// commit itself (phase 4's rule for filled messages); a message changed since stays.
+    /// </summary>
+    public void TakeBackRedoneMessage(string summary, string description)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        ArgumentNullException.ThrowIfNull(description);
+        if (string.Equals(Summary, summary, StringComparison.Ordinal) && string.Equals(Description, description, StringComparison.Ordinal))
+        {
+            Summary = string.Empty;
+            Description = string.Empty;
+        }
+    }
+
     /// <summary>Ticking "Amend previous commit" fills empty boxes with HEAD's message.</summary>
     async partial void OnIsAmendChanged(bool value)
     {

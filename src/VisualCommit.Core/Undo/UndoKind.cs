@@ -11,7 +11,7 @@ namespace VisualCommit.Core.Undo;
 /// sequences undo it, with a text of its own (<see cref="UndoScope"/>'s restore scopes):
 /// "Restore branch" as <see cref="CreateBranch"/>, "Restore tag" as <see cref="CreateTag"/>,
 /// "Restore stash" as <see cref="RestoreStash"/>, "Restore the discarded files…" and "Restore
-/// the changes…" as <see cref="Restore"/>, "Restore the staged changes…" as
+/// the changes…" as <see cref="Restore"/>, "Restore the staged changes" as
 /// <see cref="RestoreStagedChanges"/>, "Push {b} back to {r}…" as <see cref="Push"/> and a tag's
 /// as <see cref="PushTag"/>; "Create branch here…" and "Check out this commit" as theirs.
 /// </remarks>
@@ -94,7 +94,7 @@ public enum UndoKind
     /// <summary>The backups list's "Restore stash" (7.10): a dropped or popped stash stored in the list again.</summary>
     RestoreStash,
 
-    /// <summary>The backups list's "Restore the staged changes…" (7.10): the index put back from a mixed reset's snapshot.</summary>
+    /// <summary>The backups list's "Restore the staged changes" (7.10): the index put back from a mixed reset's snapshot.</summary>
     RestoreStagedChanges,
 
     /// <summary>"Ignore {name}" or "Ignore all *.{ext} files".</summary>
