@@ -202,22 +202,25 @@ public static class UndoSequence
 
     /// <summary>
     /// D91's "Stash changes and check out": the carried changes are stashed again (tracked files
-    /// only, as D91), HEAD switches back, the stash is popped; the redo is the mirror.
+    /// only, as D91), HEAD switches back, the stash is popped onto the commit HEAD was at; the redo
+    /// is the mirror.
     /// </summary>
     private static IReadOnlyList<UndoEffect> StashAndCheckout(UndoEntry entry, bool undo)
     {
         var (from, to) = undo ? (entry.After, entry.Before) : (entry.Before, entry.After);
         var created = Created(entry, HeadsPrefix).FirstOrDefault();
         IReadOnlyList<UndoEffect> branch = created is null ? [] : CreatedBranch(entry, created, undo);
+        var pop = new StashPop(null, null) { Onto = to.Head };
         return undo
-            ? [new StashPush(IncludeUntracked: false, Message: null, from.Status), new Switch(from.Head, to.Head), .. branch, new StashPop(null, null)]
-            : [new StashPush(IncludeUntracked: false, Message: null, from.Status), .. branch, new Switch(from.Head, to.Head), new StashPop(null, null)];
+            ? [new StashPush(IncludeUntracked: false, Message: null, from.Status), new Switch(from.Head, to.Head), .. branch, pop]
+            : [new StashPush(IncludeUntracked: false, Message: null, from.Status), .. branch, new Switch(from.Head, to.Head), pop];
     }
 
     /// <summary>
     /// The automatic stash's checkout (9.2, D166): HEAD switches back to the branch and the stash
-    /// it made is popped; the redo stashes again, untracked files included, with its message, and
-    /// switches to the commit. Without a stash (nothing was left to stash) it is a switch alone.
+    /// it made is popped onto the commit it was made on (the branch must not have moved since);
+    /// the redo stashes again, untracked files included, with its message, and switches to the
+    /// commit. Without a stash (nothing was left to stash) it is a switch alone.
     /// </summary>
     private static IReadOnlyList<UndoEffect> AutoStashCheckout(UndoEntry entry, bool undo)
     {
@@ -228,7 +231,7 @@ public static class UndoSequence
         }
 
         return undo
-            ? [new Switch(entry.After.Head, entry.Before.Head), new StashPop(stash, entry.After.Status)]
+            ? [new Switch(entry.After.Head, entry.Before.Head), new StashPop(stash, entry.After.Status) { Onto = entry.Before.Head }]
             : [new StashPush(IncludeUntracked: true, captured.StashMessage, entry.Before.Status), new Switch(entry.Before.Head, entry.After.Head)];
     }
 
@@ -253,12 +256,12 @@ public static class UndoSequence
             : [new BranchConfig(branch, keysBefore, keysAfter), new SetRef(fullName, tip, null)];
     }
 
-    /// <summary>A stash is popped back with its index; the redo stashes again with the same options and message (the entry takes the new stash).</summary>
+    /// <summary>A stash is popped back with its index onto the commit it was made on; the redo stashes again with the same options and message (the entry takes the new stash).</summary>
     private static IReadOnlyList<UndoEffect> Stash(UndoEntry entry, bool undo)
     {
         var captured = entry.Captured;
         return undo
-            ? [new StashPop(captured.Stash ?? throw Missing(entry, "the stash made"), entry.After.Status)]
+            ? [new StashPop(captured.Stash ?? throw Missing(entry, "the stash made"), entry.After.Status) { Onto = entry.After.Head }]
             : [new StashPush(captured.StashIncludedUntracked, captured.StashMessage, entry.Before.Status)];
     }
 
@@ -357,9 +360,10 @@ public static class UndoSequence
 
     /// <summary>
     /// An added or removed remote: its keys (and <c>remote.pushDefault</c> when it named it), the
-    /// branches' keys git removed with it, and its remote branches, which come back from the
-    /// recorded tips (the <c>remote-</c> backup holds them too). Keys are written before the
-    /// branches are set, and removed after they are deleted.
+    /// branches' keys git removed with it, and its remote branches and <c>&lt;r&gt;/HEAD</c>, which
+    /// come back from the recorded tips (the <c>remote-</c> backup holds them too). Keys are
+    /// written before the branches are set, and removed after they are deleted; the removal of
+    /// the keys deletes what a fetch since put under the remote (<see cref="RemoteConfig"/>).
     /// </summary>
     private static IReadOnlyList<UndoEffect> Remote(UndoEntry entry, bool undo)
     {
@@ -370,8 +374,9 @@ public static class UndoSequence
             .Select(branch => (UndoEffect)new BranchConfig(branch, BranchKeys(from, branch), BranchKeys(to, branch)))
             .ToList();
         var refs = ChangedRefs(entry, RemotesPrefix + remote + "/", undo);
+        var symbolic = ChangedSymbolicRefs(entry, RemotesPrefix + remote + "/", undo);
         var creates = !from.Config.Any(ConfigScope.Remote(remote).Covers);
-        return creates ? [keys, .. branches, .. refs] : [.. refs, .. branches, keys];
+        return creates ? [keys, .. branches, .. refs, .. symbolic] : [.. symbolic, .. refs, .. branches, keys];
     }
 
     private static IReadOnlyList<UndoEffect> RenameRemote(UndoEntry entry, bool undo)
@@ -425,6 +430,23 @@ public static class UndoSequence
         ];
     }
 
+    /// <summary>The symbolic refs under <paramref name="prefix"/> that the action created, deleted or pointed elsewhere, set back or forth.</summary>
+    private static IReadOnlyList<UndoEffect> ChangedSymbolicRefs(UndoEntry entry, string prefix, bool undo)
+    {
+        var before = entry.Before.SymbolicRefs;
+        var after = entry.After.SymbolicRefs;
+        return
+        [
+            .. before.Keys.Union(after.Keys, StringComparer.Ordinal)
+                .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
+                .Where(name => !string.Equals(before.GetValueOrDefault(name), after.GetValueOrDefault(name), StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal)
+                .Select(name => (UndoEffect)(undo
+                    ? new SymbolicRef(name, after.GetValueOrDefault(name), before.GetValueOrDefault(name))
+                    : new SymbolicRef(name, before.GetValueOrDefault(name), after.GetValueOrDefault(name)))),
+        ];
+    }
+
     /// <summary>The branches other than <paramref name="branch"/> that the action moved (a rebase's <c>update-ref</c> lines).</summary>
     private static IReadOnlyList<UndoEffect> OtherBranches(UndoEntry entry, string? branch, bool undo) =>
         ChangedRefs(entry, HeadsPrefix, undo, branch is null ? null : HeadsPrefix + branch);
@@ -448,15 +470,16 @@ public static class UndoSequence
     private static IReadOnlyList<RecordedFile> FilesOf(UndoState state, IReadOnlyList<string> paths) =>
         [.. state.Files.Where(file => paths.Contains(file.Path, StringComparer.Ordinal))];
 
-    private static IReadOnlyList<ConfigEntry> BranchKeys(UndoState state, string branch) =>
+    /// <summary>A branch's keys: <c>branch.&lt;b&gt;.*</c>, in the order read.</summary>
+    internal static IReadOnlyList<ConfigEntry> BranchKeys(UndoState state, string branch) =>
         [.. state.Config.Where(ConfigScope.Branch(branch).Covers)];
 
     /// <summary>A remote's keys, and <c>remote.pushdefault</c> when it names the remote.</summary>
-    private static IReadOnlyList<ConfigEntry> RemoteKeys(UndoState state, string remote) =>
+    internal static IReadOnlyList<ConfigEntry> RemoteKeys(UndoState state, string remote) =>
         [.. state.Config.Where(key => ConfigScope.Remote(remote).Covers(key)
             || (string.Equals(key.Key, "remote.pushdefault", StringComparison.OrdinalIgnoreCase) && string.Equals(key.Value, remote, StringComparison.Ordinal)))];
 
-    private static IEnumerable<string> RemoteNames(UndoState state) =>
+    internal static IEnumerable<string> RemoteNames(UndoState state) =>
         state.Config.Where(key => string.Equals(key.Section, "remote", StringComparison.OrdinalIgnoreCase)).Select(key => key.Subsection).OfType<string>().Distinct(StringComparer.Ordinal);
 
     /// <summary>The subsections of <paramref name="section"/> whose keys differ between the two states, in order.</summary>

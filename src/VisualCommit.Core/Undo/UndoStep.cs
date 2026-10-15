@@ -35,6 +35,12 @@ public enum UndoRefusalKind
     /// <summary>An operation is in progress (the app's own check: <c>update-ref</c> refuses nothing).</summary>
     InProgress,
 
+    /// <summary>
+    /// The index has conflicts and no operation is in progress (7.4's "Resolve the conflicts
+    /// first"), other than those an apply's or a pop's undo puts back as they were (<see cref="UndoRefusal.Paths"/>: the conflicted files).
+    /// </summary>
+    Conflicts,
+
     /// <summary>HEAD is no longer on the branch (<see cref="UndoRefusal.Name"/>).</summary>
     HeadNotOnBranch,
 
@@ -52,6 +58,15 @@ public enum UndoRefusalKind
 
     /// <summary>A tag of the name exists again.</summary>
     TagExists,
+
+    /// <summary>
+    /// A branch's or a remote's settings (<see cref="UndoRefusal.Name"/>) are no longer those the
+    /// step leaves: an upstream set or stopped since, a remote's keys or URL changed, a remote gone.
+    /// </summary>
+    ConfigChanged,
+
+    /// <summary>A remote of the name (<see cref="UndoRefusal.Name"/>) exists again.</summary>
+    RemoteExists,
 
     /// <summary>The branch is checked out in another worktree (<see cref="UndoRefusal.Name"/>, its folder in <see cref="UndoRefusal.Paths"/>).</summary>
     CheckedOutElsewhere,
@@ -80,7 +95,7 @@ public enum UndoRefusalKind
     /// <summary>The commits no longer exist (<c>cat-file -e</c> failed: an outside <c>gc</c>).</summary>
     CommitsGone,
 
-    /// <summary>The ref on the remote changed since (the lease): <see cref="UndoRefusal.Name"/> on the remote.</summary>
+    /// <summary>The ref on the remote changed since (the lease): <see cref="UndoRefusal.Name"/> (its short name) on <see cref="UndoRefusal.Remote"/>.</summary>
     RemoteChanged,
 
     /// <summary>A file has a flag git cannot restore: intent-to-add or skip-worktree (<see cref="UndoRefusal.Paths"/>).</summary>
@@ -93,7 +108,8 @@ public enum UndoRefusalKind
 /// <summary>Why a step was refused, with what the app's text names.</summary>
 /// <param name="Kind">The check that refused.</param>
 /// <param name="Name">The branch, tag, ref or remote the text names, when it names one.</param>
-/// <param name="Sha">The commit the text names (where a branch is now), when it names one.</param>
+/// <param name="Sha">The commit the text names (where a branch is now; null when it no longer exists), when it names one.</param>
 /// <param name="Paths">The files (or the folder) the text names or counts.</param>
 /// <param name="GitOutput">Git's own output, shown below the summary, when git refused.</param>
-public sealed record UndoRefusal(UndoRefusalKind Kind, string? Name = null, string? Sha = null, IReadOnlyList<string>? Paths = null, string? GitOutput = null);
+/// <param name="Remote">The remote whose ref changed (<see cref="UndoRefusalKind.RemoteChanged"/>).</param>
+public sealed record UndoRefusal(UndoRefusalKind Kind, string? Name = null, string? Sha = null, IReadOnlyList<string>? Paths = null, string? GitOutput = null, string? Remote = null);
