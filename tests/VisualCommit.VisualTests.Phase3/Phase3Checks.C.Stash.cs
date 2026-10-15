@@ -200,7 +200,9 @@ public sealed partial class Phase3ChecksC
             PartC.T5,
             PartC.T5Key));
         AssertErrorDialogParts(app, extra: null);
-        Assert.Equal(1, app.LastCall("git stash pop stash@{0}").ExitCode);
+        // Git refuses with exit 1 up to 2.55 and with 128 from 2.56 (CI's Windows runner, run
+        // 38723225901); the dialog and the stash list above and below are the same on both.
+        Assert.Contains(app.LastCall("git stash pop stash@{0}").ExitCode, new int?[] { 1, 128 });
         AssertStatus(app, "Pop stash@{0} failed", OperationStatusTone.Danger);
         Assert.Equal(["stash@{0}: On main: Experiment"], await StashListAsync(repo));
         Assert.Equal(["# Operations", string.Empty, "Local edit."], FileLines(repo, "README.md"));
