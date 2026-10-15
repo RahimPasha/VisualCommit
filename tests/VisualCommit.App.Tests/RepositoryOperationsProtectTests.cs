@@ -499,23 +499,51 @@ public class RepositoryOperationsProtectTests
         app.AssertScriptFollowed();
     }
 
-    [Fact]
-    public async Task A_pull_whose_merge_git_refuses_for_an_untracked_file_counts_it()
+    [Theory]
+    [InlineData("src/remote.txt", "src/remote.txt")]
+    [InlineData("src/remote", "src/remote/mine.txt")]
+    public async Task A_pull_whose_fast_forward_git_refuses_for_an_untracked_file_or_folder_counts_it(string pushed, string mine)
     {
         using var repo = await Scenarios.RemoteSyncAsync();
-        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/remote.txt", "remote\n", "Remote change");
-        repo.WriteFile("src/remote.txt", "mine\n");
+        await Scenarios.PushFromElsewhereAsync(repo, "main", pushed, "remote\n", "Remote change");
+        repo.WriteFile(mine, "mine\n");
         using var app = await OperationsHarness.OpenAsync(repo);
         var head = await repo.HeadAsync();
         app.Dialogs.CloseError();
 
         await app.Operations.PullAsync();
 
+        // Git's untracked-files block, or its folder block, which reads the same as a checkout's
+        // (9.3's second table: pull's merge and fast-forward say what a merge says).
         var dialog = Assert.Single(app.Dialogs.Errors);
         Assert.Equal(("Pull failed", "1 conflict prevents the merge. Commit, stash, or discard your changes first."), (dialog.Title, dialog.Summary));
-        Assert.Contains("src/remote.txt", dialog.Output, StringComparison.Ordinal);
+        Assert.StartsWith("git merge ", dialog.Command, StringComparison.Ordinal);
+        Assert.Contains(pushed, dialog.Output, StringComparison.Ordinal);
         Assert.Equal(head, await repo.HeadAsync());
-        Assert.Equal("mine\n", Read(repo, "src/remote.txt"));
+        Assert.Equal("mine\n", Read(repo, mine));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_pull_whose_rebase_git_refuses_for_an_untracked_folder_is_not_told_as_a_merge()
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "src/remote", "remote\n", "Remote change");
+        await repo.CommitFileAsync("local.txt", "local\n", "Local work");
+        repo.WriteFile("src/remote/mine.txt", "mine\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var head = await repo.HeadAsync();
+        app.Dialogs.CloseError();
+
+        await app.Operations.PullRebaseAsync();
+
+        // The rebase's own checkout refused: the pull's default summary, not 9.3's merge sentence.
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Pull failed", "Git could not pull origin/main into main."), (dialog.Title, dialog.Summary));
+        Assert.StartsWith("git rebase", dialog.Command, StringComparison.Ordinal);
+        Assert.Contains("Updating the following directories would lose untracked files in them:", dialog.Output, StringComparison.Ordinal);
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal("mine\n", Read(repo, "src/remote/mine.txt"));
         app.AssertScriptFollowed();
     }
 
