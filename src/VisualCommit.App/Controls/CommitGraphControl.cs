@@ -36,6 +36,10 @@ namespace VisualCommit.App.Controls;
 /// (<see cref="ContextRequestedAt"/>), and a branch label can be dragged onto another
 /// (CommitGraphControl.Drag.cs, with the window's <c>BranchDragService</c>).
 /// </para>
+/// <para>
+/// Phase 5: a stash's line down to the commit it was made on is dashed, as the working-changes
+/// row's is (docs/phase-5-design.md section 10, D161).
+/// </para>
 /// </remarks>
 public sealed partial class CommitGraphControl : Control
 {
