@@ -166,15 +166,15 @@ public partial class RepositoryMenusTests
         var (actions, recorder) = RecordingActions.Create();
         var unborn = Context(new RepoRefs(new HeadState("main", null), [], [], []));
 
-        Assert.Equal(["Local branches", "Create branch… (disabled: \"Make the first commit first\")", "Show reflog", "Show backups"], Lines(RepositoryMenus.ForSection(unborn, RefSection.LocalBranches, actions)!));
+        Assert.Equal(["Local branches", "Create branch… (disabled: \"Make the first commit first\")", "Show reflog", "Show backups", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"], Lines(RepositoryMenus.ForSection(unborn, RefSection.LocalBranches, actions)!));
         var empty = RepositoryMenus.ForEmptyGraphArea(unborn, actions);
         Assert.Equal(["Show reflog", "Show backups", "Manage remotes…"], Lines(empty)[^3..]);
         Assert.True(empty.Items.Single(item => item.Label == "Show reflog").IsEnabled);
         Invoke(empty, "Show reflog", "Show backups");
         Assert.Equal(["ShowReflogAsync()", "ShowBackupsAsync()"], recorder.Calls.Select(call => call.ToString()));
 
-        // B8 step 1: the Local branches section, 110 high with these (162 with part F's two items).
-        Assert.Equal(110, Height(RepositoryMenus.ForSection(Context(HistoryRefs()), RefSection.LocalBranches, actions)!));
+        // B8 step 1: the Local branches section, 162 high with these and part F's two items (110 without part F's).
+        Assert.Equal(162, Height(RepositoryMenus.ForSection(Context(HistoryRefs()), RefSection.LocalBranches, actions)!));
 
         // Only a local branch has "Show reflog of {b}".
         Assert.DoesNotContain(Lines(RepositoryMenus.ForRemoteBranch(Context(HistoryRefs()), "refs/remotes/origin/main", actions)), line => line.StartsWith("Show reflog", StringComparison.Ordinal));

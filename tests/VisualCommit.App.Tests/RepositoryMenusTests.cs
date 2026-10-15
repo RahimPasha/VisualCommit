@@ -823,7 +823,7 @@ public partial class RepositoryMenusTests
             default);
         var context = Context(refs) with { Filters = filters };
 
-        Assert.Equal(["Compare topic with main", "Show topic", "Solo topic", "—", "Copy branch name"], Lines(RepositoryMenus.ForLocalBranch(context, topic.FullName, actions)).TakeLast(5));
+        Assert.Equal(["Compare topic with main", "Show reflog of topic", "Show topic", "Solo topic", "—", "Copy branch name"], Lines(RepositoryMenus.ForLocalBranch(context, topic.FullName, actions)).TakeLast(6));
         Assert.Equal(["Hide main (disabled: \"The checked-out branch is always shown\")", "Stop soloing main", "—", "Copy branch name"], Lines(RepositoryMenus.ForLocalBranch(context, "refs/heads/main", actions)).TakeLast(4));
         Assert.Equal(["Compare origin/topic with main", "Show origin/topic", "Solo origin/topic", "—", "Copy branch name"], Lines(RepositoryMenus.ForRemoteBranch(context, "refs/remotes/origin/topic", actions)).TakeLast(5));
         Assert.Equal(["Show every branch of origin", "—", "Copy URL", "Manage remotes…"], Lines(RepositoryMenus.ForRemote(context, "origin", actions)).TakeLast(4));
@@ -863,7 +863,7 @@ public partial class RepositoryMenusTests
         var (actions, recorder) = RecordingActions.Create();
         var topic = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, MainWork);
         var unborn = new RepoRefs(new HeadState("main", null), [topic], [], []);
-        Assert.Equal("Compare topic with main (disabled: \"HEAD is unborn\")", Lines(RepositoryMenus.ForLocalBranch(Context(unborn), topic.FullName, actions))[^5]);
+        Assert.Equal("Compare topic with main (disabled: \"HEAD is unborn\")", Lines(RepositoryMenus.ForLocalBranch(Context(unborn), topic.FullName, actions))[^6]);
 
         var detached = new RepoRefs(new HeadState(null, AlphaTwo), [topic], [], []);
         var compare = RepositoryMenus.ForLocalBranch(Context(detached), topic.FullName, actions).Items.Single(item => item.Label == "Compare topic with HEAD");

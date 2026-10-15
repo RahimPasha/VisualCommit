@@ -47,7 +47,7 @@ public class HideAndSoloTests
         // Step 3: Hide feature/alpha, with its upstream.
         var refsBefore = (await repo.GitAsync("for-each-ref")).StandardOutput;
         app.RightClick(await app.RefRowAsync("Local branches", "feature", "alpha"));
-        Assert.Equal(["Compare feature/alpha with main", "Hide feature/alpha", "Solo feature/alpha", "—", "Copy branch name"], app.Menu().Lines().TakeLast(5));
+        Assert.Equal(["Compare feature/alpha with main", "Show reflog of feature/alpha", "Hide feature/alpha", "Solo feature/alpha", "—", "Copy branch name"], app.Menu().Lines().TakeLast(6));
         app.ClickMenuItem("Hide feature/alpha");
         await app.WaitForGraphReloadAsync();
         Assert.Equal(12, repository.Graph.Count);
