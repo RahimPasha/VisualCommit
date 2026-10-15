@@ -142,7 +142,11 @@ public partial class FileHistoryView : UserControl
         FileHistoryList.Focus(NavigationMethod.Unspecified);
     }
 
-    /// <summary>A row's menu (4.1, BD8, BD9): a right-click selects the row as a click does, then opens it at the pointer; the Menu key and Shift+F10 at the selected row's bottom-left corner.</summary>
+    /// <summary>
+    /// A row's menu (4.1, BD8, BD9): a right-click on a row selects it as a click does, then opens
+    /// it at the pointer, and one on the list's empty part opens nothing; the Menu key and
+    /// Shift+F10 open the selected row's at its bottom-left corner.
+    /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (e.Handled || _viewModel is not { IsClosed: false } viewModel || ContextMenuRequests.Layer(this) is not { } layer)
@@ -150,7 +154,7 @@ public partial class FileHistoryView : UserControl
             return;
         }
 
-        var item = ContextMenuRequests.Find<ListBoxItem>(e.Source) ?? (FileHistoryList.SelectedIndex >= 0 ? FileHistoryList.ContainerFromIndex(FileHistoryList.SelectedIndex) as ListBoxItem : null);
+        var item = ContextMenuRequests.Find<ListBoxItem>(e.Source) ?? (!e.TryGetPosition(this, out _) ? SelectedItem(FileHistoryList) : null);
         if (item?.DataContext is not FileHistoryRowViewModel row)
         {
             return;
@@ -172,6 +176,10 @@ public partial class FileHistoryView : UserControl
             e.Handled = true;
         }
     }
+
+    /// <summary>The selected row's container in <paramref name="list"/>, or null: what the Menu key and Shift+F10 open the menu of.</summary>
+    internal static ListBoxItem? SelectedItem(ListBox list) =>
+        list.SelectedIndex >= 0 ? list.ContainerFromIndex(list.SelectedIndex) as ListBoxItem : null;
 
     /// <summary>
     /// Esc (11.1, <see cref="EscapeOrder.Page"/>): the page closes and the graph takes the focus;

@@ -58,8 +58,13 @@ public class ShellDriverPhase5PagesTests
         for (var row = 0; row < 4; row++)
         {
             Assert.Equal(new Rect(260, 124 + (26 * row), 440, 26), page.Rows[row].Bounds);
-            Assert.Equal((null, null), (page.Rows[row].Author, page.Rows[row].Date));
+            Assert.Equal((false, false), (page.Rows[row].AuthorShown, page.Rows[row].DateShown));
         }
+
+        // BD2: at 440 the author and date columns are hidden, and the surface still holds them.
+        Assert.Equal(
+            [("Jonas Berg", "2026-01-01 12:13"), ("Mira Kovac", "2026-01-01 12:06"), ("Jonas Berg", "2026-01-01 12:03"), ("Mira Kovac", "2026-01-01 12:01")],
+            page.Rows.Select(row => (row.Author, row.Date)));
 
         Assert.True(page.Rows[0].IsSelected);
         Assert.True(page.Rows[0].HasFocus);
@@ -77,6 +82,16 @@ public class ShellDriverPhase5PagesTests
         Assert.Equal(7, repository.SelectedIndex);
         Assert.Equal("Rename the parser to reader", repository.Details.Subject);
         Assert.True(app.FileHistorySnapshot().Rows[1].HasFocus);
+
+        // A right-click on the list below its rows opens nothing (no row lies under it); the
+        // Menu key opens the selected row's menu at its bottom-left corner.
+        app.RightClick(new Point(420, 124 + (4 * 26) + 60));
+        Assert.False(app.IsMenuOpen);
+        Assert.Equal(7, repository.SelectedIndex);
+        app.PressKey(Key.F10, RawInputModifiers.Shift);
+        Assert.Equal("0575c7f Rename the parser to reader", app.Menu().Lines()[0]);
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen && app.FileHistorySnapshot().Rows[1].HasFocus, "the menu to close");
 
         // Down walks the list (step 6) and Esc closes the page, the graph taking the focus (11.1).
         app.PressKey(Key.Down);
@@ -170,10 +185,32 @@ public class ShellDriverPhase5PagesTests
         Assert.Equal(["HEAD@{1}", "HEAD@{11}", "HEAD@{17}", "HEAD@{23}", "HEAD@{33}"], reflog.Rows.Where(row => row.IsLost).Select(row => row.Selector));
         Assert.Equal("1 entry is not shown: it names no commit that exists", reflog.Footer);
 
+        // An entry whose commit main already has (HEAD@{12}, 316166a "Clash notes"): its
+        // cherry-pick is disabled as phase 3's commit menu's is (2.12).
+        app.RightClick(app.ReflogRowPoint("HEAD@{12}"));
+        Assert.Contains("Cherry-pick onto main (disabled: \"This commit is already on main\")", app.Menu().Lines());
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+
         // Step 8: the graph has it now; a click selects it behind the page.
         app.Click(app.ReflogRowPoint("HEAD@{9}"));
         app.WaitForCommitDetails();
         Assert.Equal(1, repository.SelectedIndex);
+
+        // A refresh reads the reflog again: the focused row keeps its container and the focus,
+        // and the marks stay where they are.
+        var list = app.Find<ListBox>("ReflogList");
+        var index = app.ReflogSnapshot().Rows.ToList().FindIndex(row => row.Selector == "HEAD@{9}");
+        var container = list.ContainerFromIndex(index);
+        Assert.True(app.ReflogSnapshot().Rows[index].HasFocus);
+        reads = app.ReflogSnapshot().ReadsShown;
+        await repository.RefreshAsync();
+        await app.WaitForReflogReadAsync(reads);
+        reflog = app.ReflogSnapshot();
+        Assert.Same(container, list.ContainerFromIndex(index));
+        Assert.True(reflog.Rows[index].HasFocus);
+        Assert.Equal("HEAD@{9}", reflog.Selected?.Selector);
+        Assert.Equal(["HEAD@{1}", "HEAD@{11}", "HEAD@{17}", "HEAD@{23}", "HEAD@{33}"], reflog.Rows.Where(row => row.IsLost).Select(row => row.Selector));
     }
 
     [AvaloniaFact]
@@ -198,7 +235,7 @@ public class ShellDriverPhase5PagesTests
         Assert.Null(page.From);
         Assert.Equal((260, 827), (page.ListBounds.Left, page.ListBounds.Right));
         Assert.Equal(new Rect(827, 124, 693, 930), page.DiffBounds);
-        Assert.Equal(("Mira Kovac", null), (page.Rows[1].Author, page.Rows[1].Date));
+        Assert.Equal(("Mira Kovac", true, false), (page.Rows[1].Author, page.Rows[1].AuthorShown, page.Rows[1].DateShown));
         Assert.Equal(0, repository.SelectedIndex);
     }
 
@@ -255,7 +292,7 @@ public class ShellDriverPhase5PagesTests
         app.Click(app.BlameTextPoint(10, 9));
         app.WaitForCommitDetails();
         Assert.Equal(("Handle empty input", 10), (repository.Details.Subject, repository.SelectedIndex));
-        Assert.Equal(["VcSelectionBrush", "VcPanelBackgroundBrush"], new[] { app.BlameSnapshot().Runs[6].Background, app.BlameSnapshot().Runs[8].Background });
+        Assert.Equal(("VcSelectionBrush", "VcPanelBackgroundBrush"), (app.BlameSnapshot().Runs[6].Background, app.BlameSnapshot().Runs[8].Background));
 
         // Step 11: a double-click on a run shows its commit in the graph.
         app.DoubleClick(app.BlameGutterPoint(20));
@@ -349,6 +386,11 @@ public class ShellDriverPhase5PagesTests
         Assert.Equal((532, 692), (app.BackupWordsBounds(top.Name).Right + 8, top.CommitBounds!.Value.Left + 160));
         Assert.Equal(new Point(420, 501), app.BackupRowPoint("abort-20260101T120601000Z"));
         Assert.Equal("Backups", AutomationProperties.GetName(app.FindByAutomationId("Reflog")));
+
+        // A right-click below the last row opens no menu, also with a row selected.
+        app.Click(app.BackupRowPoint("abort-20260101T120601000Z"));
+        app.RightClick(new Point(420, 600));
+        Assert.False(app.IsMenuOpen);
     }
 
     [AvaloniaFact]

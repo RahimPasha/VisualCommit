@@ -101,7 +101,11 @@ public partial class ReflogView : UserControl
         e.Handled = true;
     }
 
-    /// <summary>A row's menu (5.2, 5.3, BD8, BD9): a right-click selects the row as a click does, then opens it at the pointer; the Menu key and Shift+F10 at the selected row's bottom-left corner.</summary>
+    /// <summary>
+    /// A row's menu (5.2, 5.3, BD8, BD9): a right-click on a row selects it as a click does, then
+    /// opens it at the pointer, and one on the list's empty part opens nothing; the Menu key and
+    /// Shift+F10 open the selected row's at its bottom-left corner.
+    /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (e.Handled || _viewModel is not { IsClosed: false } viewModel || ContextMenuRequests.Layer(this) is not { } layer)
@@ -109,7 +113,7 @@ public partial class ReflogView : UserControl
             return;
         }
 
-        var item = ContextMenuRequests.Find<ListBoxItem>(e.Source) ?? (ReflogList.SelectedIndex >= 0 ? ReflogList.ContainerFromIndex(ReflogList.SelectedIndex) as ListBoxItem : null);
+        var item = ContextMenuRequests.Find<ListBoxItem>(e.Source) ?? (!e.TryGetPosition(this, out _) ? FileHistoryView.SelectedItem(ReflogList) : null);
         if (item?.DataContext is not PageListRow row)
         {
             return;

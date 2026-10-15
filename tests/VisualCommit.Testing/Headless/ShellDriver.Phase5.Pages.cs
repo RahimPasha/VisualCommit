@@ -57,7 +57,7 @@ public sealed partial class ShellDriver
                 return found is not null && found.Bounds.Height > 0 && found.DataContext switch
                 {
                     FileHistoryViewModel history => !history.ShowsLoading,
-                    BlameViewModel blame => !blame.ShowsLoading && (!blame.ShowsText || Find<BlameTextEditor>(found, "BlameText").TextView.VisualLinesValid),
+                    BlameViewModel blame => !blame.ShowsLoading && (!blame.ShowsText || Find<BlameTextEditor>(found, "BlameText") is { TextView.VisualLinesValid: true, IsTokenizing: false }),
                     ReflogViewModel reflog => !reflog.ShowsLoading && reflog.ReadsShown > 0,
                     _ => false,
                 };
@@ -75,11 +75,20 @@ public sealed partial class ShellDriver
             $"the file history to list {rows} rows",
             timeout);
 
-    /// <summary>Waits until the reflog page has shown a read after <paramref name="readsShown"/> (it reads again on every refresh, 5.2): an operation's effect is in it then.</summary>
+    /// <summary>
+    /// Waits until the reflog page has shown a read after <paramref name="readsShown"/> (it reads
+    /// again on every refresh, 5.2) that was made for the repository's refs as they are now, lost
+    /// marks included: after <see cref="WaitForIdleAsync"/>, whose operation's refresh has handed
+    /// the page its refs, the operation's effect is in it then. A read asked for before the
+    /// operation, which may still end after the count was taken, does not count.
+    /// </summary>
     public Task WaitForReflogReadAsync(int readsShown, TimeSpan? timeout = null) =>
         WaitForAsync(
-            () => ShownPage is ReflogView { DataContext: ReflogViewModel reflog } && reflog.ReadsShown > readsShown,
-            "the reflog page to read again",
+            () => ShownPage is ReflogView { DataContext: ReflogViewModel reflog }
+                && reflog.ReadsShown > readsShown
+                && Session.Shell.ActiveTab.Repository is { Refs: { } refs }
+                && ReferenceEquals(reflog.ShownFor, refs),
+            "the reflog page to show a read of the refs as they are now",
             timeout);
 
     /// <summary>The file history page as drawn now. Throws when it is not shown.</summary>
@@ -103,8 +112,10 @@ public sealed partial class ShellDriver
                 row.ShortSha,
                 row.Subject,
                 ShownText(drawn, "FileHistorySecondary"),
-                ShownText(drawn, "FileHistoryAuthor"),
-                ShownText(drawn, "FileHistoryDate"),
+                row.Author,
+                row.DateText,
+                ShownBounds(drawn, "FileHistoryAuthor"),
+                ShownBounds(drawn, "FileHistoryDate"),
                 drawn is null ? null : BoundsOf(drawn),
                 ReferenceEquals(model.SelectedRow, row),
                 drawn?.IsFocused == true,
@@ -147,17 +158,21 @@ public sealed partial class ShellDriver
         var gutter = Find<BlameGutter>(view, "BlameGutter");
         var text = Find<BlameTextEditor>(view, "BlameText");
         var gutterOrigin = BoundsOf(gutter).TopLeft;
-        var runs = model.Runs.Select(run => new BlameRunSnapshot(
-            run.Index,
-            run.FirstLine,
-            run.LastLine,
-            run.Commit.Sha,
-            gutter.Runs.Count > run.Index ? [.. gutter.TextsOf(run.Index).Select(part => new BlameGutterText(part.Text, gutterOrigin.X + part.X, part.Width))] : [],
-            ReferenceEquals(model.SelectedRun, run) || model.SelectedRun?.Index == run.Index
-                ? "VcSelectionBrush"
-                : run.IsEven ? "VcPanelBackgroundBrush" : "VcWindowBackgroundBrush",
-            model.SelectedRun?.Index == run.Index,
-            model.ToolTipOf(run))).ToList();
+
+        // What the gutter draws: its own runs' texts, brushes and picked run, as Render paints them.
+        var runs = model.Runs.Select(run =>
+        {
+            var drawn = gutter.Runs.Count > run.Index;
+            return new BlameRunSnapshot(
+                run.Index,
+                run.FirstLine,
+                run.LastLine,
+                run.Commit.Sha,
+                drawn ? [.. gutter.TextsOf(run.Index).Select(part => new BlameGutterText(part.Text, gutterOrigin.X + part.X, part.Width))] : [],
+                drawn ? gutter.BackgroundKeyOf(run.Index) : null,
+                gutter.SelectedRun == run.Index,
+                drawn ? gutter.Runs[run.Index].ToolTip : model.ToolTipOf(run));
+        }).ToList();
         return new BlameSnapshot(
             BoundsOf(view),
             model.Title,
@@ -389,8 +404,10 @@ public sealed record FileHistorySnapshot(
 /// <param name="ShortSha">The short SHA.</param>
 /// <param name="Subject">The subject.</param>
 /// <param name="Secondary">The secondary text as drawn, or null when its column is hidden, it has none, or the row is not drawn.</param>
-/// <param name="Author">The author as drawn, or null when the column is hidden.</param>
-/// <param name="Date">The date as drawn, or null when the column is hidden.</param>
+/// <param name="Author">The row's author, which its author column shows while it is visible (BD2: the surface holds it also when hidden).</param>
+/// <param name="Date">The row's date, <c>yyyy-MM-dd HH:mm</c>, which its date column shows while it is visible.</param>
+/// <param name="AuthorBounds">The author column in the window, or null when it is hidden or the row is not drawn.</param>
+/// <param name="DateBounds">The date column in the window, or null when it is hidden or the row is not drawn.</param>
 /// <param name="Bounds">The row in the window, or null when it is not drawn.</param>
 /// <param name="IsSelected">The row is selected.</param>
 /// <param name="HasFocus">The row has the keyboard focus.</param>
@@ -402,12 +419,21 @@ public sealed record FileHistoryRowSnapshot(
     string ShortSha,
     string Subject,
     string? Secondary,
-    string? Author,
-    string? Date,
+    string Author,
+    string Date,
+    Rect? AuthorBounds,
+    Rect? DateBounds,
     Rect? Bounds,
     bool IsSelected,
     bool HasFocus,
-    Color? Background);
+    Color? Background)
+{
+    /// <summary>The author column is drawn.</summary>
+    public bool AuthorShown => AuthorBounds is not null;
+
+    /// <summary>The date column is drawn.</summary>
+    public bool DateShown => DateBounds is not null;
+}
 
 /// <summary>The blame page as drawn (4.2, 13.4), in the window's coordinates.</summary>
 /// <param name="Bounds">The page.</param>
@@ -442,10 +468,10 @@ public sealed record BlameSnapshot(
 /// <param name="LastLine">Its last line.</param>
 /// <param name="Sha">Its commit (the zero id for lines not committed yet).</param>
 /// <param name="Texts">What its first line draws, left to right, with each text's left edge in the window and its width.</param>
-/// <param name="Background">The brush its lines are drawn on: <c>VcPanelBackgroundBrush</c>, <c>VcWindowBackgroundBrush</c> or <c>VcSelectionBrush</c>.</param>
-/// <param name="IsSelected">It is the picked run.</param>
-/// <param name="ToolTip">Its tooltip (BD11).</param>
-public sealed record BlameRunSnapshot(int Index, int FirstLine, int LastLine, string Sha, IReadOnlyList<BlameGutterText> Texts, string Background, bool IsSelected, string ToolTip);
+/// <param name="Background">The key of the brush the gutter draws its lines on: <c>VcPanelBackgroundBrush</c>, <c>VcWindowBackgroundBrush</c> or <c>VcSelectionBrush</c>; null while the gutter does not have the run.</param>
+/// <param name="IsSelected">The gutter draws it as the picked run.</param>
+/// <param name="ToolTip">Its tooltip (BD11), as the gutter shows it.</param>
+public sealed record BlameRunSnapshot(int Index, int FirstLine, int LastLine, string Sha, IReadOnlyList<BlameGutterText> Texts, string? Background, bool IsSelected, string ToolTip);
 
 /// <summary>A text a gutter run's first line draws, with its left edge in the window and its width.</summary>
 public sealed record BlameGutterText(string Text, double X, double Width);
