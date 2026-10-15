@@ -389,6 +389,8 @@ public static partial class Phase4Expectations
             "—",
             "Check out feature/rebase and rebase it onto main",
             "Check out feature/rebase and rebase it onto main interactively…",
+            "—",
+            "Compare feature/rebase with main",
         ];
 
         // ---- The details panel. ----

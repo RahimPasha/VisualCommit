@@ -1,0 +1,309 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Shell"
+             xmlns:panels="using:VisualCommit.App.ViewModels.Panels"
+             x:Class="VisualCommit.App.Views.Shell.CompareView"
+             x:DataType="vm:CompareViewModel"
+             AutomationProperties.AutomationId="Compare"
+             AutomationProperties.Name="{Binding Title}">
+
+  <!-- A comparison in the right panel (docs/phase-5-design.md 6.4): it covers the commit details
+       in the slot phase 3's list of selected commits uses. A 36-high header with the title, the
+       swap button and, for branches, the close button; then From and To as links that reveal
+       their commits, the counts and the switch for branches, what the comparison says about
+       itself, "Loading…" until the list is read; then "Changed files (N)" with Flat and Tree, and
+       phase 1's rows, each opening its diff in the graph area. -->
+  <UserControl.Resources>
+    <!-- From and To: text in the accent colour; disabled (no row in the graph) in the disabled colour. -->
+    <ControlTheme x:Key="CompareLinkButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+    </ControlTheme>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="Button.compareLink:pointerover TextBlock">
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.status.added">
+      <Setter Property="Foreground" Value="{DynamicResource VcSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.modified">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.deleted">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <!-- The file whose diff is open. A style outranks the theme's hover background. -->
+    <Style Selector="Button.fileRow.selected">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+    <Style Selector="c|Icon.chevron">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource VcPanelBackgroundBrush}">
+    <Grid RowDefinitions="36,Auto,Auto,*">
+
+      <Border Grid.Row="0"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="0,0,0,1">
+        <DockPanel Margin="12,0,8,0">
+          <Button Name="CompareClose"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcIconButton}"
+                  Margin="6,0,0,0"
+                  IsVisible="{Binding IsBranches}"
+                  Command="{Binding CloseCommand}"
+                  ToolTip.Tip="{x:Static vm:CompareViewModel.CloseToolTip}"
+                  AutomationProperties.AutomationId="CompareClose"
+                  AutomationProperties.HelpText="{x:Static vm:CompareViewModel.CloseToolTip}">
+            <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+          </Button>
+          <Button Name="CompareSwap"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcIconButton}"
+                  Width="30"
+                  Command="{Binding SwapCommand}"
+                  ToolTip.Tip="{x:Static vm:CompareViewModel.SwapToolTip}"
+                  AutomationProperties.AutomationId="CompareSwap"
+                  AutomationProperties.HelpText="{x:Static vm:CompareViewModel.SwapToolTip}">
+            <StackPanel Orientation="Horizontal" Spacing="0">
+              <c:Icon Data="{StaticResource IconArrowDown}" Width="11" Height="14" />
+              <c:Icon Data="{StaticResource IconArrowUp}" Width="11" Height="14" />
+            </StackPanel>
+          </Button>
+          <TextBlock Name="CompareTitle"
+                     Text="{Binding Title}"
+                     FontWeight="SemiBold"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis"
+                     AutomationProperties.AutomationId="CompareTitle" />
+        </DockPanel>
+      </Border>
+
+      <!-- From, To, the counts, the switch, what the comparison says about itself. -->
+      <StackPanel Grid.Row="1" Margin="12,10,12,8" Spacing="6">
+        <Button Name="CompareFrom"
+                Theme="{StaticResource CompareLinkButton}"
+                Classes="compareLink"
+                Command="{Binding RevealFromCommand}"
+                ToolTip.Tip="{Binding FromLinkToolTip}"
+                AutomationProperties.AutomationId="CompareFrom"
+                AutomationProperties.Name="{Binding FromText}"
+                AutomationProperties.HelpText="{Binding FromLinkToolTip}">
+          <TextBlock Text="{Binding FromText}" TextTrimming="CharacterEllipsis" />
+        </Button>
+        <Button Name="CompareTo"
+                Theme="{StaticResource CompareLinkButton}"
+                Classes="compareLink"
+                Command="{Binding RevealToCommand}"
+                ToolTip.Tip="{Binding ToLinkToolTip}"
+                AutomationProperties.AutomationId="CompareTo"
+                AutomationProperties.Name="{Binding ToText}"
+                AutomationProperties.HelpText="{Binding ToLinkToolTip}">
+          <TextBlock Text="{Binding ToText}" TextTrimming="CharacterEllipsis" />
+        </Button>
+        <TextBlock Name="CompareCounts"
+                   Classes="secondary"
+                   Text="{Binding CountsText}"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding HasCounts}"
+                   AutomationProperties.AutomationId="CompareCounts" />
+        <CheckBox Name="CompareAllDifferences"
+                  Theme="{StaticResource VcCheckBox}"
+                  Content="All differences"
+                  IsChecked="{Binding AllDifferences}"
+                  IsVisible="{Binding IsBranches}"
+                  AutomationProperties.AutomationId="CompareAllDifferences"
+                  AutomationProperties.Name="All differences" />
+        <TextBlock Name="CompareNotice"
+                   Classes="secondary"
+                   Text="{Binding NoticeText}"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding HasNotice}"
+                   AutomationProperties.AutomationId="CompareNotice" />
+        <TextBlock Name="CompareLoading"
+                   Classes="secondary"
+                   Text="{x:Static vm:CompareViewModel.LoadingText}"
+                   IsVisible="{Binding IsLoading}"
+                   AutomationProperties.AutomationId="CompareLoading" />
+        <TextBlock Name="CompareError"
+                   Classes="error"
+                   Text="{Binding ErrorText}"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding HasError}"
+                   AutomationProperties.AutomationId="CompareError" />
+      </StackPanel>
+
+      <!-- "Changed files (N)" with the Flat and Tree buttons (D44). -->
+      <Border Grid.Row="2"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="12,0,8,0"
+              Height="34"
+              IsVisible="{Binding HasFiles}">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+            <Button Name="CompareFlatButton"
+                    Theme="{StaticResource FileListToggle}"
+                    Classes.selected="{Binding IsFlat}"
+                    Command="{Binding ShowFlatCommand}"
+                    ToolTip.Tip="List the files with their folders"
+                    AutomationProperties.AutomationId="CompareFlatButton"
+                    AutomationProperties.Name="Flat">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <c:Icon Data="{StaticResource IconList}" Width="13" Height="13" VerticalAlignment="Center" />
+                <TextBlock Text="Flat" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Name="CompareTreeButton"
+                    Theme="{StaticResource FileListToggle}"
+                    Classes.selected="{Binding IsTree}"
+                    Command="{Binding ShowTreeCommand}"
+                    ToolTip.Tip="Show the files in a tree of folders"
+                    AutomationProperties.AutomationId="CompareTreeButton"
+                    AutomationProperties.Name="Tree">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <c:Icon Data="{StaticResource IconListTree}" Width="13" Height="13" VerticalAlignment="Center" />
+                <TextBlock Text="Tree" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+          <TextBlock Name="CompareFilesTitle"
+                     Classes="heading"
+                     Text="{Binding ChangedFilesTitle}"
+                     AutomationProperties.AutomationId="CompareFilesTitle" />
+        </DockPanel>
+      </Border>
+
+      <Panel Grid.Row="3">
+        <TextBlock Name="CompareNoDifferences"
+                   Classes="secondary"
+                   Text="{x:Static vm:CompareViewModel.NoDifferencesText}"
+                   Margin="12,10"
+                   VerticalAlignment="Top"
+                   IsVisible="{Binding ShowsNoDifferences}"
+                   AutomationProperties.AutomationId="CompareNoDifferences" />
+
+        <!-- The changed files: rows 24 high, flat or as a tree, as the details panel's. -->
+        <ItemsControl Name="CompareFileList"
+                      ItemsSource="{Binding Files}"
+                      IsVisible="{Binding HasFiles}"
+                      AutomationProperties.AutomationId="CompareFileList"
+                      AutomationProperties.Name="Changed files">
+          <ItemsControl.Template>
+            <ControlTemplate>
+              <ScrollViewer Name="PART_ScrollViewer"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="panels:ChangedFileRow">
+              <Panel Height="24">
+
+                <Button Theme="{StaticResource FileFolderButton}"
+                        IsVisible="{Binding IsFolder}"
+                        Command="{Binding ToggleCommand}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="FileTreeFolder"
+                        AutomationProperties.Name="{Binding Name}">
+                  <DockPanel Margin="0,0,12,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <Panel DockPanel.Dock="Left" Width="16" Margin="0,0,6,0">
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronDown}" IsVisible="{Binding IsOpen}" />
+                      <c:Icon Classes="chevron" Data="{StaticResource IconChevronRight}" IsVisible="{Binding !IsOpen}" />
+                    </Panel>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+                <Button Theme="{StaticResource FileFolderButton}"
+                        Classes="fileRow"
+                        Classes.selected="{Binding IsSelected}"
+                        IsVisible="{Binding IsFile}"
+                        Command="{Binding $parent[ItemsControl].((vm:CompareViewModel)DataContext).ActivateFileCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding ToolTip}"
+                        AutomationProperties.AutomationId="ChangedFile"
+                        AutomationProperties.Name="{Binding Name}">
+                  <DockPanel Margin="0,0,12,0">
+                    <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Name="FileStatus"
+                               Classes="status"
+                               Classes.added="{Binding IsAdded}"
+                               Classes.modified="{Binding IsModified}"
+                               Classes.deleted="{Binding IsDeleted}"
+                               Classes.renamed="{Binding IsRenamedOrCopied}"
+                               Width="16" Margin="0,0,6,0"
+                               TextAlignment="Center"
+                               Text="{Binding StatusLetter}" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Name="FileName"
+                               Text="{Binding Name}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <TextBlock DockPanel.Dock="Left"
+                               Name="FileLocation"
+                               Classes="secondary"
+                               Text="{Binding Folder}"
+                               IsVisible="{Binding HasFolder}"
+                               Margin="8,0,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <TextBlock Name="FileOrigin"
+                               Classes="secondary"
+                               Text="{Binding OriginText}"
+                               IsVisible="{Binding HasOrigin}"
+                               Margin="8,0,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                  </DockPanel>
+                </Button>
+
+              </Panel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+    </Grid>
+  </Border>
+</UserControl>

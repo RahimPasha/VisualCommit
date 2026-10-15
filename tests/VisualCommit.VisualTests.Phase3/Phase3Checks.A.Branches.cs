@@ -40,7 +40,7 @@ public sealed partial class Phase3ChecksA
         AssertHighlighted(menu, "Check out feature/alpha");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(PartA.FeatureAlphaMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         Assert.True(repository.Selection.IsEmpty, "The right-click selected a commit.");
         Assert.Equal(-1, repository.SelectedIndex);
         var placeholder = (TextBlock)app.FindByAutomationId("DetailsPlaceholder");
@@ -60,7 +60,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.FeatureFfMenu);
         AssertHighlighted(menu, "Check out feature/ff");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -79,7 +79,7 @@ public sealed partial class Phase3ChecksA
         AssertHighlighted(menu, "Pull from origin/main");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(PaletteOf(app).TextDisabled, menu.Item("Delete main…").TextColor);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -95,7 +95,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.OriginFeatureAlphaMenu);
         AssertHighlighted(menu, "Check out origin/feature/alpha");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         AssertRowSelected(app, PartA.MainWorkRow);
         app.ClickMenuItem("Copy branch name");
         await app.WaitForAsync(() => app.Clipboard.Text is not null, "the branch name on the clipboard");
@@ -115,8 +115,9 @@ public sealed partial class Phase3ChecksA
         AssertHighlighted(menu, "Merge origin/main into main");
         AssertMenuLook(app, menu, shot);
 
-        // 293 high with phase 4's rebase items, it no longer fits below the pointer: 4a's rule
-        // opens it above (phase 4's report: "the position only where its expected result states it").
+        // Taller with phase 4's rebase items and phase 5's Compare, Hide and Solo, it no longer fits
+        // below the pointer: 4a's rule opens it above (phase 4's report: "the position only where
+        // its expected result states it"); so do the other branch, tag, remote and header menus here.
         AssertMenuPlaced(app, menu, pointer);
         AssertRowSelected(app, PartA.MainWorkRow);
         await AssertRefHighlightedAsync(app, null);
@@ -156,7 +157,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.LocMenu);
         AssertHighlighted(menu, "Pull from main");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         Assert.True(repository.Selection.IsEmpty);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
@@ -170,7 +171,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.SideMenu);
         Assert.All(menu.Items.Where(item => item.Label != "Rebase loc onto side"), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertHighlighted(menu, "Check out side");
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -183,7 +184,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.LocalOriginMainMenu);
         AssertHighlighted(menu, "Check out origin/main");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -195,7 +196,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.RemoteOriginMainMenu);
         AssertHighlighted(menu, "Check out origin/main");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -220,7 +221,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.TagMenu);
         AssertHighlighted(menu, "Check out v1.0");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         Assert.True(repository.Selection.IsEmpty);
         await AssertRefHighlightedAsync(app, null);
         app.ClickMenuItem("Copy tag name");
@@ -259,7 +260,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.RemoteMenu);
         AssertHighlighted(menu, "Fetch origin");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Copy URL");
         await app.WaitForAsync(() => app.Clipboard.Texts.Count == 2, "the URL on the clipboard");
         Assert.Equal(await GitTextAsync(repo, "remote", "get-url", "origin"), app.Clipboard.Text);
@@ -279,7 +280,7 @@ public sealed partial class Phase3ChecksA
             menu = app.Menu();
             AssertMenu(menu, lines);
             AssertHighlighted(menu, highlighted);
-            AssertMenuAtPointer(menu, pointer);
+            AssertMenuPlaced(app, menu, pointer);
             app.PressKey(Key.Escape);
             await AssertNoMenuAsync(app, logMark: null);
             Assert.Equal(open, ((RefSectionRow)app.RefRowModel(section)).IsOpen);

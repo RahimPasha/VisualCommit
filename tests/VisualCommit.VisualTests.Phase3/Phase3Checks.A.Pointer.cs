@@ -97,7 +97,7 @@ public sealed partial class Phase3ChecksA
         AssertHighlighted(menu, "Check out origin/feature/alpha");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(PartA.OriginFeatureAlphaMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
         Assert.Equal(before, await GitStateAsync(repo));
@@ -202,7 +202,7 @@ public sealed partial class Phase3ChecksA
         AssertHighlighted(menu, "Merge feature/alpha into main");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(PartA.DropMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
-        AssertMenuAtPointer(menu, main.Center);
+        AssertMenuPlaced(app, menu, main.Center);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
         Assert.Equal(before, await GitStateAsync(repo));
@@ -216,7 +216,7 @@ public sealed partial class Phase3ChecksA
         AssertHighlighted(menu, "Merge feature/ff into main");
         Assert.True(menu.Item("Fast-forward main to feature/ff").IsEnabled);
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, main.Center);
+        AssertMenuPlaced(app, menu, main.Center);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -227,7 +227,7 @@ public sealed partial class Phase3ChecksA
         menu = app.Menu();
         AssertMenu(menu, PartA.AlphaOntoConflictDropMenu);
         AssertHighlighted(menu, "Check out feature/conflict and merge feature/alpha into it");
-        AssertMenuAtPointer(menu, conflict);
+        AssertMenuPlaced(app, menu, conflict);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
 
@@ -242,7 +242,7 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.MainOntoOriginAlphaDropMenu);
         AssertHighlighted(menu, "Push main to origin/feature/alpha");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, onto);
+        AssertMenuPlaced(app, menu, onto);
         AssertRowSelected(app, PartA.AlphaTwoRow);
         await AssertRefHighlightedAsync(app, null);
         app.PressKey(Key.Escape);

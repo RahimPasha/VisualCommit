@@ -53,6 +53,10 @@ public sealed class TabServices
         GitCalls = gitCalls;
         RecordClock = recordClock ?? TimeProvider.System;
         UndoHistories = undoHistories ?? new UndoHistories();
+
+        // A filter of a repository whose folder is gone is dropped at start-up (docs/phase-5-design.md 8.4).
+        GraphFilters = new GraphFilterStore(session, Clock);
+        GraphFilters.DropMissingFolders();
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -121,6 +125,9 @@ public sealed class TabServices
 
     /// <summary>The undo histories of the session, one per worktree (docs/phase-5-design.md 7.1), shared by every tab.</summary>
     public UndoHistories UndoHistories { get; }
+
+    /// <summary>What each repository's graph hides and solos, kept in <see cref="Session"/> (docs/phase-5-design.md 8.4, D159).</summary>
+    public GraphFilterStore GraphFilters { get; }
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

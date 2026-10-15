@@ -328,10 +328,11 @@ public sealed partial class Phase3ChecksA
         app.Click(await app.RefRowAsync("Tags", "v1.0"));
         await AssertRefHighlightedAsync(app, "Tags", "v1.0");
         app.Click(app.GraphRowPoint(PartA.InitialCommitRow), app.CommandModifier);
-        await app.WaitForAsync(() => app.FindByAutomationId("MultiSelectionView").IsEffectivelyVisible, "the multi-selection view");
+        // Two selected commits compare at once (docs/phase-5-design.md 6.1, D162): the lower row is From.
+        await app.WaitForAsync(() => app.Compare() is not null, "the comparison of the two commits");
         Shot(app, "24g-multi-selection-clears");
         Assert.Equal(2, repository.Selection.Count);
-        Assert.Equal("2 commits selected", ((TextBlock)app.FindByAutomationId("MultiSelectionTitle")).Text);
+        Assert.Equal(("From 4ef1f7c Initial commit", "To 8beca34 Add core"), (app.Compare()!.From, app.Compare()!.To));
         await AssertRefHighlightedAsync(app, null);
 
         // Step 8: the stash in the left panel, then its row in the graph: it stays highlighted.

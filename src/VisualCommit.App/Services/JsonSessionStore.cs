@@ -73,6 +73,20 @@ public sealed class JsonSessionStore : ISessionStore
                     .Select(tab => string.IsNullOrWhiteSpace(tab.RepositoryPath) ? new TabState(null) : tab)
                     .ToList() ?? [],
                 Recent = state.Recent?.Where(recent => recent is not null && !string.IsNullOrWhiteSpace(recent.Path)).ToList() ?? [],
+
+                // The same for the graph filters (docs/phase-5-design.md 8.4): an entry without a
+                // folder is dropped, a list left out is empty.
+                GraphFilters = state.GraphFilters?
+                    .Where(filter => filter is not null && !string.IsNullOrWhiteSpace(filter.RepositoryPath))
+                    .Select(filter => filter with
+                    {
+                        Hidden = filter.Hidden ?? [],
+                        Soloed = filter.Soloed ?? [],
+                        HiddenRemotes = filter.HiddenRemotes ?? [],
+                        Upstreams = filter.Upstreams?.Where(pair => pair is { Branch: not null, Upstream: not null }).ToList() ?? [],
+                        Remotes = filter.Remotes ?? [],
+                    })
+                    .ToList() ?? [],
             };
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)

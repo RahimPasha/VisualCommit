@@ -109,6 +109,22 @@ public sealed class RefSectionRow : RefListRow
         && section.Count == Count && section.CanToggle == CanToggle;
 }
 
+/// <summary>
+/// What the graph's filter marks on a left-panel row (docs/phase-5-design.md 8.3): a hidden branch
+/// or remote (its name in the disabled colour, the eye button), a soloed branch (the solo button),
+/// a branch that solo mode leaves out (its name in the disabled colour), and the name's tooltip
+/// when a hidden branch's commit is no row of the graph.
+/// </summary>
+/// <param name="IsHidden">The branch is hidden, or the remote hidden as a whole: the eye button shows it again.</param>
+/// <param name="IsSoloed">The branch is soloed: the solo button ends its solo.</param>
+/// <param name="IsDimmed">The name is drawn in the disabled colour: hidden, or neither soloed nor HEAD's in solo mode.</param>
+/// <param name="NotInGraphToolTip">The name's tooltip in place of the full name: <c>{b} is hidden in the graph</c>; null otherwise.</param>
+public sealed record RefRowMarks(bool IsHidden, bool IsSoloed, bool IsDimmed, string? NotInGraphToolTip)
+{
+    /// <summary>No filter mark: the row as before phase 5.</summary>
+    public static RefRowMarks None { get; } = new(false, false, false, null);
+}
+
 /// <summary>A remote, a folder, a branch, a tag or a stash under a section header.</summary>
 public sealed partial class RefItemRow : RefListRow
 {
@@ -123,7 +139,10 @@ public sealed partial class RefItemRow : RefListRow
         string? targetSha = null,
         bool isHead = false,
         int ahead = 0,
-        int behind = 0)
+        int behind = 0,
+        RefRowMarks? marks = null,
+        Action<RefItemRow>? showHidden = null,
+        Action<RefItemRow>? stopSoloing = null)
         : base(key, text, depth, isOpen, activate)
     {
         Kind = kind;
@@ -132,6 +151,9 @@ public sealed partial class RefItemRow : RefListRow
         IsHead = isHead;
         Ahead = ahead;
         Behind = behind;
+        Marks = marks ?? RefRowMarks.None;
+        ShowHiddenCommand = new RelayCommand(() => showHidden?.Invoke(this), () => showHidden is not null);
+        StopSoloingCommand = new RelayCommand(() => stopSoloing?.Invoke(this), () => stopSoloing is not null);
     }
 
     public RefItemKind Kind { get; }
@@ -178,10 +200,31 @@ public sealed partial class RefItemRow : RefListRow
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 
+    /// <summary>What the graph's filter marks on the row (docs/phase-5-design.md 8.3).</summary>
+    public RefRowMarks Marks { get; }
+
+    /// <summary>The eye button (<c>RefHiddenToggle</c>) shows: a hidden branch, or a remote hidden as a whole.</summary>
+    public bool ShowsHiddenToggle => Marks.IsHidden;
+
+    /// <summary>The solo button (<c>RefSoloToggle</c>) shows: a soloed branch.</summary>
+    public bool ShowsSoloToggle => Marks.IsSoloed;
+
+    /// <summary>The name is drawn in the disabled colour (8.3).</summary>
+    public bool IsDimmed => Marks.IsDimmed;
+
+    /// <summary>The name's tooltip: the whole name, or <c>{b} is hidden in the graph</c> for a hidden branch whose commit is no row (8.3).</summary>
+    public string NameToolTip => Marks.NotInGraphToolTip ?? ToolTip;
+
+    /// <summary>The eye button: shows the branch (with the upstream hidden with it) or the remote's branches again (8.3).</summary>
+    public IRelayCommand ShowHiddenCommand { get; }
+
+    /// <summary>The solo button: ends the branch's solo (8.3).</summary>
+    public IRelayCommand StopSoloingCommand { get; }
+
     public override bool ShowsSameAs(RefListRow other) =>
         other is RefItemRow item
         && item.Key == Key && item.Kind == Kind && item.Text == Text && item.ToolTip == ToolTip
         && item.Depth == Depth && item.IsOpen == IsOpen && item.TargetSha == TargetSha
         && item.IsHead == IsHead && item.Ahead == Ahead && item.Behind == Behind
-        && item.IsSelected == IsSelected;
+        && item.IsSelected == IsSelected && item.Marks == Marks;
 }

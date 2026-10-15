@@ -205,8 +205,14 @@ public sealed class BranchDragService : IEscapeHandler, IDisposable
         }
 
         // A branch row of the left panel (RefDrag.Source); the graph's labels ask for themselves.
+        // A toggle of a hidden or soloed row arms no drag (RefDrag.IsExcluded, docs/phase-5-design.md 8.3).
         for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
         {
+            if (visual is Control excluded && RefDrag.GetIsExcluded(excluded))
+            {
+                return;
+            }
+
             if (visual is Control control && RefDrag.GetSource(control) is RefItemRow row)
             {
                 if (SourceOf(row, control) is { } source)

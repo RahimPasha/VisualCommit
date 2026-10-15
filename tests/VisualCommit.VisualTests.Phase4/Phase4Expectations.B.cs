@@ -351,12 +351,12 @@ public static partial class Phase4Expectations
         /// <summary>B8's squashed commit, "Three" (f34248d).</summary>
         public static ShownDetails B8SquashedDetails { get; } = new("Three", "#42 is the issue\n\nFour", ScenarioDate(5), AppDate, ["ed58902"], ["A four.txt src", "A three.txt src"]);
 
-        /// <summary>The multi-selection view of Four and Three (B8 step 1): the commits in row order.</summary>
+        /// <summary>
+        /// Four and Three selected (B8 step 1), in row order: phase 3's multi-selection view listed
+        /// them until phase 5; their comparison now names Three From and Four To
+        /// (docs/phase-5-design.md 6.1, D162).
+        /// </summary>
         public static IReadOnlyList<string> MultiSelectionItems { get; } = ["eef5c15 Four", "ff42e7f Three"];
-
-        public const string MultiSelectionTitle = "2 commits selected";
-
-        public const string MultiSelectionHint = "Right-click a selected commit for what can be done with all of them.";
 
         // ---- The diff over the list (B6 step 4) ----------------------------------------------------
 

@@ -41,9 +41,15 @@ public partial class LeftPanelView : UserControl
         return null;
     }
 
-    /// <summary>The row button a request or a tap came from, with its row.</summary>
-    private static (Button Button, RefListRow Row)? RowOf(object? source) =>
-        ContextMenuRequests.Find<Button>(source, button => button.DataContext is RefListRow) is { DataContext: RefListRow row } button
+    /// <summary>
+    /// The row button a request or a tap came from, with its row. With <paramref name="skipToggles"/>
+    /// null for a toggle of a hidden or soloed row (<see cref="RefDrag.IsExcludedProperty"/>,
+    /// docs/phase-5-design.md 8.3), so that a double-click on it checks nothing out; a menu asked
+    /// for on a toggle is its row's (4b).
+    /// </summary>
+    private static (Button Button, RefListRow Row)? RowOf(object? source, bool skipToggles = false) =>
+        ContextMenuRequests.Find<Button>(source, button => button.DataContext is RefListRow && !RefDrag.GetIsExcluded(button)) is { DataContext: RefListRow row } button
+            && !(skipToggles && RefDrag.IsInExcluded(source, button))
             ? (button, row)
             : null;
 
@@ -69,7 +75,7 @@ public partial class LeftPanelView : UserControl
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
         // The press after a drag that started on the press before is no double-click (4c).
-        if (RowOf(e.Source) is (_, { } row)
+        if (RowOf(e.Source, skipToggles: true) is (_, { } row)
             && BranchDragService.For(this) is not { PressFollowsDrag: true }
             && ContextMenuRequests.ActiveRepository(this) is (_, { } repository)
             && ReferenceEquals(repository.LeftPanel, DataContext))

@@ -203,7 +203,7 @@ public sealed partial class Phase4ChecksC
         AssertHighlighted(menu, "Merge feature/rebase into main");
         AssertMenuShape(app, menu);
         AssertMenuAtPointer(menu, target.Center);
-        Assert.Equal(171, menu.Bounds.Height, 2.0);
+        Assert.Equal(206, menu.Bounds.Height, 2.0);
 
         // Step 10: the checkout, the backup, the rebase that stops, and the return file (14.3).
         var logMark = app.LogMark();
