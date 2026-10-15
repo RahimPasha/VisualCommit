@@ -60,7 +60,7 @@ public sealed partial class Phase3ChecksC
         Assert.Equal("Add newfile", RightPanelText(app, "DetailsSubject"));
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
             "Checkout blocked",
-            PartC.UntrackedSummary,
+            PartC.TwoConflictsSummary,
             BlockedRepo,
             "git switch --no-guess feature/addfile",
             ["Copy output", "Close"],
@@ -83,7 +83,7 @@ public sealed partial class Phase3ChecksC
         Shot(app, "14c-checkout-blocked");
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
             "Checkout blocked",
-            PartC.BlockedSummary("feature/other"),
+            PartC.OneConflictSummary,
             BlockedRepo,
             "git switch --no-guess feature/other",
             ["Copy output", "Stash changes and check out", "Close"],
@@ -135,7 +135,7 @@ public sealed partial class Phase3ChecksC
         Shot(app, "14f-clash-blocked");
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
             "Checkout blocked",
-            PartC.BlockedSummary("feature/clash"),
+            PartC.OneConflictSummary,
             BlockedRepo,
             "git switch --no-guess feature/clash",
             ["Copy output", "Stash changes and check out", "Close"],
@@ -210,7 +210,8 @@ public sealed partial class Phase3ChecksC
 
     /// <summary>
     /// Check 14b, continuing from check 14 (its steps repeated without their pictures): a checkout
-    /// of main while notes.txt is conflicted and no operation is in progress: "Checkout failed".
+    /// of main while notes.txt is conflicted and no operation is in progress, which phase 5's C12
+    /// refuses before git ("Checkout blocked", "Resolve the conflicts first"; design 9.3).
     /// </summary>
     [AvaloniaFact]
     public async Task Check_14b_checkout_failed()
@@ -243,7 +244,9 @@ public sealed partial class Phase3ChecksC
         await WaitForStagePanelAsync(app, "Unstaged files (2, 1 with conflicts)", "Staged files (0)");
         Assert.NotNull(app.BannerBounds);
 
-        // Step 2: double-click main.
+        // Step 2: double-click main. Phase 5's C12 refuses it before git (design 9.3): notes.txt
+        // is conflicted, so "Resolve the conflicts first", and no git switch runs (T4 is not shown).
+        var calls = app.GitCalls().Count;
         mark = app.LogMark();
         app.DoubleClick(await app.RefRowAsync("Local branches", "main"));
         await WaitForOperationAsync(app, repo, "Check out main", mark);
@@ -252,15 +255,14 @@ public sealed partial class Phase3ChecksC
         Assert.True(ItemRow(app, "Local branches", "main").IsSelected);
         AssertSelection(app, null, 4);
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
-            "Checkout failed",
-            "Git could not check out main.",
+            "Checkout blocked",
+            PartC.ResolveConflictsSummary,
             BlockedRepo,
-            "git switch --no-guess main",
-            ["Copy output", "Close"],
-            PartC.T4,
-            PartC.T4Key));
-        AssertErrorDialogParts(app, extra: null);
-        Assert.Equal(1, app.LastCall("git switch --no-guess main").ExitCode);
+            null,
+            ["Close"],
+            []));
+        AssertErrorDialogParts(app, extra: null, copy: false);
+        Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git switch", StringComparison.Ordinal));
         AssertStatus(app, "Check out main failed", OperationStatusTone.Danger);
 
         // Step 3: Close: nothing changed.

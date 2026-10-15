@@ -313,9 +313,17 @@ public static partial class Phase3Expectations
 
         public const string T4Key = "error: you need to resolve your current index first";
 
-        public const string UntrackedSummary = "Untracked files are in the way: feature/addfile has files with the same names. Move or delete them, then check out again.";
+        /// <summary>
+        /// Check 14 step 2's summary, phase 5's C12 (docs/phase-5-design.md 9.3, D153): T1 names
+        /// notes.txt under git's tracked header and newfile.txt under its untracked one.
+        /// </summary>
+        public const string TwoConflictsSummary = "2 conflicts prevent checkout. Commit, stash, or discard your changes first.";
 
-        public static string BlockedSummary(string branch) => $"Your changes to these files would be overwritten by checking out {branch}.";
+        /// <summary>Check 14 steps 4 and 7 (T2: notes.txt), with "Stash changes and check out" kept.</summary>
+        public const string OneConflictSummary = "1 conflict prevents checkout. Commit, stash, or discard your changes first.";
+
+        /// <summary>Check 14b step 2: notes.txt conflicted with nothing in progress, refused before git (C12, 9.3); T4 shows in no dialog now.</summary>
+        public const string ResolveConflictsSummary = "Resolve the conflicts first";
 
         public const string Check14ConflictsSummary =
             "Checked out feature/clash. Re-applying your changes stopped with conflicts in 1 file. Your changes are kept in the stash \"VisualCommit: before checking out feature/clash\".";
@@ -387,7 +395,13 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
-        /// <summary>T5, git's refusal of the pop over the edited README.md (standard error).</summary>
+        /// <summary>
+        /// Check 15b step 2's summary since phase 5's C12 (docs/phase-5-design.md 9.3): the app
+        /// refuses the pop before git, README.md having a local change that the stash changes.
+        /// </summary>
+        public const string PopRefusedSummary = "1 conflict prevents applying the stash. Commit, stash, or discard your changes first.";
+
+        /// <summary>T5, git's refusal of the pop over the edited README.md (standard error); since phase 5's C12 no dialog shows it, git not being asked.</summary>
         public static readonly string[] T5 =
         [
             "error: Your local changes to the following files would be overwritten by merge:",

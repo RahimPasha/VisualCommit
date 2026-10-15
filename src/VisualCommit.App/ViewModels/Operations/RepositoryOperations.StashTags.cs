@@ -77,10 +77,14 @@ public sealed partial class RepositoryOperations
             new RunOptions { Undo = UndoScope.Stash(message) });
     });
 
-    /// <summary>"Apply stash" (2.25): <c>git stash apply stash@{n}</c>, the stash found again by its commit.</summary>
+    /// <summary>
+    /// "Apply stash" (2.25): <c>git stash apply stash@{n}</c>, the stash found again by its commit.
+    /// Refused before git when local changes or existing files are in the stash's way (C12,
+    /// docs/phase-5-design.md 9.3): "1 conflict prevents applying the stash. …", git not run.
+    /// </summary>
     public Task ApplyStashAsync(string stash) => ApplyOrPopAsync(stash, pop: false);
 
-    /// <summary>"Pop stash" (2.25): <c>git stash pop stash@{n}</c>; a pop that conflicts keeps the stash.</summary>
+    /// <summary>"Pop stash" (2.25): <c>git stash pop stash@{n}</c>; a pop that conflicts keeps the stash. Checked before git as <see cref="ApplyStashAsync"/>.</summary>
     public Task PopStashAsync(string stash) => ApplyOrPopAsync(stash, pop: true);
 
     /// <summary>
@@ -244,6 +248,13 @@ public sealed partial class RepositoryOperations
                 RefreshScope.Refs,
                 async context =>
                 {
+                    // C12 (docs/phase-5-design.md 9.3, D179): the app's check before git, before
+                    // anything is written or backed up (the report's PD11).
+                    if (await CountStashConflictsAsync(stash) is var conflicts and > 0)
+                    {
+                        return Refusal(text, OperationTexts.ConflictsPreventApplyingStash(conflicts));
+                    }
+
                     // Its name now: another operation may have moved it in the list meanwhile.
                     var now = FindStash(stash)?.Name ?? name;
                     var result = await Git.ApplyStashAsync(stash, pop ? StashApplyMode.Pop : StashApplyMode.Apply, NetworkOptions.From(context));

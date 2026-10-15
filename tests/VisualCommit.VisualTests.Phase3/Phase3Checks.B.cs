@@ -261,12 +261,13 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertTip(stash, FinishMergeFirst);
         app.MoveToNeutral();
 
-        // Step 7: a checkout git refuses.
+        // Step 7: a checkout refused before git (phase 5's C12, design 9.3): no git switch runs.
+        var callsBefore = app.GitCalls().Count;
         await RunOperationAsync(app, "Check out feature/alpha", () => app.DoubleClick(LabelPoint(app, 4, "feature/alpha")));
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
         Shot(app, "09e-checkout-refused");
-        await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
-            CheckoutFailedTitle, CheckoutFailedSummary, Ops, CheckoutCommand, ["Copy output", "Close"], CheckoutWhileMergingLines, KeyLine: CheckoutWhileMergingLines[0]));
+        await AssertErrorDialogAsync(app, new ExpectedErrorDialog(CheckoutBlockedTitle, FinishMergeFirst, Ops, null, ["Close"], []));
+        Assert.DoesNotContain(app.GitCalls().Skip(callsBefore), call => call.CommandText == CheckoutCommand);
         AssertStatus(app, StatusCheckoutAlphaFailed, OperationStatusTone.Danger);
         AssertNoClippedText(app);
         Assert.NotNull(GitDirFile(repo, "MERGE_HEAD"));

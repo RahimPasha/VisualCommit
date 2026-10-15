@@ -124,11 +124,13 @@ public sealed partial class Phase3ChecksD
         Assert.Equal("Merge branch 'feature/conflict'", File.ReadAllLines(Path.Combine(repo.Path, ".git", "MERGE_MSG"))[0]);
         AssertNoClippedText(app);
 
-        // Step 4: a checkout during the merge fails.
+        // Step 4: a checkout during the merge fails, refused before git (phase 5's C12, design 9.3).
+        var callsBefore = app.GitCalls().Count;
         app.DoubleClick(await app.RefRowAsync("Local branches", "feature", "alpha"));
         await app.WaitForDialogAsync<ErrorDialogViewModel>(NetworkTimeout);
         Shot(app, "27d-error-light");
         await AssertErrorDialogAsync(app, Expected(PartD.CheckoutDuringMergeDialog));
+        Assert.DoesNotContain(app.GitCalls().Skip(callsBefore), call => call.CommandText.StartsWith("git switch", StringComparison.Ordinal));
         Assert.NotNull(app.BannerBounds);
         AssertStatus(app, PartD.CheckoutAlphaFailed, OperationStatusTone.Danger);
         Assert.Equal("main", await repo.CurrentBranchAsync());

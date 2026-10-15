@@ -284,10 +284,9 @@ public class OperationTextsTests
     public void Special_failures_have_their_own_dialog_texts()
     {
         Assert.Equal("Checkout blocked", OperationTexts.CheckoutBlockedTitle);
-        Assert.Equal("Your changes to these files would be overwritten by checking out feature/other.", OperationTexts.CheckoutBlockedByChanges("feature/other"));
-        Assert.Equal(
-            "Untracked files are in the way: feature/addfile has files with the same names. Move or delete them, then check out again.",
-            OperationTexts.CheckoutBlockedByUntrackedFiles("feature/addfile"));
+
+        // C12 replaces phase 3's two summaries with D153's sentence and git's count (docs/phase-5-design.md 9.3).
+        Assert.Equal("1 conflict prevents checkout. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPreventCheckout(1));
         Assert.Equal("origin has commits that your main does not have. Pull first, then push again.", OperationTexts.PushRejected("origin", "main"));
         Assert.Equal("origin/published has commits that your published does not include. Pull or look at them before forcing.", OperationTexts.ForcePushStopped("origin/published", "published"));
         Assert.Equal("published on origin has changed since you last fetched. Fetch and look at it before deleting.", OperationTexts.RemoteBranchChanged("published", "origin"));
@@ -328,6 +327,39 @@ public class OperationTextsTests
 
         var leave = OperationTexts.ConfirmLeaveDetachedCommits(1);
         Assert.Equal(("Leave these commits?", "Check out", false), (leave.Title, leave.ConfirmText, leave.IsDestructive));
+    }
+
+    [Fact]
+    public void C12s_texts_give_gits_count_with_the_singular_for_one_and_name_the_automatic_stash()
+    {
+        // Design 9.3 (D153 (1), D179) and the report's part P texts.
+        Assert.Equal("1 conflict prevents checkout. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPreventCheckout(1));
+        Assert.Equal("3 conflicts prevent checkout. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPreventCheckout(3));
+        Assert.Equal("1 conflict prevents the merge. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPrevent(1, "merge"));
+        Assert.Equal("2 conflicts prevent the cherry-pick. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPrevent(2, "cherry-pick"));
+        Assert.Equal("1 conflict prevents the revert. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPrevent(1, "revert"));
+        Assert.Equal("Your staged changes prevent the merge. Commit, stash, or unstage them first.", OperationTexts.StagedChangesPrevent("merge"));
+        Assert.Equal("Your staged changes prevent the revert. Commit, stash, or unstage them first.", OperationTexts.StagedChangesPrevent("revert"));
+        Assert.Equal("1 conflict prevents applying the stash. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPreventApplyingStash(1));
+        Assert.Equal("2 conflicts prevent applying the stash. Commit, stash, or discard your changes first.", OperationTexts.ConflictsPreventApplyingStash(2));
+        Assert.Equal("1 ignored file is in the way: 73e0bab tracks a file of the same name. Move it away first.", OperationTexts.IgnoredFilesInTheWay(1, "73e0bab"));
+        Assert.Equal("2 ignored files are in the way: v1.1 tracks files of the same names. Move them away first.", OperationTexts.IgnoredFilesInTheWay(2, "v1.1"));
+
+        // 9.2, 12.1, 12.2: the automatic stash.
+        Assert.Equal("Auto stash before checking out f39ea2d", OperationTexts.AutoStashMessage("f39ea2d"));
+        Assert.Equal("Stashing your changes…", OperationTexts.StashingYourChanges);
+        Assert.Equal("Your changes are in the stash \"Auto stash before checking out f39ea2d\".", OperationTexts.ChangesInAutoStash("f39ea2d"));
+        Assert.Equal(
+            "Git could not clear your changes from the working tree, so nothing was checked out. They are also saved in the stash \"Auto stash before checking out v1.1\".",
+            OperationTexts.AutoStashNotCleared("v1.1"));
+        Assert.Equal(
+            "Your changes are saved in the stash \"Auto stash before checking out v1.1\". Git could not finish clearing the working tree, so some of them are still there too. "
+            + "Nothing was checked out. Keep the stash until you have checked your files.",
+            OperationTexts.AutoStashPartlyCleared("v1.1"));
+        Assert.Equal(
+            "Git could not check out f39ea2d, and your changes could not be re-applied. They are kept in the stash \"Auto stash before checking out f39ea2d\".",
+            OperationTexts.AutoStashKept("f39ea2d"));
+        Assert.Equal("Nothing was checked out.", OperationTexts.NothingCheckedOut);
     }
 
     // The Abort question of 2.15 and section 5 is the banner's (ConflictBannerViewModel.AbortConfirmation,

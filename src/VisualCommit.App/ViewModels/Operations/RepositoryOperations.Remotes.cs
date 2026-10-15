@@ -129,9 +129,22 @@ public sealed partial class RepositoryOperations
                 branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
                 RefreshScope.Refs,
                 context => PullStepsAsync(context, branch, upstream, text, integration, notice),
-                NetworkRun(UndoScope.Pull(branch.Name), dedupeKey));
+                NetworkRun(UndoScope.Pull(branch.Name), dedupeKey, failure => PullRefusalDisplay(failure, text)));
             await FinishAsync(notice, new SelectionAfter());
         });
+
+    /// <summary>
+    /// C12's words for a pull that git refused because changes are in the way (docs/phase-5-design.md
+    /// 9.3), under "Pull failed". Its merge's or fast-forward's call (<c>git merge …</c>) is told as a
+    /// merge's, whatever block git printed ("1 conflict prevents the merge. …" for a changed file, an
+    /// untracked one or an untracked folder; "Your staged changes prevent the merge. …"); its
+    /// rebase's in phase 4's words ("Git rebases only a clean working tree: …"), a refused checkout
+    /// inside the rebase never as a merge's. Null for any other failure.
+    /// </summary>
+    private static FailureDisplay? PullRefusalDisplay(GitFailure failure, OperationText text) =>
+        failure.CommandText.StartsWith("git merge ", StringComparison.Ordinal) ? BlockedByChangesDisplay(failure, text, "merge")
+        : RebaseRefusalSummary(failure) is { } rebase ? new FailureDisplay(text.ErrorTitle, rebase)
+        : null;
 
     /// <summary>
     /// Pull's two steps (2.18, D84): the fetch of the upstream's remote, which can be cancelled

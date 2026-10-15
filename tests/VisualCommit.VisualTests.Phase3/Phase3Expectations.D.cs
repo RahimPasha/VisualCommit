@@ -533,14 +533,18 @@ public static partial class Phase3Expectations
 
         public const string WorkingRowConflict = "Working changes · 1 conflict";
 
+        /// <summary>
+        /// Step 4's dialog, changed by phase 5's C12 (docs/phase-5-design.md 9.3, the phase 5
+        /// report's "Beyond design 14.1"): the app refuses the checkout before git while the merge
+        /// is in progress, with no output, command or "Copy output".
+        /// </summary>
         public static readonly ErrorTexts CheckoutDuringMergeDialog = new(
-            "Checkout failed",
-            "Git could not check out feature/alpha.",
+            "Checkout blocked",
+            "Finish or abort the merge first",
             "ops",
-            "git switch --no-guess feature/alpha",
-            ["Copy output", "Close"],
-            ["fatal: cannot switch branch while merging", "Consider \"git merge --quit\" or \"git worktree add\"."],
-            "fatal: cannot switch branch while merging");
+            null,
+            ["Close"],
+            []);
 
         public const string CheckoutAlphaFailed = "Check out feature/alpha failed";
 

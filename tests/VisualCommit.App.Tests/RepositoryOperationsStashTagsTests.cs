@@ -247,15 +247,17 @@ public class RepositoryOperationsStashTagsTests
         using var app = await OperationsHarness.OpenAsync(repo);
         var stash = await app.ShaAsync("refs/stash");
         app.Dialogs.CloseError();
+        var calls = app.Calls.Snapshot().Count;
 
         await app.Operations.PopNewestStashAsync();
 
+        // C12 (docs/phase-5-design.md 9.3): the app's check refuses before git; no git stash pop runs.
         var error = Assert.Single(app.Dialogs.Errors);
         Assert.Equal("Applying the stash failed", error.Title);
-        Assert.Equal("Your changes to these files would be overwritten by applying stash@{0}.", error.Summary);
-        Assert.Contains("Your local changes to the following files would be overwritten by merge:", error.Output, StringComparison.Ordinal);
-        Assert.Contains("README.md", error.Output, StringComparison.Ordinal);
-        Assert.Equal("git stash pop stash@{0}", error.Command);
+        Assert.Equal("1 conflict prevents applying the stash. Commit, stash, or discard your changes first.", error.Summary);
+        Assert.False(error.HasOutput);
+        Assert.False(error.HasCommand);
+        Assert.DoesNotContain(app.Calls.Snapshot().Skip(calls), call => call.CommandText.StartsWith("git stash pop", StringComparison.Ordinal));
         Assert.False(error.HasExtraAction);
         Assert.Equal($"In {app.Repository.Name}", error.RepositoryText);
         Assert.Equal("Pop stash@{0} failed", app.StatusText);
@@ -267,7 +269,7 @@ public class RepositoryOperationsStashTagsTests
     }
 
     [Fact]
-    public async Task A_pop_whose_untracked_files_exist_says_that_the_tracked_changes_were_applied_and_the_stash_is_kept()
+    public async Task A_pop_whose_untracked_files_exist_is_refused_before_git_and_changes_nothing()
     {
         using var repo = await Scenarios.OperationsAsync();
         repo.WriteFile("src/core.txt", "core\nmain work\nstashed\n").WriteFile("notes.txt", "stashed notes\n");
@@ -279,16 +281,14 @@ public class RepositoryOperationsStashTagsTests
 
         await app.Operations.PopNewestStashAsync();
 
-        // Git applied the tracked part, left notes.txt alone and kept the entry.
+        // C12 (docs/phase-5-design.md 9.3): notes.txt exists, so the app refuses before git, which
+        // would have applied the tracked part and left the untracked one (design 0.5).
         var error = Assert.Single(app.Dialogs.Errors);
         Assert.Equal("Applying the stash failed", error.Title);
-        Assert.Equal(
-            "The tracked changes of stash@{0} were applied, but its untracked files were not: files of those names already exist. The stash is kept.",
-            error.Summary);
-        Assert.Contains("notes.txt already exists, no checkout", error.Output, StringComparison.Ordinal);
-        Assert.Equal("git stash pop stash@{0}", error.Command);
+        Assert.Equal("1 conflict prevents applying the stash. Commit, stash, or discard your changes first.", error.Summary);
+        Assert.False(error.HasOutput);
         Assert.Equal("Pop stash@{0} failed", app.StatusText);
-        Assert.Equal("core\nmain work\nstashed\n", File.ReadAllText(Path.Combine(repo.Path, "src", "core.txt")));
+        Assert.Equal("core\nmain work\n", File.ReadAllText(Path.Combine(repo.Path, "src", "core.txt")));
         Assert.Equal("my notes\n", File.ReadAllText(Path.Combine(repo.Path, "notes.txt")));
         Assert.Contains(stash, (await repo.StashListAsync()).Select(entry => entry.Sha));
         app.AssertScriptFollowed();

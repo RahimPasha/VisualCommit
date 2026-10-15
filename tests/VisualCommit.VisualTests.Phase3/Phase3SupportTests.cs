@@ -72,18 +72,12 @@ public sealed class Phase3SupportTests : Phase3Checks
         Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge", continueButton: resolveFirst, buttonsBelow: false));
         Assert.ThrowsAny<Exception>(() => AssertBanner(app, mergeText, "Abort merge", oneLine: true, continueButton: resolveFirst));
 
-        // Check 9 step 7: a checkout git refuses during the merge.
+        // Check 9 step 7: a checkout during the merge, refused before git since phase 5's C12
+        // (design 9.3): no output, no command, "Close" only.
         var repository = app.Session.Shell.ActiveTab.Repository!;
         var checkout = repository.Operations.CheckoutAsync("refs/heads/feature/alpha");
         await app.WaitForDialogAsync<ErrorDialogViewModel>(NetworkTimeout);
-        await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
-            "Checkout failed",
-            "Git could not check out feature/alpha.",
-            "ops",
-            "git switch --no-guess feature/alpha",
-            ["Copy output", "Close"],
-            ["fatal: cannot switch branch while merging", "Consider \"git merge --quit\" or \"git worktree add\"."],
-            KeyLine: "fatal: cannot switch branch while merging"));
+        await AssertErrorDialogAsync(app, new ExpectedErrorDialog("Checkout blocked", "Finish or abort the merge first", "ops", null, ["Close"], []));
         app.Click(app.FindByAutomationId("ConfirmButton"));
         await checkout.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
         AssertStatus(app, "Check out feature/alpha failed", OperationStatusTone.Danger);

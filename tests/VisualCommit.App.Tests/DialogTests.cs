@@ -342,7 +342,7 @@ public class DialogTests
     {
         var failure = new GitFailure(
             GitFailureKind.CheckoutBlockedByLocalChanges,
-            "Your changes to these files would be overwritten by checking out feature/other.",
+            "1 conflict prevents checkout. Commit, stash, or discard your changes first.",
             "error: Your local changes to the following files would be overwritten by checkout:\n\tnotes.txt\nAborting",
             "git switch --no-guess feature/other",
             1);
@@ -859,7 +859,7 @@ public class DialogTests
             Show(
                 new ErrorDialogViewModel(
                     "Checkout blocked",
-                    "Your changes to these files would be overwritten by checking out feature/other.",
+                    "1 conflict prevents checkout. Commit, stash, or discard your changes first.",
                     "blocked",
                     "error: Your local changes to the following files would be overwritten by checkout:\n\tnotes.txt\nPlease commit your changes or stash them before you switch branches.\nAborting",
                     "git switch --no-guess feature/other",

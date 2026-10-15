@@ -739,12 +739,11 @@ public static partial class Phase3Expectations
         public const string StatusCheckedOutMain = "Checked out main";
         public const string StatusDetachedAtInitial = "HEAD is now detached at 691f8cf";
 
-        // Check 9 step 7: the checkout git refuses during the merge (the error dialog's parts).
-        public const string CheckoutFailedTitle = "Checkout failed";
-        public const string CheckoutFailedSummary = "Git could not check out feature/alpha.";
+        // Check 9 step 7: the checkout refused during the merge (the error dialog's parts). Phase 5's
+        // C12 refuses it before git (docs/phase-5-design.md 9.3, the phase 5 report's "Beyond design
+        // 14.1"): "Checkout blocked" with the menus' reason (FinishMergeFirst), no output, no command.
+        public const string CheckoutBlockedTitle = "Checkout blocked";
         public const string CheckoutCommand = "git switch --no-guess feature/alpha";
-        public static readonly string[] CheckoutWhileMergingLines =
-            ["fatal: cannot switch branch while merging", "Consider \"git merge --quit\" or \"git worktree add\"."];
 
         // Check 12 step 11: the revert that changes nothing (D117), on Git 2.36.
         public const string RevertFailedTitle = "Revert failed";

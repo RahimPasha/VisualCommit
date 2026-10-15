@@ -147,19 +147,116 @@ public sealed partial class GitRepository
     }
 
     // ---- C12: protected changes and the automatic stash (docs/phase-5-design.md 9, D179) ---------
-    // Work package WP4 builds them here; until then each throws.
+    // The automatic stash itself is StashAsync with untracked files, then the checkout below; the
+    // operation (RepositoryOperations.Branches.cs) runs the steps of 9.2 with these.
 
-    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("A checkout that keeps ignored files is work package WP4's (docs/phase-5-design.md 9.1).");
+    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
 
-    public Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("Putting back what a half-made automatic stash deleted is work package WP4's (docs/phase-5-design.md 9.2).");
+        // --no-overwrite-ignore (a switch option since Git 2.23) refuses where git would otherwise
+        // overwrite an ignored file the commit tracks, or delete an ignored folder where it has a
+        // file (0.7); the refusal is git's untracked-files block and changes nothing.
+        return noOverwriteIgnore
+            ? RunWriteAsync(options, cancellationToken, ["switch", "--detach", "--no-overwrite-ignore", .. Positional(commit)])
+            : CheckoutDetachedAsync(commit, options, cancellationToken);
+    }
 
-    public Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("The ignored files in a checkout's way are work package WP4's (docs/phase-5-design.md 9.3).");
+    public async Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+        {
+            return;
+        }
 
-    public Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("The stash apply's check is work package WP4's (docs/phase-5-design.md 9.3).");
+        // The paths on standard input, NUL-separated: as many as there are, any name. They stay
+        // literal (GIT_LITERAL_PATHSPECS, D74), and the index is left alone (--worktree only).
+        var command = new GitCommand("restore", $"--source={source}", "--worktree", "--pathspec-from-file=-", "--pathspec-file-nul")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = (options ?? NetworkOptions.None).Environment,
+            StandardInput = string.Concat(paths.Select(path => path + "\0")),
+        };
+        (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+    }
+
+    public async Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var ignored = new HashSet<string>(StringComparer.Ordinal);
+        if (paths.Count == 0)
+        {
+            return ignored;
+        }
+
+        // A folder git names ("would lose untracked files in them") is asked about by its files,
+        // which check-ignore matches where the folder's own name may not (*.log in logs/): it is
+        // ignored when every file in it is. A symbolic link is asked about as a file. The same
+        // rules and the same check-ignore call as the undo's switch (GitRepository.Undo.cs).
+        var asked = paths.Distinct(StringComparer.Ordinal).ToDictionary(
+            path => path,
+            path => !IsFileOrLink(WorkingTreePath(path)) && Directory.Exists(WorkingTreePath(path)) ? FilesUnder(path) : [path],
+            StringComparer.Ordinal);
+        var matched = (await IgnoredAmongAsync([.. asked.Values.SelectMany(files => files).Distinct(StringComparer.Ordinal)], cancellationToken).ConfigureAwait(false))
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var (path, files) in asked)
+        {
+            if (files.Count > 0 && files.All(matched.Contains))
+            {
+                ignored.Add(path);
+            }
+        }
+
+        return ignored;
+    }
+
+    public async Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stashCommit);
+
+        // Both sides of a rename (--no-renames), against the commit the stash was made on.
+        var changed = await ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit).ConfigureAwait(false);
+
+        // A stash made without its untracked files has two parents: ^3 names nothing (the report's PD15).
+        var untracked = await ResolveAsync(stashCommit + "^3", cancellationToken).ConfigureAwait(false) is { } third
+            ? await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", third).ConfigureAwait(false)
+            : string.Empty;
+        return new StashPaths(SplitPaths(changed), SplitPaths(untracked));
+
+        static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>
+    /// The files under a folder of the working tree (<paramref name="folder"/>, a repository path),
+    /// as repository paths in byte order: what git would lose with it. A symbolic link is a file to
+    /// git, also one to a folder, and is not followed. The walk of the undo's
+    /// <c>UndoStepRun.FilesIn</c>, here for the checkout's refusal (9.3), which has no undo step.
+    /// </summary>
+    private List<string> FilesUnder(string folder)
+    {
+        var files = new List<string>();
+        var folders = new Stack<string>([folder]);
+        while (folders.TryPop(out var relative))
+        {
+            foreach (var entry in new DirectoryInfo(WorkingTreePath(relative)).EnumerateFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }))
+            {
+                var path = relative + "/" + entry.Name;
+                if (entry is DirectoryInfo && entry.LinkTarget is null)
+                {
+                    folders.Push(path);
+                }
+                else
+                {
+                    files.Add(path);
+                }
+            }
+        }
+
+        files.Sort(StringComparer.Ordinal);
+        return files;
+    }
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
 
