@@ -85,13 +85,13 @@ Start:
   nature): phase 1 `13b`, `14b` and phase 3 `30g` (a temporary folder's name), phase 3 `13j`,
   `27d`, `32b`, and 1 to 6 anti-aliased pixels in phase 3 `06e`, `10f`, `13l`, `22d`, `26e`, `28d`,
   `32d` and phase 4 `a1a`.
-- [ ] 5. Harness: phase 5's scenario repos (a file renamed across its history, blame with lines
+- [x] 5. Harness: phase 5's scenario repos (a file renamed across its history, blame with lines
   from several commits, a reflog with commits no ref reaches, branches to solo and hide, commits
   to search and compare, changes that block a checkout), pinned by tests; the projects
   `VisualCommit.VisualTests.Phase5` and `VisualCommit.VisualTests.Phase5Undo` in the solution
   (D181), `scripts/time-scripted-check.sh` and CLAUDE.md's Commands; the real-window project's
   link to `Phase5Expectations*.cs`; the record and backup clocks both harnesses fix; the driver
-  helpers the checks need.
+  helpers the checks need. (WP-S `ceb5f81`; each second-wave package added the driver helpers its part names.)
 - [x] 6. Phase 5's visual checks written into `docs/test-reports/phase-5.md`, each marked for the
   real-window pass or not, reviewed independently, and committed before the UI they test
   (`82fd5a0`: 27 checks in parts A, B, F, U and P, 89 test methods, 265 planned scripted pictures;
@@ -108,31 +108,31 @@ Git layer:
   Git 2.55.0's `--no-walk` path regression handled, design 0.3.)
 - [x] 10. Compare two commits or branches: the files changed between them and a file's diff.
   Tests. (WP1.)
-- [ ] 11. Undo and redo (D154, D155): each app action recorded with what it changed and how it
+- [x] 11. Undo and redo (D154, D155): each app action recorded with what it changed and how it
   is reversed, from the backups and what was recorded; a step refused when the repository has
   changed since; a remote put back with a lease after a question. Tests for each destructive
   action of phases 2 to 4. (Git half merged in `b0e8710`: every effect and sequence with its
-  checks, 112 tests on Git 2.36 and 2.55, design 7.12. Left: the app half, recording each
-  action and the toolbar's state, WP3 in the second wave.)
+  checks, 112 tests on Git 2.36 and 2.55, design 7.12. The app half, recording each action and
+  the toolbar's state, merged in `40cb5f5`.)
 - [x] 12. Solo and hide: the history of the chosen refs only. Tests. (WP2a, merged in `7316ad0`.)
-- [ ] 13. C12 (D153): the refusal before a checkout that would overwrite uncommitted changes, and
-  the automatic stash before checking out a commit the current branch reaches. Tests.
+- [x] 13. C12 (D153): the refusal before a checkout that would overwrite uncommitted changes, and
+  the automatic stash before checking out a commit the current branch reaches. Tests. (WP4, `43e8586`.)
 
 App:
 
-- [ ] 14. The activity log panel under the graph, from the status bar (D156): operations, their
-  git calls with output, exit code and time, warnings, the backups' clean-up lines.
-- [ ] 15. File history and blame in place of the graph (D158), from the file menus, with
-  click-through to commits.
-- [ ] 16. The reflog view with restore.
-- [ ] 17. Search over the graph (D157): the toolbar's Search and Ctrl+F, matches marked, the rest
-  dimmed, a count, next and previous; search inside changes.
-- [ ] 18. Compare: two selected commits, and a branch with another; the files in the right panel
-  and their diffs.
-- [ ] 19. The toolbar's Undo and Redo, naming the action they would undo or redo.
-- [ ] 20. Solo and hide in the branch menus and the left panel, kept in the session (D159).
-- [ ] 21. C12 on screen: the refusal's message and button, the automatic stash in the graph and
-  the left panel.
+- [x] 14. The activity log panel under the graph, from the status bar (D156): operations, their
+  git calls with output, exit code and time, warnings, the backups' clean-up lines. (WP5, `a7eb3c9`.)
+- [x] 15. File history and blame in place of the graph (D158), from the file menus, with
+  click-through to commits. (WP6, `2905f55`.)
+- [x] 16. The reflog view with restore. (WP6; the backups list's restores by WP3's app half, `40cb5f5`.)
+- [x] 17. Search over the graph (D157): the toolbar's Search and Ctrl+F, matches marked, the rest
+  dimmed, a count, next and previous; search inside changes. (WP7 and WP2b, `e11ea7d`, `17d8f97`.)
+- [x] 18. Compare: two selected commits, and a branch with another; the files in the right panel
+  and their diffs. (WP7.)
+- [x] 19. The toolbar's Undo and Redo, naming the action they would undo or redo. (WP3's app half, `40cb5f5`, with WP5's toolbar.)
+- [x] 20. Solo and hide in the branch menus and the left panel, kept in the session (D159). (WP7.)
+- [x] 21. C12 on screen: the refusal's message and button, the automatic stash in the graph and
+  the left panel. (WP4.)
 - [ ] 22. Phases 0 to 4's checks updated for what phase 5 changes on purpose (new menu items, the
   toolbar's Undo, Redo and Search, the status bar's toggle), recorded under "Changes to expected
   results" in the phase 5 report.
@@ -227,13 +227,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The second wave is merged but for WP3's app half: WP2b (`17d8f97`), WP5 (`a7eb3c9`), WP4
-(`43e8586`), WP6 (`2905f55`) and WP7 (`e11ea7d`, its menu items combined with WP6's on
-`wip/p5-merge7`), each built, reviewed and fixed; what they settled is in design 15.9. WP3's app half
-builds on `wip/p5-wp3a` (worktree `.claude/worktrees/p5-wp3a`, branched from WP4's branch). Then:
-merge it, do the lead follow-ups in the Notes below, one full default run, push, read CI; then the
-third wave writes the report's scripted checks part by part (WP8) and the real-window pass (WP9),
-fixing what they find.
+The second wave is merged: WP2b (`17d8f97`), WP5 (`a7eb3c9`), WP4 (`43e8586`), WP6 (`2905f55`),
+WP7 (`e11ea7d`) and WP3's app half (`40cb5f5`); what it settled is in design 15.9. CI run
+38816004590 on `e11ea7d` failed: on macOS three of WP7's filter tests compare a repository path as
+`/var/...` against git's `/private/var/...`, and on Windows phase 3's check 23 timed out waiting 10 s
+for "Stashed the changes". The lead's follow-ups (Notes below) and these two failures are being
+done on `wip/p5-followups` (worktree `.claude/worktrees/p5-followups`), which ends with a full
+default run and a comparison of the walk-through pictures with phase 4's list. Then: merge it,
+push, read CI; then the third wave: the report's scripted checks part by part (WP8) and the
+real-window pass (WP9), fixing what they find; at most two or three worktrees at a time (each
+built one takes about 5 GB; C: had 6 GB free on 2026-10-15).
 
 ### Notes for whoever resumes
 
