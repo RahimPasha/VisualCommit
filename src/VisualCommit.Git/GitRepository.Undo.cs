@@ -728,7 +728,7 @@ public sealed partial class GitRepository
                 }
 
                 if (effect is RemoteConfig removal && RemovesRemote(removal)
-                    && await DeleteRefsLeftUnderAsync($"{RemotesPrefix}{removal.Remote}/", index).ConfigureAwait(false) is { } left)
+                    && await DeleteRefsLeftUnderAsync(removal.Remote, index).ConfigureAwait(false) is { } left)
                 {
                     return left;
                 }
@@ -772,16 +772,31 @@ public sealed partial class GitRepository
         /// A removed remote's refs that the step's own effects before <paramref name="index"/> do
         /// not write, deleted as <c>git remote remove</c> deletes them (a fetch after an added remote
         /// made them, its entry does not hold them): the symbolic ones at once, the others in the
-        /// step's transaction, each verified at the value read.
+        /// step's transaction, each verified at the value read. Those of another remote whose name
+        /// goes on from this one's (<c>mirror/eu</c> after <c>mirror</c>, 0.5) stay, as git keeps them.
         /// </summary>
-        private async Task<UndoRefusal?> DeleteRefsLeftUnderAsync(string prefix, int index)
+        private async Task<UndoRefusal?> DeleteRefsLeftUnderAsync(string remote, int index)
         {
+            var prefix = $"{RemotesPrefix}{remote}/";
+            var others = _now.Config
+                .Where(key => string.Equals(key.Section, "remote", StringComparison.OrdinalIgnoreCase))
+                .Select(key => key.Subsection)
+                .OfType<string>()
+                .Where(name => name.StartsWith(remote + "/", StringComparison.Ordinal))
+                .Select(name => $"{RemotesPrefix}{name}/")
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
             var written = _order
                 .TakeWhile(item => item.Index != index)
                 .Select(item => item.Effect switch { SetRef set => set.Ref, SymbolicRef symbolic => symbolic.Ref, _ => null })
                 .OfType<string>()
                 .ToHashSet(StringComparer.Ordinal);
-            foreach (var (name, target) in _now.SymbolicRefs.Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal) && !written.Contains(item.Key)))
+            bool Left(string name) =>
+                name.StartsWith(prefix, StringComparison.Ordinal)
+                && !written.Contains(name)
+                && !others.Any(other => name.StartsWith(other, StringComparison.Ordinal));
+
+            foreach (var (name, target) in _now.SymbolicRefs.Where(item => Left(item.Key)))
             {
                 if (await ApplyAsync(new SymbolicRef(name, target, null), reversing: false).ConfigureAwait(false) is { } refusal)
                 {
@@ -790,7 +805,7 @@ public sealed partial class GitRepository
             }
 
             _pendingRefs.AddRange(_now.Refs
-                .Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal) && !written.Contains(item.Key))
+                .Where(item => Left(item.Key))
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new SetRef(item.Key, item.Value, null)));
             return null;

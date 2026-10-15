@@ -72,6 +72,11 @@ public class UndoStepRemoteTests
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
+
+        // A remote whose name goes on from the one added (0.5): its remote branches lie under
+        // refs/remotes/mirror/ too, and git remote remove mirror keeps them.
+        await repo.GitAsync("remote", "add", "mirror/eu", repo.SiblingPath("origin.git"));
+        await repo.GitAsync("fetch", "--quiet", "mirror/eu");
         var start = await PictureAsync(repo);
 
         var added = await RecordAsync(repository, UndoScope.AddRemote("mirror"), () => repository.AddRemoteAsync("mirror", repo.SiblingPath("origin.git"), TestCancelled));
@@ -85,6 +90,7 @@ public class UndoStepRemoteTests
         Assert.NotNull(await TargetAsync(repo, "refs/remotes/mirror/feature"));
         added = await UndoAsync(repository, added);
         Assert.Equal(start, await PictureAsync(repo));
+        Assert.NotNull(await TargetAsync(repo, "refs/remotes/mirror/eu/feature"));
         await RedoAsync(repository, added);
         Assert.Equal(withMirror, await PictureAsync(repo));
 
