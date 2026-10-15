@@ -175,9 +175,12 @@ read the screen too early); the runs were red until each was fixed (phase 4's re
 platforms", and its handoff, "Things that cost time").
 
 The last run on `phase/5-history` is
-[38748240435](https://github.com/RahimPasha/VisualCommit/actions/runs/38748240435), for `4b5716e`
-(the first wave merged: WP0, WP2a, WP1, WP-S, WP3's git half and D182): all five jobs succeeded
-with 2,749 tests each; the Windows Test step took 16 min 17 s of its 24 and macOS's 14 min 14 s.
+[38772677755](https://github.com/RahimPasha/VisualCommit/actions/runs/38772677755), for `7e7d99d`
+(the test speed-ups, whose `TempRepo` every test project uses): all five jobs succeeded with 2,765
+tests each; the Windows Test step took 16 min 38 s of its 24 and macOS's 11 min 45 s. The run
+before it, [38748240435](https://github.com/RahimPasha/VisualCommit/actions/runs/38748240435) for
+`4b5716e` (the first wave merged: WP0, WP2a, WP1, WP-S, WP3's git half and D182), had all five
+jobs green with 2,749 tests each (Windows Test step 16 min 17 s, macOS 14 min 14 s).
 Since 2026-10-15 the jobs run different gits: Windows 2.56.0.windows.2, macOS 2.56.0 (Homebrew),
 `ubuntu-latest` 2.55.0, the two containers 2.43.0. Two runs failed on the way and were fixed:
 38723225901 (phase 3's check 15b on Git 2.56, `281dd69`) and 38738421993 (a phase 5 scenario test
