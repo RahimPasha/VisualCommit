@@ -105,7 +105,11 @@ public sealed partial class Phase3ChecksB
         }
     }
 
-    /// <summary>What each row's lines must be, row by row, from the report's segments (<see cref="Segment"/>).</summary>
+    /// <summary>
+    /// What each row's lines must be, row by row, from the report's segments (<see cref="Segment"/>).
+    /// A segment that leaves a stash's node is dashed down to the first node it runs into, the
+    /// stash's base, and solid from there (docs/phase-5-design.md section 10, D161).
+    /// </summary>
     private static List<GraphLine>[] ExpectedLines(GraphTable table)
     {
         var rows = table.Rows.Select(_ => new List<GraphLine>()).ToArray();
@@ -113,22 +117,24 @@ public sealed partial class Phase3ChecksB
         {
             var start = segment.StartLane ?? segment.Lane;
             Assert.Equal(start, table.Rows[segment.FromRow].Lane);
-            rows[segment.FromRow].Add(new GraphLine(GraphLineKind.OutOfNode, start, segment.Lane, segment.Colour));
+            var dashed = table.Rows[segment.FromRow].Node == Node.Stash;
+            rows[segment.FromRow].Add(new GraphLine(GraphLineKind.OutOfNode, start, segment.Lane, segment.Colour) { IsDashed = dashed });
             for (var row = segment.FromRow + 1; row < segment.ToRow; row++)
             {
                 if (table.Rows[row].Lane == segment.Lane)
                 {
                     // A node of the lane's own on the way: the line runs into it and on out of it.
-                    rows[row].Add(new GraphLine(GraphLineKind.IntoNode, segment.Lane, segment.Lane, segment.Colour));
+                    rows[row].Add(new GraphLine(GraphLineKind.IntoNode, segment.Lane, segment.Lane, segment.Colour) { IsDashed = dashed });
                     rows[row].Add(new GraphLine(GraphLineKind.OutOfNode, segment.Lane, segment.Lane, segment.Colour));
+                    dashed = false;
                 }
                 else
                 {
-                    rows[row].Add(new GraphLine(GraphLineKind.PassThrough, segment.Lane, segment.Lane, segment.Colour));
+                    rows[row].Add(new GraphLine(GraphLineKind.PassThrough, segment.Lane, segment.Lane, segment.Colour) { IsDashed = dashed });
                 }
             }
 
-            rows[segment.ToRow].Add(new GraphLine(GraphLineKind.IntoNode, segment.Lane, table.Rows[segment.ToRow].Lane, segment.Colour));
+            rows[segment.ToRow].Add(new GraphLine(GraphLineKind.IntoNode, segment.Lane, table.Rows[segment.ToRow].Lane, segment.Colour) { IsDashed = dashed });
         }
 
         return rows;

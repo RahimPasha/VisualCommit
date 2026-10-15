@@ -10,7 +10,8 @@ namespace VisualCommit.Git.Tests;
 /// <summary>
 /// The lane layout of the commit graph (D48), on made-up histories. A history is written top to
 /// bottom as the graph shows it, one commit per line: <c>"M: P L"</c> is commit M with first
-/// parent P and second parent L; <c>"A:"</c> is a root commit.
+/// parent P and second parent L; <c>"A:"</c> is a root commit; <c>"stash S: B"</c> is a stash S
+/// made on B, whose line down to B is dashed (D161).
 /// </summary>
 public class GraphLayoutTests
 {
@@ -22,7 +23,7 @@ public class GraphLayoutTests
     /// </summary>
     private static readonly string[] GraphScenario =
     [
-        "S: T",
+        "stash S: T",
         "K: F",
         "T: H",
         "X: H",
@@ -194,10 +195,11 @@ public class GraphLayoutTests
     {
         var (layout, rows) = LayOut(GraphScenario);
 
+        // The stash's line down to T is dashed (D161); from T on, lane 0 is main's own and solid.
         Assert.Equal(13, rows.Length);
-        AssertRow(rows[0], "S", 0, 0, Out(0, 0, 0));
-        AssertRow(rows[1], "K", 1, 1, Through(0, 0), Out(1, 1, 1));
-        AssertRow(rows[2], "T", 0, 0, Into(0, 0, 0), Through(1, 1), Out(0, 0, 0));
+        AssertRow(rows[0], "S", 0, 0, Dashed(Out(0, 0, 0)));
+        AssertRow(rows[1], "K", 1, 1, Dashed(Through(0, 0)), Out(1, 1, 1));
+        AssertRow(rows[2], "T", 0, 0, Dashed(Into(0, 0, 0)), Through(1, 1), Out(0, 0, 0));
         AssertRow(rows[3], "X", 2, 2, Through(0, 0), Through(1, 1), Out(2, 2, 2));
         AssertRow(rows[4], "H", 0, 0, Into(0, 0, 0), Through(1, 1), Into(2, 0, 2), Out(0, 0, 0));
         AssertRow(rows[5], "B", 2, 3, Through(0, 0), Through(1, 1), Out(2, 2, 3));
@@ -209,6 +211,105 @@ public class GraphLayoutTests
         AssertRow(rows[11], "A2", 0, 0, Into(0, 0, 0), Into(1, 0, 4), Out(0, 0, 0));
         AssertRow(rows[12], "A1", 0, 0, Into(0, 0, 0));
         Assert.Equal(3, layout.MaxLaneCount);
+    }
+
+    [Fact]
+    public void A_stash_on_a_commit_inside_a_branch_has_a_dashed_lane_down_to_it_and_the_branch_stays_solid()
+    {
+        // C's lane waits for B before the stash comes, so the stash starts a lane of its own.
+        var (_, rows) = LayOut("C: B", "stash S: B", "B: A", "A:");
+
+        AssertRow(rows[0], "C", 0, 0, Out(0, 0, 0));
+        AssertRow(rows[1], "S", 1, 1, Through(0, 0), Dashed(Out(1, 1, 1)));
+        AssertRow(rows[2], "B", 0, 0, Into(0, 0, 0), Dashed(Into(1, 0, 1)), Out(0, 0, 0));
+        AssertRow(rows[3], "A", 0, 0, Into(0, 0, 0));
+    }
+
+    [Fact]
+    public void A_stash_lane_left_of_its_base_branch_hands_its_lane_to_the_base_solid_from_there()
+    {
+        // The stash takes lane 0 before the branch's tip C starts lane 1; B's node goes in the
+        // leftmost lane that waits for it, the stash's, as D54 places it, and goes on solid.
+        var (_, rows) = LayOut("stash S: B", "C: B", "B: A", "A:");
+
+        AssertRow(rows[0], "S", 0, 0, Dashed(Out(0, 0, 0)));
+        AssertRow(rows[1], "C", 1, 1, Dashed(Through(0, 0)), Out(1, 1, 1));
+        AssertRow(rows[2], "B", 0, 0, Dashed(Into(0, 0, 0)), Into(1, 0, 1), Out(0, 0, 0));
+        AssertRow(rows[3], "A", 0, 0, Into(0, 0, 0));
+    }
+
+    [Fact]
+    public void Two_stashes_on_one_commit_each_have_a_dashed_lane()
+    {
+        var (_, rows) = LayOut("stash S1: B", "stash S2: B", "B: A", "A:");
+
+        AssertRow(rows[0], "S1", 0, 0, Dashed(Out(0, 0, 0)));
+        AssertRow(rows[1], "S2", 1, 1, Dashed(Through(0, 0)), Dashed(Out(1, 1, 1)));
+        AssertRow(rows[2], "B", 0, 0, Dashed(Into(0, 0, 0)), Dashed(Into(1, 0, 1)), Out(0, 0, 0));
+        AssertRow(rows[3], "A", 0, 0, Into(0, 0, 0));
+    }
+
+    [Fact]
+    public void A_merges_line_that_joins_a_stash_lane_makes_the_lane_solid_from_there()
+    {
+        // M's second parent is A, which the stash's lane already waits for: from M's row down, that
+        // lane leads to a parent of M and is drawn solid; above M it stays the stash's dashed line.
+        var (_, rows) = LayOut("stash S: A", "M: X A", "X: A", "A:");
+
+        AssertRow(rows[0], "S", 0, 0, Dashed(Out(0, 0, 0)));
+        AssertRow(rows[1], "M", 1, 1, Dashed(Through(0, 0)), Out(1, 1, 1), Out(1, 0, 0));
+        AssertRow(rows[2], "X", 1, 1, Through(0, 0), Into(1, 1, 1), Out(1, 1, 1));
+        AssertRow(rows[3], "A", 0, 0, Into(0, 0, 0), Into(1, 0, 1));
+    }
+
+    [Fact]
+    public void A_stash_whose_base_never_comes_keeps_its_dashed_lane_to_the_bottom()
+    {
+        var (_, rows) = LayOut("stash S: gone", "B: A", "A:");
+
+        AssertRow(rows[0], "S", 0, 0, Dashed(Out(0, 0, 0)));
+        AssertRow(rows[1], "B", 1, 1, Dashed(Through(0, 0)), Out(1, 1, 1));
+        AssertRow(rows[2], "A", 1, 1, Dashed(Through(0, 0)), Into(1, 1, 1));
+    }
+
+    [Fact]
+    public void Dashes_change_no_lane_colour_or_node()
+    {
+        // The same histories laid out with their stashes and with every row a plain commit: every
+        // node, lane and colour is the same; only the stash lanes' lines are dashed.
+        var stashes = 0;
+        for (var seed = 1; seed <= 50; seed++)
+        {
+            var history = RandomHistory(seed, commitCount: 300, stashChance: 0.08);
+            stashes += history.Count(commit => commit.Kind == CommitKind.Stash);
+            var withStashes = new GraphLayout();
+            var plain = new GraphLayout();
+            foreach (var commit in history)
+            {
+                var row = withStashes.Add(commit);
+                var plainRow = plain.Add(commit with { Kind = CommitKind.Commit });
+                Assert.Equal(Describe(commit.Sha, plainRow.NodeLane, plainRow.NodeColor, plainRow.Lines), Describe(commit.Sha, row.NodeLane, row.NodeColor, row.Lines.Select(line => line with { IsDashed = false })));
+                Assert.DoesNotContain(plainRow.Lines, line => line.IsDashed);
+            }
+
+            Assert.Equal(plain.MaxLaneCount, withStashes.MaxLaneCount);
+        }
+
+        Assert.True(stashes > 500, $"only {stashes} stashes");
+    }
+
+    [Fact]
+    public void Random_histories_with_stashes_dash_exactly_the_stash_lanes()
+    {
+        var stashes = 0;
+        for (var seed = 1; seed <= 200; seed++)
+        {
+            var history = RandomHistory(seed, commitCount: 300, stashChance: 0.08);
+            stashes += history.Count(commit => commit.Kind == CommitKind.Stash);
+            CheckLayout(history, $"seed {seed}");
+        }
+
+        Assert.True(stashes > 2000, $"only {stashes} stashes");
     }
 
     [Fact]
@@ -264,19 +365,26 @@ public class GraphLayoutTests
 
     // ---- Building histories and layouts --------------------------------------------------------
 
-    /// <summary>Commits from lines such as <c>"M: P L"</c> (commit M, parents P then L) and <c>"A:"</c> (a root).</summary>
+    /// <summary>
+    /// Commits from lines such as <c>"M: P L"</c> (commit M, parents P then L), <c>"A:"</c> (a root)
+    /// and <c>"stash S: B"</c> (a stash S made on B).
+    /// </summary>
     private static List<CommitInfo> History(params string[] lines) =>
         [.. lines.Select(line =>
         {
+            const string StashPrefix = "stash ";
             var colon = line.IndexOf(':', StringComparison.Ordinal);
             var parents = line[(colon + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return Commit(line[..colon].Trim(), parents);
+            var name = line[..colon].Trim();
+            return name.StartsWith(StashPrefix, StringComparison.Ordinal)
+                ? Commit(name[StashPrefix.Length..], parents, CommitKind.Stash)
+                : Commit(name, parents);
         })];
 
-    private static CommitInfo Commit(string sha, IReadOnlyList<string> parents)
+    private static CommitInfo Commit(string sha, IReadOnlyList<string> parents, CommitKind kind = CommitKind.Commit)
     {
         var date = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        return new CommitInfo(sha, parents, "Test Author", "author@example.com", date, date, sha);
+        return new CommitInfo(sha, parents, "Test Author", "author@example.com", date, date, sha, kind);
     }
 
     private static (GraphLayout Layout, GraphRow[] Rows) LayOut(params string[] lines)
@@ -292,6 +400,9 @@ public class GraphLayoutTests
 
     private static GraphLine Out(int nodeLane, int toLane, int color) => new(GraphLineKind.OutOfNode, nodeLane, toLane, color);
 
+    /// <summary>The line drawn dashed: a stash's line down to its base (D161).</summary>
+    private static GraphLine Dashed(GraphLine line) => line with { IsDashed = true };
+
     /// <summary>Compares the row as text, so that a failure names the commit and shows the whole row.</summary>
     private static void AssertRow(GraphRow row, string commit, int nodeLane, int nodeColor, params GraphLine[] lines) =>
         Assert.Equal(Describe(commit, nodeLane, nodeColor, lines), Describe(commit, row.NodeLane, row.NodeColor, row.Lines));
@@ -302,7 +413,7 @@ public class GraphLayoutTests
         text.Append(CultureInfo.InvariantCulture, $"{commit}: node in lane {nodeLane}, colour {nodeColor}; lines:");
         foreach (var line in lines)
         {
-            text.Append(CultureInfo.InvariantCulture, $" {line.Kind} {line.FromLane}>{line.ToLane} colour {line.Color},");
+            text.Append(CultureInfo.InvariantCulture, $" {line.Kind} {line.FromLane}>{line.ToLane} colour {line.Color}{(line.IsDashed ? " dashed" : string.Empty)},");
         }
 
         return text.ToString();
@@ -311,16 +422,30 @@ public class GraphLayoutTests
     /// <summary>
     /// A history of <paramref name="commitCount"/> commits with branches, merges, octopus merges,
     /// several roots and tips, in an order in which every commit comes after all its children.
+    /// With a <paramref name="stashChance"/>, that share of the commits are stashes, each made on
+    /// an older commit, as many as the pager merges in; without one the same seed gives the same
+    /// history as before stashes were drawn dashed.
     /// </summary>
-    private static List<CommitInfo> RandomHistory(int seed, int commitCount)
+    private static List<CommitInfo> RandomHistory(int seed, int commitCount, double stashChance = 0)
     {
         var random = new Random(seed);
 
         // Made oldest first: every parent has a lower number than its children.
         var parentsOf = new List<int[]>(commitCount);
         var heads = new List<int>();
+        var stashes = new HashSet<int>();
+        var commits = new List<int>(commitCount);
         for (var i = 0; i < commitCount; i++)
         {
+            // A stash is made on a commit; it has no children, and no branch goes on from it.
+            if (stashChance > 0 && i > 0 && random.NextDouble() < stashChance)
+            {
+                parentsOf.Add([commits[random.Next(commits.Count)]]);
+                stashes.Add(i);
+                continue;
+            }
+
+            commits.Add(i);
             var roll = random.NextDouble();
             if (i == 0 || roll < 0.03)
             {
@@ -349,7 +474,14 @@ public class GraphLayoutTests
             }
             else if (roll < 0.30)
             {
-                parentsOf.Add([i - 1 - random.Next(Math.Min(i, 30))]);
+                // A new branch from a recent commit, never from a stash.
+                var parent = i - 1 - random.Next(Math.Min(i, 30));
+                while (stashes.Contains(parent))
+                {
+                    parent--;
+                }
+
+                parentsOf.Add([parent]);
                 heads.Add(i);
             }
             else
@@ -386,24 +518,30 @@ public class GraphLayoutTests
         }
 
         Assert.Equal(commitCount, order.Count);
-        return [.. order.Select(i => Commit($"c{i}", [.. parentsOf[i].Select(parent => $"c{parent}")]))];
+        return [.. order.Select(i => Commit(
+            $"c{i}",
+            [.. parentsOf[i].Select(parent => $"c{parent}")],
+            stashes.Contains(i) ? CommitKind.Stash : CommitKind.Commit))];
     }
 
     /// <summary>
     /// Lays the history out and checks every row against what the rows above it promised: the
     /// lanes and colours leaving the bottom of one row enter the top of the next, the lines into a
     /// node come from exactly the lanes that waited for it, every distinct parent is reached by one
-    /// line, and a lane never waits for two commits at once. Plain loops rather than LINQ keep the
-    /// tens of thousands of rows fast.
+    /// line, and a lane never waits for two commits at once. A lane is dashed from a stash's node
+    /// down to the stash's base, unless a line to another commit's further parent joins it, from
+    /// where it is solid; every other line is solid. Plain loops rather than LINQ keep the tens of
+    /// thousands of rows fast.
     /// </summary>
     private static void CheckLayout(IReadOnlyList<CommitInfo> history, string context)
     {
         var layout = new GraphLayout();
 
         // The model: what the rows so far say each lane waits for at their bottom edge (null for a
-        // free lane), and the lane's colour there.
+        // free lane), the lane's colour there, and whether it is a stash's dashed lane.
         var waitsFor = new List<string?>();
         var colorOf = new List<int>();
+        var dashedOf = new List<bool>();
         var lanesStarted = 0;
         var widest = 0;
 
@@ -441,7 +579,7 @@ public class GraphLayoutTests
                 }
 
                 var waits = WaitingIn(line.FromLane);
-                if (waits is null || colorOf[line.FromLane] != line.Color || line.FromLane <= previousLane)
+                if (waits is null || colorOf[line.FromLane] != line.Color || dashedOf[line.FromLane] != line.IsDashed || line.FromLane <= previousLane)
                 {
                     Fail($"{line} does not continue exactly one line of the row above");
                 }
@@ -505,6 +643,14 @@ public class GraphLayoutTests
 
                 var parent = parents[reached];
                 var joined = waitsFor.IndexOf(parent);
+
+                // Only a stash's line to its base starts a dashed lane; a line that joins a lane makes it solid.
+                var dashed = reached == 0 && commit.Kind == CommitKind.Stash;
+                if (line.IsDashed != dashed)
+                {
+                    Fail($"the line to {parent} is {(line.IsDashed ? "dashed" : "solid")}");
+                }
+
                 if (reached == 0)
                 {
                     if (line.ToLane != row.NodeLane || line.Color != row.NodeColor)
@@ -539,10 +685,12 @@ public class GraphLayoutTests
                 {
                     waitsFor.Add(null);
                     colorOf.Add(-1);
+                    dashedOf.Add(false);
                 }
 
                 waitsFor[line.ToLane] = parent;
                 colorOf[line.ToLane] = line.Color;
+                dashedOf[line.ToLane] = dashed;
                 reached++;
             }
 

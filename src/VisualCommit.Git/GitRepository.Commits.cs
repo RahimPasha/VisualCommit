@@ -31,6 +31,9 @@ public sealed partial class GitRepository
     /// <summary>The characters of a commit id as git prints it.</summary>
     private static readonly SearchValues<char> HexDigits = SearchValues.Create("0123456789abcdef");
 
+    /// <summary>No refs: what <see cref="GraphFilter.StandardInput"/> is given for solo, whose input does not depend on them.</summary>
+    private static readonly RepoRefs NoRefs = new(new HeadState(null, null), [], [], []);
+
     public Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(refs);
@@ -38,41 +41,64 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
-    /// The graph with a filter (docs/phase-5-design.md 8.2): a null filter is exactly
-    /// <see cref="LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>.
-    /// Loading with a filter is work package WP2a's.
+    /// The graph with what it hides or solos (docs/phase-5-design.md 8.2, D178): git gets the
+    /// filter's revisions in place of <see cref="GraphFilter.Unfiltered"/>, on its standard input
+    /// when they are too long for a command line, and a stash whose base git does not show is left
+    /// out (<see cref="CommitPager"/>). A null filter, or one that hides and solos nothing, loads
+    /// exactly as <see cref="LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>
+    /// does: the same command, byte for byte, and the same stashes.
     /// </summary>
     public Task LoadCommitsAsync(Task<RepoRefs> refs, GraphFilter? filter, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) =>
-        filter is null
-            ? LoadCommitsAsync(refs, onPage, cancellationToken)
-            : throw new NotImplementedException("Loading a filtered graph is work package WP2a's (docs/phase-5-design.md 8.2).");
+        LoadHistoryAsync(refs, filter is { IsEmpty: false } ? filter : null, onPage, cancellationToken);
 
-    public async Task LoadCommitsAsync(Task<RepoRefs> refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
+    public Task LoadCommitsAsync(Task<RepoRefs> refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) =>
+        LoadHistoryAsync(refs, filter: null, onPage, cancellationToken);
+
+    /// <summary>
+    /// Streams the graph's history to <paramref name="onPage"/>, with the stashes merged in: every
+    /// branch, remote branch and tag and HEAD without a <paramref name="filter"/>, or what the
+    /// filter shows.
+    /// </summary>
+    private async Task LoadHistoryAsync(Task<RepoRefs> refs, GraphFilter? filter, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(refs);
         ArgumentNullException.ThrowIfNull(onPage);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // The pager merges the stashes in. With a filter it also needs the commits shown for
+        // certain, so that a stash whose base is hidden is left out.
+        CommitPager NewPager(RepoRefs known) =>
+            filter is null ? new CommitPager(known.Stashes, onPage) : new CommitPager(known.Stashes, ShownTips(known, filter), onPage);
 
         // Refs already known, none of them, and an unborn HEAD: no commit to show, nothing to ask git.
         if (refs.IsCompletedSuccessfully && refs.Result.Refs.Count == 0 && refs.Result.Head.IsUnborn)
         {
             // Stashes alone are possible in theory (every branch deleted after stashing). They
             // are handed over on a background thread, as the contract promises.
-            await Task.Run(new CommitPager(refs.Result.Stashes, onPage).Finish, cancellationToken).ConfigureAwait(false);
+            await Task.Run(NewPager(refs.Result).Finish, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         // git log does not depend on the refs, so it starts before they are known. HEAD is always
         // named, with --ignore-missing, which skips it when it is unborn: a detached HEAD's
-        // commits are reachable from nothing else.
+        // commits are reachable from nothing else. A filter keeps HEAD (0.6).
         var arguments = new List<string> { "log", "--date-order", "--format=" + LogFormat };
         arguments.AddRange(PlainLogOptions);
-        arguments.AddRange(["--branches", "--remotes", "--tags", "--ignore-missing", "HEAD", "--"]);
+        arguments.AddRange(filter?.RevisionArguments ?? GraphFilter.Unfiltered);
+
+        // Too many revisions for a command line go on standard input as plain names. Hiding names
+        // every ref that is not hidden, so it waits for the refs; soloing names only the soloed
+        // refs, which the filter holds.
+        string? input = null;
+        if (filter is { UsesStandardInput: true })
+        {
+            input = filter.StandardInput(filter.IsSolo ? NoRefs : await refs.ConfigureAwait(false));
+        }
 
         // The pager needs the stashes, so it is made when the first commit arrives, waiting for the
         // refs if they are still being read; git keeps writing into the pipe meanwhile.
         CommitPager? pager = null;
-        CommitPager Pager() => pager ??= new CommitPager(refs.GetAwaiter().GetResult().Stashes, onPage);
+        CommitPager Pager() => pager ??= NewPager(refs.GetAwaiter().GetResult());
 
         // Names and addresses repeat across commits; one string each keeps a large history small.
         var strings = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -92,6 +118,7 @@ public sealed partial class GitRepository
         {
             WorkingDirectory = WorkingDirectory,
             Environment = ReadEnvironment,
+            StandardInput = input,
             OnOutputLine = line =>
             {
                 // A cancelled load must not hand over another page, even from output git
@@ -117,8 +144,32 @@ public sealed partial class GitRepository
 
         // A history without commits never made the pager; a failure to read the refs surfaces here.
         var known = await refs.ConfigureAwait(false);
-        pager ??= new CommitPager(known.Stashes, onPage);
+        pager ??= NewPager(known);
         pager.Finish();
+    }
+
+    /// <summary>
+    /// The commits a filtered graph shows for certain, before git prints them: HEAD's, and the
+    /// tips of the soloed refs or, without solo, of every ref that is not hidden. A ref deleted
+    /// after the refs were read can leave a stash on its tip placed by date, with a line to the
+    /// bottom of the graph, as any stash whose base git does not print is placed without a filter;
+    /// the refresh that the deletion brings loads the graph again.
+    /// </summary>
+    private static IEnumerable<string> ShownTips(RepoRefs refs, GraphFilter filter)
+    {
+        var named = new HashSet<string>(filter.IsSolo ? filter.Soloed : filter.Hidden, StringComparer.Ordinal);
+        foreach (var gitRef in refs.Refs)
+        {
+            if (named.Contains(gitRef.FullName) == filter.IsSolo)
+            {
+                yield return gitRef.TargetSha;
+            }
+        }
+
+        if (refs.Head.Sha is { } head)
+        {
+            yield return head;
+        }
     }
 
     public async Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default)

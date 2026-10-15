@@ -32,6 +32,14 @@ namespace VisualCommit.Core.Graph;
 /// left (lanes passing through and lanes ending in the node), then the lines to the parents,
 /// first parent first.
 /// </para>
+/// <para>
+/// A stash's lane is a stash lane down to the commit it was made on (docs/phase-5-design.md
+/// section 10, D161): the stash row's line out of its node, the lines passing through below it and
+/// the line into its base's node are dashed (<see cref="GraphLine.IsDashed"/>), as the working
+/// changes' line to HEAD is. From the base on the lane is the base's own and solid. When another
+/// commit's line to a further parent joins a stash lane, that lane leads to a real parent from
+/// there and is solid too. Lanes, colours and nodes are the same as without the dashes.
+/// </para>
 /// <para>Not thread-safe: one loader feeds it, commit by commit.</para>
 /// </remarks>
 public sealed class GraphLayout
@@ -82,7 +90,7 @@ public sealed class GraphLayout
             DrawTopHalf(waitedFor: null, nodeLane);
         }
 
-        DrawParents(commit.Parents, nodeLane, nodeColor);
+        DrawParents(commit.Parents, nodeLane, nodeColor, isStash: commit.Kind == CommitKind.Stash);
 
         while (_lanes.Count > 0 && _lanes[^1].IsFree)
         {
@@ -117,18 +125,21 @@ public sealed class GraphLayout
                 && string.Equals(state.WaitsFor, waitedFor, StringComparison.Ordinal);
             if (endsInNode)
             {
-                _lines.Add(new GraphLine(GraphLineKind.IntoNode, lane, nodeLane, state.Color));
+                _lines.Add(new GraphLine(GraphLineKind.IntoNode, lane, nodeLane, state.Color) { IsDashed = state.IsDashed });
                 _lanes[lane] = default;
             }
             else
             {
-                _lines.Add(new GraphLine(GraphLineKind.PassThrough, lane, lane, state.Color));
+                _lines.Add(new GraphLine(GraphLineKind.PassThrough, lane, lane, state.Color) { IsDashed = state.IsDashed });
             }
         }
     }
 
-    /// <summary>Points a lane at each distinct parent and adds a line from the node to it.</summary>
-    private void DrawParents(IReadOnlyList<string> parents, int nodeLane, int nodeColor)
+    /// <summary>
+    /// Points a lane at each distinct parent and adds a line from the node to it. A stash's line to
+    /// its base (its only parent) starts a stash lane.
+    /// </summary>
+    private void DrawParents(IReadOnlyList<string> parents, int nodeLane, int nodeColor, bool isStash)
     {
         for (var index = 0; index < parents.Count; index++)
         {
@@ -142,14 +153,16 @@ public sealed class GraphLayout
             {
                 // The first parent continues the node's lane, even if another lane already waits
                 // for it: the two lines then meet at the parent.
-                _lanes[nodeLane] = new Lane(parent, nodeColor);
+                _lanes[nodeLane] = new Lane(parent, nodeColor, IsDashed: isStash);
                 _leftmostLaneWaitingFor[parent] = _leftmostLaneWaitingFor.TryGetValue(parent, out var other)
                     ? Math.Min(other, nodeLane)
                     : nodeLane;
-                _lines.Add(new GraphLine(GraphLineKind.OutOfNode, nodeLane, nodeLane, nodeColor));
+                _lines.Add(new GraphLine(GraphLineKind.OutOfNode, nodeLane, nodeLane, nodeColor) { IsDashed = isStash });
             }
             else if (_leftmostLaneWaitingFor.TryGetValue(parent, out var joined))
             {
+                // From here the joined lane leads to a parent of this commit: a stash lane becomes solid.
+                _lanes[joined] = _lanes[joined] with { IsDashed = false };
                 _lines.Add(new GraphLine(GraphLineKind.OutOfNode, nodeLane, joined, _lanes[joined].Color));
             }
             else
@@ -196,7 +209,8 @@ public sealed class GraphLayout
     /// <summary>One lane: free when <see cref="WaitsFor"/> is null (the default value).</summary>
     /// <param name="WaitsFor">The id of the commit the lane leads down to.</param>
     /// <param name="Color">The colour number the lane was given when it started.</param>
-    private readonly record struct Lane(string? WaitsFor, int Color)
+    /// <param name="IsDashed">A stash lane: it leads only from a stash down to its base, and its lines are dashed.</param>
+    private readonly record struct Lane(string? WaitsFor, int Color, bool IsDashed = false)
     {
         public bool IsFree => WaitsFor is null;
     }
