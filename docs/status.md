@@ -227,14 +227,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The first wave, the test speed-ups (`7e7d99d`) and step 6's report (`82fd5a0`) are merged. The
-second wave runs in worktrees under `.claude/worktrees/p5-*`, each built, reviewed and fixed by its
-own agents, to the report's expected results and decisions (design 15.8): WP2b (`wip/p5-wp2b`,
-graph drawing), WP4 (`wip/p5-wp4`, C12), then WP3's app half on top of it (`wip/p5-wp3a`), WP5
-(`wip/p5-wp5`, activity log and shell), WP6 (`wip/p5-wp6`, pages and All files) and WP7
-(`wip/p5-wp7`, search, compare, solo and hide). Then: merge each (WP4 before WP3's app half),
-one full default run, push, read CI; then the third wave writes the report's scripted checks part
-by part (WP8) and the real-window pass (WP9), fixing what they find.
+The second wave is merged but for WP3's app half: WP2b (`17d8f97`), WP5 (`a7eb3c9`), WP4
+(`43e8586`), WP6 (`2905f55`) and WP7 (`e11ea7d`, its menu items combined with WP6's on
+`wip/p5-merge7`), each built, reviewed and fixed; what they settled is in design 15.9. WP3's app half
+builds on `wip/p5-wp3a` (worktree `.claude/worktrees/p5-wp3a`, branched from WP4's branch). Then:
+merge it, do the lead follow-ups in the Notes below, one full default run, push, read CI; then the
+third wave writes the report's scripted checks part by part (WP8) and the real-window pass (WP9),
+fixing what they find.
 
 ### Notes for whoever resumes
 
