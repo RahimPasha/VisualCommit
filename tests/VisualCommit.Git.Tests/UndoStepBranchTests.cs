@@ -19,15 +19,10 @@ namespace VisualCommit.Git.Tests;
 public class UndoStepBranchTests
 {
     [Fact]
-    public async Task A_checkout_of_a_branch_and_of_a_tag_switch_back_carrying_work()
+    public async Task A_checkout_of_a_branch_switches_back_carrying_work()
     {
         using var repo = await UndoRepoAsync();
-        var (repository, _) = await OpenDatedAsync(repo);
-        await repo.TagAsync("v-old", "HEAD~1");
-
-        // A staged change to a file both commits have alike, and an untracked file: carried both ways.
-        repo.WriteFile("a.txt", "a-staged\n").WriteFile("scratch.txt", "scratch\n");
-        await repo.GitAsync("add", "a.txt");
+        var repository = await WithWorkToCarryAsync(repo);
         var start = await PictureAsync(repo);
         var branch = await RecordAsync(repository, UndoScope.Checkout("feature", "main"), () => repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled));
         var onFeature = await PictureAsync(repo);
@@ -36,6 +31,15 @@ public class UndoStepBranchTests
         Assert.Equal("refs/heads/feature", (await repo.GitAsync("rev-parse", "--symbolic-full-name", "@{-1}")).StandardOutput.Trim());
         await RedoAsync(repository, branch);
         Assert.Equal(onFeature, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_checkout_of_a_tag_switches_back_carrying_work()
+    {
+        using var repo = await UndoRepoAsync();
+        var repository = await WithWorkToCarryAsync(repo);
+        await repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled);
+        var onFeature = await PictureAsync(repo);
 
         var tag = await RecordAsync(repository, UndoScope.Checkout("v-old", "feature"), () => repository.CheckoutDetachedAsync("refs/tags/v-old", cancellationToken: TestCancelled));
         var detached = await PictureAsync(repo);
@@ -43,6 +47,20 @@ public class UndoStepBranchTests
         Assert.Equal(onFeature, await PictureAsync(repo));
         await RedoAsync(repository, tag);
         Assert.Equal(detached, await PictureAsync(repo));
+    }
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> (the undo repository) after tagging <c>c2</c> <c>v-old</c> and
+    /// making the work a checkout carries both ways: a staged change to a file every commit
+    /// involved has alike (<c>a.txt</c>), and an untracked file.
+    /// </summary>
+    private static async Task<GitRepository> WithWorkToCarryAsync(TempRepo repo)
+    {
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.TagAsync("v-old", "HEAD~1");
+        repo.WriteFile("a.txt", "a-staged\n").WriteFile("scratch.txt", "scratch\n");
+        await repo.GitAsync("add", "a.txt");
+        return repository;
     }
 
     [Fact]

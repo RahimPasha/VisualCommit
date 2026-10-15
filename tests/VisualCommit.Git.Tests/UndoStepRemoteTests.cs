@@ -16,7 +16,7 @@ namespace VisualCommit.Git.Tests;
 public class UndoStepRemoteTests
 {
     [Fact]
-    public async Task Tags_created_and_deleted_come_back_as_the_same_objects()
+    public async Task An_annotated_tag_created_comes_back_as_the_same_object()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -36,16 +36,28 @@ public class UndoStepRemoteTests
         await RedoAsync(repository, undone);
         Assert.Equal(tagged, await PictureAsync(repo));
         Assert.Equal(tagObject, await TargetAsync(repo, "refs/tags/v1"));
+    }
+
+    [Fact]
+    public async Task A_deleted_tag_comes_back_as_the_same_object()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var start = await PictureAsync(repo);
+        await repository.CreateTagAsync("v1", "HEAD", "Release 1", TestCancelled);
+        var tagObject = await TargetAsync(repo, "refs/tags/v1");
+        var tagged = await PictureAsync(repo);
 
         var deleted = await RecordAsync(repository, UndoScope.DeleteTag("v1"), () => repository.DeleteTagAsync("v1", TestCancelled));
         deleted = await UndoAsync(repository, deleted);
         Assert.Equal(tagged, await PictureAsync(repo));
+        Assert.Equal(tagObject, await TargetAsync(repo, "refs/tags/v1"));
         await RedoAsync(repository, deleted);
         Assert.Equal(start, await PictureAsync(repo));
     }
 
     [Fact]
-    public async Task An_upstream_set_or_stopped_gets_its_keys_back()
+    public async Task An_upstream_stopped_gets_its_keys_back()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -58,6 +70,15 @@ public class UndoStepRemoteTests
         Assert.Equal("refs/remotes/origin/main", (await repo.GitAsync("rev-parse", "--symbolic-full-name", "main@{upstream}")).StandardOutput.Trim());
         await RedoAsync(repository, stop);
         Assert.Equal(stopped, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task An_upstream_set_where_there_was_none_is_taken_away_again()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repository.UnsetUpstreamAsync("main", TestCancelled);
+        var stopped = await PictureAsync(repo);
 
         var set = await RecordAsync(repository, UndoScope.Upstream("main"), () => repository.SetUpstreamAsync("main", "refs/remotes/origin/feature", TestCancelled));
         var changed = await PictureAsync(repo);
@@ -68,7 +89,7 @@ public class UndoStepRemoteTests
     }
 
     [Fact]
-    public async Task A_remote_added_and_given_a_new_url_comes_back()
+    public async Task A_remote_added_comes_back()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -87,6 +108,15 @@ public class UndoStepRemoteTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, added);
         Assert.Equal(withMirror, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_remote_given_a_new_url_comes_back()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repository.AddRemoteAsync("mirror", repo.SiblingPath("origin.git"), TestCancelled);
+        var withMirror = await PictureAsync(repo);
 
         var url = await RecordAsync(repository, UndoScope.SetRemoteUrl("mirror"), () => repository.SetRemoteUrlAsync("mirror", "https://example.com/mirror.git", TestCancelled));
         var newUrl = await PictureAsync(repo);
@@ -97,15 +127,10 @@ public class UndoStepRemoteTests
     }
 
     [Fact]
-    public async Task A_remote_renamed_and_removed_comes_back_with_its_keys_and_its_branches()
+    public async Task A_remote_renamed_comes_back_with_its_keys_and_its_branches()
     {
         using var repo = await UndoRepoAsync();
-        var (repository, _) = await OpenDatedAsync(repo);
-        await repo.GitAsync("config", "remote.pushDefault", "origin");
-        await repo.GitAsync("config", "branch.main.pushRemote", "origin");
-
-        // origin/HEAD, which every clone has and every fetch on Git 2.55 writes: a symbolic ref.
-        await repo.GitAsync("remote", "set-head", "origin", "main");
+        var repository = await WithOriginNamedEverywhereAsync(repo);
         var start = await PictureAsync(repo);
 
         var renamed = await RecordAsync(repository, UndoScope.RenameRemote("origin", "upstream"), () => repository.RenameRemoteAsync("origin", "upstream", TestCancelled));
@@ -114,7 +139,13 @@ public class UndoStepRemoteTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, renamed);
         Assert.Equal(afterRename, await PictureAsync(repo));
-        renamed = await UndoAsync(repository, renamed);
+    }
+
+    [Fact]
+    public async Task A_remote_removed_comes_back_with_its_keys_and_its_branches()
+    {
+        using var repo = await UndoRepoAsync();
+        var repository = await WithOriginNamedEverywhereAsync(repo);
 
         // Removed: its keys, remote.pushDefault, the branches' keys that named it and its remote
         // branches go (0.5); the undo brings them back.
@@ -135,6 +166,21 @@ public class UndoStepRemoteTests
         Assert.Equal("refs/remotes/origin/main", (await repo.GitAsync("symbolic-ref", "refs/remotes/origin/HEAD")).StandardOutput.Trim());
         await RedoAsync(repository, removed);
         Assert.Equal(afterRemoval, await PictureAsync(repo));
+    }
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> (the undo repository) with origin named wherever a remote can
+    /// be: <c>remote.pushDefault</c>, main's <c>pushRemote</c> as well as its upstream, and
+    /// <c>refs/remotes/origin/HEAD</c>, which every clone has and every fetch on Git 2.55 writes:
+    /// a symbolic ref.
+    /// </summary>
+    private static async Task<GitRepository> WithOriginNamedEverywhereAsync(TempRepo repo)
+    {
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.GitAsync("config", "remote.pushDefault", "origin");
+        await repo.GitAsync("config", "branch.main.pushRemote", "origin");
+        await repo.GitAsync("remote", "set-head", "origin", "main");
+        return repository;
     }
 
     [Fact]
