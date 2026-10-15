@@ -611,7 +611,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         // Step 5: a click and a Ctrl+click.
         app.Click(app.GraphRowPoint(5));
         app.Click(app.GraphRowPoint(4), command);
-        await app.WaitForAsync(() => Shown(app, "MultiSelectionView") is not null, "the multi-selection view");
+        // Two selected commits compare at once (docs/phase-5-design.md 6.1, D162).
+        await app.WaitForAsync(() => Shown(app, "Compare") is not null, "the comparison of the two commits");
         var two = Shot(app, "11d-two-selected");
         AssertSelected(app, two, 4, 5);
         AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
@@ -683,6 +684,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertSelected(app, null, 2);
         await WaitForDetailsAsync(app, "On main: Experiment");
         Assert.Null(Shown(app, "MultiSelectionView"));
+        Assert.Null(Shown(app, "Compare"));
     }
 
     /// <summary>
@@ -1251,7 +1253,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
     /// <summary>
     /// The label feature/conflict's menu with HEAD on main, nothing in progress, with phase 4's
     /// rebase items: phase 4's report gives this list for check 27 step 3 ("check 13 step 6's list
-    /// with main for hotfix"), with phase 5's "Show reflog of feature/conflict"; 415 high.
+    /// with main for hotfix"; 380 high, 493 with phase 5's compare, reflog, hide and solo items).
     /// </summary>
     private static readonly string[] FeatureConflictMenu =
     [
@@ -1271,7 +1273,10 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         "—",
         "Set upstream…",
         "—",
+        "Compare feature/conflict with main",
         "Show reflog of feature/conflict",
+        "Hide feature/conflict",
+        "Solo feature/conflict",
         "—",
         "Copy branch name",
     ];
@@ -1289,8 +1294,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
     /// The local branch feature/alpha's menu with HEAD on <paramref name="current"/>, nothing in
     /// progress (check 2 step 1's), with phase 4's rebase items: "Rebase {cur} onto feature/alpha"
     /// disabled with <c>{cur} is up to date with feature/alpha</c> when HEAD already reaches it
-    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha), and
-    /// with phase 5's "Show reflog of feature/alpha" (docs/phase-5-design.md 5.1, 14.1).
+    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha); and
+    /// phase 5's compare, reflog, hide and solo items (docs/phase-5-design.md 5.1, 13.1, 14.1).
     /// </summary>
     private static string[] AlphaMenu(string current, bool upToDate = false) =>
     [
@@ -1313,7 +1318,10 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         "Change upstream…",
         "Stop tracking origin/feature/alpha",
         "—",
+        $"Compare feature/alpha with {current}",
         "Show reflog of feature/alpha",
+        "Hide feature/alpha",
+        "Solo feature/alpha",
         "—",
         "Copy branch name",
     ];

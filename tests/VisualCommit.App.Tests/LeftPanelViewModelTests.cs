@@ -1,6 +1,7 @@
 using System.Globalization;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Session;
 using VisualCommit.Git;
 using VisualCommit.Testing;
 using Xunit;
@@ -415,6 +416,82 @@ public class LeftPanelViewModelTests
         Assert.Equal(["v0.1"], SelectedTexts(panel));
         viewModel.Selection = new VisualCommit.App.ViewModels.Graph.GraphSelection([viewModel.Graph.CommitAt(0).Sha, viewModel.Graph.CommitAt(1).Sha]);
         Assert.Empty(SelectedTexts(panel));
+    }
+
+    [Fact]
+    public void A_hidden_branch_and_a_hidden_remote_are_marked_and_their_eye_asks_to_show_them()
+    {
+        var panel = Updated(GraphRefs());
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        panel.IsInGraph = sha => sha != Sha('f');
+        panel.UpdateFilters(new RepositoryGraphFilter(
+            "C:/repo",
+            ["refs/heads/feature/search", "refs/remotes/origin/main"],
+            [],
+            ["origin"],
+            [],
+            ["origin"],
+            default));
+
+        var search = Item(panel, "search", RefItemKind.LocalBranch);
+        Assert.True(search.ShowsHiddenToggle);
+        Assert.False(search.ShowsSoloToggle);
+        Assert.True(search.IsDimmed);
+        Assert.Equal("feature/search is hidden in the graph", search.NameToolTip);
+        var remoteMain = Item(panel, "main", RefItemKind.RemoteBranch);
+        Assert.True(remoteMain.ShowsHiddenToggle);
+        Assert.Equal("origin/main", remoteMain.NameToolTip);
+        var origin = Item(panel, "origin", RefItemKind.Remote);
+        Assert.True(origin.ShowsHiddenToggle);
+        Assert.True(origin.IsDimmed);
+        Assert.False(Item(panel, "login", RefItemKind.LocalBranch).ShowsHiddenToggle);
+        Assert.False(Item(panel, "main", RefItemKind.LocalBranch).IsDimmed);
+        Assert.False(Item(panel, "v0.1", RefItemKind.Tag).IsDimmed);
+
+        // A click on a hidden branch whose commit is no row selects and highlights nothing (8.3, FD19).
+        var activated = new List<string>();
+        panel.RefActivated += (_, sha) => activated.Add(sha);
+        panel.Activate(search);
+        Assert.Empty(activated);
+        Assert.Empty(SelectedTexts(panel));
+
+        // One whose commit another ref keeps on screen is selected as today.
+        panel.Activate(Item(panel, "main", RefItemKind.RemoteBranch));
+        Assert.Equal([Sha('r')], activated);
+
+        // The eyes ask to show them again.
+        var shown = new List<RefItemRow>();
+        panel.HiddenToggleClicked += (_, row) => shown.Add(row);
+        Item(panel, "search", RefItemKind.LocalBranch).ShowHiddenCommand.Execute(null);
+        Item(panel, "origin", RefItemKind.Remote).ShowHiddenCommand.Execute(null);
+        Assert.Equal(["refs/heads/feature/search", null], shown.Select(LeftPanelViewModel.RefNameOf));
+        Assert.Equal([null, "origin"], shown.Select(LeftPanelViewModel.RemoteNameOf));
+
+        // Without the filter, the rows are as before.
+        panel.UpdateFilters(null);
+        Assert.All(panel.Rows.OfType<RefItemRow>(), row => Assert.Equal(RefRowMarks.None, row.Marks));
+    }
+
+    [Fact]
+    public void In_solo_mode_the_branches_neither_soloed_nor_heads_are_dimmed_and_the_solo_button_ends_a_solo()
+    {
+        var panel = Updated(GraphRefs());
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        panel.UpdateFilters(new RepositoryGraphFilter("C:/repo", [], ["refs/heads/feature/search"], [], [], ["origin"], default));
+
+        var search = Item(panel, "search", RefItemKind.LocalBranch);
+        Assert.True(search.ShowsSoloToggle);
+        Assert.False(search.IsDimmed);
+        Assert.True(Item(panel, "login", RefItemKind.LocalBranch).IsDimmed);
+        Assert.True(Item(panel, "main", RefItemKind.RemoteBranch).IsDimmed);
+        Assert.False(Item(panel, "main", RefItemKind.LocalBranch).IsDimmed);
+        Assert.False(Item(panel, "v0.2", RefItemKind.Tag).IsDimmed);
+        Assert.False(Item(panel, "On main: Work in progress on README", RefItemKind.Stash).IsDimmed);
+
+        var stopped = new List<string?>();
+        panel.SoloToggleClicked += (_, row) => stopped.Add(LeftPanelViewModel.RefNameOf(row));
+        search.StopSoloingCommand.Execute(null);
+        Assert.Equal(["refs/heads/feature/search"], stopped);
     }
 
     private static LeftPanelViewModel Updated(RepoRefs refs)

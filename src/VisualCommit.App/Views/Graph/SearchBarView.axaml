@@ -1,0 +1,110 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Graph"
+             x:Class="VisualCommit.App.Views.Graph.SearchBarView"
+             x:DataType="vm:SearchViewModel"
+             AutomationProperties.AutomationId="SearchBar"
+             AutomationProperties.Name="Search">
+
+  <!-- The search bar (docs/phase-5-design.md 3.1): 36 high above the graph's column headers, which
+       it pushes down. Left to right, 8 from the edges and 6 apart: the mode button, the box, the
+       count, previous, next and close. The code-behind keeps the box at least 120 wide by cutting
+       the count, then hiding it; the close button never moves out. While a Changes search runs, a
+       2-px progress bar lies along the bottom edge. -->
+  <Border Name="SearchBarFrame"
+          Height="36"
+          Background="{DynamicResource VcChromeBackgroundBrush}"
+          BorderBrush="{DynamicResource VcBorderBrush}"
+          BorderThickness="0,0,0,1">
+    <Panel>
+      <Grid Name="SearchParts" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="8,0">
+
+        <Button Name="SearchModeButton"
+                Grid.Column="0"
+                Theme="{StaticResource VcActionButton}"
+                Height="26"
+                Padding="10,0"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="SearchModeButton"
+                AutomationProperties.Name="{Binding ModeLabel}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Name="SearchModeText" Text="{Binding ModeLabel}" VerticalAlignment="Center" />
+            <c:Icon Data="{StaticResource IconChevronDown}" Width="12" Height="12" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <TextBox Name="SearchBox"
+                 Grid.Column="1"
+                 Margin="6,0,0,0"
+                 MinWidth="120"
+                 VerticalAlignment="Center"
+                 Text="{Binding Text, Mode=TwoWay}"
+                 PlaceholderText="{Binding Placeholder}"
+                 AutomationProperties.AutomationId="SearchBox"
+                 AutomationProperties.Name="Search" />
+
+        <TextBlock Name="SearchCount"
+                   Grid.Column="2"
+                   Classes="secondary"
+                   Margin="6,0,0,0"
+                   MaxWidth="110"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   Text="{Binding CountText}"
+                   ToolTip.Tip="{Binding CountToolTip}"
+                   AutomationProperties.AutomationId="SearchCount"
+                   AutomationProperties.Name="{Binding CountText}" />
+
+        <Button Name="SearchPrevious"
+                Grid.Column="3"
+                Theme="{StaticResource VcIconButton}"
+                Margin="6,0,0,0"
+                Command="{Binding PreviousCommand}"
+                ToolTip.Tip="{x:Static vm:SearchViewModel.PreviousToolTip}"
+                ToolTip.ShowOnDisabled="True"
+                AutomationProperties.AutomationId="SearchPrevious"
+                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.PreviousToolTip}">
+          <c:Icon Data="{StaticResource IconChevronUp}" Width="14" Height="14" />
+        </Button>
+
+        <Button Name="SearchNext"
+                Grid.Column="4"
+                Theme="{StaticResource VcIconButton}"
+                Margin="6,0,0,0"
+                Command="{Binding NextCommand}"
+                ToolTip.Tip="{x:Static vm:SearchViewModel.NextToolTip}"
+                ToolTip.ShowOnDisabled="True"
+                AutomationProperties.AutomationId="SearchNext"
+                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.NextToolTip}">
+          <c:Icon Data="{StaticResource IconChevronDown}" Width="14" Height="14" />
+        </Button>
+
+        <Button Name="SearchClose"
+                Grid.Column="5"
+                Theme="{StaticResource VcIconButton}"
+                Margin="6,0,0,0"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="{x:Static vm:SearchViewModel.CloseToolTip}"
+                AutomationProperties.AutomationId="SearchClose"
+                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.CloseToolTip}">
+          <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+        </Button>
+      </Grid>
+
+      <ProgressBar Name="SearchProgress"
+                   IsVisible="{Binding ShowsProgress}"
+                   VerticalAlignment="Bottom"
+                   Height="2" MinHeight="2" MinWidth="0"
+                   CornerRadius="0"
+                   Minimum="0"
+                   Maximum="{Binding ProgressMaximum}"
+                   Value="{Binding ProgressValue}"
+                   Foreground="{DynamicResource VcAccentBrush}"
+                   Background="Transparent"
+                   ToolTip.Tip="{Binding ProgressText}"
+                   AutomationProperties.AutomationId="SearchProgress"
+                   AutomationProperties.HelpText="{Binding ProgressText}" />
+    </Panel>
+  </Border>
+</UserControl>

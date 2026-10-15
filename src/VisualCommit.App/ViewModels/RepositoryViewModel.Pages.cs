@@ -38,57 +38,64 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     public bool ShowsPage => Page is not null && !IsDiffOpen && !IsResolverOpen;
 
     /// <summary>
-    /// The search bar's view model (3.1), shown above the graph's column headers while the bar is
-    /// open, with the view the view locator finds for it (WP7's); null while it is closed. The lead
-    /// opens it (<see cref="OpenSearch"/>).
+    /// The search bar's view model (3.1, <see cref="SearchViewModel"/>), shown above the graph's
+    /// column headers while the bar is open, with its view (<c>SearchBarView</c>); null while it is
+    /// closed. <see cref="OpenSearch"/> opens it.
     /// </summary>
     [ObservableProperty]
     public partial object? Search { get; private set; }
 
     /// <summary>
     /// What the graph marks of the search (3.3), which <c>CommitGraphControl.Search</c> binds to:
-    /// <see cref="GraphSearchMarks.None"/> while nothing is searched. The lead gives it from the
-    /// search's view model.
+    /// <see cref="GraphSearchMarks.None"/> while nothing is searched. The search's view model gives
+    /// it as its matches arrive.
     /// </summary>
     [ObservableProperty]
     public partial GraphSearchMarks SearchMarks { get; private set; } = GraphSearchMarks.None;
 
     /// <summary>
     /// What the graph hides and solos (8.1, 8.4, D159), as the session keeps it for this repository,
-    /// or null while nothing is. The menus read it (<see cref="RepositoryMenuContext.Filters"/>);
-    /// WP7's operations change it through <see cref="ApplyGraphFilterAsync"/>.
+    /// or null while nothing is. The menus read it (<see cref="RepositoryMenuContext.Filters"/>) and
+    /// the left panel marks it; the filters' operations change it through <see cref="ApplyGraphFilterAsync"/>.
     /// </summary>
     [ObservableProperty]
     public partial RepositoryGraphFilter? Filters { get; private set; }
 
     /// <summary>
-    /// What the graph hides or solos (8.2, D178), which the history loads with, or null to load
-    /// everything as before phase 5. The lead gives it from <see cref="Filters"/> when it joins WP7.
+    /// What the graph hides or solos (8.2, D178), which the history loads with: from
+    /// <see cref="Filters"/>, or null to load everything as before phase 5 (the same command).
     /// </summary>
-    public GraphFilter? GraphFilter => null;
+    public GraphFilter? GraphFilter => GraphFilterChanges.ToGraphFilter(Filters);
 
     /// <summary>
     /// The graph reloads for a change of filter (8.2): a 2-px bar runs under the column headers, so
-    /// that the click is seen to take effect on a large history. False until the lead joins WP7.
+    /// that the click is seen to take effect on a large history. True from the change until the
+    /// graph of the new filter is shown.
     /// </summary>
     [ObservableProperty]
     public partial bool IsReloadingGraph { get; private set; }
 
     /// <summary>
-    /// What the graph hides or solos changed (8.1 to 8.4): WP7's operations call it once they have
-    /// written the session (<see cref="TabServices.Session"/>). The menus see the new state at once.
-    /// The graph's reload through the refresh (<see cref="GraphFilter"/>, the filter's key in the
-    /// refresh's comparison, <see cref="IsReloadingGraph"/>) comes when the lead joins WP7; until
-    /// then the graph stays as it is.
+    /// What the graph hides or solos changed (8.1 to 8.4): the filters' operations call it once they
+    /// have written the session (<see cref="TabServices.GraphFilters"/>). The menus and the left
+    /// panel see the new state at once; the graph reloads through the refresh, the filter's key
+    /// joining the refs' fingerprint in its comparison, and is swapped in when complete, with
+    /// <see cref="IsReloadingGraph"/> meanwhile. Completes when the new graph is shown.
     /// </summary>
     public Task ApplyGraphFilterAsync(RepositoryGraphFilter? filters)
     {
-        if (!_disposed)
+        if (_disposed)
         {
-            Filters = filters;
+            return Task.CompletedTask;
         }
 
-        return Task.CompletedTask;
+        Filters = filters;
+        if (GraphFilter?.Key != _loadedFilterKey)
+        {
+            IsReloadingGraph = true;
+        }
+
+        return RefreshAsync();
     }
 
     /// <summary>
@@ -187,21 +194,6 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
             RevealRequested?.Invoke(this, index);
         }
     }
-
-    /// <summary>
-    /// The comparison of <paramref name="toRef"/> with <paramref name="fromRef"/> in the right panel
-    /// (6.2): "Compare {b} with {cur}" and a drop's "Compare {A} with {B}". It leaves the
-    /// working-changes row, so that the details panel, which holds it, shows. WP7 and the lead build it.
-    /// </summary>
-    public Task CompareAsync(string fromRef, string toRef) =>
-        throw new NotImplementedException("The comparison's place is the lead's, with work package WP7 (docs/phase-5-design.md 6.2).");
-
-    /// <summary>
-    /// The toolbar's Search and its key (3.1, 11.2): the graph shows (a diff or a page closes, they
-    /// hold no work) and the search bar opens with the focus in its box. WP7 and the lead build it.
-    /// </summary>
-    public void OpenSearch() =>
-        throw new NotImplementedException("The search's place is the lead's, with work package WP7 (docs/phase-5-design.md 3.1).");
 
     /// <summary>
     /// The restore bar's tie to its discard (7.9): the Undo of the discard that saved

@@ -40,7 +40,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.RemotesHeaderMenu);
         AssertHighlighted(menu, "Add remote…");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Manage remotes…");
         var remotes = await app.WaitForDialogAsync<RemotesDialogViewModel>();
         await WaitForRemoteRowsAsync(app, remotes, "origin");
@@ -169,7 +169,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.TopicMenu);
         AssertHighlighted(menu, "Check out topic");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         AssertNothingSelected(app);
 
         // Step 2: the pick dialog, filtered, an item clicked.
@@ -208,8 +208,8 @@ public sealed partial class Phase3ChecksD
         AssertHighlighted(menu, "Check out topic");
         AssertMenuShape(app, menu);
 
-        // Phase 5's "Show reflog of topic" makes it too high to fit below the pointer: 4a moves it
-        // (docs/test-reports/phase-5.md, "Changes to expected results": 28c).
+        // Phase 5's "Compare topic with main", "Show reflog of topic", "Hide topic" and "Solo topic" make it too
+        // high to fit below the pointer: 4a moves it (docs/test-reports/phase-5.md, "Changes to expected results": 28c).
         AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Change upstream…");
         await app.WaitForDialogAsync<PickDialogViewModel>();
@@ -292,7 +292,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.TagMenu);
         AssertHighlighted(menu, "Check out v1.0");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Push v1.0…");
         await app.WaitForDialogAsync<ChoiceDialogViewModel>();
         Shot(app, "29c-choice");
@@ -383,7 +383,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.BehindPublishedMenu);
         AssertHighlighted(menu, "Check out published");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         var calls = app.GitCalls().Count;
         app.ClickMenuItem("Fast-forward published to origin/published");
         await WaitForResultAsync(app, PartD.FastForwarded);
@@ -404,7 +404,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.RemotePublishedMenu);
         AssertHighlighted(menu, "Check out origin/published");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Delete published on origin…");
         await app.WaitForDialogAsync<ConfirmationViewModel>();
         Shot(app, "30d-delete-confirmation");
@@ -432,7 +432,7 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.GonePublishedMenu);
         AssertHighlighted(menu, "Check out published");
         Assert.True(menu.Item("Push published to origin/published").IsEnabled);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         var tip = await app.RestPointerOnMenuItemAsync("Force push published…");
         Shot(app, "30f-upstream-gone", keepPointer: true);
         Assert.Equal(PartD.GoneForcePushTip, tip);
@@ -471,13 +471,14 @@ public sealed partial class Phase3ChecksD
         app.MoveMouseHeld(to, steps: 4);
         app.ReleaseMouse(to);
         // Phase 4's group "Check out main and rebase it" follows phase 3's; its interactive item is
-        // the only enabled one, so it has the highlight (145 high; 84 before phase 4).
+        // the only enabled one, so it has the highlight; phase 5's "Compare main with side" ends
+        // it in a group of its own (180 high; 145 in phase 4, 84 before).
         var menu = app.Menu();
         AssertMenu(menu, PartD.WorktreeDropMenu(worktree));
         AssertHighlighted(menu, "Check out main and rebase it onto side interactively…");
-        Assert.Equal(MenuHeight(items: 4, separators: 1), menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
+        Assert.Equal(MenuHeight(items: 5, separators: 2), menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, to);
+        AssertMenuPlaced(app, menu, to);
         var tip = await app.RestPointerOnMenuItemAsync("Fast-forward side to main");
         Shot(app, "30g-worktree-refused", keepPointer: true);
         Assert.Equal(PartD.WorktreeReason(worktree), tip);

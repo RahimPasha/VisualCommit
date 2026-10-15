@@ -460,10 +460,20 @@ public sealed partial class Phase3ChecksB
     /// <summary>
     /// Asserts the multi-selection view (4h) in the right panel: "N commits selected", the commits
     /// in row order as "short id subject" (short ids in the code font, secondary colour), the
-    /// hint, and no file list.
+    /// hint, and no file list. Exactly two commits show their comparison in its place instead
+    /// (docs/phase-5-design.md 6.1, D162): the lower row From, the upper To.
     /// </summary>
     private static void AssertMultiSelection(ShellDriver app, params string[] items)
     {
+        if (items.Length == 2)
+        {
+            var comparison = app.Compare() ?? throw new InvalidOperationException("The right panel shows no comparison of the two selected commits.");
+            Assert.Equal(("From " + items[1], "To " + items[0]), (comparison.From, comparison.To));
+            Assert.Null(Shown(app, "MultiSelectionView"));
+            Assert.False(app.FindByAutomationId("FileList").IsEffectivelyVisible, "The details' file list shows beside the comparison.");
+            return;
+        }
+
         var view = app.FindByAutomationId("MultiSelectionView");
         Assert.True(view.IsEffectivelyVisible, "The multi-selection view does not show.");
         Assert.Equal($"{items.Length.ToString(CultureInfo.InvariantCulture)} commits selected", ((TextBlock)app.FindByAutomationId(view, "MultiSelectionTitle")).Text);

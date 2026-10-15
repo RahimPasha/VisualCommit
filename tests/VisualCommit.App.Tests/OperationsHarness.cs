@@ -95,6 +95,9 @@ internal sealed class OperationsHarness : IDisposable
     /// <summary>Opens <paramref name="repo"/> as a tab would and reads it.</summary>
     public static Task<OperationsHarness> OpenAsync(TempRepo repo) => OpenAsync(repo, prompts: null);
 
+    /// <summary>Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with <paramref name="session"/> as the app's session (its graph filters, docs/phase-5-design.md 8.4). Added by phase 5's WP7.</summary>
+    public static Task<OperationsHarness> OpenAsync(TempRepo repo, ISessionStore session) => OpenAsync(repo, prompts: null, session: session);
+
     /// <summary>
     /// Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with its git calls
     /// going through what <paramref name="wrap"/> makes of the real repository: a test that needs
@@ -111,7 +114,7 @@ internal sealed class OperationsHarness : IDisposable
     /// <see cref="Dialogs"/> to answer; a <see cref="ScriptedPromptHandler"/> answers without any.
     /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var calls = new GitCallLog();
@@ -124,7 +127,7 @@ internal sealed class OperationsHarness : IDisposable
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
         var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log);
-        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls);
+        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
         var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };
         await repository.StartAsync();

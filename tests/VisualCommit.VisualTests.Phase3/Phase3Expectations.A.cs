@@ -171,7 +171,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 2: branch menus. ----
 
-        /// <summary>Check 2 step 1: <c>feature/alpha</c>'s menu with phase 4's rebase items and phase 5's reflog (493 high).</summary>
+        /// <summary>Check 2 step 1: <c>feature/alpha</c>'s menu with phase 4's rebase items and phase 5's compare, reflog, hide and solo items (571 high).</summary>
         public static readonly string[] FeatureAlphaMenu =
         [
             "feature/alpha",
@@ -193,15 +193,18 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/feature/alpha",
             "—",
+            "Compare feature/alpha with main",
             "Show reflog of feature/alpha",
+            "Hide feature/alpha",
+            "Solo feature/alpha",
             "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 2 step 1: the menu is 493 high (406 before phase 4, 458 before phase 5).</summary>
-        public const double FeatureAlphaMenuHeight = 493;
+        /// <summary>Check 2 step 1: the menu is 571 high (458 before phase 5, 406 before phase 4).</summary>
+        public const double FeatureAlphaMenuHeight = 571;
 
-        /// <summary>Check 2 step 2: <c>feature/ff</c>'s menu (no upstream; 415 high with phase 4's and phase 5's items).</summary>
+        /// <summary>Check 2 step 2: <c>feature/ff</c>'s menu (no upstream; 493 high with phase 4's and phase 5's items).</summary>
         public static readonly string[] FeatureFfMenu =
         [
             "feature/ff",
@@ -220,12 +223,15 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare feature/ff with main",
             "Show reflog of feature/ff",
+            "Hide feature/ff",
+            "Solo feature/ff",
             "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 2 step 3 (and check 5 step 5): the current branch's menu, with phase 4's pull with rebase and phase 5's reflog (389 high).</summary>
+        /// <summary>Check 2 step 3 (and check 5 step 5): the current branch's menu, with phase 4's pull with rebase and phase 5's reflog, hide and solo items (441 high).</summary>
         public static readonly string[] MainMenu =
         [
             "main",
@@ -244,6 +250,8 @@ public static partial class Phase3Expectations
             "Stop tracking origin/main",
             "—",
             "Show reflog of main",
+            "Hide main (disabled: \"The checked-out branch is always shown\")",
+            "Solo main",
             "—",
             "Copy branch name",
         ];
@@ -266,11 +274,15 @@ public static partial class Phase3Expectations
             "—",
             "Delete feature/alpha on origin… (danger)",
             "—",
+            "Compare origin/feature/alpha with main",
+            "Hide origin/feature/alpha",
+            "Solo origin/feature/alpha",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 6 step 5: the remote-branch menu is 293 high (241 before phase 4).</summary>
-        public const double OriginFeatureAlphaMenuHeight = 293;
+        /// <summary>Check 6 step 5: the remote-branch menu is 380 high (293 before phase 5, 241 before phase 4).</summary>
+        public const double OriginFeatureAlphaMenuHeight = 380;
 
         /// <summary>Check 2 step 5: <c>origin/main</c>'s menu while <c>main</c> is checked out.</summary>
         public static readonly string[] OriginMainCheckedOutMenu =
@@ -286,6 +298,10 @@ public static partial class Phase3Expectations
             "Create tag here…",
             "—",
             "Delete main on origin… (danger)",
+            "—",
+            "Compare origin/main with main",
+            "Hide origin/main",
+            "Solo origin/main",
             "—",
             "Copy branch name",
         ];
@@ -328,6 +344,8 @@ public static partial class Phase3Expectations
             "Stop tracking main",
             "—",
             "Show reflog of loc",
+            "Hide loc (disabled: \"The checked-out branch is always shown\")",
+            "Solo loc",
             "—",
             "Copy branch name",
         ];
@@ -351,7 +369,10 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare side with loc",
             "Show reflog of side",
+            "Hide side",
+            "Solo side",
             "—",
             "Copy branch name",
         ];
@@ -375,7 +396,10 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare origin/main with loc",
             "Show reflog of origin/main",
+            "Hide origin/main",
+            "Solo origin/main",
             "—",
             "Copy branch name",
         ];
@@ -395,6 +419,10 @@ public static partial class Phase3Expectations
             "—",
             "Delete main on origin… (danger)",
             "—",
+            "Compare origin/main with loc",
+            "Hide origin/main",
+            "Solo origin/main",
+            "—",
             "Copy branch name",
         ];
 
@@ -409,6 +437,8 @@ public static partial class Phase3Expectations
             "Push v1.0 to origin",
             "Delete v1.0… (danger)",
             "Delete v1.0 on origin… (danger)",
+            "—",
+            "Compare v1.0 with main",
             "—",
             "Copy tag name",
         ];
@@ -432,13 +462,15 @@ public static partial class Phase3Expectations
             "Rename origin…",
             "Remove origin… (danger)",
             "—",
+            "Hide every branch of origin",
+            "—",
             "Copy URL",
             "Manage remotes…",
         ];
 
-        public static readonly string[] LocalBranchesHeaderMenu = ["Local branches", "Create branch…", "Show reflog", "Show backups"];
+        public static readonly string[] LocalBranchesHeaderMenu = ["Local branches", "Create branch…", "Show reflog", "Show backups", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"];
 
-        public static readonly string[] RemotesHeaderMenu = ["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…"];
+        public static readonly string[] RemotesHeaderMenu = ["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"];
 
         public static readonly string[] TagsHeaderMenu = ["Tags", "Create tag at HEAD…"];
 
@@ -788,7 +820,7 @@ public static partial class Phase3Expectations
         /// <summary>Check 7 step 1: the pill is this far right of and below the pointer (4g).</summary>
         public const double PillOffset = 8;
 
-        /// <summary>Check 7 steps 2 and 7: phase 3's drop menu with phase 4's group "Check out … and rebase it" (171 high).</summary>
+        /// <summary>Check 7 steps 2 and 7: phase 3's drop menu with phase 4's group "Check out … and rebase it" (206 high).</summary>
         public static readonly string[] AlphaOntoMainDropMenu =
         [
             "feature/alpha → main",
@@ -798,12 +830,14 @@ public static partial class Phase3Expectations
             "—",
             "Check out feature/alpha and rebase it onto main",
             "Check out feature/alpha and rebase it onto main interactively…",
+            "—",
+            "Compare feature/alpha with main",
         ];
 
-        /// <summary>Check 7: a local branch's drop onto the current branch makes a menu 171 high (110 before phase 4).</summary>
-        public const double DropMenuHeight = 171;
+        /// <summary>Check 7: a local branch's drop onto the current branch makes a menu 206 high (171 before phase 5, 110 before phase 4).</summary>
+        public const double DropMenuHeight = 206;
 
-        /// <summary>Check 7 step 3 (171 high).</summary>
+        /// <summary>Check 7 step 3 (206 high).</summary>
         public static readonly string[] FfOntoMainDropMenu =
         [
             "feature/ff → main",
@@ -813,9 +847,11 @@ public static partial class Phase3Expectations
             "—",
             "Check out feature/ff and rebase it onto main (disabled: \"feature/ff is up to date with main\")",
             "Check out feature/ff and rebase it onto main interactively…",
+            "—",
+            "Compare feature/ff with main",
         ];
 
-        /// <summary>Check 7 step 4 (145 high).</summary>
+        /// <summary>Check 7 step 4 (180 high).</summary>
         public static readonly string[] AlphaOntoConflictDropMenu =
         [
             "feature/alpha → feature/conflict",
@@ -824,9 +860,11 @@ public static partial class Phase3Expectations
             "—",
             "Check out feature/alpha and rebase it onto feature/conflict",
             "Check out feature/alpha and rebase it onto feature/conflict interactively…",
+            "—",
+            "Compare feature/alpha with feature/conflict",
         ];
 
-        /// <summary>Check 7 step 5 (145 high).</summary>
+        /// <summary>Check 7 step 5 (180 high).</summary>
         public static readonly string[] MainOntoOriginAlphaDropMenu =
         [
             "main → origin/feature/alpha",
@@ -835,6 +873,8 @@ public static partial class Phase3Expectations
             "—",
             "Rebase main onto origin/feature/alpha",
             "Interactive rebase of main onto origin/feature/alpha…",
+            "—",
+            "Compare main with origin/feature/alpha",
         ];
 
         /// <summary>Check 7 step 7: the merge commit plain git gives for the same merge.</summary>

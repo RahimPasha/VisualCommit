@@ -259,30 +259,30 @@ public partial class RepositoryMenusTests
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/heads/feature/alpha"), new MenuPosition(100, 200), MenuOpenedBy.Pointer));
         await WaitForMenuAsync(layer, "feature/alpha");
         Assert.Equal(
-            ["feature/alpha", "Check out feature/alpha", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Rebase main onto feature/alpha", "Interactive rebase of main onto feature/alpha…", "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")", "—", "Push feature/alpha to origin/feature/alpha", "Force push feature/alpha… (danger)", "—", "Create branch here…", "Create tag here…", "Rename feature/alpha…", "Delete feature/alpha… (danger)", "—", "Change upstream…", "Stop tracking origin/feature/alpha", "—", "Show reflog of feature/alpha", "—", "Copy branch name"],
+            ["feature/alpha", "Check out feature/alpha", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Rebase main onto feature/alpha", "Interactive rebase of main onto feature/alpha…", "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")", "—", "Push feature/alpha to origin/feature/alpha", "Force push feature/alpha… (danger)", "—", "Create branch here…", "Create tag here…", "Rename feature/alpha…", "Delete feature/alpha… (danger)", "—", "Change upstream…", "Stop tracking origin/feature/alpha", "—", "Compare feature/alpha with main", "Show reflog of feature/alpha", "Hide feature/alpha", "Solo feature/alpha", "—", "Copy branch name"],
             Lines(layer.Current!));
-        Assert.Equal(493, Height(layer.Current!));
+        Assert.Equal(571, Height(layer.Current!));
         Assert.True(app.Repository.Selection.IsEmpty);
         Assert.DoesNotContain(panel.Rows.OfType<RefItemRow>(), row => row.IsSelected);
 
         InvokeAll(layer.Current!);
         const string Alpha = "refs/heads/feature/alpha";
         Assert.Equal(
-            [$"CheckoutAsync({Alpha})", $"MergeAsync({Alpha}, Default)", $"MergeAsync({Alpha}, NoFastForward)", Rebase(AlphaTwo, "feature/alpha"), Interactive(AlphaTwo, "feature/alpha", "refs/heads/main"), $"PushBranchAsync({Alpha})", $"ForcePushAsync({Alpha})", $"CreateBranchAsync({Alpha})", $"CreateTagAsync({Alpha})", $"RenameBranchAsync({Alpha})", $"DeleteBranchAsync({Alpha})", $"SetUpstreamAsync({Alpha})", $"UnsetUpstreamAsync({Alpha})", $"ShowReflogAsync({Alpha})", $"CopyRefNameAsync({Alpha})"],
+            [$"CheckoutAsync({Alpha})", $"MergeAsync({Alpha}, Default)", $"MergeAsync({Alpha}, NoFastForward)", Rebase(AlphaTwo, "feature/alpha"), Interactive(AlphaTwo, "feature/alpha", "refs/heads/main"), $"PushBranchAsync({Alpha})", $"ForcePushAsync({Alpha})", $"CreateBranchAsync({Alpha})", $"CreateTagAsync({Alpha})", $"RenameBranchAsync({Alpha})", $"DeleteBranchAsync({Alpha})", $"SetUpstreamAsync({Alpha})", $"UnsetUpstreamAsync({Alpha})", $"CompareBranchesAsync(refs/heads/main, {Alpha})", $"ShowReflogAsync({Alpha})", $"HideBranchAsync({Alpha})", $"SoloBranchAsync({Alpha})", $"CopyRefNameAsync({Alpha})"],
             recorder.Calls.Select(call => call.ToString()));
 
         // Step 2: feature/ff's label, no upstream; the label's row is selected.
         var ff = await app.ShaAsync("feature/ff");
         Assert.True(app.Repository.OpenLabelMenu(layer, ff, new RefLabel("feature/ff", RefLabelKind.LocalBranch, "refs/heads/feature/ff"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["feature/ff", "Check out feature/ff", "Merge feature/ff into main", "Merge feature/ff into main (create a merge commit)", "Rebase main onto feature/ff", "Interactive rebase of main onto feature/ff…", "—", "Push feature/ff…", "—", "Create branch here…", "Create tag here…", "Rename feature/ff…", "Delete feature/ff… (danger)", "—", "Set upstream…", "—", "Show reflog of feature/ff", "—", "Copy branch name"],
+            ["feature/ff", "Check out feature/ff", "Merge feature/ff into main", "Merge feature/ff into main (create a merge commit)", "Rebase main onto feature/ff", "Interactive rebase of main onto feature/ff…", "—", "Push feature/ff…", "—", "Create branch here…", "Create tag here…", "Rename feature/ff…", "Delete feature/ff… (danger)", "—", "Set upstream…", "—", "Compare feature/ff with main", "Show reflog of feature/ff", "Hide feature/ff", "Solo feature/ff", "—", "Copy branch name"],
             Lines(layer.Current!));
         Assert.Equal(ff, app.Repository.Selection.Single);
 
         // Step 3: the current branch: pull, and no check-out, merge or separator after the header.
         Assert.True(app.Repository.OpenLabelMenu(layer, MainWork, new RefLabel("main", RefLabelKind.CurrentBranch, "refs/heads/main"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["main", "Pull from origin/main", "Pull from origin/main (rebase)", "—", "Push main to origin/main", "Force push main… (danger)", "—", "Create branch here…", "Create tag here…", "Rename main…", "Delete main… (disabled: \"You cannot delete the branch you are on\")", "—", "Change upstream…", "Stop tracking origin/main", "—", "Show reflog of main", "—", "Copy branch name"],
+            ["main", "Pull from origin/main", "Pull from origin/main (rebase)", "—", "Push main to origin/main", "Force push main… (danger)", "—", "Create branch here…", "Create tag here…", "Rename main…", "Delete main… (disabled: \"You cannot delete the branch you are on\")", "—", "Change upstream…", "Stop tracking origin/main", "—", "Show reflog of main", "Hide main (disabled: \"The checked-out branch is always shown\")", "Solo main", "—", "Copy branch name"],
             Lines(layer.Current!));
         var delete = layer.Current!.Items.Single(item => item.Label == "Delete main…");
         Assert.True(delete.IsDestructive);
@@ -291,7 +291,7 @@ public partial class RepositoryMenusTests
         // Step 4: the remote branch, under Remotes › origin; HEAD is on main, so it can be checked out.
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/remotes/origin/feature/alpha"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["origin/feature/alpha", "Check out origin/feature/alpha", "Merge origin/feature/alpha into main", "Merge origin/feature/alpha into main (create a merge commit)", "Rebase main onto origin/feature/alpha", "Interactive rebase of main onto origin/feature/alpha…", "—", "Create branch here…", "Create tag here…", "—", "Delete feature/alpha on origin… (danger)", "—", "Copy branch name"],
+            ["origin/feature/alpha", "Check out origin/feature/alpha", "Merge origin/feature/alpha into main", "Merge origin/feature/alpha into main (create a merge commit)", "Rebase main onto origin/feature/alpha", "Interactive rebase of main onto origin/feature/alpha…", "—", "Create branch here…", "Create tag here…", "—", "Delete feature/alpha on origin… (danger)", "—", "Compare origin/feature/alpha with main", "Hide origin/feature/alpha", "Solo origin/feature/alpha", "—", "Copy branch name"],
             Lines(layer.Current!));
 
         // "Check out origin/main" while HEAD is on main (D114).
@@ -311,24 +311,24 @@ public partial class RepositoryMenusTests
         // Step 5: loc, current, tracking the local main.
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/heads/loc"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["loc", "Pull from main", "Pull from main (rebase)", "—", "Create branch here…", "Create tag here…", "Rename loc…", "Delete loc… (disabled: \"You cannot delete the branch you are on\")", "—", "Change upstream…", "Stop tracking main", "—", "Show reflog of loc", "—", "Copy branch name"],
+            ["loc", "Pull from main", "Pull from main (rebase)", "—", "Create branch here…", "Create tag here…", "Rename loc…", "Delete loc… (disabled: \"You cannot delete the branch you are on\")", "—", "Change upstream…", "Stop tracking main", "—", "Show reflog of loc", "Hide loc (disabled: \"The checked-out branch is always shown\")", "Solo loc", "—", "Copy branch name"],
             Lines(layer.Current!));
 
         // Step 6: side, checked out in another worktree: the menu leaves the checkout to git.
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/heads/side"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["side", "Check out side", "Merge side into loc", "Merge side into loc (create a merge commit)", "Rebase loc onto side (disabled: \"loc is up to date with side\")", "Interactive rebase of loc onto side…", "—", "Push side…", "—", "Create branch here…", "Create tag here…", "Rename side…", "Delete side… (danger)", "—", "Set upstream…", "—", "Show reflog of side", "—", "Copy branch name"],
+            ["side", "Check out side", "Merge side into loc", "Merge side into loc (create a merge commit)", "Rebase loc onto side (disabled: \"loc is up to date with side\")", "Interactive rebase of loc onto side…", "—", "Push side…", "—", "Create branch here…", "Create tag here…", "Rename side…", "Delete side… (danger)", "—", "Set upstream…", "—", "Compare side with loc", "Show reflog of side", "Hide side", "Solo side", "—", "Copy branch name"],
             Lines(layer.Current!));
 
         // Steps 7 and 8: the local branch origin/main and the remote branch origin/main.
         Open(panel, "local:origin");
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/heads/origin/main"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["origin/main", "Check out origin/main", "Merge origin/main into loc", "Merge origin/main into loc (create a merge commit)", "Rebase loc onto origin/main (disabled: \"loc is up to date with origin/main\")", "Interactive rebase of loc onto origin/main…", "—", "Push origin/main…", "—", "Create branch here…", "Create tag here…", "Rename origin/main…", "Delete origin/main… (danger)", "—", "Set upstream…", "—", "Show reflog of origin/main", "—", "Copy branch name"],
+            ["origin/main", "Check out origin/main", "Merge origin/main into loc", "Merge origin/main into loc (create a merge commit)", "Rebase loc onto origin/main (disabled: \"loc is up to date with origin/main\")", "Interactive rebase of loc onto origin/main…", "—", "Push origin/main…", "—", "Create branch here…", "Create tag here…", "Rename origin/main…", "Delete origin/main… (danger)", "—", "Set upstream…", "—", "Compare origin/main with loc", "Show reflog of origin/main", "Hide origin/main", "Solo origin/main", "—", "Copy branch name"],
             Lines(layer.Current!));
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/remotes/origin/main"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["origin/main", "Check out origin/main", "Merge origin/main into loc", "Merge origin/main into loc (create a merge commit)", "Rebase loc onto origin/main", "Interactive rebase of loc onto origin/main…", "—", "Create branch here…", "Create tag here…", "—", "Delete main on origin… (danger)", "—", "Copy branch name"],
+            ["origin/main", "Check out origin/main", "Merge origin/main into loc", "Merge origin/main into loc (create a merge commit)", "Rebase loc onto origin/main", "Interactive rebase of loc onto origin/main…", "—", "Create branch here…", "Create tag here…", "—", "Delete main on origin… (danger)", "—", "Compare origin/main with loc", "Hide origin/main", "Solo origin/main", "—", "Copy branch name"],
             Lines(layer.Current!));
     }
 
@@ -363,7 +363,7 @@ public partial class RepositoryMenusTests
         var published = Tracking("published", "published") with { UpstreamGone = true };
 
         Assert.Equal(
-            ["published", "Check out published", "Merge published into main", "Merge published into main (create a merge commit)", "Rebase main onto published", "Interactive rebase of main onto published…", "Fast-forward published to origin/published (disabled: \"origin/published no longer exists\")", "—", "Push published to origin/published", "Force push published… (disabled: \"origin/published no longer exists: push normally\")", "—", "Create branch here…", "Create tag here…", "Rename published…", "Delete published… (danger)", "—", "Change upstream…", "Stop tracking origin/published", "—", "Show reflog of published", "—", "Copy branch name"],
+            ["published", "Check out published", "Merge published into main", "Merge published into main (create a merge commit)", "Rebase main onto published", "Interactive rebase of main onto published…", "Fast-forward published to origin/published (disabled: \"origin/published no longer exists\")", "—", "Push published to origin/published", "Force push published… (disabled: \"origin/published no longer exists: push normally\")", "—", "Create branch here…", "Create tag here…", "Rename published…", "Delete published… (danger)", "—", "Change upstream…", "Stop tracking origin/published", "—", "Compare published with main", "Show reflog of published", "Hide published", "Solo published", "—", "Copy branch name"],
             Lines(RepositoryMenus.ForLocalBranch(Context(OpsLikeRefs(published)), published.FullName, actions)));
 
         // On the current branch the pull says the same, as the toolbar's Pull.
@@ -380,7 +380,7 @@ public partial class RepositoryMenusTests
         var refs = new RepoRefs(new HeadState("main", MainWork), [main], [], []);
 
         Assert.Equal(
-            ["main", "Push main… (disabled: \"Add a remote first\")", "—", "Create branch here…", "Create tag here…", "Rename main…", "Delete main… (disabled: \"You cannot delete the branch you are on\")", "—", "Set upstream… (disabled: \"No remote branches to track: fetch or push first\")", "—", "Show reflog of main", "—", "Copy branch name"],
+            ["main", "Push main… (disabled: \"Add a remote first\")", "—", "Create branch here…", "Create tag here…", "Rename main…", "Delete main… (disabled: \"You cannot delete the branch you are on\")", "—", "Set upstream… (disabled: \"No remote branches to track: fetch or push first\")", "—", "Show reflog of main", "Hide main (disabled: \"The checked-out branch is always shown\")", "Solo main", "—", "Copy branch name"],
             Lines(RepositoryMenus.ForLocalBranch(Context(refs), main.FullName, actions)));
     }
 
@@ -395,9 +395,9 @@ public partial class RepositoryMenusTests
 
         // Check 9 step 5.
         Assert.Equal(
-            ["feature/alpha", "Check out feature/alpha", $"Merge feature/alpha into main (disabled: \"{Finish}\")", $"Merge feature/alpha into main (create a merge commit) (disabled: \"{Finish}\")", $"Rebase main onto feature/alpha (disabled: \"{Finish}\")", $"Interactive rebase of main onto feature/alpha… (disabled: \"{Finish}\")", "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")", "—", "Push feature/alpha to origin/feature/alpha", "Force push feature/alpha… (danger)", "—", "Create branch here…", "Create tag here…", "Rename feature/alpha…", "Delete feature/alpha… (danger)", "—", "Change upstream…", "Stop tracking origin/feature/alpha", "—", "Show reflog of feature/alpha", "—", "Copy branch name"],
+            ["feature/alpha", "Check out feature/alpha", $"Merge feature/alpha into main (disabled: \"{Finish}\")", $"Merge feature/alpha into main (create a merge commit) (disabled: \"{Finish}\")", $"Rebase main onto feature/alpha (disabled: \"{Finish}\")", $"Interactive rebase of main onto feature/alpha… (disabled: \"{Finish}\")", "Fast-forward feature/alpha to origin/feature/alpha (disabled: \"feature/alpha is up to date with origin/feature/alpha\")", "—", "Push feature/alpha to origin/feature/alpha", "Force push feature/alpha… (danger)", "—", "Create branch here…", "Create tag here…", "Rename feature/alpha…", "Delete feature/alpha… (danger)", "—", "Change upstream…", "Stop tracking origin/feature/alpha", "—", "Compare feature/alpha with main", "Show reflog of feature/alpha", "Hide feature/alpha", "Solo feature/alpha", "—", "Copy branch name"],
             Lines(RepositoryMenus.ForLocalBranch(context, "refs/heads/feature/alpha", actions)));
-        Assert.Equal(493, Height(RepositoryMenus.ForLocalBranch(context, "refs/heads/feature/alpha", actions)));
+        Assert.Equal(571, Height(RepositoryMenus.ForLocalBranch(context, "refs/heads/feature/alpha", actions)));
 
         // D119: no stash while the merge waits, in every menu that offers it and in the toolbar.
         Assert.Contains($"Stash changes… (disabled: \"{Finish}\")", Lines(RepositoryMenus.ForWorkingChanges(context, actions)));
@@ -459,7 +459,7 @@ public partial class RepositoryMenusTests
 
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "ref:refs/tags/v1.0"), default, MenuOpenedBy.Pointer));
         Assert.Equal(
-            ["v1.0", "Check out v1.0", "Create branch here…", "—", "Push v1.0 to origin", "Delete v1.0… (danger)", "Delete v1.0 on origin… (danger)", "—", "Copy tag name"],
+            ["v1.0", "Check out v1.0", "Create branch here…", "—", "Push v1.0 to origin", "Delete v1.0… (danger)", "Delete v1.0 on origin… (danger)", "—", "Compare v1.0 with main", "—", "Copy tag name"],
             Lines(layer.Current!));
         InvokeAll(layer.Current!);
 
@@ -468,7 +468,7 @@ public partial class RepositoryMenusTests
         Assert.Equal(["stash@{0} On main: Experiment", "Apply stash", "Pop stash", "Drop stash… (danger)", "—", "Copy SHA"], Lines(layer.Current!));
 
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "remote:origin"), default, MenuOpenedBy.Pointer));
-        Assert.Equal(["origin", "Fetch origin", "—", "Change URL…", "Rename origin…", "Remove origin… (danger)", "—", "Copy URL", "Manage remotes…"], Lines(layer.Current!));
+        Assert.Equal(["origin", "Fetch origin", "—", "Change URL…", "Rename origin…", "Remove origin… (danger)", "—", "Hide every branch of origin", "—", "Copy URL", "Manage remotes…"], Lines(layer.Current!));
         InvokeAll(layer.Current!);
 
         // Nothing selected and nothing highlighted by any of them (D114).
@@ -477,10 +477,10 @@ public partial class RepositoryMenusTests
 
         // The section headers; "Pull requests" and a folder have no menu.
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "section:LocalBranches"), default, MenuOpenedBy.Pointer));
-        Assert.Equal(["Local branches", "Create branch…", "Show reflog", "Show backups"], Lines(layer.Current!));
+        Assert.Equal(["Local branches", "Create branch…", "Show reflog", "Show backups", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"], Lines(layer.Current!));
         InvokeAll(layer.Current!);
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "section:Remotes"), default, MenuOpenedBy.Pointer));
-        Assert.Equal(["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…"], Lines(layer.Current!));
+        Assert.Equal(["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"], Lines(layer.Current!));
         InvokeAll(layer.Current!);
         Assert.True(app.Repository.OpenRefRowMenu(layer, Row(panel, "section:Tags"), default, MenuOpenedBy.Pointer));
         Assert.Equal(["Tags", "Create tag at HEAD…"], Lines(layer.Current!));
@@ -503,8 +503,8 @@ public partial class RepositoryMenusTests
         InvokeAll(layer.Current!);
 
         Assert.Equal(
-            ["CheckoutAsync(refs/tags/v1.0)", "CreateBranchAsync(refs/tags/v1.0)", "PushTagAsync(refs/tags/v1.0)", "DeleteTagAsync(refs/tags/v1.0)", "DeleteRemoteTagAsync(refs/tags/v1.0)", "CopyRefNameAsync(refs/tags/v1.0)",
-             "FetchAsync(origin)", "ShowEditRemoteAsync(origin)", "ShowEditRemoteAsync(origin)", "RemoveRemoteAsync(origin)", "CopyRemoteUrlAsync(origin)", "ManageRemotesAsync()",
+            ["CheckoutAsync(refs/tags/v1.0)", "CreateBranchAsync(refs/tags/v1.0)", "PushTagAsync(refs/tags/v1.0)", "DeleteTagAsync(refs/tags/v1.0)", "DeleteRemoteTagAsync(refs/tags/v1.0)", "CompareBranchesAsync(refs/heads/main, refs/tags/v1.0)", "CopyRefNameAsync(refs/tags/v1.0)",
+             "FetchAsync(origin)", "ShowEditRemoteAsync(origin)", "ShowEditRemoteAsync(origin)", "RemoveRemoteAsync(origin)", "HideRemoteAsync(origin)", "CopyRemoteUrlAsync(origin)", "ManageRemotesAsync()",
              "CreateBranchAsync()", "ShowReflogAsync()", "ShowBackupsAsync()", "ShowAddRemoteAsync()", "FetchAllAsync()", "ManageRemotesAsync()", "CreateTagAsync()",
              "FetchAllAsync()", "PullAsync()", "PushCurrentBranchAsync()", "CreateBranchAsync()", "ShowReflogAsync()", "ShowBackupsAsync()", "ManageRemotesAsync()"],
             recorder.Calls.Select(call => call.ToString()));
@@ -519,10 +519,10 @@ public partial class RepositoryMenusTests
         var none = new RepoRefs(new HeadState("main", MainWork), [tag], [], []);
 
         Assert.Equal(
-            ["v1.0", "Check out v1.0 (disabled: \"HEAD is already at this commit\")", "Create branch here…", "—", "Push v1.0…", "Delete v1.0… (danger)", "Delete v1.0 on a remote… (danger)", "—", "Copy tag name"],
+            ["v1.0", "Check out v1.0 (disabled: \"HEAD is already at this commit\")", "Create branch here…", "—", "Push v1.0…", "Delete v1.0… (danger)", "Delete v1.0 on a remote… (danger)", "—", "Compare v1.0 with HEAD", "—", "Copy tag name"],
             Lines(RepositoryMenus.ForTag(Context(several), tag.FullName, actions)));
         Assert.Equal(
-            ["v1.0", "Check out v1.0", "Create branch here…", "—", "Push v1.0… (disabled: \"Add a remote first\")", "Delete v1.0… (danger)", "Delete v1.0 on a remote… (disabled: \"Add a remote first\")", "—", "Copy tag name"],
+            ["v1.0", "Check out v1.0", "Create branch here…", "—", "Push v1.0… (disabled: \"Add a remote first\")", "Delete v1.0… (danger)", "Delete v1.0 on a remote… (disabled: \"Add a remote first\")", "—", "Compare v1.0 with main", "—", "Copy tag name"],
             Lines(RepositoryMenus.ForTag(Context(none), tag.FullName, actions)));
     }
 
@@ -735,23 +735,23 @@ public partial class RepositoryMenusTests
 
         Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/feature/alpha", "refs/heads/main", new MenuPosition(400, 200)));
         Assert.Equal(
-            ["feature/alpha → main", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")", "—", "Check out feature/alpha and rebase it onto main", "Check out feature/alpha and rebase it onto main interactively…"],
+            ["feature/alpha → main", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")", "—", "Check out feature/alpha and rebase it onto main", "Check out feature/alpha and rebase it onto main interactively…", "—", "Compare feature/alpha with main"],
             Lines(layer.Current!));
-        Assert.Equal(171, Height(layer.Current!));
+        Assert.Equal(206, Height(layer.Current!));
         Assert.Equal((new MenuPosition(400, 200), MenuOpenedBy.Pointer), (layer.Position, layer.OpenedBy));
 
         Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/feature/ff", "refs/heads/main", default));
-        Assert.Equal(["feature/ff → main", "Merge feature/ff into main", "Merge feature/ff into main (create a merge commit)", "Fast-forward main to feature/ff", "—", "Check out feature/ff and rebase it onto main (disabled: \"feature/ff is up to date with main\")", "Check out feature/ff and rebase it onto main interactively…"], Lines(layer.Current!));
+        Assert.Equal(["feature/ff → main", "Merge feature/ff into main", "Merge feature/ff into main (create a merge commit)", "Fast-forward main to feature/ff", "—", "Check out feature/ff and rebase it onto main (disabled: \"feature/ff is up to date with main\")", "Check out feature/ff and rebase it onto main interactively…", "—", "Compare feature/ff with main"], Lines(layer.Current!));
         InvokeAll(layer.Current!);
 
         Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/feature/alpha", "refs/heads/feature/conflict", default));
         Assert.Equal(
-            ["feature/alpha → feature/conflict", "Fast-forward feature/conflict to feature/alpha (disabled: \"feature/conflict has commits that feature/alpha does not have\")", "Check out feature/conflict and merge feature/alpha into it", "—", "Check out feature/alpha and rebase it onto feature/conflict", "Check out feature/alpha and rebase it onto feature/conflict interactively…"],
+            ["feature/alpha → feature/conflict", "Fast-forward feature/conflict to feature/alpha (disabled: \"feature/conflict has commits that feature/alpha does not have\")", "Check out feature/conflict and merge feature/alpha into it", "—", "Check out feature/alpha and rebase it onto feature/conflict", "Check out feature/alpha and rebase it onto feature/conflict interactively…", "—", "Compare feature/alpha with feature/conflict"],
             Lines(layer.Current!));
         InvokeAll(layer.Current!);
 
         Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/main", "refs/remotes/origin/feature/alpha", default));
-        Assert.Equal(["main → origin/feature/alpha", "Push main to origin/feature/alpha", "Push main to origin/feature/alpha and track it", "—", "Rebase main onto origin/feature/alpha", "Interactive rebase of main onto origin/feature/alpha…"], Lines(layer.Current!));
+        Assert.Equal(["main → origin/feature/alpha", "Push main to origin/feature/alpha", "Push main to origin/feature/alpha and track it", "—", "Rebase main onto origin/feature/alpha", "Interactive rebase of main onto origin/feature/alpha…", "—", "Compare main with origin/feature/alpha"], Lines(layer.Current!));
         InvokeAll(layer.Current!);
 
         // A remote branch dropped onto another local branch.
@@ -763,11 +763,14 @@ public partial class RepositoryMenusTests
         Assert.Equal(
             ["MergeAsync(refs/heads/feature/ff, Default)", "MergeAsync(refs/heads/feature/ff, NoFastForward)", "MergeAsync(refs/heads/feature/ff, FastForwardOnly)",
              Interactive(MainWork, "main", "refs/heads/feature/ff", checkoutFirst: true),
+             "CompareBranchesAsync(refs/heads/main, refs/heads/feature/ff)",
              "CheckoutAndMergeAsync(refs/heads/feature/conflict, refs/heads/feature/alpha)",
              $"CheckoutAndRebaseAsync(refs/heads/feature/alpha, {new RebaseTarget(conflict, "feature/conflict")})",
              Interactive(conflict, "feature/conflict", "refs/heads/feature/alpha", checkoutFirst: true),
+             "CompareBranchesAsync(refs/heads/feature/conflict, refs/heads/feature/alpha)",
              "PushBranchToAsync(refs/heads/main, refs/remotes/origin/feature/alpha, False)", "PushBranchToAsync(refs/heads/main, refs/remotes/origin/feature/alpha, True)",
-             Rebase(AlphaTwo, "origin/feature/alpha"), Interactive(AlphaTwo, "origin/feature/alpha", "refs/heads/main")],
+             Rebase(AlphaTwo, "origin/feature/alpha"), Interactive(AlphaTwo, "origin/feature/alpha", "refs/heads/main"),
+             "CompareBranchesAsync(refs/remotes/origin/feature/alpha, refs/heads/main)"],
             recorder.Calls.Select(call => call.ToString()));
     }
 
@@ -787,7 +790,7 @@ public partial class RepositoryMenusTests
 
         var reason = $"side is checked out in another worktree ({worktree})";
         Assert.Equal(
-            ["main → side", $"Fast-forward side to main (disabled: \"{reason}\")", $"Check out side and merge main into it (disabled: \"{reason}\")", "—", "Check out main and rebase it onto side (disabled: \"main is up to date with side\")", "Check out main and rebase it onto side interactively…"],
+            ["main → side", $"Fast-forward side to main (disabled: \"{reason}\")", $"Check out side and merge main into it (disabled: \"{reason}\")", "—", "Check out main and rebase it onto side (disabled: \"main is up to date with side\")", "Check out main and rebase it onto side interactively…", "—", "Compare main with side"],
             Lines(layer.Current!));
     }
 
@@ -798,8 +801,87 @@ public partial class RepositoryMenusTests
         var context = Context(OpsLikeRefs()) with { Drop = new DropFacts(true, RemoteMapsBranchesDifferently: true) };
 
         Assert.Equal(
-            ["main → origin/main", "Push main to origin/main (disabled: \"origin maps its branches differently: use Push main…\")", "Push main to origin/main and track it (disabled: \"origin maps its branches differently: use Push main…\")", "—", "Rebase main onto origin/main", "Interactive rebase of main onto origin/main…"],
+            ["main → origin/main", "Push main to origin/main (disabled: \"origin maps its branches differently: use Push main…\")", "Push main to origin/main and track it (disabled: \"origin maps its branches differently: use Push main…\")", "—", "Rebase main onto origin/main", "Interactive rebase of main onto origin/main…", "—", "Compare main with origin/main"],
             Lines(RepositoryMenus.ForDrop(context, "refs/heads/main", "refs/remotes/origin/main", actions)));
+    }
+
+    // --- Compare, hide and solo (docs/phase-5-design.md 6.2, 8.3, 13.1) --------------------------
+
+    [Fact]
+    public void Hidden_and_soloed_branches_turn_their_items_into_show_and_stop_soloing_and_the_sections_items_follow()
+    {
+        var (actions, recorder) = RecordingActions.Create();
+        var topic = Tracking("topic", "topic");
+        var refs = OpsLikeRefs(topic, new GitRef("refs/remotes/origin/topic", "origin/topic", RefKind.RemoteBranch, MainWork, RemoteName: "origin"));
+        var filters = new Core.Session.RepositoryGraphFilter(
+            "C:/repo",
+            ["refs/heads/topic", "refs/remotes/origin/topic"],
+            ["refs/heads/main"],
+            ["origin"],
+            [new Core.Session.BranchUpstream("refs/heads/topic", "refs/remotes/origin/topic")],
+            ["origin"],
+            default);
+        var context = Context(refs) with { Filters = filters };
+
+        Assert.Equal(["Compare topic with main", "Show reflog of topic", "Show topic", "Solo topic", "—", "Copy branch name"], Lines(RepositoryMenus.ForLocalBranch(context, topic.FullName, actions)).TakeLast(6));
+        Assert.Equal(["Hide main (disabled: \"The checked-out branch is always shown\")", "Stop soloing main", "—", "Copy branch name"], Lines(RepositoryMenus.ForLocalBranch(context, "refs/heads/main", actions)).TakeLast(4));
+        Assert.Equal(["Compare origin/topic with main", "Show origin/topic", "Solo origin/topic", "—", "Copy branch name"], Lines(RepositoryMenus.ForRemoteBranch(context, "refs/remotes/origin/topic", actions)).TakeLast(5));
+        Assert.Equal(["Show every branch of origin", "—", "Copy URL", "Manage remotes…"], Lines(RepositoryMenus.ForRemote(context, "origin", actions)).TakeLast(4));
+        Assert.Equal(["Show all hidden branches", "Stop soloing"], Lines(RepositoryMenus.ForSection(context, RefSection.LocalBranches, actions)!).TakeLast(2));
+        Assert.Equal(["Show all hidden branches", "Stop soloing"], Lines(RepositoryMenus.ForSection(context, RefSection.Remotes, actions)!).TakeLast(2));
+
+        foreach (var menu in new[]
+        {
+            RepositoryMenus.ForLocalBranch(context, topic.FullName, actions),
+            RepositoryMenus.ForLocalBranch(context, "refs/heads/main", actions),
+            RepositoryMenus.ForRemote(context, "origin", actions),
+            RepositoryMenus.ForSection(context, RefSection.LocalBranches, actions)!,
+        })
+        {
+            foreach (var item in menu.Items.Where(item => item.IsEnabled && FilterLabels.Contains(item.Label)))
+            {
+                item.Invoke();
+            }
+        }
+
+        Assert.Equal(
+            ["CompareBranchesAsync(refs/heads/main, refs/heads/topic)", "ShowBranchAsync(refs/heads/topic)", "SoloBranchAsync(refs/heads/topic)",
+             "StopSoloingBranchAsync(refs/heads/main)",
+             "ShowRemoteAsync(origin)",
+             "ShowAllHiddenBranchesAsync()", "StopSoloingAsync()"],
+            recorder.Calls.Select(call => call.ToString()));
+    }
+
+    private static readonly HashSet<string> FilterLabels =
+    [
+        "Compare topic with main", "Show topic", "Solo topic", "Stop soloing main", "Show every branch of origin", "Show all hidden branches", "Stop soloing",
+    ];
+
+    [Fact]
+    public void Comparing_is_disabled_while_HEAD_is_unborn_and_names_HEAD_while_it_is_detached()
+    {
+        var (actions, recorder) = RecordingActions.Create();
+        var topic = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, MainWork);
+        var unborn = new RepoRefs(new HeadState("main", null), [topic], [], []);
+        Assert.Equal("Compare topic with main (disabled: \"HEAD is unborn\")", Lines(RepositoryMenus.ForLocalBranch(Context(unborn), topic.FullName, actions))[^6]);
+
+        var detached = new RepoRefs(new HeadState(null, AlphaTwo), [topic], [], []);
+        var compare = RepositoryMenus.ForLocalBranch(Context(detached), topic.FullName, actions).Items.Single(item => item.Label == "Compare topic with HEAD");
+        compare.Invoke();
+        Assert.Equal(["CompareBranchesAsync(HEAD, refs/heads/topic)"], recorder.Calls.Select(call => call.ToString()));
+    }
+
+    [Fact]
+    public void A_comparisons_file_has_a_commits_file_menu_at_To()
+    {
+        var (actions, recorder) = RecordingActions.Create();
+        var file = new FileMenuTarget(new ChangedFile("src/Reader.cs", FileChangeKind.Renamed, "src/Parser.cs"), IsUntracked: false, ExistsInWorkingTree: false, CommitSha: MainWork);
+        var menu = RepositoryMenus.ForCompareFile(Context(OpsLikeRefs()), file, actions);
+
+        Assert.Equal(Lines(RepositoryMenus.ForCommitFile(Context(OpsLikeRefs()), file, actions)), Lines(menu));
+        Assert.Equal(["Reader.cs", "Open file (disabled: \"The file is not in the working tree\")", "Show in folder", "Copy path"], Lines(menu).Where(line => !line.StartsWith("File history", StringComparison.Ordinal) && !line.StartsWith("Blame", StringComparison.Ordinal) && line != "—"));
+        menu.Items.Single(item => item.Label == "Copy path").Invoke();
+        Assert.Equal(["CopyPathAsync(src/Reader.cs)"], recorder.Calls.Select(call => call.ToString()));
     }
 
     // --- Double-clicks (check 6, D93) ---------------------------------------------------------

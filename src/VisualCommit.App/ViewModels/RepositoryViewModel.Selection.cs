@@ -1,17 +1,20 @@
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Menus;
-using VisualCommit.App.ViewModels.Shell;
 using VisualCommit.Core.Git;
 
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// Several commits selected (docs/phase-3-design.md 4h, D88) and the branch drop's menu (4g):
-/// the details panel's list while two or more commits are selected, and the selection mapped
-/// again by its SHAs when a reloaded history replaces the graph.
+/// the details panel's list while three or more commits are selected (two compare, D162:
+/// <c>ShowMultiSelection</c> in RepositoryViewModel.Find.cs), and the selection mapped again by
+/// its SHAs when a reloaded history replaces the graph.
 /// </summary>
 public sealed partial class RepositoryViewModel
 {
+    /// <summary>A reloaded history's rows are taking the selection over (<c>OnGraphSwapped</c>): the user selected nothing.</summary>
+    private bool _remappingSelection;
+
     /// <summary>
     /// Makes the menu for a branch dropped onto a branch (4g), which the window's drag service
     /// opens at the drop point; null, or a function that returns null, opens nothing. The menus'
@@ -50,22 +53,23 @@ public sealed partial class RepositoryViewModel
             _ => new GraphSelection(kept, selection.Anchor, selection.Focus),
         };
 
-        if (mapped.Equals(selection))
+        // No selection of the user's: a branch comparison shown over it stays (docs/phase-5-design.md 6.2).
+        _remappingSelection = true;
+        try
         {
-            // The same commits on other rows: the list follows the new order.
-            ShowMultiSelection(selection);
+            if (mapped.Equals(selection))
+            {
+                // The same commits on other rows: the list follows the new order.
+                ShowMultiSelection(selection);
+            }
+            else
+            {
+                Selection = mapped;
+            }
         }
-        else
+        finally
         {
-            Selection = mapped;
+            _remappingSelection = false;
         }
-    }
-
-    private void ShowMultiSelection(GraphSelection selection)
-    {
-        Details.IsMultiSelection = selection.IsMultiple;
-        MultiSelection = selection.IsMultiple
-            ? new MultiSelectionViewModel([.. SelectedCommits.Select(commit => new MultiSelectionItem(commit.Sha, commit.ShortSha, commit.Subject))])
-            : null;
     }
 }

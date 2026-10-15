@@ -169,10 +169,18 @@ public sealed partial class Phase4ChecksA
 
     /// <summary>
     /// Asserts the multi-selection view (4h) in the right panel: "N commits selected" and the
-    /// commits in row order as "short id subject".
+    /// commits in row order as "short id subject". Exactly two commits show their comparison in its
+    /// place instead (docs/phase-5-design.md 6.1, D162): the lower row From, the upper To.
     /// </summary>
     private static async Task AssertMultiSelectionAsync(ShellDriver app, params string[] items)
     {
+        if (items.Length == 2)
+        {
+            await app.WaitForAsync(() => app.Compare() is not null, "the comparison of the two commits");
+            Assert.Equal(("From " + items[1], "To " + items[0]), (app.Compare()!.From, app.Compare()!.To));
+            return;
+        }
+
         await app.WaitForAsync(() => app.FindByAutomationId("MultiSelectionView").IsEffectivelyVisible, "the multi-selection view");
         var view = app.FindByAutomationId("MultiSelectionView");
         Assert.Equal($"{items.Length.ToString(CultureInfo.InvariantCulture)} commits selected", ((TextBlock)app.FindByAutomationId(view, "MultiSelectionTitle")).Text);
