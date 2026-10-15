@@ -32,6 +32,13 @@ public sealed record OperationRecord(
     /// <summary>A background operation: auto-fetch or the backups' clean-up.</summary>
     public bool IsBackground { get; init; }
 
+    /// <summary>
+    /// Where its failure was shown (<see cref="GitOperation.Errors"/>): a stage panel's write shows
+    /// its message in the stage panel, not in the status bar, so the activity log shows none for it
+    /// (docs/phase-5-design.md 2.2).
+    /// </summary>
+    public ErrorDisplay Errors { get; init; }
+
     /// <summary>The notes made while it ran (<see cref="IOperationLog.Note"/>): the clean-up's <c>Removed backup …</c> lines.</summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
 

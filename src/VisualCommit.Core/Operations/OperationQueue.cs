@@ -654,6 +654,7 @@ public sealed class OperationQueue : IOperationQueue
                 IsWarning = result.IsWarning,
                 Kind = operation.Kind,
                 IsBackground = operation.IsBackground,
+                Errors = operation.Errors,
                 DisplayedStart = entry.DisplayedStart,
                 DisplayedDuration = _recordClock.GetElapsedTime(entry.DisplayedTimestamp),
             });
