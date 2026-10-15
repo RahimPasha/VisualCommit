@@ -150,13 +150,10 @@ public class UndoEffectTests
     }
 
     [Fact]
-    public async Task A_detached_heads_moves_leave_every_branch_and_need_HEAD_detached_where_they_start()
+    public async Task A_detached_heads_keep_move_leaves_every_branch_and_the_work()
     {
         using var repo = await UndoRepoAsync();
-        var repository = await OpenAsync(repo);
-        var (c1, c3) = (await ShaAsync(repo, "HEAD~2"), await ShaAsync(repo, "HEAD"));
-        await repo.GitAsync("checkout", "--quiet", "--detach", c3);
-        repo.WriteFile("src/c.txt", "c-unstaged\n");
+        var (repository, c1, c3) = await DetachedAtMainWithWorkAsync(repo);
         var start = await PictureAsync(repo);
 
         // Keep: the files follow HEAD, the work stays, main stays where it is.
@@ -168,6 +165,14 @@ public class UndoEffectTests
         Assert.Equal("VisualCommit: undo effect", (await repo.GitAsync("log", "-g", "-1", "--format=%gs", "HEAD")).StandardOutput.Trim());
         await RunAsync(repository, new MoveDetachedHead(c1, c3, MoveMode.Keep));
         Assert.Equal(start, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_detached_heads_soft_move_leaves_every_branch_the_index_and_the_files()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, c1, c3) = await DetachedAtMainWithWorkAsync(repo);
+        var start = await PictureAsync(repo);
 
         // Soft: HEAD alone, through the transaction's no-deref option; the index and the files stay.
         await RunAsync(repository, new MoveDetachedHead(c3, c1, MoveMode.Soft));
@@ -176,6 +181,13 @@ public class UndoEffectTests
         Assert.Equal("b2\n", (await repo.GitAsync("show", ":b.txt")).StandardOutput);
         await RunAsync(repository, new MoveDetachedHead(c1, c3, MoveMode.Soft));
         Assert.Equal(start, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_detached_heads_move_needs_HEAD_detached_where_it_starts()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, c1, c3) = await DetachedAtMainWithWorkAsync(repo);
 
         // Refused: HEAD detached elsewhere, and HEAD on a branch at the commit.
         var still = await StillAsync(repo);
@@ -185,6 +197,20 @@ public class UndoEffectTests
         still = await StillAsync(repo);
         Assert.Equal(new UndoRefusal(UndoRefusalKind.HeadNotAtCommit, Sha: c3), await RefuseAsync(repository, new MoveDetachedHead(c3, c1, MoveMode.Soft)));
         Assert.Equal(still, await StillAsync(repo));
+    }
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> (the undo repository) with HEAD detached at main's commit
+    /// <c>c3</c> and <c>src/c.txt</c> changed in the working tree. Returns the repository,
+    /// <c>c1</c> and <c>c3</c>.
+    /// </summary>
+    private static async Task<(GitRepository Repository, string C1, string C3)> DetachedAtMainWithWorkAsync(TempRepo repo)
+    {
+        var repository = await OpenAsync(repo);
+        var (c1, c3) = (await ShaAsync(repo, "HEAD~2"), await ShaAsync(repo, "HEAD"));
+        await repo.GitAsync("checkout", "--quiet", "--detach", c3);
+        repo.WriteFile("src/c.txt", "c-unstaged\n");
+        return (repository, c1, c3);
     }
 
     [Fact]
@@ -246,7 +272,7 @@ public class UndoEffectTests
     }
 
     [Fact]
-    public async Task A_switch_refused_names_every_path_in_its_way_and_ignored_ones_as_such()
+    public async Task A_switch_refused_names_every_file_in_its_way_and_ignored_ones_as_such()
     {
         using var repo = await UndoRepoAsync();
         var repository = await OpenAsync(repo);
@@ -271,14 +297,21 @@ public class UndoEffectTests
         Assert.Equal(["f.txt"], ignored.Paths);
         Assert.Equal("untracked\n", ReadText(repo, "f.txt"));
         Assert.Equal(still, await StillAsync(repo));
+    }
 
-        File.Delete(Path.Combine(repo.Path, "f.txt"));
+    [Fact]
+    public async Task A_switch_refused_for_a_folder_in_its_way_names_its_ignored_files_or_the_folder()
+    {
+        using var repo = await UndoRepoAsync();
+        var repository = await OpenAsync(repo);
+        var main = new HeadState("main", await ShaAsync(repo, "main"));
+        var feature = new HeadState("feature", await ShaAsync(repo, "feature"));
 
         // A folder where feature has the file f.txt holding only files *.log ignores: git names
         // the folder, check-ignore would not match its name, its files are what is ignored.
         File.WriteAllText(Path.Combine(repo.Path, ".git", "info", "exclude"), "*.log\n");
         repo.WriteFile("f.txt/today.log", "kept\n").WriteFile("f.txt/old/yesterday.log", "kept\n");
-        still = await StillAsync(repo);
+        var still = await StillAsync(repo);
         var folder = await RefuseAsync(repository, new Switch(main, feature));
         Assert.Equal(UndoRefusalKind.IgnoredFilesInTheWay, folder.Kind);
         Assert.Equal(["f.txt/old/yesterday.log", "f.txt/today.log"], folder.Paths);

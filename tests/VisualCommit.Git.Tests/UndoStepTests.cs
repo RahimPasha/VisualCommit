@@ -237,21 +237,31 @@ public class UndoStepTests
     }
 
     [Fact]
-    public async Task A_cherry_pick_of_a_list_and_a_revert_are_undone_and_redone()
+    public async Task A_cherry_pick_of_a_list_is_undone_and_redone()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
-        var f1 = (await repo.GitAsync("rev-parse", "feature~1")).StandardOutput.Trim();
-        var f2 = (await repo.GitAsync("rev-parse", "feature")).StandardOutput.Trim();
+        var picks = await FeaturesCommitsAsync(repo);
         repo.WriteFile("scratch.txt", "scratch\n");
         var start = await PictureAsync(repo);
 
-        var pick = await RecordAsync(repository, UndoScope.CherryPick([f1, f2], "main"), () => repository.CherryPickAsync([f1, f2], cancellationToken: TestCancelled));
+        var pick = await RecordAsync(repository, UndoScope.CherryPick(picks, "main"), () => repository.CherryPickAsync(picks, cancellationToken: TestCancelled));
         var picked = await PictureAsync(repo);
         pick = await UndoAsync(repository, pick);
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, pick);
         Assert.Equal(picked, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_revert_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var picks = await FeaturesCommitsAsync(repo);
+        repo.WriteFile("scratch.txt", "scratch\n");
+        await repository.CherryPickAsync(picks, cancellationToken: TestCancelled);
+        var picked = await PictureAsync(repo);
 
         var c3 = (await repo.GitAsync("rev-parse", "HEAD~2")).StandardOutput.Trim();
         var revert = await RecordAsync(repository, UndoScope.Revert([c3], "main"), () => repository.RevertAsync(c3, isMerge: false, cancellationToken: TestCancelled));
@@ -262,15 +272,18 @@ public class UndoStepTests
         Assert.Equal(reverted, await PictureAsync(repo));
     }
 
+    /// <summary>feature's two commits, f1 and f2, oldest first.</summary>
+    private static async Task<string[]> FeaturesCommitsAsync(TempRepo repo)
+    {
+        var shas = (await repo.GitAsync("rev-parse", "feature~1", "feature")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return [shas[0], shas[1]];
+    }
+
     [Fact]
-    public async Task A_commit_and_a_cherry_pick_on_a_detached_HEAD_move_HEAD_alone()
+    public async Task A_commit_on_a_detached_HEAD_moves_HEAD_alone()
     {
         using var repo = await UndoRepoAsync();
-        var (repository, _) = await OpenDatedAsync(repo);
-        var main = (await repo.GitAsync("rev-parse", "main")).StandardOutput.Trim();
-        await repo.GitAsync("checkout", "--quiet", "--detach", "HEAD~1");
-        repo.WriteFile("a.txt", "a3\n").WriteFile("scratch.txt", "scratch\n");
-        await repo.GitAsync("add", "a.txt");
+        var (repository, main) = await DetachedWithStagedWorkAsync(repo);
         var start = await PictureAsync(repo);
 
         // The commit's undo is a soft move of the detached HEAD: its change comes back staged.
@@ -280,6 +293,16 @@ public class UndoStepTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, commit);
         Assert.Equal(committed, await PictureAsync(repo));
+        Assert.Equal(main, await TargetAsync(repo, "refs/heads/main"));
+    }
+
+    [Fact]
+    public async Task A_cherry_pick_on_a_detached_HEAD_moves_HEAD_alone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, main) = await DetachedWithStagedWorkAsync(repo);
+        await repository.CommitAsync("d1", amend: false, TestCancelled);
+        var committed = await PictureAsync(repo);
 
         // The pick's is a Keep move: the files go back, scratch.txt stays.
         var f1 = (await repo.GitAsync("rev-parse", "feature~1")).StandardOutput.Trim();
@@ -290,6 +313,21 @@ public class UndoStepTests
         await RedoAsync(repository, pick);
         Assert.Equal(picked, await PictureAsync(repo));
         Assert.Equal(main, await TargetAsync(repo, "refs/heads/main"));
+    }
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> (the undo repository) with HEAD detached at <c>c2</c>,
+    /// <c>a.txt</c> changed and staged and an untracked <c>scratch.txt</c>. Returns the repository
+    /// and main's commit, which nothing on the detached HEAD may move.
+    /// </summary>
+    private static async Task<(GitRepository Repository, string Main)> DetachedWithStagedWorkAsync(TempRepo repo)
+    {
+        var (repository, _) = await OpenDatedAsync(repo);
+        var main = (await repo.GitAsync("rev-parse", "main")).StandardOutput.Trim();
+        await repo.GitAsync("checkout", "--quiet", "--detach", "HEAD~1");
+        repo.WriteFile("a.txt", "a3\n").WriteFile("scratch.txt", "scratch\n");
+        await repo.GitAsync("add", "a.txt");
+        return (repository, main);
     }
 
     [Fact]

@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Git;
 
@@ -116,18 +118,30 @@ public sealed class TempRepo : IDisposable
     /// <summary>The environment variables that isolate this repo. Pass them to any other git call on it.</summary>
     public IReadOnlyDictionary<string, string?> Environment { get; }
 
-    /// <summary>Creates an empty repository on the branch <paramref name="initialBranch"/>.</summary>
+    /// <summary>
+    /// Creates an empty repository on the branch <paramref name="initialBranch"/>: a copy of the
+    /// git folder that <c>git init</c> and <see cref="RepositorySettings"/> made once per test
+    /// process for that branch (<see cref="BlankGitFolderAsync"/>), which is the same as running
+    /// them again for each repository, without their six git processes.
+    /// </summary>
     public static async Task<TempRepo> CreateAsync(string name = "repo", string initialBranch = "main")
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(initialBranch);
+        var blank = await BlankGitFolderAsync(initialBranch);
         var root = new TempDirectory(name);
         try
         {
             var path = root.Combine(name);
-            Directory.CreateDirectory(path);
-            var repo = new TempRepo(root, path);
-            await repo.GitAsync("init", "--quiet", "--initial-branch", initialBranch);
-            await repo.ConfigureAsync();
-            return repo;
+            var gitFolder = System.IO.Path.Combine(path, ".git");
+            CopyDirectory(blank, gitFolder);
+
+            // Git for Windows hides the git folder it makes (core.hideDotFiles); so is the copy.
+            if (OperatingSystem.IsWindows())
+            {
+                File.SetAttributes(gitFolder, File.GetAttributes(blank));
+            }
+
+            return new TempRepo(root, path);
         }
         catch
         {
@@ -138,24 +152,75 @@ public sealed class TempRepo : IDisposable
 
     /// <summary>
     /// The repository's own settings that every repo of this class has. Files are stored byte
-    /// for byte, so content and SHAs do not depend on the platform. The identity is that of
-    /// commits the app under test makes here, which has no other: the tests leave out the user's
-    /// configuration (D72); the builder's own commits set it through their environment.
+    /// for byte, so content and SHAs do not depend on the platform. Neither gc nor git's
+    /// automatic maintenance runs: nothing packs, prunes or expires behind a test's back, and a
+    /// commit, merge or rebase does not start a <c>git maintenance run --auto</c> process that
+    /// would do nothing. The identity is that of commits the app under test makes here, which has
+    /// no other: the tests leave out the user's configuration (D72); the builder's own commits set
+    /// it through their environment.
     /// </summary>
     private static readonly KeyValuePair<string, string>[] RepositorySettings =
     [
         new("core.autocrlf", "false"),
         new("commit.gpgsign", "false"),
         new("gc.auto", "0"),
+        new("maintenance.auto", "false"),
         new("user.name", AuthorName),
         new("user.email", AuthorEmail),
     ];
 
-    private async Task ConfigureAsync()
+    /// <summary>
+    /// The settings of every bare remote <see cref="AddBareRemoteAsync"/> makes: no gc after a
+    /// push (<c>receive.autogc</c>) and no automatic maintenance, so that a push starts no process
+    /// that would do nothing in a repository this small.
+    /// </summary>
+    private static readonly KeyValuePair<string, string>[] BareRemoteSettings =
+    [
+        new("receive.autogc", "false"),
+        new("maintenance.auto", "false"),
+    ];
+
+    /// <summary>The git folders of the blank repositories, one per initial branch (or <see cref="BareKey"/>), made once per test process.</summary>
+    private static readonly ConcurrentDictionary<string, Lazy<Task<string>>> BlankGitFolders = new(StringComparer.Ordinal);
+
+    /// <summary>The key of the blank bare repository in <see cref="BlankGitFolders"/>: no branch name can be empty.</summary>
+    private const string BareKey = "";
+
+    /// <summary>
+    /// The git folder of a repository that <c>git init --initial-branch <paramref name="initialBranch"/></c>
+    /// made with this class's isolation, with <see cref="RepositorySettings"/> set; or, for
+    /// <see cref="BareKey"/>, of a bare repository that <c>git init --bare</c> made, with
+    /// <see cref="BareRemoteSettings"/> set. Made once per test process, in a folder of its own
+    /// under the tests' temp folder like every other repository (git probes that file system for
+    /// its <c>core</c> settings), and deleted when the process ends. A git folder holds no path of
+    /// its own, so a copy of it is a repository of its own.
+    /// </summary>
+    private static Task<string> BlankGitFolderAsync(string initialBranch) =>
+        BlankGitFolders.GetOrAdd(initialBranch, key => new Lazy<Task<string>>(() => MakeBlankGitFolderAsync(key))).Value;
+
+    private static async Task<string> MakeBlankGitFolderAsync(string initialBranch)
     {
-        foreach (var (key, value) in RepositorySettings)
+        var root = new TempDirectory("blank");
+        try
         {
-            await ConfigAsync(key, value);
+            var bare = initialBranch.Length == 0;
+            var path = root.Combine("blank");
+            Directory.CreateDirectory(path);
+            var blank = new TempRepo(root, path);
+            string[] init = bare ? ["init", "--quiet", "--bare"] : ["init", "--quiet", "--initial-branch", initialBranch];
+            await blank.GitAsync(init);
+            foreach (var (key, value) in bare ? BareRemoteSettings : RepositorySettings)
+            {
+                await blank.ConfigAsync(key, value);
+            }
+
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => root.Dispose();
+            return bare ? path : System.IO.Path.Combine(path, ".git");
+        }
+        catch
+        {
+            root.Dispose();
+            throw;
         }
     }
 
@@ -333,9 +398,33 @@ public sealed class TempRepo : IDisposable
     public async Task<string> CommitAsync(string message)
     {
         await GitAsync("add", "--all");
-        await GitAsync("commit", "--quiet", "--allow-empty", "--message", message);
+        var sha = CommittedSha(await GitAsync(CommitArguments("--allow-empty", "--message", message)));
         _clock.Advance();
-        return await HeadAsync();
+        return sha;
+    }
+
+    /// <summary>
+    /// The arguments of a <c>git commit</c> whose summary line names the new commit in full
+    /// (<c>-c core.abbrev=no</c>), for <see cref="CommittedSha"/>: the commit is the same as with
+    /// <c>--quiet</c>, and no <c>rev-parse HEAD</c> is needed after it. <paramref name="options"/>
+    /// follow <c>commit</c>.
+    /// </summary>
+    public static string[] CommitArguments(params string[] options) => ["-c", "core.abbrev=no", "commit", .. options];
+
+    /// <summary>
+    /// The SHA of the commit a <c>git commit</c> made with <see cref="CommitArguments"/>, read from
+    /// the first line it prints: <c>[main (root-commit) &lt;sha&gt;] subject</c>, or
+    /// <c>[detached HEAD &lt;sha&gt;] subject</c>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The output has no such line.</exception>
+    public static string CommittedSha(GitResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var line = result.StandardOutput.Split('\n', 2)[0];
+        var match = Regex.Match(line, @"^\[.*? ([0-9a-f]{40}|[0-9a-f]{64})\] ");
+        return match.Success
+            ? match.Groups[1].Value
+            : throw new InvalidOperationException($"git commit did not name its commit in full. It printed:\n{result.StandardOutput}");
     }
 
     /// <summary>Writes one file and commits it. Returns the new commit's SHA.</summary>
@@ -370,14 +459,13 @@ public sealed class TempRepo : IDisposable
     /// <summary>
     /// Creates an empty bare repository next to this one's working tree (not inside it) and adds
     /// it as the remote <paramref name="name"/>. Returns the bare repository's folder. Push to it
-    /// with <see cref="PushAsync"/>.
+    /// with <see cref="PushAsync"/>. The bare repository is a copy of one that <c>git init --bare</c>
+    /// made once per test process, with <see cref="BareRemoteSettings"/> (<see cref="BlankGitFolderAsync"/>).
     /// </summary>
     public async Task<string> AddBareRemoteAsync(string name = "origin")
     {
         var barePath = _root.Combine(name + ".git");
-        Directory.CreateDirectory(barePath);
-        var command = new GitCommand("init", "--quiet", "--bare") { WorkingDirectory = barePath, Environment = Environment };
-        (await Runner.RunAsync(command)).EnsureSuccess(command);
+        CopyDirectory(await BlankGitFolderAsync(BareKey), barePath);
         await GitAsync("remote", "add", name, barePath);
         return barePath;
     }
@@ -413,10 +501,8 @@ public sealed class TempRepo : IDisposable
             CopyDirectory(_root.Path, root.Path);
             var copy = new TempRepo(root, root.Combine(System.IO.Path.GetFileName(Path))) { _clock = new Clock(_clock.Now) };
 
-            var remotes = (await copy.GitAsync("remote")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var remote in remotes)
+            foreach (var (remote, url) in await copy.RemoteUrlsAsync())
             {
-                var url = (await copy.GitAsync("remote", "get-url", remote)).StandardOutput.Trim();
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !uri.IsFile)
                 {
                     continue;
@@ -437,6 +523,41 @@ public sealed class TempRepo : IDisposable
             root.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Each remote with its URL as configured (the first <c>remote.&lt;name&gt;.url</c>, as
+    /// <c>git remote get-url</c> gives it without an <c>insteadOf</c> rule), in the order of the
+    /// configuration, read with one git call.
+    /// </summary>
+    private async Task<IReadOnlyList<(string Remote, string Url)>> RemoteUrlsAsync()
+    {
+        const string Section = "remote.", Key = ".url";
+        var command = Command(null, ["config", "--get-regexp", @"^remote\..*\.url$"]);
+        var listed = await Runner.RunAsync(command);
+        if (listed.ExitCode == 1)
+        {
+            // No such key: no remote.
+            return [];
+        }
+
+        var urls = new List<(string Remote, string Url)>();
+        foreach (var line in Lines(listed.EnsureSuccess(command).StandardOutput))
+        {
+            var space = line.IndexOf(' ', StringComparison.Ordinal);
+            if (space < 0)
+            {
+                continue;
+            }
+
+            var remote = line[Section.Length..(space - Key.Length)];
+            if (!urls.Exists(entry => entry.Remote == remote))
+            {
+                urls.Add((remote, line[(space + 1)..].TrimEnd('\r')));
+            }
+        }
+
+        return urls;
     }
 
     /// <summary>

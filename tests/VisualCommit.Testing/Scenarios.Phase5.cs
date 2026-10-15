@@ -232,9 +232,12 @@ public static partial class Scenarios
     /// <summary>
     /// The reflog scenario ("reflog", design 15.1, 5): reflogs with lost commits and a gap, and a
     /// backup of every kind the backups list shows. Commits and steps, from 2026-01-01 12:00 UTC,
-    /// each backup saved just before the step it keeps, as the app saves it, and named one second
-    /// after the minute of that step (<see cref="BackupClock.Fixed"/> at the scenario's clock; the
-    /// clock moves on a minute after it):
+    /// each backup named, and its snapshot made, just before the step it keeps, as the app makes
+    /// them, the name one second after the minute of that step (<see cref="BackupClock.Fixed"/> at
+    /// the scenario's clock; the clock moves on a minute after it). The backup refs themselves are
+    /// written by one <c>update-ref --stdin</c> transaction before doomed is deleted, which also
+    /// deletes the tags v0.9 and v1.0-rc: neither backup refs nor tags have a reflog, so the
+    /// repository is the same as if each had been written at its step, with fewer git processes:
     /// <list type="number">
     /// <item>12:00 "Initial commit" on main (README.md <see cref="ReflogFiles.Readme"/>), tagged <c>v0.8</c> (lightweight)</item>
     /// <item>12:01 "Add the app" (src/app.txt <see cref="ReflogFiles.App"/>), tagged <c>v0.9</c> (annotated, "Version 0.9"); topic and clash start here</item>
@@ -242,7 +245,7 @@ public static partial class Scenarios
     /// <item>12:03 "Main work" on main (src/app.txt <see cref="ReflogFiles.AppMainWork"/>)</item>
     /// <item>12:04 "Clashing work" on clash (src/app.txt <see cref="ReflogFiles.AppClash"/>), 12:05 "Clash notes" on clash (docs/clash.txt "clash notes\n")</item>
     /// <item>main and topic pushed to the bare <c>origin</c> and tracked, the tag v0.8 too, and the
-    /// commit Add the app as origin's feature/gone</item>
+    /// commit Add the app as origin's feature/gone, in one push</item>
     /// <item>abort-…: <c>git merge clash</c> stops with src/app.txt conflicted; its content written as
     /// <see cref="ReflogFiles.AppAbortResolution"/>; <c>abort-&lt;t&gt;</c> → HEAD and
     /// <c>-changes</c> → a snapshot of docs/clash.txt and src/app.txt; <c>git merge --abort</c></item>
@@ -260,7 +263,7 @@ public static partial class Scenarios
     /// then its creation undone as the undo does it: the backup → the tag object, the tag deleted</item>
     /// <item>remote-tag-…/origin/v0.8 → v0.8's commit; v0.8 deleted on origin (with a lease)</item>
     /// <item>remote-branch-…/origin/feature/gone → Add the app; feature/gone deleted on origin
-    /// (with a lease), so origin no longer has the branch this backup names</item>
+    /// (with a lease, by the same push as v0.8), so origin no longer has the branch this backup names</item>
     /// <item>remote-…/mirror/main and /mirror/topic: a second bare remote <c>mirror</c>
     /// (<c>mirror.git</c>) that main and topic were pushed to, then removed</item>
     /// <item>reset-… with <c>-changes</c> of a mixed reset: src/app.txt changed and staged
@@ -580,85 +583,91 @@ public static partial class Scenarios
         var repo = await TempRepo.CreateAsync("reflog");
         try
         {
-            await repo.CommitFileAsync("README.md", ReflogFiles.Readme, "Initial commit");
+            // The update-ref --stdin lines of the backups (and of the two tags' deletions), written at the end.
+            var backups = new StringBuilder();
+
+            var initial = await repo.CommitFileAsync("README.md", ReflogFiles.Readme, "Initial commit");
             await repo.TagAsync("v0.8");
             var addTheApp = await repo.CommitFileAsync("src/app.txt", ReflogFiles.App, "Add the app");
             await repo.AnnotatedTagAsync("v0.9", "Version 0.9");
             await repo.CreateBranchAsync("topic");
             await repo.CreateBranchAsync("clash");
-            await OnBranchAsync(repo, "topic", "src/topic.txt", "topic\n", "Topic work");
-            await OnBranchAsync(repo, "main", "src/app.txt", ReflogFiles.AppMainWork, "Main work");
+            var topicWork = await OnBranchAsync(repo, "topic", "src/topic.txt", "topic\n", "Topic work");
+            var mainWork = await OnBranchAsync(repo, "main", "src/app.txt", ReflogFiles.AppMainWork, "Main work");
             var clashingWork = await OnBranchAsync(repo, "clash", "src/app.txt", ReflogFiles.AppClash, "Clashing work");
             var clashNotes = await repo.CommitFileAsync("docs/clash.txt", "clash notes\n", "Clash notes");
             await repo.CheckoutAsync("main");
 
+            // One push: the branches with their upstreams (a commit given by its SHA gets none), and the tag.
             await repo.AddBareRemoteAsync("origin");
-            await repo.PushAsync("origin", setUpstream: true, "main", "topic");
-            await repo.PushAsync("origin", setUpstream: false, "refs/tags/v0.8", addTheApp + ":refs/heads/feature/gone");
+            await repo.PushAsync("origin", setUpstream: true, "main", "topic", "refs/tags/v0.8", addTheApp + ":refs/heads/feature/gone");
 
             // A merge stopped by a conflict, partly resolved, then aborted (phase 4 design 5.1).
             await ExpectStopAsync(repo, "merge", "clash");
             repo.WriteFile("src/app.txt", ReflogFiles.AppAbortResolution);
-            await SaveBackupAsync(repo, "abort", [(null, await HeadOfAsync(repo))], await TrackedChangesSnapshotAsync(repo));
+            AddBackup(repo, backups, "abort", [(null, mainWork)], await TrackedChangesSnapshotAsync(repo));
             await repo.GitAsync("merge", "--abort");
 
-            // A list of picks stopped at its first, partly resolved, then skipped: the second is picked.
+            // A list of picks stopped at its first, partly resolved, then skipped: the second is
+            // picked, and git's summary of that commit names it.
             await ExpectStopAsync(repo, "cherry-pick", clashingWork, clashNotes);
             repo.WriteFile("src/app.txt", ReflogFiles.AppSkipResolution);
-            await SaveBackupAsync(repo, "skip", [(null, await HeadOfAsync(repo))], await TrackedChangesSnapshotAsync(repo));
-            await repo.GitAsync("cherry-pick", "--skip");
+            AddBackup(repo, backups, "skip", [(null, mainWork)], await TrackedChangesSnapshotAsync(repo));
+            var main = TempRepo.CommittedSha(await repo.GitAsync("-c", "core.abbrev=no", "cherry-pick", "--skip"));
 
             // topic rebased onto main, then force-pushed.
-            var main = await HeadOfAsync(repo);
-            await SaveBackupAsync(repo, "rebase", [("topic", await RevParseAsync(repo, "refs/heads/topic"))]);
+            AddBackup(repo, backups, "rebase", [("topic", topicWork)]);
             await repo.CheckoutAsync("topic");
             await repo.GitAsync("rebase", main);
-            await SaveBackupAsync(repo, "force-push", [("origin/topic", await RevParseAsync(repo, "refs/remotes/origin/topic"))]);
+            AddBackup(repo, backups, "force-push", [("origin/topic", topicWork)]);
             await repo.GitAsync("push", "--quiet", "--force-with-lease=refs/heads/topic", "origin", "refs/heads/topic:refs/heads/topic");
             await repo.CheckoutAsync("main");
 
             // A commit on a detached HEAD, left behind by a checkout.
             await repo.DetachAsync(main);
             var detached = await repo.CommitFileAsync("docs/idea.txt", "idea\n", "Detached experiment");
-            await SaveBackupAsync(repo, "detached", [(null, detached)]);
+            AddBackup(repo, backups, "detached", [(null, detached)]);
             await repo.CheckoutAsync("main");
 
             // A stash dropped.
             var stash = await repo.WriteFile("README.md", ReflogFiles.ReadmeStashed).StashAsync("Try a README");
-            await SaveBackupAsync(repo, "stash", [(null, stash)]);
+            AddBackup(repo, backups, "stash", [(null, stash)]);
             await repo.GitAsync("stash", "drop", "--quiet", "stash@{0}");
 
-            // Tags: one deleted, one whose creation was undone, one deleted on the remote.
-            await SaveBackupAsync(repo, "tag", [("v0.9", await RevParseAsync(repo, "refs/tags/v0.9"))]);
-            await repo.GitAsync("tag", "--delete", "v0.9");
+            // Tags: one deleted, one whose creation was undone (both deleted with the backups), one
+            // deleted on the remote.
+            var tagBackup = BackupStem("tag", repo);
             await repo.AnnotatedTagAsync("v1.0-rc", "Release candidate");
-            var candidate = await RevParseAsync(repo, "refs/tags/v1.0-rc");
-            await SaveBackupAsync(repo, "tag-undone", [("v1.0-rc", candidate)]);
-            await repo.GitAsync("update-ref", "-d", "refs/tags/v1.0-rc", candidate);
-            var v08 = await RevParseAsync(repo, "refs/tags/v0.8");
-            await SaveBackupAsync(repo, "remote-tag", [("origin/v0.8", v08)]);
-            await repo.GitAsync("push", "--quiet", $"--force-with-lease=refs/tags/v0.8:{v08}", "origin", "--delete", "refs/tags/v0.8");
+            var objects = Lines(await repo.GitAsync("rev-parse", "refs/tags/v0.9", "refs/tags/v1.0-rc", "refs/heads/topic"));
+            var (v09, candidate, topic) = (objects[0], objects[1], objects[2]);
+            backups.Append(CreateLine(tagBackup + "/v0.9", v09));
+            AddBackup(repo, backups, "tag-undone", [("v1.0-rc", candidate)]);
+            AddBackup(repo, backups, "remote-tag", [("origin/v0.8", initial)]);
 
-            // A branch deleted on the remote.
-            await SaveBackupAsync(repo, "remote-branch", [("origin/feature/gone", addTheApp)]);
-            await repo.GitAsync("push", "--quiet", $"--force-with-lease=refs/heads/feature/gone:{addTheApp}", "origin", "--delete", "refs/heads/feature/gone");
+            // A branch deleted on the remote, by the same push as the tag.
+            AddBackup(repo, backups, "remote-branch", [("origin/feature/gone", addTheApp)]);
+            await repo.GitAsync(
+                "push",
+                "--quiet",
+                $"--force-with-lease=refs/tags/v0.8:{initial}",
+                $"--force-with-lease=refs/heads/feature/gone:{addTheApp}",
+                "origin",
+                "--delete",
+                "refs/tags/v0.8",
+                "refs/heads/feature/gone");
 
             // A remote removed with its branches.
             await repo.AddBareRemoteAsync("mirror");
             await repo.PushAsync("mirror", setUpstream: false, "main", "topic");
-            await SaveBackupAsync(
-                repo,
-                "remote",
-                [("mirror/main", await RevParseAsync(repo, "refs/remotes/mirror/main")), ("mirror/topic", await RevParseAsync(repo, "refs/remotes/mirror/topic"))]);
+            AddBackup(repo, backups, "remote", [("mirror/main", main), ("mirror/topic", topic)]);
             await repo.GitAsync("remote", "remove", "mirror");
 
             // A mixed reset of staged changes, then the discard of what it left and a new file.
-            var head = await HeadOfAsync(repo);
             await repo.WriteFile("src/app.txt", ReflogFiles.AppStaged).GitAsync("add", "--", "src/app.txt");
-            await SaveBackupAsync(repo, "reset", [(null, head)], await IndexCommitAsync(repo, head, "VisualCommit: index before a mixed reset"));
-            await repo.GitAsync("reset", "--mixed", "--quiet", head, "--");
+            AddBackup(repo, backups, "reset", [(null, main)], await IndexCommitAsync(repo, "HEAD", "VisualCommit: index before a mixed reset"));
+            await repo.GitAsync("reset", "--mixed", "--quiet", main, "--");
             repo.WriteFile("notes/todo.txt", ReflogFiles.Todo);
-            await SaveDiscardSnapshotAsync(repo, ["notes/todo.txt", "src/app.txt"]);
+            await AddDiscardSnapshotAsync(repo, backups, ["notes/todo.txt", "src/app.txt"]);
             await repo.GitAsync("restore", "--worktree", "--", "src/app.txt");
             repo.DeleteFile("notes/todo.txt");
             Directory.Delete(Path.Combine(repo.Path, "notes"));
@@ -669,28 +678,29 @@ public static partial class Scenarios
             await repo.CheckoutAsync("main");
             await repo.CommitFileAsync("docs/notes.txt", ReflogFiles.NotesDraft, "Draft the notes");
             await repo.WriteFile("docs/notes.txt", ReflogFiles.Notes).GitAsync("add", "--all");
-            await repo.GitAsync("commit", "--quiet", "--amend", "--message", "Write the notes");
+            var notes = TempRepo.CommittedSha(await repo.GitAsync(TempRepo.CommitArguments("--amend", "--message", "Write the notes")));
             repo.MoveClockTo(repo.ClockTime.AddMinutes(1));
-            var notes = await HeadOfAsync(repo);
             var shortcut = await repo.CommitFileAsync("src/shortcut.txt", "shortcut\n", "Try a shortcut");
             repo.WriteFile("README.md", ReflogFiles.ReadmeEdited);
-            await SaveBackupAsync(repo, "reset", [(null, shortcut)], await HardResetSnapshotAsync(repo, shortcut, notes, ["README.md"]));
+            AddBackup(repo, backups, "reset", [(null, shortcut)], await HardResetSnapshotAsync(repo, shortcut, notes, ["README.md"]));
             await repo.GitAsync("reset", "--hard", "--quiet", notes, "--");
 
-            await repo.CreateBranchAsync("draft");
-            await repo.CheckoutAsync("draft");
+            // A branch made and checked out in one step, as git checkout -b does: its reflog's
+            // first entry and HEAD's are those of git branch and git checkout.
+            await repo.GitAsync("checkout", "--quiet", "-b", "draft");
             await repo.CommitFileAsync("docs/draft.txt", "draft\n", "Draft work");
             await repo.GitAsync("branch", "--move", "draft", "feature/renamed");
             await repo.CheckoutAsync("main");
 
-            await repo.CreateBranchAsync("doomed");
-            await repo.CheckoutAsync("doomed");
+            await repo.GitAsync("checkout", "--quiet", "-b", "doomed");
             var doomed = await repo.CommitFileAsync("docs/doomed.txt", "doomed\n", "Doomed work");
             await repo.CheckoutAsync("main");
-            await SaveBackupAsync(repo, "branch", [("doomed", doomed)]);
+            AddBackup(repo, backups, "branch", [("doomed", doomed)]);
+            backups.Append(OldBackupLines(notes));
+            backups.Append("delete refs/tags/v0.9 ").Append(v09).Append('\n');
+            backups.Append("delete refs/tags/v1.0-rc ").Append(candidate).Append('\n');
+            await repo.GitWithInputAsync(backups.ToString(), "update-ref", "--stdin");
             await repo.GitAsync("branch", "--delete", "--force", "doomed");
-
-            await SaveOldBackupsAsync(repo);
             return repo;
         }
         catch
@@ -754,7 +764,7 @@ public static partial class Scenarios
     private static async Task<string> CommitAsAsync(TempRepo repo, ScenarioAuthor author, string message)
     {
         await repo.GitAsync("add", "--all").ConfigureAwait(false);
-        await repo.GitWithEnvironmentAsync(
+        var committed = await repo.GitWithEnvironmentAsync(
             new Dictionary<string, string?>
             {
                 ["GIT_AUTHOR_NAME"] = author.Name,
@@ -762,12 +772,9 @@ public static partial class Scenarios
                 ["GIT_COMMITTER_NAME"] = author.Name,
                 ["GIT_COMMITTER_EMAIL"] = author.Email,
             },
-            "commit",
-            "--quiet",
-            "--message",
-            message).ConfigureAwait(false);
+            TempRepo.CommitArguments("--message", message)).ConfigureAwait(false);
         repo.MoveClockTo(repo.ClockTime.AddMinutes(1));
-        return await repo.HeadAsync().ConfigureAwait(false);
+        return TempRepo.CommittedSha(committed);
     }
 
     /// <summary>Checks out <paramref name="branch"/> and commits one file on it. Returns the new commit's SHA.</summary>
@@ -777,42 +784,46 @@ public static partial class Scenarios
         return await repo.CommitFileAsync(path, content, message).ConfigureAwait(false);
     }
 
-    private static async Task<string> HeadOfAsync(TempRepo repo) => await RevParseAsync(repo, "HEAD").ConfigureAwait(false);
-
     /// <summary>
-    /// Saves a backup as the app does (phase 3 design 2.0): one name for the operation,
-    /// <c>&lt;kind&gt;-&lt;time&gt;</c>, with each entry's name after a slash, and the changes
-    /// snapshot as <c>&lt;kind&gt;-&lt;time&gt;-changes</c>, in one <c>update-ref --stdin</c>
-    /// transaction of <c>create</c> lines. The time is the backup clock's next name
-    /// (<see cref="BackupClock.Fixed"/>) at the scenario's clock: one second after its minute.
-    /// The clock then moves on a minute, so that the step the backup keeps is dated after it and
-    /// the next backup gets a name of its own. Returns the name.
+    /// Adds a backup to <paramref name="lines"/>, the <c>update-ref --stdin</c> transaction of
+    /// <c>create</c> lines that writes a builder's backups, as the app names them (phase 3 design
+    /// 2.0): one name for the operation, <c>&lt;kind&gt;-&lt;time&gt;</c> (<see cref="BackupStem"/>),
+    /// with each entry's name after a slash, and the changes snapshot as
+    /// <c>&lt;kind&gt;-&lt;time&gt;-changes</c>. The scenario's clock moves on a minute, as for
+    /// every backup.
     /// </summary>
-    private static async Task<string> SaveBackupAsync(TempRepo repo, string kind, IReadOnlyList<(string? Name, string Target)> entries, string? changes = null)
+    private static void AddBackup(TempRepo repo, StringBuilder lines, string kind, IReadOnlyList<(string? Name, string Target)> entries, string? changes = null)
     {
-        var stem = BackupPrefix + kind + "-" + NextBackupTime(repo);
-        var lines = new StringBuilder();
+        var stem = BackupStem(kind, repo);
         foreach (var (name, target) in entries)
         {
-            lines.Append("create ").Append(name is null ? stem : stem + "/" + name).Append(' ').Append(target).Append('\n');
+            lines.Append(CreateLine(name is null ? stem : stem + "/" + name, target));
         }
 
         if (changes is not null)
         {
-            lines.Append("create ").Append(stem).Append("-changes ").Append(changes).Append('\n');
+            lines.Append(CreateLine(stem + "-changes", changes));
         }
-
-        await repo.GitWithInputAsync(lines.ToString(), "update-ref", "--stdin").ConfigureAwait(false);
-        return stem[BackupPrefix.Length..];
     }
 
-    /// <summary>The backup clock's next name at the scenario's clock, in the backups' form; the scenario's clock then moves on a minute.</summary>
-    private static string NextBackupTime(TempRepo repo)
+    /// <summary>
+    /// A backup's ref name without its entries, <c>refs/visualcommit/backup/&lt;kind&gt;-&lt;time&gt;</c>:
+    /// the time is the backup clock's next name (<see cref="BackupClock.Fixed"/>) at the scenario's
+    /// clock, one second after its minute. The clock then moves on a minute, so that the step the
+    /// backup keeps is dated after it and the next backup gets a name of its own.
+    /// </summary>
+    private static string BackupStem(string kind, TempRepo repo)
     {
         var time = BackupTime(BackupClock.Fixed(repo.ClockTime).NextName());
         repo.MoveClockTo(repo.ClockTime.AddMinutes(1));
-        return time;
+        return BackupPrefix + kind + "-" + time;
     }
+
+    /// <summary>An <c>update-ref --stdin</c> line that creates <paramref name="name"/> (a ref that must not exist yet) at <paramref name="target"/>.</summary>
+    private static string CreateLine(string name, string target) => $"create {name} {target}\n";
+
+    /// <summary>The lines of a git call's output, empty ones left out.</summary>
+    private static string[] Lines(GitResult result) => result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>A backup's time as its name writes it: UTC to the millisecond (D67).</summary>
     private static string BackupTime(DateTimeOffset time) =>
@@ -840,12 +851,16 @@ public static partial class Scenarios
     /// </summary>
     private static async Task SaveOldBackupsAsync(TempRepo repo)
     {
+        var head = (await repo.GitAsync("rev-parse", "--verify", "HEAD").ConfigureAwait(false)).StandardOutput.Trim();
+        await repo.GitWithInputAsync(OldBackupLines(head), "update-ref", "--stdin").ConfigureAwait(false);
+    }
+
+    /// <summary>The <c>update-ref --stdin</c> lines of <see cref="SaveOldBackupsAsync"/>, with <paramref name="head"/> as HEAD's commit.</summary>
+    private static string OldBackupLines(string head)
+    {
         var clock = BackupClock.Fixed(new DateTimeOffset(2025, 11, 20, 9, 0, 0, TimeSpan.Zero));
-        var head = await HeadOfAsync(repo).ConfigureAwait(false);
-        var lines =
-            $"create {BackupPrefix}reset-{BackupTime(clock.NextName())} {head}\n" +
-            $"create {BackupPrefix}branch-{BackupTime(clock.NextName())}/old-idea {head}\n";
-        await repo.GitWithInputAsync(lines, "update-ref", "--stdin").ConfigureAwait(false);
+        return CreateLine($"{BackupPrefix}reset-{BackupTime(clock.NextName())}", head) +
+            CreateLine($"{BackupPrefix}branch-{BackupTime(clock.NextName())}/old-idea", head);
     }
 
     /// <summary>The identity of the app's snapshot commits (D67): the app's record, not the user's.</summary>
@@ -904,14 +919,16 @@ public static partial class Scenarios
     /// <summary>
     /// The snapshot an abort or a skip keeps (<c>SnapshotTrackedChangesAsync</c>): every staged
     /// path and every changed tracked one, conflicted ones included, in byte order, with HEAD as
-    /// its only parent and the app's subject "VisualCommit: snapshot before an abort".
+    /// its only parent and the app's subject "VisualCommit: snapshot before an abort". The paths
+    /// come from one <c>git diff --name-only HEAD</c>, the working tree against HEAD: in this
+    /// scenario's stops every staged path is also changed in the working tree, so they are those
+    /// the app's two calls (staged, then unstaged) give.
     /// </summary>
     private static async Task<string> TrackedChangesSnapshotAsync(TempRepo repo)
     {
-        var staged = (await repo.GitAsync("diff", "--cached", "--name-only", "-z", "HEAD").ConfigureAwait(false)).StandardOutput;
-        var unstaged = (await repo.GitAsync("diff", "--name-only", "-z").ConfigureAwait(false)).StandardOutput;
-        var paths = staged.Split('\0').Concat(unstaged.Split('\0')).Where(path => path.Length > 0).Distinct().Order(StringComparer.Ordinal).ToList();
-        return await SnapshotAsync(repo, paths, await HeadOfAsync(repo).ConfigureAwait(false), null, "VisualCommit: snapshot before an abort").ConfigureAwait(false);
+        var changed = (await repo.GitAsync("diff", "--name-only", "-z", "HEAD", "--").ConfigureAwait(false)).StandardOutput;
+        var paths = changed.Split('\0').Where(path => path.Length > 0).Distinct().Order(StringComparer.Ordinal).ToList();
+        return await SnapshotAsync(repo, paths, "HEAD", null, "VisualCommit: snapshot before an abort").ConfigureAwait(false);
     }
 
     /// <summary>
@@ -927,14 +944,14 @@ public static partial class Scenarios
 
     /// <summary>
     /// A discard snapshot of the app's form (D67, <c>GitRepository.SaveSnapshotAsync</c>): the
-    /// files as they are, on HEAD, saved as <c>discard-&lt;time&gt;</c> by a ref that must not exist
-    /// yet, the time from the backup clock as every backup's (<see cref="NextBackupTime"/>).
+    /// files as they are, on HEAD, added to <paramref name="lines"/> as <c>discard-&lt;time&gt;</c>
+    /// (a ref that must not exist yet), the time from the backup clock as every backup's
+    /// (<see cref="BackupStem"/>).
     /// </summary>
-    private static async Task SaveDiscardSnapshotAsync(TempRepo repo, IReadOnlyList<string> paths)
+    private static async Task AddDiscardSnapshotAsync(TempRepo repo, StringBuilder lines, IReadOnlyList<string> paths)
     {
-        var head = await HeadOfAsync(repo).ConfigureAwait(false);
         var files = paths.Count == 1 ? "1 file" : string.Create(CultureInfo.InvariantCulture, $"{paths.Count} files");
-        var commit = await SnapshotAsync(repo, paths, head, null, $"VisualCommit: snapshot before discarding {files}").ConfigureAwait(false);
-        await repo.GitAsync("update-ref", BackupPrefix + "discard-" + NextBackupTime(repo), commit, string.Empty).ConfigureAwait(false);
+        var commit = await SnapshotAsync(repo, paths, "HEAD", null, $"VisualCommit: snapshot before discarding {files}").ConfigureAwait(false);
+        lines.Append(CreateLine(BackupStem("discard", repo), commit));
     }
 }

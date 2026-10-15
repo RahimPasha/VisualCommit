@@ -48,7 +48,7 @@ public class UndoStepRefusalTests
     }
 
     [Fact]
-    public async Task An_ignored_file_where_the_undo_or_the_redo_adds_one_refuses_them_and_stays()
+    public async Task An_ignored_file_where_the_undo_adds_one_refuses_it_and_stays()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -64,13 +64,20 @@ public class UndoStepRefusalTests
         Assert.Equal(["g.txt"], undo.Paths);
         Assert.Equal("ignored, mine\n", ReadText(repo, "g.txt"));
         Assert.Equal(still, await StillAsync(repo));
-        File.Delete(Path.Combine(repo.Path, "g.txt"));
+    }
+
+    [Fact]
+    public async Task An_ignored_file_where_the_redo_adds_one_refuses_it_and_stays()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        File.WriteAllText(Path.Combine(repo.Path, ".git", "info", "exclude"), "g.txt\nf.txt\n");
 
         // The redo of an undone merge brings f.txt back where an ignored f.txt now is.
         var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
         merge = await UndoAsync(repository, merge);
         repo.WriteFile("f.txt", "ignored, mine\n");
-        still = await StillAsync(repo);
+        var still = await StillAsync(repo);
         var redo = await RefusedAsync(repository, merge, UndoDirection.Redo);
         Assert.Equal(UndoRefusalKind.IgnoredFilesInTheWay, redo.Kind);
         Assert.Equal(["f.txt"], redo.Paths);

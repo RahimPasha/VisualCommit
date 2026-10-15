@@ -2,6 +2,7 @@ using System.Text;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Undo;
+using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
 using static VisualCommit.Git.Tests.UndoTestSupport;
@@ -58,14 +59,10 @@ public class UndoStepFileTests
     }
 
     [Fact]
-    public async Task An_apply_and_a_pop_put_the_files_and_index_entries_back_and_the_pop_its_stash()
+    public async Task An_apply_puts_the_files_and_index_entries_back()
     {
         using var repo = await UndoRepoAsync();
-        var (repository, _) = await OpenDatedAsync(repo);
-        repo.WriteFile("a.txt", "a-stashed\n").WriteFile("notes/u.txt", "untracked\n");
-        var stash = (await repository.StashAsync("saved", includeUntracked: true, cancellationToken: TestCancelled))!;
-        var message = (await repo.StashListAsync())[0].Message;
-        repo.WriteFile("b.txt", "b-unstaged\n");
+        var (repository, stash, message) = await StashToApplyAsync(repo);
         var start = await PictureAsync(repo);
 
         var apply = await RecordAsync(repository, UndoScope.ApplyStash(stash, message), () => repository.ApplyStashAsync(stash, StashApplyMode.Apply, cancellationToken: TestCancelled));
@@ -75,8 +72,16 @@ public class UndoStepFileTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, apply);
         Assert.Equal(applied, await PictureAsync(repo));
-        apply = await UndoAsync(repository, apply);
+        await UndoAsync(repository, apply);
         Assert.Equal(start, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_pop_puts_the_files_and_index_entries_and_its_stash_back()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, stash, message) = await StashToApplyAsync(repo);
+        var start = await PictureAsync(repo);
 
         var pop = await RecordAsync(repository, UndoScope.PopStash(stash, message), () => repository.ApplyStashAsync(stash, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
         var popped = await PictureAsync(repo);
@@ -86,6 +91,21 @@ public class UndoStepFileTests
         Assert.Equal([stash], await StashShasAsync(repo));
         await RedoAsync(repository, pop);
         Assert.Equal(popped, await PictureAsync(repo));
+    }
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> (the undo repository) and makes a stash of a changed
+    /// <c>a.txt</c> and an untracked <c>notes/u.txt</c>, then changes <c>b.txt</c>: for an apply or
+    /// a pop. Returns the repository, the stash and its message as the list shows it.
+    /// </summary>
+    private static async Task<(GitRepository Repository, string Stash, string Message)> StashToApplyAsync(TempRepo repo)
+    {
+        var (repository, _) = await OpenDatedAsync(repo);
+        repo.WriteFile("a.txt", "a-stashed\n").WriteFile("notes/u.txt", "untracked\n");
+        var stash = (await repository.StashAsync("saved", includeUntracked: true, cancellationToken: TestCancelled))!;
+        var message = (await repo.StashListAsync())[0].Message;
+        repo.WriteFile("b.txt", "b-unstaged\n");
+        return (repository, stash, message);
     }
 
     [Fact]
@@ -114,25 +134,25 @@ public class UndoStepFileTests
     public async Task A_dropped_stash_is_stored_again_with_its_message()
     {
         using var repo = await UndoRepoAsync();
-        var (repository, _) = await OpenDatedAsync(repo);
-        repo.WriteFile("a.txt", "a-older\n");
-        await repository.StashAsync("older", includeUntracked: false, cancellationToken: TestCancelled);
-        repo.WriteFile("a.txt", "a-newer\n");
-        await repository.StashAsync("newer", includeUntracked: false, cancellationToken: TestCancelled);
-        var top = (await repo.StashListAsync())[0];
+        var (repository, top) = await TwoStashesAsync(repo);
         var start = await PictureAsync(repo);
 
-        var drop = await RecordAsync(repository, UndoScope.DropStash(top.Message), async () =>
-        {
-            var backup = await repository.SaveBackupRefsAsync(new BackupRequest("stash", [new BackupEntry(null, top.Sha)]), TestCancelled);
-            UndoCapture.Backups(backup.Refs);
-            await repository.DropStashAsync(top.Sha, TestCancelled);
-        });
+        var drop = await RecordAsync(repository, UndoScope.DropStash(top.Message), () => DropAsync(repository, top));
         var dropped = await PictureAsync(repo);
         drop = await UndoAsync(repository, drop);
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, drop);
         Assert.Equal(dropped, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task The_backups_lists_restore_of_a_dropped_stash_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, top) = await TwoStashesAsync(repo);
+        var start = await PictureAsync(repo);
+        await DropAsync(repository, top);
+        var dropped = await PictureAsync(repo);
 
         // The backups list's "Restore stash": stored again with its commit's subject (7.10).
         var restore = await RecordAsync(repository, UndoScope.RestoreStash(top.Message), () => repo.GitAsync("stash", "store", "-m", top.Message, top.Sha));
@@ -140,6 +160,28 @@ public class UndoStepFileTests
         Assert.Equal(dropped, await PictureAsync(repo));
         await RedoAsync(repository, restore);
         Assert.Equal(start, await PictureAsync(repo));
+    }
+
+    /// <summary>
+    /// Opens <paramref name="repo"/> (the undo repository) and makes two stashes of <c>a.txt</c>,
+    /// "older" and "newer". Returns the repository and the newer stash, the list's first.
+    /// </summary>
+    private static async Task<(GitRepository Repository, StashListEntry Top)> TwoStashesAsync(TempRepo repo)
+    {
+        var (repository, _) = await OpenDatedAsync(repo);
+        repo.WriteFile("a.txt", "a-older\n");
+        await repository.StashAsync("older", includeUntracked: false, cancellationToken: TestCancelled);
+        repo.WriteFile("a.txt", "a-newer\n");
+        await repository.StashAsync("newer", includeUntracked: false, cancellationToken: TestCancelled);
+        return (repository, (await repo.StashListAsync())[0]);
+    }
+
+    /// <summary>Drops <paramref name="stash"/> as the app does: its backup saved first, and named to the undo capture.</summary>
+    private static async Task DropAsync(GitRepository repository, StashListEntry stash)
+    {
+        var backup = await repository.SaveBackupRefsAsync(new BackupRequest("stash", [new BackupEntry(null, stash.Sha)]), TestCancelled);
+        UndoCapture.Backups(backup.Refs);
+        await repository.DropStashAsync(stash.Sha, TestCancelled);
     }
 
     [Fact]
@@ -252,7 +294,7 @@ public class UndoStepFileTests
     }
 
     [Fact]
-    public async Task The_backups_lists_restores_of_the_index_and_of_a_hard_resets_changes_are_undone_and_redone()
+    public async Task The_backups_lists_restore_of_a_mixed_resets_index_is_undone_and_redone()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -274,9 +316,16 @@ public class UndoStepFileTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, staged);
         Assert.Equal(restoredIndex, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task The_backups_lists_restore_of_a_hard_resets_changes_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
 
         // A hard reset's changes: the index from the snapshot's second parent, then its files.
-        await repo.GitAsync("reset", "--quiet", "--hard");
         repo.WriteFile("b.txt", "b-staged\n");
         await repo.GitAsync("add", "b.txt");
         repo.WriteFile("b.txt", "b-unstaged\n").WriteFile("u.txt", "untracked\n");
