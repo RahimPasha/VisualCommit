@@ -27,9 +27,15 @@ internal static class UndoTestSupport
     /// <c>a.txt</c>, <c>b.txt</c> and <c>src/c.txt</c>, <c>c2</c> changes <c>a.txt</c>, <c>c3</c>
     /// changes <c>b.txt</c>. <c>feature</c> leaves <c>c2</c>: <c>f1</c> adds <c>f.txt</c>,
     /// <c>f2</c> changes <c>src/c.txt</c>. <c>behind</c> is at <c>c2</c>. The bare remote
-    /// <c>origin</c> has <c>main</c> and <c>feature</c>, both tracked.
+    /// <c>origin</c> has <c>main</c> and <c>feature</c>, both tracked. The wait for the template,
+    /// which the first test of the process builds, does not count against the test that waits
+    /// (<see cref="HangWatchdogAttribute.SharedPreparationAsync{T}"/>), as for the scenarios' templates.
     /// </summary>
-    public static async Task<TempRepo> UndoRepoAsync() => await (await Template.Value.ConfigureAwait(false)).CopyAsync().ConfigureAwait(false);
+    public static async Task<TempRepo> UndoRepoAsync()
+    {
+        var template = await HangWatchdogAttribute.SharedPreparationAsync("the undo tests' template", Template.Value).ConfigureAwait(false);
+        return await template.CopyAsync().ConfigureAwait(false);
+    }
 
     private static async Task<TempRepo> BuildAsync()
     {
@@ -99,25 +105,29 @@ internal static class UndoTestSupport
     }
 
     /// <summary>
-    /// A picture of the repository that a step must leave as the recorded state was (7.11): HEAD,
-    /// every ref but the backups (a symbolic one with the ref it points at), the index's entries,
-    /// the status, every file's bytes, the stash list, the settings (in order: the meaning, not the
-    /// file's layout, which re-added keys change).
+    /// A picture of the repository that a step must leave as the recorded state was (7.11): HEAD
+    /// (the branch it is on, or detached, and its commit), every ref but the backups (a symbolic
+    /// one with the ref it points at), the index's entries, the status, every file's bytes, the
+    /// stash list, the settings (in order: the meaning, not the file's layout, which re-added keys
+    /// change). HEAD comes from the status's branch headers (<c>--branch</c>: <c>branch.head</c>
+    /// and <c>branch.oid</c>), which saves two git calls per picture; the status keeps the other
+    /// headers (the upstream and how far ahead and behind), which follow from the refs and the
+    /// settings the picture holds anyway.
     /// </summary>
     public static async Task<RepoPicture> PictureAsync(TempRepo repo)
     {
-        var head = await repo.GitAllowingFailureAsync("symbolic-ref", "-q", "HEAD");
-        var sha = await repo.GitAllowingFailureAsync("rev-parse", "-q", "--verify", "HEAD");
         var refs = await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname) %(symref)");
         var index = await repo.GitAsync("ls-files", "--stage", "-z");
-        var status = await repo.GitAsync("status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored");
+        var status = await repo.GitAsync("status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all", "--ignored");
         var stashes = await repo.GitAsync("stash", "list", "--format=%gs");
         var config = await repo.GitAsync("config", "--local", "--list");
+        var entries = status.StandardOutput.Split('\0');
+        static bool IsHead(string entry) => entry.StartsWith("# branch.head ", StringComparison.Ordinal) || entry.StartsWith("# branch.oid ", StringComparison.Ordinal);
         return new RepoPicture(
-            $"{head.StandardOutput.Trim()} {sha.StandardOutput.Trim()}",
+            Lines(entries.Where(IsHead)),
             Lines(refs.StandardOutput.Split('\n').Where(line => !line.StartsWith(GitRepository.BackupRefPrefix, StringComparison.Ordinal) && !line.StartsWith("refs/stash ", StringComparison.Ordinal))),
             Lines(index.StandardOutput.Split('\0')),
-            Lines(status.StandardOutput.Split('\0')),
+            Lines(entries.Where(entry => !IsHead(entry))),
             Lines(FileHashes(repo.Path)),
             Lines(stashes.StandardOutput.Split('\n')),
             Lines(config.StandardOutput.Split('\n').Order(StringComparer.Ordinal)));
