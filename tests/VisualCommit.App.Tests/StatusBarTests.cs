@@ -78,8 +78,11 @@ public class StatusBarTests
         Assert.Equal(order.Order(), order);
         Pictures(app, "statusbar-fetch-progress");
 
+        // Within a bound: a click that missed Cancel fails here with a message instead of hanging.
         app.Click(parts.Cancel);
+        await app.WaitForAsync(() => fetching.IsCompleted, "the fetch to end after Cancel");
         Assert.Equal(OperationOutcome.Cancelled, (await fetching).Outcome);
+        await app.WaitForAsync(() => waiting.IsCompleted, "the waiting operation to run after the fetch");
         await waiting;
         await app.WaitForIdleAsync(repository);
         Assert.Equal("Created hotfix and checked it out", parts.Status.Text);
@@ -110,7 +113,11 @@ public class StatusBarTests
         await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
 
         Assert.Equal("Stop git and the merge tool", ToolTip.GetTip(parts.Cancel));
+
+        // The operation runs until it is cancelled, so the wait is bounded: a click that missed
+        // fails here with a message instead of hanging.
         app.Click(parts.Cancel);
+        await app.WaitForAsync(() => tool.IsCompleted, "the merge tool's operation to end after Cancel");
         Assert.Equal(OperationOutcome.Cancelled, (await tool).Outcome);
         await app.WaitForIdleAsync(repository);
         Assert.False(parts.Cancel.IsVisible);
