@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Testing.Headless;
 
@@ -31,15 +32,19 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>
-    /// Clicks the toolbar's Undo at its centre, then waits until the active tab's queue is idle
-    /// (UD16): the step has ended with its refresh, or, for a step that changes a remote, the
-    /// question is open (no operation runs until it is answered).
+    /// Clicks the toolbar's Undo at its centre, then waits (UD16) until the step's operation has
+    /// ended with its refresh and the active tab's queue is idle, or, for a step that changes a
+    /// remote, until its question is open (no operation runs until it is answered). The question
+    /// can come after a git read (a tag's commit), so the wait is for one of the two, not for an
+    /// idle queue, which it is all along before the question opens.
     /// </summary>
     /// <exception cref="InvalidOperationException">Undo is disabled: a click would do nothing, and a check that clicks it expects it to act.</exception>
+    /// <exception cref="TimeoutException">Neither happened in time.</exception>
     public Task ClickUndoAsync(TimeSpan? timeout = null) => ClickStepButtonAsync(UndoButtonId, timeout);
 
     /// <summary>Clicks the toolbar's Redo at its centre, then waits as <see cref="ClickUndoAsync"/> does.</summary>
     /// <exception cref="InvalidOperationException">Redo is disabled.</exception>
+    /// <exception cref="TimeoutException">Neither the step's end nor its question came in time.</exception>
     public Task ClickRedoAsync(TimeSpan? timeout = null) => ClickStepButtonAsync(RedoButtonId, timeout);
 
     private async Task ClickStepButtonAsync(string automationId, TimeSpan? timeout)
@@ -51,8 +56,41 @@ public sealed partial class ShellDriver
             throw new InvalidOperationException($"{automationId} is disabled ({TipOf(button) ?? "no tooltip"}): a click would do nothing.");
         }
 
-        Click(button);
-        await WaitForIdleAsync(timeout: timeout);
+        var repository = Session.Shell.ActiveTab.Repository
+            ?? throw new InvalidOperationException("The active tab has no repository whose operations could be waited for.");
+        var dialogs = Session.Services.DialogHost;
+        var before = dialogs.Current;
+        var ended = 0;
+        void OnFinished(object? sender, OperationFinishedEventArgs args)
+        {
+            if (!args.Operation.IsBackground)
+            {
+                Interlocked.Increment(ref ended);
+            }
+        }
+
+        repository.Queue.Finished += OnFinished;
+        try
+        {
+            Click(button);
+            await WaitForAsync(
+                () => Volatile.Read(ref ended) > 0 || (dialogs.Current is { } top && !ReferenceEquals(top, before)),
+                $"{automationId}'s step to end or its question to open",
+                timeout);
+        }
+        finally
+        {
+            repository.Queue.Finished -= OnFinished;
+        }
+
+        if (Volatile.Read(ref ended) > 0)
+        {
+            await WaitForIdleAsync(repository, timeout);
+        }
+        else
+        {
+            Settle();
+        }
     }
 
     /// <summary>A control's tooltip as text, or null when it has none.</summary>
