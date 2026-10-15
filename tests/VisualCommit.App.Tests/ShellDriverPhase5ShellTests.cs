@@ -1,4 +1,6 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Operations;
@@ -40,20 +42,28 @@ public class ShellDriverPhase5ShellTests
             record.Notes);
 
         app.ClickActivityLogToggle();
+
+        // As A2's step 1 writes it: "[IconCheck, #3FB97F] 09:00:00 · Clean up backups · Removed 3 backups · 0 ms", closed.
+        var cleanUp = app.ActivityLogRow(RepositoryViewModel.CleanUpBackupsTitle);
+        Assert.Equal(
+            ("IconChevronRight", "IconCheck", SuccessColor(app), "09:00:00", RepositoryViewModel.CleanUpBackupsTitle, "Removed 3 backups", "0 ms", false),
+            (cleanUp.Chevron, cleanUp.Glyph, cleanUp.GlyphColor, cleanUp.Time, cleanUp.Title, cleanUp.Message, cleanUp.Duration, cleanUp.IsOpen));
+
         app.ClickActivityLogRow(RepositoryViewModel.CleanUpBackupsTitle);
         var rows = app.ActivityLog().Rows;
-        Assert.Equal(
-            [
-                (ActivityLogRowKind.Operation, RepositoryViewModel.CleanUpBackupsTitle),
-                (ActivityLogRowKind.Note, record.Notes[0]),
-                (ActivityLogRowKind.Note, record.Notes[1]),
-                (ActivityLogRowKind.Note, record.Notes[2]),
-                (ActivityLogRowKind.Call, "git for-each-ref \"--format=%(refname) %(objectname)\" refs/visualcommit/backup/"),
-                (ActivityLogRowKind.Call, "git update-ref --stdin"),
-            ],
-            rows.Select(row => (row.Kind, row.AutomationName)));
+        (ActivityLogRowKind Kind, string Name, string? Chevron, double Indent)[] opened =
+        [
+            (ActivityLogRowKind.Operation, RepositoryViewModel.CleanUpBackupsTitle, "IconChevronDown", 0),
+            (ActivityLogRowKind.Note, record.Notes[0], null, 24),
+            (ActivityLogRowKind.Note, record.Notes[1], null, 24),
+            (ActivityLogRowKind.Note, record.Notes[2], null, 24),
+            (ActivityLogRowKind.Call, "git for-each-ref \"--format=%(refname) %(objectname)\" refs/visualcommit/backup/", "IconChevronRight", 24),
+            (ActivityLogRowKind.Call, "git update-ref --stdin", "IconChevronRight", 24),
+        ];
+        Assert.Equal(opened, rows.Select(row => (row.Kind, row.AutomationName, row.Chevron, row.Indent ?? double.NaN)));
         Assert.Equal(("Removed 3 backups", "09:00:00", "0 ms"), (rows[0].Message, rows[0].Time, rows[0].Duration));
 
+        // The box's lines wrap: the list keeps to its end (AD15) and the call's row goes up out of view.
         app.ClickActivityLogRow("git update-ref --stdin");
         var input = Assert.Single(app.ActivityLog().Rows.Single(row => row.Kind == ActivityLogRowKind.Output).Parts!);
         var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
@@ -89,4 +99,10 @@ public class ShellDriverPhase5ShellTests
         app.ClickActivityLogToggle();
         Assert.Throws<InvalidOperationException>(() => app.DragActivityLogSplitter(-10));
     }
+
+    /// <summary>The theme's <c>VcSuccessBrush</c>, the glyph of an operation that succeeded (#3FB97F in the dark theme).</summary>
+    private static Color SuccessColor(ShellDriver app) =>
+        app.Window.TryFindResource("VcSuccessBrush", app.Window.ActualThemeVariant, out var value) && value is ISolidColorBrush brush
+            ? brush.Color
+            : throw new InvalidOperationException("No brush VcSuccessBrush.");
 }

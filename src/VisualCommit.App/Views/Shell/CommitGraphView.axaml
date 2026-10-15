@@ -30,7 +30,7 @@
            (docs/phase-4-design.md 2.2) with a commit's diff over it, the conflict resolver
            (11.2), for which this view spans the graph and right-panel columns, or a page of phase
            5 with a diff over it. -->
-      <Panel>
+      <Panel Name="GraphAreaBody">
         <Panel IsVisible="{Binding Repository.ShowsGraph, FallbackValue=True}">
           <graph:RepositoryGraphView DataContext="{Binding Repository}" />
         </Panel>

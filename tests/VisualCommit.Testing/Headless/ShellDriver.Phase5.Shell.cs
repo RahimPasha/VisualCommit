@@ -53,10 +53,11 @@ public sealed partial class ShellDriver
     public ActivityLogViewModel ActivityLogModel => Session.Shell.ActivityLog;
 
     /// <summary>
-    /// The activity log as it is drawn now (AD12), in the window's coordinates: the panel, its
-    /// header's texts, "Show reads", and every row of its list top to bottom, each with its kind,
-    /// indent, automation name and the parts it shows, and while it is realised its bounds and the
-    /// colours it is drawn in. Settles first.
+    /// The activity log as it is drawn now (AD12, the report's part A, "Reading the log"), in the
+    /// window's coordinates: the panel, its header's texts, "Show reads", and every row of its list
+    /// top to bottom, each with its kind and automation name, and while it is realised its bounds,
+    /// indent and the parts its controls draw: chevron, outcome glyph, texts, colours and the output
+    /// box's parts. Settles first.
     /// </summary>
     public ActivityLogSnapshot ActivityLog()
     {

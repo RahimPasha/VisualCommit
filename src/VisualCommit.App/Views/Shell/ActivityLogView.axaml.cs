@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
@@ -54,9 +55,9 @@ public partial class ActivityLogView : UserControl
 
     /// <summary>
     /// The panel as it is drawn now (the test surface, 15.2 and AD12): its parts and its rows top
-    /// to bottom, every row the list holds, each with what it shows and, while its row is realised,
-    /// its bounds and colours in <paramref name="relativeTo"/>'s coordinates (this view's when
-    /// null). It lets the UI thread run nothing: settle first.
+    /// to bottom, every row the list holds, each, while the list has realised it, with its bounds in
+    /// <paramref name="relativeTo"/>'s coordinates (this view's when null) and the parts, texts and
+    /// colours its controls draw. It lets the UI thread run nothing: settle first.
     /// </summary>
     public ActivityLogSnapshot Snapshot(Visual? relativeTo = null)
     {
@@ -361,51 +362,93 @@ public partial class ActivityLogView : UserControl
 
     private static ActivityLogRowPanel? RowPanelOf(object? source) => ContextMenuRequests.Find<ActivityLogRowPanel>(source);
 
+    /// <summary>
+    /// One row as it is drawn (the report's part A, "Reading the log"): every part is read from the
+    /// row's realised controls, its texts from the named text blocks, its chevron and glyph from the
+    /// icons' outlines, its indent from where its content starts, so that a binding gone wrong shows.
+    /// A row the list has not realised has its place, kind, depth, open state and name from the list
+    /// only, and no part.
+    /// </summary>
     private ActivityLogRowSnapshot RowSnapshot(ActivityLogRow row, int index, Visual to, Rect listBounds)
     {
-        var panel = RowPanelAt(index);
-        Rect? bounds = panel is { IsEffectivelyVisible: true } ? BoundsIn(panel, to) : null;
+        var panel = RowPanelAt(index) is { IsEffectivelyVisible: true } realised && ReferenceEquals(realised.DataContext, row) ? realised : null;
+        Rect? bounds = panel is null ? null : BoundsIn(panel, to);
         var inView = bounds is { } shown && shown.Top >= listBounds.Top - 0.5 && shown.Bottom <= listBounds.Bottom + 0.5;
-        TextBlock? Named(string name) => panel?.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(text => text.Name == name);
-        Color? ColorNamed(string name) => ColorOf(Named(name)?.Foreground);
-        var glyph = panel?.GetVisualDescendants().OfType<Icon>().FirstOrDefault(icon => icon.Name == "ActivityLogOutcome");
+        T? Named<T>(string name)
+            where T : Control =>
+            panel?.GetVisualDescendants().OfType<T>().FirstOrDefault(control => control.Name == name);
+        string? TextOf(string name) => Named<TextBlock>(name)?.Text;
+        Color? ColorNamed(string name) => ColorOf(Named<TextBlock>(name)?.Foreground);
 
-        return row switch
+        var glyph = Named<Icon>("ActivityLogOutcome") is { IsEffectivelyVisible: true } shownGlyph ? shownGlyph : null;
+        var box = Named<ActivityLogOutputBox>("ActivityLogOutput");
+
+        // The content starts after the row's padding: the chevron of an operation or a call, a
+        // line's text, the output box; the spacer before it is the indent.
+        var content = (Control?)Named<Icon>("ActivityLogChevron") ?? (Control?)Named<TextBlock>("ActivityLogLineText") ?? box;
+        var grid = panel?.Children.OfType<Grid>().FirstOrDefault();
+        var indent = content is not null && grid is not null ? content.TranslatePoint(default, grid)?.X : null;
+
+        return new ActivityLogRowSnapshot(
+            index,
+            row.Kind,
+            row.Depth,
+            panel is null ? row.AutomationName : AutomationProperties.GetName(panel) ?? string.Empty,
+            row is ActivityLogOperationRow { IsOpen: true } or ActivityLogCallRow { IsOpen: true },
+            bounds,
+            inView)
         {
-            ActivityLogOperationRow operation => new ActivityLogRowSnapshot(
-                index, row.Kind, row.Depth, row.Indent, row.AutomationName, operation.IsOpen, bounds, inView)
-            {
-                Outcome = operation.Outcome,
-                OutcomeColor = glyph is { IsVisible: true } ? ColorOf(glyph.Foreground) : null,
-                Time = operation.Time,
-                Title = operation.Title,
-                Message = operation.Message,
-                MessageColor = ColorNamed("ActivityLogMessage"),
-                Duration = operation.Duration,
-            },
-            ActivityLogCallRow call => new ActivityLogRowSnapshot(
-                index, row.Kind, row.Depth, row.Indent, row.AutomationName, call.IsOpen, bounds, inView)
-            {
-                ExitText = call.ExitText,
-                ExitColor = ColorNamed("ActivityLogExit"),
-                Command = call.Command,
-                OnTemporaryIndex = call.OnTemporaryIndex,
-                Duration = call.Duration,
-            },
-            ActivityLogLineRow line => new ActivityLogRowSnapshot(
-                index, row.Kind, row.Depth, row.Indent, row.AutomationName, false, bounds, inView)
-            {
-                Text = line.Text,
-                TextColor = ColorNamed("ActivityLogLineText"),
-            },
-            ActivityLogOutputRow output => new ActivityLogRowSnapshot(
-                index, row.Kind, row.Depth, row.Indent, row.AutomationName, false, bounds, inView)
-            {
-                Text = output.Text,
-                Parts = output.Parts,
-            },
-            _ => new ActivityLogRowSnapshot(index, row.Kind, row.Depth, row.Indent, row.AutomationName, false, bounds, inView),
+            Indent = indent,
+            Chevron = IconName(Named<Icon>("ActivityLogChevron")),
+            Glyph = IconName(glyph),
+            GlyphColor = ColorOf(glyph?.Foreground),
+            Time = TextOf("ActivityLogTime"),
+            Title = TextOf("ActivityLogOperationTitle"),
+            Message = TextOf("ActivityLogMessage"),
+            MessageColor = ColorNamed("ActivityLogMessage"),
+            Duration = TextOf("ActivityLogDuration"),
+            ExitText = TextOf("ActivityLogExit"),
+            ExitColor = ColorNamed("ActivityLogExit"),
+            Command = TextOf("ActivityLogCommand"),
+            OnTemporaryIndex = Named<TextBlock>("ActivityLogTemporaryIndex")?.IsEffectivelyVisible,
+            Text = box is not null ? box.Text : TextOf("ActivityLogLineText"),
+            TextColor = ColorNamed("ActivityLogLineText"),
+            Parts = box is null ? null : DrawnParts(box),
         };
+    }
+
+    /// <summary>The output box's parts as drawn: each part's title over its text, top to bottom; none when it says <c>No output</c>.</summary>
+    private static List<ActivityLogOutputPart> DrawnParts(ActivityLogOutputBox box)
+    {
+        var blocks = box.GetVisualDescendants().OfType<TextBlock>().Where(block => block.IsEffectivelyVisible).ToList();
+        var titles = blocks.Where(block => block.Name == "ActivityLogPartTitle").ToList();
+        var texts = blocks.Where(block => block.Name == "ActivityLogPartText").ToList();
+        return [.. titles.Zip(texts, (title, text) => new ActivityLogOutputPart(title.Text ?? string.Empty, text.Text ?? string.Empty))];
+    }
+
+    /// <summary>The icons a row of the log draws (2.2), by their keys in Theme/Icons.axaml.</summary>
+    private static readonly string[] RowIcons = ["IconChevronRight", "IconChevronDown", "IconCheck", "IconAlert", "IconClose", "IconMinus"];
+
+    /// <summary>
+    /// The key of the outline <paramref name="icon"/> draws (one of <see cref="RowIcons"/>), "?" for
+    /// any other outline, or null when it draws none or is not shown.
+    /// </summary>
+    private string? IconName(Icon? icon)
+    {
+        if (icon is not { IsEffectivelyVisible: true, Data: { } data })
+        {
+            return null;
+        }
+
+        foreach (var key in RowIcons)
+        {
+            if (this.TryFindResource(key, ActualThemeVariant, out var outline) && ReferenceEquals(outline, data))
+            {
+                return key;
+            }
+        }
+
+        return "?";
     }
 
     private static Rect BoundsIn(Visual visual, Visual to) =>
@@ -447,35 +490,46 @@ public sealed record ActivityLogSnapshot(
     Rect CloseBounds,
     IReadOnlyList<ActivityLogRowSnapshot> Rows);
 
-/// <summary>One row of the activity log as it is drawn: what it shows, and where while it is realised.</summary>
+/// <summary>
+/// One row of the activity log as it is drawn (the report's part A, "Reading the log"): its place
+/// in the list, and while the list has realised it, where it is and each part its controls draw.
+/// Every part is null for a row that is not realised and for a part the row does not have.
+/// </summary>
 /// <param name="Index">Its place in the list, from 0 at the top.</param>
 /// <param name="Kind">An operation, a failure's summary, a note, "no longer kept", a call or an output box.</param>
 /// <param name="Depth">0 for an operation and a read, 1 under an operation, 2 for an operation's call's box.</param>
-/// <param name="Indent">How far its content is indented: 24 per level.</param>
-/// <param name="AutomationName">Its name to UI Automation: the title, the command, the line's text, "Output".</param>
-/// <param name="IsOpen">An operation or a call that shows what it opens to.</param>
+/// <param name="AutomationName">Its name to UI Automation: the title, the command, the line's text, "Output"; the realised row's own, or for a row not realised the one it will have.</param>
+/// <param name="IsOpen">An operation or a call that shows what it opens to: its lines and calls, or its box, follow it in the list.</param>
 /// <param name="Bounds">Where it is drawn, or null while the list has not realised it.</param>
 /// <param name="IsInView">It lies whole inside the list's visible part.</param>
 public sealed record ActivityLogRowSnapshot(
     int Index,
     ActivityLogRowKind Kind,
     int Depth,
-    double Indent,
     string AutomationName,
     bool IsOpen,
     Rect? Bounds,
     bool IsInView)
 {
-    /// <summary>An operation's outcome: its glyph, none while it runs.</summary>
-    public ActivityLogOutcome? Outcome { get; init; }
+    /// <summary>How far its content (the chevron, a line's text, the box) starts after the row's padding: 24 per level.</summary>
+    public double? Indent { get; init; }
+
+    /// <summary>An operation's or a call's chevron: <c>IconChevronRight</c>, or <c>IconChevronDown</c> while open.</summary>
+    public string? Chevron { get; init; }
+
+    /// <summary>
+    /// An operation's outcome glyph as drawn: <c>IconCheck</c>, <c>IconAlert</c>, <c>IconClose</c> or
+    /// <c>IconMinus</c>, "?" for another outline, null while it runs (no glyph).
+    /// </summary>
+    public string? Glyph { get; init; }
 
     /// <summary>The glyph's colour as drawn, or null without one.</summary>
-    public Color? OutcomeColor { get; init; }
+    public Color? GlyphColor { get; init; }
 
     /// <summary>An operation's time, <c>HH:mm:ss</c>.</summary>
     public string? Time { get; init; }
 
-    /// <summary>An operation's title.</summary>
+    /// <summary>An operation's title, whole (a cut one shows it in its tooltip).</summary>
     public string? Title { get; init; }
 
     /// <summary>An operation's message: the status bar's text, <c>Running…</c>, or empty.</summary>
@@ -493,18 +547,18 @@ public sealed record ActivityLogRowSnapshot(
     /// <summary>The exit text's colour as drawn.</summary>
     public Color? ExitColor { get; init; }
 
-    /// <summary>A call's command.</summary>
+    /// <summary>A call's command, whole.</summary>
     public string? Command { get; init; }
 
-    /// <summary>A call made on a temporary index: <c>(on a temporary index)</c> follows its command.</summary>
-    public bool OnTemporaryIndex { get; init; }
+    /// <summary>Whether <c>(on a temporary index)</c> shows after a call's command.</summary>
+    public bool? OnTemporaryIndex { get; init; }
 
-    /// <summary>A line's text, or an output box's whole text.</summary>
+    /// <summary>A line's text, or an output box's whole text (its value to UI Automation).</summary>
     public string? Text { get; init; }
 
     /// <summary>A line's colour as drawn.</summary>
     public Color? TextColor { get; init; }
 
-    /// <summary>An output box's titled parts, empty when it says <c>No output</c>.</summary>
+    /// <summary>An output box's titled parts as drawn, empty when it says <c>No output</c>.</summary>
     public IReadOnlyList<ActivityLogOutputPart>? Parts { get; init; }
 }

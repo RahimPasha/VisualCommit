@@ -8,8 +8,12 @@ using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.ViewModels.Rebase;
+using VisualCommit.App.Views.Conflicts;
+using VisualCommit.App.Views.Rebase;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -24,9 +28,11 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// The activity log in the window (docs/phase-5-design.md 1.2, 2.1, 2.2; the report's part A):
 /// the status bar's toggle, the panel under the graph area and its geometry at 1100×700, the
-/// header, rows opened by click and by key, the list keeping to its end, the splitter's limits and
-/// the session's height, Esc with the focus in the log, a row's menu, and each tab's log. The rows
-/// are records added to the session's own logs, as the queue and the runner add theirs.
+/// header, rows read as drawn, opened by click and by key, the list keeping to its end, the
+/// splitter's limits and the session's height, Esc with the focus in the log and the resolver, the
+/// interactive list or a page open, and where the focus goes then (AD6), a row's menu, and each
+/// tab's log. The rows are records added to the session's own logs, as the queue and the runner add
+/// theirs.
 /// </summary>
 public class ActivityLogViewTests
 {
@@ -110,36 +116,40 @@ public class ActivityLogViewTests
         Assert.Equal(2, rows.Count);
         var cleanUp = rows[0];
         Assert.Equal(
-            (ActivityLogRowKind.Operation, ActivityLogOutcome.Succeeded, "09:00:00", "Clean up backups", "Removed 3 backups", "0 ms", false),
-            (cleanUp.Kind, cleanUp.Outcome, cleanUp.Time, cleanUp.Title, cleanUp.Message, cleanUp.Duration, cleanUp.IsOpen));
-        Assert.Equal(Brush(app, "VcSuccessBrush"), cleanUp.OutcomeColor);
+            (ActivityLogRowKind.Operation, "IconChevronRight", "IconCheck", "09:00:00", "Clean up backups", "Removed 3 backups", "0 ms", false),
+            (cleanUp.Kind, cleanUp.Chevron, cleanUp.Glyph, cleanUp.Time, cleanUp.Title, cleanUp.Message, cleanUp.Duration, cleanUp.IsOpen));
+        Assert.Equal((0.0, Brush(app, "VcSuccessBrush")), (cleanUp.Indent, cleanUp.GlyphColor));
         Assert.Equal(Brush(app, "VcTextSecondaryBrush"), cleanUp.MessageColor);
         Assert.Equal(24, cleanUp.Bounds!.Value.Height, 1);
         AssertBounds(new Rect(260, 504, 440, 24), cleanUp.Bounds.Value);
-        Assert.Equal(Brush(app, "VcDangerBrush"), rows[1].OutcomeColor);
+        Assert.Equal(("IconClose", Brush(app, "VcDangerBrush")), (rows[1].Glyph, rows[1].GlyphColor));
         Assert.Equal(Brush(app, "VcDangerBrush"), rows[1].MessageColor);
 
-        // A click opens the operation: its note, then its call, 22 high, indented 24.
+        // A click opens the operation, its chevron down: its note, then its call, 22 high, indented 24.
         app.ClickActivityLogRow("Clean up backups");
         rows = app.ActivityLog().Rows;
         Assert.Equal(
             [
-                (ActivityLogRowKind.Operation, 0, "Clean up backups"),
-                (ActivityLogRowKind.Note, 1, "Removed backup reset-20251120T090001000Z (older than 30 days)"),
-                (ActivityLogRowKind.Call, 1, "git update-ref --stdin"),
-                (ActivityLogRowKind.Operation, 0, "Check out feature/kinds"),
+                (ActivityLogRowKind.Operation, 0, 0.0, "Clean up backups"),
+                (ActivityLogRowKind.Note, 1, 24.0, "Removed backup reset-20251120T090001000Z (older than 30 days)"),
+                (ActivityLogRowKind.Call, 1, 24.0, "git update-ref --stdin"),
+                (ActivityLogRowKind.Operation, 0, 0.0, "Check out feature/kinds"),
             ],
-            rows.Select(row => (row.Kind, row.Depth, row.AutomationName)));
-        Assert.True(rows[0].IsOpen);
+            rows.Select(row => (row.Kind, row.Depth, row.Indent ?? double.NaN, row.AutomationName)));
+        Assert.Equal((true, "IconChevronDown"), (rows[0].IsOpen, rows[0].Chevron));
         Assert.Equal(22, rows[2].Bounds!.Value.Height, 1);
-        Assert.Equal(("exit 0", Brush(app, "VcTextSecondaryBrush")), (rows[2].ExitText, rows[2].ExitColor));
-        Assert.Equal(Brush(app, "VcTextSecondaryBrush"), rows[1].TextColor);
+        Assert.Equal(
+            ("IconChevronRight", "exit 0", Brush(app, "VcTextSecondaryBrush"), "git update-ref --stdin", false, "0 ms"),
+            (rows[2].Chevron, rows[2].ExitText, rows[2].ExitColor, rows[2].Command, rows[2].OnTemporaryIndex, rows[2].Duration));
+        Assert.Equal(("Removed backup reset-20251120T090001000Z (older than 30 days)", Brush(app, "VcTextSecondaryBrush")), (rows[1].Text, rows[1].TextColor));
+        Assert.Null(rows[1].Chevron);
 
-        // The call opens to its box, titled Input, whose value UI Automation reads.
+        // The call opens to its box, titled Input, indented 48, whose value UI Automation reads.
         app.ClickActivityLogRow("git update-ref --stdin");
         rows = app.ActivityLog().Rows;
+        Assert.Equal("IconChevronDown", rows[2].Chevron);
         var box = rows[3];
-        Assert.Equal((ActivityLogRowKind.Output, 2), (box.Kind, box.Depth));
+        Assert.Equal((ActivityLogRowKind.Output, 2, 48.0), (box.Kind, box.Depth, box.Indent));
         Assert.Equal([new ActivityLogOutputPart("Input", "delete refs/visualcommit/backup/reset-20251120T090001000Z da31c977")], box.Parts);
         var output = (ActivityLogOutputBox)app.FindByAutomationId("ActivityLogOutput");
         Assert.Equal("Input\ndelete refs/visualcommit/backup/reset-20251120T090001000Z da31c977", output.Text);
@@ -178,7 +188,20 @@ public class ActivityLogViewTests
         app.Settle();
         AddOperation(app, key, "op-c", "Fetch 12", OperationOutcome.Succeeded, "Fetched");
         Assert.Equal(0, list.Offset.Y, 1);
-        Assert.False(app.ActivityLog().Rows[^1].IsInView);
+        rows = app.ActivityLog().Rows;
+        Assert.False(rows[^1].IsInView);
+
+        // A row the list has not realised has no parts: the snapshot reads only what is drawn.
+        var unrealised = rows.Where(row => row.Bounds is null).ToList();
+        Assert.NotEmpty(unrealised);
+        Assert.All(unrealised, row => Assert.Equal((null, null, null, null, null), (row.Title, row.Glyph, row.Chevron, row.Time, row.Indent)));
+        Assert.Equal("Fetch 12", rows[^1].AutomationName);
+
+        // What the controls draw, not the rows behind them: a title changed on its text block shows.
+        var title = app.Window.GetVisualDescendants().OfType<TrimmedTextBlock>()
+            .First(text => text.Name == "ActivityLogOperationTitle" && text.IsEffectivelyVisible && text.Text == "Clean up backups");
+        title.Text = "Drawn title";
+        Assert.Equal(("Drawn title", "Clean up backups"), (app.ActivityLog().Rows[0].Title, ((ActivityLogOperationRow)app.ActivityLogModel.Current!.Rows[0]).Title));
     }
 
     [AvaloniaFact]
@@ -284,12 +307,41 @@ public class ActivityLogViewTests
         // The panel spans what the graph area spans: the graph's and the right panel's columns.
         AssertBounds(new Rect(260, 474, 840, 200), app.ActivityLog().Bounds);
         var merge = app.ActivityLogRow("Merge feature/theirs");
-        Assert.Equal((ActivityLogOutcome.Warning, Brush(app, "VcWarningBrush"), Brush(app, "VcWarningBrush")), (merge.Outcome, merge.OutcomeColor, merge.MessageColor));
+        Assert.Equal(("IconAlert", Brush(app, "VcWarningBrush"), Brush(app, "VcWarningBrush")), (merge.Glyph, merge.GlyphColor, merge.MessageColor));
         app.ClickActivityLogRow("Merge feature/theirs");
         app.PressKey(Key.Escape);
 
+        // The log closed, the resolver stayed (340 before its 350), and the focus went back into
+        // the resolver, the graph area's content, not to the banner above it (AD6).
         Assert.False(app.ActivityLogView.IsEffectivelyVisible);
         Assert.True(repository.IsResolverOpen);
+        await app.WaitForAsync(() => FocusedIn<ConflictResolverView>(app), "the focus in the resolver");
+    }
+
+    [AvaloniaFact]
+    public async Task With_the_interactive_list_open_Esc_in_the_log_closes_the_log_and_gives_the_list_the_focus()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.InteractiveAsync();
+        var baseSha = (await repo.GitAsync("rev-parse", "main~6")).StandardOutput.Trim();
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForIdleAsync(repository);
+        var list = await repository.Repository.ReadRebaseListAsync(baseSha, "refs/heads/main", fromCommit: true, cancellationToken: TestContext.Current.CancellationToken);
+        await repository.ShowInteractiveRebaseAsync(new InteractiveRebaseRequest(new RebaseTarget(baseSha, baseSha[..7]), "refs/heads/main", FromHere: true, CheckoutFirst: false), list);
+        await app.WaitForRebaseListAsync();
+        AddOperation(app, WorktreeKey.Of(repository.Repository.GitDirectory), "op-i1", "Fetch", OperationOutcome.Succeeded, "Fetched");
+
+        app.ClickActivityLogToggle();
+        app.ClickActivityLogRow("Fetch");
+        Assert.True(app.ActivityLogView.HasFocusWithin);
+        app.PressKey(Key.Escape);
+
+        // 340 before the list's 360: the first Esc closes only the log, and the list has the focus.
+        Assert.False(app.ActivityLogView.IsEffectivelyVisible);
+        Assert.True(repository.IsInteractiveRebaseOpen);
+        Assert.True(app.IsRebaseListOpen);
+        await app.WaitForAsync(() => FocusedIn<InteractiveRebaseView>(app), "the focus in the interactive list");
     }
 
     [AvaloniaFact]
@@ -330,6 +382,11 @@ public class ActivityLogViewTests
     /// <summary>The row of the log that has the keyboard focus, or null.</summary>
     private static ActivityLogRow? FocusedRow(ShellDriver app) =>
         (app.Window.FocusManager?.GetFocusedElement() as Control)?.DataContext as ActivityLogRow;
+
+    /// <summary>Whether the keyboard focus is inside a <typeparamref name="T"/> of the window.</summary>
+    private static bool FocusedIn<T>(ShellDriver app)
+        where T : Visual =>
+        app.Window.FocusManager?.GetFocusedElement() is Visual focused && focused.GetSelfAndVisualAncestors().OfType<T>().Any();
 
     private static void AddOperation(ShellDriver app, string key, string id, string title, OperationOutcome outcome, string message, IReadOnlyList<string>? notes = null, string? summary = null)
     {

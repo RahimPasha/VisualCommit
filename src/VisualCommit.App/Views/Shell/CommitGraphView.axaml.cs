@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
+using VisualCommit.App.Controls.Conflicts;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Panels;
 
@@ -176,7 +178,7 @@ public partial class CommitGraphView : UserControl
     /// <summary>
     /// The panel closes with the focus inside it (2.1, AD6): the focus goes to what the graph area
     /// shows once the panel is gone, the graph or the page, the interactive list, the diff or the
-    /// resolver in its place.
+    /// resolver in its place, never to the banner above it.
     /// </summary>
     private void OnActivityLogClosing(object? sender, EventArgs e)
     {
@@ -201,9 +203,17 @@ public partial class CommitGraphView : UserControl
                 return;
         }
 
-        GraphAreaContent.GetVisualDescendants()
-            .OfType<InputElement>()
-            .FirstOrDefault(element => element.Focusable && element.IsEffectivelyVisible && element.IsEffectivelyEnabled)
-            ?.Focus(NavigationMethod.Unspecified);
+        // The diff or the resolver: as the resolver gives it on opening (phase 4's 11.5), its
+        // result's text or a card's first button; otherwise the first part that takes the focus.
+        var body = GraphAreaBody.Children.FirstOrDefault(child => child.IsVisible);
+        var target = body?.GetVisualDescendants().OfType<ConflictResultEditor>().FirstOrDefault(editor => editor.IsEffectivelyVisible)?.TextArea
+            ?? FirstFocusable(body?.GetVisualDescendants().OfType<ItemsControl>().FirstOrDefault(items => items.Name == "CardButtons"))
+            ?? FirstFocusable(body);
+        target?.Focus(NavigationMethod.Unspecified);
     }
+
+    private static InputElement? FirstFocusable(Visual? within) =>
+        within?.GetVisualDescendants()
+            .OfType<InputElement>()
+            .FirstOrDefault(element => element.Focusable && element.IsEffectivelyVisible && element.IsEffectivelyEnabled);
 }

@@ -254,13 +254,16 @@
                                 HorizontalScrollBarVisibility="Disabled"
                                 VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="8,3,8,4">
-                      <TextBlock Classes="cell secondary" Text="{x:Static vm:ActivityLogViewModel.NoOutputText}" IsVisible="{Binding IsEmpty}" />
+                      <TextBlock Name="ActivityLogNoOutput"
+                                 Classes="cell secondary"
+                                 Text="{x:Static vm:ActivityLogViewModel.NoOutputText}"
+                                 IsVisible="{Binding IsEmpty}" />
                       <ItemsControl ItemsSource="{Binding Parts}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate DataType="vm:ActivityLogOutputPart">
                             <StackPanel>
-                              <TextBlock Classes="partTitle" Text="{Binding Title}" />
-                              <SelectableTextBlock Classes="partText" Text="{Binding Text}" />
+                              <TextBlock Name="ActivityLogPartTitle" Classes="partTitle" Text="{Binding Title}" />
+                              <SelectableTextBlock Name="ActivityLogPartText" Classes="partText" Text="{Binding Text}" />
                             </StackPanel>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
