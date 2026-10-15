@@ -72,11 +72,6 @@ public class UndoStepRemoteTests
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
-
-        // A remote whose name goes on from the one added (0.5): its remote branches lie under
-        // refs/remotes/mirror/ too, and git remote remove mirror keeps them.
-        await repo.GitAsync("remote", "add", "mirror/eu", repo.SiblingPath("origin.git"));
-        await repo.GitAsync("fetch", "--quiet", "mirror/eu");
         var start = await PictureAsync(repo);
 
         var added = await RecordAsync(repository, UndoScope.AddRemote("mirror"), () => repository.AddRemoteAsync("mirror", repo.SiblingPath("origin.git"), TestCancelled));
@@ -90,7 +85,6 @@ public class UndoStepRemoteTests
         Assert.NotNull(await TargetAsync(repo, "refs/remotes/mirror/feature"));
         added = await UndoAsync(repository, added);
         Assert.Equal(start, await PictureAsync(repo));
-        Assert.NotNull(await TargetAsync(repo, "refs/remotes/mirror/eu/feature"));
         await RedoAsync(repository, added);
         Assert.Equal(withMirror, await PictureAsync(repo));
 
@@ -139,6 +133,37 @@ public class UndoStepRemoteTests
         Assert.Equal(beforeRemoval, await PictureAsync(repo));
         Assert.Equal("refs/remotes/origin/main", (await repo.GitAsync("rev-parse", "--symbolic-full-name", "main@{upstream}")).StandardOutput.Trim());
         Assert.Equal("refs/remotes/origin/main", (await repo.GitAsync("symbolic-ref", "refs/remotes/origin/HEAD")).StandardOutput.Trim());
+        await RedoAsync(repository, removed);
+        Assert.Equal(afterRemoval, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_remote_removed_again_leaves_the_branches_of_a_remote_whose_name_goes_on_from_its_name()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+
+        // mirror/eu's remote branches lie under refs/remotes/mirror/ too, and git remote remove
+        // mirror keeps them (0.5). Git 2.55's remote add refuses such a pair ("a superset of
+        // existing remote"), older gits made them: written into the configuration here.
+        foreach (var name in new[] { "mirror", "mirror/eu" })
+        {
+            await repo.GitAsync("config", $"remote.{name}.url", repo.SiblingPath("origin.git"));
+            await repo.GitAsync("config", $"remote.{name}.fetch", $"+refs/heads/*:refs/remotes/{name}/*");
+            await repo.GitAsync("fetch", "--quiet", name);
+        }
+
+        await repo.GitAsync("remote", "set-head", "mirror/eu", "main");
+        var start = await PictureAsync(repo);
+
+        var removed = await RecordAsync(repository, UndoScope.RemoveRemote("mirror"), () => repository.RemoveRemoteAsync("mirror", TestCancelled));
+        var afterRemoval = await PictureAsync(repo);
+        Assert.Contains("refs/remotes/mirror/eu/feature ", afterRemoval.Refs, StringComparison.Ordinal);
+        Assert.DoesNotContain("refs/remotes/mirror/feature ", afterRemoval.Refs, StringComparison.Ordinal);
+
+        // The redo's removal of the keys deletes what is left under refs/remotes/mirror/, but for mirror/eu's.
+        removed = await UndoAsync(repository, removed);
+        Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, removed);
         Assert.Equal(afterRemoval, await PictureAsync(repo));
     }
