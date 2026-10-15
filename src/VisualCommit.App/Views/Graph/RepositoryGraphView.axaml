@@ -61,20 +61,6 @@
                           AutomationProperties.AutomationId="GraphRows"
                           AutomationProperties.Name="Commit graph" />
 
-    <!-- While the graph reloads for a change of what it hides or solos (8.2): a 2-px bar under the
-         column headers, over the rows' top edge. Hidden, it runs no animation. -->
-    <ProgressBar Name="GraphReloading"
-                 Grid.Row="2"
-                 IsVisible="{Binding IsReloadingGraph}"
-                 IsIndeterminate="{Binding IsReloadingGraph}"
-                 VerticalAlignment="Top"
-                 Height="2" MinHeight="2" MinWidth="0"
-                 CornerRadius="0"
-                 Foreground="{DynamicResource VcAccentBrush}"
-                 Background="Transparent"
-                 AutomationProperties.AutomationId="GraphReloading"
-                 AutomationProperties.Name="Reloading the graph" />
-
     <!-- Lies over the right edge of the rows and takes no width from the columns. The
          code-behind keeps it in step with the rows' scroll offset and extent. -->
     <ScrollBar Name="GraphScrollBar"
@@ -85,6 +71,22 @@
                SmallChange="26"
                IsVisible="False"
                AutomationProperties.AutomationId="GraphScrollBar" />
+
+    <!-- While the graph reloads for a change of what it hides or solos (8.2): a 2-px bar under the
+         column headers, over the rows' top edge and the scroll bar's, across the whole width. It
+         takes no input, so the rows under it can still be clicked; hidden, it runs no animation. -->
+    <ProgressBar Name="GraphReloading"
+                 Grid.Row="2"
+                 IsVisible="{Binding IsReloadingGraph}"
+                 IsIndeterminate="{Binding IsReloadingGraph}"
+                 IsHitTestVisible="False"
+                 VerticalAlignment="Top"
+                 Height="2" MinHeight="2" MinWidth="0"
+                 CornerRadius="0"
+                 Foreground="{DynamicResource VcAccentBrush}"
+                 Background="Transparent"
+                 AutomationProperties.AutomationId="GraphReloading"
+                 AutomationProperties.Name="Reloading the graph" />
 
     <StackPanel Name="NoCommits"
                 Grid.Row="2"
