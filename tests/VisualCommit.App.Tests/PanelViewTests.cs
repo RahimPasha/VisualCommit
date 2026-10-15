@@ -170,7 +170,7 @@ public class PanelViewTests
                 "Date", "2026-01-01 12:00",
                 "SHA", new string('a', 40),
                 "Parents", "1111111", "2222222",
-                "Changed files (2)", "Flat", "Tree",
+                "Changed files (2)", "Flat", "Tree", "All files",
                 "A", "login.txt", "src",
                 "A", "rules.txt", "src/validation",
             ],
@@ -212,6 +212,50 @@ public class PanelViewTests
         Assert.All(
             fileList.GetVisualDescendants().OfType<ContentPresenter>().Where(row => row.GetVisualParent() is VirtualizingStackPanel),
             row => Assert.Equal(24, row.Bounds.Height));
+    }
+
+    [AvaloniaFact]
+    public async Task All_files_is_a_third_toggle_right_of_Tree_that_lists_the_whole_tree_and_a_stash_has_none()
+    {
+        var repository = new CommitDetailsViewModelTests.FakeRepository(sha => Task.FromResult(CommitDetailsViewModelTests.Details(sha) with
+        {
+            Files = [new ChangedFile("src/Reader.cs", FileChangeKind.Modified)],
+        }))
+        {
+            Tree = ["LICENSE", "README.md", "assets/logo.png", "docs/notes.md", "src/Config.cs", "src/Reader.cs"],
+        };
+        var settings = new MainWindowViewModelTests.FakeSettings();
+        var details = new CommitDetailsViewModel(repository, settings, new DateDisplay(TimeZoneInfo.Utc));
+        using var host = Host.Show(new RightPanelView { DataContext = details }, 400);
+        await details.ShowAsync(new string('a', 40), cancellationToken: TestContext.Current.CancellationToken);
+        host.Settle();
+
+        // docs/test-reports/phase-5.md B7 step 1 (BD14): Flat (selected), Tree and All files, in that order.
+        var flat = host.Find<Button>("FlatFilesButton");
+        var tree = host.Find<Button>("TreeFilesButton");
+        var all = host.Find<Button>("AllFilesButton");
+        Assert.True(host.BoundsOf(flat).Right <= host.BoundsOf(tree).X && host.BoundsOf(tree).Right <= host.BoundsOf(all).X);
+        Assert.Equal(("All files", "Show every file of the commit", false), (Host.TextsIn(all).Single(), ToolTip.GetTip(all) as string, all.Classes.Contains("selected")));
+        Assert.Equal("AllFilesButton", Avalonia.Automation.AutomationProperties.GetAutomationId(all));
+
+        // B7 step 2: the whole tree, flat in path order, the unchanged files without a letter.
+        host.Click(all);
+        host.Window.MouseMove(new Point(1, 1));
+        await WaitForAsync(host, () => details.ChangedFilesTitle == "All files (6)");
+        Assert.Contains("selected", all.Classes);
+        Assert.Equal(Brush("VcSelectionBrush"), all.Background);
+        Assert.True(settings.Current.ShowAllFiles);
+        Assert.Equal(
+            ["LICENSE", "README.md", "logo.png", "assets", "notes.md", "docs", "Config.cs", "src", "M", "Reader.cs", "src"],
+            Host.TextsIn(host.WithAutomationId("FileList").Single()));
+        Assert.Empty(LayoutAudit.FindClippedText(host.Window));
+
+        // A stash's details have no "All files" (4.5).
+        var stash = new StashEntry(0, new string('b', 40), new string('a', 40), "On main: Work", "Test Author", "author@example.com", default, default);
+        await details.ShowAsync(stash.Sha, stash, TestContext.Current.CancellationToken);
+        host.Settle();
+        Assert.False(all.IsEffectivelyVisible);
+        Assert.Equal("Changed files (1)", details.ChangedFilesTitle);
     }
 
     [AvaloniaFact]
@@ -287,6 +331,20 @@ public class PanelViewTests
         {
             window.Close();
         }
+    }
+
+    /// <summary>Waits until <paramref name="condition"/> holds, letting the UI thread run what was posted to it.</summary>
+    private static async Task WaitForAsync(Host host, Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < until, "Timed out waiting for the panel.");
+            host.Settle();
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        host.Settle();
     }
 
     private static IBrush? Brush(string key) =>

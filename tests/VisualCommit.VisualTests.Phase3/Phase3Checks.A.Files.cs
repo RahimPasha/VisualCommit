@@ -62,7 +62,8 @@ public sealed partial class Phase3ChecksA
         menu = app.Menu();
         shot = Shot(app, "04c-untracked-menu");
         AssertMenu(menu, PartA.GuideUntrackedMenu);
-        Assert.All(menu.Items, item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
+        // Every item but phase 5's File history and Blame, which an untracked file cannot use (4.4, 14.1).
+        Assert.All(menu.Items.Where(item => item.Label is not ("File history" or "Blame")), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertHighlighted(menu, "Stage");
         AssertMenuLook(app, menu, shot);
         AssertMenuPlaced(app, menu, pointer);
@@ -186,7 +187,9 @@ public sealed partial class Phase3ChecksA
         Assert.False(repository.IsDiffOpen);
         AssertRowSelected(app, addCalculator);
         AssertMenu(menu, PartA.CommitFileMenu);
-        AssertHighlighted(menu, "Open file");
+
+        // Phase 5's File history comes first now (docs/phase-5-design.md 4.4, 14.1).
+        AssertHighlighted(menu, "File history");
         AssertMenuLook(app, menu, shot);
         AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Copy path");
@@ -201,7 +204,9 @@ public sealed partial class Phase3ChecksA
         menu = app.Menu();
         shot = Shot(app, "04k-commit-diff-menu");
         AssertMenu(menu, PartA.CommitFileMenu);
-        AssertHighlighted(menu, "Open file");
+
+        // Phase 5's File history comes first now (docs/phase-5-design.md 4.4, 14.1).
+        AssertHighlighted(menu, "File history");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(PartA.CommitFileMenuHeight, menu.Bounds.Height, WindowLayout.MenuHeightTolerance);
         AssertMenuPlaced(app, menu, pointer);
@@ -299,7 +304,8 @@ public sealed partial class Phase3ChecksA
         var menu = app.Menu();
         var shot = Shot(app, "26b-untracked-file-menu");
         AssertMenu(menu, PartA.RunLogMenu);
-        Assert.All(menu.Items, item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
+        // Every item but phase 5's File history and Blame, which an untracked file cannot use (4.4, 14.1).
+        Assert.All(menu.Items.Where(item => item.Label is not ("File history" or "Blame")), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
         AssertHighlighted(menu, "Stage");
         AssertMenuLook(app, menu, shot);
         AssertMenuPlaced(app, menu, pointer);

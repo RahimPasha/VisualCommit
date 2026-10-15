@@ -105,8 +105,15 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(StatusLetter), nameof(FileName), nameof(Folder), nameof(HasFolder), nameof(OriginText), nameof(HasOrigin), nameof(PathText), nameof(IsAdded), nameof(IsModified), nameof(IsDeleted), nameof(IsRenamed), nameof(HunkActions), nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage))]
     public partial DiffTarget Target { get; private set; }
 
-    /// <summary>"Unstaged", "Staged" or the commit's short id.</summary>
-    public string SideLabel { get; }
+    /// <summary>"Unstaged", "Staged" or the commit's short id; a diff that a page reuses for each of its rows takes each row's (<see cref="LoadAsync(DiffTarget, string)"/>).</summary>
+    [ObservableProperty]
+    public partial string SideLabel { get; private set; }
+
+    /// <summary>
+    /// The header has the close button (<c>CloseDiffButton</c>). False for a diff that a page of the
+    /// graph area hosts (docs/phase-5-design.md 4.1), which closes with its page.
+    /// </summary>
+    public bool ShowsClose { get; init; } = true;
 
     public string StatusLetter => Target.Kind switch
     {
@@ -257,6 +264,17 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
 
     /// <summary>Reads the diff and shows it.</summary>
     public Task LoadAsync() => LoadAsync(Target);
+
+    /// <summary>
+    /// Reads another file's diff into this view model, with its own side label: the file history
+    /// page's diff part, reused for every row (docs/phase-5-design.md 4.1).
+    /// </summary>
+    public Task LoadAsync(DiffTarget target, string sideLabel)
+    {
+        ArgumentNullException.ThrowIfNull(sideLabel);
+        SideLabel = sideLabel;
+        return LoadAsync(target);
+    }
 
     /// <summary>Reads the diff again for <paramref name="target"/>: the same file after a write or an outside change, maybe with another kind.</summary>
     public async Task LoadAsync(DiffTarget target)

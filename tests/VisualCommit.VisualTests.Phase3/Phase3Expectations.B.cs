@@ -418,7 +418,7 @@ public static partial class Phase3Expectations
             "Copy SHA",
         ];
 
-        /// <summary>Check 8 steps 2 and 4: the label feature/ff's menu (no upstream); 380 high (328 before phase 4).</summary>
+        /// <summary>Check 8 steps 2 and 4: the label feature/ff's menu (no upstream); 415 high (328 before phase 4, 380 before phase 5).</summary>
         public static readonly string[] FeatureFfMenu =
         [
             "feature/ff",
@@ -436,6 +436,8 @@ public static partial class Phase3Expectations
             "Delete feature/ff… (danger)",
             Sep,
             "Set upstream…",
+            Sep,
+            "Show reflog of feature/ff",
             Sep,
             "Copy branch name",
         ];
@@ -476,7 +478,7 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>Check 9 step 5: the label feature/alpha's menu while the merge is stopped; 458 high (406 before phase 4).</summary>
+        /// <summary>Check 9 step 5: the label feature/alpha's menu while the merge is stopped; 493 high (406 before phase 4, 458 before phase 5).</summary>
         public static readonly string[] AlphaMenuWhileMerging =
         [
             "feature/alpha",
@@ -498,13 +500,15 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/feature/alpha",
             Sep,
+            "Show reflog of feature/alpha",
+            Sep,
             "Copy branch name",
         ];
 
         /// <summary>
         /// Check 9b step 3: the conflicted src/core.txt's menu in the stage panel, with phase 4's
         /// "Resolve conflict" (highlighted) and "Open in merge tool" (no <c>merge.tool</c> set);
-        /// 284 high (232 before phase 4).
+        /// and phase 5's File history and Blame; 345 high (232 before phase 4, 284 before phase 5).
         /// </summary>
         public static readonly string[] ConflictedFileMenu =
         [
@@ -516,6 +520,9 @@ public static partial class Phase3Expectations
             Sep,
             "Ignore core.txt (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.txt files (disabled: \"Only untracked files can be ignored\")",
+            Sep,
+            "File history",
+            "Blame",
             Sep,
             "Open file",
             "Show in folder",
@@ -603,7 +610,7 @@ public static partial class Phase3Expectations
             "Copy SHA",
         ];
 
-        /// <summary>Check 32 step 3: main's menu while HEAD is detached on its child; 458 high (406 before phase 4).</summary>
+        /// <summary>Check 32 step 3: main's menu while HEAD is detached on its child; 493 high (406 before phase 4, 458 before phase 5).</summary>
         public static readonly string[] MainMenuWhileDetached =
         [
             "main",
@@ -624,6 +631,8 @@ public static partial class Phase3Expectations
             Sep,
             "Change upstream…",
             "Stop tracking origin/main",
+            Sep,
+            "Show reflog of main",
             Sep,
             "Copy branch name",
         ];

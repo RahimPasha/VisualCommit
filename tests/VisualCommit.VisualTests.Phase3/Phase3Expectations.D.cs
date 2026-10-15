@@ -189,7 +189,7 @@ public static partial class Phase3Expectations
             "Copy branch name",
         ];
 
-        /// <summary>The menu of the current branch <c>main</c> under Local branches (check 18b step 1), with phase 4's pull with rebase; 354 high.</summary>
+        /// <summary>The menu of the current branch <c>main</c> under Local branches (check 18b step 1), with phase 4's pull with rebase and phase 5's reflog; 389 high.</summary>
         public static readonly string[] CurrentMainMenu =
         [
             "main",
@@ -206,6 +206,8 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/main",
+            "—",
+            "Show reflog of main",
             "—",
             "Copy branch name",
         ];
@@ -312,7 +314,7 @@ public static partial class Phase3Expectations
             new("Initial commit", 0, 0, []),
         ];
 
-        /// <summary>The menu of <c>published</c> when it has diverged from its upstream (check 20 step 2), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>published</c> when it has diverged from its upstream (check 20 step 2), with phase 4's rebase items and phase 5's reflog; 493 high.</summary>
         public static readonly string[] DivergedPublishedMenu =
         [
             "published",
@@ -333,6 +335,8 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/published",
+            "—",
+            "Show reflog of published",
             "—",
             "Copy branch name",
         ];
@@ -550,7 +554,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 28 ------------------------------------------------------------------------
 
-        /// <summary>The menu of <c>topic</c>, which has no upstream (check 28 step 1), with phase 4's rebase items; 380 high.</summary>
+        /// <summary>The menu of <c>topic</c>, which has no upstream (check 28 step 1), with phase 4's rebase items and phase 5's reflog; 415 high.</summary>
         public static readonly string[] TopicMenu =
         [
             "topic",
@@ -569,10 +573,12 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Show reflog of topic",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>The menu of <c>topic</c> tracking origin/published (check 28 step 4), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>topic</c> tracking origin/published (check 28 step 4), with phase 4's rebase items and phase 5's reflog; 493 high.</summary>
         public static readonly string[] TopicTrackingMenu =
         [
             "topic",
@@ -593,6 +599,8 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/published",
+            "—",
+            "Show reflog of topic",
             "—",
             "Copy branch name",
         ];
@@ -639,7 +647,7 @@ public static partial class Phase3Expectations
 
         public const string PushedPublished = "Pushed published to origin/published";
 
-        /// <summary>The menu of <c>published</c> behind its upstream (check 30 step 3), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>published</c> behind its upstream (check 30 step 3), with phase 4's rebase items and phase 5's reflog; 493 high.</summary>
         public static readonly string[] BehindPublishedMenu =
         [
             "published",
@@ -660,6 +668,8 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/published",
+            "—",
+            "Show reflog of published",
             "—",
             "Copy branch name",
         ];
@@ -701,7 +711,7 @@ public static partial class Phase3Expectations
 
         public const string DeletedBranch = "Deleted published on origin";
 
-        /// <summary>The menu of <c>published</c> after its upstream was deleted (check 30 step 5), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>published</c> after its upstream was deleted (check 30 step 5), with phase 4's rebase items and phase 5's reflog; 493 high.</summary>
         public static readonly string[] GonePublishedMenu =
         [
             "published",
@@ -722,6 +732,8 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/published",
+            "—",
+            "Show reflog of published",
             "—",
             "Copy branch name",
         ];

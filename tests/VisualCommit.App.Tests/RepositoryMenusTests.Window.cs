@@ -115,7 +115,7 @@ public partial class RepositoryMenusTests
         app.RightClick(new Point(520, 424));
         menu = app.Menu();
         Assert.Equal(
-            ["ops", "Fetch all remotes", "Pull", "Push", "—", "Create branch…", "Stash changes… (disabled: \"There are no changes to stash\")", "—", "Manage remotes…"],
+            ["ops", "Fetch all remotes", "Pull", "Push", "—", "Create branch…", "Stash changes… (disabled: \"There are no changes to stash\")", "—", "Show reflog", "Show backups", "Manage remotes…"],
             menu.Lines());
         AssertNear(new Point(522, 426), menu.Bounds.TopLeft);
         Assert.Equal(AlphaTwoRow, repository.SelectedIndex);
@@ -141,8 +141,8 @@ public partial class RepositoryMenusTests
         app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/feature/alpha"));
         var menu = app.Menu();
         Assert.Equal("feature/alpha", menu.Header);
-        Assert.Equal(15, menu.Items.Count);
-        Assert.InRange(menu.Bounds.Height, 456, 460);
+        Assert.Equal(16, menu.Items.Count);
+        Assert.InRange(menu.Bounds.Height, 491, 495);
         Assert.True(repository.Selection.IsEmpty);
         Assert.DoesNotContain(repository.LeftPanel.Rows.OfType<RefItemRow>(), row => row.IsSelected);
         Assert.True(repository.Details.ShowsPlaceholder);
@@ -214,7 +214,7 @@ public partial class RepositoryMenusTests
         app.RightClick(workingRow);
         var menu = app.Menu();
         Assert.Equal(
-            ["Working changes", "Stage all", "Unstage all", "Discard all changes… (danger)", "—", "Stash changes…", "Create branch here…", "—", "Show in folder"],
+            ["Working changes", "Stage all", "Unstage all", "Discard all changes… (danger)", "—", "Stash changes…", "Create branch here…", "—", "Show reflog", "Show backups", "Show in folder"],
             menu.Lines());
         Assert.True(repository.IsWorkingRowSelected);
         TestPictures.Save(app, "04j-working-row-menu");
@@ -225,7 +225,7 @@ public partial class RepositoryMenusTests
         app.RightClick(calculator);
         menu = app.Menu();
         Assert.Equal(
-            ["Calculator.cs", "Stage", "Discard changes…", "—", "Ignore Calculator.cs (disabled: \"Only untracked files can be ignored\")", "Ignore all *.cs files (disabled: \"Only untracked files can be ignored\")", "—", "Open file", "Show in folder", "Copy path"],
+            ["Calculator.cs", "Stage", "Discard changes…", "—", "Ignore Calculator.cs (disabled: \"Only untracked files can be ignored\")", "Ignore all *.cs files (disabled: \"Only untracked files can be ignored\")", "—", "File history", "Blame", "—", "Open file", "Show in folder", "Copy path"],
             menu.Lines());
         Assert.False(repository.IsDiffOpen);
         Assert.False(((ChangedFileRow)calculator.DataContext!).IsSelected);
@@ -238,7 +238,7 @@ public partial class RepositoryMenusTests
         TestPictures.Save(app, "04c-untracked-menu");
         app.PressKey(Key.Escape);
         app.RightClick(FileRow(app, "StagedFileList", "config/settings.json"));
-        Assert.Equal(["settings.json", "Unstage", "—", "Open file", "Show in folder", "Copy path"], app.Menu().Lines());
+        Assert.Equal(["settings.json", "Unstage", "—", "File history (disabled: \"This file is in no commit yet\")", "Blame (disabled: \"This file is in no commit yet\")", "—", "Open file", "Show in folder", "Copy path"], app.Menu().Lines());
         TestPictures.Save(app, "04d-staged-menu");
         app.PressKey(Key.Escape);
 
@@ -252,7 +252,7 @@ public partial class RepositoryMenusTests
         app.RightClick(text.TranslatePoint(new Point(bounds.X + 300, bounds.Center.Y), app.Window)!.Value);
         menu = app.Menu();
         Assert.Equal(
-            ["Calculator.cs", "Stage hunk", "Discard hunk…", "—", "Stage file", "Discard file…", "—", "Open file", "Show in folder", "Copy path"],
+            ["Calculator.cs", "Stage hunk", "Discard hunk…", "—", "Stage file", "Discard file…", "—", "File history", "Blame", "—", "Open file", "Show in folder", "Copy path"],
             menu.Lines());
         TestPictures.Save(app, "04f-diff-menu-no-selection");
         app.PressKey(Key.Escape);
@@ -265,7 +265,7 @@ public partial class RepositoryMenusTests
         app.Click(app.GraphRowPoint(addCalculator));
         await app.WaitForAsync(() => FileButtons(app).Any(), "the commit's files");
         app.RightClick(FileButtons(app).First(button => ((ChangedFileRow)button.DataContext!).File!.Path == "src/Calculator.cs"));
-        Assert.Equal(["Calculator.cs", "Open file", "Show in folder", "Copy path"], app.Menu().Lines());
+        Assert.Equal(["Calculator.cs", "File history", "Blame", "—", "Open file", "Show in folder", "Copy path"], app.Menu().Lines());
         TestPictures.Save(app, "04i-commit-file-menu");
         app.PressKey(Key.Escape);
         Assert.False(repository.IsDiffOpen);

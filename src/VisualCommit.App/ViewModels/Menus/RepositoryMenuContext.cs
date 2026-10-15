@@ -256,6 +256,12 @@ public sealed record FileMenuTarget(ChangedFile File, bool IsUntracked, bool Exi
     /// and Blame, since opening a page would close the resolver.
     /// </summary>
     public bool InConflictResolver { get; init; }
+
+    /// <summary>
+    /// For a commit's file, the commit's first parent (a stash's: the commit it was made on), or
+    /// null: the blame of a file the commit deleted is its parent's version (docs/phase-5-design.md 4.4).
+    /// </summary>
+    public string? CommitParent { get; init; }
 }
 
 /// <summary>A right-click in the diff view (4b): which file and side, and what is selected or under the pointer.</summary>

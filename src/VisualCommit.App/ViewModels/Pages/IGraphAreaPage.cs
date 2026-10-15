@@ -67,6 +67,15 @@ public interface IGraphAreaPageHost
     bool HasCommit(string sha);
 
     /// <summary>
+    /// Whether HEAD's history holds the commit <paramref name="sha"/>, as the graph's walk from HEAD
+    /// knows it (<see cref="Graph.CommitGraphData.IsReachableFromHead"/>; the graph always shows
+    /// HEAD's history, D178): a reflog entry's "Cherry-pick onto {cur}" is disabled for it, as
+    /// phase 3's commit menu's is. False for a commit the graph does not have (a lost one) and
+    /// while the walk has not reached it: the item stays enabled and git decides.
+    /// </summary>
+    bool IsOnHead(string sha);
+
+    /// <summary>
     /// Shows the commit in the right panel and selects it behind the page when the graph has it
     /// (11.3, <see cref="RepositoryViewModel.ShowCommit"/>); the zero id of a line not committed
     /// yet selects the working-changes row. For the user's own click or key on a row only.
