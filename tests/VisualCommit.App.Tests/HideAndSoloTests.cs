@@ -87,11 +87,26 @@ public class HideAndSoloTests
         Assert.Equal([new BranchUpstream("refs/heads/feature/alpha", "refs/remotes/origin/feature/alpha")], entry.Upstreams);
         Assert.Equal(["origin"], entry.Remotes);
 
-        // Step 4: a click on the hidden row selects nothing (Alpha one is no row) and highlights nothing (FD19).
+        // Step 4: a click on the hidden row selects nothing (Alpha one is no row) and highlights nothing
+        // (FD19), also when a commit was selected before: its details give way to the placeholder.
+        app.Click(await app.RefRowAsync("Local branches", "feature", "beta"));
+        await app.WaitForAsync(() => repository.Selection.Single is not null && repository.Details.HasCommit, "feature/beta's commit to be selected");
         app.Click(app.RefRowNamePoint("Local branches", "feature", "alpha"));
         Assert.True(repository.Selection.IsEmpty);
+        Assert.Equal(-1, repository.SelectedIndex);
         Assert.DoesNotContain(repository.LeftPanel.Rows.OfType<RefItemRow>(), row => row.IsSelected);
+        await app.WaitForAsync(() => repository.Details.ShowsPlaceholder, "the details' placeholder");
         Assert.Equal("feature/alpha is hidden in the graph", app.RefRowMarks("Local branches", "feature", "alpha").NameToolTip);
+
+        // A right-click on its eye opens the row's menu (4b), as on the row; it shows nothing.
+        var graphBefore = repository.Graph;
+        app.RightClick(app.RefRowMarks("Local branches", "feature", "alpha").ToggleBounds!.Value.Center);
+        var eyeMenu = app.Menu();
+        Assert.Equal("feature/alpha", eyeMenu.Header);
+        Assert.Contains("Show feature/alpha", eyeMenu.Lines());
+        app.PressKey(Key.Escape);
+        Assert.Same(graphBefore, repository.Graph);
+        Assert.True(app.RefRowMarks("Local branches", "feature", "alpha").ShowsHiddenToggle);
 
         // Step 5: a comparison whose To is no row: its link is disabled, and the counts' singular.
         app.RightClick(await app.RefRowAsync("Local branches", "feature", "alpha"));

@@ -57,6 +57,12 @@ public partial class LeftPanelViewModel : ObservableObject
     /// </summary>
     public event EventHandler<string>? RefActivated;
 
+    /// <summary>
+    /// Raised when the user clicks a branch the graph leaves out whose commit is no row
+    /// (docs/phase-5-design.md 8.3, FD19): nothing is to be selected, whatever was before.
+    /// </summary>
+    public event EventHandler? NothingActivated;
+
     /// <summary>Raised when the eye button of a hidden branch's or remote's row is clicked: it is to be shown again (docs/phase-5-design.md 8.3).</summary>
     public event EventHandler<RefItemRow>? HiddenToggleClicked;
 
@@ -99,7 +105,8 @@ public partial class LeftPanelViewModel : ObservableObject
     /// <summary>
     /// What a click on <paramref name="row"/> does: a section header, remote or folder opens or
     /// closes; a branch, tag or stash becomes the selected item and raises
-    /// <see cref="RefActivated"/> with its commit.
+    /// <see cref="RefActivated"/> with its commit; a branch the graph leaves out whose commit is no
+    /// row raises <see cref="NothingActivated"/> instead.
     /// </summary>
     public void Activate(RefListRow row)
     {
@@ -136,6 +143,13 @@ public partial class LeftPanelViewModel : ObservableObject
                 {
                     // A branch the filter leaves out whose commit is no row: nothing is selected
                     // and no row is highlighted (8.3, FD19).
+                    _selectedKey = null;
+                    foreach (var other in Rows.OfType<RefItemRow>())
+                    {
+                        other.IsSelected = false;
+                    }
+
+                    NothingActivated?.Invoke(this, EventArgs.Empty);
                     return;
                 }
 

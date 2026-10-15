@@ -107,6 +107,7 @@ public sealed partial class RepositoryViewModel
     {
         // While the graph loads a commit may still come: a hidden branch's click selects it then (8.3).
         LeftPanel.IsInGraph = sha => !Graph.IsComplete || Graph.IndexOf(sha) >= 0;
+        LeftPanel.NothingActivated += (_, _) => SelectNothing();
         LeftPanel.HiddenToggleClicked += (_, row) =>
         {
             if (LeftPanelViewModel.RefNameOf(row) is { } branch)
@@ -125,6 +126,30 @@ public sealed partial class RepositoryViewModel
                 Start(MenuActions.StopSoloingBranchAsync(branch), "ending a solo");
             }
         };
+    }
+
+    /// <summary>
+    /// A click on a hidden branch whose commit is no row (8.3, FD19): as a click on a ref closes a
+    /// diff and selects its commit (<see cref="Select"/>), this one selects nothing: neither a
+    /// commit nor the working-changes row, and the details show their placeholder.
+    /// </summary>
+    private void SelectNothing()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        CloseDiff(returnFocus: false);
+        IsWorkingRowSelected = false;
+        _pendingSelection = null;
+        Selection = GraphSelection.Empty;
+        if (_selectedSha is not null)
+        {
+            // A commit the details showed without a row (11.3) goes too.
+            _selectedSha = null;
+            _ = Details.ShowAsync(null, null, _lifetime.Token);
+        }
     }
 
     partial void OnFiltersChanged(RepositoryGraphFilter? value) => LeftPanel.UpdateFilters(value);
