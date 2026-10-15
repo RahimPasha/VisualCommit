@@ -13,8 +13,8 @@ namespace VisualCommit.Git.Tests;
 /// that left a detached HEAD's commits, of a remote branch into a new tracking branch, the
 /// automatic stash's checkout (9.2, D166), D91's
 /// "Stash changes and check out", a branch created with and without its checkout, renamed,
-/// deleted with its upstream, fast-forwarded, an interactive rebase, a squash, a pull and a merge
-/// finished after its conflict. Each is undone to the state before it and redone to the state after.
+/// deleted with its upstream, fast-forwarded, an interactive rebase, a squash, a pull that
+/// fast-forwarded and one that rebased, and a merge finished after its conflict. Each is undone to the state before it and redone to the state after.
 /// </summary>
 public class UndoStepBranchTests
 {
@@ -292,6 +292,29 @@ public class UndoStepBranchTests
         var entry = await RecordAsync(repository, UndoScope.Pull("main"), () => repository.IntegratePullAsync(main, cancellationToken: TestCancelled));
         var done = await PictureAsync(repo);
         Assert.NotEqual(entry.Before.Head.Sha, entry.After.Head.Sha);
+
+        entry = await UndoAsync(repository, entry);
+        Assert.Equal(start, await PictureAsync(repo));
+        await RedoAsync(repository, entry);
+        Assert.Equal(done, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_pull_that_rebased_the_branchs_own_commit_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "o.txt", "other\n", "From elsewhere");
+        await repository.FetchAsync("origin", NetworkOptions.None, cancellationToken: TestCancelled);
+        await repo.CommitFileAsync("mine.txt", "mine\n", "Mine");
+        repo.WriteFile("scratch.txt", "scratch\n");
+        var start = await PictureAsync(repo);
+        var main = (await repository.ReadRefsAsync(TestCancelled)).Refs.Single(gitRef => gitRef.FullName == "refs/heads/main");
+
+        // The rebase replays "Mine" onto what was fetched (7.2: a rebase of every kind, a pull's too).
+        var entry = await RecordAsync(repository, UndoScope.Pull("main"), () => repository.IntegratePullAsync(main, PullIntegration.Rebase, beforeRebase: null, cancellationToken: TestCancelled));
+        var done = await PictureAsync(repo);
+        Assert.Equal((await repo.GitAsync("rev-parse", "origin/main")).StandardOutput.Trim(), (await repo.GitAsync("rev-parse", "HEAD~1")).StandardOutput.Trim());
 
         entry = await UndoAsync(repository, entry);
         Assert.Equal(start, await PictureAsync(repo));
