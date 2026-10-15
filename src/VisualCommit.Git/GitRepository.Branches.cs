@@ -193,12 +193,14 @@ public sealed partial class GitRepository
 
         // A folder git names ("would lose untracked files in them") is asked about by its files,
         // which check-ignore matches where the folder's own name may not (*.log in logs/): it is
-        // ignored when every file in it is. A symbolic link is asked about as a file.
+        // ignored when every file in it is. A symbolic link is asked about as a file. The same
+        // rules and the same check-ignore call as the undo's switch (GitRepository.Undo.cs).
         var asked = paths.Distinct(StringComparer.Ordinal).ToDictionary(
             path => path,
-            path => IsFolder(path) ? FilesInFolder(path) : [path],
+            path => !IsFileOrLink(WorkingTreePath(path)) && Directory.Exists(WorkingTreePath(path)) ? FilesUnder(path) : [path],
             StringComparer.Ordinal);
-        var matched = await CheckIgnoreAsync([.. asked.Values.SelectMany(files => files).Distinct(StringComparer.Ordinal)], cancellationToken).ConfigureAwait(false);
+        var matched = (await IgnoredAmongAsync([.. asked.Values.SelectMany(files => files).Distinct(StringComparer.Ordinal)], cancellationToken).ConfigureAwait(false))
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var (path, files) in asked)
         {
             if (files.Count > 0 && files.All(matched.Contains))
@@ -226,48 +228,34 @@ public sealed partial class GitRepository
         static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
 
-    /// <summary>Whether <paramref name="path"/> (relative to the working tree) is a folder there, not a symbolic link to one.</summary>
-    private bool IsFolder(string path)
-    {
-        var folder = new DirectoryInfo(Path.Combine(WorkingDirectory, path));
-        return folder.Exists && folder.LinkTarget is null;
-    }
-
-    /// <summary>The files in the folder <paramref name="path"/> and below it, relative to the working tree with <c>/</c>; symbolic links count as files and are not followed.</summary>
-    private List<string> FilesInFolder(string path)
-    {
-        var folder = Path.Combine(WorkingDirectory, path);
-        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true };
-        return [.. Directory.EnumerateFileSystemEntries(folder, "*", options)
-            .Where(entry => !Directory.Exists(entry) || new DirectoryInfo(entry).LinkTarget is not null)
-            .Select(entry => Path.GetRelativePath(WorkingDirectory, entry).Replace(Path.DirectorySeparatorChar, '/'))];
-    }
-
     /// <summary>
-    /// Which of <paramref name="paths"/> git ignores: <c>git check-ignore --stdin -z</c>, which exits
-    /// with 1 when it ignores none. It runs without <c>GIT_LITERAL_PATHSPECS</c>: it refuses to run
-    /// with it (exit 128 on Git 2.36 and 2.55, design 15.8; D74), and takes each path as it is.
+    /// The files under a folder of the working tree (<paramref name="folder"/>, a repository path),
+    /// as repository paths in byte order: what git would lose with it. A symbolic link is a file to
+    /// git, also one to a folder, and is not followed. The walk of the undo's
+    /// <c>UndoStepRun.FilesIn</c>, here for the checkout's refusal (9.3), which has no undo step.
     /// </summary>
-    private async Task<HashSet<string>> CheckIgnoreAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    private List<string> FilesUnder(string folder)
     {
-        if (paths.Count == 0)
+        var files = new List<string>();
+        var folders = new Stack<string>([folder]);
+        while (folders.TryPop(out var relative))
         {
-            return new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in new DirectoryInfo(WorkingTreePath(relative)).EnumerateFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }))
+            {
+                var path = relative + "/" + entry.Name;
+                if (entry is DirectoryInfo && entry.LinkTarget is null)
+                {
+                    folders.Push(path);
+                }
+                else
+                {
+                    files.Add(path);
+                }
+            }
         }
 
-        var command = new GitCommand("check-ignore", "--stdin", "-z")
-        {
-            WorkingDirectory = WorkingDirectory,
-            Environment = new Dictionary<string, string?>(ReadEnvironment) { ["GIT_LITERAL_PATHSPECS"] = null },
-            StandardInput = string.Concat(paths.Select(path => path + "\0")),
-        };
-        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode == 1)
-        {
-            return new HashSet<string>(StringComparer.Ordinal);
-        }
-
-        return result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        files.Sort(StringComparer.Ordinal);
+        return files;
     }
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
