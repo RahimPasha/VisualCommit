@@ -12,7 +12,8 @@ namespace VisualCommit.Git;
 /// The calls also pass the options that keep the user's git configuration from changing the
 /// output they parse: signatures, colours, output encoding, rename detection and external diff
 /// tools are fixed on the command line, and paths are read in the <c>-z</c> form, which
-/// <c>core.quotepath</c> does not touch.
+/// <c>core.quotepath</c> does not touch, or, where a line-by-line stream matters (file history,
+/// blame), C-quoted with <c>core.quotePath=true</c> fixed by <c>-c</c> (<see cref="GitQuotedPaths"/>).
 /// </para>
 /// </summary>
 public sealed partial class GitRepository : IGitRepository
