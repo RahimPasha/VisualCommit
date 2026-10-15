@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -79,7 +80,7 @@ public class VisualRunTests
         if (string.Equals(parent.ProcessName, "dotnet", StringComparison.OrdinalIgnoreCase))
         {
             Assert.Equal(VisualRun.KeyOf(parent), VisualRun.RunKey);
-            Assert.True(parent.StartTime <= self.StartTime, "The run's process started after this one.");
+            Assert.True(parent.StartTime.ToUniversalTime() <= self.StartTime.ToUniversalTime(), "The run's process started after this one.");
         }
         else
         {
@@ -87,5 +88,30 @@ public class VisualRunTests
         }
 
         Assert.Equal(VisualRun.RunKey, VisualRun.RunKey);
+    }
+
+    /// <summary>
+    /// The processes of one run must name it alike, or the second of phase 5's projects to save a
+    /// picture empties the first one's. On Linux .NET's <see cref="Process.StartTime"/> is not
+    /// alike: each process adds the start's clock ticks to a boot time it works out for itself
+    /// from a coarse clock. A process is named there by the ticks as the system records them,
+    /// which another process (cat) reads from /proc alike. Windows and macOS record the start
+    /// time itself.
+    /// </summary>
+    [Fact]
+    public async Task A_process_is_named_by_its_start_as_another_process_reads_it()
+    {
+        using var self = Process.GetCurrentProcess();
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{self.Id} {self.StartTime.ToUniversalTime():O}"), VisualRun.KeyOf(self));
+            return;
+        }
+
+        // "<pid> (<name>) <state> …", the name perhaps with spaces and parentheses: the start is field 22.
+        var (exitCode, stat, error) = await PromptTestSupport.RunProgramAsync("cat", new Dictionary<string, string?>(), $"/proc/{self.Id}/stat");
+        Assert.True(exitCode == 0, error);
+        var fields = stat[(stat.LastIndexOf(')') + 2)..].Split(' ');
+        Assert.Equal($"{self.Id} {fields[19]}", VisualRun.KeyOf(self));
     }
 }

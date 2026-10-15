@@ -41,8 +41,8 @@ public static class VisualRun
     /// The test run this process belongs to: the process that started it when that is the dotnet
     /// CLI, which starts every test project of one <c>dotnet test</c> (or <c>dotnet run</c>) as
     /// its own child; otherwise this process alone (a test program started from a shell or an
-    /// IDE). A process is named by its id and its start time, so that a later process with the
-    /// same id is another.
+    /// IDE). A process is named by its id and its start (<see cref="KeyOf"/>), so that a later
+    /// process with the same id is another.
     /// </summary>
     internal static string RunKey => RunKeyOfThisProcess.Value;
 
@@ -124,8 +124,9 @@ public static class VisualRun
             {
                 // A parent that started after this process is another that took the exited
                 // parent's id: Windows hands out the ids of processes that have ended again.
+                // Compared in UTC, since local time goes back an hour when summer time ends.
                 using var parent = Process.GetProcessById(parentId);
-                if (string.Equals(parent.ProcessName, "dotnet", StringComparison.OrdinalIgnoreCase) && parent.StartTime <= self.StartTime)
+                if (string.Equals(parent.ProcessName, "dotnet", StringComparison.OrdinalIgnoreCase) && parent.StartTime.ToUniversalTime() <= self.StartTime.ToUniversalTime())
                 {
                     return KeyOf(parent);
                 }
@@ -139,9 +140,26 @@ public static class VisualRun
         return KeyOf(self);
     }
 
-    /// <summary>A process as <see cref="RunKey"/> names it: its id and its start time, UTC.</summary>
+    /// <summary>
+    /// A process as <see cref="RunKey"/> names it: its id and its start, which every process reads
+    /// alike. On Linux the start is the clock tick after boot that the system records
+    /// (<see cref="StartTicksOnLinux"/>), not <see cref="Process.StartTime"/>: .NET adds those
+    /// ticks to a boot time that each process works out for itself from a coarse clock, so two
+    /// processes of one run would name their parent by times up to a few milliseconds apart, and
+    /// the second to save a picture would empty the first one's. Windows and macOS record the
+    /// start time itself, which is taken in UTC.
+    /// </summary>
     internal static string KeyOf(Process process) =>
-        string.Create(CultureInfo.InvariantCulture, $"{process.Id} {process.StartTime.ToUniversalTime():O}");
+        OperatingSystem.IsLinux()
+            ? string.Create(CultureInfo.InvariantCulture, $"{process.Id} {StartTicksOnLinux(process.Id)}")
+            : string.Create(CultureInfo.InvariantCulture, $"{process.Id} {process.StartTime.ToUniversalTime():O}");
+
+    /// <summary>
+    /// When a process started, on Linux: clock ticks after the system's boot, field 22 of
+    /// <c>/proc/&lt;id&gt;/stat</c>.
+    /// </summary>
+    private static long StartTicksOnLinux(int processId) =>
+        long.Parse(StatFieldsOnLinux(processId.ToString(CultureInfo.InvariantCulture))[19], NumberStyles.None, CultureInfo.InvariantCulture);
 
     /// <summary>The id of the process that started this one, or null where it cannot be read.</summary>
     internal static int? ParentProcessId()
@@ -156,13 +174,21 @@ public static class VisualRun
 
         if (OperatingSystem.IsLinux())
         {
-            // "<pid> (<name>) <state> <parent id> …": the name may hold spaces and parentheses.
-            var stat = File.ReadAllText("/proc/self/stat");
-            var fields = stat[(stat.LastIndexOf(')') + 2)..].Split(' ');
-            return int.Parse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture);
+            return int.Parse(StatFieldsOnLinux("self")[1], NumberStyles.None, CultureInfo.InvariantCulture);
         }
 
         return GetParentProcessId();
+    }
+
+    /// <summary>
+    /// The fields of <c>/proc/&lt;process&gt;/stat</c> from the third, the state, on. The file
+    /// reads "&lt;pid&gt; (&lt;name&gt;) &lt;state&gt; &lt;parent id&gt; …", and the name may hold
+    /// spaces and parentheses.
+    /// </summary>
+    private static string[] StatFieldsOnLinux(string process)
+    {
+        var stat = File.ReadAllText($"/proc/{process}/stat");
+        return stat[(stat.LastIndexOf(')') + 2)..].Split(' ');
     }
 
     /// <summary><c>GetCurrentProcess()</c>'s pseudo handle: this process.</summary>
