@@ -964,12 +964,13 @@ public class Phase5ScenarioTests
     /// <summary>
     /// What the Files mode matches among <paramref name="rows"/> for <paramref name="text"/>
     /// (design 3.2's pathspecs, with <c>GIT_LITERAL_PATHSPECS</c> removed), on every git: the rows
-    /// whose own change (against the first parent) lists a path, as <c>--name-only</c> shows
-    /// them; their subjects.
+    /// whose own change (against the first parent, the root's too, without rename pairing, as
+    /// <c>GitRepository.SearchAsync</c> asks) lists a path, as <c>--name-only</c> shows them;
+    /// their subjects.
     /// </summary>
     private static async Task<string[]> FilesSearchAsync(TempRepo repo, IReadOnlyList<string> rows, string text)
     {
-        var output = await SearchAsync(repo, rows, WithoutLiteralPathspecs, "--first-parent", "--name-only", "--format=\u0001%s", "--", $":(glob,icase)**/*{text}*", $":(glob,icase)**/*{text}*/**");
+        var output = await SearchAsync(repo, rows, WithoutLiteralPathspecs, "--first-parent", "--root", "--no-renames", "--name-only", "--format=\u0001%s", "--", $":(glob,icase)**/*{text}*", $":(glob,icase)**/*{text}*/**");
         var matches = new List<string>();
         string? subject = null;
         foreach (var line in output)
