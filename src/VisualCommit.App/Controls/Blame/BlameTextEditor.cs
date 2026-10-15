@@ -5,6 +5,7 @@ using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Editing;
@@ -18,9 +19,10 @@ namespace VisualCommit.App.Controls.Blame;
 /// The blame page's text (docs/phase-5-design.md 4.2, 13.4: <c>BlameText</c>): the file, read-only,
 /// in the code font at 12 with the font's own line height (15.84, as the diff's rows), one number
 /// column (8 + 7.2 × d + 8 for the d digits of the last line's number, at least 2: 30.4 up to 99
-/// lines) and the diff's syntax colours for the file's type (D64), or none for a very large file
-/// (D65). No caret is drawn. Its UI Automation peer is a document whose value is the text, as the
-/// conflict resolver's result's is. The gutter of runs lies left of it, a control of its own
+/// lines) and the diff's syntax colours for the file's type (D64), made on a background thread
+/// above 1,000 lines as the diff's are, or none for a very large file (D65). No caret is drawn.
+/// Its UI Automation peer is a document whose value is the text, as the conflict resolver's
+/// result's is. The gutter of runs lies left of it, a control of its own
 /// (<see cref="BlameGutter"/>), which follows its lines.
 /// </summary>
 public sealed class BlameTextEditor : CodeTextEditor
@@ -30,6 +32,7 @@ public sealed class BlameTextEditor : CodeTextEditor
     private DiffSyntax? _syntax;
     private string? _filePath;
     private bool _highlighting = true;
+    private CancellationTokenSource? _tokenizing;
 
     public BlameTextEditor()
         : base(new TextArea())
@@ -68,16 +71,31 @@ public sealed class BlameTextEditor : CodeTextEditor
     public TextView TextView => TextArea.TextView;
 
     /// <summary>
-    /// Shows <paramref name="lines"/> as the file at <paramref name="path"/> (whose extension picks
-    /// the grammar), with syntax colours unless <paramref name="highlighting"/> is false.
+    /// Shows <paramref name="text"/> (lines joined by line feeds) as the file at
+    /// <paramref name="path"/> (whose extension picks the grammar), with syntax colours unless
+    /// <paramref name="highlighting"/> is false. As the diff's (<see cref="DiffTextView.SynchronousHighlightLimit"/>),
+    /// a file of up to 1,000 lines is tokenized before it is drawn; a larger one on a background
+    /// thread, coloured when that ends, so that the window does not stop.
     /// </summary>
-    public void Show(IReadOnlyList<string> lines, string? path, bool highlighting)
+    public void Show(string text, string? path, bool highlighting)
     {
-        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(text);
+        _tokenizing?.Cancel();
+        _tokenizing = null;
         _filePath = path;
         _highlighting = highlighting;
-        _syntax = highlighting ? Tokenize(lines, path) : null;
-        Document = new TextDocument(string.Join('\n', lines));
+        _syntax = null;
+        var lines = highlighting && DiffHighlighter.HasGrammar(path) ? text.Split('\n') : null;
+        if (lines is not null && lines.Length <= DiffTextView.SynchronousHighlightLimit)
+        {
+            _syntax = Tokenize(lines, path, CancellationToken.None);
+        }
+        else if (lines is not null)
+        {
+            TokenizeInBackground(lines, path);
+        }
+
+        Document = new TextDocument(text);
         _numbers.UpdateWidth();
         TextView.Redraw();
     }
@@ -85,8 +103,11 @@ public sealed class BlameTextEditor : CodeTextEditor
     /// <summary>The path whose grammar colours the text, as last shown.</summary>
     public string? FilePath => _filePath;
 
-    /// <summary>Whether the text was shown with syntax colours.</summary>
+    /// <summary>Whether the text is shown with syntax colours (a large file's once its background tokenizing has ended).</summary>
     public bool IsHighlighted => _highlighting && _syntax is not null;
+
+    /// <summary>A large file's tokens are being made on a background thread: its colours come when they end.</summary>
+    public bool IsTokenizing => _tokenizing is not null;
 
     /// <summary>
     /// The line (from 1) drawn at <paramref name="y"/> in this control's coordinates, or null below
@@ -141,22 +162,46 @@ public sealed class BlameTextEditor : CodeTextEditor
         OnThemeChanged();
     }
 
+    /// <summary>Tokenizes a large file on a background thread; the latest request's tokens colour the text when they are made.</summary>
+    private void TokenizeInBackground(IReadOnlyList<string> lines, string? path)
+    {
+        var cancellation = new CancellationTokenSource();
+        _tokenizing = cancellation;
+        _ = Task.Run(
+            () =>
+            {
+                var syntax = Tokenize(lines, path, cancellation.Token);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // Only the latest request counts: a newer text cancelled this one.
+                    if (ReferenceEquals(_tokenizing, cancellation))
+                    {
+                        _tokenizing = null;
+                        _syntax = syntax;
+                        TextView.Redraw();
+                    }
+
+                    cancellation.Dispose();
+                });
+            },
+            CancellationToken.None);
+    }
+
     /// <summary>
     /// The file's lines as a diff of one hunk of context lines, tokenized as the diff's new side,
-    /// or null when the path has no grammar or TextMate fails (the text shows without colours).
+    /// or null when TextMate fails (the text shows without colours) or the tokenizing was cancelled.
     /// </summary>
-    private static DiffSyntax? Tokenize(IReadOnlyList<string> lines, string? path)
+    private static DiffSyntax? Tokenize(IReadOnlyList<string> lines, string? path, CancellationToken cancellationToken)
     {
-        if (!DiffHighlighter.HasGrammar(path))
-        {
-            return null;
-        }
-
         var context = lines.Select((text, index) => new DiffLine(DiffLineKind.Context, text, text, index + 1, index + 1)).ToList();
         var hunk = new DiffHunk(string.Empty, string.Empty, 1, lines.Count, 1, lines.Count, context);
         try
         {
-            return DiffHighlighter.Tokenize(new FileDiff([], [hunk], false, false, false, null, null, lines.Sum(line => (long)line.Length + 1)), path);
+            return DiffHighlighter.Tokenize(new FileDiff([], [hunk], false, false, false, null, null, lines.Sum(line => (long)line.Length + 1)), path, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {

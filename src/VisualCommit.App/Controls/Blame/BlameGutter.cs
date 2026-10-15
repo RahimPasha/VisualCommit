@@ -144,6 +144,18 @@ public sealed class BlameGutter : Control
         _editor is { } editor && editor.LineAt(this.TranslatePoint(new Point(0, y), editor)?.Y ?? y) is { } line ? RunOfLine(line) : null;
 
     /// <summary>
+    /// The resource key of the brush a run's lines are drawn on, as <see cref="Render"/> paints
+    /// them: <c>VcSelectionBrush</c> for the picked run, otherwise <c>VcPanelBackgroundBrush</c>
+    /// for run 0, 2, … and <c>VcWindowBackgroundBrush</c> for the others.
+    /// </summary>
+    public string BackgroundKeyOf(int run)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(run);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(run, _runs.Count);
+        return run == _selectedRun ? "VcSelectionBrush" : _runs[run].IsEven ? "VcPanelBackgroundBrush" : "VcWindowBackgroundBrush";
+    }
+
+    /// <summary>
     /// The texts a run's first line draws, as the test surface reads them: the SHA, the author
     /// (empty while it is not shown), the date, or <c>Not committed yet</c> alone, each with its
     /// left edge and width in the gutter's coordinates.
@@ -165,9 +177,7 @@ public sealed class BlameGutter : Control
             return;
         }
 
-        var panel = Brush("VcPanelBackgroundBrush");
-        var window = Brush("VcWindowBackgroundBrush");
-        var selection = Brush("VcSelectionBrush");
+        var brushes = new Dictionary<string, IBrush>(StringComparer.Ordinal);
         var offset = TopOffset(textView);
         foreach (var line in textView.VisualLines)
         {
@@ -180,7 +190,13 @@ public sealed class BlameGutter : Control
             var run = _runs[index];
             var top = line.VisualTop - textView.VerticalOffset + offset;
             var rect = new Rect(0, Math.Round(top), Bounds.Width, Math.Round(top + line.Height) - Math.Round(top));
-            context.FillRectangle(index == _selectedRun ? selection : run.IsEven ? panel : window, rect);
+            var key = BackgroundKeyOf(index);
+            if (!brushes.TryGetValue(key, out var background))
+            {
+                brushes[key] = background = Brush(key);
+            }
+
+            context.FillRectangle(background, rect);
             if (number != run.FirstLine)
             {
                 continue;

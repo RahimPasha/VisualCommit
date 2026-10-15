@@ -62,6 +62,7 @@ public partial class BlameView : UserControl
         {
             _viewModel.FocusRequested -= OnFocusRequested;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.TextShown -= OnTextShown;
         }
 
         _viewModel = DataContext as BlameViewModel;
@@ -69,6 +70,7 @@ public partial class BlameView : UserControl
         {
             _viewModel.FocusRequested += OnFocusRequested;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.TextShown += OnTextShown;
             FitGutter(Bounds.Width);
         }
 
@@ -76,13 +78,12 @@ public partial class BlameView : UserControl
         base.OnDataContextChanged(e);
     }
 
+    private void OnTextShown(object? sender, EventArgs e) => ShowText();
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
-            case nameof(BlameViewModel.Runs) or nameof(BlameViewModel.Lines) or nameof(BlameViewModel.Highlighting):
-                ShowText();
-                break;
             case nameof(BlameViewModel.SelectedRun):
                 BlameGutter.SelectedRun = _viewModel?.SelectedRun?.Index;
                 break;
@@ -92,18 +93,18 @@ public partial class BlameView : UserControl
         }
     }
 
-    /// <summary>The text and the gutter's runs as the view model has them now.</summary>
+    /// <summary>The text and the gutter's runs as the view model has them now: once per read (<see cref="BlameViewModel.TextShown"/>) and when the page is shown.</summary>
     private void ShowText()
     {
         if (_viewModel is not { } viewModel)
         {
-            BlameText.Show([], null, highlighting: false);
+            BlameText.Show(string.Empty, null, highlighting: false);
             BlameGutter.Runs = [];
             BlameGutter.SelectedRun = null;
             return;
         }
 
-        BlameText.Show(viewModel.Text.Split('\n'), viewModel.Request.Path, viewModel.Highlighting);
+        BlameText.Show(viewModel.Text, viewModel.Request.Path, viewModel.Highlighting);
         BlameGutter.Runs = [.. viewModel.Runs.Select(run => new BlameGutterRun(
             run.FirstLine,
             run.LastLine,

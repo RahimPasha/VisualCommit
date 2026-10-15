@@ -97,25 +97,27 @@ public sealed partial class BlameViewModel : GraphAreaPageViewModel
     [ObservableProperty]
     public partial bool IsError { get; private set; }
 
-    /// <summary>The file's lines, each with its commit, as git gave them (one character per byte, D66).</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Text))]
-    public partial IReadOnlyList<BlameLine> Lines { get; private set; } = [];
+    /// <summary>The file's lines, each with its commit, as git gave them (one character per byte, D66). Set with <see cref="Text"/>, <see cref="Runs"/> and <see cref="Highlighting"/> before <see cref="TextShown"/>.</summary>
+    public IReadOnlyList<BlameLine> Lines { get; private set; } = [];
 
     /// <summary>
     /// The lines as the page shows them, joined by line feeds: <c>BlameText</c>'s document and its
     /// UI Automation value. Decoded as UTF-8 when every line is valid UTF-8, otherwise shown as
-    /// the bytes are, as the diff decides (phase 2).
+    /// the bytes are, as the diff decides (phase 2); decoded once per read.
     /// </summary>
-    public string Text => string.Join('\n', Decode(Lines));
+    public string Text { get; private set; } = string.Empty;
 
     /// <summary>The runs of consecutive lines of one commit, top to bottom (BD12).</summary>
-    [ObservableProperty]
-    public partial IReadOnlyList<BlameRun> Runs { get; private set; } = [];
+    public IReadOnlyList<BlameRun> Runs { get; private set; } = [];
 
     /// <summary>Syntax colours: off for a very large file (D65).</summary>
-    [ObservableProperty]
-    public partial bool Highlighting { get; private set; } = true;
+    public bool Highlighting { get; private set; } = true;
+
+    /// <summary>
+    /// The read's lines, text, runs and highlighting are all set: the view fills the text and the
+    /// gutter once, for all of them together.
+    /// </summary>
+    public event EventHandler? TextShown;
 
     /// <summary>The run whose commit was picked last (its lines have the selection background in the gutter), or null.</summary>
     [ObservableProperty]
@@ -260,7 +262,9 @@ public sealed partial class BlameViewModel : GraphAreaPageViewModel
 
         Highlighting = blame.Lines.Count <= VeryLargeLines && blame.Lines.Sum(line => (long)line.Text.Length + 1) <= VeryLargeBytes;
         Lines = blame.Lines;
+        Text = string.Join('\n', Decode(blame.Lines));
         Runs = RunsOf(blame.Lines);
+        TextShown?.Invoke(this, EventArgs.Empty);
         Body = BlameBody.Text;
         RequestFocus();
     }
