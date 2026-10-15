@@ -277,6 +277,20 @@ by part (WP8) and the real-window pass (WP9), fixing what they find.
     `AllIgnoredAsync` in `GitRepository.cs` should call `GitRepository.FilesUnder`,
     `GitFailureClassifier.BlockedPaths` and `IgnoredAmongAsync` (the undo's `BlockedPaths` misses
     `would be removed by checkout:` blocks and throws git's raw failure instead of refusing).
+  - From WP6 (merged in `2905f55`) and WP7 (being merged on `wip/p5-merge7`), to record in the
+    design: the reflog entry's "Cherry-pick onto {cur}" is disabled when HEAD's graph walk
+    reaches the commit (5.2's "not from the graph" means "not from the graph's selection");
+    "All files" lists the commit's deletions with D and its title counts the rows listed (4.5,
+    BD14); the backups list reads a force push's lease when it loads (two calls per such backup);
+    Enter, Shift+Enter, previous and next during a running search wait until no nearer match can
+    come (3.1); a reload that maps or drops the selection keeps a branch comparison (6.2); a hidden
+    branch's click clears the selection and closes a diff (8.3, FD19). Design 5.2's check that a
+    reflog or backup commit still exists (`cat-file -e <sha>^{commit}`) has no owner yet: it
+    belongs in the operations a reflog row or a backup starts and in `RestoreBackupAsync`. The
+    real-window pass's `Phase3RealWindowPass.B.cs` (steps 11d, 11g, 11h) still expects "2 commits
+    selected" and fails now that two commits show their comparison (WP9). WP6's `c546200` alone
+    fails phase 3's checks 04, 05b, 08, 09, 13, 23, 26, 28 (`4705121` fixes them); WP7's `b494d96`
+    alone fails seven phase 3 checks (`604c672` fixes them).
   - WP5 edited `AppSession.cs` (one `OperationLog` shared with `GitCallLog`) and
     `MainWindowViewModel.cs` (`ActivityLog` with `Follow` and `Dispose`), the lead's files: taken
     over as merged.
