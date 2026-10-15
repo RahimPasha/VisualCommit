@@ -92,8 +92,10 @@ Start:
   (D181), `scripts/time-scripted-check.sh` and CLAUDE.md's Commands; the real-window project's
   link to `Phase5Expectations*.cs`; the record and backup clocks both harnesses fix; the driver
   helpers the checks need.
-- [ ] 6. Phase 5's visual checks written into `docs/test-reports/phase-5.md`, each marked for the
-  real-window pass or not, reviewed independently, and committed before the UI they test.
+- [x] 6. Phase 5's visual checks written into `docs/test-reports/phase-5.md`, each marked for the
+  real-window pass or not, reviewed independently, and committed before the UI they test
+  (`82fd5a0`: 27 checks in parts A, B, F, U and P, 89 test methods, 265 planned scripted pictures;
+  the lead's rulings on its questions are D183, design 15.8).
 
 Git layer:
 
@@ -229,10 +231,9 @@ seven projects (1,389 tests) in 33 min 16 s, beside other agents; `VisualCommit.
 stopped by the hang watchdog: the reflog scenario's template took over 3 minutes to build under
 that load (45 s alone), and one undo test ran 166 s. Being made fast on `wip/p5-speed` (worktree
 `.claude/worktrees/p5-speed`): measure, speed up the template, split the long tests, then one full
-run. Beside it, step 6: the report's checks are being written from design 15.4 (parts A, B, F, U
-and P, each reviewed), assembled into `docs/test-reports/phase-5.md`, and committed before the
-second wave builds any UI. Then the second wave (design 16): WP2b, WP3's app half, WP4, WP5, WP6
-and WP7.
+run. Step 6 is done: the report's checks are committed (`82fd5a0`). Next, the second wave
+(design 16, building to the report's expected results and its decisions, design 15.8): WP2b, WP4
+then WP3's app half, WP5, WP6 and WP7, each with the driver helpers its checks name.
 
 ### Notes for whoever resumes
 
