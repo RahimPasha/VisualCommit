@@ -224,16 +224,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The first wave is merged: WP0 (`e5e25ee`), WP2a (`7316ad0`), WP1 (`4cc2fd8`), WP-S (`ceb5f81`),
-WP3's git half (`b0e8710`) and the flaky test's fix (`3dcba5d`, D182); their design corrections
-are in `docs/phase-5-design.md` (7.12 and inline). The full default run on `3dcba5d` passed six of
-seven projects (1,389 tests) in 33 min 16 s, beside other agents; `VisualCommit.Git.Tests` was
-stopped by the hang watchdog: the reflog scenario's template took over 3 minutes to build under
-that load (45 s alone), and one undo test ran 166 s. Being made fast on `wip/p5-speed` (worktree
-`.claude/worktrees/p5-speed`): measure, speed up the template, split the long tests, then one full
-run. Step 6 is done: the report's checks are committed (`82fd5a0`). Next, the second wave
-(design 16, building to the report's expected results and its decisions, design 15.8): WP2b, WP4
-then WP3's app half, WP5, WP6 and WP7, each with the driver helpers its checks name.
+The first wave, the test speed-ups (`7e7d99d`) and step 6's report (`82fd5a0`) are merged. The
+second wave runs in worktrees under `.claude/worktrees/p5-*`, each built, reviewed and fixed by its
+own agents, to the report's expected results and decisions (design 15.8): WP2b (`wip/p5-wp2b`,
+graph drawing), WP4 (`wip/p5-wp4`, C12), then WP3's app half on top of it (`wip/p5-wp3a`), WP5
+(`wip/p5-wp5`, activity log and shell), WP6 (`wip/p5-wp6`, pages and All files) and WP7
+(`wip/p5-wp7`, search, compare, solo and hide). Then: merge each (WP4 before WP3's app half),
+one full default run, push, read CI; then the third wave writes the report's scripted checks part
+by part (WP8) and the real-window pass (WP9), fixing what they find.
 
 ### Notes for whoever resumes
 
@@ -245,6 +243,13 @@ then WP3's app half, WP5, WP6 and WP7, each with the driver helpers its checks n
   now accepts both (`281dd69`). Phase 5's report lists this under "Changes to expected results"
   (phase 3's report says "exit 1" in 15b's step 2 and in T5). Only 2.36 and 2.55 are on the
   development machine; CI is the only check on 2.56 so far.
+- **Test speed-ups merged (`7e7d99d`)**: `TempRepo` copies a blank git folder made once per
+  process, reads a commit's SHA from its summary line, and sets `maintenance.auto=false` (and
+  `receive.autogc=false` on bare remotes); every test project uses it. `architecture.md`'s TempRepo
+  row is updated at closing. The reflog template takes 88 git calls (11 s alone); the undo tests
+  run one action each. In that branch's full run (beside other agents) two earlier merge-tool
+  tests (`MergeToolTests`' cancelled tool, phase 4's C16) waited a minute for `git mergetool` to
+  start and failed; both pass alone. Watch for them in later full runs.
 - If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
   work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
   after building them; ask the owner before discarding any.
