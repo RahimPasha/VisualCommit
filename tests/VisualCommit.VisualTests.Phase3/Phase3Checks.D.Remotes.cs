@@ -207,7 +207,10 @@ public sealed partial class Phase3ChecksD
         AssertMenu(menu, PartD.TopicTrackingMenu);
         AssertHighlighted(menu, "Check out topic");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+
+        // Phase 5's "Show reflog of topic" makes it too high to fit below the pointer: 4a moves it
+        // (docs/test-reports/phase-5.md, "Changes to expected results": 28c).
+        AssertMenuPlaced(app, menu, pointer);
         app.ClickMenuItem("Change upstream…");
         await app.WaitForDialogAsync<PickDialogViewModel>();
         await app.WaitForAsync(() => PickItems(app).Count == 2, "both candidates");

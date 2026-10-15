@@ -146,7 +146,10 @@ public sealed partial class Phase3ChecksA
         AssertMenu(menu, PartA.UnbornEmptyAreaMenu);
         AssertHighlighted(menu, "Fetch all remotes");
         AssertMenuLook(app, menu, shot);
-        AssertMenuAtPointer(menu, pointer);
+
+        // Phase 5's Show reflog and Show backups make it too high to fit below the pointer: 4a
+        // places it above (docs/test-reports/phase-5.md, "Changes to expected results": 23i).
+        AssertMenuPlaced(app, menu, pointer);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
     }
