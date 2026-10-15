@@ -612,8 +612,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
     /// not pick {short}"), the last also in the error dialog "Cherry-pick stopped" with git's output
     /// and the banner's text (5.1). Every stop is in the warning colour and leaves the rest in
     /// git's list for the banner's Continue. A list git refused at its start was cleared by the
-    /// git layer with <c>--quit</c>, which keeps the user's changes: "Git would overwrite your
-    /// changes: commit or stash them first. Nothing was cherry-picked."
+    /// git layer with <c>--quit</c>, which keeps the user's changes, and says why in C12's words
+    /// (docs/phase-5-design.md 9.3): "Your staged changes prevent the cherry-pick. …" or "{N}
+    /// conflicts prevent the cherry-pick. …" (the revert's alike). Phase 4's "Git would overwrite
+    /// your changes: commit or stash them first. Nothing was cherry-picked." is kept for a refusal
+    /// that names no conflict and no staged change.
     /// </summary>
     private async Task RunListAsync(
         OperationText text,
