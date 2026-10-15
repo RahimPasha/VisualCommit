@@ -29,8 +29,9 @@ public sealed partial class ShellDriver
     /// to <paramref name="bottom"/> (window positions, both included): each pixel is a dash pixel
     /// when it is nearer to <paramref name="lane"/> than to the row's <paramref name="background"/>
     /// (the sum of the channels' differences), a gap pixel otherwise; every run of either kind is
-    /// <see cref="DashRunMinimum"/> to <see cref="DashRunMaximum"/> long except the first and the
-    /// last, which the range cuts; consecutive dashes start <see cref="DashPeriod"/> ±
+    /// <see cref="DashRunMinimum"/> to <see cref="DashRunMaximum"/> long, except that the first and
+    /// the last, which the range may cut, may be shorter (never longer: a cut run is no longer than
+    /// a whole one); consecutive dashes start <see cref="DashPeriod"/> ±
     /// <see cref="DashPeriodTolerance"/> apart throughout, across rows; and there are at least
     /// <paramref name="minimumDashes"/> dashes, a dash cut by the range included. Empty when the
     /// pixels are dashed as the rule says.
@@ -57,14 +58,20 @@ public sealed partial class ShellDriver
         }
 
         var problems = new List<string>();
-        for (var i = 1; i < runs.Count - 1; i++)
+        for (var i = 0; i < runs.Count; i++)
         {
+            // The range may cut the first and the last run short, never long: a cut run is no
+            // longer than a whole one, so a line solid or missing at either end is not dashed.
             var run = runs[i];
-            if (run.Length is < DashRunMinimum or > DashRunMaximum)
+            var isCut = i == 0 || i == runs.Count - 1;
+            if (run.Length > DashRunMaximum || (!isCut && run.Length < DashRunMinimum))
             {
+                var limit = isCut
+                    ? string.Create(CultureInfo.InvariantCulture, $"more than {DashRunMaximum}")
+                    : string.Create(CultureInfo.InvariantCulture, $"not {DashRunMinimum} to {DashRunMaximum}");
                 problems.Add(string.Create(
                     CultureInfo.InvariantCulture,
-                    $"The {(run.IsDash ? "dash" : "gap")} from y {run.Start} to {run.Start + run.Length - 1} is {run.Length} pixels long, not {DashRunMinimum} to {DashRunMaximum}."));
+                    $"The {(run.IsDash ? "dash" : "gap")} from y {run.Start} to {run.Start + run.Length - 1} is {run.Length} pixels long, {limit}."));
             }
         }
 

@@ -59,15 +59,47 @@ public class ShellDriverPhase5GraphTests
     }
 
     [AvaloniaFact]
+    public void The_first_and_the_last_run_may_be_cut_short_but_not_longer_than_a_whole_one()
+    {
+        Assert.Contains(
+            "The dash from y 0 to 6 is 7 pixels long, more than 4.",
+            ShellDriver.DashedPixelProblems(Column("#######...###...###...##"), 0, 0, 23, Lane, Background, minimumDashes: 2));
+        Assert.Contains(
+            "The dash from y 0 to 13 is 14 pixels long, more than 4.",
+            ShellDriver.DashedPixelProblems(Column("##############...###"), 0, 0, 19, Lane, Background, minimumDashes: 2));
+        Assert.Contains(
+            "The dash from y 12 to 19 is 8 pixels long, more than 4.",
+            ShellDriver.DashedPixelProblems(Column("###...###...########"), 0, 0, 19, Lane, Background, minimumDashes: 2));
+
+        // A line missing at the range's top for longer than a gap.
+        Assert.Contains(
+            "The gap from y 0 to 4 is 5 pixels long, more than 4.",
+            ShellDriver.DashedPixelProblems(Column(".....###...###...###"), 0, 0, 19, Lane, Background, minimumDashes: 2));
+
+        // FL0's beta stash (F15 step 2, 14 pixels) with the stash row's line drawn solid and only
+        // the next row's dashed: two dashes, one start, yet not dashed.
+        Assert.Equal(
+            ["The dash from y 0 to 5 is 6 pixels long, more than 4.", "The runs: dash 0-5, gap 6-7, dash 8-10, gap 11-13"],
+            ShellDriver.DashedPixelProblems(Column("######..###..."), 0, 0, 13, Lane, Background, minimumDashes: 2));
+    }
+
+    [AvaloniaFact]
     public void A_solid_line_or_no_line_at_all_is_not_dashed()
     {
         var solid = Column(new string('#', 40));
         var none = Column(new string('.', 40));
 
-        Assert.Contains("There are 1 dashes, fewer than 5.", ShellDriver.DashedPixelProblems(solid, 0, 0, 39, Lane, Background, minimumDashes: 5));
-        Assert.Contains("There are 0 dashes, fewer than 5.", ShellDriver.DashedPixelProblems(none, 0, 0, 39, Lane, Background, minimumDashes: 5));
+        Assert.Equal(
+            ["The dash from y 0 to 39 is 40 pixels long, more than 4.", "There are 1 dashes, fewer than 5.", "The runs: dash 0-39"],
+            ShellDriver.DashedPixelProblems(solid, 0, 0, 39, Lane, Background, minimumDashes: 5));
+        Assert.Equal(
+            ["The gap from y 0 to 39 is 40 pixels long, more than 4.", "There are 0 dashes, fewer than 5.", "The runs: gap 0-39"],
+            ShellDriver.DashedPixelProblems(none, 0, 0, 39, Lane, Background, minimumDashes: 5));
+
+        // Even with no minimum, the one run is longer than a dash or a gap.
+        Assert.NotEmpty(ShellDriver.DashedPixelProblems(solid, 0, 0, 39, Lane, Background, minimumDashes: 0));
         var thrown = Assert.Throws<InvalidOperationException>(() => ShellDriver.AssertDashedPixels(solid, 0, 0, 39, Lane, Background, 5, "lane 0"));
-        Assert.StartsWith("lane 0 at x 0 from y 0 to 39 is not dashed in #ff7c8cff: There are 1 dashes, fewer than 5.", thrown.Message, StringComparison.Ordinal);
+        Assert.StartsWith("lane 0 at x 0 from y 0 to 39 is not dashed in #ff7c8cff: The dash from y 0 to 39 is 40 pixels long, more than 4. There are 1 dashes, fewer than 5.", thrown.Message, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
