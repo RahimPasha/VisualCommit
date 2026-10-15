@@ -38,8 +38,9 @@ public sealed partial class Phase3ChecksA
             "Create branch", "From 88d6b91 \"Main work\"", "Branch name", null, false, "Check out the new branch", true, "Create branch", false));
         Shot(app, "23c-branch-dialog");
         app.Type("topic/new");
+        var calls = app.GitCalls().Count;
         app.Click(app.FindByAutomationId("ConfirmButton"));
-        await app.WaitForAsync(() => repository.OperationStatus.Text == PartA.BranchCreatedMessage, $"\"{PartA.BranchCreatedMessage}\"");
+        await WaitForStatusAsync(app, PartA.BranchCreatedMessage, calls, WriteTimeout);
         await app.WaitForIdleAsync();
         Shot(app, "23d-branch-created");
         Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create topic/new " + PartA.MainWorkSha);
@@ -81,8 +82,9 @@ public sealed partial class Phase3ChecksA
         Assert.True(message.Bounds.Height < 40, $"The stash message box is {message.Bounds.Height} high, not one line.");
         Shot(app, "23e-stash-dialog");
         app.Type("Toolbar stash");
+        calls = app.GitCalls().Count;
         app.Click(app.FindByAutomationId("ConfirmButton"));
-        await app.WaitForAsync(() => repository.OperationStatus.Text == "Stashed the changes", "\"Stashed the changes\"");
+        await WaitForStatusAsync(app, "Stashed the changes", calls, WriteTimeout);
         await app.WaitForIdleAsync();
         await app.WaitForAsync(() => !Graph(app).ShowsWorkingRow && repository.Graph.Count == 9, "the stash in the graph and no working-changes row");
         Shot(app, "23f-stashed");
@@ -110,8 +112,9 @@ public sealed partial class Phase3ChecksA
             NothingToRedo);
 
         // Step 4: Pop: the stash found by its id, popped; the files back.
+        calls = app.GitCalls().Count;
         app.Click(ToolbarButton(app, "PopButton"));
-        await app.WaitForAsync(() => repository.OperationStatus.Text == "Popped stash@{0}", "\"Popped stash@{0}\"");
+        await WaitForStatusAsync(app, "Popped stash@{0}", calls, WriteTimeout);
         await app.WaitForIdleAsync();
         await app.WaitForAsync(() => Graph(app).ShowsWorkingRow && repository.Graph.Count == 8, "the working-changes row and the ops graph");
         var shot = Shot(app, "23g-popped");
