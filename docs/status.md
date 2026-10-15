@@ -253,6 +253,18 @@ by part (WP8) and the real-window pass (WP9), fixing what they find.
   run one action each. In that branch's full run (beside other agents) two earlier merge-tool
   tests (`MergeToolTests`' cancelled tool, phase 4's C16) waited a minute for `git mergetool` to
   start and failed; both pass alone. Watch for them in later full runs.
+- **Lead follow-ups from the second wave** (do them before its full run):
+  - After WP3's app half is merged: replace `UndoUntilRecorded` and `RedoUntilRecorded` in phase
+    3's `Phase3Checks.A.Toolbar.cs` (check 23) with the report's values (after the branch: `Undo
+    creation of topic/new`; after the stash: `Undo stash "Toolbar stash"`; after the pop: `Undo
+    pop of stash "Toolbar stash"`; at the merge step: `PartA.FinishMerge` for both) and remove the
+    two constants. Check 23 fails until then, on purpose (WP5).
+  - Record in design 15.8 or a new 15.9: FD15's first and last dash runs may be shorter than 2 but
+    no longer than 4 (WP2b); AD6 extended: closing the activity log gives the focus to whatever
+    content is shown (graph, page, interactive list, diff or resolver), never the banner (WP5).
+  - WP5 edited `AppSession.cs` (one `OperationLog` shared with `GitCallLog`) and
+    `MainWindowViewModel.cs` (`ActivityLog` with `Follow` and `Dispose`), the lead's files: taken
+    over as merged.
 - If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
   work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
   after building them; ask the owner before discarding any.
