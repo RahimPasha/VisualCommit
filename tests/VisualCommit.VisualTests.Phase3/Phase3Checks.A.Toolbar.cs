@@ -25,7 +25,7 @@ public sealed partial class Phase3ChecksA
 
         // Step 1: the toolbar with a clean ops repository; the pointer rests on Stash.
         Shot(app, "23a-toolbar-with-repository");
-        AssertToolbar(app, new Dictionary<string, string> { ["StashButton"] = PartA.NoChangesToStash });
+        AssertToolbar(app, new Dictionary<string, string> { ["StashButton"] = PartA.NoChangesToStash }, undo: NothingToUndo);
         AssertStatus(app, "Ready");
         var tip = await app.RestPointerOnAsync(ToolbarButton(app, "StashButton"));
         Shot(app, "23b-stash-disabled-tooltip", keepPointer: true);
@@ -137,7 +137,7 @@ public sealed partial class Phase3ChecksA
             ["BranchButton"] = PartA.MakeFirstCommit,
             ["StashButton"] = PartA.MakeFirstCommit,
             ["PopButton"] = PartA.NoStashes,
-        });
+        }, undo: NothingToUndo);
 
         var pointer = new Point(PartA.UnbornAreaPoint.X, PartA.UnbornAreaPoint.Y);
         app.RightClick(pointer);
@@ -168,7 +168,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.AddRemoteFirst,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        });
+        }, undo: NothingToUndo);
     }
 
     /// <summary>Check 23, step 7: the edges scenario, HEAD detached.</summary>
@@ -188,7 +188,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.DetachedPush,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        });
+        }, undo: NothingToUndo);
     }
 
     /// <summary>Check 23, step 8: the edges scenario with loc checked out, whose upstream is local.</summary>
@@ -208,7 +208,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.LocTracksLocal,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        });
+        }, undo: NothingToUndo);
     }
 
     /// <summary>Check 23, step 9: a merge stopped by a conflict.</summary>

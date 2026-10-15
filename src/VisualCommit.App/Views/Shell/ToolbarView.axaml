@@ -8,8 +8,9 @@
 
   <!-- Fetch, Pull, Push, Branch, Stash and Pop act on the active tab's repository
        (docs/phase-3-design.md 4d, D90). A disabled one says why in its tooltip, which the button
-       theme shows on a disabled button too; an enabled one has none. Undo, Redo and Search stay
-       placeholders until phase 5. -->
+       theme shows on a disabled button too; an enabled one has none. Undo, Redo and Search
+       (docs/phase-5-design.md 1.1) have a tooltip while enabled too, which is also their
+       automation help text: what Undo and Redo would act on, Search's key. -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,0,0,1"
@@ -17,7 +18,10 @@
     <DockPanel>
 
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-        <c:ToolbarButton Label="Search" IconData="{StaticResource IconSearch}" IsEnabled="False"
+        <c:ToolbarButton Name="SearchButton" Label="Search" IconData="{StaticResource IconSearch}"
+                         Command="{Binding ActiveTab.Toolbar.SearchCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.SearchToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.SearchToolTip}"
                          AutomationProperties.AutomationId="SearchButton" />
         <c:ToolbarButton Name="ThemeSwitch" Label="Theme"
                          Classes.light="{Binding !IsDarkTheme}"
@@ -27,9 +31,15 @@
       </StackPanel>
 
       <StackPanel Orientation="Horizontal">
-        <c:ToolbarButton Label="Undo" IconData="{StaticResource IconUndo}" IsEnabled="False"
+        <c:ToolbarButton Name="UndoButton" Label="Undo" IconData="{StaticResource IconUndo}"
+                         Command="{Binding ActiveTab.Toolbar.UndoCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.UndoToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.UndoToolTip}"
                          AutomationProperties.AutomationId="UndoButton" />
-        <c:ToolbarButton Label="Redo" IconData="{StaticResource IconRedo}" IsEnabled="False"
+        <c:ToolbarButton Name="RedoButton" Label="Redo" IconData="{StaticResource IconRedo}"
+                         Command="{Binding ActiveTab.Toolbar.RedoCommand}"
+                         ToolTip.Tip="{Binding ActiveTab.Toolbar.RedoToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.RedoToolTip}"
                          AutomationProperties.AutomationId="RedoButton" />
         <Border Classes="toolbarSeparator" />
         <c:ToolbarButton Name="FetchButton" Label="Fetch" IconData="{StaticResource IconFetch}"
