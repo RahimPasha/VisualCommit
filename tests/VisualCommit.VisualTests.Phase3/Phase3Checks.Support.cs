@@ -43,8 +43,9 @@
 //   expectations as a constant that the scripted check asserts (±1) and the pass uses.
 // - Menus are asserted with AssertMenu (the report's notation), AssertHighlighted, AssertMenuShape
 //   and AssertMenuAtPointer (AssertMenuPlaced where phase 4's and phase 5's taller menus no
-//   longer fit below the pointer: every branch, tag, remote, section-header and drop menu); "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the
-//   error dialog with AssertErrorDialogAsync (git's lines word for word only on Git 2.36); the
+//   longer fit below the pointer: every branch, tag, remote, section-header and drop menu);
+//   "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the error
+//   dialog with AssertErrorDialogAsync (git's lines word for word only on Git 2.36); the
 //   in-progress banner with AssertBanner (its text, phase 4's Continue and Skip, Abort, and
 //   whether the buttons stand under the text); the status bar with AssertStatus and AssertBranch.
 using System.Globalization;
