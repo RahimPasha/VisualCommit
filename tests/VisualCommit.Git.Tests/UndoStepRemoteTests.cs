@@ -68,12 +68,10 @@ public class UndoStepRemoteTests
     }
 
     [Fact]
-    public async Task Remotes_added_renamed_given_a_new_url_and_removed_come_back()
+    public async Task A_remote_added_and_given_a_new_url_comes_back()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
-        await repo.GitAsync("config", "remote.pushDefault", "origin");
-        await repo.GitAsync("config", "branch.main.pushRemote", "origin");
         var start = await PictureAsync(repo);
 
         var added = await RecordAsync(repository, UndoScope.AddRemote("mirror"), () => repository.AddRemoteAsync("mirror", repo.SiblingPath("origin.git"), TestCancelled));
@@ -89,11 +87,21 @@ public class UndoStepRemoteTests
         Assert.Equal(withMirror, await PictureAsync(repo));
         await RedoAsync(repository, url);
         Assert.Equal(newUrl, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_remote_renamed_and_removed_comes_back_with_its_keys_and_its_branches()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.GitAsync("config", "remote.pushDefault", "origin");
+        await repo.GitAsync("config", "branch.main.pushRemote", "origin");
+        var start = await PictureAsync(repo);
 
         var renamed = await RecordAsync(repository, UndoScope.RenameRemote("origin", "upstream"), () => repository.RenameRemoteAsync("origin", "upstream", TestCancelled));
         var afterRename = await PictureAsync(repo);
         renamed = await UndoAsync(repository, renamed);
-        Assert.Equal(newUrl, await PictureAsync(repo));
+        Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, renamed);
         Assert.Equal(afterRename, await PictureAsync(repo));
         renamed = await UndoAsync(repository, renamed);

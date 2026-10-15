@@ -9,8 +9,9 @@ namespace VisualCommit.Git.Tests;
 
 /// <summary>
 /// docs/phase-5-design.md 7.3's sequences for checkouts and branches, each action made by the git
-/// call the app makes and recorded as the app records it: a checkout of a branch, of a tag, of a
-/// remote branch into a new tracking branch, the automatic stash's checkout (9.2, D166), D91's
+/// call the app makes and recorded as the app records it: a checkout of a branch, of a tag, one
+/// that left a detached HEAD's commits, of a remote branch into a new tracking branch, the
+/// automatic stash's checkout (9.2, D166), D91's
 /// "Stash changes and check out", a branch created with and without its checkout, renamed,
 /// deleted with its upstream, fast-forwarded, an interactive rebase, a squash, a pull and a merge
 /// finished after its conflict. Each is undone to the state before it and redone to the state after.
@@ -42,6 +43,33 @@ public class UndoStepBranchTests
         Assert.Equal(onFeature, await PictureAsync(repo));
         await RedoAsync(repository, tag);
         Assert.Equal(detached, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_checkout_that_left_a_detached_heads_commits_switches_back_to_them()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.GitAsync("checkout", "--quiet", "--detach", "HEAD~1");
+        var left = await repo.CommitFileAsync("d.txt", "detached\n", "d1");
+        repo.WriteFile("scratch.txt", "scratch\n");
+        var start = await PictureAsync(repo);
+
+        // The app saves the commits it leaves behind (phase 3's detached-<time>) before the checkout.
+        var entry = await RecordAsync(repository, UndoScope.Checkout("main", null), async () =>
+        {
+            var backup = await repository.SaveBackupRefsAsync(new BackupRequest("detached", [new BackupEntry(null, left)]), TestCancelled);
+            UndoCapture.Backups(backup.Refs);
+            await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
+        });
+        var done = await PictureAsync(repo);
+        Assert.Single(entry.Captured.Backups);
+
+        entry = await UndoAsync(repository, entry);
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(left, (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim());
+        await RedoAsync(repository, entry);
+        Assert.Equal(done, await PictureAsync(repo));
     }
 
     [Fact]
@@ -128,7 +156,7 @@ public class UndoStepBranchTests
     }
 
     [Fact]
-    public async Task Branches_created_renamed_deleted_and_fast_forwarded_come_back()
+    public async Task A_branch_created_from_a_remote_branch_is_deleted_with_its_upstream_keys()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -142,46 +170,75 @@ public class UndoStepBranchTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, created);
         Assert.Equal(withTracked, await PictureAsync(repo));
+    }
 
-        // Created and checked out.
+    [Fact]
+    public async Task A_branch_created_and_checked_out_is_left_and_deleted()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var start = await PictureAsync(repo);
+
         var checkedOut = await RecordAsync(repository, UndoScope.CreateBranch("topic", "main"), () => repository.CreateBranchAsync("topic", "HEAD~1", checkout: true, cancellationToken: TestCancelled));
         var onTopic = await PictureAsync(repo);
         checkedOut = await UndoAsync(repository, checkedOut);
-        Assert.Equal(withTracked, await PictureAsync(repo));
+        Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, checkedOut);
         Assert.Equal(onTopic, await PictureAsync(repo));
+    }
 
-        // Renamed, the checked-out branch and its keys with it.
-        var renamed = await RecordAsync(repository, UndoScope.RenameBranch("topic", "topic2"), () => repository.RenameBranchAsync("topic", "topic2", TestCancelled));
+    [Fact]
+    public async Task The_checked_out_branch_renamed_is_renamed_back_with_its_keys()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.GitAsync("checkout", "--quiet", "feature");
+        var start = await PictureAsync(repo);
+
+        var renamed = await RecordAsync(repository, UndoScope.RenameBranch("feature", "feature2"), () => repository.RenameBranchAsync("feature", "feature2", TestCancelled));
         var afterRename = await PictureAsync(repo);
+        Assert.Contains("branch.feature2.merge", afterRename.Config, StringComparison.Ordinal);
         renamed = await UndoAsync(repository, renamed);
-        Assert.Equal(onTopic, await PictureAsync(repo));
+        Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, renamed);
         Assert.Equal(afterRename, await PictureAsync(repo));
+    }
 
-        // Deleted with every key of its: they come back with it, and a reflog of its own.
+    [Fact]
+    public async Task A_deleted_branch_comes_back_with_its_keys_and_a_reflog_of_its_own()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
         await repo.GitAsync("config", "branch.feature.description", "The feature");
-        var beforeDelete = await PictureAsync(repo);
+        var start = await PictureAsync(repo);
+
         var deleted = await RecordAsync(repository, UndoScope.DeleteBranch("feature"), () => repository.DeleteBranchAsync("feature", TestCancelled));
         var afterDelete = await PictureAsync(repo);
         deleted = await UndoAsync(repository, deleted);
-        Assert.Equal(beforeDelete, await PictureAsync(repo));
+        Assert.Equal(start, await PictureAsync(repo));
         Assert.Contains("VisualCommit: undo deletion of feature", (await repo.GitAsync("log", "-g", "--format=%gs", "refs/heads/feature")).StandardOutput, StringComparison.Ordinal);
         await RedoAsync(repository, deleted);
         Assert.Equal(afterDelete, await PictureAsync(repo));
+    }
 
-        // A branch that is not checked out, fast-forwarded.
+    [Fact]
+    public async Task A_branch_fast_forwarded_without_its_checkout_is_set_back()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var start = await PictureAsync(repo);
+
         var main = (await repo.GitAsync("rev-parse", "main")).StandardOutput.Trim();
         var fastForward = await RecordAsync(repository, UndoScope.FastForwardBranch("behind"), () => repository.FastForwardBranchAsync("behind", main, TestCancelled));
         var forwarded = await PictureAsync(repo);
         fastForward = await UndoAsync(repository, fastForward);
-        Assert.Equal(afterDelete, await PictureAsync(repo));
+        Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, fastForward);
         Assert.Equal(forwarded, await PictureAsync(repo));
     }
 
     [Fact]
-    public async Task An_interactive_rebase_and_a_squash_are_undone_and_redone()
+    public async Task An_interactive_rebase_is_undone_and_redone()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -198,14 +255,25 @@ public class UndoStepBranchTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, rebase);
         Assert.Equal(rebased, await PictureAsync(repo));
+    }
 
+    [Fact]
+    public async Task A_squash_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.CheckoutAsync("feature");
+        await repo.CommitFileAsync("f.txt", "f2\n", "f3");
+        var start = await PictureAsync(repo);
+
+        // The last two commits joined into one, as the graph's Squash builds its plan.
         var basis = (await repo.GitAsync("rev-parse", "HEAD~2")).StandardOutput.Trim();
         var pair = await repository.ReadRebaseListAsync(basis, "refs/heads/feature", fromCommit: true, cancellationToken: TestCancelled);
         var squashPlan = RebaseTestSupport.Plan(pair, "refs/heads/feature", (RebaseAction.Pick, null), (RebaseAction.Fixup, null));
         var squash = await RecordAsync(repository, UndoScope.Squash(2, "feature"), () => repository.InteractiveRebaseAsync(squashPlan, cancellationToken: TestCancelled));
         var squashed = await PictureAsync(repo);
         squash = await UndoAsync(repository, squash);
-        Assert.Equal(rebased, await PictureAsync(repo));
+        Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, squash);
         Assert.Equal(squashed, await PictureAsync(repo));
     }
