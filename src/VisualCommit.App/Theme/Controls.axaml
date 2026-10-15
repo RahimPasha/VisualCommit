@@ -334,4 +334,13 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- A tooltip takes no input. Tooltips are drawn on the window's overlay layer (D105, App's
+       static constructor) and slide back inside the window at its edge: at the bottom edge the
+       tooltip of a status bar control lies over the pointer. A press there reaches the control
+       under it, as a user who rested on the control until its tooltip showed expects, instead of
+       closing the tooltip and doing nothing else; the control keeps its hover look meanwhile. -->
+  <Style Selector="ToolTip">
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
 </Styles>
