@@ -147,8 +147,9 @@ public class RepositoryOperationsMergeTests
         await app.Operations.RevertAsync(head);
         await app.Operations.CheckoutAndMergeAsync("refs/heads/feature/ff", "refs/heads/feature/alpha");
 
+        // "Check out and merge" is refused at its checkout: C12's title for a refusal before git (the report's PD5).
         Assert.Equal(
-            [("Merge failed", "Finish or abort the merge first"), ("Cherry-pick failed", "Finish or abort the merge first"), ("Revert failed", "Finish or abort the merge first"), ("Merge failed", "Finish or abort the merge first")],
+            [("Merge failed", "Finish or abort the merge first"), ("Cherry-pick failed", "Finish or abort the merge first"), ("Revert failed", "Finish or abort the merge first"), ("Checkout blocked", "Finish or abort the merge first")],
             app.Dialogs.Errors.Select(dialog => (dialog.Title, dialog.Summary)));
         Assert.All(app.Dialogs.Errors, dialog => Assert.False(dialog.HasOutput));
         Assert.Equal(("Check out feature/ff and merge feature/alpha failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
@@ -196,7 +197,7 @@ public class RepositoryOperationsMergeTests
         await app.Operations.CheckoutAndMergeAsync("refs/heads/feature/other", "refs/heads/feature/clash");
 
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Checkout blocked", "Your changes to these files would be overwritten by checking out feature/other."), (dialog.Title, dialog.Summary));
+        Assert.Equal(("Checkout blocked", "1 conflict prevents checkout. Commit, stash, or discard your changes first."), (dialog.Title, dialog.Summary));
         Assert.False(dialog.HasExtraAction);
         Assert.Equal("Check out feature/other and merge feature/clash failed", app.StatusText);
         Assert.Equal("main", await repo.CurrentBranchAsync());

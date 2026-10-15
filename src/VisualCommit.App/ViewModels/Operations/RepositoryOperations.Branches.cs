@@ -3,7 +3,10 @@
 // of RepositoryOperations.Run.cs. Its tests are tests/VisualCommit.App.Tests/RepositoryOperations{Checkout,Branches,Merge,History}Tests.cs.
 // Phase 4 (WP4) picks and reverts several commits with one git call that takes the list
 // (docs/phase-4-design.md section 4, D136) and has Abort check out again the branch a "Check out
-// and rebase" left (1.3).
+// and rebase" left (1.3). Phase 5's C12 (WP4, docs/phase-5-design.md section 9) gives every
+// checkout here its refusals before git and 9.3's message, the checkout of a commit the branch
+// reaches its automatic stash, and merges, picks and reverts their refusal texts; those parts are
+// in RepositoryOperations.Protect.cs.
 
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
@@ -19,6 +22,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
     // ---- Checkouts (2.1 to 2.3, 2.31, 4g) ---------------------------------------------------------
 
     /// <inheritdoc cref="IRepositoryActions.CheckoutAsync"/>
+    /// <remarks>
+    /// C12 (docs/phase-5-design.md 9.1): a commit or a tag the current branch reaches is checked out
+    /// after the automatic stash (<see cref="CheckoutWithAutoStashAsync"/>); every other checkout
+    /// runs as phase 3's, refused before git while an operation is in progress or files conflict,
+    /// and a refusal for changes in the way is shown with 9.3's message.
+    /// </remarks>
     public Task CheckoutAsync(string target)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
@@ -26,17 +35,35 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var text = OperationTexts.CheckOut(plan.Name);
         return GuardAsync(text, async () =>
         {
+            if (IsClosed)
+            {
+                return;
+            }
+
+            if (await AutoStashTargetAsync(target) is { } autoStash)
+            {
+                await CheckoutWithAutoStashAsync(plan.Name, autoStash, text);
+                return;
+            }
+
             if (await ConfirmLeavingDetachedHeadAsync() is not { } backUpDetached)
             {
                 return;
             }
 
+            FailureDisplay? display = null;
             await RunAsync(
                 text,
                 OperationKind.Local,
                 RefreshScope.Refs,
                 async context =>
                 {
+                    if (await RefuseCheckoutAsync(text) is { } blocked)
+                    {
+                        display = blocked.Display;
+                        return blocked.Report;
+                    }
+
                     if (await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
                         return refusal;
@@ -46,10 +73,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 },
                 new RunOptions
                 {
-                    DescribeFailure = failure => CheckoutFailureDisplay(failure, target, offerStash: true) is { Extra: { } extra } display && backUpDetached
+                    DescribeFailure = failure => display ?? (CheckoutFailureDisplay(failure, target, offerStash: true) is { Extra: { } extra } shown && backUpDetached
                         // The detached commits were confirmed and backed up already: 2.31 does not ask again.
-                        ? display with { Extra = extra with { Run = () => StashAndCheckoutAsync(target, detachedBackedUp: true) } }
-                        : CheckoutFailureDisplay(failure, target, offerStash: true),
+                        ? shown with { Extra = extra with { Run = () => StashAndCheckoutAsync(target, detachedBackedUp: true) } }
+                        : CheckoutFailureDisplay(failure, target, offerStash: true)),
                     Undo = UndoScope.Checkout(plan.Name, Refs?.Head.BranchName, CreatedBranchOf(target)),
                 });
         });
@@ -168,10 +195,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 RefreshScope.Refs,
                 async context =>
                 {
-                    if (await RefuseWhileInProgressAsync(text) is { } refusal)
+                    // Its checkout's refusals before git (C12, design 9.3, the report's PD5).
+                    if (await RefuseCheckoutAsync(text) is { } blocked)
                     {
-                        display = new FailureDisplay(mergeText.ErrorTitle, refusal.Failure!.Summary);
-                        return refusal;
+                        display = blocked.Display;
+                        return blocked.Report;
                     }
 
                     var options = NetworkOptions.From(context);
@@ -189,8 +217,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     }
                     catch (GitException mergeFailure)
                     {
-                        display = new FailureDisplay(mergeText.ErrorTitle, mergeText.FailureSummary);
-                        return Failed(text, FailureOf(mergeFailure, mergeText.FailureSummary));
+                        var failure = FailureOf(mergeFailure, mergeText.FailureSummary);
+                        display = BlockedByChangesDisplay(failure, mergeText, "merge") ?? new FailureDisplay(mergeText.ErrorTitle, mergeText.FailureSummary);
+                        return Failed(text, failure with { Summary = display.Summary });
                     }
                 },
                 new RunOptions
@@ -209,27 +238,31 @@ public sealed partial class RepositoryOperations : IInProgressActions
         new(OperationTexts.StashAndCheckOutButton, () => StashAndCheckoutAsync(target));
 
     /// <summary>
-    /// The dialog of a checkout's failure (2.1 to 2.3): "Checkout blocked" for tracked changes, with
-    /// "Stash changes and check out" when <paramref name="offerStash"/> (not after 4g's drop), or
-    /// for untracked files in the way, without it; null for any other failure (2.33's default).
+    /// The dialog of a checkout's failure (2.1 to 2.3, C12's 9.3): "Checkout blocked" with D153's
+    /// sentence and git's count of the paths in the way (<see cref="GitFailure.BlockedPaths"/>, at
+    /// least 1), git's output naming them. For tracked changes alone it offers "Stash changes and
+    /// check out" when <paramref name="offerStash"/> (D80, D91: phase 3's checkouts of
+    /// <see cref="CheckoutAsync"/>, not 4g's drop, "Create branch" or an automatic stash's
+    /// refusal); untracked files or a folder in the way offer nothing (D91). Null for any other
+    /// failure (2.33's default).
     /// </summary>
     /// <param name="failure">The failure.</param>
-    /// <param name="target">What is checked out, as <see cref="CheckoutAsync"/> names it.</param>
+    /// <param name="target">What is checked out, as <see cref="CheckoutAsync"/> names it: what the extra button checks out.</param>
     /// <param name="offerStash">Offer "Stash changes and check out".</param>
     public FailureDisplay? CheckoutFailureDisplay(GitFailure failure, string target, bool offerStash)
     {
         ArgumentNullException.ThrowIfNull(failure);
         ArgumentNullException.ThrowIfNull(target);
-        var name = ShortName(target);
+        var summary = OperationTexts.ConflictsPreventCheckout(Math.Max(1, failure.BlockedPaths.Count));
         return failure.Kind switch
         {
             GitFailureKind.CheckoutBlockedByLocalChanges => new FailureDisplay(
                 OperationTexts.CheckoutBlockedTitle,
-                OperationTexts.CheckoutBlockedByChanges(name),
+                summary,
                 offerStash ? StashAndCheckoutAction(target) : null),
-            GitFailureKind.CheckoutBlockedByUntrackedFiles => new FailureDisplay(
+            GitFailureKind.CheckoutBlockedByUntrackedFiles or GitFailureKind.CheckoutBlockedByUntrackedFolder => new FailureDisplay(
                 OperationTexts.CheckoutBlockedTitle,
-                OperationTexts.CheckoutBlockedByUntrackedFiles(name)),
+                summary),
             _ => null,
         };
     }
@@ -277,12 +310,20 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 backUpDetached = confirmed;
             }
 
+            FailureDisplay? display = null;
             await RunAsync(
                 text,
                 OperationKind.Local,
                 RefreshScope.Refs,
                 async operation =>
                 {
+                    // Its checkout's refusals before git (C12, design 9.3); git creates no branch then.
+                    if (checkout && await RefuseCheckoutAsync(text) is { } blocked)
+                    {
+                        display = blocked.Display;
+                        return blocked.Report;
+                    }
+
                     // HEAD as it is now, not as it was when the dialog opened (2.1's rule, D83).
                     if (checkout && await GuardDetachedHeadAsync(text, backUpDetached, keptBy: startPoint) is { } refusal)
                     {
@@ -292,7 +333,13 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
                     return OperationReport.Done(OperationTexts.CreatedBranch(name, checkout));
                 },
-                new RunOptions { Undo = UndoScope.CreateBranch(name, Refs?.Head.BranchName) });
+                new RunOptions
+                {
+                    // A refused checkout shows 9.3's message without "Stash changes and check out"
+                    // (the report's PD4): the branch it would check out does not exist.
+                    DescribeFailure = failure => display ?? (checkout ? CheckoutFailureDisplay(failure, startPoint, offerStash: false) : null),
+                    Undo = UndoScope.CreateBranch(name, Refs?.Head.BranchName),
+                });
         });
     }
 
@@ -411,7 +458,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                 return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
             },
-            new RunOptions { Undo = UndoScope.Merge(source, current, fastForwardOnly: mode == MergeMode.FastForwardOnly) }));
+            new RunOptions
+            {
+                // C12: git refused for changes in the way (design 9.3's second table).
+                DescribeFailure = failure => BlockedByChangesDisplay(failure, text, "merge"),
+                Undo = UndoScope.Merge(source, current, fastForwardOnly: mode == MergeMode.FastForwardOnly),
+            }));
     }
 
     // ---- Reset (2.11) -----------------------------------------------------------------------------
@@ -509,7 +561,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return Failed(text, FailureOfLastCall(context, command => IsCallOn(command, "cherry-pick", commit), display.Summary));
                 }
             },
-            new RunOptions { DescribeFailure = _ => display, Undo = UndoScope.CherryPick([commit], seen?.BranchName) }));
+            new RunOptions
+            {
+                DescribeFailure = failure => display ?? BlockedByChangesDisplay(failure, text, "cherry-pick"),
+                Undo = UndoScope.CherryPick([commit], seen?.BranchName),
+            }));
     }
 
     /// <inheritdoc cref="IRepositoryActions.CherryPickSeveralAsync"/>
@@ -601,9 +657,13 @@ public sealed partial class RepositoryOperations : IInProgressActions
             new RunOptions
             {
                 HasSeveralSteps = true,
-                DescribeFailure = failure => failure.GitOutput.Contains("would be overwritten", StringComparison.Ordinal)
-                    ? new FailureDisplay(text.ErrorTitle, OperationTexts.ListRefusedAtStart(kind))
-                    : null,
+
+                // A list git refused at its start for changes in the way: C12's words (design 9.3),
+                // or phase 4's sentence for a refusal that names no conflict and no staged change.
+                DescribeFailure = failure => BlockedByChangesDisplay(failure, text, kind == InProgressKind.Revert ? "revert" : "cherry-pick")
+                    ?? (failure.GitOutput.Contains("would be overwritten", StringComparison.Ordinal)
+                        ? new FailureDisplay(text.ErrorTitle, OperationTexts.ListRefusedAtStart(kind))
+                        : null),
                 Undo = undo,
             });
         await FinishAsync(notice, new SelectionAfter());
@@ -657,7 +717,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         _ => OperationReport.Conflicts(OperationTexts.RevertStoppedEmpty(commit, current)),
                     };
                 },
-                new RunOptions { Undo = UndoScope.Revert([commit], seen?.BranchName) });
+                new RunOptions
+                {
+                    DescribeFailure = failure => BlockedByChangesDisplay(failure, text, "revert"),
+                    Undo = UndoScope.Revert([commit], seen?.BranchName),
+                });
         });
     }
 

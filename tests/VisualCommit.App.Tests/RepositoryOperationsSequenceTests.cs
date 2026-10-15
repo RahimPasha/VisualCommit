@@ -535,8 +535,9 @@ public class RepositoryOperationsSequenceTests
 
         await app.Operations.CherryPickSeveralAsync([await app.ShaAsync("feature/picks~2"), await app.ShaAsync("feature/picks")]);
 
+        // Phase 5's C12 words for a staged change (docs/phase-5-design.md 9.3: "cherry-pick, revert (one or a list)").
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Cherry-pick failed", "Git would overwrite your changes: commit or stash them first. Nothing was cherry-picked."), (dialog.Title, dialog.Summary));
+        Assert.Equal(("Cherry-pick failed", "Your staged changes prevent the cherry-pick. Commit, stash, or unstage them first."), (dialog.Title, dialog.Summary));
         Assert.NotEqual(string.Empty, dialog.Output);
         Assert.Equal(("Cherry-pick 2 commits failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.Equal(head, await repo.HeadAsync());

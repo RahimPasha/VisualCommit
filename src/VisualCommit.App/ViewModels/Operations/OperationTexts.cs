@@ -128,13 +128,7 @@ public static partial class OperationTexts
     /// <summary>"HEAD is now detached at a1b2c3d" (2.3).</summary>
     public static string DetachedAt(string sha) => $"HEAD is now detached at {Short(sha)}";
 
-    /// <summary>"Checkout blocked" for tracked changes: the dialog offers <see cref="StashAndCheckOutButton"/> (2.1).</summary>
-    public static string CheckoutBlockedByChanges(string target) =>
-        $"Your changes to these files would be overwritten by checking out {target}.";
-
-    /// <summary>"Checkout blocked" for untracked files in the way: no extra button (2.1, D91).</summary>
-    public static string CheckoutBlockedByUntrackedFiles(string target) =>
-        $"Untracked files are in the way: {target} has files with the same names. Move or delete them, then check out again.";
+    // "Checkout blocked"'s summaries are C12's (docs/phase-5-design.md 9.3), in OperationTexts.Protect.cs.
 
     /// <summary>The confirmation before any checkout while HEAD is detached on <paramref name="count"/> commits that nothing else reaches (2.1).</summary>
     public static ConfirmationRequest ConfirmLeaveDetachedCommits(int count) => new(

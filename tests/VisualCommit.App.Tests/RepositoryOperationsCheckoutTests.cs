@@ -60,7 +60,7 @@ public class RepositoryOperationsCheckoutTests
         await app.Operations.CheckoutAsync("refs/heads/feature/other");
 
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Checkout blocked", "Your changes to these files would be overwritten by checking out feature/other.", "Stash changes and check out"),
+        Assert.Equal(("Checkout blocked", "1 conflict prevents checkout. Commit, stash, or discard your changes first.", "Stash changes and check out"),
             (dialog.Title, dialog.Summary, dialog.ExtraAction));
         Assert.Equal("In blocked", dialog.RepositoryText);
         Assert.Equal("git switch --no-guess feature/other", dialog.Command);
@@ -115,8 +115,9 @@ public class RepositoryOperationsCheckoutTests
 
         await app.Operations.CheckoutAsync("refs/heads/feature/addfile");
 
+        // C12 (design 9.3): one path under each of git's two headers.
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Checkout blocked", "Untracked files are in the way: feature/addfile has files with the same names. Move or delete them, then check out again."),
+        Assert.Equal(("Checkout blocked", "2 conflicts prevent checkout. Commit, stash, or discard your changes first."),
             (dialog.Title, dialog.Summary));
         Assert.False(dialog.HasExtraAction);
         Assert.Contains("error: Your local changes to the following files would be overwritten by checkout:", dialog.Output, StringComparison.Ordinal);
@@ -129,19 +130,23 @@ public class RepositoryOperationsCheckoutTests
     }
 
     [Fact]
-    public async Task A_checkout_git_refuses_for_another_reason_shows_checkout_failed_with_gits_words()
+    public async Task A_checkout_during_a_merge_is_refused_before_git_with_the_menus_reason()
     {
+        // C12 (design 9.3): git would refuse with "cannot switch branch while merging"; the app
+        // refuses first, as "Checkout blocked" with no git output (the report's PD5, phase 3's check 9).
         using var repo = await Scenarios.StoppedAsync(Stopped.Merge);
         using var app = await OperationsHarness.OpenAsync(repo);
         app.Dialogs.CloseError();
+        var calls = app.Calls.Snapshot().Count;
 
         await app.Operations.CheckoutAsync("refs/heads/feature/alpha");
 
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Checkout failed", "Git could not check out feature/alpha."), (dialog.Title, dialog.Summary));
-        Assert.Contains("fatal: cannot switch branch while merging", dialog.Output, StringComparison.Ordinal);
-        Assert.Equal("git switch --no-guess feature/alpha", dialog.Command);
+        Assert.Equal(("Checkout blocked", "Finish or abort the merge first"), (dialog.Title, dialog.Summary));
+        Assert.False(dialog.HasOutput);
+        Assert.False(dialog.HasCommand);
         Assert.False(dialog.HasExtraAction);
+        Assert.DoesNotContain(app.Calls.Snapshot().Skip(calls), call => call.CommandText.StartsWith("git switch", StringComparison.Ordinal));
         Assert.Equal(("Check out feature/alpha failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Equal(InProgressKind.Merge, app.Operations.Status.InProgress.Kind);
@@ -329,7 +334,7 @@ public class RepositoryOperationsCheckoutTests
         var run = operations.CheckoutAsync("refs/heads/feature/addfile");
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
         Assert.Equal("Checkout blocked", TextOf(app, "ErrorTitle"));
-        Assert.Equal("Untracked files are in the way: feature/addfile has files with the same names. Move or delete them, then check out again.", TextOf(app, "ErrorSummary"));
+        Assert.Equal("2 conflicts prevent checkout. Commit, stash, or discard your changes first.", TextOf(app, "ErrorSummary"));
         Assert.Equal("In blocked", TextOf(app, "ErrorRepository"));
         Assert.Contains("newfile.txt", TextOf(app, "ErrorOutput"), StringComparison.Ordinal);
         Assert.False(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
@@ -340,7 +345,7 @@ public class RepositoryOperationsCheckoutTests
 
         run = operations.CheckoutAsync("refs/heads/feature/other");
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
-        Assert.Equal("Your changes to these files would be overwritten by checking out feature/other.", TextOf(app, "ErrorSummary"));
+        Assert.Equal("1 conflict prevents checkout. Commit, stash, or discard your changes first.", TextOf(app, "ErrorSummary"));
         Assert.Equal("Stash changes and check out", ((Button)app.FindByAutomationId("ErrorExtraButton")).Content);
         Assert.True(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
         TestPictures.Save(app, "wp7-14b-tracked-changes-in-the-way");
@@ -371,10 +376,12 @@ public class RepositoryOperationsCheckoutTests
         Assert.False(app.FindByAutomationId("BannerAbortButton").IsEffectivelyVisible);
         TestPictures.Save(app, "wp7-14e-stash-conflict-banner");
 
+        // C12 (design 9.3): the conflicted file refuses the checkout before git, with no output.
         run = operations.CheckoutAsync("refs/heads/main");
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
-        Assert.Equal(("Checkout failed", "Git could not check out main."), (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
-        Assert.StartsWith("error: you need to resolve your current index first", TextOf(app, "ErrorOutput"), StringComparison.Ordinal);
+        Assert.Equal(("Checkout blocked", "Resolve the conflicts first"), (TextOf(app, "ErrorTitle"), TextOf(app, "ErrorSummary")));
+        Assert.False(app.FindByAutomationId("ErrorOutput").IsEffectivelyVisible);
+        Assert.False(app.FindByAutomationId("ErrorCopyButton").IsEffectivelyVisible);
         Assert.False(app.FindByAutomationId("ErrorExtraButton").IsEffectivelyVisible);
         Assert.Equal("Check out main failed", TextOf(app, "OperationStatus"));
         TestPictures.Save(app, "wp7-14f-checkout-failed");

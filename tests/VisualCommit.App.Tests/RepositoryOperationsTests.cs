@@ -104,7 +104,7 @@ public class RepositoryOperationsTests
 
         var dialog = Assert.Single(app.Dialogs.Errors);
         Assert.Equal("Checkout blocked", dialog.Title);
-        Assert.Equal("Your changes to these files would be overwritten by checking out feature/other.", dialog.Summary);
+        Assert.Equal("1 conflict prevents checkout. Commit, stash, or discard your changes first.", dialog.Summary);
         Assert.Equal("Stash changes and check out", dialog.ExtraAction);
         Assert.Contains("Your local changes to the following files would be overwritten by checkout", dialog.Output, StringComparison.Ordinal);
         Assert.Equal(["Stash changes and check out"], clicked);
@@ -129,8 +129,9 @@ public class RepositoryOperationsTests
             },
             new RunOptions { DescribeFailure = failure => app.Operations.CheckoutFailureDisplay(failure, "refs/heads/feature/addfile", offerStash: true) });
 
+        // C12 (design 9.3): git names notes.txt under its tracked block and newfile.txt under its untracked one.
         var dialog = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal(("Checkout blocked", OperationTexts.CheckoutBlockedByUntrackedFiles("feature/addfile")), (dialog.Title, dialog.Summary));
+        Assert.Equal(("Checkout blocked", "2 conflicts prevent checkout. Commit, stash, or discard your changes first."), (dialog.Title, dialog.Summary));
         Assert.False(dialog.HasExtraAction);
         Assert.Equal("Check out feature/addfile failed", app.StatusText);
         app.AssertScriptFollowed();
@@ -148,9 +149,11 @@ public class RepositoryOperationsTests
         static GitFailure Fail(GitFailureKind kind) => new(kind, "x failed.", "out", "git x", 1);
 
         var blocked = operations.CheckoutFailureDisplay(Fail(GitFailureKind.CheckoutBlockedByLocalChanges), "refs/remotes/origin/feature/x", offerStash: true)!;
-        Assert.Equal(("Checkout blocked", "Your changes to these files would be overwritten by checking out origin/feature/x.", "Stash changes and check out"),
+        Assert.Equal(("Checkout blocked", "1 conflict prevents checkout. Commit, stash, or discard your changes first.", "Stash changes and check out"),
             (blocked.Title, blocked.Summary, blocked.Extra!.Label));
         Assert.Null(operations.CheckoutFailureDisplay(Fail(GitFailureKind.CheckoutBlockedByLocalChanges), "refs/heads/b", offerStash: false)!.Extra);
+        Assert.Null(operations.CheckoutFailureDisplay(Fail(GitFailureKind.CheckoutBlockedByUntrackedFiles), "refs/heads/b", offerStash: true)!.Extra);
+        Assert.Null(operations.CheckoutFailureDisplay(Fail(GitFailureKind.CheckoutBlockedByUntrackedFolder), "refs/heads/b", offerStash: true)!.Extra);
         Assert.Null(operations.CheckoutFailureDisplay(Fail(GitFailureKind.Other), "refs/heads/b", offerStash: true));
 
         var rejected = operations.PushFailureDisplay(Fail(GitFailureKind.PushRejected), "main", "origin", currentToUpstream: true)!;
