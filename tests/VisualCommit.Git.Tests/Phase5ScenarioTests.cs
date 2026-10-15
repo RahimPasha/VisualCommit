@@ -504,13 +504,20 @@ public class Phase5ScenarioTests
     }
 
     [Fact]
-    public async Task Reflog_backups_the_clean_up_removes_by_the_harness_clock_are_the_two_old_ones_and_one_of_51_young_ones()
+    public async Task Reflog_backups_the_clean_up_removes_by_the_harness_clock_are_the_two_old_ones()
     {
         using var repo = await Scenarios.ReflogAsync();
         var repository = await OpenAsync(repo);
         repository.BackupClock = BackupClock.Fixed(AppClocks.HarnessTime);
         Assert.Equal(Reflog.OldBackups, await repository.FindBackupsToRemoveAsync(BackupRetention.Default, new HashSet<string>(), cancellationToken: TestCancelled));
 
+        // The backups the checks make are named later than all of the scenario's.
+        Assert.True(BackupClock.Fixed(AppClocks.HarnessTime).NextName() > new DateTimeOffset(2026, 1, 1, 23, 59, 59, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task Reflog_backups_the_clean_up_removes_with_51_young_ones_are_the_two_old_ones_and_the_oldest_young_one()
+    {
         using var many = await Scenarios.ReflogManyBackupsAsync();
         var manyRepository = await OpenAsync(many);
         manyRepository.BackupClock = BackupClock.Fixed(AppClocks.HarnessTime);
@@ -523,7 +530,11 @@ public class Phase5ScenarioTests
             ],
             removed.Select(backup => backup.Describe(BackupRetention.Default)));
         Assert.Empty(await manyRepository.FindBackupsToRemoveAsync(BackupRetention.Default, new HashSet<string>(), cancellationToken: TestCancelled));
+    }
 
+    [Fact]
+    public async Task Old_and_many_backups_added_to_a_scenario_without_backups_are_removed_as_the_reflog_scenarios()
+    {
         // The same on a scenario without backups of its own (the conflicts scenario, for check A2).
         using var conflicts = await Scenarios.ConflictsAsync();
         await Scenarios.AddOldAndManyBackupsAsync(conflicts);
@@ -533,9 +544,6 @@ public class Phase5ScenarioTests
             [.. Reflog.OldBackups, Reflog.FirstFillerBackup],
             await conflictsRepository.FindBackupsToRemoveAsync(BackupRetention.Default, new HashSet<string>(), cancellationToken: TestCancelled));
         Assert.Equal(Reflog.YoungBackupsForCount + Reflog.OldBackups.Count, (await conflicts.BackupRefsAsync()).Count);
-
-        // The backups the checks make are named later than all of the scenario's.
-        Assert.True(BackupClock.Fixed(AppClocks.HarnessTime).NextName() > new DateTimeOffset(2026, 1, 1, 23, 59, 59, TimeSpan.Zero));
     }
 
     // ---- ProtectAsync -----------------------------------------------------------------------------
