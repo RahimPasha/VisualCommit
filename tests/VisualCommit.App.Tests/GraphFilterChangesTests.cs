@@ -76,6 +76,38 @@ public class GraphFilterChangesTests
     }
 
     [Fact]
+    public void An_upstream_two_branches_track_stays_hidden_or_soloed_until_both_are_shown_or_stop_soloing()
+    {
+        const string Twin = "refs/heads/twin";
+        var refs = Refs with
+        {
+            Refs = [.. Refs.Refs, new GitRef(Twin, "twin", RefKind.LocalBranch, "a1", Upstream: "origin/feature/alpha", UpstreamRef: OriginAlpha, UpstreamRemote: "origin")],
+        };
+
+        // Each branch records the upstream that came with it (8.1).
+        var both = GraphFilterChanges.Hide(GraphFilterChanges.Hide(null, refs, Twin), refs, Alpha)!;
+        Assert.Equal([Alpha, Twin, OriginAlpha], both.Hidden);
+        Assert.Equal([new BranchUpstream(Alpha, OriginAlpha), new BranchUpstream(Twin, OriginAlpha)], both.Upstreams);
+
+        // Showing one leaves the upstream hidden with the other, whose history it would show again.
+        var one = GraphFilterChanges.Show(both, refs, Alpha)!;
+        Assert.Equal([Twin, OriginAlpha], one.Hidden);
+        Assert.Null(GraphFilterChanges.Show(one, refs, Twin));
+
+        // So for solo.
+        var soloed = GraphFilterChanges.Solo(GraphFilterChanges.Solo(null, refs, Twin), refs, Alpha)!;
+        Assert.Equal([Alpha, Twin, OriginAlpha], soloed.Soloed);
+        var stillSoloed = GraphFilterChanges.StopSoloing(soloed, refs, Alpha)!;
+        Assert.Equal([Twin, OriginAlpha], stillSoloed.Soloed);
+        Assert.Null(GraphFilterChanges.StopSoloing(stillSoloed, refs, Twin));
+
+        // The upstream shown on its own follows neither any more.
+        var upstreamShown = GraphFilterChanges.Show(both, refs, OriginAlpha)!;
+        Assert.Equal([Alpha, Twin], upstreamShown.Hidden);
+        Assert.Empty(upstreamShown.Upstreams);
+    }
+
+    [Fact]
     public void Soloing_shows_a_hidden_branch_hiding_ends_a_solo_and_the_sections_end_each_kind()
     {
         var hidden = GraphFilterChanges.Hide(null, Refs, Alpha);

@@ -49,7 +49,8 @@ public static class GraphFilterChanges
         edit.Hidden.Add(branchRef);
         if (UpstreamOf(refs, branchRef) is { } upstream)
         {
-            edit.LeaveOnItsOwn(upstream);
+            // Another local branch that tracks it keeps its record: showing one of the two leaves
+            // the upstream hidden while the other is (Edit.Show).
             edit.Soloed.Remove(upstream);
             edit.Hidden.Add(upstream);
             edit.Upstreams[branchRef] = upstream;
@@ -94,7 +95,7 @@ public static class GraphFilterChanges
         edit.Soloed.Add(branchRef);
         if (UpstreamOf(refs, branchRef) is { } upstream)
         {
-            edit.LeaveOnItsOwn(upstream);
+            // As in Hide: another soloed branch that tracks it keeps its record (Edit.StopSoloing).
             edit.Hidden.Remove(upstream);
             edit.Soloed.Add(upstream);
             edit.Upstreams[branchRef] = upstream;
