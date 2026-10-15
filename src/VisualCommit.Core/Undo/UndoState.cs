@@ -129,7 +129,7 @@ public sealed record UndoCaptured
 
     /// <summary>
     /// The commit whose tree a restore from the backups list put the index to (7.10): a mixed
-    /// reset's snapshot ("Restore the staged changes…"), or a hard reset's snapshot's second parent
+    /// reset's snapshot ("Restore the staged changes"), or a hard reset's snapshot's second parent
     /// when "Restore the changes…" put the index back first; null otherwise.
     /// </summary>
     public string? IndexSource { get; init; }

@@ -54,12 +54,16 @@ public class RepositoryOperationsBackupCleanupTests
 
         await app.Operations.RebaseAsync(new RebaseTarget(MainMore, "main"));
 
-        // One more clean-up, at the end of the rebase, with the default retention and the snapshot to keep.
+        // One more clean-up, at the end of the rebase, with the default retention and the backups to
+        // keep: the restore bar's snapshot, and those the undo history's entries need
+        // (docs/phase-5-design.md 7.8, D171): the discard's (the same snapshot) and the rebase's own,
+        // whose entry is recorded before the clean-up.
         Assert.Equal(2, spy.Calls.Count);
         var call = spy.Calls[1];
         Assert.Equal(BackupRetention.Default, call.Retention);
-        Assert.Equal(snapshot, Assert.Single(call.Keep));
         var names = (await repo.BackupRefsAsync()).Select(entry => entry.Name).ToList();
+        var rebase = Assert.Single(names, name => name.StartsWith("refs/visualcommit/backup/rebase-", StringComparison.Ordinal));
+        Assert.Equal(new[] { snapshot, rebase }.Order(StringComparer.Ordinal), call.Keep.Order(StringComparer.Ordinal));
         Assert.DoesNotContain(old, names);
         Assert.Contains(snapshot, names);
         Assert.Contains(names, name => name.StartsWith("refs/visualcommit/backup/rebase-", StringComparison.Ordinal));
@@ -92,7 +96,8 @@ public class RepositoryOperationsBackupCleanupTests
         var call = Assert.Single(spy!.Calls);
         Assert.Equal((BackupRetention.Default, snapshot), (call.Retention, Assert.Single(call.Keep)));
 
-        // A line discard (the whole hunk): its own snapshot is kept, the discard's goes when old.
+        // A line discard (the whole hunk): its own snapshot is kept, and the discard's stays too
+        // while its undo entry needs it (docs/phase-5-design.md 7.8, D171).
         var readme = await File.ReadAllTextAsync(Path.Combine(repo.Path, "README.md"), TestContext.Current.CancellationToken);
         repo.WriteFile("README.md", readme + "a line to discard\n");
         await app.Repository.RefreshAsync();
@@ -105,8 +110,8 @@ public class RepositoryOperationsBackupCleanupTests
 
         Assert.Equal(readme, await File.ReadAllTextAsync(Path.Combine(repo.Path, "README.md"), TestContext.Current.CancellationToken));
         Assert.Equal(2, spy.Calls.Count);
-        var lineSnapshot = Assert.Single(spy.Calls[1].Keep);
-        Assert.NotEqual(snapshot, lineSnapshot);
+        var lineSnapshot = Assert.Single(spy.Calls[1].Keep, name => name != snapshot);
+        Assert.Contains(snapshot, spy.Calls[1].Keep);
         Assert.Contains(lineSnapshot, (await repo.BackupRefsAsync()).Select(entry => entry.Name));
     }
 

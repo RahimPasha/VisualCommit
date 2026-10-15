@@ -129,7 +129,11 @@ public sealed partial class Phase3ChecksC
         ClickDialogButton(app, "CancelButton");
         await AssertNoDialogAsync(app);
         Assert.Equal(2, (await StashListAsync(repo)).Count);
-        Assert.Empty(await repo.BackupRefsAsync());
+
+        // Step 6's pop saved a backup of "Save my work" first (docs/phase-5-design.md 7.8, D171):
+        // the backup clock's first name of the session (2.3).
+        var popped = Assert.Single(await repo.BackupRefsAsync());
+        Assert.Equal(("refs/visualcommit/backup/stash-20260102T090001000Z", saveMyWork), (popped.Name, popped.Sha));
 
         await OpenStashMenuAsync(app, "On main: Experiment");
         app.ClickMenuItem("Drop stash…");
@@ -140,7 +144,11 @@ public sealed partial class Phase3ChecksC
         await WaitForOperationAsync(app, repo, "Drop stash@{1}", mark);
         shot = Shot(app, "15i-dropped");
         await AssertNoDialogAsync(app);
-        var backup = Assert.Single(await BackupsAsync(repo));
+        var backups = await BackupsAsync(repo);
+        Assert.Equal(2, backups.Count);
+        Assert.Equal(popped.Name, backups[0].Name);
+        var backup = backups[1];
+        Assert.Equal("refs/visualcommit/backup/stash-20260102T090002000Z", backup.Name);
         Assert.Equal("stash", backup.Ref.Kind);
         Assert.Null(backup.Ref.Name);
         Assert.False(backup.Ref.IsChanges);

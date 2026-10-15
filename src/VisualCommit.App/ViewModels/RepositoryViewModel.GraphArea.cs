@@ -132,10 +132,22 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     /// <summary>
     /// The full ref names the backups' clean-up keeps (section 9, D139): the restore bar's
-    /// snapshot while the bar offers it.
+    /// snapshot while the bar offers it, and the backups the undo histories of the repository's
+    /// worktrees need (docs/phase-5-design.md 7.8, D171).
     /// </summary>
-    public IReadOnlySet<string> BackupsToKeep =>
-        _lastSnapshot is { } snapshot ? new HashSet<string>(StringComparer.Ordinal) { snapshot.Ref } : new HashSet<string>(StringComparer.Ordinal);
+    public IReadOnlySet<string> BackupsToKeep
+    {
+        get
+        {
+            var keep = new HashSet<string>(Operations.UndoBackupsToKeep(), StringComparer.Ordinal);
+            if (_lastSnapshot is { } snapshot)
+            {
+                keep.Add(snapshot.Ref);
+            }
+
+            return keep;
+        }
+    }
 
     /// <summary>
     /// Closes what the graph area shows instead of the graph, without asking (after

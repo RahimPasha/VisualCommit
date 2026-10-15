@@ -287,7 +287,7 @@ public interface IRepositoryActions
     /// <summary>
     /// A backup's own restore in the backups list (7.10): its kind decides ("Restore branch {b}",
     /// "Restore tag {t}", "Restore stash", "Restore the discarded files…", "Restore the changes…",
-    /// "Restore the staged changes…", "Push {b} back to {r}…"), as one operation recorded in the
+    /// "Restore the staged changes", "Push {b} back to {r}…"), as one operation recorded in the
     /// undo history.
     /// </summary>
     Task RestoreBackupAsync(BackupInfo backup);

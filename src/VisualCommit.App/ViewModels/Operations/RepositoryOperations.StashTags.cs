@@ -255,6 +255,13 @@ public sealed partial class RepositoryOperations
                         return Refusal(text, OperationTexts.ConflictsPreventApplyingStash(conflicts));
                     }
 
+                    // A pop saves a backup first, as a drop does (docs/phase-5-design.md 7.8, D171): the
+                    // popped stash outlives git's pruning, for the undo and the backups list.
+                    if (pop)
+                    {
+                        await SaveBackupAsync(new BackupRequest("stash", [new BackupEntry(null, stash)]));
+                    }
+
                     // Its name now: another operation may have moved it in the list meanwhile.
                     var now = FindStash(stash)?.Name ?? name;
                     var result = await Git.ApplyStashAsync(stash, pop ? StashApplyMode.Pop : StashApplyMode.Apply, NetworkOptions.From(context));

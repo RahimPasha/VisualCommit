@@ -7,6 +7,7 @@ using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
+using VisualCommit.Core.Undo;
 using VisualCommit.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -104,14 +105,26 @@ internal sealed class OperationsHarness : IDisposable
     public static Task<OperationsHarness> OpenWrappedAsync(TempRepo repo, Func<IGitRepository, IGitRepository> wrap) => OpenAsync(repo, prompts: null, wrap);
 
     /// <summary>
+    /// Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with the undo
+    /// histories of <paramref name="session"/>'s services: as a second tab of the same app session,
+    /// on another worktree of the repository or on the same one (docs/phase-5-design.md 7.1).
+    /// </summary>
+    public static Task<OperationsHarness> OpenAsync(TempRepo repo, TabServices session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return OpenAsync(repo, prompts: null, undoHistories: session.UndoHistories);
+    }
+
+    /// <summary>
     /// Opens <paramref name="repo"/> as <see cref="OpenAsync(TempRepo)"/> does, with the app's
     /// prompt broker (the real askpass helper, design 3.1) answering git's and ssh's prompts
     /// through the handler <paramref name="prompts"/> makes for the harness's dialog layer:
     /// <c>host =&gt; new PromptDialogs(host)</c> shows the app's prompt dialogs there, for
     /// <see cref="Dialogs"/> to answer; a <see cref="ScriptedPromptHandler"/> answers without any.
     /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
+    /// <paramref name="undoHistories"/> are the app session's undo histories, new ones when null.
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, UndoHistories? undoHistories = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var calls = new GitCallLog();
@@ -124,7 +137,7 @@ internal sealed class OperationsHarness : IDisposable
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
         var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log);
-        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls);
+        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
         var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };
         await repository.StartAsync();

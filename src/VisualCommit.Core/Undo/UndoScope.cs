@@ -448,7 +448,7 @@ public sealed record UndoScope
         Files = paths,
     };
 
-    /// <summary>"Restore the staged changes…": the index put back from a mixed reset's snapshot, which is captured (<see cref="UndoCapture.IndexRestored"/>).</summary>
+    /// <summary>"Restore the staged changes": the index put back from a mixed reset's snapshot, which is captured (<see cref="UndoCapture.IndexRestored"/>).</summary>
     public static UndoScope RestoreStagedChanges() => new()
     {
         Kind = UndoKind.RestoreStagedChanges,
