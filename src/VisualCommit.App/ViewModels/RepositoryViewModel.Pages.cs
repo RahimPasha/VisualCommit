@@ -55,40 +55,47 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 
     /// <summary>
     /// What the graph hides and solos (8.1, 8.4, D159), as the session keeps it for this repository,
-    /// or null while nothing is. The menus read it (<see cref="RepositoryMenuContext.Filters"/>);
-    /// WP7's operations change it through <see cref="ApplyGraphFilterAsync"/>.
+    /// or null while nothing is. The menus read it (<see cref="RepositoryMenuContext.Filters"/>) and
+    /// the left panel marks it; the filters' operations change it through <see cref="ApplyGraphFilterAsync"/>.
     /// </summary>
     [ObservableProperty]
     public partial RepositoryGraphFilter? Filters { get; private set; }
 
     /// <summary>
-    /// What the graph hides or solos (8.2, D178), which the history loads with, or null to load
-    /// everything as before phase 5. The lead gives it from <see cref="Filters"/> when it joins WP7.
+    /// What the graph hides or solos (8.2, D178), which the history loads with: from
+    /// <see cref="Filters"/>, or null to load everything as before phase 5 (the same command).
     /// </summary>
-    public GraphFilter? GraphFilter => null;
+    public GraphFilter? GraphFilter => GraphFilterChanges.ToGraphFilter(Filters);
 
     /// <summary>
     /// The graph reloads for a change of filter (8.2): a 2-px bar runs under the column headers, so
-    /// that the click is seen to take effect on a large history. False until the lead joins WP7.
+    /// that the click is seen to take effect on a large history. True from the change until the
+    /// graph of the new filter is shown.
     /// </summary>
     [ObservableProperty]
     public partial bool IsReloadingGraph { get; private set; }
 
     /// <summary>
-    /// What the graph hides or solos changed (8.1 to 8.4): WP7's operations call it once they have
-    /// written the session (<see cref="TabServices.Session"/>). The menus see the new state at once.
-    /// The graph's reload through the refresh (<see cref="GraphFilter"/>, the filter's key in the
-    /// refresh's comparison, <see cref="IsReloadingGraph"/>) comes when the lead joins WP7; until
-    /// then the graph stays as it is.
+    /// What the graph hides or solos changed (8.1 to 8.4): the filters' operations call it once they
+    /// have written the session (<see cref="TabServices.GraphFilters"/>). The menus and the left
+    /// panel see the new state at once; the graph reloads through the refresh, the filter's key
+    /// joining the refs' fingerprint in its comparison, and is swapped in when complete, with
+    /// <see cref="IsReloadingGraph"/> meanwhile. Completes when the new graph is shown.
     /// </summary>
     public Task ApplyGraphFilterAsync(RepositoryGraphFilter? filters)
     {
-        if (!_disposed)
+        if (_disposed)
         {
-            Filters = filters;
+            return Task.CompletedTask;
         }
 
-        return Task.CompletedTask;
+        Filters = filters;
+        if (GraphFilter?.Key != _loadedFilterKey)
+        {
+            IsReloadingGraph = true;
+        }
+
+        return RefreshAsync();
     }
 
     /// <summary>

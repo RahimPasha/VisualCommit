@@ -115,6 +115,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         LeftPanel = new LeftPanelViewModel();
         LeftPanel.RefActivated += (_, sha) => Select(sha, reveal: true);
+        ConnectLeftPanelFilters();
         Details = new CommitDetailsViewModel(repository, settings, dates, _log);
         Details.ParentActivated += (_, sha) => Select(sha, reveal: true);
         Details.FileActivated += (_, file) => OpenCommitDiff(file);
@@ -267,8 +268,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: opened after {_sinceOpening.ElapsedMilliseconds} ms"));
             var reading = Repository.ReadRefsAsync(cancellationToken);
             var status = Repository.ReadStatusAsync(cancellationToken);
-            var data = new Lazy<CommitGraphData>(() => new CommitGraphData(reading.Result), LazyThreadSafetyMode.ExecutionAndPublication);
-            var loading = LoadAsync(reading, data, cancellationToken);
+
+            // What the graph hides or solos comes from the session, so that git starts before the
+            // refs are read, as without a filter (docs/phase-5-design.md 8.2, 8.4).
+            var filter = LoadSessionFilter();
+            var data = new Lazy<CommitGraphData>(() => new CommitGraphData(reading.Result, filter), LazyThreadSafetyMode.ExecutionAndPublication);
+            var loading = LoadAsync(reading, data, filter, cancellationToken);
 
             RepoRefs refs;
             try
@@ -284,7 +289,14 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             }
 
             _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: refs read after {_sinceOpening.ElapsedMilliseconds} ms"));
+            if (CorrectFilters(refs, firstRead: true))
+            {
+                // Names that no longer exist went from the filter: the graph loads again once loaded.
+                _changedWhileStarting = true;
+            }
+
             ApplyRefs(refs);
+            _loadedFilterKey = filter?.Key;
             Graph = data.Value;
             var statusShown = ShowStatusAsync(status);
             await loading;
@@ -376,18 +388,26 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 }
 
                 var refs = await Repository.ReadRefsAsync(cancellationToken);
-                if (refs.Fingerprint == _fingerprint)
+
+                // A filter's change joins the refs' in the comparison (docs/phase-5-design.md 8.2):
+                // the new graph loads off screen and is swapped in when complete.
+                CorrectFilters(refs, firstRead: false);
+                var filter = GraphFilter;
+                if (refs.Fingerprint == _fingerprint && filter?.Key == _loadedFilterKey)
                 {
                     // Upstreams and their counts can change without moving a ref.
                     ApplyRefs(refs);
                 }
                 else
                 {
-                    var data = new CommitGraphData(refs);
-                    await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), cancellationToken);
+                    var data = new CommitGraphData(refs, filter);
+                    await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), filter, cancellationToken);
                     ApplyRefs(refs);
+                    _loadedFilterKey = filter?.Key;
                     SwapGraph(data);
                 }
+
+                IsReloadingGraph = GraphFilter?.Key != _loadedFilterKey;
 
                 // The index lives in the git folder: a change there may be a change of the status.
                 await RefreshStatusAsync();
@@ -400,6 +420,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         catch (Exception ex)
         {
             _log.Error($"{Name}: refreshing after an outside change failed.", ex);
+            IsReloadingGraph = false;
         }
     }
 
@@ -1144,16 +1165,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>
     /// Loads the history into <paramref name="lazyData"/>, which is made from <paramref name="refs"/>
-    /// once they are known. Git starts at once; no page arrives before the refs (the contract of
+    /// once they are known, with what <paramref name="filter"/> hides or solos (docs/phase-5-design.md
+    /// 8.2; null loads everything). Git starts at once; no page arrives before the refs (the contract of
     /// <see cref="IGitRepository.LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>).
     /// </summary>
-    private async Task LoadAsync(Task<RepoRefs> refs, Lazy<CommitGraphData> lazyData, CancellationToken cancellationToken)
+    private async Task LoadAsync(Task<RepoRefs> refs, Lazy<CommitGraphData> lazyData, GraphFilter? filter, CancellationToken cancellationToken)
     {
         var layout = new GraphLayout();
         var stopwatch = Stopwatch.StartNew();
         await Repository.LoadCommitsAsync(
             refs,
-            GraphFilter,
+            filter,
             page =>
             {
                 var data = lazyData.Value;

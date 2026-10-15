@@ -205,11 +205,15 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
         return fullName;
     }
 
-    /// <summary>A reloaded or newly loading graph is searched where it left off (3.4), and the comparison's links follow its rows.</summary>
+    /// <summary>
+    /// A reloaded or newly loading graph is searched where it left off (3.4), the comparison's links
+    /// follow its rows, and so do the left panel's marks of hidden branches (8.3).
+    /// </summary>
     partial void OnGraphChanged(CommitGraphData value)
     {
         SearchBar?.OnGraphReplaced();
         Comparison?.UpdateLinks();
+        FollowGraphForLeftPanel(value);
     }
 
     partial void OnSelectedIndexChanged(int oldValue, int newValue) => SearchBar?.OnSelectionChanged();

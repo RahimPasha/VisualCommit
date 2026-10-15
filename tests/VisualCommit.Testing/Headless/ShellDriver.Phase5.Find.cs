@@ -42,6 +42,25 @@ public sealed partial class ShellDriver
         await WaitForAsync(() => search.IsSettled && ReferenceEquals(ActiveRepository.SearchMarks, search.Marks), "the search to end and its matches to be applied", timeout);
     }
 
+    /// <summary>
+    /// Waits until the graph has reloaded for a change of what it hides or solos (part F's
+    /// convention): <c>GraphReloading</c> is hidden and the graph shown is the one the new filter
+    /// loads, complete; then until the queue is idle.
+    /// </summary>
+    public async Task WaitForGraphReloadAsync(TimeSpan? timeout = null)
+    {
+        var repository = ActiveRepository;
+        await WaitForAsync(
+            () => !repository.IsReloadingGraph
+                && repository.LoadedFilterKey == repository.GraphFilter?.Key
+                && repository.Graph.IsComplete
+                && ReferenceEquals(Find<CommitGraphControl>("GraphRows").Data, repository.Graph)
+                && !Find<ProgressBar>("GraphReloading").IsVisible,
+            "the graph to reload for its filter",
+            timeout);
+        await WaitForIdleAsync(repository, timeout);
+    }
+
     /// <summary>Waits until the comparison in the right panel has been read (part F's convention): <c>Loading…</c> is gone and, for branches, the counts show.</summary>
     /// <exception cref="InvalidOperationException">No comparison is shown.</exception>
     public async Task WaitForCompareAsync(TimeSpan? timeout = null)
@@ -201,6 +220,42 @@ public sealed partial class ShellDriver
             ?? throw new InvalidOperationException($"The row of {path} in CompareFileList is not laid out.");
     }
 
+    /// <summary>
+    /// What the left panel's row at <paramref name="path"/> (<see cref="RefRowAsync"/>'s path) shows of
+    /// the graph's filter (design 8.3): the colour its name is drawn in, which toggle shows
+    /// (<c>RefHiddenToggle</c>, <c>RefSoloToggle</c>) with its bounds in the window and tooltip, and the
+    /// name's tooltip. The row must be laid out: <see cref="RefRowAsync"/> first.
+    /// </summary>
+    public RefRowMarksSnapshot RefRowMarks(params string[] path)
+    {
+        var row = RefRowButton(path);
+        var name = Named<TextBlock>(row, "RefName");
+        var hidden = Named<Button>(row, "RefHiddenToggle");
+        var solo = Named<Button>(row, "RefSoloToggle");
+        var toggle = hidden.IsEffectivelyVisible ? hidden : solo.IsEffectivelyVisible ? solo : null;
+        return new RefRowMarksSnapshot(
+            (name.Foreground as ISolidColorBrush)?.Color,
+            hidden.IsEffectivelyVisible,
+            solo.IsEffectivelyVisible,
+            toggle is null ? null : BoundsOf(toggle),
+            toggle is null ? null : ToolTip.GetTip(toggle) as string,
+            ToolTip.GetTip(name) as string,
+            toggle is null ? null : (toggle.Foreground as ISolidColorBrush)?.Color);
+    }
+
+    /// <summary>The centre of the name of the left panel's row at <paramref name="path"/>, in the window: where the pointer rests for the name's tooltip (FD13), off the row's toggle.</summary>
+    public Point RefRowNamePoint(params string[] path) => BoundsOf(Named<TextBlock>(RefRowButton(path), "RefName")).Center;
+
+    /// <summary>The laid-out row button of the left panel's row at <paramref name="path"/>.</summary>
+    private Button RefRowButton(string[] path)
+    {
+        var model = RefRowModel(path);
+        Settle();
+        return Find<ItemsControl>("RefList").GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(button => ReferenceEquals(button.DataContext, model) && Avalonia.Automation.AutomationProperties.GetAutomationId(button) == "RefItem" && button.IsEffectivelyVisible && button.Bounds.Height > 0)
+            ?? throw new InvalidOperationException($"The left panel's row {string.Join(" › ", path)} is not laid out: call RefRowAsync first.");
+    }
+
     private static T Named<T>(Visual scope, string name)
         where T : Control =>
         scope.GetVisualDescendants().OfType<T>().FirstOrDefault(control => control.Name == name)
@@ -256,3 +311,20 @@ public sealed record CompareSnapshot(
     string? Notice,
     string? FilesTitle,
     IReadOnlyList<ChangedFileRow> Files);
+
+/// <summary>What a left-panel row shows of the graph's filter (design 8.3), as <see cref="ShellDriver.RefRowMarks"/> reads it.</summary>
+/// <param name="NameColor">The colour its name is drawn in.</param>
+/// <param name="ShowsHiddenToggle">The eye button (<c>RefHiddenToggle</c>) shows.</param>
+/// <param name="ShowsSoloToggle">The solo button (<c>RefSoloToggle</c>) shows.</param>
+/// <param name="ToggleBounds">The toggle's bounds in the window, or null without one.</param>
+/// <param name="ToggleToolTip">The toggle's tooltip, or null without one.</param>
+/// <param name="NameToolTip">The name's tooltip.</param>
+/// <param name="ToggleColor">The colour the toggle's icon is drawn in, or null without one.</param>
+public sealed record RefRowMarksSnapshot(
+    Color? NameColor,
+    bool ShowsHiddenToggle,
+    bool ShowsSoloToggle,
+    Rect? ToggleBounds,
+    string? ToggleToolTip,
+    string? NameToolTip,
+    Color? ToggleColor);

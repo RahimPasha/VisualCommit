@@ -41,9 +41,14 @@ public partial class LeftPanelView : UserControl
         return null;
     }
 
-    /// <summary>The row button a request or a tap came from, with its row.</summary>
+    /// <summary>
+    /// The row button a request or a tap came from, with its row; null for a toggle of a hidden or
+    /// soloed row (<see cref="RefDrag.IsExcludedProperty"/>, docs/phase-5-design.md 8.3), so that a
+    /// double-click on it checks nothing out.
+    /// </summary>
     private static (Button Button, RefListRow Row)? RowOf(object? source) =>
-        ContextMenuRequests.Find<Button>(source, button => button.DataContext is RefListRow) is { DataContext: RefListRow row } button
+        ContextMenuRequests.Find<Button>(source, button => button.DataContext is RefListRow && !RefDrag.GetIsExcluded(button)) is { DataContext: RefListRow row } button
+            && !RefDrag.IsInExcluded(source, button)
             ? (button, row)
             : null;
 

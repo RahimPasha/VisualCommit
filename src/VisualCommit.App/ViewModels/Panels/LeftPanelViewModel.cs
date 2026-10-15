@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Session;
 
 namespace VisualCommit.App.ViewModels.Panels;
 
@@ -35,6 +36,9 @@ public partial class LeftPanelViewModel : ObservableObject
     private RepoRefs? _refs;
     private string? _selectedKey;
 
+    /// <summary>What the graph hides and solos (docs/phase-5-design.md 8.3), which the rows mark; null while nothing is.</summary>
+    private RepositoryGraphFilter? _filters;
+
     public LeftPanelViewModel()
     {
         Rebuild();
@@ -52,6 +56,28 @@ public partial class LeftPanelViewModel : ObservableObject
     /// the commit it points to, which the graph then selects and scrolls into view.
     /// </summary>
     public event EventHandler<string>? RefActivated;
+
+    /// <summary>Raised when the eye button of a hidden branch's or remote's row is clicked: it is to be shown again (docs/phase-5-design.md 8.3).</summary>
+    public event EventHandler<RefItemRow>? HiddenToggleClicked;
+
+    /// <summary>Raised when the solo button of a soloed branch's row is clicked: its solo is to end (8.3).</summary>
+    public event EventHandler<RefItemRow>? SoloToggleClicked;
+
+    /// <summary>
+    /// Whether a commit is a row of the graph shown, which a hidden branch's row asks (8.3): its
+    /// click selects nothing and its name's tooltip says so when it is not. Null: every commit is.
+    /// </summary>
+    public Func<string, bool>? IsInGraph { get; set; }
+
+    /// <summary>Shows what the graph hides and solos (8.3): the marks and toggles of the rows.</summary>
+    public void UpdateFilters(RepositoryGraphFilter? filters)
+    {
+        _filters = filters;
+        Rebuild();
+    }
+
+    /// <summary>The graph shown changed: a hidden branch's row asks again whether its commit is a row (8.3).</summary>
+    public void RefreshMarks() => Rebuild();
 
     /// <summary>
     /// Shows <paramref name="refs"/>. Keeps the filter and which folders and sections the user
@@ -106,6 +132,13 @@ public partial class LeftPanelViewModel : ObservableObject
                 break;
 
             case RefItemRow { TargetSha: { } sha } item:
+                if ((item.Marks.IsHidden || item.Marks.IsDimmed) && IsInGraph?.Invoke(sha) == false)
+                {
+                    // A branch the filter leaves out whose commit is no row: nothing is selected
+                    // and no row is highlighted (8.3, FD19).
+                    return;
+                }
+
                 _selectedKey = item.Key;
                 foreach (var other in Rows.OfType<RefItemRow>())
                 {
@@ -205,7 +238,9 @@ public partial class LeftPanelViewModel : ObservableObject
 
                 var key = "remote:" + remote;
                 var open = IsContainerOpen(key, defaultOpen: true);
-                rows.Add(new RefItemRow(RefItemKind.Remote, key, remote, remote, 1, Activate, isOpen: open));
+                var hidden = _filters?.HiddenRemotes.Contains(remote, StringComparer.Ordinal) == true;
+                var marks = hidden ? new RefRowMarks(IsHidden: true, IsSoloed: false, IsDimmed: true, NotInGraphToolTip: null) : null;
+                rows.Add(new RefItemRow(RefItemKind.Remote, key, remote, remote, 1, Activate, isOpen: open, marks: marks, showHidden: OnHiddenToggleClicked));
                 if (open)
                 {
                     var prefix = remote + "/";
@@ -299,7 +334,8 @@ public partial class LeftPanelViewModel : ObservableObject
         {
             rows.Add(Selected(new RefItemRow(
                 leaf.Kind, leaf.Key, name, leaf.FullName, depth, Activate,
-                targetSha: leaf.Sha, isHead: leaf.IsHead, ahead: leaf.Ahead, behind: leaf.Behind)));
+                targetSha: leaf.Sha, isHead: leaf.IsHead, ahead: leaf.Ahead, behind: leaf.Behind,
+                marks: MarksOf(leaf), showHidden: OnHiddenToggleClicked, stopSoloing: OnSoloToggleClicked)));
         }
     }
 
@@ -317,6 +353,35 @@ public partial class LeftPanelViewModel : ObservableObject
 
         return _toggled.TryGetValue(key, out var open) ? open : defaultOpen;
     }
+
+    /// <summary>
+    /// What the filter marks on a branch's row (8.3): hidden (the eye button, the disabled colour,
+    /// and the tooltip when its commit is no row), soloed (the solo button), or, in solo mode, left
+    /// out (the disabled colour) unless it is HEAD's branch, which is always shown. Tags keep their look.
+    /// </summary>
+    private RefRowMarks? MarksOf(LeafRow leaf)
+    {
+        if (_filters is not { } filters || leaf.Kind is not (RefItemKind.LocalBranch or RefItemKind.RemoteBranch) || !leaf.Key.StartsWith(RefKeyPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var fullName = leaf.Key[RefKeyPrefix.Length..];
+        var hidden = filters.Hidden.Contains(fullName, StringComparer.Ordinal);
+        var soloed = filters.Soloed.Contains(fullName, StringComparer.Ordinal);
+        var leftOut = filters.Soloed.Count > 0 && !soloed;
+        if (!hidden && !soloed && !leftOut)
+        {
+            return null;
+        }
+
+        var notInGraph = hidden && IsInGraph?.Invoke(leaf.Sha) == false ? $"{leaf.FullName} is hidden in the graph" : null;
+        return new RefRowMarks(hidden, soloed, IsDimmed: (hidden || leftOut) && !leaf.IsHead, notInGraph);
+    }
+
+    private void OnHiddenToggleClicked(RefItemRow row) => HiddenToggleClicked?.Invoke(this, row);
+
+    private void OnSoloToggleClicked(RefItemRow row) => SoloToggleClicked?.Invoke(this, row);
 
     private RefItemRow Selected(RefItemRow row)
     {
