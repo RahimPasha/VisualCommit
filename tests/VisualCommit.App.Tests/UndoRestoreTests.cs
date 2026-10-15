@@ -166,6 +166,38 @@ public class UndoRestoreTests
     }
 
     [Fact]
+    public async Task A_hard_resets_changes_come_back_with_its_index_for_its_own_paths_when_nothing_is_staged()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\n");
+        await repo.GitAsync("add", "src/core.txt");
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\nunstaged line\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Reset(ResetMode.Hard);
+        await app.Operations.ResetAsync("8beca345049bf7e8bab3a7b4f1427eff941b87e3");
+        Assert.Empty((await repo.GitAsync("status", "--porcelain")).StandardOutput.Trim());
+        var backup = await BackupAsync(app, "reset");
+        var index = (await repo.GitAsync("rev-parse", backup.Refs.Single(entry => entry.IsChanges).Target + "^2")).StandardOutput.Trim();
+
+        await app.Operations.RestoreBackupAsync(backup);
+
+        // BD16: the index for the paths the snapshot's index changed, then the files; no question.
+        Assert.Empty(app.Dialogs.Confirmations);
+        Assert.Equal("Restored 1 file", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == $"git restore --staged --source={index} -- src/core.txt");
+        Assert.Equal("MM src/core.txt", (await repo.GitAsync("status", "--porcelain")).StandardOutput.Trim());
+        Assert.Equal("core\nmain work\nstaged line\n", (await repo.GitAsync("show", ":src/core.txt")).StandardOutput);
+        Assert.Equal("core\nmain work\nstaged line\nunstaged line\n", ReadText(repo, "src/core.txt"));
+        var entry = app.Repository.UndoHistory.Entries[^1];
+        Assert.Equal(("restore of the changes", index), (entry.Text, entry.Captured.IndexSource));
+
+        // Undone: the files, then the index for the same paths.
+        await app.Operations.UndoAsync();
+        Assert.Empty((await repo.GitAsync("status", "--porcelain")).StandardOutput.Trim());
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_dropped_stash_and_deleted_tags_come_back_and_a_force_pushs_backup_is_pushed_back_with_its_lease()
     {
         using var repo = await Scenarios.ReflogAsync();
