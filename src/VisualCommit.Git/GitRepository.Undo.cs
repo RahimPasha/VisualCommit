@@ -383,8 +383,12 @@ public sealed partial class GitRepository
         /// <summary>The token of the step's calls; none while what a refused or cancelled step applied is put back.</summary>
         private CancellationToken Token => _reversing ? CancellationToken.None : _cancellationToken;
 
-        /// <summary>The reflog message of every ref the step writes (7.3): <c>VisualCommit: undo &lt;text&gt;</c> or <c>VisualCommit: redo &lt;text&gt;</c>.</summary>
-        private string Message => $"VisualCommit: {(_step.Direction == UndoDirection.Undo ? "undo" : "redo")} {_step.Entry.Text}";
+        /// <summary>
+        /// The reflog message of every ref the step writes (7.3): <c>VisualCommit: undo &lt;text&gt;</c>
+        /// or <c>VisualCommit: redo &lt;text&gt;</c>, or the step's own (<see cref="UndoStep.Message"/>:
+        /// a restore from the backups list).
+        /// </summary>
+        private string Message => _step.Message ?? $"VisualCommit: {(_step.Direction == UndoDirection.Undo ? "undo" : "redo")} {_step.Entry.Text}";
 
         /// <summary>The reflog message of a write that puts back what a refused step had applied.</summary>
         private string PutBackMessage => $"VisualCommit: put back after a refused {(_step.Direction == UndoDirection.Undo ? "undo" : "redo")} of {_step.Entry.Text}";
@@ -572,7 +576,7 @@ public sealed partial class GitRepository
         {
             MoveHead { Mode: MoveMode.Keep } move => await IgnoredInTheWayAsync(Required(move.From), Required(move.To)).ConfigureAwait(false),
             MoveDetachedHead { Mode: MoveMode.Keep } move => await IgnoredInTheWayAsync(move.From, move.To).ConfigureAwait(false),
-            IndexTo index => await IndexHoldsAsync(index.From).ConfigureAwait(false) ? null : new UndoRefusal(UndoRefusalKind.IndexChanged),
+            IndexTo index => await IndexHoldsAsync(index.From, index.Paths).ConfigureAwait(false) ? null : new UndoRefusal(UndoRefusalKind.IndexChanged),
             IndexEntries entries => await FlagsAsync(entries.Paths).ConfigureAwait(false),
             StashPop { Sha: { } sha } => await StashUntrackedInTheWayAsync(sha).ConfigureAwait(false),
             GitignoreBytes => new FileInfo(_repository.WorkingTreePath(".gitignore")).LinkTarget is not null
@@ -591,10 +595,13 @@ public sealed partial class GitRepository
             _ => null,
         };
 
-        /// <summary>Whether the index holds <paramref name="commit"/>'s tree: <c>diff-index --cached --quiet</c> exits 0 when it does, 1 when not.</summary>
-        private async Task<bool> IndexHoldsAsync(string commit)
+        /// <summary>
+        /// Whether the index holds <paramref name="commit"/>'s tree, for <paramref name="paths"/>
+        /// only when given: <c>diff-index --cached --quiet</c> exits 0 when it does, 1 when not.
+        /// </summary>
+        private async Task<bool> IndexHoldsAsync(string commit, IReadOnlyList<string>? paths = null)
         {
-            var command = Read(["diff-index", "--cached", "--quiet", commit, "--"]);
+            var command = Read(["diff-index", "--cached", "--quiet", commit, "--", .. paths ?? []]);
             var result = await _repository._runner.RunAsync(command, Token).ConfigureAwait(false);
             return result.ExitCode switch
             {
@@ -998,7 +1005,7 @@ public sealed partial class GitRepository
                 case RemoteRef remote:
                     return await PushRemoteRefAsync(remote).ConfigureAwait(false);
                 case IndexTo index:
-                    await WriteAsync("restore", "--staged", $"--source={index.Source}", "--", ".").ConfigureAwait(false);
+                    await WriteAsync(["restore", "--staged", $"--source={index.Source}", "--", .. index.Paths ?? ["."]]).ConfigureAwait(false);
                     break;
                 case FilesTo write:
                     await WriteFilesAsync(write.To).ConfigureAwait(false);
@@ -1500,7 +1507,7 @@ public sealed partial class GitRepository
             RemoteConfig keys => keys with { From = keys.To, To = keys.From },
             RemoteRename rename => new RemoteRename(rename.To, rename.From),
             UndoEffect.RemoteUrl url => url with { From = url.To, To = url.From },
-            IndexTo index => new IndexTo(index.From, index.Source),
+            IndexTo index => index with { Source = index.From, From = index.Source },
             FilesTo write => new FilesTo(write.To, write.From),
             RestoreSnapshot restore => new FilesTo([], restore.From),
             StashPush => new StashPop(null, null),

@@ -298,7 +298,7 @@ public static class UndoSequence
     private static IReadOnlyList<UndoEffect> RestoreFiles(UndoEntry entry, bool undo)
     {
         IReadOnlyList<UndoEffect> index = entry.Captured.IndexSource is { } source
-            ? [undo ? new IndexTo(HeadCommit(entry), source) : new IndexTo(source, HeadCommit(entry))]
+            ? [(undo ? new IndexTo(HeadCommit(entry), source) : new IndexTo(source, HeadCommit(entry))) with { Paths = entry.Captured.IndexPaths }]
             : [];
         return undo
             ? [new FilesTo(entry.After.Files, entry.Before.Files), .. index]
@@ -322,7 +322,7 @@ public static class UndoSequence
     {
         var source = entry.Captured.IndexSource ?? throw Missing(entry, "the snapshot the index was put back from");
         var head = HeadCommit(entry);
-        return [undo ? new IndexTo(head, source) : new IndexTo(source, head)];
+        return [(undo ? new IndexTo(head, source) : new IndexTo(source, head)) with { Paths = entry.Captured.IndexPaths }];
     }
 
     /// <summary>

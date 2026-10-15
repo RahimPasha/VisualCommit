@@ -272,6 +272,46 @@ public class UndoEffectTests
     }
 
     [Fact]
+    public async Task An_index_put_back_for_some_paths_stages_those_alone_and_a_steps_own_message_names_its_ref_writes()
+    {
+        using var repo = await UndoRepoAsync();
+        var restores = new List<string>();
+        var runner = new InterceptingRunner(NewRunner(), command =>
+        {
+            if (command.Arguments is ["restore", ..])
+            {
+                restores.Add(string.Join(' ', command.Arguments));
+            }
+
+            return Task.CompletedTask;
+        });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestCancelled);
+        var (c1, c3) = (await ShaAsync(repo, "HEAD~2"), await ShaAsync(repo, "HEAD"));
+        repo.WriteFile("src/c.txt", "c-staged\n");
+        await repo.GitAsync("add", "src/c.txt");
+
+        // c1 differs from HEAD in a.txt and b.txt: b.txt alone is staged from it (the report's BD16),
+        // and what is staged elsewhere neither refuses the step nor goes.
+        await RunAsync(repository, new IndexTo(c1, c3) { Paths = ["b.txt"] });
+        Assert.Equal(("a2\n", "b1\n", "c-staged\n"), (await StagedAsync(repo, "a.txt"), await StagedAsync(repo, "b.txt"), await StagedAsync(repo, "src/c.txt")));
+        Assert.Equal($"restore --staged --source={c1} -- b.txt", Assert.Single(restores));
+        await RunAsync(repository, new IndexTo(c3, c1) { Paths = ["b.txt"] });
+        Assert.Equal(("b2\n", "c-staged\n"), (await StagedAsync(repo, "b.txt"), await StagedAsync(repo, "src/c.txt")));
+
+        // b.txt staged since: its check refuses, and nothing changes.
+        repo.WriteFile("b.txt", "b-mine\n");
+        await repo.GitAsync("add", "b.txt");
+        var still = await StillAsync(repo);
+        Assert.Equal(UndoRefusalKind.IndexChanged, (await RefuseAsync(repository, new IndexTo(c1, c3) { Paths = ["b.txt"] })).Kind);
+        Assert.Equal(still, await StillAsync(repo));
+
+        // The backups list's restores name their ref writes themselves (BD17).
+        var restore = Step(UndoDirection.Redo, new SetRef("refs/heads/restored", null, c1) { CreateReflog = true }) with { Message = "VisualCommit: restore of branch restored" };
+        Assert.True((await repository.RunUndoStepAsync(restore, NetworkOptions.None, TestCancelled)).IsDone);
+        Assert.Equal("VisualCommit: restore of branch restored", (await repo.GitAsync("log", "-g", "-1", "--format=%gs", "refs/heads/restored")).StandardOutput.Trim());
+    }
+
+    [Fact]
     public async Task A_switch_refused_names_every_file_in_its_way_and_ignored_ones_as_such()
     {
         using var repo = await UndoRepoAsync();
@@ -550,6 +590,9 @@ public class UndoEffectTests
     }
 
     private static async Task<string> ShaAsync(TempRepo repo, string revision) => (await repo.GitAsync("rev-parse", revision)).StandardOutput.Trim();
+
+    /// <summary>A path's staged content (<c>git show :path</c>).</summary>
+    private static async Task<string> StagedAsync(TempRepo repo, string path) => (await repo.GitAsync("show", ":" + path)).StandardOutput;
 
     /// <summary>What a refused step must leave as it was (7.5): the index's entries, every ref (the backups too), HEAD's reflog, every file and the stash list.</summary>
     private static async Task<Still> StillAsync(TempRepo repo)

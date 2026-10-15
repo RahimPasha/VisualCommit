@@ -370,6 +370,12 @@ public class UndoSequenceTests
         Assert.Equal([new IndexTo(T, O)], Redo(staged));
         Assert.Throws<InvalidOperationException>(() => Undo(staged with { Captured = UndoCaptured.None }));
 
+        // Restored for the snapshot's own paths (the report's BD16): its undo and redo the same paths.
+        var ownPaths = staged with { Captured = new UndoCaptured { IndexSource = T, IndexPaths = ["a.txt"] } };
+        Assert.Equal(["a.txt"], Assert.IsType<IndexTo>(Assert.Single(Undo(ownPaths))).Paths);
+        Assert.Equal(["a.txt"], Assert.IsType<IndexTo>(Assert.Single(Redo(ownPaths))).Paths);
+        Assert.Null(Assert.IsType<IndexTo>(Assert.Single(Undo(staged))).Paths);
+
         // "Restore the changes…" that put a hard reset's index back first: the files, then the index.
         var snapshot = new DiscardSnapshot("refs/visualcommit/backup/reset-1-changes", T, ["a.txt"], new HashSet<string> { "a.txt" });
         IReadOnlyList<RecordedFile> before = [new RecordedFile("a.txt", null, null)];
@@ -519,6 +525,10 @@ public class UndoSequenceTests
         // Something staged since the reset: its index check refuses already.
         var staged = WorkingTreeStatus.Clean with { Staged = [new ChangedFile("a.txt", FileChangeKind.Modified)] };
         Assert.Equal(new UndoRefusal(UndoRefusalKind.IndexChanged), UndoChecks.FirstRefusalInMemory(undo, refs, staged, []));
+
+        // An index put back for some paths compares those alone: inside the step (the report's BD16).
+        var restored = Entry(UndoKind.RestoreStagedChanges, Head("main", N), Head("main", N), captured: new UndoCaptured { IndexSource = T, IndexPaths = ["b.txt"] });
+        Assert.Null(UndoChecks.FirstRefusalInMemory(Step(restored, UndoDirection.Redo), refs, staged, []));
 
         // A branch another worktree has checked out.
         var fastForward = Step(Entry(UndoKind.FastForwardBranch, Head("main", N), Head("main", N), beforeRefs: new() { ["refs/heads/side"] = O }, afterRefs: new() { ["refs/heads/side"] = N }), UndoDirection.Undo);

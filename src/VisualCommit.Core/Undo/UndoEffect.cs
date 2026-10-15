@@ -82,7 +82,16 @@ public abstract record UndoEffect
     public sealed record RemoteUrl(string Remote, string From, string To) : UndoEffect;
 
     /// <summary>Puts the index to <paramref name="Source"/>'s tree: <c>restore --staged --source=&lt;source&gt; -- .</c>. Check: the index equals <paramref name="From"/> (<c>diff-index --cached --quiet &lt;from&gt;</c>).</summary>
-    public sealed record IndexTo(string Source, string From) : UndoEffect;
+    public sealed record IndexTo(string Source, string From) : UndoEffect
+    {
+        /// <summary>
+        /// The paths it puts back, or null for the whole index (<c>-- .</c>): the backups list's
+        /// index restores stage a snapshot's own paths only, since HEAD may have moved since the
+        /// snapshot (the report's BD16), and their undo and redo do the same. With paths, the check
+        /// compares those paths only (<c>diff-index --cached --quiet &lt;from&gt; -- &lt;paths&gt;</c>).
+        /// </summary>
+        public IReadOnlyList<string>? Paths { get; init; }
+    }
 
     /// <summary>
     /// Writes each file's recorded bytes back (<c>cat-file blob</c>), or deletes a file recorded

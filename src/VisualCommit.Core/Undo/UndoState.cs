@@ -134,6 +134,12 @@ public sealed record UndoCaptured
     /// </summary>
     public string? IndexSource { get; init; }
 
+    /// <summary>
+    /// The paths of <see cref="IndexSource"/> the restore put back (the report's BD16: a
+    /// snapshot's own paths), or null for the whole index.
+    /// </summary>
+    public IReadOnlyList<string>? IndexPaths { get; init; }
+
     /// <summary>The stash commit a stash made: <see cref="IGitRepository.StashAsync"/>'s result.</summary>
     public string? Stash { get; init; }
 
