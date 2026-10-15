@@ -189,14 +189,6 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     }
 
     /// <summary>
-    /// The comparison of <paramref name="toRef"/> with <paramref name="fromRef"/> in the right panel
-    /// (6.2): "Compare {b} with {cur}" and a drop's "Compare {A} with {B}". It leaves the
-    /// working-changes row, so that the details panel, which holds it, shows. WP7 and the lead build it.
-    /// </summary>
-    public Task CompareAsync(string fromRef, string toRef) =>
-        throw new NotImplementedException("The comparison's place is the lead's, with work package WP7 (docs/phase-5-design.md 6.2).");
-
-    /// <summary>
     /// The restore bar's tie to its discard (7.9): the Undo of the discard that saved
     /// <paramref name="snapshot"/> put its files back, so its bar goes. A bar that shows another
     /// discard's snapshot stays. WP3's undo calls it.

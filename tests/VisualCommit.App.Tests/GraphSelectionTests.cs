@@ -25,7 +25,9 @@ namespace VisualCommit.App.Tests;
 /// Several commits selected in the graph (docs/phase-3-design.md 4h, D88): the gestures with the
 /// platform's command modifier, Shift and the arrow keys, the selection kept as SHAs across a
 /// reload, the selected rows' look, what a right-click keeps, and the details panel's list of
-/// them (<c>MultiSelectionView</c>). The ops scenario's rows are those of the phase 3 report.
+/// three or more of them (<c>MultiSelectionView</c>); exactly two compare at once in its place
+/// (docs/phase-5-design.md 6.1, D162: <c>CompareView</c>). The ops scenario's rows are those of
+/// the phase 3 report.
 /// </summary>
 public class GraphSelectionTests
 {
@@ -64,27 +66,16 @@ public class GraphSelectionTests
         Assert.Equal(-1, repository.SelectedIndex);
         Assert.True(repository.Details.IsMultiSelection);
         Assert.False(repository.Details.ShowsPlaceholder);
-        var multi = Assert.IsType<MultiSelectionViewModel>(repository.MultiSelection);
-        Assert.Equal("2 commits selected", multi.Title);
-        Assert.Equal([("ce5ea6a", "Alpha two"), ("dff8fbf", "Alpha one")], multi.Items.Select(item => (item.ShortSha, item.Subject)));
 
-        var view = app.Window.GetVisualDescendants().OfType<MultiSelectionView>().Single(candidate => candidate.IsEffectivelyVisible);
-        Assert.Equal("2 commits selected", ((TextBlock)app.FindByAutomationId("MultiSelectionTitle")).Text);
-        Assert.Equal(MultiSelectionViewModel.HintText, ((TextBlock)app.FindByAutomationId("MultiSelectionHint")).Text);
-        Assert.Equal("Right-click a selected commit for what can be done with all of them.", MultiSelectionViewModel.HintText);
-        var items = view.GetVisualDescendants().OfType<Control>().Where(control => AutomationProperties.GetAutomationId(control) == "MultiSelectionItem").ToList();
-        Assert.Equal(["ce5ea6a Alpha two", "dff8fbf Alpha one"], items.Select(AutomationProperties.GetName));
-        var shaText = items[0].GetVisualDescendants().OfType<TextBlock>().First(text => text.Name == "MultiSelectionSha");
-        Assert.Equal(Resource(app, "VcTextSecondaryBrush"), ((ISolidColorBrush)shaText.Foreground!).Color);
-        Assert.Equal(app.Window.FindResource("VcCodeFontFamily"), shaText.FontFamily);
+        // Exactly two commits compare at once (docs/phase-5-design.md 6.1, D162): the lower row is From.
+        var comparison = Assert.IsType<CompareViewModel>(repository.MultiSelection);
+        Assert.False(comparison.IsBranches);
+        Assert.Equal("From dff8fbf Alpha one", comparison.FromText);
+        Assert.Equal("To ce5ea6a Alpha two", comparison.ToText);
+        Assert.Single(app.Window.GetVisualDescendants().OfType<CompareView>(), candidate => candidate.IsEffectivelyVisible);
+        Assert.DoesNotContain(app.Window.GetVisualDescendants().OfType<MultiSelectionView>(), candidate => candidate.IsEffectivelyVisible);
         Assert.False(app.FindByAutomationId("DetailsPlaceholder").IsEffectivelyVisible);
         Assert.False(app.FindByAutomationId("FileList").IsEffectivelyVisible);
-
-        // Its root is a control element named by its title, so UI Automation can find it.
-        var peer = ControlAutomationPeer.CreatePeerForElement(view);
-        Assert.True(peer.IsControlElement());
-        Assert.Equal("MultiSelectionView", peer.GetAutomationId());
-        Assert.Equal("2 commits selected", peer.GetName());
 
         // Both rows have the selection background; the others do not.
         var shot = app.Capture();
@@ -96,10 +87,27 @@ public class GraphSelectionTests
         Assert.Equal(Resource(app, "VcWindowBackgroundBrush"), shot.PixelAt(BackgroundPoint(app, MainWork)));
         Pictures(app, "graph-selection-two");
 
-        // Check 11 step 6: a third row, then the command modifier on it again removes it (step 7).
+        // Check 11 step 6: a third row shows phase 3's list; the command modifier on it again removes it (step 7).
         app.Click(RowPoint(app, MainWork), app.CommandModifier);
-        Assert.Equal("3 commits selected", ((MultiSelectionViewModel)repository.MultiSelection!).Title);
-        Assert.Equal(["88d6b91", "ce5ea6a", "dff8fbf"], ((MultiSelectionViewModel)repository.MultiSelection!).Items.Select(item => item.ShortSha));
+        var multi = Assert.IsType<MultiSelectionViewModel>(repository.MultiSelection);
+        Assert.Equal("3 commits selected", multi.Title);
+        Assert.Equal([("88d6b91", "Main work"), ("ce5ea6a", "Alpha two"), ("dff8fbf", "Alpha one")], multi.Items.Select(item => (item.ShortSha, item.Subject)));
+
+        var view = app.Window.GetVisualDescendants().OfType<MultiSelectionView>().Single(candidate => candidate.IsEffectivelyVisible);
+        Assert.Equal("3 commits selected", ((TextBlock)app.FindByAutomationId("MultiSelectionTitle")).Text);
+        Assert.Equal(MultiSelectionViewModel.HintText, ((TextBlock)app.FindByAutomationId("MultiSelectionHint")).Text);
+        Assert.Equal("Right-click a selected commit for what can be done with all of them.", MultiSelectionViewModel.HintText);
+        var items = view.GetVisualDescendants().OfType<Control>().Where(control => AutomationProperties.GetAutomationId(control) == "MultiSelectionItem").ToList();
+        Assert.Equal(["88d6b91 Main work", "ce5ea6a Alpha two", "dff8fbf Alpha one"], items.Select(AutomationProperties.GetName));
+        var shaText = items[0].GetVisualDescendants().OfType<TextBlock>().First(text => text.Name == "MultiSelectionSha");
+        Assert.Equal(Resource(app, "VcTextSecondaryBrush"), ((ISolidColorBrush)shaText.Foreground!).Color);
+        Assert.Equal(app.Window.FindResource("VcCodeFontFamily"), shaText.FontFamily);
+
+        // Its root is a control element named by its title, so UI Automation can find it.
+        var peer = ControlAutomationPeer.CreatePeerForElement(view);
+        Assert.True(peer.IsControlElement());
+        Assert.Equal("MultiSelectionView", peer.GetAutomationId());
+        Assert.Equal("3 commits selected", peer.GetName());
         app.Click(RowPoint(app, MainWork), app.CommandModifier);
 
         Assert.Equal([Sha(repository, AlphaOne), Sha(repository, AlphaTwo)], repository.Selection.Shas);
@@ -223,7 +231,7 @@ public class GraphSelectionTests
         app.RightClick(RowPoint(app, AlphaOne));
         Assert.Equal(Rows(repository, AlphaTwo, AlphaOne), Selected(repository));
         Assert.Equal((GraphHitKind.Commit, AlphaOne), (asked[^1].Hit.Kind, asked[^1].Hit.Row));
-        Assert.Equal("2 commits selected", ((MultiSelectionViewModel)repository.MultiSelection!).Title);
+        Assert.Equal("From dff8fbf Alpha one", Assert.IsType<CompareViewModel>(repository.MultiSelection).FromText);
         app.PressKey(Key.Escape);
 
         // A label of a selected row keeps it too.
@@ -279,15 +287,18 @@ public class GraphSelectionTests
 
         app.Click(RowPoint(app, AlphaTwo));
         app.Click(RowPoint(app, AlphaOne), app.CommandModifier);
+        var comparison = Assert.IsType<CompareViewModel>(repository.MultiSelection);
 
-        // A commit made outside moves every row down by one: the same commits stay selected.
+        // A commit made outside moves every row down by one: the same commits stay selected, and
+        // their comparison stays as it was.
         var before = repository.Graph;
         await scenario.CommitFileAsync("outside.txt", "outside\n", "Outside commit");
         await repository.RefreshAsync();
         await app.WaitForAsync(() => !ReferenceEquals(repository.Graph, before), "the reloaded graph");
         Assert.Equal([alphaTwo, alphaOne], repository.Selection.Shas);
         Assert.Equal([AlphaTwo + 1, AlphaOne + 1], Selected(repository));
-        Assert.Equal(["ce5ea6a", "dff8fbf"], ((MultiSelectionViewModel)repository.MultiSelection!).Items.Select(item => item.ShortSha));
+        Assert.Same(comparison, repository.MultiSelection);
+        Assert.Equal("From dff8fbf Alpha one", comparison.FromText);
         var shot = app.Capture();
         Assert.Equal(Resource(app, "VcSelectionBrush"), shot.PixelAt(BackgroundPoint(app, AlphaTwo + 1)));
         Assert.Equal(Resource(app, "VcSelectionBrush"), shot.PixelAt(BackgroundPoint(app, AlphaOne + 1)));

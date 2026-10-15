@@ -1,14 +1,14 @@
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Menus;
-using VisualCommit.App.ViewModels.Shell;
 using VisualCommit.Core.Git;
 
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// Several commits selected (docs/phase-3-design.md 4h, D88) and the branch drop's menu (4g):
-/// the details panel's list while two or more commits are selected, and the selection mapped
-/// again by its SHAs when a reloaded history replaces the graph.
+/// the details panel's list while three or more commits are selected (two compare, D162:
+/// <c>ShowMultiSelection</c> in RepositoryViewModel.Find.cs), and the selection mapped again by
+/// its SHAs when a reloaded history replaces the graph.
 /// </summary>
 public sealed partial class RepositoryViewModel
 {
@@ -59,13 +59,5 @@ public sealed partial class RepositoryViewModel
         {
             Selection = mapped;
         }
-    }
-
-    private void ShowMultiSelection(GraphSelection selection)
-    {
-        Details.IsMultiSelection = selection.IsMultiple;
-        MultiSelection = selection.IsMultiple
-            ? new MultiSelectionViewModel([.. SelectedCommits.Select(commit => new MultiSelectionItem(commit.Sha, commit.ShortSha, commit.Subject))])
-            : null;
     }
 }

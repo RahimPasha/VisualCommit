@@ -8,8 +8,12 @@ namespace VisualCommit.App.ViewModels.Operations;
 public sealed partial class RepositoryOperations
 {
     /// <inheritdoc cref="IRepositoryActions.CompareBranchesAsync"/>
-    public Task CompareBranchesAsync(string fromRef, string toRef) =>
-        throw new NotImplementedException("Comparing branches is work package WP7's (docs/phase-5-design.md 6.2).");
+    public Task CompareBranchesAsync(string fromRef, string toRef)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fromRef);
+        ArgumentException.ThrowIfNullOrWhiteSpace(toRef);
+        return IsClosed ? Task.CompletedTask : Repository.CompareAsync(fromRef, toRef);
+    }
 
     /// <inheritdoc cref="IRepositoryActions.HideBranchAsync"/>
     public Task HideBranchAsync(string branchRef) =>

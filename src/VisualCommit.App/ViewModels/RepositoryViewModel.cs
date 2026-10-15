@@ -150,7 +150,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     [ObservableProperty]
     public partial GraphSelection Selection { get; set; } = GraphSelection.Empty;
 
-    /// <summary>What the details panel shows instead of one commit's details while several are selected (4h); null otherwise. WP8 sets it.</summary>
+    /// <summary>
+    /// What the details panel's slot shows instead of one commit's details (4h): the list of three
+    /// or more selected commits, or a comparison (docs/phase-5-design.md 6: two selected commits,
+    /// or branches from their menus, <see cref="Comparison"/>); null otherwise.
+    /// </summary>
     [ObservableProperty]
     public partial object? MultiSelection { get; private set; }
 

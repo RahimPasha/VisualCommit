@@ -4,6 +4,7 @@
 // OperationTexts.Menus.Filters.cs. Until then each hook gives nothing, so no menu changes.
 
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 
 namespace VisualCommit.App.ViewModels.Menus;
@@ -27,4 +28,17 @@ public static partial class RepositoryMenus
 
     /// <summary>"Compare {A} with {B}" (6.2): a drop's, in a group of its own at the end.</summary>
     private static MenuItem? DropCompareItem(RepositoryMenuContext context, string sourceRef, string targetRef, IRepositoryActions actions) => null;
+
+    /// <summary>
+    /// A file of a comparison's list (6.4, FD21), built as a commit's file is: header the file
+    /// name; File history and Blame (at To, <see cref="FileMenuTarget.CommitSha"/>); then Open
+    /// file, Show in folder, Copy path. A right-click opens it only, selecting no row.
+    /// </summary>
+    public static MenuModel ForCompareFile(RepositoryMenuContext context, FileMenuTarget file, IRepositoryActions actions)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(actions);
+        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, actions));
+    }
 }

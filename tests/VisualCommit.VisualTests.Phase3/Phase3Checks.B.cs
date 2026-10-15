@@ -610,7 +610,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         // Step 5: a click and a Ctrl+click.
         app.Click(app.GraphRowPoint(5));
         app.Click(app.GraphRowPoint(4), command);
-        await app.WaitForAsync(() => Shown(app, "MultiSelectionView") is not null, "the multi-selection view");
+        // Two selected commits compare at once (docs/phase-5-design.md 6.1, D162).
+        await app.WaitForAsync(() => Shown(app, "Compare") is not null, "the comparison of the two commits");
         var two = Shot(app, "11d-two-selected");
         AssertSelected(app, two, 4, 5);
         AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
@@ -682,6 +683,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertSelected(app, null, 2);
         await WaitForDetailsAsync(app, "On main: Experiment");
         Assert.Null(Shown(app, "MultiSelectionView"));
+        Assert.Null(Shown(app, "Compare"));
     }
 
     /// <summary>
