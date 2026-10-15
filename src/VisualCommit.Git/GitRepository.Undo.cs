@@ -608,13 +608,7 @@ public sealed partial class GitRepository
             var candidates = new SortedSet<string>(StringComparer.Ordinal);
             foreach (var path in added)
             {
-                for (var slash = path.IndexOf('/', StringComparison.Ordinal); slash > 0; slash = path.IndexOf('/', slash + 1))
-                {
-                    if (IsFileOrLink(_repository.WorkingTreePath(path[..slash])))
-                    {
-                        candidates.Add(path[..slash]);
-                    }
-                }
+                candidates.UnionWith(ParentFolders(path).Where(parent => IsFileOrLink(_repository.WorkingTreePath(parent))));
 
                 var full = _repository.WorkingTreePath(path);
                 if (IsFileOrLink(full))
@@ -623,15 +617,41 @@ public sealed partial class GitRepository
                 }
                 else if (Directory.Exists(full))
                 {
-                    foreach (var file in Directory.EnumerateFiles(full, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 }))
-                    {
-                        candidates.Add(path + "/" + Path.GetRelativePath(full, file).Replace(Path.DirectorySeparatorChar, '/'));
-                    }
+                    candidates.UnionWith(FilesIn(path));
                 }
             }
 
             var ignored = await _repository.IgnoredAmongAsync(candidates, Token).ConfigureAwait(false);
             return ignored.Count > 0 ? new UndoRefusal(UndoRefusalKind.IgnoredFilesInTheWay, Paths: ignored) : null;
+        }
+
+        /// <summary>
+        /// The files under a folder of the working tree, as repository paths in byte order: what
+        /// git would lose with it. A symbolic link is a file to git, also one to a folder, and is
+        /// not followed.
+        /// </summary>
+        private List<string> FilesIn(string folder)
+        {
+            var files = new List<string>();
+            var folders = new Stack<string>([folder]);
+            while (folders.TryPop(out var relative))
+            {
+                foreach (var entry in new DirectoryInfo(_repository.WorkingTreePath(relative)).EnumerateFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }))
+                {
+                    var path = relative + "/" + entry.Name;
+                    if (entry is DirectoryInfo && entry.LinkTarget is null)
+                    {
+                        folders.Push(path);
+                    }
+                    else
+                    {
+                        files.Add(path);
+                    }
+                }
+            }
+
+            files.Sort(StringComparer.Ordinal);
+            return files;
         }
 
         /// <summary>
@@ -1022,13 +1042,18 @@ public sealed partial class GitRepository
                     GitOutput: updated.StandardError.Trim());
         }
 
-        [GeneratedRegex(@"not uptodate\. Cannot merge|would be overwritten by merge|would be removed by merge")]
+        /// <summary>
+        /// read-tree's refusals of a two-way merge (0.4), the last one for a folder of untracked files
+        /// where the move adds a file: <c>error: Updating 'd' would lose untracked files in it</c>.
+        /// </summary>
+        [GeneratedRegex(@"not uptodate\. Cannot merge|would be overwritten by merge|would be removed by merge|would lose untracked files in it")]
         private static partial Regex TwoWayMergeRefusalPattern();
 
         /// <summary>
         /// The paths in a move's way, counted by the app (7.6): read-tree names only the first. The
-        /// paths the move changes that the status shows changed or untracked; git's own path when
-        /// that finds none.
+        /// paths the move changes that the status shows changed or untracked, one where a folder
+        /// holds changed or untracked files, and an untracked file where the move puts a folder
+        /// (once, however many paths the move puts in it); git's own path when that finds none.
         /// </summary>
         private async Task<IReadOnlyList<string>> PathsInTheWayAsync(string from, string to, string gitOutput)
         {
@@ -1046,13 +1071,33 @@ public sealed partial class GitRepository
                 }
             }
 
-            var paths = SplitNul(await changed.ConfigureAwait(false)).Where(touched.Contains).ToList();
+            var folders = new HashSet<string>(touched.SelectMany(ParentFolders), StringComparer.Ordinal);
+            var paths = new List<string>();
+            var counted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var path in SplitNul(await changed.ConfigureAwait(false)))
+            {
+                var inTheWay = touched.Contains(path) || folders.Contains(path) ? path : ParentFolders(path).FirstOrDefault(touched.Contains);
+                if (inTheWay is not null && counted.Add(inTheWay))
+                {
+                    paths.Add(inTheWay);
+                }
+            }
+
             if (paths.Count == 0 && GitPathPattern().Match(gitOutput) is { Success: true } named)
             {
                 paths.Add(named.Groups["path"].Value);
             }
 
             return paths;
+        }
+
+        /// <summary>The folders a repository path lies in, outermost first: <c>a</c> and <c>a/b</c> for <c>a/b/c.txt</c>.</summary>
+        private static IEnumerable<string> ParentFolders(string path)
+        {
+            for (var slash = path.IndexOf('/', StringComparison.Ordinal); slash > 0; slash = path.IndexOf('/', slash + 1))
+            {
+                yield return path[..slash];
+            }
         }
 
         [GeneratedRegex(@"'(?<path>[^']+)'")]
@@ -1083,11 +1128,18 @@ public sealed partial class GitRepository
                 result.EnsureSuccess(command);
             }
 
-            var ignored = await _repository.IgnoredAmongAsync(blocked, Token).ConfigureAwait(false);
-            var local = blocked.Except(ignored, StringComparer.Ordinal).ToList();
+            // A folder git names ("would lose untracked files in them") is asked about by its files,
+            // which check-ignore matches and the folder's own name may not (*.log in logs/): it is
+            // in the way as ignored files only when every file in it is ignored.
+            var files = blocked.ToDictionary(
+                path => path,
+                path => !IsFileOrLink(_repository.WorkingTreePath(path)) && Directory.Exists(_repository.WorkingTreePath(path)) ? FilesIn(path) : [path],
+                StringComparer.Ordinal);
+            var ignored = (await _repository.IgnoredAmongAsync([.. files.Values.SelectMany(inside => inside)], Token).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
+            var local = blocked.Where(path => files[path].Count == 0 || !files[path].All(ignored.Contains)).ToList();
             return local.Count > 0
                 ? new UndoRefusal(UndoRefusalKind.LocalChangesInTheWay, Paths: local, GitOutput: result.StandardError.Trim())
-                : new UndoRefusal(UndoRefusalKind.IgnoredFilesInTheWay, Paths: ignored, GitOutput: result.StandardError.Trim());
+                : new UndoRefusal(UndoRefusalKind.IgnoredFilesInTheWay, Paths: [.. blocked.SelectMany(path => files[path])], GitOutput: result.StandardError.Trim());
         }
 
         /// <summary>

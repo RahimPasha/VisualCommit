@@ -16,7 +16,8 @@ namespace VisualCommit.Git.Tests;
 /// ref, HEAD's reflog and every file's bytes compared, never the index file's bytes. The Keep move
 /// (D169) keeps staged, partly staged and unstaged work, is not refused for stale stat data,
 /// refuses ignored files in its way that read-tree would overwrite without a word, counts every
-/// file in its way, and puts the files back when its compare-and-swap loses a race.
+/// file in its way (a folder of untracked files by its name), and puts the files back when its
+/// compare-and-swap loses a race. A switch tells a folder of ignored files from local work.
 /// </summary>
 public class UndoEffectTests
 {
@@ -110,6 +111,42 @@ public class UndoEffectTests
             Assert.Equal([path], refusal.Paths);
             Assert.Equal(still, await StillAsync(repo));
         }
+    }
+
+    [Fact]
+    public async Task Untracked_files_in_folders_where_a_keep_move_adds_files_refuse_it_counted_by_folder()
+    {
+        using var repo = await UndoRepoAsync();
+        var repository = await OpenAsync(repo);
+        var c3 = await ShaAsync(repo, "HEAD");
+
+        // The target adds the files d and e; untracked files, not ignored, lie in folders of those
+        // names. read-tree says "Updating 'd' would lose untracked files in it" and stops there.
+        await repo.GitAsync("checkout", "--quiet", "-b", "adds");
+        repo.WriteFile("d", "a file\n").WriteFile("e", "another file\n");
+        var target = await repo.CommitAsync("d and e");
+        await repo.CheckoutAsync("main");
+        repo.WriteFile("d/x.txt", "untracked\n").WriteFile("e/sub/y.txt", "untracked\n");
+        var still = await StillAsync(repo);
+
+        var refusal = await RefuseAsync(repository, new MoveHead("main", c3, target, MoveMode.Keep));
+        Assert.Equal(UndoRefusalKind.LocalChangesInTheWay, refusal.Kind);
+        Assert.Equal(["d", "e"], refusal.Paths);
+        Assert.Contains("would lose untracked files in it", refusal.GitOutput, StringComparison.Ordinal);
+        Assert.Equal(still, await StillAsync(repo));
+
+        // An untracked file where the target puts a folder of two files: one path in the way.
+        Directory.Delete(Path.Combine(repo.Path, "d"), recursive: true);
+        Directory.Delete(Path.Combine(repo.Path, "e"), recursive: true);
+        await repo.GitAsync("checkout", "--quiet", "-b", "nested", c3);
+        repo.WriteFile("n/one.txt", "1\n").WriteFile("n/two.txt", "2\n");
+        var nested = await repo.CommitAsync("n/one.txt and n/two.txt");
+        await repo.CheckoutAsync("main");
+        repo.WriteFile("n", "untracked\n");
+        still = await StillAsync(repo);
+        refusal = await RefuseAsync(repository, new MoveHead("main", c3, nested, MoveMode.Keep));
+        Assert.Equal((UndoRefusalKind.LocalChangesInTheWay, "n"), (refusal.Kind, Assert.Single(refusal.Paths!)));
+        Assert.Equal(still, await StillAsync(repo));
     }
 
     [Fact]
@@ -236,6 +273,26 @@ public class UndoEffectTests
         Assert.Equal(still, await StillAsync(repo));
 
         File.Delete(Path.Combine(repo.Path, "f.txt"));
+
+        // A folder where feature has the file f.txt holding only files *.log ignores: git names
+        // the folder, check-ignore would not match its name, its files are what is ignored.
+        File.WriteAllText(Path.Combine(repo.Path, ".git", "info", "exclude"), "*.log\n");
+        repo.WriteFile("f.txt/today.log", "kept\n").WriteFile("f.txt/old/yesterday.log", "kept\n");
+        still = await StillAsync(repo);
+        var folder = await RefuseAsync(repository, new Switch(main, feature));
+        Assert.Equal(UndoRefusalKind.IgnoredFilesInTheWay, folder.Kind);
+        Assert.Equal(["f.txt/old/yesterday.log", "f.txt/today.log"], folder.Paths);
+        Assert.Contains("would lose untracked files in them", folder.GitOutput, StringComparison.Ordinal);
+        Assert.Equal(still, await StillAsync(repo));
+
+        // One file in it that is not ignored: the folder is local work in the way.
+        repo.WriteFile("f.txt/notes.txt", "mine\n");
+        still = await StillAsync(repo);
+        var mixed = await RefuseAsync(repository, new Switch(main, feature));
+        Assert.Equal((UndoRefusalKind.LocalChangesInTheWay, "f.txt"), (mixed.Kind, Assert.Single(mixed.Paths!)));
+        Assert.Equal(still, await StillAsync(repo));
+        Directory.Delete(Path.Combine(repo.Path, "f.txt"), recursive: true);
+
         await RunAsync(repository, new Switch(main, feature));
         Assert.Equal("feature", await repo.CurrentBranchAsync());
         Assert.Equal("refs/heads/main", (await repo.GitAsync("rev-parse", "--symbolic-full-name", "@{-1}")).StandardOutput.Trim());
