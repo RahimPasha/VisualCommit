@@ -38,17 +38,17 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     public bool ShowsPage => Page is not null && !IsDiffOpen && !IsResolverOpen;
 
     /// <summary>
-    /// The search bar's view model (3.1), shown above the graph's column headers while the bar is
-    /// open, with the view the view locator finds for it (WP7's); null while it is closed. The lead
-    /// opens it (<see cref="OpenSearch"/>).
+    /// The search bar's view model (3.1, <see cref="SearchViewModel"/>), shown above the graph's
+    /// column headers while the bar is open, with its view (<c>SearchBarView</c>); null while it is
+    /// closed. <see cref="OpenSearch"/> opens it.
     /// </summary>
     [ObservableProperty]
     public partial object? Search { get; private set; }
 
     /// <summary>
     /// What the graph marks of the search (3.3), which <c>CommitGraphControl.Search</c> binds to:
-    /// <see cref="GraphSearchMarks.None"/> while nothing is searched. The lead gives it from the
-    /// search's view model.
+    /// <see cref="GraphSearchMarks.None"/> while nothing is searched. The search's view model gives
+    /// it as its matches arrive.
     /// </summary>
     [ObservableProperty]
     public partial GraphSearchMarks SearchMarks { get; private set; } = GraphSearchMarks.None;
@@ -195,13 +195,6 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     /// </summary>
     public Task CompareAsync(string fromRef, string toRef) =>
         throw new NotImplementedException("The comparison's place is the lead's, with work package WP7 (docs/phase-5-design.md 6.2).");
-
-    /// <summary>
-    /// The toolbar's Search and its key (3.1, 11.2): the graph shows (a diff or a page closes, they
-    /// hold no work) and the search bar opens with the focus in its box. WP7 and the lead build it.
-    /// </summary>
-    public void OpenSearch() =>
-        throw new NotImplementedException("The search's place is the lead's, with work package WP7 (docs/phase-5-design.md 3.1).");
 
     /// <summary>
     /// The restore bar's tie to its discard (7.9): the Undo of the discard that saved
