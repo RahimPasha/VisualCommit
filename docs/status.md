@@ -253,47 +253,26 @@ by part (WP8) and the real-window pass (WP9), fixing what they find.
   run one action each. In that branch's full run (beside other agents) two earlier merge-tool
   tests (`MergeToolTests`' cancelled tool, phase 4's C16) waited a minute for `git mergetool` to
   start and failed; both pass alone. Watch for them in later full runs.
-- **Lead follow-ups from the second wave** (do them before its full run):
+- **Lead follow-ups from the second wave** (do them before its full run; what the wave settled
+  is recorded in design 15.9 and the report's "Beyond design 14.1"):
   - After WP3's app half is merged: replace `UndoUntilRecorded` and `RedoUntilRecorded` in phase
     3's `Phase3Checks.A.Toolbar.cs` (check 23) with the report's values (after the branch: `Undo
     creation of topic/new`; after the stash: `Undo stash "Toolbar stash"`; after the pop: `Undo
     pop of stash "Toolbar stash"`; at the merge step: `PartA.FinishMerge` for both) and remove the
     two constants. Check 23 fails until then, on purpose (WP5).
-  - Record in design 15.8 or a new 15.9: FD15's first and last dash runs may be shorter than 2 but
-    no longer than 4 (WP2b); AD6 extended: closing the activity log gives the focus to whatever
-    content is shown (graph, page, interactive list, diff or resolver), never the banner (WP5).
-  - From WP4 (merged in `43e8586`): record in the design that 9.1's "inside the operation" holds
-    both ways (a checkout the click gave no automatic stash is refused with D124's text when HEAD
-    moved onto a branch that reaches the target) and that 9.3's rebase row covers only `cannot
-    rebase: …` (a pull's rebase refused at its own checkout keeps the pull's summary); add to the
-    report's "Beyond design 14.1": `RepositoryOperationsMergeTests` (~150, "Check out and merge"
-    during a merge shows "Checkout blocked"), `RepositoryOperationsSequenceTests` 540 (a list
-    refused at its start: "Your staged changes prevent the cherry-pick. …"),
-    `RepositoryOperationsStashTagsTests`' second pop test (refused before git), and
-    `ShellDriverCheckSupportTests`' and `Phase3SupportTests`' replays of check 9 step 7 (`e26f320`
-    alone fails them, `e666b65` fixes them); `architecture.md`'s quote of the old list refusal
-    text (about line 864) at closing; and the duplicate helpers WP4 could not reach:
-    `UndoStepRun.FilesIn` and `UndoStepRun.BlockedPaths` in `GitRepository.Undo.cs` and
-    `AllIgnoredAsync` in `GitRepository.cs` should call `GitRepository.FilesUnder`,
-    `GitFailureClassifier.BlockedPaths` and `IgnoredAmongAsync` (the undo's `BlockedPaths` misses
-    `would be removed by checkout:` blocks and throws git's raw failure instead of refusing).
-  - From WP6 (merged in `2905f55`) and WP7 (being merged on `wip/p5-merge7`), to record in the
-    design: the reflog entry's "Cherry-pick onto {cur}" is disabled when HEAD's graph walk
-    reaches the commit (5.2's "not from the graph" means "not from the graph's selection");
-    "All files" lists the commit's deletions with D and its title counts the rows listed (4.5,
-    BD14); the backups list reads a force push's lease when it loads (two calls per such backup);
-    Enter, Shift+Enter, previous and next during a running search wait until no nearer match can
-    come (3.1); a reload that maps or drops the selection keeps a branch comparison (6.2); a hidden
-    branch's click clears the selection and closes a diff (8.3, FD19). Design 5.2's check that a
-    reflog or backup commit still exists (`cat-file -e <sha>^{commit}`) has no owner yet: it
-    belongs in the operations a reflog row or a backup starts and in `RestoreBackupAsync`. The
-    real-window pass's `Phase3RealWindowPass.B.cs` (steps 11d, 11g, 11h) still expects "2 commits
-    selected" and fails now that two commits show their comparison (WP9). WP6's `c546200` alone
-    fails phase 3's checks 04, 05b, 08, 09, 13, 23, 26, 28 (`4705121` fixes them); WP7's `b494d96`
-    alone fails seven phase 3 checks (`604c672` fixes them).
-  - WP5 edited `AppSession.cs` (one `OperationLog` shared with `GitCallLog`) and
-    `MainWindowViewModel.cs` (`ActivityLog` with `Follow` and `Dispose`), the lead's files: taken
-    over as merged.
+  - Design 5.2's check that a reflog or backup commit still exists (`git cat-file -e
+    <sha>^{commit}`) in the operations a reflog row or a backup starts and in
+    `RestoreBackupAsync`; and `UndoStepRun.FilesIn`, `UndoStepRun.BlockedPaths` (it misses `would be
+    removed by checkout:` blocks and throws git's raw failure) and `AllIgnoredAsync` to call WP4's
+    `GitRepository.FilesUnder`, `GitFailureClassifier.BlockedPaths` and `IgnoredAmongAsync`
+    (design 15.9's last item).
+  - For WP9: `Phase3RealWindowPass.B.cs` (steps 11d, 11g, 11h) still expects "2 commits selected";
+    two selected commits now show their comparison (D162).
+  - At closing, in `architecture.md`: the TempRepo row (the speed-ups), the quote of the old list
+    refusal text (about line 864), and WP5's edits to `AppSession.cs` (one `OperationLog` shared
+    with `GitCallLog`) and `MainWindowViewModel.cs` (`ActivityLog`), taken over as merged. Bisect
+    notes: WP6's `c546200` alone fails eight phase 3 checks (`4705121` fixes them), WP7's
+    `b494d96` seven (`604c672`), WP4's `e26f320` two support tests (`e666b65`).
 - If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
   work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
   after building them; ask the owner before discarding any.

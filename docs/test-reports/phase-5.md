@@ -3260,6 +3260,19 @@ listed here as expected.
   so Q1's measurement and the real-window pass's `loaded N commits` waits stand. No earlier picture
   shows a page, the reflog or a backup's name.
 
+- **Found while building phase 5 (second wave), not in design 14.1**: `RepositoryOperationsMergeTests`
+  (about line 150): "Check out and merge" during a merge shows "Checkout blocked", "Finish or abort
+  the merge first" (C12, before git) instead of "Merge failed"; `RepositoryOperationsSequenceTests`
+  (line 540): a list of picks refused at its start says "Your staged changes prevent the
+  cherry-pick. …"; `RepositoryOperationsStashTagsTests`' second pop test
+  (`A_pop_whose_untracked_files_exist_is_refused_before_git_and_changes_nothing`): git's partial
+  apply is refused before git (D179); `ShellDriverCheckSupportTests` and `Phase3SupportTests`
+  replay check 9 step 7 as C12 refuses it (WP4, `43e8586`). Phase 3's check 23 states Undo and
+  Redo at every step (WP5). Two selected commits show their comparison in phase 3's checks 11 and
+  24 and phase 4's A1 and B8 (WP7, D162), and every branch menu gains part B's and part F's items
+  (heights: a local branch 571, the checked-out branch 441, check 13's hotfix 328, `loc` 380, the
+  drops 180, a conflicted file 345; WP6 and WP7, `e11ea7d`).
+
 ### Made before this report
 
 - **Phase 3, check 15b, a pop refused by git exits 128 on Git 2.56** (`281dd69`). CI's Windows

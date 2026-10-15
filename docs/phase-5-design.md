@@ -1785,6 +1785,48 @@ tag, the commit it points to. Of these, these change sentences above:
 - **Run time** (15.6, UD17): the Phase5 project has 34 test methods and Phase5Undo 55 (about 170
   operations), more than 15.6 estimates; D152's rule for CI's limit applies.
 
+### 15.9 What the second wave settled
+
+The second wave's packages (WP2b, WP4, WP5, WP6, WP7) built the UI to the report and found these;
+each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`, `2905f55`,
+`e11ea7d`).
+
+- **Dashes** (10, FD15): the dash pattern of every dashed line starts at the bottom of the row-0
+  ring in content coordinates; in a sampled range every run is 2 to 4 pixels, the first and the
+  last cut by the range may be shorter but never longer than 4. The reload bar (8.2) lies over the
+  scroll bar too and takes no input.
+- **Closing the activity log** (2.1, AD6) gives the focus to whatever content is shown (the graph,
+  a page, the interactive list, a diff or the resolver), never to a banner.
+- **C12's decision is made again inside the operation** (9.1): a checkout the click gave no
+  automatic stash (a detached HEAD, HEAD's own commit, a commit the branch did not reach) is
+  refused with D124's text (`HEAD moved while this waited: …`) when HEAD has moved meanwhile onto
+  a branch that reaches the target, as the automatic stash's own path is. 9.3's rebase row covers
+  only `cannot rebase: …`: a pull's rebase refused at its own checkout keeps the pull's summary; a
+  pull's merge or fast-forward gets C12's words for every block git prints, the folder's included.
+- **The reflog page** (5.2): "Cherry-pick onto {cur}" is disabled when HEAD's history (the graph's
+  walk from HEAD, complete by D178) reaches the entry's commit: 5.2's "reasons from the row, not
+  from the graph" means not from the graph's selection. A read again keeps the rows it did not
+  change, with their containers and focus. A right-click on a list's empty part opens no menu.
+- **"All files"** (4.5, BD14) lists the commit's deletions with D at their path's place, and its
+  title counts the rows listed (the tree and the deletions).
+- **The backups list** (5.3, 7.10) reads a force-push backup's lease when it loads (the
+  remote-tracking ref's reflog, two calls per such backup) and disables `Push {b} back to {r}…` when
+  it is gone.
+- **Search** (3.1): Enter, Shift+Enter, previous and next during a running search select once git
+  has searched every row between the selection and the target match (no nearer match can come) or
+  when the search ends; afterwards at once.
+- **Compare** (6.2): a reload that maps or drops a multi-selection is not the user selecting, so a
+  branch comparison stays.
+- **Hide** (8.3, FD19): clicking a hidden branch's row clears the selection (no commit, no working
+  row, a diff closed, the details placeholder shown). An upstream two branches track stays hidden
+  until both are shown.
+- **Still to do** (lead): design 5.2's check that a reflog or backup commit still exists (`git
+  cat-file -e <sha>^{commit}`) inside the operations a reflog row or a backup starts and in
+  `RestoreBackupAsync`; the undo's `UndoStepRun.FilesIn` and `BlockedPaths` and phase 1's
+  `AllIgnoredAsync` to share WP4's `GitRepository.FilesUnder`, `GitFailureClassifier.BlockedPaths`
+  and `IgnoredAmongAsync` (the undo's own `BlockedPaths` misses `would be removed by checkout:`
+  blocks).
+
 ## 16. Work breakdown
 
 Each package is built in its own worktree on a branch made **from `phase/5-history`**
