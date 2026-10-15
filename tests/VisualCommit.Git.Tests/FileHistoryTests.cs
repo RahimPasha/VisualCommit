@@ -309,11 +309,11 @@ public class FileHistoryTests(FileHistoryTests.History history) : IClassFixture<
     }
 
     [Fact]
-    public async Task Paths_with_a_line_feed_or_the_look_of_a_header_are_read_whole()
+    public async Task Paths_with_a_line_feed_a_tab_or_the_look_of_a_header_are_read_whole()
     {
-        // Neither name fits a Windows folder, so the history is imported without a working tree.
-        // The runner splits git's output at line feeds; the reader joins the pieces again, and
-        // consumes paths by count, so a path that starts like a commit header stays a path.
+        // No such name fits a Windows folder, so the history is imported without a working tree.
+        // Git C-quotes each of them (\n, \t, \037), so an entry stays one line, splits at its
+        // tabs alone, and never looks like a commit's header.
         using var repo = await TempRepo.CreateAsync("history-names");
 
         // Newer Git for Windows refuses to write such names into a tree unless told they need not fit Windows.
@@ -324,46 +324,126 @@ public class FileHistoryTests(FileHistoryTests.History history) : IClassFixture<
         var second = stream.Commit("refs/heads/main", "Edit the line break", file: "\"line\\nbreak.txt\"", content: "2\n");
         var third = stream.Commit("refs/heads/main", "Add the odd one", file: "\"" + new string('a', 40) + "\\037x.txt\"", content: "3\n");
         var fourth = stream.Commit("refs/heads/main", "Edit the odd one", file: "\"" + new string('a', 40) + "\\037x.txt\"", content: "4\n");
+        var fifth = stream.Commit("refs/heads/main", "Add the tabbed one", file: "\"tab\\there.txt\"", content: "5\n");
         var marks = await ImportAsync(repo, stream);
         var repository = await OpenAsync(repo);
 
         Assert.Equal(
             [(marks[second], FileChangeKind.Modified, "line\nbreak.txt", null), (marks[first], FileChangeKind.Added, "line\nbreak.txt", (string?)null)],
-            Shape(await ReadAsync(repository, marks[fourth], "line\nbreak.txt")));
+            Shape(await ReadAsync(repository, marks[fifth], "line\nbreak.txt")));
         Assert.Equal(
             [(marks[fourth], FileChangeKind.Modified, headerLike, null), (marks[third], FileChangeKind.Added, headerLike, (string?)null)],
-            Shape(await ReadAsync(repository, marks[fourth], headerLike)));
+            Shape(await ReadAsync(repository, marks[fifth], headerLike)));
+        Assert.Equal(
+            [(marks[fifth], FileChangeKind.Added, "tab\there.txt", (string?)null)],
+            Shape(await ReadAsync(repository, marks[fifth], "tab\there.txt")));
     }
 
     [Fact]
-    public void The_reader_joins_the_runners_lines_and_keeps_one_entry_per_commit()
+    public async Task A_rename_between_non_ascii_names_comes_back_whatever_the_users_quote_path()
+    {
+        // The app sets core.quotePath itself: the user's false would put raw UTF-8 into the entries.
+        using var repo = await TempRepo.CreateAsync("history-quoted");
+        var added = await repo.CommitFileAsync(History.NonAsciiPath, History.LongText, "Add a non-ASCII name");
+        repo.DeleteFile(History.NonAsciiPath).WriteFile("日本語/名前 ßΩ.txt", History.LongText);
+        var renamed = await repo.CommitAsync("Rename it to another");
+        await repo.ConfigAsync("core.quotePath", "false");
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(
+            [(renamed, FileChangeKind.Renamed, "日本語/名前 ßΩ.txt", History.NonAsciiPath), (added, FileChangeKind.Added, History.NonAsciiPath, (string?)null)],
+            Shape(await ReadAsync(repository, renamed, "日本語/名前 ßΩ.txt")));
+    }
+
+    [Fact]
+    public async Task Each_row_is_handed_over_as_soon_as_git_prints_its_entry()
+    {
+        // The page's first row must not wait for git to find the next commit, nor the last row for
+        // git to end (0.1: on 100k commits without a commit-graph, the first row at 147 ms, the
+        // end at 2 s). The runner notes each line before the reader gets it.
+        var events = new List<string>();
+        var repository = await GitRepository.OpenAsync(new LineNotingRunner(NewRunner(), events), history.Repo.Path, TestCancelled);
+
+        await repository.ReadFileHistoryAsync(
+            await history.HeadAsync(),
+            "notes/c.txt",
+            row =>
+            {
+                lock (events)
+                {
+                    events.Add("row " + row.Commit.Sha);
+                }
+            },
+            TestCancelled);
+
+        // Each commit has one entry here: its row comes right after that line, before the next header.
+        var expected = new List<string>();
+        var header = string.Empty;
+        foreach (var line in events.Where(e => e.StartsWith("line ", StringComparison.Ordinal)).Select(e => e["line ".Length..]))
+        {
+            expected.Add("line " + line);
+            if (line.Length > 40 && line[40] == '\u001f')
+            {
+                header = line[..40];
+            }
+            else if (line.Length > 0)
+            {
+                expected.Add("row " + header);
+            }
+        }
+
+        Assert.Equal(6, expected.Count(e => e.StartsWith("row ", StringComparison.Ordinal)));
+        Assert.Equal(expected, events);
+    }
+
+    [Fact]
+    public void The_reader_reads_each_entry_line_and_keeps_one_entry_per_commit()
     {
         var a = new string('a', 40);
         var b = new string('b', 40);
         var c = new string('c', 40);
-        string Header(string sha, string parent, string subject) =>
-            $"{sha}\u001f{parent}\u001fA U Thor\u001fa@example.com\u001f2026-01-01T12:00:00+00:00\u001f2026-01-01T12:00:00Z\u001f{subject}\0";
 
-        // What git prints, as the runner hands it over: split at every line feed, which also
-        // splits the path "x\ny" and the line before each commit's entries.
-        var stream = Header(a, b, "Third") + "\nR100\0old\0x\ny\0" + "M\0another\0"
-            + Header(b, c, "Second") + "\nM\0old\0"
-            + Header(c, string.Empty, "First") + "\nA\0old\0";
+        // What git prints, line by line as the runner hands it over: a rename's two paths, the new
+        // one C-quoted, then a second entry of the same commit, which is left out.
+        string[] lines =
+        [
+            Header(a, b, "Third"), string.Empty, "R088\told\t\"x\\ny\\tz \\303\\251\\\"\"", "M\tanother",
+            Header(b, c, "Second"), string.Empty, "M\told",
+            Header(c, string.Empty, "First"), string.Empty, "A\told",
+        ];
         var rows = new List<FileHistoryRow>();
         var reader = new GitRepository.FileHistoryReader(text => text, rows.Add);
-        foreach (var line in stream.Split('\n'))
+        foreach (var line in lines)
         {
             reader.Add(line);
         }
 
-        reader.Finish();
-
         Assert.Equal(0, reader.Skipped);
         Assert.Equal(
-            [(a, FileChangeKind.Renamed, "x\ny", "old"), (b, FileChangeKind.Modified, "old", null), (c, FileChangeKind.Added, "old", (string?)null)],
+            [(a, FileChangeKind.Renamed, "x\ny\tz é\"", "old"), (b, FileChangeKind.Modified, "old", null), (c, FileChangeKind.Added, "old", (string?)null)],
             Shape(rows));
         Assert.Equal("Third", rows[0].Commit.Subject);
         Assert.Equal([b], rows[0].Commit.Parents);
+    }
+
+    [Fact]
+    public void The_reader_hands_over_a_row_on_its_entry_line()
+    {
+        var a = new string('a', 40);
+        var b = new string('b', 40);
+        var rows = new List<FileHistoryRow>();
+        var reader = new GitRepository.FileHistoryReader(text => text, rows.Add);
+
+        reader.Add(Header(a, b, "Second"));
+        reader.Add(string.Empty);
+        Assert.Empty(rows);
+        reader.Add("M\tf.txt");
+        Assert.Single(rows);
+
+        reader.Add(Header(b, string.Empty, "First"));
+        reader.Add(string.Empty);
+        reader.Add("A\tf.txt");
+        Assert.Equal(2, rows.Count);
     }
 
     [Fact]
@@ -373,13 +453,17 @@ public class FileHistoryTests(FileHistoryTests.History history) : IClassFixture<
         var rows = new List<FileHistoryRow>();
         var reader = new GitRepository.FileHistoryReader(text => text, rows.Add);
 
-        // A header whose parent is no commit id, then a good one.
-        reader.Add($"{a}\u001fnot-a-sha\u001fA\u001fa@x\u001f\u001f\u001fBad\0");
-        reader.Add($"M\0f.txt\0{a}\u001f\u001fA\u001fa@x\u001f2026-01-01T12:00:00Z\u001f2026-01-01T12:00:00Z\u001fGood\0");
-        reader.Add("A\0f.txt\0");
-        reader.Finish();
+        // A header whose parent is no commit id with its entry, a rename without its second path,
+        // then a good commit.
+        reader.Add($"{a}\u001fnot-a-sha\u001fA\u001fa@x\u001f\u001f\u001fBad");
+        reader.Add(string.Empty);
+        reader.Add("M\tf.txt");
+        reader.Add("R100\tf.txt");
+        reader.Add($"{a}\u001f\u001fA\u001fa@x\u001f2026-01-01T12:00:00Z\u001f2026-01-01T12:00:00Z\u001fGood");
+        reader.Add(string.Empty);
+        reader.Add("A\tf.txt");
 
-        Assert.Equal(1, reader.Skipped);
+        Assert.Equal(2, reader.Skipped);
         Assert.Equal([(a, FileChangeKind.Added, "f.txt", (string?)null)], Shape(rows));
     }
 
@@ -414,5 +498,43 @@ public class FileHistoryTests(FileHistoryTests.History history) : IClassFixture<
         var ex = await Assert.ThrowsAsync<GitException>(() => history.Repository.ReadTreeFilesAsync(new string('1', 40), TestCancelled));
 
         Assert.Equal(128, ex.ExitCode);
+    }
+
+    /// <summary>A commit's header line as git prints it with the graph's format.</summary>
+    private static string Header(string sha, string parent, string subject) =>
+        $"{sha}\u001f{parent}\u001fA U Thor\u001fa@example.com\u001f2026-01-01T12:00:00+00:00\u001f2026-01-01T12:00:00Z\u001f{subject}";
+
+    /// <summary>A runner that notes each line git prints in <c>events</c> before the caller's handler gets it.</summary>
+    private sealed class LineNotingRunner(IGitRunner inner, List<string> events) : IGitRunner
+    {
+        public string ExecutablePath => inner.ExecutablePath;
+
+        public Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
+        {
+            if (command.OnOutputLine is not { } onLine)
+            {
+                return inner.RunAsync(command, cancellationToken);
+            }
+
+            var noting = new GitCommand([.. command.Arguments])
+            {
+                WorkingDirectory = command.WorkingDirectory,
+                Environment = command.Environment,
+                StandardInput = command.StandardInput,
+                RecordsStandardInput = command.RecordsStandardInput,
+                Encoding = command.Encoding,
+                OnErrorLine = command.OnErrorLine,
+                OnOutputLine = line =>
+                {
+                    lock (events)
+                    {
+                        events.Add("line " + line);
+                    }
+
+                    onLine(line);
+                },
+            };
+            return inner.RunAsync(noting, cancellationToken);
+        }
     }
 }

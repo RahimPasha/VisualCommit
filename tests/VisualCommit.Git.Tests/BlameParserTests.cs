@@ -85,14 +85,14 @@ public class BlameParserTests
     [InlineData("\"unfinished\\", "\"unfinished\\")]
     public void Unquote_reads_gits_c_quoting(string quoted, string expected)
     {
-        Assert.Equal(expected, BlameParser.Unquote(Latin1(quoted)));
+        Assert.Equal(expected, GitQuotedPaths.Unquote(Latin1(quoted)));
     }
 
     [Fact]
     public void A_raw_utf8_path_is_decoded()
     {
         // core.quotePath=false leaves non-ASCII bytes alone.
-        Assert.Equal("日本語/ßΩ.txt", BlameParser.Unquote(Latin1("日本語/ßΩ.txt")));
+        Assert.Equal("日本語/ßΩ.txt", GitQuotedPaths.Unquote(Latin1("日本語/ßΩ.txt")));
     }
 
     [Fact]

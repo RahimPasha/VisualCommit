@@ -1,4 +1,3 @@
-using System.Text;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -27,8 +26,10 @@ public sealed partial class GitRepository
 
         // --follow takes exactly one path and follows renames of 50 % or more (-M, as the diff's
         // --find-renames); --root keeps the file's first commit when log.showRoot is off. Only the
-        // default order streams (0.1). -z prints paths as they are, whatever core.quotePath says.
-        string[] arguments = ["log", "--follow", "--root", "-z", "-M", "--name-status", .. PlainLogOptions, "--format=" + LogFormat, startSha, "--", path];
+        // default order streams (0.1). Not -z: a commit's entries would then share a line with the
+        // next commit's header and wait for it. core.quotePath quotes every byte above 127 too, so
+        // an entry is one line of ASCII whatever its path holds.
+        string[] arguments = ["-c", "core.quotePath=true", "log", "--follow", "--root", "-M", "--name-status", .. PlainLogOptions, "--format=" + LogFormat, startSha, "--", path];
 
         var strings = new Dictionary<string, string>(StringComparer.Ordinal);
         var reader = new FileHistoryReader(
@@ -58,10 +59,9 @@ public sealed partial class GitRepository
 
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         result.EnsureSuccess(command);
-        reader.Finish();
         if (reader.Skipped > 0)
         {
-            _log.Warning($"git log --follow printed {reader.Skipped} part(s) that could not be read in {WorkingDirectory}; those commits are missing from the history of {path}.");
+            _log.Warning($"git log --follow printed {reader.Skipped} line(s) that could not be read in {WorkingDirectory}; those commits are missing from the history of {path}.");
         }
     }
 
@@ -133,91 +133,39 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
-    /// Reads <c>git log --follow -z --name-status</c> as it streams (0.1): per commit the graph's
-    /// header (<see cref="LogFormat"/>) ended by NUL, a line feed, then <c>status\0path\0</c>
-    /// (<c>status\0old\0new\0</c> for a rename or copy, the status with its score, <c>R088</c>);
-    /// the next header follows the last path directly. The runner hands the output over in lines,
-    /// split at line feeds, so the lines are joined with line feeds again (a path may hold one)
-    /// and the stream is read at NUL. A commit's first entry is its row; a path given for a
-    /// folder lists several files in one commit, and only the first is kept.
-    /// <para>
-    /// The runner drops a carriage return that comes just before a line feed, so a path that holds
-    /// "\r\n" loses its "\r". A commit's entries share their line with the next commit's header,
-    /// whose line feed ends it, so a row arrives when git prints the next commit, the last one
-    /// when git ends.
-    /// </para>
+    /// Reads <c>git log --follow --name-status</c> line by line as it streams (0.1): per commit the
+    /// graph's header (<see cref="LogFormat"/>), an empty line, then one line per entry,
+    /// <c>status\tpath</c> (<c>status\told\tnew</c> for a rename or copy, the status with its score,
+    /// <c>R088</c>). Under <c>core.quotePath</c> git C-quotes a path that holds a tab, a line feed,
+    /// any other control character, a quote, a backslash or a byte above 127, so an entry is one
+    /// line of ASCII, split at its tabs, and never holds the header's unit separator. A commit's
+    /// first entry is its row, handed over as soon as its line comes; a path given for a folder
+    /// lists several files in one commit, and only the first is kept.
     /// </summary>
     internal sealed class FileHistoryReader(Func<string, string> pooled, Action<FileHistoryRow> onRow)
     {
-        private readonly StringBuilder _stream = new();
-        private bool _started;
-
         /// <summary>The commit whose entries come now; null before the first and after a header that could not be read.</summary>
         private CommitInfo? _commit;
 
         /// <summary>The commit's row has been handed over: its other entries are left out.</summary>
         private bool _given;
 
-        /// <summary>The status of the entry being read, while its paths are still to come.</summary>
-        private string? _status;
-
-        private readonly List<string> _paths = [];
-
-        /// <summary>Headers that could not be read, and parts of the stream that fit nowhere.</summary>
+        /// <summary>Headers that could not be read, and lines that are neither a header nor an entry.</summary>
         public int Skipped { get; private set; }
 
         /// <summary>Reads one line the runner handed over.</summary>
         public void Add(string line)
         {
-            if (_started)
+            // The empty line between a commit's header and its entries.
+            if (line.Length == 0)
             {
-                _stream.Append('\n');
-            }
-
-            _started = true;
-            _stream.Append(line);
-            var text = _stream.ToString();
-            var start = 0;
-            for (var end = text.IndexOf('\0', start); end >= 0; end = text.IndexOf('\0', start))
-            {
-                Read(text[start..end]);
-                start = end + 1;
-            }
-
-            _stream.Clear().Append(text, start, text.Length - start);
-        }
-
-        /// <summary>Ends the stream: anything after its last NUL fits nowhere.</summary>
-        public void Finish()
-        {
-            if (_stream.ToString().Trim('\n').Length > 0 || _status is not null)
-            {
-                Skipped++;
-            }
-
-            _stream.Clear();
-            _status = null;
-        }
-
-        private void Read(string token)
-        {
-            if (_status is not null)
-            {
-                _paths.Add(token);
-                if (_paths.Count == (_status[0] is 'R' or 'C' ? 2 : 1))
-                {
-                    GiveRow();
-                }
-
                 return;
             }
 
-            // The line feed between a commit's header and its entries starts the first entry.
-            var text = token.TrimStart('\n');
-            if (IsHeader(text))
+            if (IsHeader(line))
             {
                 _given = false;
-                _commit = TryParseLogLine(text, pooled, out var commit) ? commit : null;
+                _commit = TryParseLogLine(line, pooled, out var commit) ? commit : null;
                 if (_commit is null)
                 {
                     Skipped++;
@@ -226,34 +174,31 @@ public sealed partial class GitRepository
                 return;
             }
 
-            if (text.Length > 0)
+            var fields = line.Split('\t');
+            if (fields[0].Length == 0 || fields.Length != (fields[0][0] is 'R' or 'C' ? 3 : 2))
             {
-                _status = text;
-                _paths.Clear();
+                Skipped++;
+                return;
             }
-        }
 
-        private void GiveRow()
-        {
-            var status = _status!;
-            _status = null;
             if (_commit is null || _given)
             {
                 return;
             }
 
             _given = true;
-            var row = _paths.Count == 2
-                ? new FileHistoryRow(_commit, KindOf(status), _paths[1], _paths[0])
-                : new FileHistoryRow(_commit, KindOf(status), _paths[0]);
+            var status = KindOf(fields[0]);
+            var row = fields.Length == 3
+                ? new FileHistoryRow(_commit, status, GitQuotedPaths.Unquote(fields[2]), GitQuotedPaths.Unquote(fields[1]))
+                : new FileHistoryRow(_commit, status, GitQuotedPaths.Unquote(fields[1]));
             onRow(row);
         }
 
-        /// <summary>A commit's header: its id (40 or 64 hex digits), then the unit separator, which no status holds.</summary>
-        private static bool IsHeader(string token)
+        /// <summary>A commit's header: its id (40 or 64 hex digits), then the unit separator, which no entry holds.</summary>
+        private static bool IsHeader(string line)
         {
-            var separator = token.IndexOf('\x1f', StringComparison.Ordinal);
-            return separator is 40 or 64 && IsObjectId(token[..separator]);
+            var separator = line.IndexOf('\x1f', StringComparison.Ordinal);
+            return separator is 40 or 64 && IsObjectId(line[..separator]);
         }
 
         /// <summary>The status letter as the changed-file list reads it (<see cref="ParseNameStatus"/>).</summary>

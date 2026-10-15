@@ -115,12 +115,12 @@ internal static partial class BlameParser
                             throw new FormatException($"Line {i + 1} of the blame has no path after the previous commit: {Shorten(row)}");
                         }
 
-                        previous = (value[..separator], Unquote(value[(separator + 1)..]));
+                        previous = (value[..separator], GitQuotedPaths.Unquote(value[(separator + 1)..]));
                         break;
                     case "filename":
                         // The file name ends a commit's path information; a previous commit not
                         // named just before it does not apply to this path.
-                        current.Path = Unquote(value);
+                        current.Path = GitQuotedPaths.Unquote(value);
                         current.Previous = previous;
                         previous = null;
                         break;
@@ -134,58 +134,6 @@ internal static partial class BlameParser
         }
 
         return new BlameResult(lines);
-    }
-
-    /// <summary>
-    /// A path as git writes it in <c>filename</c> and <c>previous</c>: C-quoted when it holds a
-    /// quote, a backslash, a control character or (with <c>core.quotePath</c>) a byte above 127,
-    /// and as it is otherwise; then its bytes read as UTF-8.
-    /// </summary>
-    internal static string Unquote(string latin1)
-    {
-        if (latin1.Length < 2 || latin1[0] != '"' || latin1[^1] != '"')
-        {
-            return DecodeUtf8(latin1);
-        }
-
-        var end = latin1.Length - 1;
-        var bytes = new List<byte>(latin1.Length);
-        for (var i = 1; i < end; i++)
-        {
-            var c = latin1[i];
-            if (c != '\\' || i + 1 >= end)
-            {
-                bytes.Add((byte)c);
-                continue;
-            }
-
-            var escaped = latin1[++i];
-            if (escaped is >= '0' and <= '3' && i + 2 < end && IsOctal(latin1[i + 1]) && IsOctal(latin1[i + 2]))
-            {
-                // A byte in three octal digits: git writes every byte above 127 so under core.quotePath.
-                bytes.Add((byte)(((escaped - '0') << 6) | ((latin1[i + 1] - '0') << 3) | (latin1[i + 2] - '0')));
-                i += 2;
-                continue;
-            }
-
-            bytes.Add(escaped switch
-            {
-                'a' => 7,
-                'b' => 8,
-                't' => 9,
-                'n' => 10,
-                'v' => 11,
-                'f' => 12,
-                'r' => 13,
-
-                // \\ and \" stand for themselves, as does anything git does not write.
-                _ => (byte)escaped,
-            });
-        }
-
-        return Utf8.GetString([.. bytes]);
-
-        static bool IsOctal(char c) => c is >= '0' and <= '7';
     }
 
     /// <summary>Text read as Latin-1 (one character per byte) decoded as the UTF-8 it is.</summary>

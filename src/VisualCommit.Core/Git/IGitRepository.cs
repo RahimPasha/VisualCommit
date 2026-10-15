@@ -672,11 +672,12 @@ public interface IGitRepository
     // File history, blame and the tree's files (sections 4.1 to 4.5; WP1).
 
     /// <summary>
-    /// A file's history (4.1, 0.1): <c>git log --follow --root -z -M --name-status
-    /// --no-show-signature --no-color --encoding=UTF-8 --format=&lt;the graph's&gt; &lt;start&gt; --
-    /// &lt;path&gt;</c>, newest first, following renames, without merges. <paramref name="onRow"/>
-    /// receives each commit as git prints it, on a background thread, never two at once. No commit
-    /// has touched an untracked path: no row. Unborn HEAD throws <see cref="GitException"/>.
+    /// A file's history (4.1, 0.1): <c>git -c core.quotePath=true log --follow --root -M
+    /// --name-status --no-show-signature --no-color --encoding=UTF-8 --format=&lt;the graph's&gt;
+    /// &lt;start&gt; -- &lt;path&gt;</c>, newest first, following renames, without merges.
+    /// <paramref name="onRow"/> receives each commit as git prints it, on a background thread,
+    /// never two at once. No commit has touched an untracked path: no row. Unborn HEAD throws
+    /// <see cref="GitException"/>.
     /// </summary>
     /// <param name="startSha">The commit the history starts from, a full SHA resolved when the page opened (it stays fixed).</param>
     /// <param name="path">The file's path at <paramref name="startSha"/>, repository-relative with <c>/</c>.</param>
