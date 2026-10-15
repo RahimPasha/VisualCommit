@@ -256,9 +256,9 @@ public class FailureClassifierTests
             ["README.md"]
         },
         {
-            "TP9, git merge over a staged file on 2.36 (standard output, no error:, no final line feed)",
-            string.Empty,
+            "TP9, git merge over a staged file on 2.36 (standard error, no error:, no final line feed)",
             "Your local changes to the following files would be overwritten by merge:\n  README.md",
+            string.Empty,
             GitFailureKind.MergeBlockedByStagedChanges,
             []
         },
