@@ -147,19 +147,128 @@ public sealed partial class GitRepository
     }
 
     // ---- C12: protected changes and the automatic stash (docs/phase-5-design.md 9, D179) ---------
-    // Work package WP4 builds them here; until then each throws.
+    // The automatic stash itself is StashAsync with untracked files, then the checkout below; the
+    // operation (RepositoryOperations.Branches.cs) runs the steps of 9.2 with these.
 
-    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("A checkout that keeps ignored files is work package WP4's (docs/phase-5-design.md 9.1).");
+    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
 
-    public Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("Putting back what a half-made automatic stash deleted is work package WP4's (docs/phase-5-design.md 9.2).");
+        // --no-overwrite-ignore (a switch option since Git 2.23) refuses where git would otherwise
+        // overwrite an ignored file the commit tracks, or delete an ignored folder where it has a
+        // file (0.7); the refusal is git's untracked-files block and changes nothing.
+        return noOverwriteIgnore
+            ? RunWriteAsync(options, cancellationToken, ["switch", "--detach", "--no-overwrite-ignore", .. Positional(commit)])
+            : CheckoutDetachedAsync(commit, options, cancellationToken);
+    }
 
-    public Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("The ignored files in a checkout's way are work package WP4's (docs/phase-5-design.md 9.3).");
+    public async Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+        {
+            return;
+        }
 
-    public Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("The stash apply's check is work package WP4's (docs/phase-5-design.md 9.3).");
+        // The paths on standard input, NUL-separated: as many as there are, any name. They stay
+        // literal (GIT_LITERAL_PATHSPECS, D74), and the index is left alone (--worktree only).
+        var command = new GitCommand("restore", $"--source={source}", "--worktree", "--pathspec-from-file=-", "--pathspec-file-nul")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = (options ?? NetworkOptions.None).Environment,
+            StandardInput = string.Concat(paths.Select(path => path + "\0")),
+        };
+        (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+    }
+
+    public async Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var ignored = new HashSet<string>(StringComparer.Ordinal);
+        if (paths.Count == 0)
+        {
+            return ignored;
+        }
+
+        // A folder git names ("would lose untracked files in them") is asked about by its files,
+        // which check-ignore matches where the folder's own name may not (*.log in logs/): it is
+        // ignored when every file in it is. A symbolic link is asked about as a file.
+        var asked = paths.Distinct(StringComparer.Ordinal).ToDictionary(
+            path => path,
+            path => IsFolder(path) ? FilesInFolder(path) : [path],
+            StringComparer.Ordinal);
+        var matched = await CheckIgnoreAsync([.. asked.Values.SelectMany(files => files).Distinct(StringComparer.Ordinal)], cancellationToken).ConfigureAwait(false);
+        foreach (var (path, files) in asked)
+        {
+            if (files.Count > 0 && files.All(matched.Contains))
+            {
+                ignored.Add(path);
+            }
+        }
+
+        return ignored;
+    }
+
+    public async Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stashCommit);
+
+        // Both sides of a rename (--no-renames), against the commit the stash was made on.
+        var changed = await ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit).ConfigureAwait(false);
+
+        // A stash made without its untracked files has two parents: ^3 names nothing (the report's PD15).
+        var untracked = await ResolveAsync(stashCommit + "^3", cancellationToken).ConfigureAwait(false) is { } third
+            ? await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", third).ConfigureAwait(false)
+            : string.Empty;
+        return new StashPaths(SplitPaths(changed), SplitPaths(untracked));
+
+        static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>Whether <paramref name="path"/> (relative to the working tree) is a folder there, not a symbolic link to one.</summary>
+    private bool IsFolder(string path)
+    {
+        var folder = new DirectoryInfo(Path.Combine(WorkingDirectory, path));
+        return folder.Exists && folder.LinkTarget is null;
+    }
+
+    /// <summary>The files in the folder <paramref name="path"/> and below it, relative to the working tree with <c>/</c>; symbolic links count as files and are not followed.</summary>
+    private List<string> FilesInFolder(string path)
+    {
+        var folder = Path.Combine(WorkingDirectory, path);
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true };
+        return [.. Directory.EnumerateFileSystemEntries(folder, "*", options)
+            .Where(entry => !Directory.Exists(entry) || new DirectoryInfo(entry).LinkTarget is not null)
+            .Select(entry => Path.GetRelativePath(WorkingDirectory, entry).Replace(Path.DirectorySeparatorChar, '/'))];
+    }
+
+    /// <summary>
+    /// Which of <paramref name="paths"/> git ignores: <c>git check-ignore --stdin -z</c>, which exits
+    /// with 1 when it ignores none. It runs without <c>GIT_LITERAL_PATHSPECS</c>: it refuses to run
+    /// with it (exit 128 on Git 2.36 and 2.55, design 15.8; D74), and takes each path as it is.
+    /// </summary>
+    private async Task<HashSet<string>> CheckIgnoreAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        if (paths.Count == 0)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var command = new GitCommand("check-ignore", "--stdin", "-z")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = new Dictionary<string, string?>(ReadEnvironment) { ["GIT_LITERAL_PATHSPECS"] = null },
+            StandardInput = string.Concat(paths.Select(path => path + "\0")),
+        };
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode == 1)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+    }
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
 
