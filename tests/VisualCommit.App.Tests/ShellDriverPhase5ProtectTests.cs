@@ -8,15 +8,20 @@ namespace VisualCommit.App.Tests;
 
 /// <summary>
 /// The driver's part P helpers (ShellDriver.Phase5.Protect.cs, WP4) in the headless window on the
-/// "protect" scenario: the status bar's text read as laid out, the stash calls since a mark, and
-/// the wait for a status read after a change made outside the app.
+/// "protect" scenario: the status bar's text read as laid out, whole or cut, the stash calls since
+/// a mark, and the wait for a status read after a change made outside the app, which counts only
+/// reads logged after its mark.
 /// </summary>
 public class ShellDriverPhase5ProtectTests
 {
+    /// <summary>A branch whose "Checked out {b}" is wider than the status bar's 520.</summary>
+    private const string LongBranch = "a-branch-whose-name-is-long-enough-that-the-status-bar-cuts-the-message-of-its-checkout-with-an-ellipsis";
+
     [AvaloniaFact]
     public async Task The_automatic_stashs_result_is_read_whole_with_its_tooltip_and_its_stash_calls_alone()
     {
         using var repo = await Scenarios.ProtectAsync();
+        await repo.GitAsync("branch", LongBranch, "main");
         repo.WriteFile("src/app.txt", "app\nunstaged\n").WriteFile("scratch.txt", "scratch\n");
         using var data = new TempDirectory("data");
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
@@ -40,6 +45,14 @@ public class ShellDriverPhase5ProtectTests
         Assert.Contains(app.GitCalls().Skip(calls), call => call.CommandText.StartsWith("git stash list", StringComparison.Ordinal));
         Assert.Empty(app.StashCallsSince(app.GitCalls().Count));
         Assert.Throws<ArgumentOutOfRangeException>(() => app.StashCallsSince(-1));
+
+        // A text wider than the status bar's 520 is cut with "…" and is not whole; its tooltip is
+        // (the cut that AssertNoClippedText cannot tell, PD14).
+        await repository.Operations.CheckoutAsync("refs/heads/" + LongBranch);
+        await app.WaitForIdleAsync(repository);
+        var cut = app.OperationStatusLayout();
+        Assert.Equal(("Checked out " + LongBranch, false, "Checked out " + LongBranch), (cut.Text, cut.IsWhole, cut.ToolTip));
+        Assert.True(cut.Width <= 520, "The status text is wider than its MaxWidth.");
     }
 
     [AvaloniaFact]
@@ -51,21 +64,24 @@ public class ShellDriverPhase5ProtectTests
         await app.WaitUntilReadyAsync();
         var repository = await GraphShownAsync(app);
 
-        // The opening's read was 0 and 0; a read after the mark is waited for, not that one.
+        // The opening's read was 0 and 0; the untracked notes makes a read of 0 and 1 after the mark.
         var mark = app.LogMark();
-        repo.WriteFile("src/app.txt", "app\nlocal\n");
+        repo.WriteFile("notes", "my own notes\n");
         await app.WaitForStatusReadAsync(0, 1, mark, timeout: TimeSpan.FromSeconds(30));
-        Assert.True(repository.Status.HasChanges);
+        Assert.True(repository.Status.IsUntracked("notes"));
 
-        // Counts that do not change (P24 step 7): the status names the new path.
+        // Only reads after the mark count: the opening's 0 and 0 is logged before it, and no read
+        // after it can have those counts while notes is there. The timeout says what it waited for.
+        var timedOut = await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForStatusReadAsync(0, 0, app.LogMark(), timeout: TimeSpan.FromMilliseconds(500)));
+        Assert.Contains("0 staged and 0 unstaged", timedOut.Message, StringComparison.Ordinal);
+
+        // P24 step 7: notes deleted and notes/today.txt written, so the counts stay 0 and 1, as
+        // the read before the mark had them: the status the step names decides.
         mark = app.LogMark();
+        File.Delete(Path.Combine(repo.Path, "notes"));
         repo.WriteFile("notes/today.txt", "today\n");
-        File.Delete(Path.Combine(repo.Path, "src", "app.txt"));
-        await app.WaitForStatusReadAsync(0, 2, mark, status => status.IsUntracked("notes/today.txt"), TimeSpan.FromSeconds(30));
+        await app.WaitForStatusReadAsync(0, 1, mark, status => status.IsUntracked("notes/today.txt") && !status.IsUntracked("notes"), TimeSpan.FromSeconds(30));
         Assert.True(repository.Status.IsUntracked("notes/today.txt"));
-
-        // Nothing that matches: the wait times out and says what it waited for.
-        var timedOut = await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForStatusReadAsync(3, 3, app.LogMark(), timeout: TimeSpan.FromMilliseconds(200)));
-        Assert.Contains("3 staged and 3 unstaged", timedOut.Message, StringComparison.Ordinal);
+        Assert.False(repository.Status.IsUntracked("notes"));
     }
 }
