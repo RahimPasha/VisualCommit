@@ -22,6 +22,13 @@ public sealed record UndoState
     /// </summary>
     public IReadOnlyDictionary<string, string> Refs { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The scope's symbolic refs (a remote's <c>refs/remotes/&lt;r&gt;/HEAD</c>, which every clone
+    /// has and every fetch on Git 2.55 writes, 0.2), by full name, with the full name of the ref
+    /// each points at (<c>%(symref)</c>). They have no object of their own and are not in <see cref="Refs"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> SymbolicRefs { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>The folder of the worktree each branch of <see cref="Refs"/> is checked out in, when one is (<c>%(worktreepath)</c>); branches checked out nowhere are absent.</summary>
     public IReadOnlyDictionary<string, string> CheckedOutIn { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 

@@ -34,12 +34,13 @@ public sealed partial class GitRepository
         var filesTask = ReadUndoFilesAsync(scope, cancellationToken);
         await Task.WhenAll(headTask, refsTask, stashesTask, configTask, statusTask, filesTask).ConfigureAwait(false);
 
-        var (refs, checkedOut) = await refsTask.ConfigureAwait(false);
+        var (refs, symbolicRefs, checkedOut) = await refsTask.ConfigureAwait(false);
         var (files, entries) = await filesTask.ConfigureAwait(false);
         return new UndoState
         {
             Head = await headTask.ConfigureAwait(false),
             Refs = refs,
+            SymbolicRefs = symbolicRefs,
             CheckedOutIn = checkedOut,
             Stashes = await stashesTask.ConfigureAwait(false),
             Config = await configTask.ConfigureAwait(false),
@@ -91,16 +92,18 @@ public sealed partial class GitRepository
     /// The scope's refs with one <c>for-each-ref</c>, and the worktree each branch is checked out in
     /// (<c>%(worktreepath)</c>). A pattern also matches the refs below it (<c>refs/heads/x</c> matches
     /// <c>refs/heads/x/y</c>), so exact names are filtered here. A symbolic ref
-    /// (<c>refs/remotes/&lt;r&gt;/HEAD</c>) has no object of its own and is left out.
+    /// (<c>refs/remotes/&lt;r&gt;/HEAD</c>) has no object of its own: it is kept apart with the ref it
+    /// points at (<c>%(symref)</c>), which <c>git remote remove</c> deletes with the rest.
     /// </summary>
-    private async Task<(IReadOnlyDictionary<string, string> Refs, IReadOnlyDictionary<string, string> CheckedOut)> ReadUndoRefsAsync(UndoScope scope, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyDictionary<string, string> Refs, IReadOnlyDictionary<string, string> SymbolicRefs, IReadOnlyDictionary<string, string> CheckedOut)> ReadUndoRefsAsync(UndoScope scope, CancellationToken cancellationToken)
     {
         var refs = new Dictionary<string, string>(StringComparer.Ordinal);
+        var symbolicRefs = new Dictionary<string, string>(StringComparer.Ordinal);
         var checkedOut = new Dictionary<string, string>(StringComparer.Ordinal);
         var patterns = scope.Refs.Concat(scope.RefPrefixes.Select(prefix => prefix.TrimEnd('/'))).Distinct(StringComparer.Ordinal).ToList();
         if (patterns.Count == 0)
         {
-            return (refs, checkedOut);
+            return (refs, symbolicRefs, checkedOut);
         }
 
         var output = await ReadOutputAsync(
@@ -109,8 +112,14 @@ public sealed partial class GitRepository
         foreach (var line in SplitLines(output))
         {
             var fields = line.Split('\x1f');
-            if (fields.Length < 4 || fields[3].Length > 0 || !scope.Covers(fields[0]))
+            if (fields.Length < 4 || !scope.Covers(fields[0]))
             {
+                continue;
+            }
+
+            if (fields[3].Length > 0)
+            {
+                symbolicRefs[fields[0]] = fields[3];
                 continue;
             }
 
@@ -121,7 +130,7 @@ public sealed partial class GitRepository
             }
         }
 
-        return (refs, checkedOut);
+        return (refs, symbolicRefs, checkedOut);
     }
 
     /// <summary>The stash list, newest first: each stash's commit and its message as the list shows it (<c>%gs</c>).</summary>
@@ -718,6 +727,12 @@ public sealed partial class GitRepository
                     continue;
                 }
 
+                if (effect is RemoteConfig removal && RemovesRemote(removal)
+                    && await DeleteRefsLeftUnderAsync($"{RemotesPrefix}{removal.Remote}/", index).ConfigureAwait(false) is { } left)
+                {
+                    return left;
+                }
+
                 if (effect is BranchConfig or RemoteConfig or UndoEffect.RemoteUrl or GitignoreBytes)
                 {
                     _deferred.Add(effect);
@@ -750,10 +765,41 @@ public sealed partial class GitRepository
             return null;
         }
 
+        /// <summary>Whether a remote's keys are removed: its <c>To</c> holds none of them.</summary>
+        private static bool RemovesRemote(RemoteConfig keys) => !keys.To.Any(ConfigScope.Remote(keys.Remote).Covers);
+
+        /// <summary>
+        /// A removed remote's refs that the step's own effects before <paramref name="index"/> do
+        /// not write, deleted as <c>git remote remove</c> deletes them (a fetch after an added remote
+        /// made them, its entry does not hold them): the symbolic ones at once, the others in the
+        /// step's transaction, each verified at the value read.
+        /// </summary>
+        private async Task<UndoRefusal?> DeleteRefsLeftUnderAsync(string prefix, int index)
+        {
+            var written = _order
+                .TakeWhile(item => item.Index != index)
+                .Select(item => item.Effect switch { SetRef set => set.Ref, SymbolicRef symbolic => symbolic.Ref, _ => null })
+                .OfType<string>()
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var (name, target) in _now.SymbolicRefs.Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal) && !written.Contains(item.Key)))
+            {
+                if (await ApplyAsync(new SymbolicRef(name, target, null), reversing: false).ConfigureAwait(false) is { } refusal)
+                {
+                    return refusal;
+                }
+            }
+
+            _pendingRefs.AddRange(_now.Refs
+                .Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal) && !written.Contains(item.Key))
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => new SetRef(item.Key, item.Value, null)));
+            return null;
+        }
+
         /// <summary>
         /// Whether the effect needs the waiting ref writes first: a switch to a branch the step
         /// creates, a move or a rename of a branch it sets, anything that starts from HEAD's commit
-        /// after a soft move of it.
+        /// after a soft move of it, a symbolic ref pointed at a ref the step creates.
         /// </summary>
         private bool NeedsPendingRefs(UndoEffect effect)
         {
@@ -772,6 +818,7 @@ public sealed partial class GitRepository
                 UndoEffect.RenameBranch rename => pending.Contains(HeadsPrefix + rename.From) || pending.Contains(HeadsPrefix + rename.To),
                 StashPush or StashPop or HardReset => movesHead,
                 RemoteRename rename => pending.Any(name => name.StartsWith($"{RemotesPrefix}{rename.From}/", StringComparison.Ordinal)),
+                SymbolicRef { To: { } target } => pending.Contains(target),
                 _ => false,
             };
         }
@@ -917,6 +964,7 @@ public sealed partial class GitRepository
                 Switch change => await SwitchAsync(change, reversing).ConfigureAwait(false),
                 UndoEffect.RenameBranch rename => await RenameAsync(rename, reversing).ConfigureAwait(false),
                 SetRef or TagRef or MoveHead or MoveDetachedHead => await TransactionAsync([effect], reversing ? PutBackMessage : Message, reversing).ConfigureAwait(false),
+                SymbolicRef symbolic => await SymbolicRefAsync(symbolic, reversing ? PutBackMessage : Message).ConfigureAwait(false),
                 _ => await ApplyWriteAsync(effect).ConfigureAwait(false),
             };
             if (refusal is null && !reversing)
@@ -1172,6 +1220,25 @@ public sealed partial class GitRepository
             return [.. paths.Distinct(StringComparer.Ordinal)];
         }
 
+        /// <summary>
+        /// A symbolic ref pointed at its target (<c>symbolic-ref -m</c>), or deleted itself rather
+        /// than the ref it points at (<c>update-ref --no-deref -d</c>, which also takes one whose
+        /// target is gone). Its check was the simulation's: git refuses neither.
+        /// </summary>
+        private async Task<UndoRefusal?> SymbolicRefAsync(SymbolicRef symbolic, string message)
+        {
+            if (symbolic.To is { } target)
+            {
+                await WriteAsync("symbolic-ref", "-m", message, symbolic.Ref, target).ConfigureAwait(false);
+            }
+            else
+            {
+                await WriteAsync("update-ref", "-m", message, "--no-deref", "-d", symbolic.Ref).ConfigureAwait(false);
+            }
+
+            return null;
+        }
+
         private async Task<UndoRefusal?> RenameAsync(UndoEffect.RenameBranch rename, bool reversing)
         {
             var command = _repository.WriteCommand(null, ["branch", "--move", .. Positional(rename.From, rename.To)]);
@@ -1410,6 +1477,7 @@ public sealed partial class GitRepository
             MoveHead move => move with { From = move.To, To = move.From },
             MoveDetachedHead move => move with { From = move.To, To = move.From },
             SetRef set => new SetRef(set.Ref, set.To, set.From),
+            SymbolicRef symbolic => symbolic with { From = symbolic.To, To = symbolic.From },
             TagRef tag => tag with { Present = !tag.Present },
             Switch change => new Switch(change.To, change.From),
             UndoEffect.RenameBranch rename => new UndoEffect.RenameBranch(rename.To, rename.From),

@@ -335,6 +335,7 @@ public class UndoEffectTests
             new RemoteRename("origin", "upstream"),
             new UndoEffect.RemoteUrl("upstream", url, "https://example.com/x.git"),
             new TagRef("t1", c1, Present: true),
+            new SymbolicRef("refs/remotes/upstream/HEAD", null, "refs/remotes/upstream/main"),
         ];
         foreach (var effect in effects)
         {
@@ -344,6 +345,8 @@ public class UndoEffectTests
         Assert.NotNull(await TargetAsync(repo, "refs/heads/behind2"));
         Assert.Equal("refs/heads/main", (await repo.GitAsync("config", "branch.feature.merge")).StandardOutput.Trim());
         Assert.Equal("https://example.com/x.git", (await repo.GitAsync("config", "remote.upstream.url")).StandardOutput.Trim());
+        Assert.Equal("refs/remotes/upstream/main", (await repo.GitAsync("symbolic-ref", "refs/remotes/upstream/HEAD")).StandardOutput.Trim());
+        Assert.Equal("VisualCommit: undo effect", (await repo.GitAsync("log", "-g", "-1", "--format=%gs", "refs/remotes/upstream/HEAD")).StandardOutput.Trim());
 
         foreach (var effect in effects.Reverse())
         {
@@ -352,13 +355,18 @@ public class UndoEffectTests
 
         Assert.Equal(start, await PictureAsync(repo));
 
-        // Refused: a branch of the new name exists, a key changed since, a tag exists again.
+        // Refused: a branch of the new name exists, a key changed since, a tag exists again, a
+        // symbolic ref points elsewhere.
         await repo.CreateBranchAsync("behind2");
         await repo.TagAsync("t1", "HEAD");
+        await repo.GitAsync("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/feature");
         var still = await StillAsync(repo);
         Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchExists, Name: "behind2"), await RefuseAsync(repository, effects[0]));
         Assert.Equal(new UndoRefusal(UndoRefusalKind.ConfigChanged, Name: "feature"), await RefuseAsync(repository, new BranchConfig("feature", other, upstream)));
         Assert.Equal(new UndoRefusal(UndoRefusalKind.TagExists, Name: "t1"), await RefuseAsync(repository, effects[4]));
+        Assert.Equal(
+            new UndoRefusal(UndoRefusalKind.RefChanged, Name: "refs/remotes/origin/HEAD"),
+            await RefuseAsync(repository, new SymbolicRef("refs/remotes/origin/HEAD", "refs/remotes/origin/main", null)));
         Assert.Equal(still, await StillAsync(repo));
     }
 
@@ -495,6 +503,7 @@ public class UndoEffectTests
         RemoteRename rename => new RemoteRename(rename.To, rename.From),
         UndoEffect.RemoteUrl url => url with { From = url.To, To = url.From },
         TagRef tag => tag with { Present = !tag.Present },
+        SymbolicRef symbolic => symbolic with { From = symbolic.To, To = symbolic.From },
         _ => throw new ArgumentOutOfRangeException(nameof(effect)),
     };
 

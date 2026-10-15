@@ -307,17 +307,52 @@ public class UndoSequenceTests
             UndoKind.RemoveRemote,
             "removal of remote origin",
             "op-1",
-            new UndoState { Head = Head("main", O), Refs = Refs(new() { ["refs/remotes/origin/main"] = O }), Config = [.. remote, .. branch] },
+            new UndoState
+            {
+                Head = Head("main", O),
+                Refs = Refs(new() { ["refs/remotes/origin/main"] = O }),
+                SymbolicRefs = Refs(new() { ["refs/remotes/origin/HEAD"] = "refs/remotes/origin/main" }),
+                Config = [.. remote, .. branch],
+            },
             new UndoState { Head = Head("main", O) },
             UndoCaptured.None);
+        var head = new SymbolicRef("refs/remotes/origin/HEAD", null, "refs/remotes/origin/main");
         Assert.Equal(
-            [new RemoteConfig("origin", [], remote), new BranchConfig("main", [], branch), new SetRef("refs/remotes/origin/main", null, O)],
+            [new RemoteConfig("origin", [], remote), new BranchConfig("main", [], branch), new SetRef("refs/remotes/origin/main", null, O), head],
             Undo(entry),
             EffectComparer.Instance);
         Assert.Equal(
-            [new SetRef("refs/remotes/origin/main", O, null), new BranchConfig("main", branch, []), new RemoteConfig("origin", remote, [])],
+            [head with { From = head.To, To = null }, new SetRef("refs/remotes/origin/main", O, null), new BranchConfig("main", branch, []), new RemoteConfig("origin", remote, [])],
             Redo(entry),
             EffectComparer.Instance);
+    }
+
+    [Fact]
+    public void A_removal_of_a_remotes_keys_forgets_every_ref_under_it_and_a_symbolic_ref_is_checked_by_its_target()
+    {
+        // An added remote fetched since: its undo leaves no ref under it for a later effect.
+        IReadOnlyList<ConfigEntry> remote = [new("remote.mirror.url", "https://example.com/m.git")];
+        var added = new UndoEntry(UndoKind.AddRemote, "addition of remote mirror", "op-1", new UndoState { Head = Head("main", O) }, new UndoState { Head = Head("main", O), Config = remote }, UndoCaptured.None);
+        var fetched = new UndoState
+        {
+            Head = Head("main", O),
+            Refs = Refs(new() { ["refs/remotes/mirror/main"] = O }),
+            SymbolicRefs = Refs(new() { ["refs/remotes/mirror/HEAD"] = "refs/remotes/mirror/main" }),
+            Config = remote,
+        };
+        var then = new UndoStep(added, UndoDirection.Undo, [.. Undo(added), new SetRef("refs/remotes/mirror/main", null, N), new SymbolicRef("refs/remotes/mirror/HEAD", null, "refs/remotes/mirror/main")]);
+        Assert.Null(UndoChecks.FirstRefusal(then, fetched));
+
+        // A symbolic ref pointed elsewhere since, or one created where a plain ref now is.
+        var symbolic = new SymbolicRef("refs/remotes/mirror/HEAD", "refs/remotes/mirror/main", null);
+        Assert.Null(UndoChecks.FirstRefusal(new UndoStep(added, UndoDirection.Undo, [symbolic]), fetched));
+        Assert.Equal(
+            new UndoRefusal(UndoRefusalKind.RefChanged, Name: "refs/remotes/mirror/HEAD"),
+            UndoChecks.FirstRefusal(new UndoStep(added, UndoDirection.Undo, [symbolic]), fetched with { SymbolicRefs = Refs(new() { ["refs/remotes/mirror/HEAD"] = "refs/remotes/mirror/other" }) }));
+        Assert.Equal(
+            new UndoRefusal(UndoRefusalKind.RefChanged, Name: "refs/remotes/mirror/HEAD"),
+            UndoChecks.FirstRefusal(new UndoStep(added, UndoDirection.Undo, [new SymbolicRef("refs/remotes/mirror/HEAD", null, "refs/remotes/mirror/main")]), fetched with { SymbolicRefs = Refs(new()), Refs = Refs(new() { ["refs/remotes/mirror/HEAD"] = O }) }));
+        Assert.Equal(["refs/remotes/mirror/HEAD"], UndoChecks.ScopeOf(new UndoStep(added, UndoDirection.Undo, [symbolic])).Refs);
     }
 
     [Fact]

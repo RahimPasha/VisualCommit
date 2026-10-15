@@ -76,6 +76,13 @@ public class UndoStepRemoteTests
 
         var added = await RecordAsync(repository, UndoScope.AddRemote("mirror"), () => repository.AddRemoteAsync("mirror", repo.SiblingPath("origin.git"), TestCancelled));
         var withMirror = await PictureAsync(repo);
+
+        // "Fetch now", ticked by default, runs as an operation of its own after the add, which
+        // records nothing: its remote branches and mirror/HEAD (which a fetch on Git 2.55 writes
+        // itself) go with the remote, as git remote remove deletes them.
+        await repository.FetchAsync("mirror", NetworkOptions.None, cancellationToken: TestCancelled);
+        await repo.GitAsync("remote", "set-head", "mirror", "main");
+        Assert.NotNull(await TargetAsync(repo, "refs/remotes/mirror/feature"));
         added = await UndoAsync(repository, added);
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, added);
@@ -96,6 +103,9 @@ public class UndoStepRemoteTests
         var (repository, _) = await OpenDatedAsync(repo);
         await repo.GitAsync("config", "remote.pushDefault", "origin");
         await repo.GitAsync("config", "branch.main.pushRemote", "origin");
+
+        // origin/HEAD, which every clone has and every fetch on Git 2.55 writes: a symbolic ref.
+        await repo.GitAsync("remote", "set-head", "origin", "main");
         var start = await PictureAsync(repo);
 
         var renamed = await RecordAsync(repository, UndoScope.RenameRemote("origin", "upstream"), () => repository.RenameRemoteAsync("origin", "upstream", TestCancelled));
@@ -118,9 +128,11 @@ public class UndoStepRemoteTests
         });
         var afterRemoval = await PictureAsync(repo);
         Assert.DoesNotContain("remote.pushdefault", afterRemoval.Config, StringComparison.Ordinal);
+        Assert.DoesNotContain("refs/remotes/origin/HEAD", afterRemoval.Refs, StringComparison.Ordinal);
         removed = await UndoAsync(repository, removed);
         Assert.Equal(beforeRemoval, await PictureAsync(repo));
         Assert.Equal("refs/remotes/origin/main", (await repo.GitAsync("rev-parse", "--symbolic-full-name", "main@{upstream}")).StandardOutput.Trim());
+        Assert.Equal("refs/remotes/origin/main", (await repo.GitAsync("symbolic-ref", "refs/remotes/origin/HEAD")).StandardOutput.Trim());
         await RedoAsync(repository, removed);
         Assert.Equal(afterRemoval, await PictureAsync(repo));
     }

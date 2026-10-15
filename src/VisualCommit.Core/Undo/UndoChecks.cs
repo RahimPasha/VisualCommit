@@ -23,10 +23,10 @@ public static class UndoChecks
 
     /// <summary>
     /// What a step's operation reads before it changes anything (7.5 step 2): the entry's scope,
-    /// and everything the step's effects check: the refs they name, the stash list, the
-    /// configuration of the branches and remotes they change (every remote's, for
-    /// <c>remote.pushDefault</c> and the remotes' names), the files they write, the whole status for
-    /// a stash, the <c>.gitignore</c>.
+    /// and everything the step's effects check: the refs they name (symbolic ones too), the stash
+    /// list, the configuration of the branches and remotes they change (every remote's, for
+    /// <c>remote.pushDefault</c> and the remotes' names), the files they write, the whole status
+    /// for a stash, the <c>.gitignore</c>.
     /// </summary>
     public static UndoScope ScopeOf(UndoStep step)
     {
@@ -47,6 +47,9 @@ public static class UndoChecks
                     break;
                 case SetRef set:
                     refs.Add(set.Ref);
+                    break;
+                case SymbolicRef symbolic:
+                    refs.Add(symbolic.Ref);
                     break;
                 case Switch change:
                     refs.AddRange(new[] { change.From.BranchName, change.To.BranchName }.OfType<string>().Select(branch => HeadsPrefix + branch));
@@ -179,7 +182,7 @@ public static class UndoChecks
     /// <summary>
     /// The state a step's effects leave, effect by effect, as far as it is known. What is not
     /// known (in memory: the configuration, the files, the index entries, the whole status, an
-    /// annotated tag's object; after a pop: the files and the status) is not checked.
+    /// annotated tag's object, the symbolic refs; after a pop: the files and the status) is not checked.
     /// </summary>
     private sealed class Simulation
     {
@@ -188,6 +191,9 @@ public static class UndoChecks
 
         private readonly bool _inMemory;
         private readonly Dictionary<string, string> _refs;
+
+        /// <summary>The symbolic refs with the refs they point at; null in memory, where they were not read.</summary>
+        private readonly Dictionary<string, string>? _symbolicRefs;
 
         /// <summary>The branches (short names) checked out in another worktree, with its folder.</summary>
         private readonly Dictionary<string, string> _elsewhere = new(StringComparer.Ordinal);
@@ -237,6 +243,7 @@ public static class UndoChecks
                 return;
             }
 
+            _symbolicRefs = new Dictionary<string, string>(now.SymbolicRefs, StringComparer.Ordinal);
             _config = [.. now.Config];
             _status = now.Status;
             _gitignore = now.Gitignore;
@@ -283,6 +290,7 @@ public static class UndoChecks
             MoveHead move => Move(move),
             MoveDetachedHead move => MoveDetached(move),
             SetRef set => Set(set),
+            SymbolicRef symbolic => Symbolic(symbolic),
             Switch change => SwitchHead(change),
             UndoEffect.RenameBranch rename => Rename(rename),
             BranchConfig keys => Keys(keys),
@@ -366,6 +374,32 @@ public static class UndoChecks
             }
 
             SetValue(set.Ref, set.To);
+            return null;
+        }
+
+        private UndoRefusal? Symbolic(SymbolicRef symbolic)
+        {
+            if (_symbolicRefs is null)
+            {
+                return null;
+            }
+
+            // A ref of the name that is not symbolic is in the way of one created too.
+            if (!string.Equals(_symbolicRefs.GetValueOrDefault(symbolic.Ref), symbolic.From, StringComparison.Ordinal)
+                || (symbolic.From is null && RefOf(symbolic.Ref) is not null))
+            {
+                return new UndoRefusal(UndoRefusalKind.RefChanged, Name: symbolic.Ref);
+            }
+
+            if (symbolic.To is null)
+            {
+                _symbolicRefs.Remove(symbolic.Ref);
+            }
+            else
+            {
+                _symbolicRefs[symbolic.Ref] = symbolic.To;
+            }
+
             return null;
         }
 
@@ -487,7 +521,9 @@ public static class UndoChecks
 
             if (removes)
             {
+                // Every ref left under the remote goes with it, as git remote remove deletes them.
                 _remotes.Remove(keys.Remote);
+                ForgetRefsUnder($"{RemotesPrefix}{keys.Remote}/");
             }
             else
             {
@@ -515,11 +551,7 @@ public static class UndoChecks
             // Git rewrites the remote's keys, the upstreams and its remote branches: what is read
             // of them is no longer known.
             _config = null;
-            foreach (var name in _refs.Keys.Where(name => name.StartsWith($"{RemotesPrefix}{rename.From}/", StringComparison.Ordinal)).ToList())
-            {
-                _refs.Remove(name);
-            }
-
+            ForgetRefsUnder($"{RemotesPrefix}{rename.From}/");
             return null;
         }
 
@@ -813,6 +845,25 @@ public static class UndoChecks
         }
 
         private void ForgetIndexEntries() => _indexKnown = false;
+
+        /// <summary>The refs and symbolic refs under <paramref name="prefix"/> are gone, or no longer known.</summary>
+        private void ForgetRefsUnder(string prefix)
+        {
+            foreach (var name in _refs.Keys.Where(name => name.StartsWith(prefix, StringComparison.Ordinal)).ToList())
+            {
+                _refs.Remove(name);
+            }
+
+            if (_symbolicRefs is not { } symbolicRefs)
+            {
+                return;
+            }
+
+            foreach (var name in symbolicRefs.Keys.Where(name => name.StartsWith(prefix, StringComparison.Ordinal)).ToList())
+            {
+                symbolicRefs.Remove(name);
+            }
+        }
 
         /// <summary>Whether the ref's value is known: in memory, only branches, remote branches and tags were read.</summary>
         private bool KnowsRef(string fullName) =>

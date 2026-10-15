@@ -42,6 +42,17 @@ public abstract record UndoEffect
     }
 
     /// <summary>
+    /// Points the symbolic ref <paramref name="Ref"/> (full name: a remote's
+    /// <c>refs/remotes/&lt;r&gt;/HEAD</c>) at <paramref name="To"/> instead of <paramref name="From"/>
+    /// (full ref names; either absent, null): <c>symbolic-ref -m &lt;msg&gt; &lt;ref&gt; &lt;to&gt;</c>,
+    /// once the step's ref transaction has written the ref it points at (<c>update-ref --stdin</c> of
+    /// older gits has no command for one: 2.36 says <c>fatal: unknown command: symref-create</c>), or
+    /// <c>update-ref -m &lt;msg&gt; --no-deref -d &lt;ref&gt;</c>. Check: the ref points at
+    /// <paramref name="From"/> (is absent when it is null).
+    /// </summary>
+    public sealed record SymbolicRef(string Ref, string? From, string? To) : UndoEffect;
+
+    /// <summary>
     /// Switches HEAD from <paramref name="From"/> to <paramref name="To"/>: <c>switch --no-guess
     /// --no-overwrite-ignore &lt;b&gt;</c>, or <c>switch --detach --no-overwrite-ignore &lt;sha&gt;</c>
     /// for a detached one, never with an automatic stash (9.1). Check: HEAD is exactly
@@ -55,7 +66,13 @@ public abstract record UndoEffect
     /// <summary>Writes <paramref name="Branch"/>'s keys of <paramref name="To"/> with <c>config --local</c> and unsets the others. Check: the keys are <paramref name="From"/>.</summary>
     public sealed record BranchConfig(string Branch, IReadOnlyList<ConfigEntry> From, IReadOnlyList<ConfigEntry> To) : UndoEffect;
 
-    /// <summary>As <see cref="BranchConfig"/> for a remote's keys (<c>remote.&lt;r&gt;.*</c>, and <c>remote.pushDefault</c> when it names it), written with <c>--add</c> in order.</summary>
+    /// <summary>
+    /// As <see cref="BranchConfig"/> for a remote's keys (<c>remote.&lt;r&gt;.*</c>, and
+    /// <c>remote.pushDefault</c> when it names it), written with <c>--add</c> in order. One that
+    /// removes the remote (<paramref name="To"/> holds none of its keys) also deletes, in the step's
+    /// ref transaction, every ref the step leaves under <c>refs/remotes/&lt;r&gt;/</c>, as <c>git
+    /// remote remove</c> does: those a fetch made after an added remote, which its entry does not hold.
+    /// </summary>
     public sealed record RemoteConfig(string Remote, IReadOnlyList<ConfigEntry> From, IReadOnlyList<ConfigEntry> To) : UndoEffect;
 
     /// <summary>Renames a remote: <c>remote rename</c>. Check: <paramref name="From"/> exists and <paramref name="To"/> does not.</summary>

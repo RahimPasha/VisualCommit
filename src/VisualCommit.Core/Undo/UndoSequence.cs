@@ -360,9 +360,10 @@ public static class UndoSequence
 
     /// <summary>
     /// An added or removed remote: its keys (and <c>remote.pushDefault</c> when it named it), the
-    /// branches' keys git removed with it, and its remote branches, which come back from the
-    /// recorded tips (the <c>remote-</c> backup holds them too). Keys are written before the
-    /// branches are set, and removed after they are deleted.
+    /// branches' keys git removed with it, and its remote branches and <c>&lt;r&gt;/HEAD</c>, which
+    /// come back from the recorded tips (the <c>remote-</c> backup holds them too). Keys are
+    /// written before the branches are set, and removed after they are deleted; the removal of
+    /// the keys deletes what a fetch since put under the remote (<see cref="RemoteConfig"/>).
     /// </summary>
     private static IReadOnlyList<UndoEffect> Remote(UndoEntry entry, bool undo)
     {
@@ -373,8 +374,9 @@ public static class UndoSequence
             .Select(branch => (UndoEffect)new BranchConfig(branch, BranchKeys(from, branch), BranchKeys(to, branch)))
             .ToList();
         var refs = ChangedRefs(entry, RemotesPrefix + remote + "/", undo);
+        var symbolic = ChangedSymbolicRefs(entry, RemotesPrefix + remote + "/", undo);
         var creates = !from.Config.Any(ConfigScope.Remote(remote).Covers);
-        return creates ? [keys, .. branches, .. refs] : [.. refs, .. branches, keys];
+        return creates ? [keys, .. branches, .. refs, .. symbolic] : [.. symbolic, .. refs, .. branches, keys];
     }
 
     private static IReadOnlyList<UndoEffect> RenameRemote(UndoEntry entry, bool undo)
@@ -425,6 +427,23 @@ public static class UndoSequence
                 .Select(name => (UndoEffect)(undo
                     ? new SetRef(name, after.GetValueOrDefault(name), before.GetValueOrDefault(name))
                     : new SetRef(name, before.GetValueOrDefault(name), after.GetValueOrDefault(name)))),
+        ];
+    }
+
+    /// <summary>The symbolic refs under <paramref name="prefix"/> that the action created, deleted or pointed elsewhere, set back or forth.</summary>
+    private static IReadOnlyList<UndoEffect> ChangedSymbolicRefs(UndoEntry entry, string prefix, bool undo)
+    {
+        var before = entry.Before.SymbolicRefs;
+        var after = entry.After.SymbolicRefs;
+        return
+        [
+            .. before.Keys.Union(after.Keys, StringComparer.Ordinal)
+                .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
+                .Where(name => !string.Equals(before.GetValueOrDefault(name), after.GetValueOrDefault(name), StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal)
+                .Select(name => (UndoEffect)(undo
+                    ? new SymbolicRef(name, after.GetValueOrDefault(name), before.GetValueOrDefault(name))
+                    : new SymbolicRef(name, before.GetValueOrDefault(name), after.GetValueOrDefault(name)))),
         ];
     }
 

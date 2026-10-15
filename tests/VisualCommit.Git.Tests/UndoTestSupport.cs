@@ -100,14 +100,15 @@ internal static class UndoTestSupport
 
     /// <summary>
     /// A picture of the repository that a step must leave as the recorded state was (7.11): HEAD,
-    /// every ref but the backups, the index's entries, the status, every file's bytes, the stash
-    /// list, the settings (in order: the meaning, not the file's layout, which re-added keys change).
+    /// every ref but the backups (a symbolic one with the ref it points at), the index's entries,
+    /// the status, every file's bytes, the stash list, the settings (in order: the meaning, not the
+    /// file's layout, which re-added keys change).
     /// </summary>
     public static async Task<RepoPicture> PictureAsync(TempRepo repo)
     {
         var head = await repo.GitAllowingFailureAsync("symbolic-ref", "-q", "HEAD");
         var sha = await repo.GitAllowingFailureAsync("rev-parse", "-q", "--verify", "HEAD");
-        var refs = await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)");
+        var refs = await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname) %(symref)");
         var index = await repo.GitAsync("ls-files", "--stage", "-z");
         var status = await repo.GitAsync("status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored");
         var stashes = await repo.GitAsync("stash", "list", "--format=%gs");
