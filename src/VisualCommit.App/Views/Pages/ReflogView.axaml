@@ -170,19 +170,20 @@
     </Border>
 
     <!-- The footer (BD5): only when git skipped entries. -->
-    <Border Name="ReflogFooterBar"
+    <Border Name="ReflogFooter"
             DockPanel.Dock="Bottom"
             Height="26"
             BorderBrush="{DynamicResource VcBorderBrush}"
             BorderThickness="0,1,0,0"
-            IsVisible="{Binding HasFooter}">
-      <c:TrimmedTextBlock Name="ReflogFooter"
+            IsVisible="{Binding HasFooter}"
+            AutomationProperties.AutomationId="ReflogFooter"
+            AutomationProperties.Name="{Binding Footer}">
+      <c:TrimmedTextBlock Name="ReflogFooterText"
                           Classes="secondary"
                           Text="{Binding Footer}"
                           Margin="8,0"
                           TextTrimming="CharacterEllipsis"
-                          VerticalAlignment="Center"
-                          AutomationProperties.AutomationId="ReflogFooter" />
+                          VerticalAlignment="Center" />
     </Border>
 
     <Panel>

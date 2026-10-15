@@ -5,6 +5,8 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
 using VisualCommit.App.Controls;
+using VisualCommit.App.Controls.Diff;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.Views.Pages;
 using VisualCommit.Testing;
@@ -84,6 +86,94 @@ public class ShellDriverPhase5PagesTests
         app.PressKey(Key.Escape);
         await app.WaitForAsync(() => app.ShownPage is null && repository.ShowsGraph, "the page to close");
         await app.WaitForAsync(() => app.Find<CommitGraphControl>("GraphRows").IsFocused, "the graph to take the focus");
+    }
+
+    [AvaloniaFact]
+    public async Task A_commits_diff_opens_over_the_history_Esc_closes_only_the_diff_and_its_menu_opens_another_history()
+    {
+        using var repo = await Scenarios.HistoryAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+
+        // B5 steps 5 and 6: a commit's file opens its history from that commit; Down shows 365482b.
+        app.Click(app.GraphRowPoint(7));
+        app.WaitForCommitDetails();
+        app.RightClick(await app.FileRowAsync("FileList", "src/Reader.cs"));
+        Assert.Equal(["Reader.cs", "File history", "Blame", "—", "Open file", "Show in folder", "Copy path"], app.Menu().Lines());
+        app.ClickMenuItem("File history");
+        await app.WaitForPageAsync<FileHistoryView>();
+        await app.WaitForFileHistoryRowsAsync(3);
+        Assert.Equal("from 0575c7f", app.FileHistorySnapshot().From);
+        app.PressKey(Key.Down);
+        app.WaitForCommitDetails();
+        Assert.Equal("Handle empty input", repository.Details.Subject);
+
+        // Step 7: the right panel's file opens phase 2's diff over the page; Esc closes only it.
+        app.Click(await app.FileRowAsync("FileList", "src/Parser.cs"));
+        await app.WaitForAsync(() => repository.Diff?.ShowsText == true && app.ShownPage is null, "the diff over the page");
+        Assert.Equal("365482b", app.Find<TextBlock>("DiffSideLabel").Text);
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => app.ShownPage is FileHistoryView && app.FileHistorySnapshot().ListHasFocus, "the page back with the focus in its list");
+        Assert.True(app.FileHistorySnapshot().Rows[1].IsSelected);
+
+        // The diff's menu has the commit's history and blame (4.4): its history from that commit.
+        app.Click(await app.FileRowAsync("FileList", "src/Parser.cs"));
+        await app.WaitForAsync(() => repository.Diff?.ShowsText == true, "the diff again");
+        // On its new line 10, the first added line of its hunk (B5 step 7), on the text.
+        var row = app.DiffRowOfLine(10);
+        Assert.True(row >= 0);
+        var point = app.DiffTextPoint(row);
+        Assert.True(point.X >= 260 + 240 - 1 && point.X <= 700, $"The diff's text point {point} is not on the text.");
+        app.RightClick(point);
+        Assert.Equal(["Parser.cs", "File history", "Blame", "—", "Open file (disabled: \"The file is not in the working tree\")", "Show in folder", "Copy path"], app.Menu().Lines());
+        app.ClickMenuItem("File history");
+        await app.WaitForPageAsync<FileHistoryView>();
+        await app.WaitForFileHistoryRowsAsync(2);
+        var page = app.FileHistorySnapshot();
+        Assert.Equal(("History of Parser.cs", "from 365482b"), (page.Title, page.From));
+        Assert.Equal(["365482b Handle empty input", "1d5a7cf Add the parser"], page.Rows.Select(entry => entry.Name));
+        Assert.Equal([null, "added"], page.Rows.Select(entry => entry.Secondary));
+        Assert.False(repository.IsDiffOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task The_reflog_reads_again_after_an_operation_and_a_lost_commits_branch_takes_its_mark_away()
+    {
+        using var repo = await Scenarios.ReflogAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => app.LogLines().Any(line => line.Contains("reflog: Clean up backups: Succeeded", StringComparison.Ordinal)), "the backups' clean-up");
+
+        // B8 steps 2, 5, 6 and 7.
+        await repository.MenuActions.ShowReflogAsync(null);
+        await app.WaitForPageAsync<ReflogView>();
+        var reads = app.ReflogSnapshot().ReadsShown;
+        app.RightClick(app.ReflogRowPoint("HEAD@{9}"));
+        app.WaitForCommitDetails();
+        Assert.Equal("Try a shortcut", repository.Details.Subject);
+        Assert.Equal(
+            ["d07c677 Try a shortcut", "Create branch here…", "Check out this commit", "—", "Reset main to this commit…", "Cherry-pick onto main", "—", "Show in graph (disabled: \"This commit is not in the graph\")", "Copy SHA"],
+            app.Menu().Lines());
+        app.ClickMenuItem("Create branch here…");
+        await app.WaitForDialogAsync<NameDialogViewModel>();
+        app.TypeInto("NameBox", "shortcut");
+        app.Click(app.FindByAutomationId("NameDialogOption"));
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        await app.WaitForIdleAsync();
+        await app.WaitForReflogReadAsync(reads);
+
+        Assert.Equal("d07c677b8a64284adc1f0f3ed0733f97ca3d3a7f", await repo.RefTargetAsync("refs/heads/shortcut"));
+        var reflog = app.ReflogSnapshot();
+        Assert.Equal(36, reflog.Rows.Count);
+        Assert.Equal(["HEAD@{1}", "HEAD@{11}", "HEAD@{17}", "HEAD@{23}", "HEAD@{33}"], reflog.Rows.Where(row => row.IsLost).Select(row => row.Selector));
+        Assert.Equal("1 entry is not shown: it names no commit that exists", reflog.Footer);
+
+        // Step 8: the graph has it now; a click selects it behind the page.
+        app.Click(app.ReflogRowPoint("HEAD@{9}"));
+        app.WaitForCommitDetails();
+        Assert.Equal(1, repository.SelectedIndex);
     }
 
     [AvaloniaFact]

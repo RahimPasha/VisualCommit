@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.Controls.Blame;
+using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.ViewModels.Panels;
@@ -18,9 +19,9 @@ namespace VisualCommit.Testing.Headless;
 /// docs/test-reports/phase-5.md part B, "Harness this part needs"): waiting for a page, the file
 /// history, the blame and the reflog page (or the backups list) as snapshots in the window's
 /// coordinates, the points the report clicks (a page row's at window x 420 over its centre, BD1;
-/// a blame line's in the gutter and in the text, 13.4), and the details panel's rows for "All
-/// files". The history's own diff is looked for inside <c>FileHistory</c> only (11.1: phase 2's
-/// lookups find the main diff first).
+/// a blame line's in the gutter and in the text, 13.4; a line of the main diff, as phase 3's
+/// checks find it), and the details panel's rows for "All files". The history's own diff is
+/// looked for inside <c>FileHistory</c> only (11.1: phase 2's lookups find the main diff first).
 /// </summary>
 public sealed partial class ShellDriver
 {
@@ -243,7 +244,7 @@ public sealed partial class ShellDriver
             }
         }
 
-        var footer = Find<Border>(view, "ReflogFooterBar");
+        var footer = Find<Border>(view, "ReflogFooter");
         return new ReflogSnapshot(
             BoundsOf(view),
             model.Title,
@@ -301,6 +302,25 @@ public sealed partial class ShellDriver
         return [.. ((IEnumerable<ChangedFileRow>)(list.ItemsSource ?? Array.Empty<ChangedFileRow>()))
             .Where(row => row.IsFile)
             .Select(row => new DetailsFileRow(row.StatusLetter, row.Name, row.Folder, row.IsUnchanged, row.IsSelected))];
+    }
+
+    /// <summary>
+    /// The index of the main diff's row for new line <paramref name="newNumber"/> (or old line,
+    /// when the line was removed), as phase 3's checks find it (part B's B5 step 7). The main diff
+    /// comes before the history page's in the window (11.1), so this is never the page's.
+    /// </summary>
+    public int DiffRowOfLine(int newNumber)
+    {
+        var text = Find<DiffTextView>("DiffText");
+        return text.Rows.ToList().FindIndex(row => row.Kind != DiffRowKind.HunkHeader && row.Left is { } cell && (cell.NewNumber ?? cell.OldNumber) == newNumber);
+    }
+
+    /// <summary>A point on the text of the main diff's row <paramref name="row"/>: 240 right of the row's left edge, on its text and not on its numbers (phase 3's <c>DiffTextPoint</c>).</summary>
+    public Point DiffTextPoint(int row)
+    {
+        var text = Find<DiffTextView>("DiffText");
+        var bounds = text.RowBounds(row) ?? throw new InvalidOperationException($"Diff row {row} is not in view.");
+        return text.TranslatePoint(new Point(bounds.X + 240, bounds.Center.Y), Window) ?? throw new InvalidOperationException("The diff is not in the window.");
     }
 
     private static T Find<T>(Visual scope, string name)
@@ -437,7 +457,7 @@ public sealed record BlameGutterText(string Text, double X, double Width);
 /// <param name="SourceBounds">The source selector (<c>ReflogSource</c>).</param>
 /// <param name="ListBounds">The list (<c>ReflogList</c>).</param>
 /// <param name="Footer">The footer's text, or null without one.</param>
-/// <param name="FooterBounds">The footer (<c>ReflogFooter</c>'s bar), or null.</param>
+/// <param name="FooterBounds">The footer (<c>ReflogFooter</c>), 26 high along the page's bottom, or null.</param>
 /// <param name="IsLoading">The list's place says <c>Loading…</c>.</param>
 /// <param name="Message">The list's message (no reflog, no backups, git's failure), or null.</param>
 /// <param name="Detail">The second line under the message (git's rules), or null.</param>
