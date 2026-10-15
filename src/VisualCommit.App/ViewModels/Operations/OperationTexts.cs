@@ -76,6 +76,13 @@ public static partial class OperationTexts
     /// <summary>The summary for a stash that is no longer listed (2.25).</summary>
     public const string StashGone = "This stash no longer exists.";
 
+    /// <summary>
+    /// The summary for an operation a reflog row or a backup started whose commit a <c>gc</c> has
+    /// pruned since the page read it (docs/phase-5-design.md 5.2: <c>cat-file -e</c> failed):
+    /// <c>The commit c7bf508 no longer exists.</c>, as <see cref="StashGone"/> says it of a stash.
+    /// </summary>
+    public static string CommitGone(string sha) => $"The commit {Short(sha)} no longer exists.";
+
     // Counts (D113).
 
     /// <summary>"1 file", "2 files": <paramref name="singular"/> for one, <paramref name="plural"/> (or the singular with "s") otherwise.</summary>

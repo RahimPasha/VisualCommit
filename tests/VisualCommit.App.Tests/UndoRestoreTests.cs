@@ -1,7 +1,5 @@
 using VisualCommit.App.ViewModels;
-using VisualCommit.Core;
 using VisualCommit.Core.Git;
-using VisualCommit.Git;
 using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
@@ -29,7 +27,7 @@ public class UndoRestoreTests
     public async Task A_deleted_branch_is_restored_at_its_backup_with_a_reflog_of_its_own_and_undone_as_a_creation()
     {
         using var repo = await Scenarios.ReflogAsync();
-        using var app = await OpenAsync(repo);
+        using var app = await OpenWithBackupClockAsync(repo);
         var backup = await BackupAsync(app, "branch");
         var tip = backup.Main!.Commit;
 
@@ -63,7 +61,7 @@ public class UndoRestoreTests
     public async Task A_deleted_remote_branch_is_pushed_back_after_the_question_with_a_lease_that_it_must_not_exist()
     {
         using var repo = await Scenarios.ReflogAsync();
-        using var app = await OpenAsync(repo);
+        using var app = await OpenWithBackupClockAsync(repo);
         var backup = await BackupAsync(app, "remote-branch");
         var commit = backup.Main!.Commit;
 
@@ -95,7 +93,7 @@ public class UndoRestoreTests
     {
         using var repo = await Scenarios.ReflogAsync();
         repo.WriteFile("src/app.txt", "app\nmy own edit\n");
-        using var app = await OpenAsync(repo);
+        using var app = await OpenWithBackupClockAsync(repo);
         var backup = await BackupAsync(app, "discard");
         var before = await repo.BackupRefsAsync();
 
@@ -125,7 +123,7 @@ public class UndoRestoreTests
     public async Task An_aborts_changes_are_restored_without_a_question_and_a_skips_with_it_each_counting_its_paths()
     {
         using var repo = await Scenarios.ReflogAsync();
-        using var app = await OpenAsync(repo);
+        using var app = await OpenWithBackupClockAsync(repo);
 
         await app.Operations.RestoreBackupAsync(await BackupAsync(app, "abort"));
         Assert.Empty(app.Dialogs.Confirmations);
@@ -144,7 +142,7 @@ public class UndoRestoreTests
     public async Task A_mixed_resets_staged_changes_are_staged_again_for_its_own_paths_and_undone_for_them()
     {
         using var repo = await Scenarios.ReflogAsync();
-        using var app = await OpenAsync(repo);
+        using var app = await OpenWithBackupClockAsync(repo);
         var backup = await BackupAsync(app, "reset", snapshotSubject: "VisualCommit: index before a mixed reset");
         var snapshot = backup.Refs.Single(entry => entry.IsChanges).Target;
 
@@ -318,7 +316,7 @@ public class UndoRestoreTests
     public async Task A_dropped_stash_and_deleted_tags_come_back_and_a_force_pushs_backup_is_pushed_back_with_its_lease()
     {
         using var repo = await Scenarios.ReflogAsync();
-        using var app = await OpenAsync(repo);
+        using var app = await OpenWithBackupClockAsync(repo);
 
         var stash = await BackupAsync(app, "stash");
         await app.Operations.RestoreBackupAsync(stash);
@@ -351,22 +349,4 @@ public class UndoRestoreTests
 
     /// <summary>The working tree's status as <c>git status --porcelain</c> gives it, without the end of its last line.</summary>
     private static async Task<string> PorcelainAsync(TempRepo repo) => (await repo.GitAsync("status", "--porcelain")).StandardOutput.TrimEnd();
-
-    /// <summary>The "reflog" scenario opened with the harnesses' fixed backup clock, after the clean-up at opening (which removes its two old backups).</summary>
-    private static async Task<OperationsHarness> OpenAsync(TempRepo repo)
-    {
-        var app = await OperationsHarness.OpenWrappedAsync(repo, git =>
-        {
-            ((GitRepository)git).BackupClock = BackupClock.Fixed(AppClocks.HarnessTime);
-            return git;
-        });
-        await WaitUntilAsync(() => app.Log.Messages.Any(message => message.Contains($": {RepositoryViewModel.CleanUpBackupsTitle}: ", StringComparison.Ordinal)), "the clean-up at opening");
-        await app.WaitForIdleAsync();
-        return app;
-    }
-
-    /// <summary>The backup of <paramref name="kind"/> the list shows (the newest), with a snapshot of that subject where given.</summary>
-    private static async Task<BackupInfo> BackupAsync(OperationsHarness app, string kind, string? snapshotSubject = null) =>
-        (await app.Repository.Repository.ReadBackupsAsync()).First(backup => backup.Kind == kind
-            && (snapshotSubject is null || backup.Refs.Any(entry => entry.IsChanges && entry.Subject == snapshotSubject)));
 }

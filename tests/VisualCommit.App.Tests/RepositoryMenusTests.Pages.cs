@@ -252,7 +252,7 @@ public partial class RepositoryMenusTests
         Assert.Equal(206, Height(menu));
         InvokeAll(menu);
         Assert.Equal(
-            [$"CreateBranchAsync({Shortcut})", $"CheckoutAsync({Shortcut})", $"ResetAsync({Shortcut})", $"CherryPickAsync({Shortcut})", $"CopyShaAsync({Shortcut})"],
+            [$"CreateBranchAtKeptCommitAsync({Shortcut})", $"CheckoutKeptCommitAsync({Shortcut})", $"ResetToKeptCommitAsync({Shortcut})", $"CherryPickKeptCommitAsync({Shortcut})", $"CopyShaAsync({Shortcut})"],
             recorder.Calls.Select(call => call.ToString()));
 
         // HEAD's own commit, and a merge commit.
@@ -308,7 +308,7 @@ public partial class RepositoryMenusTests
         Assert.Equal(154, Height(menu));
         InvokeAll(menu);
         Assert.Equal(
-            [$"RestoreBackupAsync({doomed})", "CreateBranchAsync(44e646bdcb1d920659f2b28b1b44e19f6ae45a7b)", "CheckoutAsync(44e646bdcb1d920659f2b28b1b44e19f6ae45a7b)", "CopyShaAsync(44e646bdcb1d920659f2b28b1b44e19f6ae45a7b)"],
+            [$"RestoreBackupAsync({doomed})", "CreateBranchAtKeptCommitAsync(44e646bdcb1d920659f2b28b1b44e19f6ae45a7b)", "CheckoutKeptCommitAsync(44e646bdcb1d920659f2b28b1b44e19f6ae45a7b)", "CopyShaAsync(44e646bdcb1d920659f2b28b1b44e19f6ae45a7b)"],
             recorder.Calls.Select(call => call.ToString()));
 
         // B9 step 4: once the branch exists, its item says so.

@@ -30,7 +30,17 @@ public sealed partial class RepositoryOperations : IInProgressActions
     /// (<see cref="RefuseIfNowAutoStashTargetAsync"/>), and a refusal for changes in the way is
     /// shown with 9.3's message.
     /// </remarks>
-    public Task CheckoutAsync(string target)
+    public Task CheckoutAsync(string target) => CheckoutAsync(target, checkExists: false);
+
+    /// <inheritdoc cref="IRepositoryActions.CheckoutKeptCommitAsync"/>
+    public Task CheckoutKeptCommitAsync(string sha) => CheckoutAsync(sha, checkExists: true);
+
+    /// <summary>
+    /// <see cref="CheckoutAsync(string)"/>; with <paramref name="checkExists"/> (a reflog row's or a
+    /// backup's commit, design 5.2) refused when the commit no longer exists, before anything reads
+    /// it (9.1's choice would fail on it) and again inside the operation that checks it out.
+    /// </summary>
+    private Task CheckoutAsync(string target, bool checkExists)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         var plan = PlanCheckout(target);
@@ -42,12 +52,18 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 return;
             }
 
+            if (checkExists && !await Git.CommitExistsAsync(target))
+            {
+                await RefuseAsync(text, OperationTexts.CommitGone(target), RefreshScope.Refs);
+                return;
+            }
+
             // 9.1's choice is made on HEAD as the click sees it, and made again inside the
             // operation when HEAD is no longer there (D124).
             var seen = Refs?.Head;
             if (await AutoStashTargetAsync(target, seen) is { } autoStash)
             {
-                await CheckoutWithAutoStashAsync(plan.Name, autoStash, text);
+                await CheckoutWithAutoStashAsync(plan.Name, autoStash, text, checkExists);
                 return;
             }
 
@@ -63,6 +79,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 RefreshScope.Refs,
                 async context =>
                 {
+                    if (checkExists && await RefuseIfCommitGoneAsync(text, target) is { } gone)
+                    {
+                        return gone;
+                    }
+
                     if (await RefuseCheckoutAsync(text) is { } blocked)
                     {
                         display = blocked.Display;
@@ -280,7 +301,22 @@ public sealed partial class RepositoryOperations : IInProgressActions
     // ---- Branches (2.4 to 2.7) --------------------------------------------------------------------
 
     /// <inheritdoc cref="IRepositoryActions.CreateBranchAsync"/>
-    public async Task CreateBranchAsync(string? start)
+    public Task CreateBranchAsync(string? start) => CreateBranchAsync(start, checkExists: false);
+
+    /// <inheritdoc cref="IRepositoryActions.CreateBranchAtKeptCommitAsync"/>
+    public Task CreateBranchAtKeptCommitAsync(string sha)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        return CreateBranchAsync(sha, checkExists: true);
+    }
+
+    /// <summary>
+    /// <see cref="CreateBranchAsync(string?)"/>; with <paramref name="checkExists"/> (a reflog row's
+    /// or a backup's commit, design 5.2) refused inside the operation when the commit no longer
+    /// exists. Before the dialog nothing needs it: a commit whose subject cannot be read is named
+    /// by its short SHA.
+    /// </summary>
+    private async Task CreateBranchAsync(string? start, bool checkExists)
     {
         if (IsClosed)
         {
@@ -327,6 +363,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 RefreshScope.Refs,
                 async operation =>
                 {
+                    if (checkExists && await RefuseIfCommitGoneAsync(text, startPoint) is { } gone)
+                    {
+                        return gone;
+                    }
+
                     // Its checkout's refusals before git (C12, design 9.3); git creates no branch then.
                     if (checkout && await RefuseCheckoutAsync(text) is { } blocked)
                     {
@@ -479,7 +520,17 @@ public sealed partial class RepositoryOperations : IInProgressActions
     // ---- Reset (2.11) -----------------------------------------------------------------------------
 
     /// <inheritdoc cref="IRepositoryActions.ResetAsync"/>
-    public Task ResetAsync(string commit)
+    public Task ResetAsync(string commit) => ResetAsync(commit, checkExists: false);
+
+    /// <inheritdoc cref="IRepositoryActions.ResetToKeptCommitAsync"/>
+    public Task ResetToKeptCommitAsync(string sha) => ResetAsync(sha, checkExists: true);
+
+    /// <summary>
+    /// <see cref="ResetAsync(string)"/>; with <paramref name="checkExists"/> (a reflog row's commit,
+    /// design 5.2) refused when the commit no longer exists, before the dialog asks about it and
+    /// again inside the operation.
+    /// </summary>
+    private Task ResetAsync(string commit, bool checkExists)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
@@ -490,6 +541,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
             if (IsClosed || seen is not { IsUnborn: false })
             {
                 // Nothing to reset before the first commit: the menus disable it (2.11).
+                return;
+            }
+
+            if (checkExists && !await Git.CommitExistsAsync(commit))
+            {
+                await RefuseAsync(text, OperationTexts.CommitGone(commit), RefreshScope.Refs);
                 return;
             }
 
@@ -506,6 +563,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 RefreshScope.Refs,
                 async context =>
                 {
+                    if (checkExists && await RefuseIfCommitGoneAsync(text, commit) is { } gone)
+                    {
+                        return gone;
+                    }
+
                     // The dialog named the branch and what it would lose: HEAD must still be there.
                     if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReset, sameCommit: true) is { } moved)
                     {
@@ -533,7 +595,13 @@ public sealed partial class RepositoryOperations : IInProgressActions
     // ---- Cherry-pick and revert (2.12 to 2.14) ----------------------------------------------------
 
     /// <inheritdoc cref="IRepositoryActions.CherryPickAsync"/>
-    public Task CherryPickAsync(string commit)
+    public Task CherryPickAsync(string commit) => CherryPickAsync(commit, checkExists: false);
+
+    /// <inheritdoc cref="IRepositoryActions.CherryPickKeptCommitAsync"/>
+    public Task CherryPickKeptCommitAsync(string sha) => CherryPickAsync(sha, checkExists: true);
+
+    /// <summary><see cref="CherryPickAsync(string)"/>; with <paramref name="checkExists"/> (a reflog row's commit, design 5.2) refused inside the operation when the commit no longer exists.</summary>
+    private Task CherryPickAsync(string commit, bool checkExists)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         var current = HeadName;
@@ -546,6 +614,11 @@ public sealed partial class RepositoryOperations : IInProgressActions
             RefreshScope.Refs,
             async context =>
             {
+                if (checkExists && await RefuseIfCommitGoneAsync(text, commit) is { } gone)
+                {
+                    return gone;
+                }
+
                 if (await RefuseWhileInProgressAsync(text) is { } refusal)
                 {
                     return refusal;
@@ -1111,6 +1184,15 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
     /// <summary>A failure the app tells itself, with no git output and no command (the error dialog then shows the summary alone).</summary>
     private static GitFailure StoppedFailure(string summary) => new(GitFailureKind.Other, summary, string.Empty, string.Empty, null);
+
+    /// <summary>
+    /// Design 5.2's check inside an operation a reflog row or a backup started: its commit still
+    /// exists (<c>git cat-file -e &lt;sha&gt;^{commit}</c>), since a <c>gc</c> may have pruned it after
+    /// the page read it. The refusal ("The commit c7bf508 no longer exists.") changes nothing;
+    /// null when it exists.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfCommitGoneAsync(OperationText text, string sha) =>
+        await Git.CommitExistsAsync(sha) ? null : Refused(text, OperationTexts.CommitGone(sha));
 
     /// <summary>2.7's dialog: its two sentences when git's line says why, otherwise 2.33's default.</summary>
     private static FailureDisplay? FastForwardFailureDisplay(GitFailure failure, string branch, string target)

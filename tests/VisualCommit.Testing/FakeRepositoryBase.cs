@@ -80,6 +80,9 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<string?> ResolveAsync(string revision, CancellationToken cancellationToken = default) =>
         Task.FromResult<string?>(null);
 
+    public virtual Task<bool> CommitExistsAsync(string sha, CancellationToken cancellationToken = default) =>
+        Task.FromResult(true);
+
     public virtual Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<WorktreeInfo>>([]);
 
