@@ -244,11 +244,18 @@ public sealed partial class RepositoryViewModel
         }
 
         var context = MenuContext;
+
+        // A commit's file is the shown commit's, which a page may show without selecting it in
+        // the graph (docs/phase-5-design.md 11.3); its first parent names a deleted file's blame (4.4).
+        var shown = place == FileMenuPlace.CommitFiles ? Details.Details : null;
         var target = new FileMenuTarget(
             file,
             IsUntracked: place == FileMenuPlace.Unstaged && Status.IsUntracked(file.Path),
             ExistsInWorkingTree: ExistsInWorkingTree(file.Path),
-            CommitSha: place == FileMenuPlace.CommitFiles ? Selection.Single : null);
+            CommitSha: place == FileMenuPlace.CommitFiles ? shown?.Sha ?? Selection.Single : null)
+        {
+            CommitParent = shown?.Parents.FirstOrDefault(),
+        };
         var menu = place switch
         {
             FileMenuPlace.Unstaged => RepositoryMenus.ForUnstagedFile(context, target, MenuActions),
@@ -273,7 +280,10 @@ public sealed partial class RepositoryViewModel
             new ChangedFile(target.Path, target.Kind, target.OldPath),
             target.IsUntracked,
             ExistsInWorkingTree(target.Path),
-            target.Side == DiffSide.Commit ? target.Commit : null);
+            target.Side == DiffSide.Commit ? target.Commit : null)
+        {
+            CommitParent = target.Side == DiffSide.Commit ? target.Parent : null,
+        };
         var hunkInDiff = hunk is { } index && diff.Diff is { } read && index >= 0 && index < read.Hunks.Count ? hunk : null;
         var menu = RepositoryMenus.ForDiff(
             MenuContext,

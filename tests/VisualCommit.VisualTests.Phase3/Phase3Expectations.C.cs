@@ -145,7 +145,7 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
-        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items; 380 high.</summary>
+        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items and phase 5's reflog; 415 high.</summary>
         public static readonly string[] Check13BranchMenu =
         [
             "feature/conflict",
@@ -164,10 +164,12 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Show reflog of feature/conflict",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items and phase 5's reflog; 493 high.</summary>
         public static readonly string[] Check13MainMenu =
         [
             "main",
@@ -189,6 +191,8 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/main",
             "—",
+            "Show reflog of main",
+            "—",
             "Copy branch name",
         ];
 
@@ -203,6 +207,8 @@ public static partial class Phase3Expectations
             "Delete hotfix… (disabled: \"You cannot delete the branch you are on\")",
             "—",
             "Set upstream…",
+            "—",
+            "Show reflog of hotfix",
             "—",
             "Copy branch name",
         ];

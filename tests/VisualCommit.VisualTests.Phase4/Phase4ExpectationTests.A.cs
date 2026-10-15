@@ -47,7 +47,7 @@ public sealed class Phase4ExpectationTestsA
     public void The_menu_counts_leave_out_the_header_and_count_the_separators()
     {
         Assert.Equal((9, 2), PartA.MenuCounts(PartA.MainMoreCommitMenu));
-        Assert.Equal((15, 4), PartA.MenuCounts(PartA.MainBranchMenu));
+        Assert.Equal((16, 5), PartA.MenuCounts(PartA.MainBranchMenu));
         Assert.Equal((3, 0), PartA.MenuCounts(PartA.OriginMainOntoTopicDropMenu));
     }
 

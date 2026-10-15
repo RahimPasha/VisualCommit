@@ -357,7 +357,7 @@ public static partial class Phase4Expectations
             "Copy SHA",
         ];
 
-        /// <summary>A1 step 4: the menu of the local branch main (with an upstream, not checked out), 458 high.</summary>
+        /// <summary>A1 step 4: the menu of the local branch main (with an upstream, not checked out), with phase 5's reflog, 493 high.</summary>
         public static readonly string[] MainBranchMenu =
         [
             "main",
@@ -378,6 +378,8 @@ public static partial class Phase4Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/main",
+            "—",
+            "Show reflog of main",
             "—",
             "Copy branch name",
         ];
@@ -418,10 +420,10 @@ public static partial class Phase4Expectations
             "Copy branch name",
         ];
 
-        /// <summary>A1 step 7: the menu of the current branch feature/topic with its upstream, 354 high.</summary>
+        /// <summary>A1 step 7: the menu of the current branch feature/topic with its upstream, with phase 5's reflog, 389 high.</summary>
         public static readonly string[] FeatureTopicMenu = CurrentBranchMenu("feature/topic", "origin/feature/topic");
 
-        /// <summary>A4 step 2: the menu of the current branch main in "sync" (A1 step 7's for main), 354 high.</summary>
+        /// <summary>A4 step 2: the menu of the current branch main in "sync" (A1 step 7's for main), 389 high.</summary>
         public static readonly string[] SyncMainMenu = CurrentBranchMenu("main", "origin/main");
 
         /// <summary>A1 step 8: two commits that form a chain on HEAD's line ("Topic two", "Topic one"), 145 high.</summary>
@@ -519,7 +521,7 @@ public static partial class Phase4Expectations
             "Check out feature/other and rebase it onto main interactively…",
         ];
 
-        /// <summary>A4 step 5: the conflicted file's menu in the unstaged list, 284 high.</summary>
+        /// <summary>A4 step 5: the conflicted file's menu in the unstaged list, with phase 5's File history and Blame, 345 high.</summary>
         public static readonly string[] ConflictedFileMenu =
         [
             "published.txt",
@@ -531,6 +533,9 @@ public static partial class Phase4Expectations
             "Ignore published.txt (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.txt files (disabled: \"Only untracked files can be ignored\")",
             "—",
+            "File history",
+            "Blame",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
@@ -541,9 +546,9 @@ public static partial class Phase4Expectations
 
         public const double SeveralCommitsMenuHeight = 145;
 
-        public const double LocalBranchWithUpstreamMenuHeight = 458;
+        public const double LocalBranchWithUpstreamMenuHeight = 493;
 
-        public const double CurrentBranchWithUpstreamMenuHeight = 354;
+        public const double CurrentBranchWithUpstreamMenuHeight = 389;
 
         public const double RemoteBranchMenuHeight = 293;
 
@@ -551,7 +556,7 @@ public static partial class Phase4Expectations
 
         public const double DropOfRemoteBranchMenuHeight = 110;
 
-        public const double ConflictedFileMenuHeight = 284;
+        public const double ConflictedFileMenuHeight = 345;
 
         /// <summary>
         /// The drag of check A3 (and A5 step 3): 5 equal moves with the button held, the first more
@@ -771,7 +776,7 @@ public static partial class Phase4Expectations
         public static CommitRow Commit(string message, int lane, int colour, string shortSha, string date, params string[] labels) =>
             new(message, lane, colour, labels, ShortSha: shortSha, Date: date, Ends: []);
 
-        /// <summary>The menu of the current branch with an upstream (A1 step 7): "Pull from {up}", then "Pull from {up} (rebase)" and phase 3's other groups.</summary>
+        /// <summary>The menu of the current branch with an upstream (A1 step 7): "Pull from {up}", then "Pull from {up} (rebase)", phase 3's other groups and phase 5's reflog.</summary>
         public static string[] CurrentBranchMenu(string branch, string upstream) =>
         [
             branch,
@@ -788,6 +793,8 @@ public static partial class Phase4Expectations
             "—",
             "Change upstream…",
             $"Stop tracking {upstream}",
+            "—",
+            $"Show reflog of {branch}",
             "—",
             "Copy branch name",
         ];
