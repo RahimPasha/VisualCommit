@@ -156,6 +156,20 @@ public class SearchTests(SearchTests.Rows rows) : IClassFixture<SearchTests.Rows
     }
 
     [Fact]
+    public async Task Commits_match_non_ascii_text_whatever_the_users_output_encoding()
+    {
+        // Git matches --grep against the message re-encoded to the output encoding: with the
+        // user's ISO-8859-1 and no --encoding=UTF-8, "é" and "ß" become bytes the text never matches.
+        using var repo = await TempRepo.CreateAsync("search-encoding");
+        var cafe = await repo.CommitFileAsync("menu.txt", "menu\n", "Café menu: Straße");
+        await repo.ConfigAsync("i18n.logOutputEncoding", "ISO-8859-1");
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal([cafe], await SearchAsync(repository, SearchMode.Commits, "CAFÉ", [cafe]));
+        Assert.Equal([cafe], await SearchAsync(repository, SearchMode.Commits, "straße", [cafe]));
+    }
+
+    [Fact]
     public async Task Files_match_a_path_containing_the_text_in_the_commits_own_change()
     {
         // The stash by its working-tree change; the rename by both its names.
@@ -173,25 +187,29 @@ public class SearchTests(SearchTests.Rows rows) : IClassFixture<SearchTests.Rows
     }
 
     [Fact]
-    public async Task Git_2_55_prints_every_commit_given_to_no_walk_whatever_the_path_so_files_are_matched_by_the_paths_listed()
+    public async Task Files_are_matched_by_the_paths_listed_as_git_2_55_0_ignores_the_path_under_no_walk()
     {
-        // The design's Files command relied on a path filter that Git 2.36 applies to the commits
-        // given on standard input and Git 2.55 does not: there it printed all of them. The search
-        // asks for the paths of each commit's change instead (--name-only), which both print alike.
+        // The design's Files command relied on the path filter, which Git 2.36 applies to the
+        // commits given on standard input. Git 2.55.0 does not, and prints all of them: a
+        // regression, which upstream has fixed since (32c4ed70, "revision: fix --no-walk path
+        // filtering regression"). The search asks for the paths of each commit's change instead
+        // (--name-only), which every git prints alike.
+        string[] filtered = [rows.FooEdit, rows.Foo];
         var output = (await rows.Repo.GitWithInputAsync(string.Concat(rows.All.Select(sha => sha + "\n")), "log", "--no-walk=unsorted", "--stdin", "--format=%H", "--", "notes.txt"))
             .StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        // Seen on these two; a git between them may do either.
+
+        // Filtered on 2.36, all of them on 2.55.0; any other git may do either.
         var version = await SequenceTestSupport.GitVersionAsync(rows.Repo);
         if (version is { Major: 2, Minor: 36 })
         {
-            Assert.Equal([rows.FooEdit, rows.Foo], output);
+            Assert.Equal(filtered, output);
         }
-        else if (version >= new GitVersion(2, 55, 0))
+        else
         {
-            Assert.Equal(rows.All, output);
+            Assert.True(output.SequenceEqual(filtered) || output.SequenceEqual(rows.All), $"Git {version} printed {output.Length} of the {rows.All.Count} commits.");
         }
 
-        Assert.Equal([rows.FooEdit, rows.Foo], await SearchAsync(SearchMode.Files, "notes.txt"));
+        Assert.Equal(filtered, await SearchAsync(SearchMode.Files, "notes.txt"));
     }
 
     [Fact]

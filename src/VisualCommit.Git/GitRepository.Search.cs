@@ -112,7 +112,9 @@ public sealed partial class GitRepository
     /// </summary>
     private GitCommand SearchCommand(SearchMode mode, string text, string input, Action<string> onMatch, CancellationToken cancellationToken)
     {
-        List<string> arguments = ["log", "--no-walk=unsorted", "--stdin", "--no-show-signature", "--no-color"];
+        // --encoding=UTF-8 matters to the Commits mode: git matches --grep against the message
+        // re-encoded to the output encoding, which the user's i18n.logOutputEncoding would set.
+        List<string> arguments = ["log", "--no-walk=unsorted", "--stdin", .. PlainLogOptions];
         var environment = ReadEnvironment;
         Action<string> onLine = line =>
         {
@@ -133,11 +135,12 @@ public sealed partial class GitRepository
 
             case SearchMode.Files:
                 // A match is a commit whose own change (against its first parent; --root for a
-                // root commit whatever log.showRoot says) lists a path the globs match. Git 2.55
-                // prints every commit it is given, a path filter or not, so a commit counts only
-                // when a path follows its line; Git 2.36 leaves the others out itself. Glob magic
-                // needs GIT_LITERAL_PATHSPECS removed, as AllIgnoredAsync removes it; a glob that
-                // matches a folder does not match the files under it, hence the second pathspec.
+                // root commit whatever log.showRoot says) lists a path the globs match. Git 2.55.0
+                // prints every commit given to --no-walk whatever the path (a regression, fixed
+                // upstream by 32c4ed70), so a commit counts only when a path follows its line;
+                // listing the paths works on both. Glob magic needs GIT_LITERAL_PATHSPECS removed,
+                // as AllIgnoredAsync removes it; a glob that matches a folder does not match the
+                // files under it, hence the second pathspec.
                 var glob = EscapeGlob(text.Replace('\\', '/'));
                 arguments.AddRange([
                     "--format=%x1e%H", "--first-parent", "--root", "--no-renames", "--name-only",
