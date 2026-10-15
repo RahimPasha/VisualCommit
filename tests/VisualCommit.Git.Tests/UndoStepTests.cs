@@ -263,6 +263,36 @@ public class UndoStepTests
     }
 
     [Fact]
+    public async Task A_commit_and_a_cherry_pick_on_a_detached_HEAD_move_HEAD_alone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var main = (await repo.GitAsync("rev-parse", "main")).StandardOutput.Trim();
+        await repo.GitAsync("checkout", "--quiet", "--detach", "HEAD~1");
+        repo.WriteFile("a.txt", "a3\n").WriteFile("scratch.txt", "scratch\n");
+        await repo.GitAsync("add", "a.txt");
+        var start = await PictureAsync(repo);
+
+        // The commit's undo is a soft move of the detached HEAD: its change comes back staged.
+        var commit = await RecordAsync(repository, UndoScope.Commit("d1", amend: false, null), () => repository.CommitAsync("d1", amend: false, TestCancelled));
+        var committed = await PictureAsync(repo);
+        commit = await UndoAsync(repository, commit);
+        Assert.Equal(start, await PictureAsync(repo));
+        await RedoAsync(repository, commit);
+        Assert.Equal(committed, await PictureAsync(repo));
+
+        // The pick's is a Keep move: the files go back, scratch.txt stays.
+        var f1 = (await repo.GitAsync("rev-parse", "feature~1")).StandardOutput.Trim();
+        var pick = await RecordAsync(repository, UndoScope.CherryPick([f1], null), () => repository.CherryPickAsync([f1], cancellationToken: TestCancelled));
+        var picked = await PictureAsync(repo);
+        pick = await UndoAsync(repository, pick);
+        Assert.Equal(committed, await PictureAsync(repo));
+        await RedoAsync(repository, pick);
+        Assert.Equal(picked, await PictureAsync(repo));
+        Assert.Equal(main, await TargetAsync(repo, "refs/heads/main"));
+    }
+
+    [Fact]
     public async Task A_rebase_is_undone_and_redone()
     {
         using var repo = await UndoRepoAsync();
