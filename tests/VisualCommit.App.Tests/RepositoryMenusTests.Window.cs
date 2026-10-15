@@ -141,8 +141,8 @@ public partial class RepositoryMenusTests
         app.RightClick(LeftRow(app, row => row.Key == "ref:refs/heads/feature/alpha"));
         var menu = app.Menu();
         Assert.Equal("feature/alpha", menu.Header);
-        Assert.Equal(15, menu.Items.Count);
-        Assert.InRange(menu.Bounds.Height, 456, 460);
+        Assert.Equal(18, menu.Items.Count);
+        Assert.InRange(menu.Bounds.Height, 543, 547);
         Assert.True(repository.Selection.IsEmpty);
         Assert.DoesNotContain(repository.LeftPanel.Rows.OfType<RefItemRow>(), row => row.IsSelected);
         Assert.True(repository.Details.ShowsPlaceholder);
@@ -192,9 +192,12 @@ public partial class RepositoryMenusTests
         var menu5 = app.Menu();
         Assert.Equal("main", menu5.Header);
 
-        // The row starts at the window's left edge: the menu is moved 4 inside the window (4a).
+        // The row starts at the window's left edge: the menu is moved 4 inside the window (4a). With
+        // phase 5's items (docs/phase-5-design.md 13.1) it no longer fits below the row, so it
+        // opens above it, moved inside the window too.
         var corner = app.BoundsOf(main).BottomLeft;
-        AssertNear(new Point(Math.Max(4, corner.X), corner.Y), menu5.Bounds.TopLeft);
+        AssertNear(MenuLayer.PlaceMenu(app.Window.ClientSize, corner, menu5.Bounds.Size, MenuOpenedBy.Keyboard), menu5.Bounds.TopLeft);
+        Assert.True(corner.Y + menu5.Bounds.Height > app.Window.ClientSize.Height);
         TestPictures.Save(app, "05e-left-panel-shift-f10");
         app.PressKey(Key.Escape);
         Assert.Same(main, app.Window.FocusManager?.GetFocusedElement());
@@ -317,11 +320,11 @@ public partial class RepositoryMenusTests
         var menu = app.Menu();
 
         Assert.Equal(
-            ["feature/alpha → main", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")", "—", "Check out feature/alpha and rebase it onto main", "Check out feature/alpha and rebase it onto main interactively…"],
+            ["feature/alpha → main", "Merge feature/alpha into main", "Merge feature/alpha into main (create a merge commit)", "Fast-forward main to feature/alpha (disabled: \"main has commits that feature/alpha does not have\")", "—", "Check out feature/alpha and rebase it onto main", "Check out feature/alpha and rebase it onto main interactively…", "—", "Compare feature/alpha with main"],
             menu.Lines());
         Assert.Equal("Merge feature/alpha into main", menu.Highlighted?.Label);
         AssertNear(main + new Point(2, 2), menu.Bounds.TopLeft);
-        Assert.InRange(menu.Bounds.Height, 169, 173);
+        Assert.InRange(menu.Bounds.Height, 204, 208);
         TestPictures.Save(app, "07b-drop-menu");
         app.PressKey(Key.Escape);
     }

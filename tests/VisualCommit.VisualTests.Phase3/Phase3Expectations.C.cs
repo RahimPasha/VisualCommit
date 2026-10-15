@@ -145,7 +145,7 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
-        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items; 380 high.</summary>
+        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items and phase 5's compare, hide and solo items; 467 high.</summary>
         public static readonly string[] Check13BranchMenu =
         [
             "feature/conflict",
@@ -164,10 +164,14 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare feature/conflict with hotfix",
+            "Hide feature/conflict",
+            "Solo feature/conflict",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items and phase 5's compare, hide and solo items; 545 high.</summary>
         public static readonly string[] Check13MainMenu =
         [
             "main",
@@ -189,6 +193,10 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/main",
             "—",
+            "Compare main with hotfix",
+            "Hide main",
+            "Solo main",
+            "—",
             "Copy branch name",
         ];
 
@@ -204,6 +212,9 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Hide hotfix (disabled: \"The checked-out branch is always shown\")",
+            "Solo hotfix",
+            "—",
             "Copy branch name",
         ];
 
@@ -211,7 +222,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 13b ----
 
-        /// <summary>Check 13b step 1: check 2 step 4's list, with phase 4's rebase items; 293 high.</summary>
+        /// <summary>Check 13b step 1: check 2 step 4's list, with phase 4's rebase items and phase 5's compare, hide and solo items; 380 high.</summary>
         public static readonly string[] Check13bRemoteMenu =
         [
             "origin/feature/alpha",
@@ -226,6 +237,10 @@ public static partial class Phase3Expectations
             "—",
             "Delete feature/alpha on origin… (danger)",
             "—",
+            "Compare origin/feature/alpha with main",
+            "Hide origin/feature/alpha",
+            "Solo origin/feature/alpha",
+            "—",
             "Copy branch name",
         ];
 
@@ -238,6 +253,8 @@ public static partial class Phase3Expectations
             "Push v1.0 to origin",
             "Delete v1.0… (danger)",
             "Delete v1.0 on origin… (danger)",
+            "—",
+            "Compare v1.0 with main",
             "—",
             "Copy tag name",
         ];
@@ -442,6 +459,8 @@ public static partial class Phase3Expectations
             "Push v1.2 to origin",
             "Delete v1.2… (danger)",
             "Delete v1.2 on origin… (danger)",
+            "—",
+            "Compare v1.2 with main",
             "—",
             "Copy tag name",
         ];

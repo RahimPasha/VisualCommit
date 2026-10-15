@@ -1252,7 +1252,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
     /// <summary>
     /// The label feature/conflict's menu with HEAD on main, nothing in progress, with phase 4's
     /// rebase items: phase 4's report gives this list for check 27 step 3 ("check 13 step 6's list
-    /// with main for hotfix"; 380 high).
+    /// with main for hotfix"; 380 high, 467 with phase 5's compare, hide and solo items).
     /// </summary>
     private static readonly string[] FeatureConflictMenu =
     [
@@ -1272,6 +1272,10 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         "—",
         "Set upstream…",
         "—",
+        "Compare feature/conflict with main",
+        "Hide feature/conflict",
+        "Solo feature/conflict",
+        "—",
         "Copy branch name",
     ];
 
@@ -1288,7 +1292,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
     /// The local branch feature/alpha's menu with HEAD on <paramref name="current"/>, nothing in
     /// progress (check 2 step 1's), with phase 4's rebase items: "Rebase {cur} onto feature/alpha"
     /// disabled with <c>{cur} is up to date with feature/alpha</c> when HEAD already reaches it
-    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha).
+    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha); and
+    /// phase 5's compare, hide and solo items (docs/phase-5-design.md 13.1).
     /// </summary>
     private static string[] AlphaMenu(string current, bool upToDate = false) =>
     [
@@ -1310,6 +1315,10 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         "—",
         "Change upstream…",
         "Stop tracking origin/feature/alpha",
+        "—",
+        $"Compare feature/alpha with {current}",
+        "Hide feature/alpha",
+        "Solo feature/alpha",
         "—",
         "Copy branch name",
     ];
