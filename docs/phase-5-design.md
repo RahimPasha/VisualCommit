@@ -1088,7 +1088,7 @@ The backups list (5.3) restores a backup outside the session's history with the 
 | `stash-<t>` | `Restore stash` | `StashStore`, with the stash commit's subject as message |
 | `discard-<t>` | `Restore the discarded files…` | asks D75's `Restore discarded changes?` when a file would be overwritten, then `RestoreSnapshot` |
 | `reset-<t>-changes` of a hard reset, `abort-<t>-changes`, `skip-<t>-changes` (paths in the message) | `Restore the changes…` | the same question, then the files (`RestoreSnapshot`); for a hard reset's, when nothing is staged now, the index from its second parent first |
-| `reset-<t>-changes` of a mixed reset (`VisualCommit: index before a mixed reset`, no paths) | `Restore the staged changes…` (disabled `Unstage your changes first` while the index differs from HEAD) | `IndexTo(<snapshot>, HEAD)` |
+| `reset-<t>-changes` of a mixed reset (`VisualCommit: index before a mixed reset`, no paths) | `Restore the staged changes` (disabled `Unstage your changes first` while the index differs from HEAD) | `IndexTo(<snapshot>, HEAD)` |
 | `remote-branch-<t>/<r>/<b>` | `Push {b} back to {r}…` (disabled `{r} no longer exists`) | `RemoteRef` create (lease: must not exist), after 7.5's question; the remote and branch split by the remote list's longest matching name, as the deletion did |
 | `remote-tag-<t>/<r>/<t>` | `Push {t} back to {r}…` | likewise for the tag |
 | `force-push-<t>/<name>` | `Push {b} back to {r}…` | the remote and its ref from the upstream that maps to `refs/remotes/<name>`, or from the fetch refspecs; the lease is the commit the force push left, read from the remote-tracking reflog (the `update by push` entry whose older neighbour is the backup's commit); when none of these can be found: disabled, `The remote this backup came from cannot be found` or `The commit your force push left can no longer be found` |
@@ -1498,7 +1498,7 @@ entries are not shown: they name …`, `1 commit only on …` / `{a} commits onl
 | `Stop soloing` | `No branch is soloed` |
 | `Compare {b} with {cur}` | `HEAD is unborn` |
 | `Restore branch {b}`, `Restore tag {t}` | `A branch named {b} exists`, `A tag named {t} exists` |
-| `Restore the staged changes…` | `Unstage your changes first` |
+| `Restore the staged changes` | `Unstage your changes first` |
 | `Push {b} back to {r}…` | `{r} no longer exists`; `The remote this backup came from cannot be found`; `The commit your force push left can no longer be found` |
 | Search | `Close the interactive rebase first`; `Close the conflict resolver first` |
 
@@ -1742,6 +1742,48 @@ and the difference, and say for each whether every change is one that 14.1 lists
 changes lie outside the regions 14.1 names is opened and judged in full. Earlier real-window captures
 are judged against their new scripted twins through the pass's own difference pictures. Phase 5's own
 pictures are inspected in full, as every phase's are.
+
+### 15.8 What the report settled (D183)
+
+`docs/test-reports/phase-5.md`, written from this design before any phase 5 UI (step 6), fixes
+the values this design left open: its section "Decisions this report makes" (AD1 to AD15, BD1 to
+BD24, FD1 to FD21, UD1 to UD20, PD1 to PD17) is part of this design for the builders, and where a
+decision there and a sentence here differ, the decision holds. The lead ruled on its eight questions
+(D183): AD11, BD16, UD17, UD18, UD20 and PD7 as the report proposes; BD21 `Restore the staged
+changes` without "…" (changed in 7.10 and 12.4); UD10 the remote questions name, for an annotated
+tag, the commit it points to. Of these, these change sentences above:
+
+- **The opening's reads** (2.2, 2.3, AD11): a tab's opening reads, from `git rev-parse
+  --is-inside-work-tree --show-toplevel --absolute-git-dir --git-common-dir` to the first refresh,
+  are top-level rows under `Show reads`; 2.2's "the welcome page's open, init and clone" means only
+  that a welcome page has no log of its own.
+- **Index restores from the backups list** (7.10, BD16): `Restore the staged changes` runs `git
+  restore --staged --source=<snapshot> -- <the paths diff-tree -r -z --no-renames --name-only
+  <snapshot>^1 <snapshot> lists>`, and a hard reset's `Restore the changes…` restores the index
+  for the paths `<snapshot>^1` and `<snapshot>^2` differ in: a whole-tree restore after HEAD has
+  moved would stage the commits' differences as well. The undo's `IndexTo` inside a session stays
+  `-- .`, which is exact there.
+- **The restore bar against D75** (7.9, UD18): the bar's Restore runs as the discard entry's Undo
+  only while the files are as the discard left them (the bar's own check comes first); otherwise
+  D75's question, and the Restore is recorded as an entry of its own (`restore of the discarded
+  files`). Phase 2's D75 test stands.
+- **A step's calls** (7.3, 7.5, UD20), as the merged git half runs them: soft moves and tag writes
+  are lines of the step's one `update-ref -m <msg> --stdin` transaction, written at the step's end
+  unless a later effect needs one of its refs first (a switch to a branch the step creates);
+  `IndexTo` runs at its place in the sequence (a mixed reset's undo runs `restore --staged` before
+  the transaction); configuration and `.gitignore` writes come after the transaction and any
+  switch; a Keep move keeps its positional `update-ref` (D169). The end states are the same on 2.36
+  and 2.55.
+- **HEAD's own commit** (9.1, D179, PD7) is checked out without `--no-overwrite-ignore` and without
+  a stash, as 9.1 says; D179's "every checkout of a commit the current branch reaches" excludes it.
+- **`git check-ignore` refuses to run with `GIT_LITERAL_PATHSPECS=1`** (exit 128, 2.36 and 2.55),
+  so every call of it (9.3's ignored-files test, 7.3's guard) runs without that variable, as
+  `AllIgnoredAsync` already does.
+- **A merge refused for local changes** differs on 2.55 (exit 2 instead of 128, a last line `Merge
+  with strategy ort failed.`, and `error:` before the staged-file message); the classifier keys on
+  lines both gits print (PD10).
+- **Run time** (15.6, UD17): the Phase5 project has 34 test methods and Phase5Undo 55 (about 170
+  operations), more than 15.6 estimates; D152's rule for CI's limit applies.
 
 ## 16. Work breakdown
 
