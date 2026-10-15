@@ -206,13 +206,14 @@ public class Phase5ScenarioTests
     /// <summary>
     /// Design 0.3 and 3.2 take the Files mode's matches from <c>git log --no-walk=unsorted --stdin
     /// --first-parent -- &lt;pathspecs&gt;</c>, which prints only the rows whose change touches the
-    /// paths on Git 2.36. Git 2.55 (CI's) prints every row given and limits only the diff to the
-    /// paths: a row matches when its change lists a path (<see cref="FilesSearchAsync"/>), on
-    /// every git. Which version between them changed it is not known; a git in between does one or
-    /// the other.
+    /// paths on Git 2.36. Git 2.55.0 prints every row given and limits only the diff to the paths,
+    /// a regression fixed upstream (32c4ed70): CI's macOS git 2.56.0 filters again, while Git for
+    /// Windows 2.56.0.windows.2 still prints every row (run 38738421993). So a row matches when its
+    /// change lists a path (<see cref="FilesSearchAsync"/>), on every git, and any git but 2.36 may
+    /// print either.
     /// </summary>
     [Fact]
-    public async Task History_rows_given_with_no_walk_are_limited_by_a_pathspec_on_git_2_36_but_not_on_git_2_55()
+    public async Task History_rows_given_with_no_walk_are_limited_by_a_pathspec_on_git_2_36_and_may_not_be_on_later_gits()
     {
         using var repo = await Scenarios.HistoryAsync();
         var rows = Lines(await repo.GitAsync("log", "--date-order", "--format=%H", "--branches", "--remotes", "HEAD"));
@@ -226,10 +227,6 @@ public class Phase5ScenarioTests
         if (version.Major == 2 && version.Minor == 36)
         {
             Assert.Equal(matches, limited);
-        }
-        else if (version >= new GitVersion(2, 55, 0))
-        {
-            Assert.Equal(everyRow, limited);
         }
         else
         {
