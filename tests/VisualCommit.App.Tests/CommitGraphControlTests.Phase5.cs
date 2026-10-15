@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -406,6 +407,14 @@ public partial class CommitGraphControlTests
                 Assert.True(before.PixelAt(x, y) == reloading.PixelAt(x, y), $"({x}, {y}) changed from {before.PixelAt(x, y)} to {reloading.PixelAt(x, y)} with the reload bar.");
             }
         }
+
+        // It lies over the scroll bar's top too, and takes no input: a click on the rows' top edge
+        // under it selects the first row.
+        var grid = Assert.IsType<Grid>(view.Content);
+        Assert.True(grid.Children.IndexOf(bar) > grid.Children.IndexOf(view.FindControl<ScrollBar>("GraphScrollBar")!), "The reload bar is drawn under the scroll bar.");
+        Assert.False(bar.IsHitTestVisible);
+        host.Click(rows, new Point(200, 1));
+        Assert.Equal(0, viewModel.SelectedIndex);
 
         var marks = new GraphSearchMarks([viewModel.Graph.CommitAt(2).Sha], isActive: true);
         SetViewModelProperty(viewModel, nameof(RepositoryViewModel.SearchMarks), marks);
