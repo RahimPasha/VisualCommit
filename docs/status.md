@@ -97,16 +97,22 @@ Start:
 
 Git layer:
 
-- [ ] 7. File history following renames, a file's diff at each of its commits, and blame. Tests.
-- [ ] 8. The reflog of HEAD and of each branch, and restoring from it. Tests.
-- [ ] 9. Commit search by message, author, SHA and file, and inside changes. Tests.
-- [ ] 10. Compare two commits or branches: the files changed between them and a file's diff.
-  Tests.
+- [x] 7. File history following renames, a file's diff at each of its commits, and blame. Tests.
+  (WP1, merged in `4cc2fd8`; streamed row by row, design 0.1 as corrected.)
+- [x] 8. The reflog of HEAD and of each branch, and restoring from it. Tests. (WP1 reads the
+  reflogs, lost commits and backups; WP3's git half, merged in `b0e8710`, has the restore effects;
+  the backups list's operations come with WP3's app half, step 16.)
+- [x] 9. Commit search by message, author, SHA and file, and inside changes. Tests. (WP1;
+  Git 2.55.0's `--no-walk` path regression handled, design 0.3.)
+- [x] 10. Compare two commits or branches: the files changed between them and a file's diff.
+  Tests. (WP1.)
 - [ ] 11. Undo and redo (D154, D155): each app action recorded with what it changed and how it
   is reversed, from the backups and what was recorded; a step refused when the repository has
   changed since; a remote put back with a lease after a question. Tests for each destructive
-  action of phases 2 to 4.
-- [ ] 12. Solo and hide: the history of the chosen refs only. Tests.
+  action of phases 2 to 4. (Git half merged in `b0e8710`: every effect and sequence with its
+  checks, 112 tests on Git 2.36 and 2.55, design 7.12. Left: the app half, recording each
+  action and the toolbar's state, WP3 in the second wave.)
+- [x] 12. Solo and hide: the history of the chosen refs only. Tests. (WP2a, merged in `7316ad0`.)
 - [ ] 13. C12 (D153): the refusal before a checkout that would overwrite uncommitted changes, and
   the automatic stash before checking out a commit the current branch reaches. Tests.
 
@@ -166,6 +172,15 @@ could not (Git 2.55's own files and words, a background clean-up that held the q
 read the screen too early); the runs were red until each was fixed (phase 4's report, "Other
 platforms", and its handoff, "Things that cost time").
 
+The last run on `phase/5-history` is
+[38748240435](https://github.com/RahimPasha/VisualCommit/actions/runs/38748240435), for `4b5716e`
+(the first wave merged: WP0, WP2a, WP1, WP-S, WP3's git half and D182): all five jobs succeeded
+with 2,749 tests each; the Windows Test step took 16 min 17 s of its 24 and macOS's 14 min 14 s.
+Since 2026-10-15 the jobs run different gits: Windows 2.56.0.windows.2, macOS 2.56.0 (Homebrew),
+`ubuntu-latest` 2.55.0, the two containers 2.43.0. Two runs failed on the way and were fixed:
+38723225901 (phase 3's check 15b on Git 2.56, `281dd69`) and 38738421993 (a phase 5 scenario test
+that took Git 2.55.0's `--no-walk` regression for the rule, `499b90c`).
+
 Phase 5's first run is
 [38350713964](https://github.com/RahimPasha/VisualCommit/actions/runs/38350713964), for `279dd8c`
 (phase 4's leftovers, D160): all five jobs succeeded with 2,421 tests each: `windows-latest` (16 min
@@ -207,23 +222,23 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP0 (design 16) is merged (`e5e25ee`): the contracts, records, stubs and every operation's undo
-call points, built, reviewed three ways (19 findings, all fixed) and run in full in its worktree
-(2,470 tests passed in 25 min 13 s; the walk-through pictures unchanged but for those step 4 names).
-The first wave runs in worktrees under `.claude/worktrees/p5-*`, each built, reviewed and fixed by
-its own agents: WP-S (`wip/p5-s`, step 5), WP1 (`wip/p5-wp1`), WP2a (`wip/p5-wp2a`), WP3's git half
-(`wip/p5-wp3g`) and the flaky test below (`wip/p5-flaky`). Then: merge each with `--no-ff`, remove
-its worktree, run the full default tests once on the merged branch, push, read CI. Then step 6 (the
-report's checks, from design 15.4, on the scenarios WP-S pinned), reviewed and committed before
-the second wave builds any UI.
+The first wave is merged: WP0 (`e5e25ee`), WP2a (`7316ad0`), WP1 (`4cc2fd8`), WP-S (`ceb5f81`),
+WP3's git half (`b0e8710`) and the flaky test's fix (`3dcba5d`, D182); their design corrections
+are in `docs/phase-5-design.md` (7.12 and inline). The full default run on `3dcba5d` passed six of
+seven projects (1,389 tests) in 33 min 16 s, beside other agents; `VisualCommit.Git.Tests` was
+stopped by the hang watchdog: the reflog scenario's template took over 3 minutes to build under
+that load (45 s alone), and one undo test ran 166 s. Being made fast on `wip/p5-speed` (worktree
+`.claude/worktrees/p5-speed`): measure, speed up the template, split the long tests, then one full
+run. Beside it, step 6: the report's checks are being written from design 15.4 (parts A, B, F, U
+and P, each reviewed), assembled into `docs/test-reports/phase-5.md`, and committed before the
+second wave builds any UI. Then the second wave (design 16): WP2b, WP3's app half, WP4, WP5, WP6
+and WP7.
 
 ### Notes for whoever resumes
 
-- **A flaky test, older than phase 5**: `StatusBarTests.While_the_merge_tool_runs_Cancel_says_it_stops_git_and_the_merge_tool`
-  (added with the leftovers in `279dd8c`) hangs until the 3-minute watchdog kills App.Tests in
-  about half the runs under load, also on `c319578` before WP0: the click on Cancel does not reach
-  the button. Being fixed on `wip/p5-flaky`. If a full run dies with `HANG WATCHDOG` naming it,
-  run it again; it is not a failure of what was changed.
+- **The flaky Cancel test was an app defect, fixed (D182, `3dcba5d`)**: at the window's bottom
+  edge a status bar control's tooltip slid over the pointer and took the press. Tooltips now take
+  no input.
 - **CI's Windows runner moved to Git 2.56.0.windows.2** on 2026-10-15 (run 38723225901; 2.55.0
   before). There a `git stash pop` refused by local changes exits 128, not 1: phase 3's check 15b
   now accepts both (`281dd69`). Phase 5's report lists this under "Changes to expected results"
