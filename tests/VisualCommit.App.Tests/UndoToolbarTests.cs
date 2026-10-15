@@ -1,7 +1,9 @@
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
+using VisualCommit.Git;
 using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
@@ -15,8 +17,10 @@ namespace VisualCommit.App.Tests;
 /// reason that holds, in 7.4's order: a user operation that runs (a background one gives none), an
 /// operation in progress or conflicts (except those an apply's undo puts back), the interactive
 /// list, nothing to do, then the entry's own check against what the app last read, which an
-/// outside change makes fail and its return passes again. The toolbar reads the same on
-/// <see cref="ToolbarViewModel.UpdateUndoStates"/>; WP5 reads it on every change of the queue.
+/// outside change makes fail and its return passes again; none before the refs are read and after
+/// the tab closed. A second click before the toolbar followed the first joins its step. The
+/// toolbar reads the same on <see cref="ToolbarViewModel.UpdateUndoStates"/>; WP5 reads it on
+/// every change of the queue.
 /// </summary>
 [Collection(UndoCollection)]
 public class UndoToolbarTests
@@ -138,7 +142,46 @@ public class UndoToolbarTests
     }
 
     [Fact]
-    public async Task Before_the_refs_are_read_and_after_the_tab_closed_both_are_disabled_without_a_reason()
+    public async Task A_double_click_on_Undo_undoes_its_entry_once()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var history = app.Repository.UndoHistory;
+        app.Dialogs.EnterName("hotfix", option: false).EnterName("keep", option: false);
+        await app.Operations.CreateBranchAsync(MainWork);
+        await app.Operations.CreateBranchAsync(MainWork);
+
+        // The second click comes before the toolbar followed the first: it joins the first's step,
+        // which would otherwise find the history moved and end "… cancelled".
+        var first = app.Operations.UndoAsync();
+        var second = app.Operations.UndoAsync();
+        await Task.WhenAll(first, second);
+        Assert.Equal("Undid creation of keep", app.StatusText);
+        Assert.Equal(1, Ran(app, "Undo creation of keep"));
+        Assert.Empty(app.Dialogs.Errors);
+        Assert.Equal((1, MainWork), (history.Cursor, await repo.RefTargetAsync("refs/heads/hotfix")));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/keep"));
+
+        // Once it has ended, a click undoes the next entry.
+        await app.Operations.UndoAsync();
+        Assert.Equal("Undid creation of hotfix", app.StatusText);
+        Assert.Equal(0, history.Cursor);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Before_the_refs_are_read_both_are_disabled_without_a_reason()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var git = await GitRepository.OpenAsync(
+            new GitRunner(GitLocator.FindExecutable(GitSearchContext.FromSystem())!), repo.Path, TestContext.Current.CancellationToken);
+        using var repository = new RepositoryViewModel(git, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+        Assert.Null(repository.Refs);
+        Assert.Equal(UndoAvailability.Disabled, repository.Operations.ReadUndoAvailability());
+    }
+
+    [Fact]
+    public async Task After_the_tab_closed_both_are_disabled_without_a_reason()
     {
         using var repo = await Scenarios.OperationsAsync();
         var app = await OperationsHarness.OpenAsync(repo);

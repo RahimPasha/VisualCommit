@@ -42,6 +42,23 @@ public sealed partial class RepositoryOperations
     /// </summary>
     private readonly CheckedStep?[] _checked = new CheckedStep?[2];
 
+    /// <summary>
+    /// The step a click started that has not ended: its direction, its entry and its task. A second
+    /// click for the same entry while it asks, waits or runs (a fast double click, a key pressed
+    /// twice before the toolbar followed) shares it, as the toolbar's Pop does; on its own it would
+    /// find the history moved and end cancelled.
+    /// </summary>
+    private (UndoDirection Direction, UndoEntry Entry, Task Task)? _step;
+
+    /// <summary>How many operations are between the start and the end of their recording now.</summary>
+    private int _recordingsOpen;
+
+    /// <summary>How many recordings have started or ended so far: a status read made while it changed may be older than what they did.</summary>
+    private long _recordingEvents;
+
+    /// <summary>1 while a read that decides whether a pending entry's operation ended runs (<see cref="RemovePendingIfEndedAsync"/>).</summary>
+    private int _pendingCheckRuns;
+
     /// <summary>The toolbar's Undo and its key (7.4, 7.5, D163): the entry before the history's cursor, applied backwards as one operation.</summary>
     public Task UndoAsync() => StepAsync(UndoDirection.Undo);
 
@@ -76,19 +93,72 @@ public sealed partial class RepositoryOperations
     /// Hook (7.2, 7.4): the repository shows a newly read status, after a refresh's refs too
     /// (<see cref="RepositoryViewModel"/>'s <c>OnStatusApplied</c>), on the UI thread. A pending
     /// entry whose stopped operation is no longer in progress ended outside the app (a terminal):
-    /// it goes. The toolbar then reads its states again, whose checks follow the new status.
+    /// it goes once a read begun now says so too (<see cref="RemovePendingIfEndedAsync"/>), since
+    /// this read may have begun before the action stopped. The toolbar then reads its states
+    /// again, whose checks follow the new status.
     /// </summary>
     public void NoteUndoState(WorkingTreeStatus status)
     {
         ArgumentNullException.ThrowIfNull(status);
-        var history = Repository.UndoHistory;
-        if (history.Pending is { } pending && !status.InProgress.IsActive)
+        if (Repository.UndoHistory.Pending is { } pending && !status.InProgress.IsActive)
         {
-            Log.Info($"{Repository.Name}: the stopped {pending.Text} ended outside the app; its undo entry goes.");
-            history.RemovePending();
+            _ = RemovePendingIfEndedAsync(pending);
         }
 
         Repository.Toolbar.UpdateUndoStates();
+    }
+
+    /// <summary>
+    /// A status read showed nothing in progress while <paramref name="pending"/> waits (7.2). That
+    /// read may have begun before the action stopped (a refresh in flight when the merge started,
+    /// shown after its entry was added), so a read begun now decides: the entry goes when it too
+    /// shows nothing in progress, the entry is still the pending one, and no operation recorded
+    /// meanwhile (Continue, Skip, Abort and the stage panel's Commit settle the entry themselves,
+    /// and an operation's refresh reads the status again after its recording). One such read at a
+    /// time: a read begun while one runs would decide the same.
+    /// </summary>
+    private async Task RemovePendingIfEndedAsync(UndoEntry pending)
+    {
+        if (Volatile.Read(ref _recordingsOpen) > 0 || Interlocked.Exchange(ref _pendingCheckRuns, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var events = Interlocked.Read(ref _recordingEvents);
+            var status = await Git.ReadStatusAsync(CancellationToken.None);
+            var history = Repository.UndoHistory;
+            if (IsClosed
+                || Volatile.Read(ref _recordingsOpen) > 0
+                || Interlocked.Read(ref _recordingEvents) != events
+                || !ReferenceEquals(history.Pending, pending))
+            {
+                return;
+            }
+
+            if (status.InProgress.IsActive)
+            {
+                Log.Debug($"{Repository.Name}: the stopped {pending.Text} is still in progress; its undo entry stays.");
+                return;
+            }
+
+            Log.Info($"{Repository.Name}: the stopped {pending.Text} ended outside the app; its undo entry goes.");
+            history.RemovePending();
+            Repository.Toolbar.UpdateUndoStates();
+        }
+        catch (Exception ex)
+        {
+            // Nothing waits for this read: it never throws. After the tab closed it says nothing.
+            if (!IsClosed)
+            {
+                Log.Warning($"{Repository.Name}: whether the stopped {pending.Text} ended could not be read; its undo entry stays.", ex);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _pendingCheckRuns, 0);
+        }
     }
 
     /// <summary>
@@ -178,24 +248,38 @@ public sealed partial class RepositoryOperations
     /// One step as one operation of the queue (7.5): the entry at the cursor, asked about first when
     /// the step changes a remote (D155, D170: 7.5's questions), a network operation then; titled
     /// <c>Undo {text}</c> or <c>Redo {text}</c>, refreshing the refs. Nothing happens when there is
-    /// no finished entry to step over.
+    /// no finished entry to step over; a click while the step for the same entry has not ended
+    /// gets that step's task.
     /// </summary>
-    private async Task StepAsync(UndoDirection direction)
+    private Task StepAsync(UndoDirection direction)
     {
         if (IsClosed)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var history = Repository.UndoHistory;
         if ((direction == UndoDirection.Undo ? history.ToUndo : history.ToRedo) is not { State: UndoEntryState.Done } entry)
         {
             Log.Info($"{Repository.Name}: {(direction == UndoDirection.Undo ? OperationTexts.NothingToUndo : OperationTexts.NothingToRedo)}.");
-            return;
+            return Task.CompletedTask;
         }
 
         var text = OperationTexts.Step(direction, entry.Text);
-        await GuardAsync(text, async () =>
+        if (_step is { Task.IsCompleted: false } started && started.Direction == direction && ReferenceEquals(started.Entry, entry))
+        {
+            Log.Info($"{Repository.Name}: {text.Title}: started already; the click joins it.");
+            return started.Task;
+        }
+
+        var step = AskAndRunStepAsync(direction, entry, text);
+        _step = (direction, entry, step);
+        return step;
+    }
+
+    /// <summary><see cref="StepAsync"/>'s step: 7.5's question when it changes a remote, then its operation.</summary>
+    private Task AskAndRunStepAsync(UndoDirection direction, UndoEntry entry, OperationText text) =>
+        GuardAsync(text, async () =>
         {
             var step = UndoStep.For(entry, direction);
             if (step.ChangesRemote && !await ConfirmAsync(await RemoteQuestionAsync(step)))
@@ -209,7 +293,6 @@ public sealed partial class RepositoryOperations
                 RefreshScope.Refs,
                 context => RunStepAsync(context, text, step));
         });
-    }
 
     /// <summary>
     /// Inside the step's operation: the step runs in the git layer (7.5 steps 1 to 5), the history's
@@ -490,6 +573,10 @@ public sealed partial class RepositoryOperations
 
     internal partial async Task<UndoRecording?> BeginUndoRecordingAsync(UndoScope scope, OperationContext context)
     {
+        // Counted before anything can fail, for RemovePendingIfEndedAsync: the end of the
+        // recording, which every operation reaches, counts it out.
+        Interlocked.Increment(ref _recordingsOpen);
+        Interlocked.Increment(ref _recordingEvents);
         var pending = Repository.UndoHistory.Pending;
         if (scope.RemovesPending || scope.CompletesPending)
         {
@@ -513,6 +600,23 @@ public sealed partial class RepositoryOperations
     }
 
     internal partial async Task EndUndoRecordingAsync(UndoRecording? recording, UndoCaptured captured, OperationReport? report)
+    {
+        try
+        {
+            await RecordAsync(recording, captured);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _recordingsOpen);
+            Interlocked.Increment(ref _recordingEvents);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="EndUndoRecordingAsync"/>'s work: the pending entry completed or removed, or the
+    /// read after the action and its entry when anything changed (7.7 steps 4 and 5).
+    /// </summary>
+    private async Task RecordAsync(UndoRecording? recording, UndoCaptured captured)
     {
         if (recording is null)
         {
@@ -742,7 +846,9 @@ public sealed partial class RepositoryOperations
     /// question when a file of the snapshot would be overwritten; on Restore those files are saved
     /// in a snapshot of their own first; a hard reset's snapshot puts the index back for its own
     /// paths when nothing is staged now; then the snapshot's files; then the clean-up when a
-    /// snapshot was saved. The status counts every path of the snapshot.
+    /// snapshot was saved. The status counts every path of the snapshot. The undo history learns
+    /// what was put back only when the step went through: a refused or failed one changed nothing,
+    /// and would otherwise be recorded as an entry whose undo refuses and blocks the older ones.
     /// </summary>
     private Task RestoreFilesAsync(BackupRefInfo backup, bool discarded, bool putsIndexBack)
     {
@@ -773,17 +879,20 @@ public sealed partial class RepositoryOperations
                         await Git.SaveSnapshotAsync(changed);
                     }
 
-                    List<UndoEffect> effects = [];
-                    if (putsIndexBack && await IndexOfHardResetAsync(snapshot.Commit) is { } index)
-                    {
-                        effects.Add(index);
-                        UndoCapture.IndexRestored(index.Source, index.Paths);
-                    }
-
+                    var index = putsIndexBack ? await IndexOfHardResetAsync(snapshot.Commit) : null;
+                    List<UndoEffect> effects = index is null ? [] : [index];
                     effects.Add(new UndoEffect.RestoreSnapshot(snapshot, []));
-                    UndoCapture.Snapshot(snapshot);
                     var entryText = discarded ? UndoTexts.Restore : UndoTexts.RestoreChanges;
                     var refusal = await RunEffectsAsync(context, UndoKind.Restore, entryText, effects);
+                    if (refusal is null)
+                    {
+                        UndoCapture.Snapshot(snapshot);
+                        if (index is not null)
+                        {
+                            UndoCapture.IndexRestored(index.Source, index.Paths);
+                        }
+                    }
+
                     if (changed.Count > 0)
                     {
                         await CleanUpBackupsAsync();
@@ -797,8 +906,9 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// A hard reset's snapshot's index (its second parent) put back for the paths it differs in
-    /// from the snapshot's first parent (BD16), when nothing is staged now; null when something is,
-    /// when the index had conflicts (no second parent) or when it differs in no path.
+    /// from the snapshot's first parent (BD16) and from HEAD (<see cref="DifferingFromHeadAsync"/>),
+    /// when nothing is staged now; null when something is, when the index had conflicts (no second
+    /// parent) or when no such path is left.
     /// </summary>
     private async Task<UndoEffect.IndexTo?> IndexOfHardResetAsync(string snapshot)
     {
@@ -808,14 +918,15 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
-        var paths = await PathsChangedByAsync(parents[1]);
+        var paths = await DifferingFromHeadAsync(parents[1], head, await PathsChangedByAsync(parents[1]));
         return paths.Count == 0 ? null : new UndoEffect.IndexTo(parents[1], head) { Paths = paths };
     }
 
     /// <summary>
     /// "Restore the staged changes" (7.10, BD16, BD21): a mixed reset's snapshot staged again for
-    /// the paths it differs in from its parent, while nothing is staged ("Unstage your changes
-    /// first" otherwise, the item's disabled reason).
+    /// the paths it differs in from its parent and from HEAD (<see cref="DifferingFromHeadAsync"/>),
+    /// while nothing is staged ("Unstage your changes first" otherwise, the item's disabled
+    /// reason). Recorded only when the step went through, as <see cref="RestoreFilesAsync"/>.
     /// </summary>
     private Task RestoreStagedChangesAsync(BackupRefInfo backup)
     {
@@ -832,15 +943,20 @@ public sealed partial class RepositoryOperations
                     return Failed(text, new GitFailure(GitFailureKind.Other, OperationTexts.UnstageYourChangesFirst, string.Empty, string.Empty, null));
                 }
 
-                var paths = await PathsChangedByAsync(backup.Target);
-                if (paths.Count == 0 || await Git.ResolveAsync("HEAD") is not { } head)
+                if (await Git.ResolveAsync("HEAD") is not { } head
+                    || await DifferingFromHeadAsync(backup.Target, head, await PathsChangedByAsync(backup.Target)) is not { Count: > 0 } paths)
                 {
                     return OperationReport.Done(OperationTexts.RestoredStagedChanges);
                 }
 
-                UndoCapture.IndexRestored(backup.Target, paths);
                 var refusal = await RunEffectsAsync(context, UndoKind.RestoreStagedChanges, UndoTexts.RestoreStagedChanges, [new UndoEffect.IndexTo(backup.Target, head) { Paths = paths }]);
-                return refusal is null ? OperationReport.Done(OperationTexts.RestoredStagedChanges) : await RestoreRefusedAsync(context, text, refusal);
+                if (refusal is not null)
+                {
+                    return await RestoreRefusedAsync(context, text, refusal);
+                }
+
+                UndoCapture.IndexRestored(backup.Target, paths);
+                return OperationReport.Done(OperationTexts.RestoredStagedChanges);
             },
             new RunOptions { Undo = UndoScope.RestoreStagedChanges() }));
     }
@@ -997,6 +1113,27 @@ public sealed partial class RepositoryOperations
             .SelectMany(file => file.OldPath is { } old ? new[] { file.Path, old } : [file.Path])
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Of BD16's <paramref name="paths"/>, those whose version in <paramref name="source"/> differs
+    /// from <paramref name="head"/>'s, which the index holds while nothing is staged: the others
+    /// need nothing put back, and a path that neither has (a staged deletion of a file the reset's
+    /// target lacks too) makes <c>git restore --staged --source=&lt;s&gt; -- &lt;paths&gt;</c> fail
+    /// as a whole ("did not match any file(s) known to git"). The restore's undo and redo name
+    /// the same paths (<see cref="UndoCaptured.IndexPaths"/>), each in the index or in HEAD there.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> DifferingFromHeadAsync(string source, string head, IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+        {
+            return paths;
+        }
+
+        var differing = (await Git.CompareAsync(head, source, threeDot: false, countCommits: false)).Files
+            .SelectMany(file => file.OldPath is { } old ? new[] { file.Path, old } : [file.Path])
+            .ToHashSet(StringComparer.Ordinal);
+        return [.. paths.Where(differing.Contains)];
+    }
 
     /// <summary>
     /// The paths of <paramref name="snapshot"/> whose working-tree file differs both from HEAD's

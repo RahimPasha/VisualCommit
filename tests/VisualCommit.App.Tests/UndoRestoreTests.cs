@@ -21,6 +21,10 @@ namespace VisualCommit.App.Tests;
 [Collection(UndoCollection)]
 public class UndoRestoreTests
 {
+    // The "ops" scenario's commits, as ScenarioTests pins them.
+    private const string MainWork = "88d6b91e821a43cd39c94aa7892c8095b628caf8";
+    private const string AddCore = "8beca345049bf7e8bab3a7b4f1427eff941b87e3";
+
     [Fact]
     public async Task A_deleted_branch_is_restored_at_its_backup_with_a_reflog_of_its_own_and_undone_as_a_creation()
     {
@@ -198,6 +202,119 @@ public class UndoRestoreTests
     }
 
     [Fact]
+    public async Task A_staged_deletion_of_a_file_the_resets_target_lacks_too_is_left_out_of_the_staged_changes_put_back()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.CommitFileAsync("extra.txt", "extra\n", "Add extra");
+        await repo.GitAsync("rm", "--quiet", "extra.txt");
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\n");
+        await repo.GitAsync("add", "src/core.txt");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Reset(ResetMode.Mixed);
+        await app.Operations.ResetAsync(MainWork);
+        Assert.Equal(" M src/core.txt", await PorcelainAsync(repo));
+        var backup = await BackupAsync(app, "reset", snapshotSubject: "VisualCommit: index before a mixed reset");
+        var snapshot = backup.Refs.Single(entry => entry.IsChanges).Target;
+
+        // The snapshot's index changed extra.txt too, which neither it nor HEAD has: git would
+        // refuse a path that matches nothing, and the whole restore with it (BD16's correction).
+        await app.Operations.RestoreBackupAsync(backup);
+        Assert.Equal("Restored the staged changes", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == $"git restore --staged --source={snapshot} -- src/core.txt");
+        Assert.Equal("M  src/core.txt", await PorcelainAsync(repo));
+        var entry = app.Repository.UndoHistory.Entries[^1];
+        Assert.Equal("restore of the staged changes", entry.Text);
+        Assert.Equal(["src/core.txt"], entry.Captured.IndexPaths);
+
+        // Its undo and redo name the same path, which each finds.
+        await app.Operations.UndoAsync();
+        Assert.Equal("Undid restore of the staged changes", app.StatusText);
+        Assert.Equal(" M src/core.txt", await PorcelainAsync(repo));
+        await app.Operations.RedoAsync();
+        Assert.Equal("Redid restore of the staged changes", app.StatusText);
+        Assert.Equal("M  src/core.txt", await PorcelainAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_hard_resets_index_put_back_leaves_out_a_staged_deletion_of_a_file_its_target_lacks_too()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.CommitFileAsync("extra.txt", "extra\n", "Add extra");
+        await repo.GitAsync("rm", "--quiet", "extra.txt");
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\n");
+        await repo.GitAsync("add", "src/core.txt");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Reset(ResetMode.Hard);
+        await app.Operations.ResetAsync(MainWork);
+        Assert.Empty(await PorcelainAsync(repo));
+        var backup = await BackupAsync(app, "reset");
+        var index = (await repo.GitAsync("rev-parse", backup.Refs.Single(entry => entry.IsChanges).Target + "^2")).StandardOutput.Trim();
+
+        await app.Operations.RestoreBackupAsync(backup);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == $"git restore --staged --source={index} -- src/core.txt");
+        Assert.Equal("M  src/core.txt", await PorcelainAsync(repo));
+        Assert.Equal("core\nmain work\nstaged line\n", ReadText(repo, "src/core.txt"));
+        var entry = app.Repository.UndoHistory.Entries[^1];
+        Assert.Equal(("restore of the changes", index), (entry.Text, entry.Captured.IndexSource));
+        Assert.Equal(["src/core.txt"], entry.Captured.IndexPaths);
+
+        await app.Operations.UndoAsync();
+        Assert.Empty(await PorcelainAsync(repo));
+        await app.Operations.RedoAsync();
+        Assert.Equal("M  src/core.txt", await PorcelainAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_restore_git_refuses_records_nothing_so_the_entries_before_it_stay_undoable()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\n");
+        await repo.GitAsync("add", "src/core.txt");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var history = app.Repository.UndoHistory;
+
+        // A mixed reset of the staged change, then a hard reset with it staged again: a snapshot
+        // of the index each, whose restores put an index back.
+        app.Dialogs.Reset(ResetMode.Mixed);
+        await app.Operations.ResetAsync(AddCore);
+        var mixed = await BackupAsync(app, "reset", snapshotSubject: "VisualCommit: index before a mixed reset");
+        await repo.GitAsync("add", "src/core.txt");
+        await app.Repository.RefreshAsync();
+        app.Dialogs.Reset(ResetMode.Hard);
+        await app.Operations.ResetAsync(MainWork);
+        var hard = await BackupAsync(app, "reset");
+        Assert.NotEqual(mixed.Name, hard.Name);
+        string[] entries = ["reset of main to 8beca34 (mixed)", "reset of main to 88d6b91 (hard)"];
+        Assert.Equal(entries, history.Entries.Select(entry => entry.Text));
+
+        // A merge in progress with nothing staged and no conflicts: the app's own checks let both
+        // restores through, and the git layer refuses them before writing anything.
+        await repo.GitAsync("merge", "--no-ff", "--no-commit", "--strategy=ours", "feature/conflict");
+        await app.Repository.RefreshAsync();
+        Assert.True(app.Repository.Status.InProgress.IsActive);
+        app.Dialogs.CloseError().CloseError();
+        await app.Operations.RestoreBackupAsync(hard);
+        await app.Operations.RestoreBackupAsync(mixed);
+        Assert.Equal(
+            ["Can't restore the changes: Finish or abort the merge first", "Can't restore the staged changes: Finish or abort the merge first"],
+            app.Dialogs.Errors.Select(error => error.Summary));
+        Assert.Equal(entries, history.Entries.Select(entry => entry.Text));
+        Assert.Equal(2, history.Cursor);
+
+        // The merge gone, the last reset is still the one Undo offers, and undone.
+        await repo.GitAsync("merge", "--abort");
+        await app.Repository.RefreshAsync();
+        AssertStates(app, new UndoAvailability(true, "Undo reset of main to 88d6b91 (hard)", false, "Nothing to redo"));
+        await app.Operations.UndoAsync();
+        Assert.Equal("Undid reset of main to 88d6b91 (hard)", app.StatusText);
+        Assert.Equal(AddCore, await repo.HeadAsync());
+        Assert.Equal("M  src/core.txt", await PorcelainAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_dropped_stash_and_deleted_tags_come_back_and_a_force_pushs_backup_is_pushed_back_with_its_lease()
     {
         using var repo = await Scenarios.ReflogAsync();
@@ -231,6 +348,9 @@ public class UndoRestoreTests
         Assert.Equal(forcedCommit, await RemoteHeadAsync(repo, "refs/heads/topic"));
         app.AssertScriptFollowed();
     }
+
+    /// <summary>The working tree's status as <c>git status --porcelain</c> gives it, without the end of its last line.</summary>
+    private static async Task<string> PorcelainAsync(TempRepo repo) => (await repo.GitAsync("status", "--porcelain")).StandardOutput.TrimEnd();
 
     /// <summary>The "reflog" scenario opened with the harnesses' fixed backup clock, after the clean-up at opening (which removes its two old backups).</summary>
     private static async Task<OperationsHarness> OpenAsync(TempRepo repo)

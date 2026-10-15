@@ -6,6 +6,7 @@ using VisualCommit.Core.Operations;
 using VisualCommit.Core.Undo;
 using VisualCommit.Testing;
 using Xunit;
+using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 using static VisualCommit.App.Tests.UndoAppTestSupport;
 
 namespace VisualCommit.App.Tests;
@@ -13,10 +14,13 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// The undo history's recording through <see cref="RepositoryOperations"/> against real git
 /// (docs/phase-5-design.md 7.2, 7.7, 7.11; the report's part U): the entry each kind of action
-/// leaves, with its text (7.6); no entry for an action that changed nothing or was refused; the
-/// undo and the redo of the entries as the toolbar runs them (7.5), with what the stage panel
-/// shows; the pending entry of a stopped action, completed by the stage panel's Commit and removed
-/// by Abort (D165); and one history per worktree (7.1).
+/// leaves, with its text (7.6) and what its undo needs beyond the reads (a mixed reset's index, a
+/// force push's values); no entry for an action that changed nothing or was refused, for D91's
+/// checkout whose stash was kept, or for a checkout that left HEAD where it was; the undo and the
+/// redo of the entries as the toolbar runs them (7.5), with what the stage panel shows; the
+/// pending entry of a stopped action, completed by Continue, Skip and the stage panel's Commit,
+/// removed by Abort (D165) and by a terminal's end of it, never by a status read older than the
+/// entry; and one history per worktree (7.1).
 /// </summary>
 [Collection(UndoCollection)]
 public class UndoRecordingTests
@@ -237,6 +241,161 @@ public class UndoRecordingTests
         await app.Operations.UndoAsync();
         Assert.Equal("Undid cherry-pick of 2 commits", app.StatusText);
         Assert.Equal(MainWork, await repo.HeadAsync());
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_list_of_picks_that_stops_is_one_entry_from_before_the_picks_once_continue_ends_it()
+    {
+        using var repo = await Scenarios.ConflictsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var history = app.Repository.UndoHistory;
+        var main = await repo.HeadAsync();
+        var clean = await app.ShaAsync("feature/picks~2");
+        var conflicting = await app.ShaAsync("feature/picks~1");
+        var last = await app.ShaAsync("feature/picks");
+
+        await app.Operations.CherryPickSeveralAsync([clean, conflicting, last]);
+        Assert.Equal((UndoEntryState.Pending, "cherry-pick of 3 commits"), (history.Pending!.State, history.Pending.Text));
+
+        // Resolved and staged; Continue picks the rest and ends the list (7.2).
+        repo.WriteFile("notes.txt", Scenarios.ConflictsFiles.NotesOurs.Replace("line 2 ours", "line 2 ours and picked", StringComparison.Ordinal));
+        await repo.GitAsync("add", "notes.txt");
+        await app.Repository.RefreshAsync();
+        await app.Operations.ContinueAsync(app.Operations.Status.InProgress, "Pick conflicting, resolved");
+        Assert.Equal("Cherry-pick finished", app.StatusText);
+        var entry = Assert.Single(history.Entries);
+        Assert.Equal((UndoKind.CherryPick, UndoEntryState.Done, main), (entry.Kind, entry.State, entry.Before.Head.Sha));
+        Assert.Equal(await repo.HeadAsync(), entry.After.Head.Sha);
+        AssertStates(app, new UndoAvailability(true, "Undo cherry-pick of 3 commits", false, "Nothing to redo"));
+
+        await app.Operations.UndoAsync();
+        Assert.Equal("Undid cherry-pick of 3 commits", app.StatusText);
+        Assert.Equal(main, await repo.HeadAsync());
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_status_read_begun_before_a_merge_stopped_leaves_its_pending_entry_and_a_terminals_abort_removes_it()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var history = app.Repository.UndoHistory;
+        var before = app.Repository.Status;
+        await app.Operations.MergeAsync("refs/heads/feature/conflict", MergeMode.Default);
+        var pending = history.Pending;
+        Assert.NotNull(pending);
+
+        // A refresh in flight when the merge started shows its read after the entry was added: a
+        // read begun then finds the merge in progress, and the entry stays.
+        Assert.False(before.InProgress.IsActive);
+        app.Operations.NoteUndoState(before);
+        Assert.Same(pending, history.Pending);
+        await WaitUntilAsync(() => app.Log.Messages.Any(message => message.EndsWith(": the stopped merge of feature/conflict into main is still in progress; its undo entry stays.", StringComparison.Ordinal)), "the read begun after the entry");
+        Assert.Same(pending, history.Pending);
+        AssertStates(app, new UndoAvailability(false, "Finish or abort the merge first", false, "Finish or abort the merge first"));
+
+        // Aborted in a terminal: the next status read removes it, once a read of its own agrees.
+        await repo.GitAsync("merge", "--abort");
+        await app.Repository.RefreshAsync();
+        await WaitUntilAsync(() => history.Pending is null, "the pending entry to go");
+        Assert.Empty(history.Entries);
+        AssertStates(app, new UndoAvailability(false, "Nothing to undo", false, "Nothing to redo"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_mixed_reset_keeps_the_index_it_replaced_which_its_undo_stages_again()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\n");
+        await repo.GitAsync("add", "src/core.txt");
+        repo.WriteFile("src/core.txt", "core\nmain work\nstaged line\nunstaged line\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var start = await PictureAsync(repo);
+
+        app.Dialogs.Reset(ResetMode.Mixed);
+        await app.Operations.ResetAsync(AddCore);
+        Assert.Equal(" M src/core.txt", (await repo.GitAsync("status", "--porcelain")).StandardOutput.TrimEnd());
+        var entry = Assert.Single(app.Repository.UndoHistory.Entries);
+        Assert.Equal(("reset of main to 8beca34 (mixed)", ResetMode.Mixed), (entry.Text, entry.Captured.ResetMode));
+        var snapshot = Assert.IsType<string>(entry.Captured.ResetSnapshot);
+        Assert.Equal("VisualCommit: index before a mixed reset", (await repo.GitAsync("log", "-1", "--format=%s", snapshot)).StandardOutput.Trim());
+        Assert.Equal("core\nmain work\nstaged line\n", (await repo.GitAsync("show", snapshot + ":src/core.txt")).StandardOutput);
+        var done = await PictureAsync(repo);
+
+        // The undo moves the branch back and stages the snapshot's index (7.3's IndexTo), not HEAD's tree.
+        await app.Operations.UndoAsync();
+        Assert.Equal("Undid reset of main to 8beca34 (mixed)", app.StatusText);
+        Assert.Equal(start, await PictureAsync(repo));
+        await app.Operations.RedoAsync();
+        Assert.Equal(done, await PictureAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_force_push_records_the_remotes_value_before_and_after_and_its_undo_puts_the_one_before_back()
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        var published = await repo.RefTargetAsync("refs/remotes/origin/published");
+        await repo.CheckoutAsync("published");
+        await repo.GitAsync("reset", "--quiet", "--hard", "refs/heads/main");
+        var rewritten = await repo.CommitFileAsync("src/published.txt", "rewritten\n", "Rewritten work");
+        await repo.CheckoutAsync("main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var history = app.Repository.UndoHistory;
+
+        app.Dialogs.Confirm();
+        await app.Operations.ForcePushAsync("refs/heads/published");
+        Assert.Equal("Force-pushed published to origin/published", app.StatusText);
+        var entry = Assert.Single(history.Entries);
+        Assert.Equal((UndoKind.ForcePush, "force push of published to origin", "origin"), (entry.Kind, entry.Text, entry.Captured.Remote));
+        Assert.Equal([new PushedRef("refs/heads/published", published, rewritten)], entry.Captured.Push!.Refs);
+
+        // 7.5's question, then the remote back where it was, with a lease on what the push left.
+        app.Dialogs.Confirm();
+        await app.Operations.UndoAsync();
+        var question = app.Dialogs.Confirmations[^1];
+        Assert.Equal(
+            ("Undo the push to origin?", $"published on origin goes back to {published![..7]}, which it was before the push. Anyone who fetched {rewritten[..7]} keeps it."),
+            (question.Title, question.Question));
+        Assert.Equal("Undid force push of published to origin", app.StatusText);
+        Assert.Equal(published, await RemoteHeadAsync(repo, "refs/heads/published"));
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText.StartsWith($"git push --progress --force-with-lease=refs/heads/published:{rewritten} origin ", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Stash_and_check_out_whose_pop_conflicted_records_nothing_and_keeps_its_stash()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work, mine\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var stashes = (await repo.StashListAsync()).Count;
+
+        // D91: stashed, checked out, popped with a conflict: the stash is kept and named (7.3).
+        app.Dialogs.CloseError();
+        await app.Operations.StashAndCheckoutAsync("refs/heads/feature/conflict");
+        Assert.Equal("Changes re-applied with conflicts", Assert.Single(app.Dialogs.Errors).Title);
+        Assert.Equal("feature/conflict", await repo.CurrentBranchAsync());
+        Assert.Equal(stashes + 1, (await repo.StashListAsync()).Count);
+        Assert.Empty(app.Repository.UndoHistory.Entries);
+        AssertStates(app, new UndoAvailability(false, "Resolve the conflicts first", false, "Resolve the conflicts first"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_checkout_that_leaves_HEAD_where_it_was_records_nothing()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        // origin/main's checkout is main's (2.2, D93), the branch HEAD is on already.
+        await app.Operations.CheckoutAsync("refs/remotes/origin/main");
+        Assert.Equal(1, Ran(app, "Check out origin/main"));
+        Assert.Equal(("main", MainWork), (await repo.CurrentBranchAsync(), await repo.HeadAsync()));
+        Assert.Empty(app.Repository.UndoHistory.Entries);
+        AssertStates(app, new UndoAvailability(false, "Nothing to undo", false, "Nothing to redo"));
         app.AssertScriptFollowed();
     }
 
