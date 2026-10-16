@@ -146,7 +146,7 @@ Visual checks:
 
 Closing:
 
-- [ ] 25. An independent review of the code before the gate; what it finds fixed, with tests.
+- [x] 25. An independent review of the code before the gate; what it finds fixed, with tests. (Six lenses, each finding verified by a skeptic: 43 confirmed, 1 blocker, 9 major, 33 minor, 3 refuted; all fixed with tests, merged in `b175509` and `4281f4c`; the full run then passed 3,227 of 3,227.)
 - [ ] 26. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed.
 - [ ] 27. CI run of the gate's commit read, every job.
@@ -233,17 +233,15 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 25's review is done: six reviewers, each finding verified by a skeptic, 43 confirmed (1
-blocker, 9 major, 33 minor) and 3 refuted; every confirmed one fixed. The performance half is
-merged (`b175509`: the undo history's reads cut, a pop 22 git calls to 16; no raw copies of files
-nothing writes back; file history in batches). The other half (`wip/p5-review-rest`: the blocker,
-undo and restores no longer delete what stands where a snapshot puts something back; ignored files
-under a stash; held files; the restores deciding inside their operation; two tabs taking turns on
-one history; the filter following branch changes; search, reflog and activity log fixes; code and
-test quality) conflicts with it in the undo's file recording, and is being merged on
-`wip/p5-merge-review`, which ends with a full default run. Then: merge it, push, CI; then the gate
-(design 15.7; references in `D:/Projects/Personal/gate5-reference/`), after telling the owner
-before the real-window pass.
+Step 26, the visual test gate, on the commit `4281f4c` (step 25's fixes merged; the last full run,
+on `539f113`, the same code, passed 3,227 of 3,227 in 49 min 17 s). In order: `dotnet test` at the
+root of the main checkout (the scripted pictures under `artifacts/visual/phase-*/scripted/`); then,
+after telling the owner and with the desktop unlocked, the real-window pass (`dotnet test --project
+tests/VisualCommit.RealWindowTests -c Release`, about 25 minutes); then the inspection of every
+picture: phase 5's own in full, the earlier ones through `scripts/compare-pictures.py` against
+`D:/Projects/Personal/gate5-reference/` (design 15.7), the 25 that vary by nature in full; the
+report's Scripted and Real window columns, "Run", "Found by the gate"; the pictures' list
+`docs/test-reports/phase-5-pictures.sha256`; then the closing steps.
 
 ### Notes for whoever resumes
 
