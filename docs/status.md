@@ -93,7 +93,7 @@ Start:
   helpers the checks need. (WP-S `ceb5f81`; each second-wave package added the driver helpers its part names.)
 - [x] 6. Phase 5's visual checks written into `docs/test-reports/phase-5.md`, each marked for the
   real-window pass or not, reviewed independently, and committed before the UI they test
-  (`82fd5a0`: 27 checks in parts A, B, F, U and P, 89 test methods, 265 planned scripted pictures;
+  (`82fd5a0`: 27 checks in parts A, B, F, U and P, 89 test methods, 264 planned scripted pictures;
   the lead's rulings on its questions are D183, design 15.8).
 
 Git layer:
@@ -132,9 +132,9 @@ App:
 - [x] 20. Solo and hide in the branch menus and the left panel, kept in the session (D159). (WP7.)
 - [x] 21. C12 on screen: the refusal's message and button, the automatic stash in the graph and
   the left panel. (WP4.)
-- [ ] 22. Phases 0 to 4's checks updated for what phase 5 changes on purpose (new menu items, the
+- [x] 22. Phases 0 to 4's checks updated for what phase 5 changes on purpose (new menu items, the
   toolbar's Undo, Redo and Search, the status bar's toggle), recorded under "Changes to expected
-  results" in the phase 5 report.
+  results" in the phase 5 report. (Each package changed the earlier tests its behaviour changes; every change is in the report's "Changes to expected results", and the gate inspected every changed earlier picture against it.)
 
 Visual checks:
 
@@ -236,7 +236,7 @@ Step 26, the gate. Its first run, on `4281f4c` (2026-10-16): `dotnet test` passe
 45 min 37 s, the real-window pass 59 of 59 in 26 min 26 s (Q1 1,749 ms of 2,000, the laptop warm),
 CI run 38909397699 green in all five jobs. The inspection of all 1,080 pictures (twelve Opus
 inspectors; verdicts in `D:/Projects/Personal/gate5-inspection/run1-verdicts.json`, the run's
-picture list in `run1-pictures.sha256` there) passed 1,033 and found: after an outside commit with
+picture list in `run1-pictures.sha256` there) passed every picture but 18 (15 scripted, 3 real-window), which showed: after an outside commit with
 the search open, the graph briefly showed the new rows with the old refs' labels (`f11f`); the
 search bar's disabled Previous and Next drawn as enabled (`VcIconButton` has no disabled style;
 `f10a`, `f11a`, `f11d`); seven earlier checks pictured the two-commit comparison still loading
@@ -312,9 +312,10 @@ carry their verdict over); the report's results and "Found by the gate" record b
   branch first; merged worktrees must be removed at once (each build folder is about 580 MB per
   project); a global `core.fsmonitor=true` leaves a git daemon per worktree running (phase 4's
   handoff says how to list and stop them before a gate).
-- The default run takes about 22 minutes (up to 27 under load) on the development laptop and
-  about 15 minutes per job on CI's Windows and macOS; the real-window pass 14 minutes. See phase
-  4's handoff, "Running the visual gate", for how to run both and what to stop first.
+- The default run takes about 45 minutes on the development laptop (43 min 22 s at phase 5's gate)
+  and about 16 to 25 minutes per job on CI's Windows and macOS; the real-window pass about 25
+  minutes, after a rest (a hot laptop fails Q1). See phase 5's handoff, "Running the visual
+  gate", for how to run both and what to stop first.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.

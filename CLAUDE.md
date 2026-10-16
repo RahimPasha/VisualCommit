@@ -281,11 +281,10 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 22 minutes on the Windows machine with nothing else running, up to 27
-  with other load (21 min 52 s at phase 4's gate on 2026-10-12, rested and alone, 2,411 tests). The
-  test projects run side by side (five in that run; seven since phase 5 added its two walk-throughs,
-  which docs/phase-5-design.md 15.6 expects to bring the run to 30 minutes or more), and the run is
-  bound by the processors,
+- The default tests take about 45 minutes on the Windows machine with nothing else running (43 min
+  22 s at phase 5's gate on 2026-10-16, alone, 3,233 tests; 21 min 52 s at phase 4's, 2,411 tests).
+  The seven test projects run side by side (phase 5 added its two walk-throughs and an undo history
+  whose reads every operation makes), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it. In that run, side by side: phases 0 to 2's
   walk-through 8 minutes, the phase 4 walk-through 16.5, `VisualCommit.Git.Tests` 18,
@@ -307,7 +306,7 @@ What to know about them:
   inspecting and before anything else runs, with
   `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-N-pictures.sha256`.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 14 minutes (phases 0 to 4): tell the
+  app on the desktop and moves the real mouse for about 25 minutes (phases 0 to 5): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
   and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
