@@ -2037,6 +2037,20 @@ The review before the gate (status step 25) found these; each is pinned by the t
 The gate's inspection of the pictures taken on `4281f4c` found these; each is pinned by the tests
 named.
 
+- **The refs are a snapshot of one moment** (D52's refresh): the five reads of
+  `ReadRefsAsync` run side by side, and a commit made in a terminal between them gave HEAD the new
+  commit (`rev-parse HEAD`) and its branch the old one (`for-each-ref`). That snapshot's fingerprint
+  differed from the last, so the graph loaded again: the new commit's row (git log names the refs)
+  without its branch's label, the label still on the row below, until the next refresh (`f11f`;
+  likely also phase 1's CI run 38203733545). HEAD's commit is now its branch's as `for-each-ref`
+  listed it; `rev-parse HEAD` stands for a detached HEAD, an unborn branch and a branch the list
+  missed (`RefReadingTests`, and `GraphReviewFixTests` for the labels drawn on every graph swapped
+  in). A second change made between the refs' read and git log's can still show for one refresh;
+  the change's own refresh corrects it, as at opening.
+- **A disabled icon button** (`VcIconButton`: the search bar's previous and next, the resolver's
+  close button and arrows, the stage rows' buttons, the pages' and panels' close buttons) draws in
+  `VcTextDisabledBrush`, as every other button theme of the app; the resolver's own rule for its
+  arrows (D160) is the theme's now (`SearchBarTests`).
 - **A page's header may cut its texts** (4.1, 4.2): the history's and the blame's titles and the
   blame's caption are `TrimmedTextBlock`s, cut with "…" with the whole text in the tooltip, as the
   history's subjects and the reflog's action and commit; at 1100×700 (a header 440 wide) the
