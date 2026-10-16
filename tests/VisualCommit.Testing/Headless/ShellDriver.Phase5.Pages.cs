@@ -320,14 +320,16 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>
-    /// The index of the main diff's row for new line <paramref name="newNumber"/> (or old line,
-    /// when the line was removed), as phase 3's checks find it (part B's B5 step 7). The main diff
+    /// The index of the main diff's row whose new number is <paramref name="newNumber"/> (an added
+    /// or a context line), or -1 (part B's B5 step 7). A removed line has no new number, so the
+    /// removed old line of the same number, which comes first in a change, is never the one found
+    /// (phase 3's own helper, which falls back to the old number, would find it). The main diff
     /// comes before the history page's in the window (11.1), so this is never the page's.
     /// </summary>
     public int DiffRowOfLine(int newNumber)
     {
         var text = Find<DiffTextView>("DiffText");
-        return text.Rows.ToList().FindIndex(row => row.Kind != DiffRowKind.HunkHeader && row.Left is { } cell && (cell.NewNumber ?? cell.OldNumber) == newNumber);
+        return text.Rows.ToList().FindIndex(row => row.Kind == DiffRowKind.Line && row.Left?.NewNumber == newNumber);
     }
 
     /// <summary>A point on the text of the main diff's row <paramref name="row"/>: 240 right of the row's left edge, on its text and not on its numbers (phase 3's <c>DiffTextPoint</c>).</summary>
