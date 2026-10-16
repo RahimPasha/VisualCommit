@@ -325,7 +325,8 @@ public sealed partial class Phase5ChecksA
         app.ClickMenuItem(PartA.OpenInMergeTool);
         await app.WaitForAsync(
             () => Scenarios.WaitingMergeToolStarted(repo) && app.FindByAutomationId("OperationCancelButton").IsEffectivelyVisible,
-            "the merge tool to start and the status bar to show Cancel");
+            "the merge tool to start and the status bar to show Cancel",
+            Scenarios.MergeToolTimeout);
         app.MoveToNeutral();
         await app.WaitForAsync(() => app.ActivityLog().Rows.Any(line => line.AutomationName == PartA.MergeToolTitle), "the merge tool's running row");
         shot = Shot(app, PartA.A2MergeToolRunning);
