@@ -92,26 +92,38 @@ public partial class Phase5RealWindowPass(Phase5Run fixture) : IClassFixture<Pha
     /// <summary>
     /// Starts the real app on a new data folder with one tab on <paramref name="repo"/> (and, when
     /// given, the activity log's height in the session, A2's 320) in a 1100×700 client area, dark
-    /// (the default theme), and waits until the repository has opened (<see cref="WaitForOpened"/>).
-    /// The first launch of the pass notes the display in run.txt.
+    /// (the default theme), and waits until the repository has opened (<see cref="Opened"/>). The
+    /// first launch of the pass notes the display in run.txt.
     /// </summary>
     private RealApp Launch(TempRepo repo, double? activityLogHeight = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var data = Run.NewDataDirectory();
         var app = RealApp.Launch(data, new SessionState { Tabs = [new TabState(repo.Path)], ActiveTab = 0, ActivityLogHeight = activityLogHeight });
-        return Opened(app, NameOf(repo));
+        return Opened(app, NameOf(repo), loadsBefore: 0, readsBefore: 0);
     }
 
     /// <summary>
     /// Starts the real app again on <paramref name="data"/>, writing no session, so that the session
     /// the last instance saved opens its tabs (a real restart, A3 and F14), and waits until the
-    /// repository <paramref name="repository"/> has opened.
+    /// repository <paramref name="repository"/> has opened in the new process: the data folder's log
+    /// already holds the last instance's lines, so the new process's are counted after them.
     /// </summary>
-    private RealApp Relaunch(string data, string repository) => Opened(RealApp.Launch(data), repository);
+    private RealApp Relaunch(string data, string repository)
+    {
+        var lines = AppLogFile.ReadLines(data);
+        var loadsBefore = lines.Count(line => Loaded(repository).IsMatch(line));
+        var readsBefore = lines.Count(line => AppLogFile.WorkingTreeRead(repository).IsMatch(line));
+        return Opened(RealApp.Launch(data), repository, loadsBefore, readsBefore);
+    }
 
-    /// <summary>Sizes the window to 1100×700, notes the display once, and waits until <paramref name="repository"/> has opened; disposes the app when that fails.</summary>
-    private RealApp Opened(RealApp app, string repository)
+    /// <summary>
+    /// Sizes the window to 1100×700, notes the display once, and waits until <paramref name="repository"/>
+    /// has opened: its history loaded and its status shown, the log lines the app writes for both,
+    /// after the <paramref name="loadsBefore"/> and <paramref name="readsBefore"/> the log held
+    /// before the launch. Disposes the app when that fails.
+    /// </summary>
+    private RealApp Opened(RealApp app, string repository, int loadsBefore, int readsBefore)
     {
         try
         {
@@ -122,7 +134,8 @@ public partial class Phase5RealWindowPass(Phase5Run fixture) : IClassFixture<Pha
                 fixture.DisplayNoted = true;
             }
 
-            WaitForOpened(app, repository);
+            app.WaitForLogLine(Loaded(repository), LoadTimeout, loadsBefore + 1);
+            app.WaitForLogLine(AppLogFile.WorkingTreeRead(repository), LoadTimeout, readsBefore + 1);
             return app;
         }
         catch
@@ -132,12 +145,8 @@ public partial class Phase5RealWindowPass(Phase5Run fixture) : IClassFixture<Pha
         }
     }
 
-    /// <summary>Waits until <paramref name="repository"/> has opened: its history loaded and its status shown (the log lines the app writes for both).</summary>
-    private static void WaitForOpened(RealApp app, string repository)
-    {
-        app.WaitForLogLine(AppLogFile.Containing($"] {repository}: loaded "), LoadTimeout);
-        app.WaitForLogLine(AppLogFile.WorkingTreeRead(repository), LoadTimeout);
-    }
+    /// <summary>The line a repository logs when its graph has loaded: <c>&lt;repo&gt;: loaded N commits in M ms</c>.</summary>
+    private static Regex Loaded(string repository) => AppLogFile.Containing($"] {repository}: loaded ");
 
     /// <summary>
     /// Waits for the backups' clean-up at opening on a scenario that holds backups due for it (the
@@ -193,7 +202,7 @@ public partial class Phase5RealWindowPass(Phase5Run fixture) : IClassFixture<Pha
     /// </summary>
     private static PendingLoad ExpectGraphLoad(RealApp app, string repository)
     {
-        var pattern = AppLogFile.Containing($"] {repository}: loaded ");
+        var pattern = Loaded(repository);
         return new PendingLoad(app, pattern, app.CountLogLines(pattern));
     }
 
