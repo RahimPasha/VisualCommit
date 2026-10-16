@@ -110,11 +110,12 @@ public sealed partial class Phase4ChecksB
     /// <summary>
     /// The right panel of Four and Three selected: phase 3's multi-selection view (4h) until phase 5,
     /// their comparison now (docs/phase-5-design.md 6.1, D162): From the lower row (Three), To the
-    /// upper (Four), in place of "2 commits selected".
+    /// upper (Four), in place of "2 commits selected", waited for until it is read and shows their
+    /// changed files.
     /// </summary>
     private static async Task AssertMultiSelectionAsync(ShellDriver app)
     {
-        await app.WaitForAsync(() => app.Compare() is not null, "the comparison of the two commits");
+        await app.WaitForComparisonShownAsync();
         Assert.Null(Shown(app, "MultiSelectionView"));
         Assert.Equal(("From " + MultiSelectionItems[1], "To " + MultiSelectionItems[0]), (app.Compare()!.From, app.Compare()!.To));
     }

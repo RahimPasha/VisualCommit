@@ -73,6 +73,22 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>
+    /// Waits until the right panel shows a comparison that has been read, its list laid out under
+    /// <c>Changed files (N)</c> (design 6.4), or what it says instead (a notice, its error): what
+    /// two selected commits show once their comparison is read (D162), and what phases 3 and 4
+    /// take their pictures of two selected commits with. Unlike <see cref="WaitForCompareAsync"/>
+    /// it waits for a comparison to show first, and judges the one shown when it looks, so a
+    /// selection that replaces the comparison meanwhile is followed. A wait on the condition,
+    /// never on a time.
+    /// </summary>
+    public Task WaitForComparisonShownAsync(TimeSpan? timeout = null) =>
+        WaitForAsync(
+            () => Compare() is { IsLoading: false } shown
+                && (shown.FilesTitle is not null || shown.Notice is not null || ActiveRepository.Comparison?.HasError == true),
+            "the comparison in the right panel to be read, its changed files shown",
+            timeout);
+
+    /// <summary>
     /// What the graph marks of the search (design 3.3, 15.2), read from the graph control's
     /// <c>Search</c> and its rows, never from pixels: whether a search is active, and which commit
     /// rows (as <c>SelectedIndex</c> counts them) are marked and which dimmed. The working-changes

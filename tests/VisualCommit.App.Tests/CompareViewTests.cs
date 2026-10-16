@@ -31,6 +31,28 @@ public class CompareViewTests
     private const string AddTracing = "14a5c6ca3e6afa5f8d0eb4e10b5068df51f4793c";
 
     [AvaloniaFact]
+    public async Task The_wait_for_a_comparison_shown_ends_once_its_changed_files_show()
+    {
+        // Phases 3 and 4 take their pictures of two selected commits after this wait (the phase 5
+        // gate's 11d, 11g, 12b, 24g, a1g, a1h and b8a were taken while "Loading…" showed).
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.HistoryAsync();
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+
+        app.Click(app.GraphRowPoint(7));
+        app.Click(app.GraphRowPoint(0), app.CommandModifier);
+        await app.WaitForComparisonShownAsync();
+
+        var compare = app.Compare()!;
+        Assert.False(compare.IsLoading);
+        Assert.Equal("Changed files (4)", compare.FilesTitle);
+        Assert.Equal(["M README.md", "M notes.md docs", "M Config.cs src", "M Reader.cs src"], Files(compare));
+        Assert.True(compare.FromEnabled);
+        Assert.True(compare.ToEnabled);
+    }
+
+    [AvaloniaFact]
     public async Task Two_selected_commits_compare_at_once_and_a_third_or_a_single_one_ends_it()
     {
         using var data = new TempDirectory("data");
