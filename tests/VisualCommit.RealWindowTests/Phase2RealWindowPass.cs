@@ -27,7 +27,15 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
 
     private const float RowHeight = 26;
 
-    /// <summary>Where the mouse rests between steps: on the status bar, out of every hover and tooltip.</summary>
+    /// <summary>
+    /// Where the mouse rests before a capture at 1400×900 (y 887): on the status bar, left of its
+    /// middle, which shows "Ready" (ending near x 102, no tooltip) in every capture at that size;
+    /// the neutral point lies in the graph area there, over the open diff. At 1100×700 the pass
+    /// rests at the neutral point (<see cref="RealApp.NeutralPoint"/>), as the later phases' passes
+    /// do: x 130 lies on the operation's text once it is longer than "Ready", and since phase 5
+    /// the restore bar's Restore is the discard's Undo (its D172), whose result "Undid discard of
+    /// Calculator.cs" has a tooltip, which showed in 17c-restored.
+    /// </summary>
     private const float RestX = 130;
 
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(60);
@@ -42,7 +50,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         using var app = LaunchWithTabs(data, repo.Path);
         Run.NoteDisplay(app);
         WaitForStatus(app, data, "changes", staged: 3, unstaged: 7);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var row = app.CaptureClient())
         {
             Run.Save(row, "01a-working-row");
@@ -51,7 +59,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
 
         ClickWorkingRow(app);
         WaitForStagePanel(app, unstaged: 7, staged: 3);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var panel = app.CaptureClient())
         {
             Run.Save(panel, "01b-stage-panel");
@@ -79,7 +87,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         WaitForLog(app, data, "changes: loaded 3 commits");
         WaitForStatus(app, data, "changes", staged: 0, unstaged: 7);
         WaitForStagePanel(app, unstaged: 7, staged: 0);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var committed = app.CaptureClient())
         {
             Run.Save(committed, "14b-committed");
@@ -106,7 +114,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         // Step 2: the row's Discard button, shown while the real mouse is over the row.
         ClickRowButton(app, "UnstagedFileList", "src/Calculator.cs", "RowDiscardButton");
         app.WaitFor(() => app.FindAll("ConfirmQuestion").Any(text => text.Name == "Discard the changes to Calculator.cs?"), "the confirmation dialog", LoadTimeout);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var dialog = app.CaptureClient())
         {
             Run.Save(dialog, "17a-discard-dialog");
@@ -124,7 +132,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         app.ClickWithMouse(app.Find("ConfirmButton"));
         app.WaitFor(() => app.FindAll("RestoreBarText").Any(text => text.Name == "Discarded changes to Calculator.cs."), "the restore bar", LoadTimeout);
         WaitForStagePanel(app, unstaged: 6, staged: 3);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var discarded = app.CaptureClient())
         {
             Run.Save(discarded, "17b-discarded");
@@ -137,7 +145,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
         app.ClickWithMouse(app.Find("RestoreDiscardButton"));
         app.WaitFor(() => app.FindAll("RestoreBarText").Count == 0, "the restore bar to go", LoadTimeout);
         WaitForStagePanel(app, unstaged: 7, staged: 3);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var restored = app.CaptureClient())
         {
             Run.Save(restored, "17c-restored");
@@ -159,7 +167,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
 
         repo.WriteFile("notes.txt", "A note\n");
         WaitForStatus(app, data, "linear", staged: 0, unstaged: 1);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var appeared = app.CaptureClient())
         {
             Run.Save(appeared, "20b-row-appeared");
@@ -213,7 +221,7 @@ public partial class Phase2RealWindowPass(Phase2Run fixture) : IClassFixture<Pha
 
         ClickFileRow(app, "UnstagedFileList", "assets/logo.png");
         app.WaitFor(() => app.FindAll("AfterCaption").Any(text => text.Name.Contains("pixels", StringComparison.Ordinal)), "the images' captions", LoadTimeout);
-        app.MoveMouseTo(RestX, 687);
+        app.MoveToNeutral();
         using (var image = app.CaptureClient())
         {
             Run.Save(image, "05-image-diff");

@@ -33,11 +33,6 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
     </Style>
-    <!-- An arrow (the previous or next file or conflict) with nowhere to go, or while a write or
-         the merge tool runs, in the disabled text colour, as the toolbar's buttons. -->
-    <Style Selector="Button.arrow:disabled">
-      <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
-    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="36,36,*" Background="{DynamicResource VcWindowBackgroundBrush}">
@@ -80,7 +75,6 @@
                      Margin="24,0,8,0"
                      AutomationProperties.AutomationId="ResolverFilePosition" />
           <Button Name="ResolverPreviousFile"
-                  Classes="arrow"
                   Theme="{StaticResource VcIconButton}"
                   Command="{Binding PreviousFileCommand}"
                   ToolTip.Tip="Previous file"
@@ -88,7 +82,6 @@
             <c:Icon Data="{StaticResource IconChevronLeft}" Width="14" Height="14" />
           </Button>
           <Button Name="ResolverNextFile"
-                  Classes="arrow"
                   Theme="{StaticResource VcIconButton}"
                   Command="{Binding NextFileCommand}"
                   ToolTip.Tip="Next file"
@@ -125,7 +118,6 @@
                        Margin="0,0,8,0"
                        AutomationProperties.AutomationId="ResolverConflictPosition" />
             <Button Name="ResolverPreviousConflict"
-                    Classes="arrow"
                     Theme="{StaticResource VcIconButton}"
                     Command="{Binding PreviousConflictCommand}"
                     ToolTip.Tip="Previous conflict"
@@ -133,7 +125,6 @@
               <c:Icon Data="{StaticResource IconChevronUp}" Width="14" Height="14" />
             </Button>
             <Button Name="ResolverNextConflict"
-                    Classes="arrow"
                     Theme="{StaticResource VcIconButton}"
                     Command="{Binding NextConflictCommand}"
                     ToolTip.Tip="Next conflict"
