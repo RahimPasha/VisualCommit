@@ -68,7 +68,7 @@ public sealed partial class Phase5ChecksU : Phase5Checks
             using var texts = app.RecordStatusTexts();
             await ClickAsync(app, direction);
             Assert.True(app.Session.Services.DialogHost.Current is not ConfirmationViewModel, $"{direction} {text} asked a question; only a step that changes a remote asks.");
-            await AssertRanAsync(app, repo, direction, text, mark, texts);
+            await AssertRanAsync(app, repo, direction, text, mark, texts, OperationKind.Local);
             return calls;
         }
 
@@ -100,12 +100,16 @@ public sealed partial class Phase5ChecksU : Phase5Checks
             var mark = app.LogMark();
             using var texts = app.RecordStatusTexts();
             ClickDialogButton(app, "ConfirmButton");
-            await AssertRanAsync(app, repo, direction, text, mark, texts);
+            await AssertRanAsync(app, repo, direction, text, mark, texts, OperationKind.Network);
             return calls;
         }
 
-        /// <summary>"Undo ran" after <paramref name="mark"/>: the running text the status bar showed, the log line, idle, no dialog, the status.</summary>
-        private static async Task AssertRanAsync(ShellDriver app, TempRepo repo, Direction direction, string text, int mark, StatusTextRecorder texts)
+        /// <summary>
+        /// "Undo ran" after <paramref name="mark"/>: the running text the status bar showed, the log
+        /// line, idle, no dialog, the status, and the operation's record: a network operation for a step
+        /// that changes a remote (7.5), a local one otherwise.
+        /// </summary>
+        private static async Task AssertRanAsync(ShellDriver app, TempRepo repo, Direction direction, string text, int mark, StatusTextRecorder texts, OperationKind kind)
         {
             var result = (direction == Direction.Undo ? "Undid " : "Redid ") + text;
             var ended = AppLogFile.OperationEnded(NameOf(repo), Title(direction, text));
@@ -116,6 +120,8 @@ public sealed partial class Phase5ChecksU : Phase5Checks
             await AssertNoDialogAsync(app);
             AssertStatus(app, result);
             Assert.Contains(Running(direction, text), texts.Texts);
+            var record = app.Session.Operations.Snapshot().Last(operation => operation.Title == Title(direction, text));
+            Assert.Equal((OperationOutcome.Succeeded, result, kind), (record.Outcome, record.Message, record.Kind));
         }
 
         /// <summary>The status bar's text while a step runs (12.1): <c>Undoing x…</c> or <c>Redoing x…</c>.</summary>
