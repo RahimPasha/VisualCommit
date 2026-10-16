@@ -1874,6 +1874,57 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   calls, 0.7 s alone). `ShellDriver.DoubleClick` stops the window's input clock for its presses
   (`HeadlessInputClock`), as a user's double-click carries the times of its presses however busy
   the app is (`ShellDriverTests.A_double_click_stays_one_when_its_first_click_takes_longer_than_the_double_tap_time`).
+- **The undo history's reads, cut** (7.7, D184; step 25's review of their cost):
+  - 7.7's "Operations that already read HEAD for D124 share that read" is built: inside a
+    recorded operation, the checks of HEAD made before anything that can move it (D124's "HEAD
+    moved while this waited" of a merge, reset, pick, revert, rebase or squash; 9.1's choice made
+    again and 9.2 step 1; 2.1's detached commits; the commit a reset or a rebase starts from) take
+    the recording's read (`RepositoryOperations.ReadHeadAtStartAsync`). A pull's check after its
+    fetch reads HEAD again.
+  - A hard reset hands the recording its snapshot's paths, the paths it holds a file for (D62's
+    rule: a file or a link in the working tree) and its index commit
+    (`IGitRepository.SnapshotForHardResetWithFilesAsync`), which the recording no longer reads back
+    from the snapshot commit; a redone hard reset does the same.
+  - Where only whether an operation is in progress matters (the in-progress refusals of a merge,
+    a pick and a revert; 9.3's checkout refusals and 1.3's rebase refusals; the recording's
+    "stopped" check; Abort, Continue, Skip, a pending entry's end; 7.5 step 1), the app reads the
+    git folder (`ReadInProgressStateAsync`: no git call while nothing is in progress, D89; it
+    decides no empty stop) and, for conflicts, `git ls-files --unmerged -z`
+    (`ReadConflictedPathsAsync`), not the whole status.
+  - A stash commit's paths (`ReadStashPathsAsync`, now with what its index commit stages,
+    `StashPaths.Staged`) are read once per stash commit named by its full id, the three reads side
+    by side, and shared by C12's check (9.3) and the recording's reads before and after an apply or
+    a pop; a name such as `stash@{0}` is read each time.
+  - **A file's raw bytes are kept as a blob only where an undo writes them back** (7.7 step 2,
+    `UndoScope.KeepsFileBytes`): the read before an apply, a pop or a restore
+    (`UndoScope.BeforeAction`). The read before a discard and every read after an action
+    (`UndoScope.AfterAction`, a redone hard reset's too) record the SHA-256 alone, read as a stream
+    (a file over 2 GB is recorded; `File.ReadAllBytes` failed on it and the action got no entry). A
+    step's own read (7.5 step 2) still keeps the bytes of the files it is about to overwrite: the
+    effects write them back when a later effect refuses, and the entry takes them for the opposite
+    step, so a redo writes back exactly the bytes its undo left. A discard of a file under a filter
+    (Git LFS, `core.autocrlf`) thus copies no raw content into the object store; its undo copies
+    the content it overwrites, once. A `FilesTo` whose bytes were never kept is refused (`the
+    commits no longer exist`) and writes nothing; a file is never deleted for want of its bytes.
+    The recording compares files by path and SHA-256 (`RecordedFile.SameContent`), and a file
+    exists when it has a SHA-256.
+  - The git calls inside the operation (Git 2.55, the ops scenario, before → after): commit 6 → 6;
+    checkout of a branch 8 → 6; the automatic stash's checkout 15 → 13; merge 14 → 10; a
+    cherry-pick that stops 14 → 10; mixed reset 13 → 10; hard reset with a local change 25 → 18;
+    stash 9 → 9; apply 20 → 14; pop 22 → 16; a pop C12 refuses 17 → 11; push 7 → 7; discard 14 → 12;
+    tag 5 → 5; branch deletion 9 → 9; undo and redo of an apply 10 → 10 each, of a discard 6 → 6
+    each (a full status became `ls-files --unmerged`), of a stash 8 → 8; undo of a hard reset
+    13 → 13, its redo 20 → 16. 7.7's push config read, the HEAD read of the kinds that never use it
+    and the stash's own reads stay as 7.7 and 0.5 have them.
+- **The reflog's lost marks** (5.2): a read again for the same refs (`RepoRefs.Fingerprint`) and the
+  same distinct commits takes the last walk's marks; the walk runs again when an entry is new or a
+  ref moved (`ReflogViewModelTests.A_read_again_for_the_same_refs_and_commits_takes_the_last_walks_marks`).
+- **The file history's rows** (4.1, "rows come as git prints them"): they reach the list in
+  batches, one UI job and one change of the list (`RowCollection.AddRange`) for whatever has come
+  since the last, the first row as soon as it comes; one job per row kept the window from taking
+  input until a file with thousands of commits had all its rows.
+- **Blame's gutter** (4.2) finds a line's run by a binary search over the runs, which follow one
+  another in line order.
 
 ## 16. Work breakdown
 
