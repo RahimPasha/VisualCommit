@@ -197,7 +197,10 @@ public sealed partial class GitRepository
         }
     }
 
-    public async Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default)
+    public async Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default) =>
+        (await SnapshotForHardResetWithFilesAsync(target, cancellationToken).ConfigureAwait(false))?.Commit;
+
+    public async Task<HardResetSnapshot?> SnapshotForHardResetWithFilesAsync(string target, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         var status = await ReadPlainStatusAsync(cancellationToken).ConfigureAwait(false);
@@ -237,12 +240,13 @@ public sealed partial class GitRepository
         }
 
         var shortTarget = target.Length > 7 ? target[..7] : target;
-        return await CommitSnapshotAsync(
+        var (commit, present) = await CommitSnapshotAsync(
             paths,
             head,
             indexCommit,
             $"VisualCommit: snapshot before a hard reset to {shortTarget}",
             cancellationToken).ConfigureAwait(false);
+        return new HardResetSnapshot(commit) { Index = indexCommit, Paths = [.. paths], Present = present };
     }
 
     /// <summary>
@@ -387,7 +391,7 @@ public sealed partial class GitRepository
         }
 
         var head = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
-        return await CommitSnapshotAsync(paths, head, null, "VisualCommit: snapshot before an abort", cancellationToken).ConfigureAwait(false);
+        return (await CommitSnapshotAsync(paths, head, null, "VisualCommit: snapshot before an abort", cancellationToken).ConfigureAwait(false)).Commit;
     }
 
     private static string[] SplitNul(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
@@ -453,9 +457,10 @@ public sealed partial class GitRepository
     /// A snapshot commit made D67's way, without a ref: an index of its own, read from HEAD, with
     /// <paramref name="paths"/> added as they are in the working tree (a path gone from it as
     /// deleted). Its parents are HEAD and <paramref name="secondParent"/>. The paths go to git on
-    /// standard input, so any number of them fits.
+    /// standard input, so any number of them fits. Returns the commit and the paths it holds a
+    /// file for, as D62's snapshot tells them (a file or a link in the working tree).
     /// </summary>
-    private async Task<string> CommitSnapshotAsync(
+    private async Task<(string Commit, IReadOnlySet<string> Present)> CommitSnapshotAsync(
         IReadOnlyCollection<string> paths,
         string? head,
         string? secondParent,
@@ -498,7 +503,7 @@ public sealed partial class GitRepository
             var message = $"{subject}\n\n{string.Join('\n', paths)}\n";
             var commit = (await RunAsync(SnapshotIdentity, message, cancellationToken, [.. arguments]).ConfigureAwait(false)).Trim();
             _log.Info($"Made a snapshot of {Count(paths.Count, "file")} ({commit[..Math.Min(7, commit.Length)]}): {subject}.");
-            return commit;
+            return (commit, present.ToHashSet(StringComparer.Ordinal));
         }
         finally
         {

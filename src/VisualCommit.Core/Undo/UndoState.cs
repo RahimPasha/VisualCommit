@@ -78,16 +78,24 @@ public sealed record ConfigEntry(string Key, string Value)
 }
 
 /// <summary>
-/// One working-tree file as the history recorded it: its raw bytes saved as a blob
-/// (<c>git hash-object -w --no-filters</c>), so that they can be written back byte for byte, and
-/// their SHA-256, which the checks compare with the file on disk.
+/// One working-tree file as the history recorded it: its SHA-256, which the checks compare with
+/// the file on disk, and, where a step may write them back, its raw bytes saved as a blob
+/// (<c>git hash-object -w --no-filters</c>), so that they come back byte for byte
+/// (<see cref="UndoScope.KeepsFileBytes"/>).
 /// </summary>
 /// <param name="Path">The repository-relative path, with <c>/</c>.</param>
-/// <param name="Blob">The blob that holds the file's bytes, or null when the file did not exist.</param>
+/// <param name="Blob">The blob that holds the file's bytes; null when the file did not exist, or when only its SHA-256 was recorded.</param>
 /// <param name="Sha256">The SHA-256 of the file's bytes, upper-case hex, or null when the file did not exist.</param>
 public sealed record RecordedFile(string Path, string? Blob, string? Sha256)
 {
-    public bool Exists => Blob is not null;
+    public bool Exists => Sha256 is not null;
+
+    /// <summary>Whether this is the same file content as <paramref name="other"/>: the same path, both absent or both with the same SHA-256, whether or not either kept its bytes.</summary>
+    public bool SameContent(RecordedFile other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return string.Equals(Path, other.Path, StringComparison.Ordinal) && string.Equals(Sha256, other.Sha256, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>One entry of the stash list as the history recorded it: never by its <c>stash@{n}</c>, which renumbering reuses (7.6).</summary>

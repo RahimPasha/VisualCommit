@@ -170,7 +170,8 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// The scope's files and, for an apply or a pop, the stash's (its changed paths and its
-    /// untracked ones): their raw bytes kept as blobs, their SHA-256 and their index entries.
+    /// untracked ones): their SHA-256, their raw bytes kept as blobs when the scope keeps them
+    /// (<see cref="UndoScope.KeepsFileBytes"/>), and their index entries.
     /// </summary>
     private async Task<(IReadOnlyList<RecordedFile> Files, IReadOnlyList<string> Entries)> ReadUndoFilesAsync(UndoScope scope, CancellationToken cancellationToken)
     {
@@ -186,7 +187,7 @@ public sealed partial class GitRepository
             return ([], []);
         }
 
-        var files = RecordUndoFilesAsync(paths, cancellationToken);
+        var files = RecordUndoFilesAsync(paths, scope.KeepsFileBytes, cancellationToken);
         var entries = ReadUndoIndexEntriesAsync(paths, cancellationToken);
         await Task.WhenAll(files, entries).ConfigureAwait(false);
         return (await files.ConfigureAwait(false), await entries.ConfigureAwait(false));
@@ -194,32 +195,22 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// The paths a stash holds, in byte order: what its working-tree commit and its index commit
-    /// change against its base, and its untracked files (its third parent), each name of a rename too.
+    /// change against its base, and its untracked files (its third parent), each name of a rename
+    /// too. Read once per stash commit with C12's check (<see cref="ReadStashPathsAsync"/>).
     /// </summary>
     private async Task<IReadOnlyList<string>> ReadUndoStashPathsAsync(string stash, CancellationToken cancellationToken)
     {
-        var tracked = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stash + "^1", stash);
-        var staged = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stash + "^1", stash + "^2");
-        var untracked = await ResolveAsync(stash + "^3", cancellationToken).ConfigureAwait(false);
-        var paths = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var path in SplitNul(await tracked.ConfigureAwait(false)).Concat(SplitNul(await staged.ConfigureAwait(false))))
-        {
-            paths.Add(path);
-        }
-
-        if (untracked is not null)
-        {
-            paths.UnionWith(SplitNul(await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", untracked).ConfigureAwait(false)));
-        }
-
-        return [.. paths];
+        var read = await ReadStashPathsAsync(stash, cancellationToken).ConfigureAwait(false);
+        return [.. new SortedSet<string>(read.Changed.Concat(read.Staged).Concat(read.Untracked), StringComparer.Ordinal)];
     }
 
     /// <summary>
-    /// Each path's raw bytes kept as a blob (<c>hash-object -w --no-filters</c>, 0.5: written back
-    /// byte for byte, whatever <c>core.autocrlf</c> says) and their SHA-256, or absent.
+    /// Each path's SHA-256, or absent, and with <paramref name="keepBytes"/> its raw bytes kept as
+    /// a blob (<c>hash-object -w --no-filters</c>, 0.5: written back byte for byte, whatever
+    /// <c>core.autocrlf</c> or a filter says). The SHA-256 is read as a stream, so a file of any
+    /// size is recorded.
     /// </summary>
-    internal async Task<IReadOnlyList<RecordedFile>> RecordUndoFilesAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    internal async Task<IReadOnlyList<RecordedFile>> RecordUndoFilesAsync(IReadOnlyList<string> paths, bool keepBytes, CancellationToken cancellationToken)
     {
         var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var path in paths)
@@ -227,12 +218,12 @@ public sealed partial class GitRepository
             var full = WorkingTreePath(path);
             if (File.Exists(full))
             {
-                hashes[path] = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(full, cancellationToken).ConfigureAwait(false)));
+                hashes[path] = await Sha256OfFileAsync(full, cancellationToken).ConfigureAwait(false);
             }
         }
 
         var blobs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var chunk in UndoPathChunks([.. paths.Where(hashes.ContainsKey)]))
+        foreach (var chunk in UndoPathChunks(keepBytes ? [.. paths.Where(hashes.ContainsKey)] : []))
         {
             var command = new GitCommand(["hash-object", "-w", "--no-filters", "--", .. chunk]) { WorkingDirectory = WorkingDirectory };
             var ids = SplitLines((await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput);
@@ -242,9 +233,19 @@ public sealed partial class GitRepository
             }
         }
 
-        return [.. paths.Select(path => blobs.TryGetValue(path, out var blob)
-            ? new RecordedFile(path, blob, hashes[path])
+        return [.. paths.Select(path => hashes.TryGetValue(path, out var hash)
+            ? new RecordedFile(path, blobs.GetValueOrDefault(path), hash)
             : new RecordedFile(path, null, null))];
+    }
+
+    /// <summary>The SHA-256 of a file's bytes, upper-case hex, read as a stream.</summary>
+    private static async Task<string> Sha256OfFileAsync(string full, CancellationToken cancellationToken)
+    {
+        var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81_920, useAsync: true);
+        await using (stream.ConfigureAwait(false))
+        {
+            return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        }
     }
 
     /// <summary>The paths' index entries as <c>ls-files --stage -z</c> prints them (unmerged stages included), without the NUL; a path names itself only, not what lies below it.</summary>
@@ -269,8 +270,8 @@ public sealed partial class GitRepository
             return new GitignoreState(Exists: false, Length: 0, Sha256: null);
         }
 
-        var bytes = File.ReadAllBytes(path);
-        return new GitignoreState(Exists: true, bytes.Length, Convert.ToHexString(SHA256.HashData(bytes)));
+        using var stream = File.OpenRead(path);
+        return new GitignoreState(Exists: true, stream.Length, Convert.ToHexString(SHA256.HashData(stream)));
     }
 
     /// <summary>Paths split so that each git call's command line stays short enough.</summary>
@@ -370,7 +371,7 @@ public sealed partial class GitRepository
         private bool _madeStashPopped;
 
         /// <summary>A redone hard reset's snapshot and backups.</summary>
-        private (string? Snapshot, BackupResult Backup)? _hardReset;
+        private (HardResetSnapshot? Snapshot, BackupResult Backup)? _hardReset;
 
         public UndoStepRun(GitRepository repository, UndoStep step, NetworkOptions options, CancellationToken cancellationToken)
         {
@@ -397,14 +398,14 @@ public sealed partial class GitRepository
 
         public async Task<UndoStepResult> RunAsync()
         {
-            // 1. The app's own check first: update-ref refuses nothing during a merge, a rebase or a pick (0.4).
-            var status = await _repository.ReadStatusAsync(Token).ConfigureAwait(false);
-            if (status.InProgress.IsActive)
+            // 1. The app's own check first: update-ref refuses nothing during a merge, a rebase or a
+            // pick (0.4). Read from the git folder, then the conflicted paths, without a status.
+            if ((await _repository.ReadInProgressStateAsync(Token).ConfigureAwait(false)).IsActive)
             {
                 return Refused(new UndoRefusal(UndoRefusalKind.InProgress));
             }
 
-            if (ConflictsInTheWay(status) is { } conflicts)
+            if (ConflictsInTheWay(await _repository.ReadConflictedPathsAsync(Token).ConfigureAwait(false)) is { } conflicts)
             {
                 return Refused(conflicts);
             }
@@ -418,6 +419,8 @@ public sealed partial class GitRepository
             {
                 return Refused(refusal);
             }
+
+            KeepBytesOfFilesLeft();
 
             // 4. The effects, reversed when a later one refuses.
             try
@@ -441,12 +444,42 @@ public sealed partial class GitRepository
         private UndoStepResult Refused(UndoRefusal refusal) => new(refusal, _step.Entry);
 
         /// <summary>
+        /// The bytes of the files the step's effects overwrite (each <see cref="FilesTo"/>'s and
+        /// <see cref="RestoreSnapshot"/>'s <c>From</c>), where the recording kept only their SHA-256
+        /// (<see cref="UndoScope.KeepsFileBytes"/>): the step's own read kept them as blobs, and
+        /// its checks proved them the recorded ones. The effects write them back when a later
+        /// effect refuses, and the entry keeps them for the opposite step
+        /// (<see cref="RewriteEntryAsync"/>): a redo writes back the bytes its undo left.
+        /// </summary>
+        private void KeepBytesOfFilesLeft()
+        {
+            for (var i = 0; i < _order.Count; i++)
+            {
+                var (index, effect) = _order[i];
+                _order[i] = (index, effect switch
+                {
+                    FilesTo write => write with { From = WithBytes(write.From) },
+                    RestoreSnapshot restore => restore with { From = WithBytes(restore.From) },
+                    _ => effect,
+                });
+            }
+        }
+
+        /// <summary><paramref name="files"/> with the bytes the step's read kept for those whose content it found, where they have none.</summary>
+        private IReadOnlyList<RecordedFile> WithBytes(IReadOnlyList<RecordedFile> files) =>
+            files.Any(file => file is { Exists: true, Blob: null }) ? [.. files.Select(WithBytes)] : files;
+
+        private RecordedFile WithBytes(RecordedFile file) =>
+            file is { Exists: true, Blob: null } && _now.Files.FirstOrDefault(now => now.SameContent(file)) is { Blob: { } blob }
+                ? file with { Blob = blob }
+                : file;
+
+        /// <summary>
         /// Conflicts without an operation in progress refuse the step (7.4), except for the undo of an
         /// apply or a pop whose recorded files hold every conflicted one: it puts them back as they were.
         /// </summary>
-        private UndoRefusal? ConflictsInTheWay(WorkingTreeStatus status)
+        private UndoRefusal? ConflictsInTheWay(IReadOnlyList<string> conflicted)
         {
-            var conflicted = status.Unstaged.Where(file => file.Kind == FileChangeKind.Conflicted).Select(file => file.Path).ToList();
             if (conflicted.Count == 0)
             {
                 return null;
@@ -500,6 +533,11 @@ public sealed partial class GitRepository
                     case RestoreSnapshot restore:
                         objects.Add(restore.Snapshot.Commit);
                         break;
+                    case FilesTo write when write.To.Any(file => file is { Exists: true, Blob: null }):
+                        // Bytes the entry never kept (its undo keeps them before a redo needs them):
+                        // nothing to write back, as when a gc took them.
+                        _repository._log.Error($"The {_step.Direction} of {_step.Entry.Text} has files without their bytes: {string.Join(", ", write.To.Where(file => file is { Exists: true, Blob: null }).Select(file => file.Path))}.");
+                        return new UndoRefusal(UndoRefusalKind.CommitsGone);
                     case FilesTo write:
                         objects.AddRange(write.To.Select(file => file.Blob).OfType<string>());
                         break;
@@ -1283,9 +1321,18 @@ public sealed partial class GitRepository
             (await _repository._runner.RunAsync(command, Token).ConfigureAwait(false)).EnsureSuccess(command);
         }
 
-        /// <summary>Each file's recorded bytes written back (<c>cat-file blob</c>), or the file deleted with the folders it leaves empty when it was absent (7.3).</summary>
+        /// <summary>
+        /// Each file's recorded bytes written back (<c>cat-file blob</c>), or the file deleted with the
+        /// folders it leaves empty when it was absent (7.3). A file recorded without its bytes is
+        /// never deleted for it: nothing is written, and the call fails before it starts.
+        /// </summary>
         private async Task WriteFilesAsync(IReadOnlyList<RecordedFile> files)
         {
+            if (files.FirstOrDefault(file => file is { Exists: true, Blob: null }) is { } unkept)
+            {
+                throw new InvalidOperationException($"The bytes of {unkept.Path} were not kept: it cannot be written back.");
+            }
+
             foreach (var file in files)
             {
                 if (file.Blob is not { } blob)
@@ -1388,8 +1435,8 @@ public sealed partial class GitRepository
         /// </summary>
         private async Task HardResetAsync(HardReset reset)
         {
-            var snapshot = await _repository.SnapshotForHardResetAsync(reset.To, Token).ConfigureAwait(false);
-            var backup = await _repository.SaveBackupRefsAsync(new BackupRequest("reset", [new BackupEntry(null, reset.From)]) { ChangesCommit = snapshot }, Token).ConfigureAwait(false);
+            var snapshot = await _repository.SnapshotForHardResetWithFilesAsync(reset.To, Token).ConfigureAwait(false);
+            var backup = await _repository.SaveBackupRefsAsync(new BackupRequest("reset", [new BackupEntry(null, reset.From)]) { ChangesCommit = snapshot?.Commit }, Token).ConfigureAwait(false);
             _hardReset = (snapshot, backup);
             _newBackups.AddRange(backup.Refs);
             await _repository.ResetAsync(reset.To, ResetMode.Hard, _options, Token).ConfigureAwait(false);
@@ -1471,13 +1518,24 @@ public sealed partial class GitRepository
         /// <summary>
         /// The entry with what the step made: a redo's stash (its commit, and its place in the list
         /// after the action), a redo's hard-reset snapshot (with the files the reset left now), the
-        /// backups it saved.
+        /// backups it saved, and the bytes of the files the step overwrote where the recording kept
+        /// only their SHA-256 (<see cref="KeepBytesOfFilesLeft"/>): the opposite step writes them back.
         /// </summary>
         private async Task<UndoEntry> RewriteEntryAsync()
         {
             var entry = _step.Entry;
             var captured = entry.Captured;
+            var before = entry.Before;
             var after = entry.After;
+            if (_step.Direction == UndoDirection.Undo)
+            {
+                after = after with { Files = WithBytes(after.Files) };
+            }
+            else
+            {
+                before = before with { Files = WithBytes(before.Files) };
+            }
+
             if (_madeStash is { } stash && !_madeStashPopped)
             {
                 var listed = await _repository.ReadUndoStashesAsync(Token).ConfigureAwait(false);
@@ -1502,23 +1560,30 @@ public sealed partial class GitRepository
                 captured = captured with { Backups = [.. captured.Backups.Union(_newBackups, StringComparer.Ordinal)] };
             }
 
-            return entry with { Captured = captured, After = after };
+            return entry with { Captured = captured, Before = before, After = after };
         }
 
-        /// <summary>A redone hard reset's new snapshot as its undo needs it (7.3): the snapshot, its index (second parent), its files, and the bytes the reset left at its paths.</summary>
-        private async Task<(UndoCaptured Captured, UndoState After)> RewriteHardResetAsync(UndoCaptured captured, UndoState after, string? snapshot, BackupResult backup)
+        /// <summary>
+        /// A redone hard reset's new snapshot as its undo needs it (7.3): the snapshot, its index
+        /// (second parent), its files as the snapshot was made, and the bytes the reset left at
+        /// its paths (their SHA-256: the undo's own read keeps them as blobs when it needs them).
+        /// </summary>
+        private async Task<(UndoCaptured Captured, UndoState After)> RewriteHardResetAsync(UndoCaptured captured, UndoState after, HardResetSnapshot? snapshot, BackupResult backup)
         {
             if (snapshot is null)
             {
                 return (captured with { ResetSnapshot = null, ResetIndex = null, Snapshot = null, ChangedFiles = [] }, after);
             }
 
-            var files = await _repository.ReadUndoSnapshotAsync(backup.Refs[^1], snapshot, Token).ConfigureAwait(false);
-            var index = await _repository.ResolveAsync(snapshot + "^2", Token).ConfigureAwait(false);
-            var recorded = await _repository.RecordUndoFilesAsync(files.Paths, Token).ConfigureAwait(false);
+            var reference = backup.Refs[^1];
+            var files = snapshot is { Paths: { } known, Present: { } present }
+                ? new DiscardSnapshot(reference, snapshot.Commit, known, present)
+                : await _repository.ReadUndoSnapshotAsync(reference, snapshot.Commit, Token).ConfigureAwait(false);
+            var index = snapshot.Paths is not null ? snapshot.Index : await _repository.ResolveAsync(snapshot.Commit + "^2", Token).ConfigureAwait(false);
+            var recorded = await _repository.RecordUndoFilesAsync(files.Paths, keepBytes: false, Token).ConfigureAwait(false);
             var paths = files.Paths.ToHashSet(StringComparer.Ordinal);
             return (
-                captured with { ResetSnapshot = snapshot, ResetIndex = index, Snapshot = files, ChangedFiles = files.Paths },
+                captured with { ResetSnapshot = snapshot.Commit, ResetIndex = index, Snapshot = files, ChangedFiles = files.Paths },
                 after with { Files = [.. after.Files.Where(file => !paths.Contains(file.Path)), .. recorded] });
         }
 

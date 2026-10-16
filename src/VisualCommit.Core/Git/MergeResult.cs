@@ -69,7 +69,11 @@ public enum StashApplyMode
 /// <summary>The paths a stash would write (<see cref="IGitRepository.ReadStashPathsAsync"/>), repository-relative with <c>/</c>, raw.</summary>
 /// <param name="Changed">The paths its changes touch, against its base: both sides of a rename.</param>
 /// <param name="Untracked">Its untracked files; empty for a stash made without them.</param>
-public sealed record StashPaths(IReadOnlyList<string> Changed, IReadOnlyList<string> Untracked);
+public sealed record StashPaths(IReadOnlyList<string> Changed, IReadOnlyList<string> Untracked)
+{
+    /// <summary>The paths its index commit (its second parent) changes against its base, both sides of a rename: what an apply with <c>--index</c> stages, and what the undo history records with the rest.</summary>
+    public IReadOnlyList<string> Staged { get; init; } = [];
+}
 
 /// <summary>What a pull's integration step did (2.18, D84).</summary>
 public enum PullOutcome

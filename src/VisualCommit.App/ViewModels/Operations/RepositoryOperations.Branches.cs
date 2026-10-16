@@ -574,17 +574,28 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return moved;
                     }
 
-                    var head = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
+                    var head = (await ReadHeadAtStartAsync()).Sha ?? throw new InvalidOperationException("HEAD names no commit.");
                     // Hard: the changes it discards; mixed: the index it replaces, when anything is
                     // staged, so that "this can be undone" holds for a staged version too.
+                    var hard = mode == ResetMode.Hard ? await Git.SnapshotForHardResetWithFilesAsync(commit) : null;
                     var changes = mode switch
                     {
-                        ResetMode.Hard => await Git.SnapshotForHardResetAsync(commit),
+                        ResetMode.Hard => hard?.Commit,
                         ResetMode.Mixed => await Git.SnapshotIndexAsync(),
                         _ => null,
                     };
-                    await SaveBackupAsync(new BackupRequest("reset", [new BackupEntry(null, head)]) { ChangesCommit = changes });
-                    UndoCapture.Reset(mode, changes);
+                    var saved = await SaveBackupAsync(new BackupRequest("reset", [new BackupEntry(null, head)]) { ChangesCommit = changes });
+
+                    // A hard reset's undo needs the snapshot's index and files, known here (7.7 step 3).
+                    var snapshotRef = saved?.Refs.FirstOrDefault(name => name.EndsWith("-changes", StringComparison.Ordinal));
+                    if (hard is { Paths: { } paths, Present: { } present } && snapshotRef is not null)
+                    {
+                        UndoCapture.Reset(mode, changes, hard.Index, new DiscardSnapshot(snapshotRef, hard.Commit, paths, present));
+                    }
+                    else
+                    {
+                        UndoCapture.Reset(mode, changes);
+                    }
                     await Git.ResetAsync(commit, mode, NetworkOptions.From(context));
                     return OperationReport.Done(OperationTexts.ResetDone(current, commit, mode));
                 },
@@ -1064,7 +1075,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
             return null;
         }
 
-        var head = await Git.ReadHeadAsync();
+        var head = await ReadHeadAtStartAsync();
         if (!head.IsDetached)
         {
             return null;
@@ -1088,15 +1099,17 @@ public sealed partial class RepositoryOperations : IInProgressActions
     /// detached, and with <paramref name="sameCommit"/> at the same commit too. Otherwise it
     /// refuses, saying where HEAD went and <paramref name="nothing"/>, so it never acts on a branch
     /// the user did not name. Null when HEAD is where it was, or when no refs had been read.
+    /// HEAD is the undo recording's read of it (<see cref="ReadHeadAtStartAsync"/>), or with
+    /// <paramref name="fresh"/> read now: for a check after a wait inside the operation (a pull's fetch).
     /// </summary>
-    private async Task<OperationReport?> RefuseIfHeadMovedAsync(OperationText text, HeadState? seen, string nothing, bool sameCommit = false)
+    private async Task<OperationReport?> RefuseIfHeadMovedAsync(OperationText text, HeadState? seen, string nothing, bool sameCommit = false, bool fresh = false)
     {
         if (seen is null)
         {
             return null;
         }
 
-        var now = await Git.ReadHeadAsync();
+        var now = fresh ? await Git.ReadHeadAsync() : await ReadHeadAtStartAsync();
         string summary;
         if (!string.Equals(now.BranchName, seen.BranchName, StringComparison.Ordinal))
         {
@@ -1165,13 +1178,14 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
     /// <summary>
     /// A merge, cherry-pick or revert started while another operation is in progress is refused
-    /// with the menus' reason "Finish or abort the &lt;kind&gt; first" (design 5), read from a fresh
-    /// status inside the operation, so one queued behind an operation that stopped is refused too.
+    /// with the menus' reason "Finish or abort the &lt;kind&gt; first" (design 5), read fresh from the
+    /// git folder inside the operation (<see cref="IGitRepository.ReadInProgressStateAsync"/>), so
+    /// one queued behind an operation that stopped is refused too.
     /// Null when nothing is in progress.
     /// </summary>
     private async Task<OperationReport?> RefuseWhileInProgressAsync(OperationText text)
     {
-        var state = (await Git.ReadStatusAsync()).InProgress;
+        var state = await Git.ReadInProgressStateAsync();
         if (!state.IsActive)
         {
             return null;

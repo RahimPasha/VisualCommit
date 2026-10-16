@@ -111,12 +111,12 @@ public class ReflogViewModelTests
         var rows = page.Rows.ToList();
         Assert.Same(host.Refs, page.ShownFor);
 
-        // The refresh's read: the same entries keep their rows (and the list its containers and
-        // focus); the lost mark stays until the new walk ends, then follows it.
+        // The refresh's read after a ref moved: the same entries keep their rows (and the list its
+        // containers and focus); the lost mark stays until the new walk ends, then follows it.
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         repository.LostGate = gate;
         repository.Lost.Clear();
-        var refreshed = host.Refs with { Remotes = ["origin"] };
+        var refreshed = host.Refs with { Refs = [.. host.Refs.Refs, new GitRef("refs/heads/kept", "kept", RefKind.LocalBranch, Shortcut)] };
         page.OnRefsRead(refreshed);
         await WaitForAsync(() => repository.ReadCount("lost") == 2);
         Assert.Equal(rows, page.Rows);
@@ -141,6 +141,42 @@ public class ReflogViewModelTests
         repository.LostGate.SetResult();
         await WaitForAsync(() => page.ReadsShown == 3);
         Assert.All(page.Rows.Cast<ReflogRowViewModel>(), row => Assert.False(row.IsLost));
+    }
+
+    /// <summary>
+    /// Step 25's review: every refresh walked again for the lost marks, also one that moved no
+    /// ref (a stage writes the index), which takes seconds in a large repository without a
+    /// commit-graph. A commit's mark depends only on the refs and the reflog's commits: a read
+    /// again for the same takes the last walk's marks, and is shown as a read all the same.
+    /// </summary>
+    [Fact]
+    public async Task A_read_again_for_the_same_refs_and_commits_takes_the_last_walks_marks()
+    {
+        var repository = new PageFakeRepository();
+        repository.Reflogs["HEAD"] = new ReflogResult([Entry("HEAD@{0}", 0, Notes, "a", "Write the notes", 27), Entry("HEAD@{1}", 1, Shortcut, "b", "Try a shortcut", 23)], 0);
+        repository.Lost.Add(Shortcut);
+        var host = new RecordingPageHost(repository);
+        using var page = new ReflogViewModel(host, "HEAD");
+        await page.LoadAsync();
+        Assert.Equal(1, repository.ReadCount("lost"));
+
+        // The same refs in another snapshot (the remotes are no part of the walk), the same entries.
+        var same = host.Refs with { Remotes = ["origin", "upstream"] };
+        page.OnRefsRead(same);
+        await WaitForAsync(() => page.ReadsShown == 2);
+        Assert.Equal(1, repository.ReadCount("lost"));
+        Assert.Same(same, page.ShownFor);
+        Assert.Equal([false, true], page.Rows.Cast<ReflogRowViewModel>().Select(row => row.IsLost));
+
+        // A new entry, or a ref moved, walks again.
+        repository.Reflogs["HEAD"] = new ReflogResult([Entry("HEAD@{0}", 0, Shortcut, "c", "Try a shortcut", 28), Entry("HEAD@{1}", 1, Notes, "a", "Write the notes", 27), Entry("HEAD@{2}", 2, Shortcut, "b", "Try a shortcut", 23), Entry("HEAD@{3}", 3, ParentSha, "d", "Earlier", 20)], 0);
+        page.OnRefsRead(same);
+        await WaitForAsync(() => page.ReadsShown == 3);
+        Assert.Equal(2, repository.ReadCount("lost"));
+        var moved = same with { Head = new HeadState("main", Shortcut) };
+        page.OnRefsRead(moved);
+        await WaitForAsync(() => page.ReadsShown == 4);
+        Assert.Equal(3, repository.ReadCount("lost"));
     }
 
     [Fact]

@@ -125,14 +125,29 @@ public sealed class BlameGutter : Control
         }
     }
 
-    /// <summary>The index of the run of line <paramref name="line"/> (from 1), or null.</summary>
+    /// <summary>
+    /// The index of the run of line <paramref name="line"/> (from 1), or null. The runs follow one
+    /// another in line order (<see cref="ViewModels.Pages.BlameViewModel.RunsOf"/>), so a binary search finds it:
+    /// every visible line of every frame asks, and a large, much-edited file has tens of thousands of runs.
+    /// </summary>
     public int? RunOfLine(int line)
     {
-        for (var index = 0; index < _runs.Count; index++)
+        int low = 0, high = _runs.Count - 1;
+        while (low <= high)
         {
-            if (line >= _runs[index].FirstLine && line <= _runs[index].LastLine)
+            var middle = low + ((high - low) / 2);
+            var run = _runs[middle];
+            if (line < run.FirstLine)
             {
-                return index;
+                high = middle - 1;
+            }
+            else if (line > run.LastLine)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                return middle;
             }
         }
 

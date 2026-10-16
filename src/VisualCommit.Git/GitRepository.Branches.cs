@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using VisualCommit.Core.Git;
 
@@ -227,21 +228,67 @@ public sealed partial class GitRepository
         return ignored;
     }
 
-    public async Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The paths of the stash commits read so far, by full SHA: a commit never changes, so C12's
+    /// check and the undo history's reads before and after an apply or a pop read them once.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Task<StashPaths>> _stashPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stashCommit);
+        if (!IsFullObjectId(stashCommit))
+        {
+            // A name (stash@{0}) may name another commit tomorrow: read, not kept.
+            return ReadStashPathsUncachedAsync(stashCommit, cancellationToken);
+        }
 
-        // Both sides of a rename (--no-renames), against the commit the stash was made on.
-        var changed = await ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit).ConfigureAwait(false);
+        if (_stashPaths.TryGetValue(stashCommit, out var known))
+        {
+            return known.WaitAsync(cancellationToken);
+        }
 
-        // A stash made without its untracked files has two parents: ^3 names nothing (the report's PD15).
-        var untracked = await ResolveAsync(stashCommit + "^3", cancellationToken).ConfigureAwait(false) is { } third
-            ? await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", third).ConfigureAwait(false)
+        // One read for every caller, not cancelled by any one of them; a failed read is not kept.
+        var read = ReadStashPathsUncachedAsync(stashCommit, CancellationToken.None);
+        var kept = _stashPaths.GetOrAdd(stashCommit, read);
+        if (ReferenceEquals(kept, read))
+        {
+            _ = read.ContinueWith(
+                failed => _stashPaths.TryRemove(new KeyValuePair<string, Task<StashPaths>>(stashCommit, failed)),
+                CancellationToken.None,
+                TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        return kept.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="ReadStashPathsAsync"/>'s reads, side by side: what the stash's working-tree commit
+    /// and its index commit change against its base (both sides of a rename, <c>--no-renames</c>)
+    /// and, when it has a third parent, its untracked files (a stash made without them has two
+    /// parents: <c>^3</c> names nothing, the report's PD15).
+    /// </summary>
+    private async Task<StashPaths> ReadStashPathsUncachedAsync(string stashCommit, CancellationToken cancellationToken)
+    {
+        var changed = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit);
+        var staged = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit + "^2");
+        var third = ResolveAsync(stashCommit + "^3", cancellationToken);
+        await Task.WhenAll((Task[])[changed, staged, third]).ConfigureAwait(false);
+        var untracked = await third.ConfigureAwait(false) is { } tree
+            ? await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", tree).ConfigureAwait(false)
             : string.Empty;
-        return new StashPaths(SplitPaths(changed), SplitPaths(untracked));
+        return new StashPaths(SplitPaths(await changed.ConfigureAwait(false)), SplitPaths(untracked))
+        {
+            Staged = SplitPaths(await staged.ConfigureAwait(false)),
+        };
 
         static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
+
+    /// <summary>Whether <paramref name="value"/> is a whole object id (SHA-1 or SHA-256, hex), which names one object for good.</summary>
+    private static bool IsFullObjectId(string value) =>
+        value.Length is 40 or 64 && value.All(char.IsAsciiHexDigit);
 
     /// <summary>
     /// The files under a folder of the working tree (<paramref name="folder"/>, a repository path),
@@ -546,14 +593,8 @@ public sealed partial class GitRepository
     }
 
     /// <summary>The number of conflicted paths in the index: the distinct paths of <c>git ls-files --unmerged -z</c> (one line per stage).</summary>
-    private async Task<int> CountConflictedFilesAsync(CancellationToken cancellationToken)
-    {
-        var output = await ReadOutputAsync(cancellationToken, "ls-files", "--unmerged", "-z").ConfigureAwait(false);
-        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Select(entry => entry.IndexOf('\t', StringComparison.Ordinal) is var tab and >= 0 ? entry[(tab + 1)..] : entry)
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-    }
+    private async Task<int> CountConflictedFilesAsync(CancellationToken cancellationToken) =>
+        (await ReadConflictedPathsAsync(cancellationToken).ConfigureAwait(false)).Count;
 
     /// <summary>Whether the repository stores its refs in the reftable format (null: not asked yet), asked once per <see cref="GitRepository"/> (8.1).</summary>
     private bool? _usesReftable;

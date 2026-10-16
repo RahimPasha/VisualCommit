@@ -127,7 +127,7 @@ public sealed partial class RepositoryOperations
         try
         {
             var events = Interlocked.Read(ref _recordingEvents);
-            var status = await Git.ReadStatusAsync(CancellationToken.None);
+            var inProgress = await Git.ReadInProgressStateAsync(CancellationToken.None);
             var history = Repository.UndoHistory;
             if (IsClosed
                 || Volatile.Read(ref _recordingsOpen) > 0
@@ -137,7 +137,7 @@ public sealed partial class RepositoryOperations
                 return;
             }
 
-            if (status.InProgress.IsActive)
+            if (inProgress.IsActive)
             {
                 Log.Debug($"{Repository.Name}: the stopped {pending.Text} is still in progress; its undo entry stays.");
                 return;
@@ -427,7 +427,7 @@ public sealed partial class RepositoryOperations
             return OperationTexts.RefusalReason(refusal, Repository.Path);
         }
 
-        var state = (await Git.ReadStatusAsync()).InProgress;
+        var state = await Git.ReadInProgressStateAsync();
         return state.IsActive ? OperationTexts.FinishOrAbortFirst(state.Kind) : OperationTexts.RefusalReason(refusal, Repository.Path);
     }
 
@@ -598,7 +598,7 @@ public sealed partial class RepositoryOperations
             return pending is null ? null : new UndoRecording(scope, null, context.OperationId, UndoRecordingMode.CompletePending, WasInProgress: true);
         }
 
-        var before = await Git.ReadRefStatesAsync(scope, cancellationToken: CancellationToken.None);
+        var before = await Git.ReadRefStatesAsync(scope.BeforeAction(), cancellationToken: CancellationToken.None);
         return new UndoRecording(scope, before, context.OperationId, UndoRecordingMode.Record, Status.InProgress.IsActive);
     }
 
@@ -631,7 +631,7 @@ public sealed partial class RepositoryOperations
         {
             case UndoRecordingMode.RemovePending:
                 // D165: an Abort that ended the operation takes its entry; one git refused leaves it.
-                if (!(await Git.ReadStatusAsync(CancellationToken.None)).InProgress.IsActive)
+                if (!(await Git.ReadInProgressStateAsync(CancellationToken.None)).IsActive)
                 {
                     history.RemovePending();
                 }
@@ -646,12 +646,12 @@ public sealed partial class RepositoryOperations
         var scope = recording.Scope;
         var before = recording.Before!;
         captured = await CompleteCaptureAsync(scope, before, captured);
-        var after = await Git.ReadRefStatesAsync(scope with { Files = [.. scope.Files.Union(captured.ChangedFiles, StringComparer.Ordinal)] }, cancellationToken: CancellationToken.None);
+        var after = await Git.ReadRefStatesAsync(scope.AfterAction(captured.ChangedFiles), cancellationToken: CancellationToken.None);
 
         // An action that stopped (a merge's conflicts change no ref) is pending (7.2); one refused
         // while an operation was in progress already is not.
         var kind = scope.Kind!.Value;
-        var stopped = StoppingKinds.Contains(kind) && !recording.WasInProgress && (await Git.ReadStatusAsync(CancellationToken.None)).InProgress.IsActive;
+        var stopped = StoppingKinds.Contains(kind) && !recording.WasInProgress && (await Git.ReadInProgressStateAsync(CancellationToken.None)).IsActive;
         if (!stopped && !Changed(before, after, captured))
         {
             Log.Debug($"{Repository.Name}: {scope.Text}: nothing changed, nothing is recorded.");
@@ -680,12 +680,12 @@ public sealed partial class RepositoryOperations
     private async Task CompletePendingAsync()
     {
         var history = Repository.UndoHistory;
-        if (history.Pending is not { } pending || (await Git.ReadStatusAsync(CancellationToken.None)).InProgress.IsActive)
+        if (history.Pending is not { } pending || (await Git.ReadInProgressStateAsync(CancellationToken.None)).IsActive)
         {
             return;
         }
 
-        var after = await Git.ReadRefStatesAsync(pending.Scope, cancellationToken: CancellationToken.None);
+        var after = await Git.ReadRefStatesAsync(pending.Scope.AfterAction([]), cancellationToken: CancellationToken.None);
         var completed = pending with { After = after, State = UndoEntryState.Done };
         if (!Changed(pending.Before, after, pending.Captured) || WhyNotRecorded(completed) is not null)
         {
@@ -698,9 +698,10 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// What the recorder adds to what the operation captured (7.7 step 3): a hard reset's snapshot
-    /// as its undo needs it (its files, its paths and the index it holds, read from the snapshot
-    /// commit, UndoCapture's "completed by the recorder"), and the bytes an ignore appended to
-    /// <c>.gitignore</c>, read from the file after the append.
+    /// as its undo needs it (its files, its paths and the index it holds: given by the reset that
+    /// made it, or read from the snapshot commit, UndoCapture's "completed by the recorder"), whose
+    /// paths the read after it records, and the bytes an ignore appended to <c>.gitignore</c>, read
+    /// from the file after the append.
     /// </summary>
     private async Task<UndoCaptured> CompleteCaptureAsync(UndoScope scope, UndoState before, UndoCaptured captured)
     {
@@ -712,8 +713,12 @@ public sealed partial class RepositoryOperations
             {
                 Snapshot = snapshot,
                 ResetIndex = details.Parents.Count > 1 ? details.Parents[1] : null,
-                ChangedFiles = [.. captured.ChangedFiles.Union(snapshot.Paths, StringComparer.Ordinal)],
             };
+        }
+
+        if (captured is { ResetMode: ResetMode.Hard, ResetSnapshot: not null, Snapshot: { } files })
+        {
+            captured = captured with { ChangedFiles = [.. captured.ChangedFiles.Union(files.Paths, StringComparer.Ordinal)] };
         }
 
         if (scope.Gitignore && captured.GitignoreAppended is null)
@@ -733,14 +738,19 @@ public sealed partial class RepositoryOperations
         return captured;
     }
 
-    /// <summary>Whether the action changed anything its scope names, or a remote (a push's values), or put an index back.</summary>
+    /// <summary>
+    /// Whether the action changed anything its scope names, or a remote (a push's values), or put
+    /// an index back. Files by their content: the read before an apply keeps their bytes, the read
+    /// after it their SHA-256 only (<see cref="UndoScope.AfterAction"/>).
+    /// </summary>
     private static bool Changed(UndoState before, UndoState after, UndoCaptured captured) =>
         before.Head != after.Head
         || !SameMap(before.Refs, after.Refs)
         || !SameMap(before.SymbolicRefs, after.SymbolicRefs)
         || !before.Stashes.SequenceEqual(after.Stashes)
         || !before.Config.SequenceEqual(after.Config)
-        || !before.Files.SequenceEqual(after.Files)
+        || before.Files.Count != after.Files.Count
+        || before.Files.Zip(after.Files).Any(pair => !pair.First.SameContent(pair.Second))
         || !before.IndexEntries.SequenceEqual(after.IndexEntries, StringComparer.Ordinal)
         || !string.Equals(before.Status, after.Status, StringComparison.Ordinal)
         || before.Gitignore != after.Gitignore

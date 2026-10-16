@@ -56,6 +56,18 @@ public sealed record UndoScope
     /// <summary>A stash whose files (its changed paths and its untracked ones) are read as <see cref="Files"/> are: an apply or a pop.</summary>
     public string? FilesOfStash { get; init; }
 
+    /// <summary>
+    /// The files' raw bytes are kept as blobs (<c>hash-object -w --no-filters</c>), so that a step
+    /// can write them back; otherwise only their SHA-256 is recorded, which is all the checks
+    /// compare. True for a step's own read (<see cref="UndoChecks.ScopeOf"/>), which keeps the
+    /// bytes of the files it is about to overwrite: the step puts them back when a later effect
+    /// refuses, and the entry keeps them for the opposite step. A recording keeps only the bytes
+    /// an undo writes back (<see cref="BeforeAction"/>, <see cref="AfterAction"/>), so that a large
+    /// file, or one a filter such as Git LFS stores elsewhere, is not copied into the object store
+    /// for every action that touches it.
+    /// </summary>
+    public bool KeepsFileBytes { get; init; } = true;
+
     /// <summary>The whole status is read (the stash kinds, whose checks compare it).</summary>
     public bool Status { get; init; }
 
@@ -77,6 +89,24 @@ public sealed record UndoScope
         ArgumentNullException.ThrowIfNull(fullName);
         return Refs.Contains(fullName, StringComparer.Ordinal)
             || RefPrefixes.Any(prefix => fullName.StartsWith(prefix.EndsWith('/') ? prefix : prefix + "/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The recording's read before the action (7.7 step 2): the files' bytes kept only where the
+    /// undo writes them back (<see cref="UndoEffect.FilesTo"/> to the state before): an apply's, a
+    /// pop's and a restore's files. A discard's undo restores its snapshot instead.
+    /// </summary>
+    public UndoScope BeforeAction() => this with { KeepsFileBytes = Kind is UndoKind.ApplyStash or UndoKind.PopStash or UndoKind.Restore };
+
+    /// <summary>
+    /// The recording's read after the action (7.7 step 4), with <paramref name="changedFiles"/>,
+    /// the files the action changed beyond the scope's (a hard reset's): their SHA-256 only. Only a
+    /// redo writes the state after back, and the undo before it keeps those bytes with its own read.
+    /// </summary>
+    public UndoScope AfterAction(IEnumerable<string> changedFiles)
+    {
+        ArgumentNullException.ThrowIfNull(changedFiles);
+        return this with { Files = [.. Files.Union(changedFiles, StringComparer.Ordinal)], KeepsFileBytes = false };
     }
 
     /// <summary>Whether <paramref name="key"/> (as <c>git config --list</c> prints it) is one of the scope's configuration keys.</summary>

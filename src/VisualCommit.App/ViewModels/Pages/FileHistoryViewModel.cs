@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+using System.Collections.Concurrent;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Diff;
@@ -36,6 +36,12 @@ public sealed partial class FileHistoryViewModel : GraphAreaPageViewModel
     private readonly IFileHistoryHost _host;
     private bool _selectingQuietly;
 
+    /// <summary>The rows git has printed that the list does not show yet: added in batches on the UI thread (<see cref="Drain"/>).</summary>
+    private readonly ConcurrentQueue<FileHistoryRow> _pending = new();
+
+    /// <summary>1 while a <see cref="Drain"/> is posted and has not started.</summary>
+    private int _drainPosted;
+
     public FileHistoryViewModel(IFileHistoryHost host, FileHistoryRequest request)
         : base(host)
     {
@@ -71,8 +77,8 @@ public sealed partial class FileHistoryViewModel : GraphAreaPageViewModel
 
     public bool HasFrom => FromText is not null;
 
-    /// <summary>The rows, newest first, as git hands them over.</summary>
-    public ObservableCollection<FileHistoryRowViewModel> Rows { get; } = [];
+    /// <summary>The rows, newest first, as git hands them over, added in batches.</summary>
+    public RowCollection<FileHistoryRowViewModel> Rows { get; } = [];
 
     /// <summary>No row has come yet and git has not ended: the list's place says <c>Loading…</c>.</summary>
     [ObservableProperty]
@@ -119,6 +125,9 @@ public sealed partial class FileHistoryViewModel : GraphAreaPageViewModel
     /// <summary>
     /// Reads the history (4.1): resolves the start to a full id, then lists the rows as git prints
     /// them, the first one selected (filling the diff part only). Closing the page cancels the read.
+    /// The rows reach the list in batches, one UI job and one change of the list each, whatever
+    /// has come since the last (step 25's review): one job per row kept the window from taking
+    /// input until a file with thousands of commits had all its rows.
     /// </summary>
     public async Task LoadAsync()
     {
@@ -138,8 +147,12 @@ public sealed partial class FileHistoryViewModel : GraphAreaPageViewModel
 
             StartSha = start;
             FromText = string.Equals(start, Host.MenuContext.Head.Sha, StringComparison.Ordinal) ? null : $"from {Short(start)}";
-            await Host.Repository.ReadFileHistoryAsync(start, Request.Path, row => OnUiThread(() => Add(row)), Lifetime);
-            OnUiThread(() => Finish(Rows.Count == 0 ? NoCommitText() : null, isError: false));
+            await Host.Repository.ReadFileHistoryAsync(start, Request.Path, Enqueue, Lifetime);
+            OnUiThread(() =>
+            {
+                Drain();
+                Finish(Rows.Count == 0 ? NoCommitText() : null, isError: false);
+            });
         }
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested)
         {
@@ -148,7 +161,11 @@ public sealed partial class FileHistoryViewModel : GraphAreaPageViewModel
         {
             Host.Log.Error($"The history of {Request.Path} could not be read.", ex);
             var reason = ex is GitException { StandardError: { } error } && !string.IsNullOrWhiteSpace(error) ? error.Trim() : ex.Message;
-            OnUiThread(() => Finish(Rows.Count == 0 ? reason : null, isError: true));
+            OnUiThread(() =>
+            {
+                Drain();
+                Finish(Rows.Count == 0 ? reason : null, isError: true);
+            });
         }
     }
 
@@ -198,22 +215,49 @@ public sealed partial class FileHistoryViewModel : GraphAreaPageViewModel
 
     protected override void OnDisposed() => Diff?.Dispose();
 
-    private void Add(FileHistoryRow row)
+    /// <summary>A row git printed, on the reader's thread: queued, and a <see cref="Drain"/> posted unless one is waiting already.</summary>
+    private void Enqueue(FileHistoryRow row)
     {
+        _pending.Enqueue(row);
+        if (Interlocked.Exchange(ref _drainPosted, 1) == 0)
+        {
+            OnUiThread(Drain);
+        }
+    }
+
+    /// <summary>
+    /// On the UI thread: every row queued since the last drain, added to the list with one change
+    /// (<see cref="RowCollection{T}.AddRange"/>); the first row of the history selected quietly,
+    /// as soon as it comes. A row queued while this runs posts the next drain.
+    /// </summary>
+    private void Drain()
+    {
+        Volatile.Write(ref _drainPosted, 0);
         if (IsClosed)
         {
             return;
         }
 
-        var added = new FileHistoryRowViewModel(row, Request.Path, Host.Dates.Format(row.Commit.AuthorDate));
-        Rows.Add(added);
+        var added = new List<FileHistoryRowViewModel>();
+        while (_pending.TryDequeue(out var row))
+        {
+            added.Add(new FileHistoryRowViewModel(row, Request.Path, Host.Dates.Format(row.Commit.AuthorDate)));
+        }
+
+        if (added.Count == 0)
+        {
+            return;
+        }
+
+        var first = Rows.Count == 0;
+        Rows.AddRange(added);
         OnPropertyChanged(nameof(ShowsLoading));
-        if (Rows.Count == 1)
+        if (first)
         {
             _selectingQuietly = true;
             try
             {
-                SelectedRow = added;
+                SelectedRow = added[0];
             }
             finally
             {

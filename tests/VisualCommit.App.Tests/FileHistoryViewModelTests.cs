@@ -166,4 +166,71 @@ public class FileHistoryViewModelTests
         Assert.Empty(page.Rows);
         Assert.Null(page.Diff);
     }
+
+    /// <summary>
+    /// Step 25's review: each row was one job on the UI thread and one change of the list, so a
+    /// file with thousands of commits kept the window from taking input until its last row came.
+    /// The rows that come while the UI thread is busy now wait for one job, which adds them all
+    /// with one change, the first selected as before.
+    /// </summary>
+    [Fact]
+    public async Task Rows_that_come_while_the_ui_thread_is_busy_reach_the_list_in_one_job_and_one_change()
+    {
+        var repository = new PageFakeRepository();
+        repository.History.AddRange(Enumerable.Range(1, 2_000).Select(index => new FileHistoryRow(
+            Commit(index.ToString("x40", System.Globalization.CultureInfo.InvariantCulture), "Jonas Berg", index % 60, ParentSha),
+            FileChangeKind.Modified,
+            "src/Reader.cs")));
+        var host = new RecordingPageHost(repository);
+        var ui = new QueuedContext();
+        var previous = SynchronizationContext.Current;
+        FileHistoryViewModel page;
+        SynchronizationContext.SetSynchronizationContext(ui);
+        try
+        {
+            page = new FileHistoryViewModel(host, new FileHistoryRequest("src/Reader.cs", "HEAD"));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        using (page)
+        {
+            // git's reader runs on a pool thread; the UI thread runs nothing until the test pumps it.
+            await Task.Run(page.LoadAsync, TestContext.Current.CancellationToken);
+            Assert.Empty(page.Rows);
+            Assert.Equal(2, ui.Waiting);
+
+            var changes = 0;
+            page.Rows.CollectionChanged += (_, _) => changes++;
+            ui.RunAll();
+
+            Assert.Equal(2_000, page.Rows.Count);
+            Assert.Equal(1, changes);
+            Assert.Same(page.Rows[0], page.SelectedRow);
+            Assert.Empty(host.Shown);
+            Assert.False(page.IsLoading);
+        }
+    }
+
+    /// <summary>A UI thread that runs what is posted to it only when the test says so, on the test's thread.</summary>
+    private sealed class QueuedContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _posted = new();
+
+        public int Waiting => _posted.Count;
+
+        public override void Post(SendOrPostCallback d, object? state) => _posted.Enqueue((d, state));
+
+        public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
+
+        public void RunAll()
+        {
+            while (_posted.TryDequeue(out var work))
+            {
+                work.Callback(work.State);
+            }
+        }
+    }
 }

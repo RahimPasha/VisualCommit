@@ -208,6 +208,51 @@ public class UndoStepFileTests
         Assert.False(Directory.Exists(Path.Combine(repo.Path, "notes")));
     }
 
+    /// <summary>
+    /// The finding of step 25's review: the recording copied a discarded file's raw bytes into
+    /// the object store before and after the discard, which under a filter (here
+    /// <c>core.autocrlf</c>; Git LFS alike) are blobs of their own, kept until a gc. Now it keeps
+    /// their SHA-256 only; the undo keeps the bytes the discard left, which its redo writes back.
+    /// </summary>
+    [Fact]
+    public async Task A_discard_of_a_filtered_file_copies_no_raw_bytes_until_its_undo_and_its_redo_writes_them_back()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await repo.ConfigAsync("core.autocrlf", "true");
+        repo.WriteBytes("a.txt", Encoding.ASCII.GetBytes("a-work\r\nmore\r\n"));
+        var worked = await RawBlobAsync(repo, "a.txt");
+        var start = await PictureAsync(repo);
+
+        var discard = await RecordAsync(repository, UndoScope.Discard(["a.txt"]), async () =>
+        {
+            UndoCapture.Snapshot(await repository.SaveSnapshotAsync(["a.txt"], TestCancelled));
+            await repository.DiscardAsync(["a.txt"], new HashSet<string>(StringComparer.Ordinal), TestCancelled);
+        });
+        var discarded = await PictureAsync(repo);
+        var left = await RawBlobAsync(repo, "a.txt");
+        Assert.NotEqual(worked, left);
+        Assert.All(discard.Before.Files.Concat(discard.After.Files), file => Assert.True(file.Exists && file.Blob is null, $"{file} kept its bytes"));
+        Assert.False(await HasObjectAsync(repo, worked));
+        Assert.False(await HasObjectAsync(repo, left));
+
+        discard = await UndoAsync(repository, discard);
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(left, discard.After.Files.Single().Blob);
+        Assert.True(await HasObjectAsync(repo, left));
+
+        await RedoAsync(repository, discard);
+        Assert.Equal(discarded, await PictureAsync(repo));
+    }
+
+    /// <summary>The id <c>git hash-object --no-filters</c> gives a working-tree file's raw bytes, without writing it.</summary>
+    private static async Task<string> RawBlobAsync(TempRepo repo, string path) =>
+        (await repo.GitAsync("hash-object", "--no-filters", "--", path)).StandardOutput.Trim();
+
+    /// <summary>Whether the object store has <paramref name="id"/> (<c>git cat-file -e</c>).</summary>
+    private static async Task<bool> HasObjectAsync(TempRepo repo, string id) =>
+        (await repo.GitAllowingFailureAsync("cat-file", "-e", id)).ExitCode == 0;
+
     [Fact]
     public async Task A_discard_of_lines_keeps_the_files_other_changes_both_ways()
     {

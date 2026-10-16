@@ -84,6 +84,28 @@ public interface IGitRepository
     /// <summary>Reads the staged, unstaged and untracked files (<c>git status --porcelain=v2</c>).</summary>
     Task<WorkingTreeStatus> ReadStatusAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The operation in progress alone, read from the files git leaves in the git folder without
+    /// the status: no git call while nothing is in progress (D89). For the checks that need only
+    /// whether one is in progress and its kind (<see cref="InProgressState.IsActive"/>,
+    /// <see cref="InProgressState.Kind"/>): whether a stop is empty
+    /// (<see cref="InProgressState.Empty"/>, <see cref="RebaseStopKind.Empty"/>) needs the status,
+    /// so no stop is read as empty here. The default implementation reads the status.
+    /// </summary>
+    async Task<InProgressState> ReadInProgressStateAsync(CancellationToken cancellationToken = default) =>
+        (await ReadStatusAsync(cancellationToken).ConfigureAwait(false)).InProgress;
+
+    /// <summary>
+    /// The conflicted paths, each once: those with unmerged index entries (<c>git ls-files
+    /// --unmerged -z</c>), the status's conflicted files without the rest of the status. The default
+    /// implementation reads the status.
+    /// </summary>
+    async Task<IReadOnlyList<string>> ReadConflictedPathsAsync(CancellationToken cancellationToken = default) =>
+        [.. (await ReadStatusAsync(cancellationToken).ConfigureAwait(false)).Unstaged
+            .Where(file => file.Kind == FileChangeKind.Conflicted)
+            .Select(file => file.Path)
+            .Distinct(StringComparer.Ordinal)];
+
     /// <summary>Reads one file's diff, byte for byte (D66). A file without changes on that side gives <see cref="Diff.FileDiff.Empty"/>.</summary>
     Task<Diff.FileDiff> ReadDiffAsync(Diff.DiffTarget target, CancellationToken cancellationToken = default);
 
@@ -202,6 +224,16 @@ public interface IGitRepository
     /// </summary>
     /// <exception cref="IOException">A repository is nested in a folder the reset would delete.</exception>
     Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="SnapshotForHardResetAsync"/>, with what the undo history needs of the snapshot
+    /// it made (docs/phase-5-design.md 7.7 step 3): its second parent and its files, which the
+    /// recorder would otherwise read back from the commit. The default implementation knows only
+    /// the commit (<see cref="HardResetSnapshot.Paths"/> null).
+    /// </summary>
+    /// <exception cref="IOException">A repository is nested in a folder the reset would delete.</exception>
+    async Task<HardResetSnapshot?> SnapshotForHardResetWithFilesAsync(string target, CancellationToken cancellationToken = default) =>
+        await SnapshotForHardResetAsync(target, cancellationToken).ConfigureAwait(false) is { } commit ? new HardResetSnapshot(commit) : null;
 
     /// <summary>
     /// Before a mixed reset, which replaces the index: a commit of the real index's tree with HEAD
@@ -419,8 +451,10 @@ public interface IGitRepository
     /// The paths the stash <paramref name="stashCommit"/> would write (docs/phase-5-design.md 9.2,
     /// 9.3): those its changes touch, both sides of a rename (<c>git diff-tree -r -z --no-renames
     /// --name-only &lt;s&gt;^1 &lt;s&gt;</c>), and its untracked files (<c>git ls-tree -r -z
-    /// --name-only &lt;s&gt;^3</c>, none without a third parent). The app checks an apply or a pop
-    /// against them before git runs. A read.
+    /// --name-only &lt;s&gt;^3</c>, none without a third parent); with what its index commit changes
+    /// (<see cref="StashPaths.Staged"/>, <c>&lt;s&gt;^1 &lt;s&gt;^2</c>). The app checks an apply or a pop
+    /// against them before git runs, and the undo history records them. A read, made once per
+    /// stash commit named by its full id (a commit never changes): later calls share it.
     /// </summary>
     Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default);
 
@@ -781,8 +815,9 @@ public interface IGitRepository
     /// --symbolic-full-name HEAD</c>, or <c>symbolic-ref -q HEAD</c> while unborn), and what
     /// <paramref name="scope"/> names: its refs with one <c>for-each-ref</c> (their worktrees with
     /// <c>%(worktreepath)</c>; exact names filtered in code), the stash list, the configuration keys,
-    /// the files' raw bytes (<c>hash-object -w --no-filters</c>) and index entries, the status, the
-    /// <c>.gitignore</c>. Writes nothing but the files' blobs.
+    /// the files' SHA-256 and index entries, with their raw bytes (<c>hash-object -w
+    /// --no-filters</c>) when the scope keeps them (<see cref="Undo.UndoScope.KeepsFileBytes"/>),
+    /// the status, the <c>.gitignore</c>. Writes nothing but the files' blobs.
     /// </summary>
     Task<Undo.UndoState> ReadRefStatesAsync(Undo.UndoScope scope, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
@@ -805,6 +840,23 @@ public interface IGitRepository
 /// <param name="Paths">The files it was taken for.</param>
 /// <param name="Present">Those of <paramref name="Paths"/> that existed in the working tree; the others were deleted there.</param>
 public sealed record DiscardSnapshot(string Ref, string Commit, IReadOnlyList<string> Paths, IReadOnlySet<string> Present);
+
+/// <summary>
+/// The snapshot a hard reset saves first (<see cref="IGitRepository.SnapshotForHardResetWithFilesAsync"/>):
+/// its commit and, when known, what the undo of the reset needs of it.
+/// </summary>
+/// <param name="Commit">The snapshot commit.</param>
+public sealed record HardResetSnapshot(string Commit)
+{
+    /// <summary>Its second parent, the real index's tree before the reset; null when the index had conflicts, or when <see cref="Paths"/> is not known.</summary>
+    public string? Index { get; init; }
+
+    /// <summary>The paths it holds, in byte order as its message lists them; null when not known.</summary>
+    public IReadOnlyList<string>? Paths { get; init; }
+
+    /// <summary>Those of <see cref="Paths"/> it holds a file for (the others were gone from the working tree); null when not known.</summary>
+    public IReadOnlySet<string>? Present { get; init; }
+}
 
 /// <summary>Opens, initialises and clones repositories. The app's implementation waits for git to be found first.</summary>
 public interface IRepositoryProvider
