@@ -246,15 +246,28 @@ public sealed partial class ShellDriver : IDisposable
     /// <summary>Moves the mouse to the centre of a control and double-clicks the left button.</summary>
     public void DoubleClick(Visual visual) => DoubleClick(BoundsOf(visual).Center);
 
-    /// <summary>Moves the mouse to a window position and double-clicks the left button.</summary>
+    /// <summary>
+    /// Moves the mouse to a window position and double-clicks the left button: two presses at one
+    /// spot, which Avalonia counts as a double-click when the second comes within the platform's
+    /// double-tap time, 500 ms, of the first by the window's input clock. That clock is real time,
+    /// and the public helpers run the dispatcher's jobs and render a frame around every event, so
+    /// the presses lay as far apart as the first click's work took: in the full run's projects
+    /// side by side more than 500 ms, and the double-click came as two single clicks (P25's on
+    /// Local branches › main checked nothing out; 700 ms between the presses does the same alone).
+    /// The clock stands still for the presses (<see cref="HeadlessInputClock"/>), as a user's
+    /// double-click carries the times of the presses however busy the app is; the app handles
+    /// them as before.
+    /// </summary>
     public void DoubleClick(Point position)
     {
         Window.MouseMove(position);
-        for (var click = 0; click < 2; click++)
+        using (HeadlessInputClock.Pause(Window))
         {
-            // Two presses at one spot in quick succession: Avalonia counts them as a double-click.
-            Window.MouseDown(position, MouseButton.Left);
-            Window.MouseUp(position, MouseButton.Left);
+            for (var click = 0; click < 2; click++)
+            {
+                Window.MouseDown(position, MouseButton.Left);
+                Window.MouseUp(position, MouseButton.Left);
+            }
         }
 
         Settle();

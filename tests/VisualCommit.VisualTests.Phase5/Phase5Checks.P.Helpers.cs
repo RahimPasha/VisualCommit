@@ -341,6 +341,29 @@ public sealed partial class Phase5ChecksP
     /// <summary>HEAD's reflog, newest first, as <c>git log -g --format=%gs HEAD</c> lists it.</summary>
     private static Task<string[]> ReflogAsync(TempRepo repo) => GitLinesAsync(repo, "log", "-g", "--format=%gs", "HEAD");
 
+    /// <summary>
+    /// HEAD's reflog after <paramref name="stagedRefusals"/> merges of <c>other</c> that git
+    /// refused for something staged (P27; design 15.9): on Git 2.36, the report's,
+    /// <paramref name="before"/> as it was; on a later git <paramref name="before"/> under one
+    /// no-op entry per such merge, <see cref="PartP.RefusedMergeReflog"/>, whose old and new values
+    /// are both Main work, where HEAD stayed.
+    /// </summary>
+    private static async Task AssertReflogAfterStagedMergeRefusalsAsync(TempRepo repo, string[] before, int stagedRefusals)
+    {
+        var added = await IsReportGitAsync() ? 0 : stagedRefusals;
+        string[] expected = [.. Enumerable.Repeat(PartP.RefusedMergeReflog, added), .. before];
+        Assert.Equal(expected, await ReflogAsync(repo));
+        Assert.All(HeadReflogValues(repo).Take(added), values => Assert.Equal((PartP.MainWorkSha, PartP.MainWorkSha), values));
+    }
+
+    /// <summary>The old and new values of HEAD's reflog entries, newest first, as git's <c>logs/HEAD</c> holds them.</summary>
+    private static IEnumerable<(string Old, string New)> HeadReflogValues(TempRepo repo) =>
+        File.ReadAllLines(Path.Combine(repo.Path, ".git", "logs", "HEAD"))
+            .Where(line => line.Length > 0)
+            .Reverse()
+            .Select(line => line.Split(' ', 3))
+            .Select(fields => (fields[0], fields[1]));
+
     /// <summary>Every ref and what it points at, as <c>git for-each-ref</c> lists them (the backups included).</summary>
     private static Task<string[]> RefsAsync(TempRepo repo) => GitLinesAsync(repo, "for-each-ref", "--format=%(refname) %(objectname)");
 

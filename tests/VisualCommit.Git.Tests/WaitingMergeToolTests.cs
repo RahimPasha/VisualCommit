@@ -33,7 +33,7 @@ public class WaitingMergeToolTests
                     Assert.Fail("git mergetool ended before the tool started: " + (await tool).StandardError);
                 }
 
-                Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), "The tool did not start within 60 seconds.");
+                Assert.True(clock.Elapsed < Scenarios.MergeToolTimeout, $"The tool did not start within {Scenarios.MergeToolTimeout.TotalSeconds:F0} seconds.");
                 await Task.Delay(50, TestCancelled);
             }
 

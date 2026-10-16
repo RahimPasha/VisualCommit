@@ -605,6 +605,14 @@ public static partial class Phase5Expectations
 
         public const string MainToMainWorkReflog = "checkout: moving from main to " + MainWorkSha;
 
+        /// <summary>
+        /// What a merge of <c>other</c> refused for something staged writes into HEAD's reflog on
+        /// gits later than 2.36 (P27 step 6; design 15.9): a no-op entry, its old and new value
+        /// both HEAD's commit. Git 2.36 writes none, and no git writes one for a merge refused
+        /// for an unstaged change (step 2).
+        /// </summary>
+        public const string RefusedMergeReflog = "merge refs/heads/other: updating HEAD";
+
         /// <summary>The backup the toolbar's Pop saves (D171; the fixed backup clock's first name).</summary>
         public const string PopBackup = "refs/visualcommit/backup/stash-20260102T090001000Z";
 
