@@ -27,13 +27,14 @@ public sealed partial class GitRepository : IGitRepository
     private readonly IGitRunner _runner;
     private readonly IAppLog _log;
 
-    private GitRepository(IGitRunner runner, IAppLog log, string workingDirectory, string gitDirectory, string commonDirectory)
+    private GitRepository(IGitRunner runner, IAppLog log, string workingDirectory, string gitDirectory, string commonDirectory, string openedFolder)
     {
         _runner = runner;
         _log = log;
         WorkingDirectory = workingDirectory;
         GitDirectory = gitDirectory;
         CommonDirectory = commonDirectory;
+        OpenedFolder = openedFolder;
         var name = Path.GetFileName(workingDirectory);
         Name = name.Length > 0 ? name : workingDirectory;
     }
@@ -45,6 +46,8 @@ public sealed partial class GitRepository : IGitRepository
     public string CommonDirectory { get; }
 
     public string Name { get; }
+
+    public string OpenedFolder { get; }
 
     /// <summary>
     /// Opens the repository whose working tree contains <paramref name="path"/>: its top-level
@@ -111,7 +114,7 @@ public sealed partial class GitRepository : IGitRepository
         var commonDirectory = await ResolveCommonDirectoryAsync(runner, lines[3], folder, workingDirectory, cancellationToken).ConfigureAwait(false);
 
         log.Info($"Opened the repository at {workingDirectory}.");
-        return new GitRepository(runner, log, workingDirectory, gitDirectory, commonDirectory);
+        return new GitRepository(runner, log, workingDirectory, gitDirectory, commonDirectory, Path.TrimEndingDirectorySeparator(folder));
     }
 
     /// <summary>
