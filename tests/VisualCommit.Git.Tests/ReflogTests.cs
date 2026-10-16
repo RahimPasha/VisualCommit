@@ -64,6 +64,9 @@ public class ReflogTests
 
         var two = await repository.ReadReflogAsync("refs/heads/main", 2, TestCancelled);
         Assert.Equal([third, second], two.Entries.Select(entry => entry.Sha));
+
+        // One entry past the limit tells that there are more (15.9); exactly the limit does not.
+        Assert.Equal((true, false, false), (two.More, all.More, (await repository.ReadReflogAsync("refs/heads/main", 3, TestCancelled)).More));
     }
 
     [Fact]

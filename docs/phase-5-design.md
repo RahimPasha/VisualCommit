@@ -439,7 +439,7 @@ At 1100×700 (440 wide) the parts take about 90 + 6 + box + 6 + count + 6 + 22 +
 when the area is too narrow for the box's 120 the count is cut with "…" (its whole text in the
 tooltip), then hidden; the close button never moves out. While a Changes search runs, a 2-px
 determinate progress bar (`SearchProgress`, `VcAccentBrush`) lies along the bar's bottom edge, its
-help text and tooltip `Searched {k} of {n} commits`.
+help text and tooltip `Searched {k} of {n} commits` (`Searched {k} of 1 commit` for one, D113).
 
 Opening the bar puts the keyboard focus in the box with its text selected. The box searches as the
 user types, 300 ms after the last key (Commits) or 600 ms (Files, Changes), and at once on Enter when
@@ -662,7 +662,7 @@ and the close button (`ReflogClose`).
 `.git/logs`, which reftable lacks) with two calls whose rows are zipped by position, because no
 placeholder gives an entry's time together with its index (0.2):
 
-1. `git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 500
+1. `git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 501
    --format=%gD%x1f%H%x1f%P%x1f%gs%x1f%s <full ref> --`: the selector, the commit, its parents, the
    entry's message and the commit's subject.
 2. The same walk with `--date=raw --format=%gD%x1f%H`: the selector becomes `<ref>@{<seconds>
@@ -1942,6 +1942,19 @@ The review before the gate (status step 25) found these; each is pinned by the t
   type`, `no such path … in …`); the page then says `{name} is a submodule: it has no lines to
   blame`, as for a binary file, whichever menu or click opened it. The menus still offer the item
   (`BlameTests`, `BlameViewModelTests`).
+- **A graph swapped during a search does not stop its git call** (3.4, D174): the pass that gives
+  git the old graph's rows ends after the call that runs (the git layer looks at the token only
+  between calls), the rows git reported are kept, and the next pass gives git the new graph's rows
+  not searched yet; a search waiting for rows reads the new graph at once
+  (`SearchViewModelTests`). The progress text has its singular, `Searched {k} of 1 commit` (D113).
+- **The reflog page** (5.2): a newer read cancels the one it replaces, whose git calls (the two
+  walks, the lost-commit walk, the force pushes' reflogs) stop; and a reflog with more entries than
+  the page reads (500) says so in the footer, `Only the newest 500 entries are shown`, before the
+  skipped entries' text (`ReflogResult.More`, read as one entry past the limit). The force push's
+  lease rule is one, `ReflogResult.ForcePushLease`, read as deep by the list's item and the restore
+  (`ReflogResult.ForcePushLeaseDepth`) (`ReflogTests`, `ReflogViewModelTests`).
+- **The activity log keeps no rows of a worktree not shown** (2.3): they held call records past the
+  call log's bounds; `Show` makes them again (`ActivityLogViewModelTests`).
 
 ## 16. Work breakdown
 

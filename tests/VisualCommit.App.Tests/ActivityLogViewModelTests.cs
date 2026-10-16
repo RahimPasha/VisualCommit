@@ -288,6 +288,38 @@ public class ActivityLogViewModelTests
     }
 
     [Fact]
+    public void A_worktree_not_shown_keeps_no_rows_so_no_record_the_call_log_dropped_stays_alive()
+    {
+        // 15.9: the rows of a worktree left (another tab, a closed one) held the records they showed
+        // past the call log's bounds; Show makes them again from what the log keeps.
+        var operations = new OperationLog();
+        var calls = new GitCallLog(capacity: 3, operations: operations);
+        var log = new ActivityLogViewModel(operations, calls, new MemorySession(), new DateDisplay(TimeZoneInfo.Utc));
+        log.Show(Graph);
+        log.ShowReads = true;
+        calls.Add(Read("git status 1", 1, Tree("graph")));
+        calls.Add(Read("git status 2", 2, Tree("graph")));
+        var graph = log.Current!;
+        Assert.Equal(["git status 1", "git status 2"], graph.Rows.Select(row => row.AutomationName));
+
+        log.Show(Other);
+        Assert.Empty(graph.Rows);
+        for (var i = 0; i < 3; i++)
+        {
+            calls.Add(Read($"git status other {i}", 3 + i, Tree("other")));
+        }
+
+        // The ring dropped graph's reads: none is held by a row, and none comes back.
+        Assert.Empty(graph.Rows);
+        log.Show(Graph);
+        Assert.Same(graph, log.Current);
+        Assert.Empty(graph.Rows);
+
+        log.Show(null);
+        Assert.Empty(graph.Rows);
+    }
+
+    [Fact]
     public void An_evicted_operation_leaves_with_its_calls_and_one_whose_calls_were_dropped_says_so()
     {
         var operations = new OperationLog(capacity: 2);

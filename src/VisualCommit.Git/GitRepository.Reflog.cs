@@ -46,8 +46,9 @@ public sealed partial class GitRepository
         }
 
         // --ignore-missing (before the ref) makes a ref without a reflog, or an unborn HEAD, no
-        // output instead of "bad revision"; -n bounds the walk.
-        string[] walk = ["log", "--walk-reflogs", .. PlainLogOptions, "--ignore-missing", "-z", "-n", limit.ToString(CultureInfo.InvariantCulture)];
+        // output instead of "bad revision"; -n bounds the walk, one entry past the limit telling
+        // whether there are more (ReflogResult.More).
+        string[] walk = ["log", "--walk-reflogs", .. PlainLogOptions, "--ignore-missing", "-z", "-n", (limit + 1).ToString(CultureInfo.InvariantCulture)];
         for (var attempt = 1; ; attempt++)
         {
             // The two walks do not depend on each other: they run side by side.
@@ -55,7 +56,7 @@ public sealed partial class GitRepository
             var times = ReadOutputAsync(cancellationToken, [.. walk, "--date=raw", "--format=" + ReflogTimeFormat, fullRef, "--"]);
             await Task.WhenAll(entries, times).ConfigureAwait(false);
 
-            if (ParseReflog(await entries.ConfigureAwait(false), await times.ConfigureAwait(false), _log) is { } result)
+            if (ParseReflog(await entries.ConfigureAwait(false), await times.ConfigureAwait(false), _log, limit) is { } result)
             {
                 return result;
             }
@@ -75,9 +76,11 @@ public sealed partial class GitRepository
     /// Zips the two reflog walks (<see cref="ReflogFormat"/> and <see cref="ReflogTimeFormat"/>,
     /// <c>-z</c>) by position. Null when they do not list the same commits in the same order. An
     /// entry whose selector or commit cannot be read is left out and logged; the numbers git
-    /// skipped (entries that name no commit that exists) are counted.
+    /// skipped (entries that name no commit that exists) are counted. At most
+    /// <paramref name="limit"/> entries are kept: one more makes the result say there are more
+    /// (<see cref="ReflogResult.More"/>), and a gap just before it is not counted.
     /// </summary>
-    internal static ReflogResult? ParseReflog(string entriesOutput, string timesOutput, IAppLog log)
+    internal static ReflogResult? ParseReflog(string entriesOutput, string timesOutput, IAppLog log, int limit = int.MaxValue)
     {
         var entries = Records(entriesOutput);
         var times = Records(timesOutput);
@@ -86,9 +89,10 @@ public sealed partial class GitRepository
             return null;
         }
 
-        var result = new List<ReflogEntry>(entries.Count);
+        var result = new List<ReflogEntry>(Math.Min(entries.Count, limit));
         var skipped = 0;
         var expected = 0;
+        var more = false;
         for (var i = 0; i < entries.Count; i++)
         {
             var fields = entries[i].Split('\x1f', ReflogFieldCount);
@@ -117,13 +121,19 @@ public sealed partial class GitRepository
                 continue;
             }
 
+            if (result.Count == limit)
+            {
+                more = true;
+                continue;
+            }
+
             // Git skips an entry whose commit it cannot read and keeps its number: a gap.
             skipped += Math.Max(0, number - expected);
             expected = number + 1;
             result.Add(new ReflogEntry(selector, number, sha, parents, message, subject, time));
         }
 
-        return result.Count == 0 && skipped == 0 ? ReflogResult.Empty : new ReflogResult(result, skipped);
+        return result.Count == 0 && skipped == 0 ? ReflogResult.Empty : new ReflogResult(result, skipped) { More = more };
 
         // -z ends each record with NUL, the last one too.
         static List<string> Records(string output)

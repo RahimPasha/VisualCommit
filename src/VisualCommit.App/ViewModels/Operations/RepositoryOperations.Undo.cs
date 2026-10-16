@@ -25,9 +25,6 @@ public sealed partial class RepositoryOperations
     /// <summary>How many bytes of a file the backups list's question compares (BD15); a larger file counts as changed.</summary>
     private const long CompareBytes = 64L * 1024 * 1024;
 
-    /// <summary>How many entries of a remote-tracking reflog a force push's lease is looked for in (7.10).</summary>
-    private const int ForcePushReflogEntries = 500;
-
     /// <summary>The kinds whose action can stop with the banner showing (7.2): their entry is pending until it ends.</summary>
     private static readonly HashSet<UndoKind> StoppingKinds =
     [
@@ -1098,7 +1095,7 @@ public sealed partial class RepositoryOperations
 
         return GuardAsync(text, async () =>
         {
-            var lease = ForcePushLease(await Git.ReadReflogAsync(RemotesPrefix + name, ForcePushReflogEntries), backup.Commit);
+            var lease = (await Git.ReadReflogAsync(RemotesPrefix + name, ReflogResult.ForcePushLeaseDepth)).ForcePushLease(backup.Commit);
             if (lease is null)
             {
                 await ShowRefusalAsync(text, OperationTexts.ForcePushCommitNotFound);
@@ -1147,28 +1144,6 @@ public sealed partial class RepositoryOperations
             },
             new RunOptions { Undo = isTag ? UndoScope.PushTagBack(name, remote) : UndoScope.PushBack(name, remote) });
     });
-
-    /// <summary>
-    /// The commit a force push left on the remote (7.10), its backup's lease: in the remote-tracking
-    /// ref's reflog (newest first), the <c>update by push</c> entry whose older neighbour is the
-    /// commit the push replaced. Null when the reflog no longer has it.
-    /// </summary>
-    public static string? ForcePushLease(ReflogResult remoteReflog, string backupCommit)
-    {
-        ArgumentNullException.ThrowIfNull(remoteReflog);
-        ArgumentNullException.ThrowIfNull(backupCommit);
-        var entries = remoteReflog.Entries;
-        for (var index = 0; index + 1 < entries.Count; index++)
-        {
-            if (string.Equals(entries[index].Message, "update by push", StringComparison.Ordinal)
-                && string.Equals(entries[index + 1].Sha, backupCommit, StringComparison.Ordinal))
-            {
-                return entries[index].Sha;
-            }
-        }
-
-        return null;
-    }
 
     /// <summary>
     /// Runs a restore's effects as a step of their own inside its operation (7.10): the git layer's
