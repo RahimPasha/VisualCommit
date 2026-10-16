@@ -148,7 +148,10 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
             return;
         }
 
+        // A commit the graph lacks (a lost reflog entry, a hidden branch's, a backup's) ends a
+        // branch comparison as a selected commit does (6.2): the details would show under it.
         Selection = GraphSelection.Empty;
+        EndComparison();
         _selectedSha = sha;
         _ = Details.ShowAsync(sha, null, _lifetime.Token);
     }

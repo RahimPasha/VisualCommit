@@ -24,6 +24,9 @@ public sealed class UndoHistory
     private readonly List<UndoEntry> _entries = [];
     private readonly int _capacity;
 
+    /// <summary>Completes when the last turn taken (<see cref="TakeTurnAsync"/>) is given back.</summary>
+    private Task _turn = Task.CompletedTask;
+
     /// <param name="capacity">How many entries to keep; tests give a smaller bound.</param>
     public UndoHistory(int capacity = Capacity)
     {
@@ -161,8 +164,31 @@ public sealed class UndoHistory
         RaiseChanged();
     }
 
+    /// <summary>
+    /// Waits until every turn taken before is given back, then holds the history until the result
+    /// is disposed (docs/phase-5-design.md 15.9). Two tabs on one worktree share the history (7.1)
+    /// but not a queue, so a step that awaits git between its check of the entry at the cursor and
+    /// its cursor move takes a turn, and so does a recording around its writes: an entry another
+    /// tab adds meanwhile then lands after the move, not in the stepped entry's place. Take it on
+    /// the UI thread; nothing that waits for another tab's operation may run while it is held.
+    /// </summary>
+    public async Task<IDisposable> TakeTurnAsync()
+    {
+        var mine = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var before = _turn;
+        _turn = mine.Task;
+        await before.ConfigureAwait(true);
+        return new Turn(mine);
+    }
+
     /// <summary>Where the pending entry is, or -1: found by its state, though it is kept last.</summary>
     private int PendingIndex() => _entries.FindLastIndex(entry => entry.State == UndoEntryState.Pending);
 
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>A turn of <see cref="TakeTurnAsync"/>: disposing it lets the next taker go on.</summary>
+    private sealed class Turn(TaskCompletionSource given) : IDisposable
+    {
+        public void Dispose() => given.TrySetResult();
+    }
 }

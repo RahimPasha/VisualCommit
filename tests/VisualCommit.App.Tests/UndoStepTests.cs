@@ -1,6 +1,7 @@
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Undo;
 using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
@@ -303,5 +304,126 @@ public class UndoStepTests
         Assert.Equal(Scenarios.OperationsFiles.CoreMainWork, ReadText(repo, "src/core.txt"));
         Assert.False(changes.HasRestore);
         app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task The_bars_restore_clicked_while_a_recorded_operation_runs_restores_after_it_and_undoes_nothing_else()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nmine\n");
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
+        {
+            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(gate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (NetworkOptions?)args[3], (CancellationToken)args[4]!)),
+        }));
+        var history = app.Repository.UndoHistory;
+        app.Dialogs.Confirm();
+        await app.Repository.DiscardAsync([app.Repository.Status.Unstaged.Single(file => file.Path == "src/core.txt")]);
+
+        // A recorded operation runs; the bar's Restore is clicked meanwhile (15.9). It is not the
+        // discard's Undo now, which would find the history moved and do nothing: it runs as in
+        // phase 2, after the branch's creation, and is recorded after it.
+        app.Dialogs.EnterName("keep", option: false);
+        var branch = app.Operations.CreateBranchAsync(MainWork);
+        await WaitUntilAsync(() => app.Repository.Queue.Current is not null, "the branch's creation to start");
+        var restore = app.Repository.RestoreAsync();
+        await WaitUntilAsync(() => app.Repository.Queue.Waiting > 0 || restore.IsCompleted, "the restore to queue");
+        gate.SetResult();
+        await branch;
+        Assert.Null(await restore);
+        await app.WaitForIdleAsync();
+
+        Assert.Equal("core\nmain work\nmine\n", ReadText(repo, "src/core.txt"));
+        Assert.Equal(MainWork, await repo.RefTargetAsync("refs/heads/keep"));
+        Assert.False(app.Repository.Changes.HasRestore);
+        Assert.Equal(
+            ("discard of core.txt | creation of keep | restore of the discarded files", 3),
+            (string.Join(" | ", history.Entries.Select(entry => entry.Text)), history.Cursor));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task The_bars_restore_saves_a_file_written_after_its_question_with_the_newer_versions()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        repo.WriteFile("src/core.txt", "core\nmain work\nmine\n").WriteFile("todo.txt", "todo\n");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm();
+        await app.Repository.DiscardAsync([.. app.Repository.Status.Unstaged]);
+        var before = await repo.BackupRefsAsync();
+
+        // todo.txt changed since the discard: D75's question, while which core.txt is edited too.
+        repo.WriteFile("todo.txt", "todo again\n");
+        app.Dialogs.Answer<ConfirmationViewModel>(dialog =>
+        {
+            repo.WriteFile("src/core.txt", "typed while the question was open\n");
+            dialog.ConfirmCommand.Execute(null);
+        });
+        Assert.Null(await app.Repository.RestoreAsync());
+
+        Assert.Equal("todo.txt has changed since the discard. Put back the version from before the discard?", Assert.Single(app.Dialogs.Confirmations, question => question.Title == "Restore discarded changes?").Question);
+        var saved = Assert.Single(await repo.BackupRefsAsync(), entry => !before.Contains(entry));
+        Assert.Equal("todo again\n", (await repo.GitAsync("show", saved.Sha + ":todo.txt")).StandardOutput);
+        Assert.Equal("typed while the question was open\n", (await repo.GitAsync("show", saved.Sha + ":src/core.txt")).StandardOutput);
+        Assert.Equal(("core\nmain work\nmine\n", "todo\n"), (ReadText(repo, "src/core.txt"), ReadText(repo, "todo.txt")));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Two_tabs_on_one_worktree_an_undo_that_ends_after_the_other_tab_recorded_keeps_that_entry()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var histories = new UndoHistories();
+        var stepEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stepGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var branchGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var a = await OperationsHarness.OpenAsync(repo, null, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
+        {
+            [nameof(IGitRepository.RunUndoStepAsync)] = args => HeldStepAsync(inner, args, stepEntered, stepGate.Task),
+        }), undoHistories: histories);
+        using var b = await OperationsHarness.OpenAsync(repo, null, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
+        {
+            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(branchGate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (NetworkOptions?)args[3], (CancellationToken)args[4]!)),
+        }), undoHistories: histories);
+        var history = a.Repository.UndoHistory;
+        Assert.Same(history, b.Repository.UndoHistory);
+
+        a.Dialogs.EnterName("x", option: false);
+        await a.Operations.CreateBranchAsync(MainWork);
+        b.Dialogs.EnterName("y", option: false);
+        var creatingY = b.Operations.CreateBranchAsync(MainWork);
+        await WaitUntilAsync(() => b.Repository.Queue.Current is not null, "tab B's operation to start");
+
+        // Tab A undoes x; its step holds inside git while tab B's creation of y ends (15.9).
+        await a.Repository.RefreshAsync();
+        var undo = a.Operations.UndoAsync();
+        await stepEntered.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        branchGate.SetResult();
+        await WaitUntilAsync(() => File.Exists(Path.Combine(repo.Path, ".git", "refs", "heads", "y")), "y to be created");
+        await Task.WhenAny(creatingY, Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        stepGate.SetResult();
+        await undo;
+        await creatingY;
+        await a.WaitForIdleAsync();
+        await b.WaitForIdleAsync();
+
+        // y was recorded after x's undo moved the cursor, not in x's place.
+        Assert.Equal(("creation of y", 1), (string.Join(" | ", history.Entries.Select(entry => entry.Text)), history.Cursor));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/x"));
+        Assert.Equal(MainWork, await repo.RefTargetAsync("refs/heads/y"));
+        Assert.Equal("Undid creation of x", a.StatusText);
+    }
+
+    private static async Task<UndoStepResult> HeldStepAsync(IGitRepository inner, object?[] args, TaskCompletionSource entered, Task gate)
+    {
+        entered.TrySetResult();
+        await gate;
+        return await inner.RunUndoStepAsync((UndoStep)args[0]!, (NetworkOptions)args[1]!, (CancellationToken)args[2]!);
+    }
+
+    private static async Task HeldAsync(Task gate, Func<Task> call)
+    {
+        await gate;
+        await call();
     }
 }

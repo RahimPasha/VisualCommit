@@ -1909,6 +1909,39 @@ The review before the gate (status step 25) found these; each is pinned by the t
   and no stash holds a folder; `StashAsync` makes again those that were empty before it
   (`ls-files --others --directory`), for the automatic stash, its redo and the toolbar's stash
   alike (`ProtectedChangesTests`).
+- **D75 decided inside the operation** (7.10, D124): the backups list's "Restore the discarded
+  files…" and "Restore the changes…", and the restore bar's phase-2 Restore, save the files that
+  differ when their operation runs, also one written while the question was open or while it
+  waited in the queue (the question still names those it found when it asked). Their backups'
+  clean-up follows the recording, whose entry keeps the snapshot restored from (7.8), as every
+  operation that saves a backup does (`UndoRestoreTests`, `UndoStepTests`).
+- **The restore bar's Restore is the discard's Undo only while no operation of the user runs or
+  waits** (7.9): queued behind one that records, the Undo would find the history moved and do
+  nothing, or undo that operation instead. Otherwise it runs as in phase 2, after it, recorded as
+  an entry of its own; after its hash of the discarded files it looks at the entry and the queue
+  again (`UndoStepTests`). The toolbar's Undo and Redo give 7.4's first reason for a user operation
+  that waits behind a background one too (`UndoToolbarTests`).
+- **Two tabs on one worktree take turns at the history** (7.1, 7.5): a step holds the history's
+  turn (`UndoHistory.TakeTurnAsync`) from its check of the entry at the cursor to its cursor move,
+  and a recording around its writes, so that the other tab's entry lands after the move, never in
+  the stepped entry's place (`UndoStepTests`).
+- **The filter follows the app's own branch changes** (8.1, 8.4): create (and a remote branch's
+  tracking branch), rename and delete call the `Follow…` members inside their operations, and so
+  do the undo's steps (an undone rename moves the entries back, an undone creation removes them,
+  a branch brought back in solo mode is soloed) and the backups list's "Restore branch"
+  (`RepositoryViewModelFilterTests`).
+- **A page's commit the graph lacks ends a branch comparison** (6.2, 11.3) as a selected commit
+  does: its details would otherwise show under the comparison. **A file a comparison deletes is
+  blamed on the side the list was read from** (6.4: the merge base or From, as its diff is),
+  captioned `before {To}` (`RepositoryViewModelFilterTests`).
+- **The comparison's counts are kept apart from its lists** (6.4): a read by the switch asks for
+  them where they are missing (the first read cancelled or failed), and a swap back shows the
+  counts read before. With no common history the switch is not shown (6.3: three-dot is not
+  offered) (`CompareViewModelTests`).
+- **A submodule has no lines to blame** (4.2): git's blame fails on a gitlink (`unsupported file
+  type`, `no such path … in …`); the page then says `{name} is a submodule: it has no lines to
+  blame`, as for a binary file, whichever menu or click opened it. The menus still offer the item
+  (`BlameTests`, `BlameViewModelTests`).
 
 ## 16. Work breakdown
 

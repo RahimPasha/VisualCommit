@@ -392,14 +392,23 @@ public sealed partial class RepositoryOperations
 
         var saved = await Git.SaveBackupRefsAsync(request, CancellationToken.None);
         Log.Info($"{Repository.Name}: saved the backup {string.Join(", ", saved.Refs)}");
-        if (_backupSaved.Value is { } flag)
-        {
-            flag.Value = true;
-        }
+        MarkBackupSaved();
 
         // The undo entry needs it: the clean-up keeps it while the entry exists (7.8, D171).
         UndoCapture.Backups(saved.Refs);
         return saved;
+    }
+
+    /// <summary>
+    /// The running operation saved a backup (a snapshot too): it ends with the backups' clean-up,
+    /// after its undo entry is recorded, which keeps the backups the entry needs (D139, 7.8).
+    /// </summary>
+    private void MarkBackupSaved()
+    {
+        if (_backupSaved.Value is { } flag)
+        {
+            flag.Value = true;
+        }
     }
 
     // The undo history's recording (docs/phase-5-design.md 7.7, D167), around the work of every

@@ -109,6 +109,17 @@ public sealed class OperationQueue : IOperationQueue
         }
     }
 
+    public string? FirstWaitingTitle
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _waiting.First?.Value.Operation.Title;
+            }
+        }
+    }
+
     public OperationResult? LastResult
     {
         get

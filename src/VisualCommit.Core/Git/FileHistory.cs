@@ -23,6 +23,13 @@ public sealed record BlameResult(IReadOnlyList<BlameLine> Lines)
 
     /// <summary>A line holds a NUL byte: the page says the file is binary instead of showing it.</summary>
     public bool IsBinary => Lines.Any(line => line.Text.Contains('\0', StringComparison.Ordinal));
+
+    /// <summary>
+    /// The path is a submodule (a gitlink, mode 160000), which git cannot blame
+    /// (<c>fatal: unsupported file type</c>, <c>no such path … in …</c>): the page says so, as for a
+    /// binary file (docs/phase-5-design.md 15.9). No lines then.
+    /// </summary>
+    public bool IsSubmodule { get; init; }
 }
 
 /// <summary>One line of a blame.</summary>

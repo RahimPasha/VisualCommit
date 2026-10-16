@@ -105,7 +105,9 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
             return false;
         }
 
-        var target = new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: to);
+        // A file the comparison deletes is blamed on the side the list was read from (the merge base
+        // or From), as the file's diff and its menu are: To's first parent may lack it (15.9).
+        var target = new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: to) { CommitParent = comparison.Old };
         return OpenMenu(layer, RepositoryMenus.ForCompareFile(MenuContext, target, MenuActions), position, openedBy);
     }
 

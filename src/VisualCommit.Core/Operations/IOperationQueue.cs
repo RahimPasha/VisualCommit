@@ -37,6 +37,9 @@ public interface IOperationQueue : IDisposable
     /// <summary>How many operations wait behind the running one.</summary>
     int Waiting { get; }
 
+    /// <summary>The title of the first operation that waits, or null; a waiting operation is never a background one.</summary>
+    string? FirstWaitingTitle { get; }
+
     /// <summary>The last result of an operation that was not in the background, or null.</summary>
     OperationResult? LastResult { get; }
 
