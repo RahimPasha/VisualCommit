@@ -175,7 +175,7 @@ public sealed partial class RepositoryOperations
         context.EndCancelWindow();
 
         // Once more after the fetch, which can take long: a terminal may have moved HEAD meanwhile.
-        if (await RefuseIfHeadMovedAsync(text, new HeadState(branch.Name, branch.TargetSha), OperationTexts.NothingPulled) is { } moved)
+        if (await RefuseIfHeadMovedAsync(text, new HeadState(branch.Name, branch.TargetSha), OperationTexts.NothingPulled, fresh: true) is { } moved)
         {
             return moved;
         }

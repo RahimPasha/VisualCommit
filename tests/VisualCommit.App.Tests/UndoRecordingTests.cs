@@ -429,4 +429,61 @@ public class UndoRecordingTests
         main.AssertScriptFollowed();
         other.AssertScriptFollowed();
     }
+
+    /// <summary>
+    /// Step 25's review of the recording's cost. 7.7: "Operations that already read HEAD for D124
+    /// share that read": a checkout, a merge and a hard reset read HEAD before their work once,
+    /// the recording's read, and their own checks take it. None scans the whole status to learn
+    /// that nothing is in progress (the git folder tells, D89; conflicts from <c>ls-files
+    /// --unmerged</c>). The hard reset's entry takes its snapshot's files and index from the
+    /// reset that made it, not from reading the snapshot back. Every entry is recorded as before.
+    /// </summary>
+    [Fact]
+    public async Task Recorded_operations_share_the_recordings_HEAD_and_scan_no_status_to_learn_that_nothing_is_in_progress()
+    {
+        const string RecordingsHead = "git rev-parse HEAD --symbolic-full-name HEAD";
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        var checkout = await OperationCallsAsync(app, () => app.Operations.CheckoutAsync("refs/heads/feature/alpha"));
+        Assert.Contains("git switch --no-guess feature/alpha", checkout);
+        await app.Operations.CheckoutAsync("refs/heads/main");
+        var merge = await OperationCallsAsync(app, () => app.Operations.MergeAsync("refs/heads/feature/alpha", MergeMode.Default));
+        Assert.Equal("Merged feature/alpha into main", app.StatusText);
+        foreach (var calls in new[] { checkout, merge })
+        {
+            Assert.Equal(2, calls.Count(command => command == RecordingsHead));
+            Assert.DoesNotContain(calls, command => command is "git symbolic-ref -q HEAD" or "git rev-parse -q --verify HEAD");
+            Assert.DoesNotContain(calls, command => command.StartsWith("git status ", StringComparison.Ordinal));
+        }
+
+        repo.WriteFile("src/core.txt", "core\nmain work\nlocal\n");
+        app.Dialogs.Reset(ResetMode.Hard);
+        var reset = await OperationCallsAsync(app, () => app.Operations.ResetAsync(AddCore));
+        Assert.Equal("Reset main to 8beca34 (hard)", app.StatusText);
+        Assert.Equal(2, reset.Count(command => command == RecordingsHead));
+        Assert.DoesNotContain(reset, command => command is "git symbolic-ref -q HEAD" or "git rev-parse -q --verify HEAD");
+        Assert.DoesNotContain(reset, command => command.StartsWith("git log -1 ", StringComparison.Ordinal));
+
+        Assert.Equal(
+            [("checkout of feature/alpha", UndoKind.Checkout), ("checkout of main", UndoKind.Checkout), ("merge of feature/alpha into main", UndoKind.Merge), ("reset of main to 8beca34 (hard)", UndoKind.Reset)],
+            app.Repository.UndoHistory.Entries.Select(entry => (entry.Text, entry.Kind)));
+        var entry = app.Repository.UndoHistory.Entries[^1];
+        Assert.Equal(["src/core.txt"], entry.Captured.Snapshot!.Paths);
+        Assert.NotNull(entry.Captured.ResetIndex);
+        Assert.Contains(entry.Captured.Snapshot.Ref, app.Repository.BackupsToKeep);
+
+        // Undone from what the reset handed over: the local change comes back.
+        await app.Operations.UndoAsync();
+        Assert.Equal("core\nmain work\nlocal\n", ReadText(repo, "src/core.txt"));
+        app.AssertScriptFollowed();
+    }
+
+    /// <summary>The git calls <paramref name="action"/>'s operations made (those with an operation id), in the order they started.</summary>
+    private static async Task<List<string>> OperationCallsAsync(OperationsHarness app, Func<Task> action)
+    {
+        var start = app.Calls.Snapshot().Count;
+        await action();
+        return [.. app.Calls.Snapshot().Skip(start).Where(call => call.OperationId is not null).Select(call => call.CommandText)];
+    }
 }

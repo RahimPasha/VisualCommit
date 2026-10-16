@@ -64,13 +64,15 @@ internal static class UndoTestSupport
     }
 
     /// <summary>
-    /// Records <paramref name="action"/> as the app's recorder does (7.7): the state before, the
-    /// action with an <see cref="UndoCapture"/> running in its flow, the state after with the files
-    /// the capture names. Returns the entry, or null when nothing the scope names changed.
+    /// Records <paramref name="action"/> as the app's recorder does (7.7): the state before
+    /// (<see cref="UndoScope.BeforeAction"/>: the files' bytes kept only where the undo writes them
+    /// back), the action with an <see cref="UndoCapture"/> running in its flow, the state after with
+    /// the files the capture names (<see cref="UndoScope.AfterAction"/>: their SHA-256 only).
+    /// Returns the entry, or null when nothing the scope names changed.
     /// </summary>
     public static async Task<UndoEntry> RecordAsync(GitRepository repository, UndoScope scope, Func<Task> action)
     {
-        var before = await repository.ReadRefStatesAsync(scope, cancellationToken: TestCancelled);
+        var before = await repository.ReadRefStatesAsync(scope.BeforeAction(), cancellationToken: TestCancelled);
         UndoCaptured captured;
         using (UndoCapture.Begin(out var capture))
         {
@@ -78,7 +80,7 @@ internal static class UndoTestSupport
             captured = capture.Captured;
         }
 
-        var after = await repository.ReadRefStatesAsync(scope with { Files = [.. scope.Files.Union(captured.ChangedFiles, StringComparer.Ordinal)] }, cancellationToken: TestCancelled);
+        var after = await repository.ReadRefStatesAsync(scope.AfterAction(captured.ChangedFiles), cancellationToken: TestCancelled);
         return new UndoEntry(scope.Kind ?? throw new ArgumentException("An unrecorded scope.", nameof(scope)), scope.Text, "op-1", before, after, captured) { Scope = scope };
     }
 

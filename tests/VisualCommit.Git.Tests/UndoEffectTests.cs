@@ -451,13 +451,13 @@ public class UndoEffectTests
         var binary = new byte[] { 0, 1, 2, 0xFF, 0x0D, 0x0A, 0x0A, 0x80 };
         repo.WriteBytes("bin/data.bin", binary).WriteBytes("crlf.txt", Encoding.ASCII.GetBytes("one\r\ntwo\r\n"));
         await repo.ConfigAsync("core.autocrlf", "true");
-        var recorded = await repository.RecordUndoFilesAsync(["bin/data.bin", "crlf.txt", "absent.txt"], TestCancelled);
+        var recorded = await repository.RecordUndoFilesAsync(["bin/data.bin", "crlf.txt", "absent.txt"], keepBytes: true, TestCancelled);
         Assert.False(recorded[2].Exists);
 
         // Changed and deleted since: put back exactly, whatever core.autocrlf says (0.5).
         repo.WriteFile("crlf.txt", "changed\n").WriteFile("absent.txt", "now here\n");
         File.Delete(Path.Combine(repo.Path, "bin", "data.bin"));
-        var now = await repository.RecordUndoFilesAsync(["bin/data.bin", "crlf.txt", "absent.txt"], TestCancelled);
+        var now = await repository.RecordUndoFilesAsync(["bin/data.bin", "crlf.txt", "absent.txt"], keepBytes: true, TestCancelled);
         await RunAsync(repository, new FilesTo(now, recorded));
         Assert.Equal(binary, File.ReadAllBytes(Path.Combine(repo.Path, "bin", "data.bin")));
         Assert.Equal("one\r\ntwo\r\n", ReadText(repo, "crlf.txt"));
@@ -473,6 +473,86 @@ public class UndoEffectTests
         Assert.Equal(new UndoRefusal(UndoRefusalKind.FilesChanged, Paths: refusal.Paths), refusal);
         Assert.Equal(["crlf.txt"], refusal.Paths);
         Assert.Equal(still, await StillAsync(repo));
+    }
+
+    [Fact]
+    public async Task Files_recorded_by_their_hash_alone_are_never_written_blind_and_a_refused_step_puts_them_back_from_its_own_read()
+    {
+        using var repo = await UndoRepoAsync();
+        var (c2, feature) = (await ShaAsync(repo, "HEAD~1"), await ShaAsync(repo, "feature"));
+        var race = false;
+        var runner = new InterceptingRunner(NewRunner(), async command =>
+        {
+            if (race && command.Arguments is ["update-ref", "-m", _, "--stdin"])
+            {
+                race = false;
+                await repo.GitAsync("update-ref", "refs/heads/feature", c2);
+            }
+        });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestCancelled);
+        repo.WriteFile("a.txt", "a-original\n");
+        var original = await repository.RecordUndoFilesAsync(["a.txt"], keepBytes: true, TestCancelled);
+        repo.WriteFile("a.txt", "a-third\n");
+        var third = await repository.RecordUndoFilesAsync(["a.txt"], keepBytes: false, TestCancelled);
+        repo.WriteFile("a.txt", "a-changed\n");
+        var changed = await repository.RecordUndoFilesAsync(["a.txt"], keepBytes: false, TestCancelled);
+        Assert.True(changed[0].Exists);
+        Assert.Null(changed[0].Blob);
+
+        // Bytes that were never kept cannot be written back: refused before anything is written.
+        var still = await StillAsync(repo);
+        Assert.Equal(UndoRefusalKind.CommitsGone, (await RefuseAsync(repository, new FilesTo(changed, third))).Kind);
+        Assert.Equal(still, await StillAsync(repo));
+
+        // A ref write after the files refused (a terminal moved feature): the files go back to the
+        // bytes the step's own read kept, which the recording had not (UndoScope.KeepsFileBytes).
+        race = true;
+        var refusal = await RefuseAsync(repository, new FilesTo(changed, original), new SetRef("refs/heads/feature", feature, c2));
+        Assert.Equal(UndoRefusalKind.BranchMoved, refusal.Kind);
+        Assert.Equal("a-changed\n", ReadText(repo, "a.txt"));
+    }
+
+    /// <summary>
+    /// Step 25's review: an apply or a pop read the same stash commit's paths three times, by two
+    /// readers (C12's check and the undo history's reads before and after). A commit never
+    /// changes: its paths are read once, with what its index commit stages, and shared.
+    /// </summary>
+    [Fact]
+    public async Task A_stashs_paths_are_read_once_for_c12s_check_and_the_recordings_reads_before_and_after()
+    {
+        using var repo = await UndoRepoAsync();
+        var diffTrees = 0;
+        var runner = new InterceptingRunner(NewRunner(), command =>
+        {
+            if (command.Arguments is ["diff-tree", ..])
+            {
+                Interlocked.Increment(ref diffTrees);
+            }
+
+            return Task.CompletedTask;
+        });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestCancelled);
+        repo.WriteFile("a.txt", "a-staged\n");
+        await repo.GitAsync("add", "a.txt");
+        repo.WriteFile("b.txt", "b-unstaged\n").WriteFile("notes/u.txt", "untracked\n");
+        var stash = (await repository.StashAsync("saved", includeUntracked: true, cancellationToken: TestCancelled))!;
+        diffTrees = 0;
+
+        var scope = UndoScope.ApplyStash(stash, "On main: saved");
+        var before = await repository.ReadRefStatesAsync(scope.BeforeAction(), cancellationToken: TestCancelled);
+        var paths = await repository.ReadStashPathsAsync(stash, TestCancelled);
+        var after = await repository.ReadRefStatesAsync(scope.AfterAction([]), cancellationToken: TestCancelled);
+
+        Assert.Equal(2, diffTrees);
+        Assert.Equal(["a.txt", "b.txt"], paths.Changed);
+        Assert.Equal(["a.txt"], paths.Staged);
+        Assert.Equal(["notes/u.txt"], paths.Untracked);
+        Assert.Equal(["a.txt", "b.txt", "notes/u.txt"], before.Files.Select(file => file.Path));
+        Assert.Equal(before.Files.Select(file => file.Path), after.Files.Select(file => file.Path));
+
+        // A name is no commit: stash@{0} names another one after the next stash, and is read each time.
+        await repository.ReadStashPathsAsync("stash@{0}", TestCancelled);
+        Assert.Equal(4, diffTrees);
     }
 
     [Fact]

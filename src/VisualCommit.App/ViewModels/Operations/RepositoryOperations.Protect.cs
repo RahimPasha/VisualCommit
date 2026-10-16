@@ -168,7 +168,7 @@ public sealed partial class RepositoryOperations
     private async Task<OperationReport?> RefuseIfAutoStashTargetMovedAsync(OperationText text, AutoStashTarget target)
     {
         var seen = target.Seen;
-        var now = await Git.ReadHeadAsync();
+        var now = await ReadHeadAtStartAsync();
         if (now == seen || await ReachesFromBranchAsync(now, target.Commit))
         {
             return null;
@@ -196,7 +196,7 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
-        var now = await Git.ReadHeadAsync();
+        var now = await ReadHeadAtStartAsync();
         if (now == seen || now.BranchName is null || await Git.ResolveAsync(target + "^{commit}") is not { } commit
             || !await ReachesFromBranchAsync(now, commit))
         {
@@ -296,15 +296,15 @@ public sealed partial class RepositoryOperations
     // ---- 9.3: the refusal message -------------------------------------------------------------------
 
     /// <summary>
-    /// 9.3's refusals before git, for every checkout path: from a fresh status, an operation in
-    /// progress ("Finish or abort the {kind} first": git would refuse with <c>cannot switch branch
-    /// while …</c>) or conflicted files ("Resolve the conflicts first": <c>you need to resolve your
+    /// 9.3's refusals before git, for every checkout path, read fresh: an operation in progress
+    /// ("Finish or abort the {kind} first": git would refuse with <c>cannot switch branch while
+    /// …</c>) or conflicted files ("Resolve the conflicts first": <c>you need to resolve your
     /// current index first</c>), with the dialog "Checkout blocked" and no git output (the report's
     /// PD5). Null when the checkout may go to git.
     /// </summary>
     private async Task<(OperationReport Report, FailureDisplay Display)?> RefuseCheckoutAsync(OperationText text)
     {
-        if (RefusalOf(await Git.ReadStatusAsync()) is not { } summary)
+        if (await InProgressOrConflictedRefusalAsync() is not { } summary)
         {
             return null;
         }

@@ -92,6 +92,14 @@ public sealed partial class RepositoryOperations
     /// <summary>Set while an operation of <see cref="RunAsync"/> runs: <see cref="SaveBackupAsync"/> marks it, and the operation then ends with the backups' clean-up (D139).</summary>
     private readonly AsyncLocal<StrongBox<bool>?> _backupSaved = new();
 
+    /// <summary>
+    /// Set while a recorded operation of <see cref="RunAsync"/> runs: HEAD as the undo history's
+    /// recording read it just before the operation's work (docs/phase-5-design.md 7.7), which the
+    /// operation's own checks of HEAD share (<see cref="ReadHeadAtStartAsync"/>). Null when the
+    /// operation is not recorded or completes a pending entry.
+    /// </summary>
+    private readonly AsyncLocal<HeadState?> _headAtStart = new();
+
     // The repository's state.
 
     /// <summary>The tab was closed: nothing starts any more, and nothing is shown (1.8).</summary>
@@ -305,6 +313,7 @@ public sealed partial class RepositoryOperations
             // half-way; what the reads cannot see is captured while it runs. The entry is added
             // before the clean-up, which then keeps the backups it needs.
             var recording = await BeginRecordingAsync(options.Undo, context, text.Title);
+            _headAtStart.Value = recording?.Before?.Head;
             OperationReport? report = null;
             using (UndoCapture.Begin(out var capture))
             {
@@ -439,6 +448,17 @@ public sealed partial class RepositoryOperations
             return null;
         }
     }
+
+    /// <summary>
+    /// HEAD at the start of the running operation's work: the undo history's read of it when the
+    /// operation is recorded (docs/phase-5-design.md 7.7: "Operations that already read HEAD for
+    /// D124 share that read"), otherwise read now. Only for the checks an operation makes before
+    /// it writes anything that can move HEAD (a backup ref moves nothing): D124's "HEAD moved
+    /// while this waited", 2.1's detached commits, and the commit a reset or a rebase starts from.
+    /// A check made after such a write, or after a wait such as a pull's fetch, reads HEAD itself.
+    /// </summary>
+    private Task<HeadState> ReadHeadAtStartAsync() =>
+        _headAtStart.Value is { } head ? Task.FromResult(head) : Git.ReadHeadAsync();
 
     /// <summary><see cref="EndUndoRecordingAsync"/>, which never fails the operation: a failure is logged.</summary>
     internal async Task EndRecordingAsync(UndoRecording? recording, UndoCaptured captured, OperationReport? report, string title)
