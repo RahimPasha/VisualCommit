@@ -80,7 +80,8 @@ public sealed partial class Phase5ChecksU
         AssertStatus(app, PartU2.Applied);
         await U20.AssertAppliedAsync(app, repo);
 
-        // Step 5: Undo: the index entries, then README.md's recorded bytes; no git stash call.
+        // Step 5: Undo: the index entries, then README.md's recorded bytes; no git stash call. The
+        // call log keeps no input of update-index, so the entries are read back from the index.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.ApplyText);
         var shot = Shot(app, "u20c-apply-undone");
         Assert.Equal(
@@ -88,8 +89,9 @@ public sealed partial class Phase5ChecksU
             Steps.OperationCallsSince(app, calls).Where(call => call.StartsWith("git update-index", StringComparison.Ordinal)));
         Steps.AssertSucceeded(app, calls, PartU2.IndexInfo);
         U20.AssertNoStashWrite(app, calls);
-        Assert.Equal(index, await Steps.GitLinesAsync(repo, "ls-files", "--stage"));
-        Assert.Contains(index, line => line.StartsWith($"100644 {PartU2.ReadmeBlob}", StringComparison.Ordinal) && line.EndsWith("\tREADME.md", StringComparison.Ordinal));
+        var undone = await Steps.GitLinesAsync(repo, "ls-files", "--stage");
+        Assert.Equal(index, undone);
+        Assert.Contains(undone, line => line.StartsWith($"100644 {PartU2.ReadmeBlob}", StringComparison.Ordinal) && line.EndsWith(" 0\tREADME.md", StringComparison.Ordinal));
         Assert.Equal(Scenarios.OperationsFiles.Readme, Steps.FileText(repo, "README.md"));
         Assert.Equal([PartU2.OnMain], await Steps.StatusAsync(repo));
         Assert.Equal(PartU2.ExperimentOnly, await Steps.StashListAsync(repo));

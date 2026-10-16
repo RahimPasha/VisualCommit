@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -91,6 +92,7 @@ public sealed partial class Phase5ChecksU
         Steps.ClickDialogButton(app, "CancelButton");
         await AssertNoDialogAsync(app);
         AssertCalledInOrder(app, calls, PartU2.Command("remote", "add", "--", "mirror", url), PartU2.FetchMirror);
+        Assert.Equal(1, app.CountLogLines(AppLogFile.OperationEnded(NameOf(repo), "Add remote mirror", OperationOutcome.Succeeded, PartU2.AddedRemote), mark));
         var fetch = Steps.AssertSucceeded(app, calls, PartU2.FetchMirror);
         await Steps.AssertPrintedAsync(fetch, " * [new branch]      main       -> mirror/main");
         await Steps.AssertPrintedAsync(fetch, " * [new branch]      published  -> mirror/published");
@@ -104,16 +106,29 @@ public sealed partial class Phase5ChecksU
         AssertGraph(app, PartU2.SyncWithMirror, PartU2.SyncLanes);
         Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.AddRemoteText));
 
-        // Step 5: Undo: the remote's section removed, and its fetched refs deleted in the step's transaction (7.12).
+        // Step 5: Undo: its fetched refs deleted in the step's transaction (7.12), then the remote's
+        // section removed (configuration follows the transaction, UD20); the refs' reflogs go with them.
+        string[] fetched = ["refs/remotes/mirror/main", "refs/remotes/mirror/published"];
+        foreach (var reference in fetched)
+        {
+            Assert.Equal(0, (await repo.GitAllowingFailureAsync("reflog", "exists", reference)).ExitCode);
+        }
+
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.AddRemoteText);
         var shot = Shot(app, "u22c-add-undone");
-        Steps.AssertSucceeded(app, calls, "git config --local --remove-section remote.mirror");
         var transaction = Steps.AssertSucceeded(app, calls, PartU2.Transaction(PartU2.UndoMessage(PartU2.AddRemoteText)));
+        Steps.AssertSucceeded(app, calls, "git config --local --remove-section remote.mirror");
+        AssertCalledInOrder(app, calls, transaction.CommandText, "git config --local --remove-section remote.mirror");
         Assert.Equal(
             [$"delete refs/remotes/mirror/main {PartU2.SharedWork}", $"delete refs/remotes/mirror/published {PartU2.PublishedWork}"],
             Steps.Lines(transaction.StandardInput ?? string.Empty).Order(StringComparer.Ordinal));
         Assert.Equal(["origin"], await Steps.GitLinesAsync(repo, "remote"));
         Assert.Empty(await Steps.RefsUnderAsync(repo, "refs/remotes/mirror/"));
+        foreach (var reference in fetched)
+        {
+            Assert.Equal(1, (await repo.GitAllowingFailureAsync("reflog", "exists", reference)).ExitCode);
+        }
+
         Assert.Equal(config, await File.ReadAllBytesAsync(Path.Combine(repo.Path, ".git", "config")));
         AssertGraph(app, PartU2.Sync, PartU2.SyncLanes, picture: shot);
         Assert.Equal(2, Steps.SectionCount(app, "Remotes"));

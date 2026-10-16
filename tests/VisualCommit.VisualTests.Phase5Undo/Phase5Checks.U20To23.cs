@@ -265,11 +265,11 @@ public sealed partial class Phase5ChecksU : Phase5Checks
                 .Select(row => new string(' ', 2 * (row.Depth - 1)) + row.Text + (row.IsContainer && row.IsOpen ? " (open)" : string.Empty))];
         }
 
-        /// <summary>A local branch's arrows (ahead, behind) as the left panel shows them.</summary>
-        public static (int Ahead, int Behind) Arrows(ShellDriver app, string branch)
+        /// <summary>A local branch's arrows (ahead, behind) as the left panel shows them; the branch by its row's path under Local branches ("feature", "topic").</summary>
+        public static (int Ahead, int Behind) Arrows(ShellDriver app, params string[] branch)
         {
             app.Settle();
-            var row = (RefItemRow)app.RefRowModel("Local branches", branch);
+            var row = (RefItemRow)app.RefRowModel(["Local branches", .. branch]);
             return (row.Ahead, row.Behind);
         }
 
@@ -325,12 +325,22 @@ public sealed partial class Phase5ChecksU : Phase5Checks
 
         // ---- Tooltips ----
 
-        /// <summary>The open tooltip with <paramref name="text"/> lies inside the window.</summary>
-        public static void AssertToolTipInsideWindow(ShellDriver app, string text)
+        /// <summary>
+        /// The open tooltip with <paramref name="text"/> lies under the button with the automation
+        /// id <paramref name="button"/>, on which the pointer rests at its centre
+        /// (<see cref="ShellDriver.RestPointerOnAsync"/>): below the pointer, as phase 4's
+        /// conventions have a tooltip open, and starting within the button across; and inside the
+        /// window.
+        /// </summary>
+        public static void AssertToolTipUnder(ShellDriver app, string text, string button)
         {
             var tips = app.Window.GetVisualDescendants().OfType<ToolTip>().Where(tip => tip.IsEffectivelyVisible && tip.Bounds.Width > 0).ToList();
             var tip = Assert.Single(tips, candidate => candidate.Content is string content ? content == text : TextsIn(candidate).Contains(text));
             var bounds = app.BoundsOf(tip);
+            var under = app.BoundsOf(app.FindByAutomationId(button));
+            Assert.True(
+                bounds.Top >= under.Center.Y && bounds.Left >= under.Left && bounds.Left < under.Right,
+                $"The tooltip at {bounds} is not under {button} at {under}, below the pointer at its centre.");
             var size = app.Window.ClientSize;
             Assert.True(
                 bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= size.Width && bounds.Bottom <= size.Height,

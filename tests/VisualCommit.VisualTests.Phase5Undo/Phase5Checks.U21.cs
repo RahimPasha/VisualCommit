@@ -46,7 +46,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 2: Undo asks first.
         await Steps.AskAsync(app, repo, Undo, PartU2.PushTopicText, PartU2.UndoPushTopic);
-        Shot(app, "u21a-push-undo-question", keepPointer: true);
+        Shot(app, "u21a-push-undo-question");
 
         // Step 3: "Undo": deleted on origin first, then the upstream's keys removed.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.PushTopicText);
@@ -67,7 +67,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 4: Redo asks too.
         await Steps.AskAsync(app, repo, Redo, PartU2.PushTopicText, PartU2.RedoPushTopic);
-        Shot(app, "u21c-push-redo-question", keepPointer: true);
+        Shot(app, "u21c-push-redo-question");
 
         // Step 5: "Redo": pushed with an empty lease (the branch must not exist), then the keys added again.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.PushTopicText);
@@ -96,6 +96,7 @@ public sealed partial class Phase5ChecksU
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo);
         AssertGraph(app, PartU2.SyncRewritten, lanes: 3);
+        Assert.Equal((1, 1), Steps.Arrows(app, "published"));
         Steps.AssertButtons(app, UndoRedoButtons.Nothing);
         var backup = $"{PartU2.FirstBackup("force-push", "origin/published")} {PartU2.PublishedWork}";
 
@@ -116,7 +117,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 7: Undo asks first.
         await Steps.AskAsync(app, repo, Undo, PartU2.ForcePushText, PartU2.UndoForcePush);
-        Shot(app, "u21e-force-undo-question", keepPointer: true);
+        Shot(app, "u21e-force-undo-question");
 
         // Step 8: "Undo": origin's published back at Published work, leased on Rewritten work.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.ForcePushText);
@@ -133,7 +134,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 9: Redo asks too.
         await Steps.AskAsync(app, repo, Redo, PartU2.ForcePushText, PartU2.RedoForcePush);
-        Shot(app, "u21g-force-redo-question", keepPointer: true);
+        Shot(app, "u21g-force-redo-question");
 
         // Step 10: "Redo": Rewritten work again, leased on Published work; no new backup.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.ForcePushText);
@@ -172,7 +173,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 12: Undo asks first.
         await Steps.AskAsync(app, repo, Undo, PartU2.DeleteRemoteBranchText, PartU2.UndoDeletePublished);
-        Shot(app, "u21i-delete-undo-question", keepPointer: true);
+        Shot(app, "u21i-delete-undo-question");
 
         // Step 13: "Undo": pushed back with an empty lease.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.DeleteRemoteBranchText);
@@ -188,7 +189,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 14: Redo asks too.
         await Steps.AskAsync(app, repo, Redo, PartU2.DeleteRemoteBranchText, PartU2.RedoDeletePublished);
-        Shot(app, "u21k-delete-redo-question", keepPointer: true);
+        Shot(app, "u21k-delete-redo-question");
 
         // Step 15: "Redo": deleted again, leased on Published work.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.DeleteRemoteBranchText);
@@ -218,7 +219,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 17: Undo asks first.
         await Steps.AskAsync(app, repo, Undo, PartU2.PushTagText, PartU2.UndoPushTag);
-        Shot(app, "u21m-tag-undo-question", keepPointer: true);
+        Shot(app, "u21m-tag-undo-question");
 
         // Step 18: "Undo": deleted on origin, leased on Main work; the local v1.1 stays.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.PushTagText);
@@ -232,7 +233,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 19: Redo asks too.
         await Steps.AskAsync(app, repo, Redo, PartU2.PushTagText, PartU2.RedoPushTag);
-        Shot(app, "u21o-tag-redo-question", keepPointer: true);
+        Shot(app, "u21o-tag-redo-question");
 
         // Step 20: "Redo": pushed again with an empty lease.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.PushTagText);
@@ -272,7 +273,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 22: Undo asks first.
         await Steps.AskAsync(app, repo, Undo, PartU2.DeleteRemoteTagText, PartU2.UndoDeleteTag);
-        Shot(app, "u21q-tag-delete-undo-question", keepPointer: true);
+        Shot(app, "u21q-tag-delete-undo-question");
 
         // Step 23: "Undo": pushed back with an empty lease.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.DeleteRemoteTagText);
@@ -283,7 +284,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 24: Redo asks too.
         await Steps.AskAsync(app, repo, Redo, PartU2.DeleteRemoteTagText, PartU2.RedoDeleteTag);
-        Shot(app, "u21s-tag-delete-redo-question", keepPointer: true);
+        Shot(app, "u21s-tag-delete-redo-question");
 
         // Step 25: "Redo": deleted again; the backup stays.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.DeleteRemoteTagText);
@@ -328,7 +329,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 28: Undo asks: the remote's old value from git's summary line (7.7).
         await Steps.AskAsync(app, repo, Undo, PartU2.PushPublishedText, PartU2.UndoLeasedPush);
-        Shot(app, "u21u-lease-question", keepPointer: true);
+        Shot(app, "u21u-lease-question");
 
         // Step 29: "Undo": git refuses the stale lease; the error dialog.
         var origin = await Steps.OriginUrlAsync(repo);
@@ -338,19 +339,20 @@ public sealed partial class Phase5ChecksU
         Steps.ClickDialogButton(app, "ConfirmButton");
         await app.WaitForDialogAsync<ErrorDialogViewModel>(NetworkTimeout);
         await app.WaitForIdleAsync(timeout: NetworkTimeout);
-        Shot(app, "u21v-lease-failed", keepPointer: true);
+        Shot(app, "u21v-lease-failed");
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
             "Undo failed",
             PartU2.LeaseSummary,
-            NameOf(repo),
+            PartU2.SyncRepo,
             push,
             ["Copy output", "Close"],
             PartU2.Tu2(origin),
             PartU2.Tu2Key));
+        AssertNoClippedText(app);
         Assert.Equal(1, app.LastCall(push).ExitCode);
         AssertStatus(app, $"{Steps.Title(Undo, PartU2.PushPublishedText)} failed", OperationStatusTone.Danger);
         await app.WaitForLogLineAsync(
-            AppLogFile.OperationEnded(NameOf(repo), Steps.Title(Undo, PartU2.PushPublishedText), OperationOutcome.Failed, $"To {origin}"),
+            AppLogFile.OperationEnded(PartU2.SyncRepo, Steps.Title(Undo, PartU2.PushPublishedText), OperationOutcome.Failed, $"To {origin}"),
             mark: mark);
         Assert.Contains($"{PartU2.PublishedElsewhere} refs/heads/published", await Steps.LsRemoteAsync(repo, "--heads"));
         Assert.Equal(PartU2.UnpushedWork, await Steps.RefAsync(repo, "refs/heads/published"));
@@ -367,6 +369,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.PushPublishedText));
         AssertGraph(app, PartU2.SyncPublishedPushed, PartU2.SyncLanes);
+        AssertNoClippedText(app);
     }
 
     /// <summary>The helpers of check U21's methods.</summary>

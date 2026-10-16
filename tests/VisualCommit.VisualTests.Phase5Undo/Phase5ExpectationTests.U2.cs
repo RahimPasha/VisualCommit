@@ -16,6 +16,7 @@ public sealed class PartU2ExpectationTests
             PartU2.Transaction(PartU2.UndoMessage(PartU2.CreateTagText)));
         Assert.Equal("VisualCommit: redo deletion of tag v1.0", PartU2.RedoMessage(PartU2.DeleteTagText));
         Assert.Equal(PartU2.StashStore, PartU2.Command("stash", "store", "-m", "On main: Experiment", PartU2.Experiment));
+        Assert.Equal(PartU2.MergeFf, PartU2.Command("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/ff'", "refs/heads/feature/ff"));
     }
 
     [Fact]
@@ -89,6 +90,7 @@ public sealed class PartU2ExpectationTests
         Assert.Equal(3, PartU2.SyncRewritten.Max(row => row.Lane) + 1);
         Assert.Equal(4, PartU2.SyncForcePushed.Count);
         Assert.Equal(PartU2.RebaseLanes, PartU2.R1.Max(row => row.Lane) + 1);
+        Assert.Equal([PartU2.OtherOne[..7], PartU2.MainMore[..7]], PartU2.R0.Take(2).Select(row => row.ShortSha));
     }
 
     [Fact]

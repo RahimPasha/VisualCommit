@@ -15,6 +15,14 @@ public static partial class Phase5Expectations
     /// <summary>The expected results of checks U20 to U23 (part U's second half).</summary>
     public static class PartU2
     {
+        // ---- The scenarios' repositories: the tab's name, the error dialog's "In …" and the log's ----
+
+        public const string OpsRepo = "ops";
+
+        public const string SyncRepo = "sync";
+
+        public const string RebaseRepo = "rebase";
+
         // ---- The scenarios' commits ("Full SHAs of the scenarios used in commands") ----
 
         /// <summary>"ops": Main work, where main, origin/main and v1.1 are.</summary>
@@ -52,6 +60,12 @@ public static partial class Phase5Expectations
 
         /// <summary>"rebase": Topic two as built, feature/topic's tip before the rebase.</summary>
         public const string TopicTwo = "b0dfa3f405dffff59bea3f4f434b16e5490cc597";
+
+        /// <summary>"rebase": Main more, main's tip.</summary>
+        public const string MainMore = "1dd58b8cfc17d4d9b80550eddd80b11ebf94c146";
+
+        /// <summary>"rebase": Other one, feature/other's tip.</summary>
+        public const string OtherOne = "2d4d79a03112c8a5e2f9a783318d588df519af5d";
 
         // ---- Commits and objects the checks make ----
 
@@ -148,6 +162,9 @@ public static partial class Phase5Expectations
 
         public const string MergeFfText = "merge of feature/ff into main";
 
+        /// <summary>U23 part B: the merge that stops with a conflict, pending while its banner shows (7.2).</summary>
+        public const string MergeConflictText = "merge of feature/conflict into main";
+
         public const string CreateHotfixText = "creation of hotfix";
 
         public const string RebaseText = "rebase of feature/topic onto main";
@@ -179,6 +196,9 @@ public static partial class Phase5Expectations
         public const string DeletedRemoteTag = "Deleted tag v1.1 on origin";
 
         public const string TracksPublished = "topic now tracks origin/published";
+
+        /// <summary>U22 step 4: the add's own result, before its fetch's status replaces it.</summary>
+        public const string AddedRemote = "Added remote mirror";
 
         public const string FetchedFromMirror = "Fetched from mirror";
 
@@ -374,6 +394,15 @@ public static partial class Phase5Expectations
         public const string FetchMirror = "git fetch --progress mirror";
 
         public const string RefreshIndex = "git update-index -q --refresh";
+
+        /// <summary>U23's "Merge feature/ff into main" (U19's step 1): phase 3's merge, which fast-forwards here.</summary>
+        public const string MergeFf = "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" refs/heads/feature/ff";
+
+        /// <summary>HEAD's reflog's newest entry after that merge: a merge given -m that fast-forwards says it made no commit.</summary>
+        public const string MergeFfReflog = "merge refs/heads/feature/ff: Fast-forward (no commit created; -m option ignored)";
+
+        /// <summary>The status line of "ops" after that merge.</summary>
+        public const string OnMainAheadOne = "## main...origin/main [ahead 1]";
 
         // ---- The graphs (rows from the top; "Scenarios and graphs of part U") ----
 
