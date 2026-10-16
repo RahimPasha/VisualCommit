@@ -3279,6 +3279,14 @@ listed here as expected.
   `23g`); phase 2's check 23's dashed line now runs dashed from the working ring to `main` in one
   pattern.
 
+- **The headless harness's default wait** (`ShellDriver.DefaultWaitTimeout`, which phase 3's
+  report names as 10 s) is 30 s from `fe34b62`'s successor: in the full run's seven projects side
+  by side, steps took 5 to 8 times as long as alone, and four waits for an operation's result ran
+  out at 10 s (phase 2's check 24, phase 3's checks 06 and 07, the App window test of a merge);
+  each passed alone in 5 to 15 s. Phase 5 records every action for undo, so each operation makes
+  more git calls (a stash 17). No expected result changes; a wait ends as soon as its condition
+  holds.
+
 ### Made before this report
 
 - **Phase 3, check 15b, a pop refused by git exits 128 on Git 2.56** (`281dd69`). CI's Windows

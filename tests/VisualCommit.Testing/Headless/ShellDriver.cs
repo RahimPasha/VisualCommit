@@ -24,8 +24,14 @@ namespace VisualCommit.Testing.Headless;
 /// </summary>
 public sealed partial class ShellDriver : IDisposable
 {
-    /// <summary>How long <see cref="WaitForAsync"/> waits when the test names no time.</summary>
-    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// How long <see cref="WaitForAsync"/> waits when the test names no time: 30 s, the limit
+    /// phases 2 to 4 gave a wait after a write. Phase 5 records every action for undo (a stash
+    /// makes 17 git calls), and in the full run's seven projects side by side a step took 5 to 8
+    /// times as long as alone, so 10 s ran out for operations that end in 1 to 3 s alone. A wait
+    /// still ends as soon as its condition holds.
+    /// </summary>
+    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// The pause between two looks at a condition in <see cref="WaitForAsync"/>: short enough that
