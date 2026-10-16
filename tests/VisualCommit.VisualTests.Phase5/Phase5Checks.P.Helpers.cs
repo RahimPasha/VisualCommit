@@ -70,6 +70,14 @@ public sealed partial class Phase5ChecksP
     private static RefSectionRow SectionOf(IEnumerable<RefListRow> rows, string title) =>
         rows.OfType<RefSectionRow>().Single(row => row.Text == title);
 
+    /// <summary>Local branches › <paramref name="branch"/> is the left panel's selected row: a double-click's first click selects it (phase 3's 4c).</summary>
+    private static void AssertBranchRowSelected(ShellDriver app, string branch)
+    {
+        var row = app.RefRowModel("Local branches", branch);
+        Assert.True(row is RefItemRow { IsSelected: true }, $"Local branches › {branch} is not selected in the left panel.");
+        Assert.Equal([row.Key], SelectedRefRows(app));
+    }
+
     /// <summary>The keys of the left panel's selected rows.</summary>
     private static List<string> SelectedRefRows(ShellDriver app)
     {
@@ -199,12 +207,13 @@ public sealed partial class Phase5ChecksP
         Assert.True(extra.IsEffectivelyEnabled, $"\"{label}\" is disabled.");
     }
 
-    /// <summary>The status bar's operation text is drawn whole, not cut with "…", and its tooltip holds the same text (PD14).</summary>
+    /// <summary>The status bar's operation text is drawn whole, not cut with "…", within its 520, and its tooltip holds the same text (PD14).</summary>
     private static void AssertStatusWhole(ShellDriver app, string text)
     {
         var layout = app.OperationStatusLayout();
         Assert.Equal(text, layout.Text);
         Assert.True(layout.IsWhole, $"The status text \"{text}\" is cut ({layout.Width} wide).");
+        Assert.True(layout.Width <= PartP.StatusTextMaxWidth, $"The status text is {layout.Width} wide, more than {PartP.StatusTextMaxWidth}.");
         Assert.Equal(text, layout.ToolTip);
     }
 
@@ -380,6 +389,29 @@ public sealed partial class Phase5ChecksP
         Assert.Equal($"{TempRepo.AuthorName} <{TempRepo.AuthorEmail}>", fields[3]);
         AssertGitDate(AppCommitTime, fields[4]);
         AssertGitDate(AppCommitTime, fields[5]);
+    }
+
+    /// <summary>
+    /// The labels the graph draws in the given rows (<c>LabelsInRow</c>): their drawn texts in
+    /// order, none cut and none a "+N", each from and to the x the report gives, ±2 (the
+    /// conventions' rule).
+    /// </summary>
+    private static void AssertDrawnLabels(ShellDriver app, params (int Row, PartP.DrawnLabel[] Labels)[] rows)
+    {
+        var graph = Graph(app);
+        foreach (var (row, labels) in rows)
+        {
+            var drawn = graph.LabelsInRow(row);
+            Assert.Equal(labels.Select(label => label.Text), drawn.Select(label => label.Text));
+            Assert.All(drawn, label => Assert.False(label.IsOverflow, $"Row {row} draws \"{label.Text}\" for labels it has no room for."));
+            foreach (var expected in labels)
+            {
+                var bounds = app.GraphLabelBounds(row, expected.Text);
+                Assert.True(
+                    Math.Abs(bounds.Left - expected.Left) <= 2 && Math.Abs(bounds.Right - expected.Right) <= 2,
+                    string.Create(CultureInfo.InvariantCulture, $"Row {row}'s label \"{expected.Text}\" is drawn from x {bounds.Left} to {bounds.Right}; the report gives {expected.Left} to {expected.Right} (±2)."));
+            }
+        }
     }
 
     /// <summary>A label's bounds against the report's numbers, ±2 (the conventions' rule).</summary>

@@ -88,6 +88,44 @@ public sealed class Phase5ExpectationTestsP
         Assert.Equal(new[] { (0, GraphLineKind.OutOfNode, 0), (1, GraphLineKind.IntoNode, 0) }, PartP.StashOnTopDashes);
     }
 
+    /// <summary>
+    /// The drawn labels' positions agree with the conventions' widths (<c>main</c> ✓ 50.8,
+    /// <c>main</c> 37.8, <c>other</c> 40.6, <c>v1.1</c> 43.7, <c>HEAD</c> 42.8, <c>stash@{0}</c>
+    /// 68.3), the first from x 266 and each next one 4 after the one before.
+    /// </summary>
+    [Fact]
+    public void The_drawn_labels_are_the_conventions_widths_4_apart_from_266()
+    {
+        var current = new Dictionary<(string, bool), double>
+        {
+            [("main", true)] = 50.8,
+            [("main", false)] = 37.8,
+            [("other", false)] = 40.6,
+            [("v1.1", false)] = 43.7,
+            [("HEAD", false)] = 42.8,
+            [("stash@{0}", false)] = 68.3,
+        };
+        var graphs = new (CommitRow[] Rows, (int Row, PartP.DrawnLabel[] Labels)[] Drawn)[]
+        {
+            (PartP.P0, PartP.P0Labels), (PartP.P0h, PartP.P0hLabels), (PartP.P1, PartP.P1Labels), (PartP.P1m, PartP.P1mLabels),
+        };
+        foreach (var (rows, drawn) in graphs)
+        {
+            foreach (var (row, labels) in drawn)
+            {
+                Assert.Equal(rows[row].Labels.Select(label => label.Replace(CurrentMark, string.Empty, StringComparison.Ordinal)), labels.Select(label => label.Text));
+                var left = 266.0;
+                foreach (var label in labels)
+                {
+                    var isCurrent = rows[row].Labels.Contains(Current(label.Text));
+                    Assert.Equal(left, label.Left, 0.05);
+                    Assert.Equal(current[(label.Text, isCurrent)], label.Right - label.Left, 0.05);
+                    left = label.Right + 4;
+                }
+            }
+        }
+    }
+
     /// <summary>The stash's menu (P27 step 9) is 145 high by 4a's formula: four items and one separator.</summary>
     [Fact]
     public void The_stash_menus_height_is_4as_formula()

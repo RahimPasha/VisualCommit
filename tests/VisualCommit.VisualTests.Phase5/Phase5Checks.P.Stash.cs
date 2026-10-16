@@ -52,7 +52,7 @@ public sealed partial class Phase5ChecksP
         app.DoubleClick(await app.RefRowAsync("Local branches", "main"));
         await WaitForSuccessAsync(app, repo, PartP.CheckOutMain, mark);
         shot = Shot(app, "p25c-main-again");
-        Assert.True(app.RefRowModel("Local branches", "main") is App.ViewModels.Panels.RefItemRow { IsSelected: true }, "The double-click's first click did not select main in the left panel.");
+        AssertBranchRowSelected(app, "main");
         await AssertRowSelectedAsync(app, PartP.MainWorkRowUnderStash, "Main work");
         var switched = AssertCall(app, calls, PartP.SwitchMainCommand, 0);
         await AssertGitPrintedAsync(switched.StandardError, PartP.SwitchedBackToMain, "The switch back to main");
@@ -60,6 +60,7 @@ public sealed partial class Phase5ChecksP
         AssertStatus(app, PartP.CheckedOutMain);
         AssertBranch(app, "main");
         AssertGraph(app, PartP.P1m, PartP.Lanes, showsDate: true, picture: shot);
+        AssertDrawnLabels(app, PartP.P1mLabels);
         AssertDashedLines(app, PartP.StashOnTopDashes);
         await AssertLeftPanelAsync(app, stashes: 1, head: "main", PartP.AutoStashListed);
         AssertUndoRedo(app, UndoRedoButtons.CanUndo(PartP.CheckoutEntry("main")));
@@ -214,6 +215,7 @@ public sealed partial class Phase5ChecksP
         AssertStatusWhole(app, PartP.ChangesInAutoStash);
         AssertBranch(app, PartP.DetachedAt(PartP.DescribeSha));
         AssertGraph(app, PartP.P1, PartP.Lanes, showsDate: true, picture: picture);
+        AssertDrawnLabels(app, PartP.P1Labels);
         AssertDashedLines(app, PartP.StashOnTopDashes);
         await AssertRowSelectedAsync(app, PartP.DescribeRowUnderStash, "Describe the app");
         await AssertLeftPanelAsync(app, stashes: 1, head: null, PartP.AutoStashListed);

@@ -37,6 +37,7 @@ public sealed partial class Phase5ChecksP : Phase5Checks
         // Step 1: P0w, nothing selected, the status bar "Ready".
         var shot = Shot(app, "p24a-changed-file");
         AssertGraph(app, PartP.P0, PartP.Lanes, PartP.Working, showsDate: true, picture: shot);
+        AssertDrawnLabels(app, PartP.P0Labels);
         AssertDashedLines(app);
         AssertNothingSelected(app);
         AssertStatus(app, "Ready");
@@ -52,7 +53,7 @@ public sealed partial class Phase5ChecksP : Phase5Checks
         app.DoubleClick(await app.RefRowAsync("Local branches", "other"));
         await WaitForFailureAsync(app, repo, PartP.CheckOutOther, mark);
         Shot(app, "p24b-one-conflict");
-        Assert.True(app.RefRowModel("Local branches", "other") is App.ViewModels.Panels.RefItemRow { IsSelected: true }, "The double-click's first click did not select other in the left panel.");
+        AssertBranchRowSelected(app, "other");
         await AssertRowSelectedAsync(app, PartP.OtherFilesRow, "Other files");
         AssertCall(app, calls, PartP.SwitchOtherCommand, 1);
         AssertNoStashCall(app, calls);

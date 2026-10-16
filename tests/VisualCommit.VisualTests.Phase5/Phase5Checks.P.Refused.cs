@@ -70,6 +70,7 @@ public sealed partial class Phase5ChecksP
         AssertStatus(app, PartP.DetachedAtStatus(PartP.MainWorkSha));
         AssertBranch(app, PartP.DetachedAt(PartP.MainWorkSha));
         AssertGraph(app, PartP.P0h, PartP.Lanes, PartP.Working, showsDate: true, picture: shot);
+        AssertDrawnLabels(app, PartP.P0hLabels);
         AssertDashedLines(app);
         await AssertRowSelectedAsync(app, PartP.MainWorkRow, "Main work");
         await AssertLeftPanelAsync(app, stashes: 0, head: null);

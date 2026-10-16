@@ -209,6 +209,37 @@ public static partial class Phase5Expectations
         /// <summary>P24 part B: the label <c>other</c> of commit row 1 below the working-changes row, x 266 to 306.6, y 172 to 190.</summary>
         public static readonly (double Left, double Top, double Right, double Bottom) OtherLabelBelowWorking = (266, 172, 306.6, 190);
 
+        /// <summary>A label as the graph draws it at 1100×700: its drawn text and where it starts and ends (the report's widths, from x 266, 4 apart).</summary>
+        public sealed record DrawnLabel(string Text, double Left, double Right);
+
+        /// <summary>P0's (and P0w's) drawn labels by commit row: <c>main</c> ✓ 266 to 316.8, <c>other</c> 266 to 306.6, <c>v1.1</c> 266 to 309.7.</summary>
+        public static readonly (int Row, DrawnLabel[] Labels)[] P0Labels =
+        [
+            (MainWorkRow, [new("main", 266, 316.8)]),
+            (OtherFilesRow, [new("other", 266, 306.6)]),
+            (DescribeRow, [new("v1.1", 266, 309.7)]),
+        ];
+
+        /// <summary>P0h's row 0: <c>HEAD</c> 266 to 308.8 and <c>main</c> 312.8 to 350.6, both drawn.</summary>
+        public static readonly (int Row, DrawnLabel[] Labels)[] P0hLabels =
+        [
+            (MainWorkRow, [new("HEAD", 266, 308.8), new("main", 312.8, 350.6)]),
+        ];
+
+        /// <summary>P1's drawn labels: <c>stash@{0}</c> 266 to 334.3, <c>main</c> (no check mark) 266 to 303.8, <c>HEAD</c> 266 to 308.8 and <c>v1.1</c> 312.8 to 356.5.</summary>
+        public static readonly (int Row, DrawnLabel[] Labels)[] P1Labels =
+        [
+            (StashRow, [new("stash@{0}", 266, 334.3)]),
+            (MainWorkRowUnderStash, [new("main", 266, 303.8)]),
+            (DescribeRowUnderStash, [new("HEAD", 266, 308.8), new("v1.1", 312.8, 356.5)]),
+        ];
+
+        /// <summary>P1m's row 1: <c>main</c> ✓ 266 to 316.8.</summary>
+        public static readonly (int Row, DrawnLabel[] Labels)[] P1mLabels =
+        [
+            (MainWorkRowUnderStash, [new("main", 266, 316.8)]),
+        ];
+
         // ---- The left panel (P0, P1, P1m, P0s). ----
 
         /// <summary>
@@ -320,6 +351,9 @@ public static partial class Phase5Expectations
 
         /// <summary>9.2 step 6: the status bar and its tooltip after the automatic stash's checkout of Describe the app.</summary>
         public const string ChangesInAutoStash = "Your changes are in the stash \"Auto stash before checking out f39ea2d\".";
+
+        /// <summary>The widest the status bar's operation text is laid out (<c>MaxWidth</c>, PD14).</summary>
+        public const double StatusTextMaxWidth = 520;
 
         public const string CheckedOutMain = "Checked out main";
 
