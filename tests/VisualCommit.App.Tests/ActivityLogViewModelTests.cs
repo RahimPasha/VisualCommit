@@ -235,6 +235,38 @@ public class ActivityLogViewModelTests
     }
 
     [Fact]
+    public void A_read_made_in_a_folder_the_worktree_was_opened_from_is_its_read_whatever_path_git_reports_for_it()
+    {
+        // Opened through a link (2.3, AD11): the opening's first read runs in the folder as it was
+        // opened, git reports the working tree with the link resolved and the opening asks it again
+        // there. A second tab that opened the same worktree from another folder adds that folder.
+        const string opening = "git rev-parse --is-inside-work-tree --show-toplevel --absolute-git-dir --git-common-dir";
+        var (_, calls, log) = Make();
+        log.ShowReads = true;
+        var link = Tree("link");
+        var throughLink = Graph with { OpenedFolder = link };
+        var mapped = Path.Combine(Tree("mapped"), "src");
+        var fromMapped = Graph with { OpenedFolder = mapped };
+        calls.Add(Read(opening, 1, link));
+        calls.Add(Read("git rev-parse --git-common-dir", 2, Tree("graph")));
+        calls.Add(Read("git status under the link", 3, Path.Combine(link, "src")));
+        calls.Add(Read("git status linked", 4, Tree("linked")));
+        log.Show(throughLink);
+
+        Assert.Equal([opening, "git rev-parse --git-common-dir", "git status under the link"], log.Current!.Rows.Select(row => row.AutomationName));
+
+        calls.Add(Read("git status mapped", 5, mapped));
+        Assert.Equal(3, log.Current.Rows.Count);
+        log.Show(Other);
+        log.Show(fromMapped);
+        Assert.Equal([opening, "git rev-parse --git-common-dir", "git status under the link", "git status mapped"], log.Current.Rows.Select(row => row.AutomationName));
+        log.Show(throughLink);
+        Assert.Equal([opening, "git rev-parse --git-common-dir", "git status under the link", "git status mapped"], log.Current.Rows.Select(row => row.AutomationName));
+        log.Show(Other);
+        Assert.Empty(log.Current.Rows);
+    }
+
+    [Fact]
     public void A_burst_of_reads_takes_no_operation_call_away_and_old_reads_leave_the_list()
     {
         var operations = new OperationLog();

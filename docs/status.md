@@ -233,13 +233,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The second wave and the lead's follow-ups are merged (`fe34b62`): its full run passed 3,042 of
-3,046, the four failures 10-second waits that ran out under the run's own load (the default wait
-is 30 s since `5bdd1de`). Now the third wave (WP8, step 23): the report's scripted checks part by
-part, each written, run, its pictures looked at, reviewed and fixed, in three lanes of worktrees
-`.claude/worktrees/p5-checks-<part>` (branches `wip/p5-checks-<part>`): U16 to U19 then B, U20 to
-U23 then F, A then P. Then merge each, one full run, CI; then WP9 (the real-window pass for the RW
-checks, step 24) and step 25's review.
+The third wave (WP8, step 23) is merged but for part B: parts U (U16 to U19 and U20 to U23, the
+Phase5Undo project), A, F and P (`c29cd52`, `4e00bab`, `dfd147e`), each written, run, its pictures
+looked at, reviewed and fixed; the Phase5 project passed 79 of 79 on `dfd147e`. Part B is in its
+fix stage on `wip/p5-checks-B`; at its merge, its expectations take part A's wider backups-list
+columns (BD4: the time column 136 px). CI run 38847538648 on `c29cd52` found an app defect on
+macOS: a repository opened through a folder link loses its opening read from the activity log (the
+attribution compares paths as text; A2's `Show reads`); being fixed on `wip/p5-linkreads`. Then:
+merge both, one full default run, CI; then WP9 (step 24: the real-window pass for the RW checks,
+written and built, run only at the gate), step 22's remaining earlier-phase changes, and step
+25's review (with the undo recording's cost, Notes).
 
 ### Notes for whoever resumes
 

@@ -243,8 +243,18 @@ public sealed partial class ShellDriver
             toggle is null ? null : (toggle.Foreground as ISolidColorBrush)?.Color);
     }
 
-    /// <summary>The centre of the name of the left panel's row at <paramref name="path"/>, in the window: where the pointer rests for the name's tooltip (FD13), off the row's toggle.</summary>
-    public Point RefRowNamePoint(params string[] path) => BoundsOf(Named<TextBlock>(RefRowButton(path), "RefName")).Center;
+    /// <summary>
+    /// The centre of the name of the left panel's row at <paramref name="path"/>, in the window:
+    /// where the pointer rests for the name's tooltip (FD13), off the row's toggle. It is the
+    /// centre of the name's text as laid out, not of its text block, which stretches to the row's
+    /// toggles and counts: only the text itself is hit by the pointer there.
+    /// </summary>
+    public Point RefRowNamePoint(params string[] path)
+    {
+        var name = Named<TextBlock>(RefRowButton(path), "RefName");
+        var bounds = BoundsOf(name);
+        return new Point(bounds.X + (Math.Min(name.TextLayout.Width, bounds.Width) / 2), bounds.Center.Y);
+    }
 
     /// <summary>The laid-out row button of the left panel's row at <paramref name="path"/>.</summary>
     private Button RefRowButton(string[] path)

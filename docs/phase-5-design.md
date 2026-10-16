@@ -356,8 +356,10 @@ log file (operations.md sections 3 and 4). Phase 5 changes:
   gains `Sequence`. Both sequences come from one session-wide counter (`Interlocked`), taken when the
   operation or call **starts**, so the panel orders rows by start whatever the times say (the
   harnesses freeze them) and whenever the panel was opened. A read belongs to the worktree whose
-  working tree holds the call's `WorkingDirectory` (the first `rev-parse` of `OpenAsync` can run in a
-  subfolder).
+  working tree, or the folder a tab opened it from, holds the call's `WorkingDirectory` (the first
+  `rev-parse` of `OpenAsync` runs in the folder as opened: a subfolder, or a path through a link,
+  which git's `--show-toplevel` resolves; `IGitRepository.OpenedFolder` keeps it, found by CI's
+  macOS run 38847538648, `15a252f`).
 - **More of each operation.** `OperationRecord` gains `IsWarning`, `Kind` (Local or Network),
   `IsBackground` and `Notes` (a list of strings), filled by `OperationQueue.Record`, and
   `FailureSummary`, which the queue cannot know (the error dialog's summary is chosen after the

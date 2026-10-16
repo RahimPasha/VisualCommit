@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -485,6 +486,94 @@ public class ActivityLogViewTests
         app.Session.Shell.ActivateTabCommand.Execute(app.Session.Shell.Tabs[0]);
         app.Settle();
         Assert.Equal(["Push main", "git push --progress origin main"], app.ActivityLog().Rows.Select(row => row.AutomationName));
+    }
+
+    [AvaloniaFact]
+    public async Task A_repository_opened_through_a_link_shows_its_openings_reads_under_Show_reads()
+    {
+        // A folder reached through a symbolic link or a junction (macOS's temporary folder is one:
+        // /var leads to /private/var; CI run 38847538648): the opening's first read runs in the
+        // folder as it was opened, while git reports the working tree with the link resolved. That
+        // read is still the worktree's (2.3, AD11 as ruled in D183), whether the link leads to the
+        // working tree or the tab opened a folder inside it.
+        using var repo = await Scenarios.HistoryAsync();
+        using var other = await Scenarios.HistoryAsync();
+        using var links = new TempDirectory("links");
+        Directory.CreateDirectory(Path.Combine(other.Path, "sub"));
+        var top = links.Combine("top");
+        var otherLink = links.Combine("other");
+        var sub = Path.Combine(otherLink, "sub");
+        LinkFolder(top, repo.Path);
+        LinkFolder(otherLink, other.Path);
+        try
+        {
+            using var data = new TempDirectory("data");
+            using var app = ShellDriver.StartWithTabs(data.Path, [top, sub]);
+            await app.WaitUntilReadyAsync();
+            var first = await app.WaitForRepositoryAsync();
+            Assert.False(
+                WorktreeKey.Comparer.Equals(top, first.Path),
+                $"Git reported the working tree as the link {top}: the test needs a link git resolves.");
+            Assert.Contains(app.GitCalls(), call => call.CommandText == OpeningRevParse && call.OperationId is null && WorktreeKey.Comparer.Equals(call.WorkingDirectory, top));
+            app.ClickActivityLogToggle();
+            app.Click(app.FindByAutomationId("ActivityLogShowReads"));
+            app.Settle();
+
+            Assert.Equal([OpeningRevParse, CommonDirRevParse], TopLevelNames(app).Take(2));
+
+            app.Session.Shell.ActivateTabCommand.Execute(app.Session.Shell.Tabs[1]);
+            var second = await app.WaitForRepositoryAsync();
+            Assert.False(
+                WorktreeKey.Comparer.Equals(otherLink, second.Path),
+                $"Git reported the working tree as the link {otherLink}: the test needs a link git resolves.");
+            Assert.Contains(app.GitCalls(), call => call.CommandText == OpeningRevParse && call.OperationId is null && WorktreeKey.Comparer.Equals(call.WorkingDirectory, sub));
+            Assert.True(app.ActivityLog().ShowReads, "Show reads is not checked on the second tab.");
+            Assert.Equal([OpeningRevParse, CommonDirRevParse], TopLevelNames(app).Take(2));
+        }
+        finally
+        {
+            Directory.Delete(top);
+            Directory.Delete(otherLink);
+        }
+    }
+
+    private const string OpeningRevParse = "git rev-parse --is-inside-work-tree --show-toplevel --absolute-git-dir --git-common-dir";
+
+    private const string CommonDirRevParse = "git rev-parse --git-common-dir";
+
+    /// <summary>The names of the log's top-level rows, top to bottom.</summary>
+    private static List<string> TopLevelNames(ShellDriver app) =>
+        [.. app.ActivityLog().Rows.Where(row => row.Depth == 0).Select(row => row.AutomationName)];
+
+    /// <summary>
+    /// Makes <paramref name="link"/> lead to the folder <paramref name="target"/>: a junction on
+    /// Windows, which needs no privilege there (a symbolic link needs Developer Mode or an
+    /// administrator), a symbolic link elsewhere. <see cref="Directory.Delete(string)"/> removes
+    /// either without touching the target.
+    /// </summary>
+    private static void LinkFolder(string link, string target)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateSymbolicLink(link, target);
+            return;
+        }
+
+        var start = new ProcessStartInfo("cmd.exe")
+        {
+            ArgumentList = { "/d", "/c", "mklink", "/J", link, target },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("cmd.exe did not start.");
+
+        // A line on each at most: neither pipe can fill while the other is read.
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0 && Directory.Exists(link), $"mklink /J {link} {target} failed ({process.ExitCode}): {output}{error}");
     }
 
     /// <summary>The row of the log that has the keyboard focus, or null.</summary>
