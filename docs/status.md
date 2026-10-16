@@ -233,15 +233,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 26, the visual test gate, on the commit `4281f4c` (step 25's fixes merged; the last full run,
-on `539f113`, the same code, passed 3,227 of 3,227 in 49 min 17 s). In order: `dotnet test` at the
-root of the main checkout (the scripted pictures under `artifacts/visual/phase-*/scripted/`); then,
-after telling the owner and with the desktop unlocked, the real-window pass (`dotnet test --project
-tests/VisualCommit.RealWindowTests -c Release`, about 25 minutes); then the inspection of every
-picture: phase 5's own in full, the earlier ones through `scripts/compare-pictures.py` against
-`D:/Projects/Personal/gate5-reference/` (design 15.7), the 25 that vary by nature in full; the
-report's Scripted and Real window columns, "Run", "Found by the gate"; the pictures' list
-`docs/test-reports/phase-5-pictures.sha256`; then the closing steps.
+Step 26, the gate, on `4281f4c`: both passes have run on it on 2026-10-16 on the Windows machine.
+`dotnet test` at the root passed 3,227 of 3,227 in 45 min 37 s (Git 2.36.0.windows.1, .NET SDK
+10.0.303); the real-window pass passed 59 of 59 in 26 min 26 s (200% scaling; Q1 1,749 ms of its
+2,000, on a laptop warm from the run before it; phase 4's gate measured 937 ms rested). CI run
+38909397699 on `4281f4c`: all five jobs green with 3,227 tests (Windows' Test step 22 min 54 s,
+macOS's 20 min 51 s). Now: the inspection of all 1,080 pictures, by Opus inspectors (phase 5's in
+full; the earlier ones against `D:/Projects/Personal/gate5-reference/` with
+`scripts/compare-pictures.py`'s difference pictures in `D:/Projects/Personal/gate5-inspection/`).
+The list `docs/test-reports/phase-5-pictures.sha256` is written (1,080 pictures) and is committed
+once the inspection passes. Then: the report's results, then the closing steps 28 to 33.
 
 ### Notes for whoever resumes
 
