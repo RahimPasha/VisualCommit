@@ -32,7 +32,7 @@ public sealed partial class Phase5ChecksP
         AssertUndoRedo(app, UndoRedoButtons.Nothing);
 
         // Step 2: Other edits, not on main: no stash, git refuses the detached checkout (TP1d).
-        var menu = RightClickCommit(app, PartP.OtherEditsRow);
+        var menu = RightClickCommit(app, PartP.OtherEditsRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "4f5e821 Other edits", PartP.CheckOutThisCommitItem, first: true);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
@@ -56,7 +56,7 @@ public sealed partial class Phase5ChecksP
         await CloseDialogAsync(app);
 
         // Step 3: HEAD's own commit: git's plain detached checkout, no stash, the change carried.
-        menu = RightClickCommit(app, PartP.MainWorkRow);
+        menu = RightClickCommit(app, PartP.MainWorkRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "41f8398 Main work", PartP.CheckOutThisCommitItem, first: true);
         mark = app.LogMark();
         calls = app.GitCalls().Count;
@@ -100,7 +100,7 @@ public sealed partial class Phase5ChecksP
 
         // Step 4: on a clean tree (an ignored file is no change): refused, nothing to stash (TP6).
         AssertGraph(app, PartP.P0, PartP.Lanes, showsDate: true);
-        var menu = RightClickCommit(app, PartP.AddGuideRow);
+        var menu = RightClickCommit(app, PartP.AddGuideRow, belowWorkingRow: false);
         AssertItemEnabled(menu, "73e0bab Add the guide", PartP.CheckOutThisCommitItem, first: true);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
@@ -132,9 +132,10 @@ public sealed partial class Phase5ChecksP
         var before = await ExactStateAsync(repo);
         AssertGraph(app, PartP.P0, PartP.Lanes, PartP.Working, showsDate: true);
         Assert.Equal(PartP.P25Status, await StatusAsync(repo));
+        AssertUndoRedo(app, UndoRedoButtons.Nothing);
 
         // Step 6: stashed, refused, popped back: everything as before.
-        menu = RightClickCommit(app, PartP.AddGuideRow);
+        menu = RightClickCommit(app, PartP.AddGuideRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "73e0bab Add the guide", PartP.CheckOutThisCommitItem, first: true);
         mark = app.LogMark();
         calls = app.GitCalls().Count;
@@ -224,6 +225,7 @@ public sealed partial class Phase5ChecksP
         await WaitForStatusReadAsync(app, 1, 0, mark);
         AssertGraph(app, PartP.P0, PartP.Lanes, PartP.Working, showsDate: true);
         Assert.Equal(["M  README.md"], await PorcelainAsync(repo));
+        AssertUndoRedo(app, UndoRedoButtons.Nothing);
 
         // Step 6: the merge again (TP9: the staged form).
         calls = await MergeOtherAsync(app, repo);
@@ -303,6 +305,7 @@ public sealed partial class Phase5ChecksP
         mark = app.LogMark();
         repo.WriteFile("todo.txt", PartP.TodoMine);
         await WaitForStatusReadAsync(app, 0, 2, mark);
+        AssertUndoRedo(app, UndoRedoButtons.Nothing);
 
         // Step 11: the toolbar's Pop refused before git: two paths in the way.
         AssertToolbarButton(app, "PopButton", null);
@@ -342,7 +345,7 @@ public sealed partial class Phase5ChecksP
     /// <summary>P27 steps 3 and 7: Other edits' menu, "Cherry-pick onto main" (enabled), the operation failed. Returns the git calls' count before the click.</summary>
     private static async Task<int> CherryPickOtherEditsAsync(ShellDriver app, TempRepo repo)
     {
-        var menu = RightClickCommit(app, PartP.OtherEditsRow);
+        var menu = RightClickCommit(app, PartP.OtherEditsRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "4f5e821 Other edits", PartP.CherryPickItem);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
@@ -354,7 +357,7 @@ public sealed partial class Phase5ChecksP
     /// <summary>P27 steps 4 and 8: Describe the app's menu, "Revert this commit" (enabled), the operation failed. Returns the git calls' count before the click.</summary>
     private static async Task<int> RevertDescribeAsync(ShellDriver app, TempRepo repo)
     {
-        var menu = RightClickCommit(app, PartP.DescribeRow);
+        var menu = RightClickCommit(app, PartP.DescribeRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "f39ea2d Describe the app", PartP.RevertItem);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;

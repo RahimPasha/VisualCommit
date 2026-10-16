@@ -31,8 +31,8 @@ public sealed partial class Phase5ChecksP
     /// branches 2, Remotes 0, Pull requests 0, Tags 1, Stashes <paramref name="stashes"/>), the
     /// local branches <c>main</c> and <c>other</c> in that order, the one HEAD is on
     /// (<paramref name="head"/>, null while HEAD is detached) drawn in the accent colour and the
-    /// other in the primary colour, and, where the section shows its rows, the tag <c>v1.1</c> and
-    /// the stashes <paramref name="stashRows"/>.
+    /// other in the primary colour, and the sections Tags and Stashes open (as every step leaves
+    /// them) with the tag <c>v1.1</c> and the stashes <paramref name="stashRows"/>.
     /// </summary>
     private static async Task AssertLeftPanelAsync(ShellDriver app, int stashes, string? head, params string[] stashRows)
     {
@@ -53,15 +53,10 @@ public sealed partial class Phase5ChecksP
             Assert.True(colour == expected, $"Local branches › {branch} is drawn in {colour}, expected {expected}.");
         }
 
-        if (SectionOf(rows, "Tags").IsOpen)
-        {
-            Assert.Equal(PartP.Tags, ItemsOf(rows, RefItemKind.Tag).Select(row => row.Text));
-        }
-
-        if (SectionOf(rows, "Stashes").IsOpen)
-        {
-            Assert.Equal(stashRows, ItemsOf(rows, RefItemKind.Stash).Select(row => row.Text));
-        }
+        Assert.True(SectionOf(rows, "Tags").IsOpen, "The left panel's section Tags is closed.");
+        Assert.Equal(PartP.Tags, ItemsOf(rows, RefItemKind.Tag).Select(row => row.Text));
+        Assert.True(SectionOf(rows, "Stashes").IsOpen, "The left panel's section Stashes is closed.");
+        Assert.Equal(stashRows, ItemsOf(rows, RefItemKind.Stash).Select(row => row.Text));
     }
 
     private static IEnumerable<RefItemRow> ItemsOf(IEnumerable<RefListRow> rows, RefItemKind kind) =>
@@ -126,12 +121,33 @@ public sealed partial class Phase5ChecksP
 
     // ---- Menus ----
 
-    /// <summary>Right-clicks commit row <paramref name="row"/> in its Message column and returns the menu it opens.</summary>
-    private static MenuSnapshot RightClickCommit(ShellDriver app, int row)
+    /// <summary>
+    /// Right-clicks commit row <paramref name="row"/> in its Message column and returns the menu it
+    /// opens. The point the bounds give is first asserted against the one the report states (±2,
+    /// the conventions' rule): <c>(468, 129 + 26 r)</c>, or <c>(468, 155 + 26 r)</c> while the
+    /// working-changes row shows (<paramref name="belowWorkingRow"/>).
+    /// </summary>
+    private static MenuSnapshot RightClickCommit(ShellDriver app, int row, bool belowWorkingRow)
     {
-        app.RightClick(app.GraphRowPoint(row));
+        var point = app.GraphRowPoint(row);
+        AssertNear(PartP.RowPoint(row, belowWorkingRow), point, string.Create(CultureInfo.InvariantCulture, $"Commit row {row}'s Message column"));
+        app.RightClick(point);
         return app.Menu();
     }
+
+    /// <summary>Clicks the working-changes row in its Message column, at the point the report states, (468, 129), ±2.</summary>
+    private static void ClickWorkingRow(ShellDriver app)
+    {
+        var point = app.WorkingRowPoint();
+        AssertNear(PartP.WorkingRowPoint, point, "The working-changes row's Message column");
+        app.Click(point);
+    }
+
+    /// <summary>A point the bounds give against the one the report states, ±2 (the conventions' rule).</summary>
+    private static void AssertNear(Point reported, Point actual, string what) =>
+        Assert.True(
+            Math.Abs(reported.X - actual.X) <= 2 && Math.Abs(reported.Y - actual.Y) <= 2,
+            string.Create(CultureInfo.InvariantCulture, $"{what} is at {actual}; the report says {reported} (±2)."));
 
     /// <summary>Right-clicks a left-panel row, found by its path, and returns the menu it opens.</summary>
     private static async Task<MenuSnapshot> RightClickRefAsync(ShellDriver app, params string[] path)

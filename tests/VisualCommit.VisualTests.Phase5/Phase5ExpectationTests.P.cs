@@ -1,4 +1,6 @@
+using Avalonia;
 using VisualCommit.Core.Graph;
+using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.VisualTests.Phase5.Phase5Expectations;
 
@@ -79,6 +81,27 @@ public sealed class Phase5ExpectationTestsP
         Assert.True(stash.Stash);
         Assert.Equal((PartP.ExperimentListed, PartP.ExperimentStashSha[..7], "2026-01-01 12:07"), (stash.Message, stash.ShortSha, stash.Date));
         Assert.Equal(["stash@{0}"], stash.Labels);
+    }
+
+    /// <summary>
+    /// The points the checks click are the report's: the working-changes row at (468, 129); below
+    /// it Other files (468, 181), Describe the app (468, 233), Other edits (468, 207), Main work
+    /// (468, 155) and Add the guide (468, 285); without it Add the guide (468, 259). The x is the
+    /// Message column of two lanes, 30 in.
+    /// </summary>
+    [Fact]
+    public void The_click_points_are_the_reports()
+    {
+        Assert.Equal(PartP.RowPointX, WindowLayout.MessageColumnX(PartP.Lanes) + WindowLayout.MessageClickInset);
+        Assert.Equal(new Point(468, 129), PartP.WorkingRowPoint);
+        Assert.Equal(new Point(468, 181), PartP.RowPoint(PartP.OtherFilesRow, belowWorkingRow: true));
+        Assert.Equal(new Point(468, 233), PartP.RowPoint(PartP.DescribeRow, belowWorkingRow: true));
+        Assert.Equal(new Point(468, 207), PartP.RowPoint(PartP.OtherEditsRow, belowWorkingRow: true));
+        Assert.Equal(new Point(468, 155), PartP.RowPoint(PartP.MainWorkRow, belowWorkingRow: true));
+        Assert.Equal(new Point(468, 285), PartP.RowPoint(PartP.AddGuideRow, belowWorkingRow: true));
+        Assert.Equal(new Point(468, 259), PartP.RowPoint(PartP.AddGuideRow, belowWorkingRow: false));
+        Assert.Equal(WindowLayout.RowCentreY(1 + PartP.AddGuideRow), PartP.RowPoint(PartP.AddGuideRow, belowWorkingRow: true).Y);
+        Assert.Equal(WindowLayout.RowCentreY(PartP.AddGuideRow), PartP.RowPoint(PartP.AddGuideRow, belowWorkingRow: false).Y);
     }
 
     /// <summary>A stash on top draws its line dashed out of its ring and into its base's node, both in lane 0.</summary>

@@ -3,6 +3,7 @@
 // P's writer edits this file; its members live in Phase5Expectations.PartP. Compiled by the
 // real-window pass too: see Phase5Expectations.Common.cs for what may be used here (no type of
 // the walk-through's own files, so the error dialogs are given as their parts).
+using Avalonia;
 using VisualCommit.Core.Graph;
 
 namespace VisualCommit.VisualTests.Phase5;
@@ -60,6 +61,19 @@ public static partial class Phase5Expectations
 
         /// <summary>Every graph of part P has two lanes (Graph column 48, the Message column at x 438).</summary>
         public const int Lanes = 2;
+
+        /// <summary>The x a row is clicked at "in its Message column": 30 into the Message column at x 438.</summary>
+        public const double RowPointX = 468;
+
+        /// <summary>
+        /// Where commit row <paramref name="row"/> is clicked, as the conventions' Rows give it: its
+        /// centre y 129 + 26 r without the working-changes row, y 155 + 26 r while it shows
+        /// (<paramref name="belowWorkingRow"/>); for example (468, 181), (468, 259) and (468, 285).
+        /// </summary>
+        public static Point RowPoint(int row, bool belowWorkingRow) => new(RowPointX, (belowWorkingRow ? 155 : 129) + (26 * row));
+
+        /// <summary>Where the working-changes row (display row 0) is clicked: (468, 129).</summary>
+        public static readonly Point WorkingRowPoint = new(RowPointX, 129);
 
         /// <summary>The files of "protect" on <c>main</c> and of its ignored settings (Scenarios.ProtectFiles).</summary>
         public const string ReadmeMainWork = "# Protect\n\nAn app to protect.\n\nMain work.\n";

@@ -73,7 +73,7 @@ public sealed partial class Phase5ChecksP : Phase5Checks
         await CloseDialogAsync(app);
 
         // Step 3: "Create branch here…" on Other files with "Check out the new branch" ticked (TP2).
-        var menu = RightClickCommit(app, PartP.OtherFilesRow);
+        var menu = RightClickCommit(app, PartP.OtherFilesRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "19a9044 Other files", PartP.CreateBranchHereItem);
         await AssertRowSelectedAsync(app, PartP.OtherFilesRow, "Other files");
         app.ClickMenuItem(PartP.CreateBranchHereItem);
@@ -115,6 +115,7 @@ public sealed partial class Phase5ChecksP : Phase5Checks
         await WaitForStatusReadAsync(app, 0, 3, mark);
         Assert.True(Graph(app).ShowsWorkingRow, "The working-changes row is gone.");
         Assert.Equal([" M docs/guide.txt", " M src/app.txt", " M src/lib.txt"], await PorcelainAsync(repo));
+        AssertUndoRedo(app, UndoRedoButtons.Nothing);
 
         // Step 5: the branch menu's "Check out other" (TP3: three conflicts).
         var (selectedRow, selectedRefs) = (Repo(app).SelectedIndex, SelectedRefRows(app));
@@ -195,6 +196,7 @@ public sealed partial class Phase5ChecksP : Phase5Checks
         File.Delete(Path.Combine(repo.Path, "notes"));
         repo.WriteFile("notes/today.txt", PartP.Today);
         await WaitForStatusReadAsync(app, 0, 1, mark, status => status.IsUntracked("notes/today.txt") && !status.IsUntracked("notes"));
+        AssertUndoRedo(app, UndoRedoButtons.Nothing);
 
         // Step 8: a double-click on Local branches › other (TP5: the folder in the way).
         mark = app.LogMark();

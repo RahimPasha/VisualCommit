@@ -42,7 +42,7 @@ public sealed partial class Phase5ChecksP
         AssertNoClippedText(app);
 
         // Step 2: "Check out this commit" on Describe the app: stashed, then checked out, no question.
-        var calls = await CheckOutDescribeAsync(app, repo, recordTexts: true);
+        var calls = await CheckOutDescribeAsync(app, repo);
         shot = Shot(app, "p25b-auto-stashed");
         await AssertAutoStashedAsync(app, repo, calls, shot);
 
@@ -118,7 +118,7 @@ public sealed partial class Phase5ChecksP
 
         // Step 5: steps 1 and 2 again, without their pictures.
         await SelectWorkingRowAsync(app, "Staged files (1)");
-        var calls = await CheckOutDescribeAsync(app, repo, recordTexts: false);
+        var calls = await CheckOutDescribeAsync(app, repo);
         await AssertAutoStashedAsync(app, repo, calls, picture: null);
 
         // Step 6: Undo: switched back to main and the stash popped with its index.
@@ -145,7 +145,10 @@ public sealed partial class Phase5ChecksP
         AssertUndoRedo(app, UndoRedoButtons.CanUndo(DescribeCheckout));
         await AssertDetachedAtAsync(repo, PartP.DescribeSha);
         Assert.Equal([$"stash@{{0}}: {PartP.AutoStashListed}"], await StashListAsync(repo));
+        Assert.Equal(PartP.AutoStashSha, await RevParseAsync(repo, "stash@{0}"));
         await AssertStashCommitAsync(repo, PartP.AutoStashSha, PartP.AutoStashListed, PartP.MainWorkSha, PartP.AutoStashIndexSha, PartP.AutoStashUntrackedSha);
+        Assert.Equal(["M\tsrc/app.txt", "M\tsrc/lib.txt"], await GitLinesAsync(repo, "diff-tree", "-r", "--name-status", "stash@{0}^1", "stash@{0}"));
+        Assert.Equal(["scratch.txt"], await GitLinesAsync(repo, "ls-tree", "-r", "--name-only", "stash@{0}^3"));
         Assert.Equal(PartP.CleanStatus, await StatusAsync(repo));
         Assert.Equal(PartP.SettingsLocal, WorkingFile(repo, "settings.local.json"));
         await AssertNoBackupAsync(repo);
@@ -164,34 +167,30 @@ public sealed partial class Phase5ChecksP
         AssertNoClippedText(app);
     }
 
-    /// <summary>Clicks the working-changes row and waits for the stage panel with P25's three unstaged files and <paramref name="stagedTitle"/>.</summary>
+    /// <summary>Clicks the working-changes row (at the report's point) and waits for the stage panel with P25's three unstaged files and <paramref name="stagedTitle"/>.</summary>
     private static async Task SelectWorkingRowAsync(ShellDriver app, string stagedTitle)
     {
-        app.Click(app.WorkingRowPoint());
+        ClickWorkingRow(app);
         await WaitForStagePanelAsync(app, "Unstaged files (3)", stagedTitle);
     }
 
     /// <summary>
-    /// P25 step 2's input: "Check out this commit" in Describe the app's menu (first and enabled),
-    /// then the operation "Check out f39ea2d" succeeded with the automatic stash's result. With
-    /// <paramref name="recordTexts"/>, the status bar's texts while it ran are asserted too:
-    /// <c>Stashing your changes…</c>, <c>Checking out f39ea2d…</c>, then the result. Returns the git
-    /// calls' count before the click.
+    /// P25 step 2's input (and step 5's): "Check out this commit" in Describe the app's menu (first
+    /// and enabled; the row below the working-changes row, (468, 233)), then the operation "Check
+    /// out f39ea2d" succeeded with the automatic stash's result, the status bar having shown
+    /// <c>Stashing your changes…</c>, <c>Checking out f39ea2d…</c>, then the result. Returns the
+    /// git calls' count before the click.
     /// </summary>
-    private static async Task<int> CheckOutDescribeAsync(ShellDriver app, TempRepo repo, bool recordTexts)
+    private static async Task<int> CheckOutDescribeAsync(ShellDriver app, TempRepo repo)
     {
-        var menu = RightClickCommit(app, PartP.DescribeRow);
+        var menu = RightClickCommit(app, PartP.DescribeRow, belowWorkingRow: true);
         AssertItemEnabled(menu, "f39ea2d Describe the app", PartP.CheckOutThisCommitItem, first: true);
         var mark = app.LogMark();
         var calls = app.GitCalls().Count;
         using var texts = app.RecordStatusTexts();
         app.ClickMenuItem(PartP.CheckOutThisCommitItem);
         await WaitForSuccessAsync(app, repo, PartP.CheckOut(PartP.DescribeSha), mark, PartP.ChangesInAutoStash);
-        if (recordTexts)
-        {
-            Assert.Equal([PartP.StashingYourChanges, PartP.CheckingOut("f39ea2d"), PartP.ChangesInAutoStash], texts.Texts);
-        }
-
+        Assert.Equal([PartP.StashingYourChanges, PartP.CheckingOut("f39ea2d"), PartP.ChangesInAutoStash], texts.Texts);
         return calls;
     }
 
