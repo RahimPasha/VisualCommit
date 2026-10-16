@@ -128,10 +128,12 @@ public sealed partial class Phase5ChecksA
         AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false, inView: false);
         Assert.Equal(checkout, IndexOf(log, PartA.CheckoutTitle));
 
-        // The switch's box has scrolled the checkout's row and its summary out of the list's view (AD15).
+        // The switch's box has scrolled the checkout's row out of the list's view (AD15); its
+        // summary is the first row whole in view.
         AssertOperationRow(app, log.Rows[checkout], PartA.IconClose, PartA.CheckoutTitle, PartA.CheckoutFailed, palette.Danger, open: true, inView: false);
         var under = Under(log, checkout);
-        AssertLineRow(app, under[0], ActivityLogRowKind.FailureSummary, PartA.CheckoutSummary, inView: false);
+        AssertLineRow(app, under[0], ActivityLogRowKind.FailureSummary, PartA.CheckoutSummary);
+        Assert.Equal(under[0].Index, log.Rows.First(line => line.IsInView).Index);
         Assert.DoesNotContain(under, line => line.Kind == ActivityLogRowKind.Note);
         var checkoutCalls = AssertOperationCalls(app, log, PartA.CheckoutTitle);
         Assert.Contains(PartA.CheckoutCommand, checkoutCalls.Select(call => call.CommandText));
@@ -397,13 +399,13 @@ public sealed partial class Phase5ChecksA
         Assert.All(TopLevel(log).Take(3), top => Assert.False(top.IsOpen, $"The row \"{top.AutomationName}\" is open."));
         var abort = IndexOf(log, PartA.AbortTitle);
 
-        // The row lies just above the list's top, its note the first row in view (AD15).
-        AssertOperationRow(app, log.Rows[abort], PartA.IconCheck, PartA.AbortTitle, PartA.Aborted, palette.TextSecondary, open: true, inView: false);
+        // The list at its end (AD15) shows the row whole at its top, its note under it.
+        AssertOperationRow(app, log.Rows[abort], PartA.IconCheck, PartA.AbortTitle, PartA.Aborted, palette.TextSecondary, open: true);
         under = Under(log, abort);
         Assert.DoesNotContain(under, line => line.Kind == ActivityLogRowKind.FailureSummary);
         Assert.Equal(ActivityLogRowKind.Note, under[0].Kind);
         AssertLineRow(app, under[0], ActivityLogRowKind.Note, PartA.AbortNote);
-        Assert.Equal(under[0].Index, log.Rows.First(line => line.IsInView).Index);
+        Assert.Equal(log.Rows[abort].Index, log.Rows.First(line => line.IsInView).Index);
         Assert.Single(under, line => line.Kind == ActivityLogRowKind.Note);
         Assert.Equal([PartA.AbortNote], Record(app, PartA.AbortTitle).Notes);
         var abortCalls = AssertOperationCalls(app, log, PartA.AbortTitle);
