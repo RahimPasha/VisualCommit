@@ -381,8 +381,8 @@ public class ShellDriverPhase5PagesTests
         Assert.Equal(("Backups", "Backups", null), (backups.Title, backups.SourceLabel, backups.FooterBounds));
         var top = backups.Backups[0];
         Assert.Equal(("branch-20260101T122701000Z", "2026-01-01 12:27:01", "Deleted branch doomed", "44e646b", "Doomed work"), (top.Name, top.Time, top.Words, top.ShortSha, top.Subject));
-        Assert.Equal((268, 396), (top.TimeBounds!.Value.Left, top.TimeBounds.Value.Right));
-        Assert.Equal((404, 524), (top.WordsBounds!.Value.Left, top.WordsBounds.Value.Right));
+        Assert.Equal((268, 404), (top.TimeBounds!.Value.Left, top.TimeBounds.Value.Right));
+        Assert.Equal((412, 524), (top.WordsBounds!.Value.Left, top.WordsBounds.Value.Right));
         Assert.Equal((532, 692), (app.BackupWordsBounds(top.Name).Right + 8, top.CommitBounds!.Value.Left + 160));
         Assert.Equal(new Point(420, 501), app.BackupRowPoint("abort-20260101T120601000Z"));
         Assert.Equal("Backups", AutomationProperties.GetName(app.FindByAutomationId("Reflog")));

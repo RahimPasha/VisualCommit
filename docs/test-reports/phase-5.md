@@ -3311,6 +3311,15 @@ listed here as expected.
   refs/heads/feature/ff: Fast-forward`). The report said `git merge --ff-only
   refs/heads/feature/ff`, which is the drop menu's "Fast-forward main to feature/ff". U19's row
   now names the merge's command; U23, which merges "as in step 1", follows it.
+- **BD4, the backup row's time 136 and the words at least 112** (found by WP8, part A, A2 step 6):
+  the time column's 128 holds `2025-12-20 09:00:51` (125.4 px in Inter at 12.5) but not
+  `2025-12-20 09:00:44` (128.1 px), which was cut with "…" and no tooltip; the widest digit, 4,
+  makes any time at most 133.6 px. The app's column is 136 now (`ReflogView.axaml`), the words
+  keep at least 112 at 440, and `ShellDriverPhase5PagesTests` pins the new bounds. A2's step 6
+  also found that `LayoutAudit` reported a list's last row, which the list shows in part at its
+  edge, as cut when a page around the list ends there too; it now lets through what only the
+  list's view cuts (pinned by
+  `LayoutAuditTests.A_row_cut_at_a_lists_edge_is_let_through_also_where_a_page_around_the_list_ends_there`).
 
 ## How the expected git states were derived
 
@@ -3874,8 +3883,9 @@ HEAD's own commit, as design 9.1 does.
   the time 112, 8, the action (at least 140), 8, the commit 160 (short SHA 56 in the code font, 6,
   the subject), 8, the lost mark 20 (`IconAlert` 12, centred), 8. The time shows from a page width
   of 552, the selector from 432: at 440 the time is hidden and the action gets 148.
-- **BD4** (design 5.3). **The backup row's layout.** 8, the time 128 (`yyyy-MM-dd HH:mm:ss`), 8, the
-  words (at least 120), 8, the commit 160, 8; nothing is hidden at 440.
+- **BD4** (design 5.3). **The backup row's layout.** 8, the time 136 (`yyyy-MM-dd HH:mm:ss`, whole for
+  every time), 8, the words (at least 112), 8, the commit 160, 8; nothing is hidden at 440 (136 and
+  112 since the report's first commit: "Changed in this report after its first commit").
 - **BD5** (design 5.2). **The reflog's footer** (`ReflogFooter`) is a fixed line 26 high along the
   page's bottom, under the list, shown only when git skipped entries (so at 1100×700 the list ends
   at y 648).
