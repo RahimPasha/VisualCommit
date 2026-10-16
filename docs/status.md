@@ -157,7 +157,7 @@ Closing:
 - [x] 30. Handoff `docs/handoffs/phase-5.md`. ([phase-5](handoffs/phase-5.md), `632efda`.)
 - [x] 31. Cold-read check by a fresh agent; gaps fixed. (A fresh agent with only the repo, told that phase 5 is accepted and merged; it answered how to build, run and test the app and how to begin phase 6, and listed 26 gaps, fixed in `9fd2c46`; D186 came from it.)
 - [x] 32. `status.md`: links, CI, gate commit, waiting on the owner, state. (This commit.)
-- [ ] 33. Owner told what passed, what did not, and what needs a decision.
+- [x] 33. Owner told what passed, what did not, and what needs a decision. (2026-10-16, in the session's closing reply.)
 
 ### CI
 
