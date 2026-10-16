@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-12
+Last updated: 2026-10-16
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -14,7 +14,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 2. Diff and commit workflow | Done | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
 | 3. Branch, remote, stash and tag operations | Done | `phase/3-operations` | [phase-3](handoffs/phase-3.md) | [phase-3](test-reports/phase-3.md) |
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
-| 5. History, traceability and undo | In progress | `phase/5-history` | | [phase-5](test-reports/phase-5.md) (to be written) |
+| 5. History, traceability and undo | In progress | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Not started | `phase/6-multi-repo` | | |
 | 7. Hosting | Not started | `phase/7-hosting` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
@@ -149,9 +149,9 @@ Closing:
 - [x] 26. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed. Passed on `1b2e734` (2026-10-16): `dotnet test` 3,233 of 3,233 in 43 min 22 s; the real-window pass 59 of 59 in 24 min 57 s (run again rested after Q1 measured 2,613 ms on a hot laptop; alone, rested, Q1 is 1,147 ms); all 1,080 pictures inspected. The first run, on `4281f4c`, found five problems, fixed in `1b2e734`.
 - [x] 27. CI run of the gate's commit read, every job. Run [38931127856](https://github.com/RahimPasha/VisualCommit/actions/runs/38931127856) on `1b2e734`: all five jobs green, 3,233 tests; Windows' Test step 25 min 15 s, macOS's 16 min 13 s, Ubuntu's 3 min 26 s, the containers' about 4 min.
-- [ ] 28. `architecture.md` describes what is built.
-- [ ] 29. `plan.md`: anything not delivered moved, risks updated.
-- [ ] 30. Handoff `docs/handoffs/phase-5.md`.
+- [x] 28. `architecture.md` describes what is built. (`632efda`.)
+- [x] 29. `plan.md`: anything not delivered moved, risks updated. (`632efda`.)
+- [x] 30. Handoff `docs/handoffs/phase-5.md`. ([phase-5](handoffs/phase-5.md), `632efda`.)
 - [ ] 31. Cold-read check by a fresh agent; gaps fixed.
 - [ ] 32. `status.md`: links, CI, gate commit, waiting on the owner, state.
 - [ ] 33. Owner told what passed, what did not, and what needs a decision.
@@ -232,19 +232,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 26, the gate. Its first run, on `4281f4c` (2026-10-16): `dotnet test` passed 3,227 of 3,227 in
-45 min 37 s, the real-window pass 59 of 59 in 26 min 26 s (Q1 1,749 ms of 2,000, the laptop warm),
-CI run 38909397699 green in all five jobs. The inspection of all 1,080 pictures (twelve Opus
-inspectors; verdicts in `D:/Projects/Personal/gate5-inspection/run1-verdicts.json`, the run's
-picture list in `run1-pictures.sha256` there) passed every picture but 18 (15 scripted, 3 real-window), which showed: after an outside commit with
-the search open, the graph briefly showed the new rows with the old refs' labels (`f11f`); the
-search bar's disabled Previous and Next drawn as enabled (`VcIconButton` has no disabled style;
-`f10a`, `f11a`, `f11d`); seven earlier checks pictured the two-commit comparison still loading
-(phase 3's 11d, 11g, 12b, 24g; phase 4's a1g, a1h, b8a); a stray status-bar tooltip in phase 2's
-real-window 17c; the blame header's caption cut at 1100x700, which the report does not say
-(`b7b`, `b7c`, `b7e`, `b7f`). Being fixed on `wip/p5-gatefix`. Then the gate runs again on the new
-commit: both passes, and the inspection of every picture whose bytes changed since run 1 (the rest
-carry their verdict over); the report's results and "Found by the gate" record both runs.
+The gate passed on `1b2e734` (step 26); the report's results, `architecture.md`, `plan.md` and the
+handoff are written (`632efda`). Now closing step 5, the cold-read check (step 31): a fresh agent
+with only the repo, told that phase 5 is accepted and merged, explains how to build, run and test the
+app and how it would begin phase 6; every gap it hits in the docs is fixed. Then step 32: phase 5 set
+to "Awaiting acceptance" with the links, the CI run of the gate commit and what waits on the owner;
+then step 33, the owner told.
 
 ### Notes for whoever resumes
 
