@@ -3,7 +3,6 @@
 // question before a step that changes a remote, and git's state read back with plain git. In a
 // nested class of their own, U20To23, so that the first half's helpers (U16 to U19) and these never
 // clash in the one class Phase5ChecksU; the checks call them through the alias Steps.
-using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
@@ -337,8 +336,5 @@ public sealed partial class Phase5ChecksU : Phase5Checks
                 bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= size.Width && bounds.Bottom <= size.Height,
                 $"The tooltip at {bounds} is not inside the {size.Width}x{size.Height} window.");
         }
-
-        /// <summary>The point where the toolbar's Undo is (its centre).</summary>
-        public static Point UndoButtonCentre(ShellDriver app) => app.BoundsOf(app.FindByAutomationId(ShellDriver.UndoButtonId)).Center;
     }
 }
