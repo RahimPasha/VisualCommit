@@ -36,6 +36,7 @@ public partial class ActivityLogView : UserControl
     private IDisposable? _escape;
     private bool _keepAtEnd = true;
     private bool _restoring;
+    private bool _scrollingToRow;
 
     public ActivityLogView()
     {
@@ -178,6 +179,12 @@ public partial class ActivityLogView : UserControl
     /// </summary>
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
+        if (_scrollingToRow)
+        {
+            // FocusRow decides once the list is at the row.
+            return;
+        }
+
         if (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0)
         {
             if (_keepAtEnd)
@@ -194,6 +201,12 @@ public partial class ActivityLogView : UserControl
             _keepAtEnd = IsAtEnd();
         }
 
+        RememberScroll();
+    }
+
+    /// <summary>The worktree keeps where its list is (2.1), unless the list is being put back there.</summary>
+    private void RememberScroll()
+    {
         if (_shown is { } shown && !_restoring)
         {
             shown.IsScrolledToEnd = _keepAtEnd;
@@ -239,7 +252,7 @@ public partial class ActivityLogView : UserControl
             return;
         }
 
-        panel.Focus(NavigationMethod.Pointer);
+        FocusPanel(panel, NavigationMethod.Pointer);
         if (row is ActivityLogOperationRow or ActivityLogCallRow)
         {
             viewModel.ToggleRow(row);
@@ -330,7 +343,12 @@ public partial class ActivityLogView : UserControl
         }
     }
 
-    /// <summary>Scrolls <paramref name="row"/> into view and gives its panel the focus, once the list has made it.</summary>
+    /// <summary>
+    /// Scrolls <paramref name="row"/> into view and gives its panel the focus, once the list has
+    /// made it. While the list scrolls to a row it does not keep to its end (AD15): the new
+    /// estimates of its length on the way would take it back there; whether it is at its end is
+    /// decided once it is at the row.
+    /// </summary>
     private void FocusRow(ActivityLogRow row, NavigationMethod method)
     {
         var index = _viewModel?.Current?.Rows.IndexOf(row) ?? -1;
@@ -339,10 +357,25 @@ public partial class ActivityLogView : UserControl
             return;
         }
 
-        ActivityLogRows.ScrollIntoView(index);
+        if (!IsWhollyInView(index))
+        {
+            _scrollingToRow = true;
+            try
+            {
+                ActivityLogRows.ScrollIntoView(index);
+            }
+            finally
+            {
+                _scrollingToRow = false;
+            }
+
+            _keepAtEnd = IsAtEnd();
+            RememberScroll();
+        }
+
         if (RowPanelAt(index) is { } panel)
         {
-            panel.Focus(method);
+            FocusPanel(panel, method);
             return;
         }
 
@@ -352,11 +385,34 @@ public partial class ActivityLogView : UserControl
                 var at = _viewModel?.Current?.Rows.IndexOf(row) ?? -1;
                 if (at >= 0 && RowPanelAt(at) is { } later)
                 {
-                    later.Focus(method);
+                    FocusPanel(later, method);
                 }
             },
             DispatcherPriority.Loaded);
     }
+
+    /// <summary>
+    /// Gives a row's panel the focus, then makes its container the list's active one, which the
+    /// list's virtualising panel keeps while it scrolls: any other container it may hand to
+    /// another row, and the focus would go with it (the scroll to the list's end, AD15, after a
+    /// box opened under the last call did). The focus moves first: the panel lets go of the
+    /// container it kept until then, which must no longer hold the focus.
+    /// </summary>
+    private void FocusPanel(ActivityLogRowPanel panel, NavigationMethod method)
+    {
+        panel.Focus(method);
+        if (panel.DataContext is { } row && ActivityLogRows.ContainerFromItem(row) is { } container)
+        {
+            KeyboardNavigation.SetTabOnceActiveElement(ActivityLogRows, container);
+        }
+    }
+
+    /// <summary>Whether the row at <paramref name="index"/> is made and lies whole inside the list's view.</summary>
+    private bool IsWhollyInView(int index) =>
+        RowPanelAt(index) is { IsEffectivelyVisible: true } panel
+        && panel.TranslatePoint(default, ActivityLogList) is { } top
+        && top.Y >= -0.5
+        && top.Y + panel.Bounds.Height <= ActivityLogList.Viewport.Height + 0.5;
 
     private ActivityLogRowPanel? RowPanelAt(int index) =>
         ActivityLogRows.ContainerFromIndex(index) switch
