@@ -233,16 +233,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 25, the independent review of the code before the gate, runs as a workflow: six reviewers
-(git safety, threads and lifetimes, performance with the undo recording's cost first,
-conformance with the report and design, code quality, test quality), each finding verified by a
-skeptic, the confirmed ones fixed on `wip/p5-review-perf` and `wip/p5-review-rest`. Merged before
-it: WP9's real-window pass (`310de48`, written and built, never run outside the gate), the fixes
-for the full run's and CI's failures (`6d76c4f`: P27's no-op reflog entry on later gits, the
-clean-up tests' race, the merge tool's start under load, the headless double-click's clock) and
-D185 (`ed680ff`). Then: merge the review's fixes, one full run, CI; then the gate (design 15.7:
-the reference pictures from `master`, the comparison script, `dotnet test` and the real-window
-pass on one commit, after telling the owner, every picture inspected), then the closing steps.
+Step 25's review is done: six reviewers, each finding verified by a skeptic, 43 confirmed (1
+blocker, 9 major, 33 minor) and 3 refuted; every confirmed one fixed. The performance half is
+merged (`b175509`: the undo history's reads cut, a pop 22 git calls to 16; no raw copies of files
+nothing writes back; file history in batches). The other half (`wip/p5-review-rest`: the blocker,
+undo and restores no longer delete what stands where a snapshot puts something back; ignored files
+under a stash; held files; the restores deciding inside their operation; two tabs taking turns on
+one history; the filter following branch changes; search, reflog and activity log fixes; code and
+test quality) conflicts with it in the undo's file recording, and is being merged on
+`wip/p5-merge-review`, which ends with a full default run. Then: merge it, push, CI; then the gate
+(design 15.7; references in `D:/Projects/Personal/gate5-reference/`), after telling the owner
+before the real-window pass.
 
 ### Notes for whoever resumes
 
