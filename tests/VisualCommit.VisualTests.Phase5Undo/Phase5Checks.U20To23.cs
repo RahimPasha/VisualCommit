@@ -4,6 +4,7 @@
 // nested class of their own, U20To23, so that the first half's helpers (U16 to U19) and these never
 // clash in the one class Phase5ChecksU; the checks call them through the alias Steps.
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -275,6 +276,40 @@ public sealed partial class Phase5ChecksU : Phase5Checks
             app.Settle();
             var rows = (IEnumerable<ChangedFileRow>)app.Find<ItemsControl>(list).ItemsSource!;
             return [.. rows.Where(row => row.IsFile).Select(row => string.Join(' ', new[] { row.StatusLetter, row.Name, row.Folder }.Where(part => !string.IsNullOrEmpty(part))))];
+        }
+
+        // ---- The Remotes dialog (phase 3's check 22) ----
+
+        /// <summary>Opens the Remotes dialog from the Remotes section header's menu, "Manage remotes…", and waits for its list.</summary>
+        public static async Task<RemotesDialogViewModel> OpenRemotesAsync(ShellDriver app, params string[] names)
+        {
+            await OpenRowMenuAsync(app, "Remotes");
+            app.ClickMenuItem("Manage remotes…");
+            var remotes = await app.WaitForDialogAsync<RemotesDialogViewModel>();
+            await WaitForRemoteRowsAsync(app, remotes, names);
+            return remotes;
+        }
+
+        /// <summary>The Remotes dialog's rows' names, top to bottom.</summary>
+        public static List<string> RemoteRows(ShellDriver app) =>
+            [.. app.TopDialogView!.GetVisualDescendants().OfType<Control>()
+                .Where(control => AutomationProperties.GetAutomationId(control) == "RemoteRow" && control.IsEffectivelyVisible)
+                .OrderBy(control => app.BoundsOf(control).Y)
+                .Select(control => AutomationProperties.GetName(control) ?? string.Empty)];
+
+        /// <summary>Waits until the Remotes dialog is on top and shows its list with exactly these remotes.</summary>
+        public static Task WaitForRemoteRowsAsync(ShellDriver app, RemotesDialogViewModel remotes, params string[] names) =>
+            app.WaitForAsync(
+                () => app.Session.Services.DialogHost.Current == remotes && !remotes.IsFormShown && RemoteRows(app).SequenceEqual(names),
+                "the Remotes dialog to list " + string.Join(", ", names),
+                NetworkTimeout);
+
+        /// <summary>Clicks one of a remote row's buttons (<c>RemoteEditButton</c>, <c>RemoteRemoveButton</c>).</summary>
+        public static void ClickRemoteRowButton(ShellDriver app, string name, string automationId)
+        {
+            var row = app.Window.GetVisualDescendants().OfType<Control>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == "RemoteRow" && AutomationProperties.GetName(control) == name);
+            app.Click(row.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetAutomationId(button) == automationId));
         }
 
         // ---- Tooltips ----
