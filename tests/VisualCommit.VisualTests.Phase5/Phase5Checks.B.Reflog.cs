@@ -138,7 +138,9 @@ public sealed partial class Phase5ChecksB
         await AssertReflogRowsAsync(app, page, [.. HeadReflog.Select(row => row.Selector == "HEAD@{9}" ? row with { Lost = false } : row)]);
 
         // Step 8: the graph has d07c677 now: a click selects it behind the page.
-        app.Click(app.ReflogRowPoint("HEAD@{9}"));
+        row9 = app.ReflogRowPoint("HEAD@{9}");
+        Assert.Equal(PageRowPoint(8), row9);
+        app.Click(row9);
         await AssertDetailsAsync(app, TryAShortcut, 1);
 
         // Step 9: the source menu, then main's reflog.

@@ -59,9 +59,7 @@ public sealed partial class Phase5ChecksB
         AssertToolTipShown(app, stash.Words);
 
         // Step 3: row 0's menu; the right-click selects it and shows its commit (BD9).
-        var row0 = app.BackupRowPoint(Backups[DoomedBackupRow].Name);
-        Assert.Equal(PageRowPoint(DoomedBackupRow), row0);
-        app.RightClick(row0);
+        app.RightClick(BackupRowPointAsReported(app, DoomedBackupRow));
         var menu = app.Menu();
         await AssertDetailsAsync(app, DoomedWork, -1);
         shot = Shot(app, "b9c-branch-menu");
@@ -77,7 +75,9 @@ public sealed partial class Phase5ChecksB
         await AssertNoDialogAsync(app);
         page = await WaitForReflogAsync(app, BackupsTitle, BackupsTitle, BackupsLeft, reads);
         Assert.Single(CallsSince(app, calls), call => call == RestoreDoomedCommand);
-        Assert.True(app.GitCalls().Skip(calls).Single(call => call.CommandText == RestoreDoomedCommand).Succeeded);
+        var restore = AssertCalled(app, calls, RestoreDoomedCommand);
+        Assert.True(restore.Succeeded, $"\"{RestoreDoomedCommand}\" failed: {restore.StandardError}");
+        Assert.Equal(RestoreDoomedInput + "\n", restore.StandardInput);
         Assert.Equal(DoomedWorkSha, await repo.RefTargetAsync("refs/heads/doomed"));
         Assert.Equal([DoomedReflog], Split((await repo.GitAsync("log", "--walk-reflogs", "--format=%gs", "refs/heads/doomed")).StandardOutput));
         var config = await repo.GitAllowingFailureAsync("config", "--get-regexp", @"^branch\.doomed\.");
@@ -89,7 +89,7 @@ public sealed partial class Phase5ChecksB
         var (branches, branchRows) = Section(app, "Local branches");
         Assert.Equal(5, branches);
         Assert.Contains("doomed", branchRows);
-        app.RightClick(app.BackupRowPoint(Backups[DoomedBackupRow].Name));
+        app.RightClick(BackupRowPointAsReported(app, DoomedBackupRow));
         Assert.Equal(BranchDoomedExists, await app.RestPointerOnMenuItemAsync(RestoreBranchDoomed));
         shot = Shot(app, "b9d-restore-disabled", keepPointer: true);
         AssertMenuAsReported(app, app.Menu(), BackupMenu("Deleted branch doomed", $"{RestoreBranchDoomed} (disabled: \"{BranchDoomedExists}\")"), CreateBranchHere, BackupMenuHeight);
@@ -99,7 +99,7 @@ public sealed partial class Phase5ChecksB
         var refs = await RefsAsync(repo);
 
         // Step 5: row 5's menu, the deleted remote branch.
-        app.RightClick(app.BackupRowPoint(Backups[RemoteBranchBackupRow].Name));
+        app.RightClick(BackupRowPointAsReported(app, RemoteBranchBackupRow));
         menu = app.Menu();
         await AssertDetailsAsync(app, AddTheApp, 8);
         shot = Shot(app, "b9e-remote-branch-menu");
@@ -158,7 +158,7 @@ public sealed partial class Phase5ChecksB
         await OpenBackupsAsync(app);
         Assert.True(Graph(app).ShowsWorkingRow, "The working-changes row does not show behind the page.");
         Assert.Equal([" M src/app.txt"], await StatusAllAsync(repo));
-        app.RightClick(app.BackupRowPoint(Backups[DiscardBackupRow].Name));
+        app.RightClick(BackupRowPointAsReported(app, DiscardBackupRow));
         var menu = app.Menu();
         await AssertDetailsAsync(app, DiscardSnapshot, -1);
         var shot = Shot(app, "b9h-discard-menu");
@@ -204,9 +204,7 @@ public sealed partial class Phase5ChecksB
 
         // Step 11: the abort's menu; Restore the changes…, no question.
         await OpenBackupsAsync(app);
-        var abortRow = app.BackupRowPoint(Backups[AbortBackupRow].Name);
-        Assert.Equal(PageRowPoint(AbortBackupRow), abortRow);
-        app.RightClick(abortRow);
+        app.RightClick(BackupRowPointAsReported(app, AbortBackupRow));
         var menu = app.Menu();
         await AssertDetailsAsync(app, MainWork, 6);
         var shot = Shot(app, "b9k-abort-menu");
@@ -227,7 +225,7 @@ public sealed partial class Phase5ChecksB
         Assert.Equal(BackupsLeft, (await BackupsAsync(repo)).Select(entry => entry.Ref.Stem).Distinct().Count());
 
         // Step 12: the skip's: src/app.txt has changed since, so D75's question; Restore.
-        app.RightClick(app.BackupRowPoint(Backups[SkipBackupRow].Name));
+        app.RightClick(BackupRowPointAsReported(app, SkipBackupRow));
         AssertMenuAsReported(app, app.Menu(), BackupMenu("Before skipping a commit", RestoreTheChanges), RestoreTheChanges, BackupMenuHeight);
         await AssertDetailsAsync(app, MainWork, 6);
         app.ClickMenuItem(RestoreTheChanges);
@@ -264,7 +262,7 @@ public sealed partial class Phase5ChecksB
 
         // Step 13: the mixed reset's menu.
         await OpenBackupsAsync(app);
-        app.RightClick(app.BackupRowPoint(Backups[MixedResetBackupRow].Name));
+        app.RightClick(BackupRowPointAsReported(app, MixedResetBackupRow));
         var menu = app.Menu();
         await AssertDetailsAsync(app, ClashNotes316, 3);
         var shot = Shot(app, "b9o-mixed-reset-menu");
@@ -287,7 +285,7 @@ public sealed partial class Phase5ChecksB
         Assert.Contains("-staged", Split((await repo.GitAsync("diff")).StandardOutput));
         Assert.Equal(NotesWritten, ReadFile(repo, "docs/notes.txt"));
         Assert.Equal(BackupsLeft, (await BackupsAsync(repo)).Select(entry => entry.Ref.Stem).Distinct().Count());
-        app.RightClick(app.BackupRowPoint(Backups[MixedResetBackupRow].Name));
+        app.RightClick(BackupRowPointAsReported(app, MixedResetBackupRow));
         Assert.Equal(UnstageYourChangesFirst, await app.RestPointerOnMenuItemAsync(RestoreTheStagedChanges));
         Shot(app, "b9p-staged-disabled", keepPointer: true);
         AssertMenuAsReported(app, app.Menu(), BackupMenu("Before a mixed reset", $"{RestoreTheStagedChanges} (disabled: \"{UnstageYourChangesFirst}\")"), CreateBranchHere, BackupMenuHeight);
@@ -297,7 +295,7 @@ public sealed partial class Phase5ChecksB
         await CloseMenuAsync(app);
         app.PressKey(Key.Escape);
         await app.WaitForAsync(() => app.ShownPage is null && repository.ShowsGraph, "the page to close");
-        app.Click(app.WorkingRowPoint());
+        app.Click(WorkingRowPointAsReported(app));
         await AssertStagePanelAsync(app, "Unstaged files (1)", ["M app.txt src"], "Staged files (1)", ["M app.txt src"]);
         Shot(app, "b9q-stage-panel");
         AssertNoClippedText(app);

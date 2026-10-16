@@ -35,7 +35,7 @@ public sealed partial class Phase5ChecksB
         var palette = Dark;
 
         // Step 1: Read whole lines; the list's three buttons.
-        app.Click(app.GraphRowPoint(ReadWholeLinesRow));
+        app.Click(GraphRowPointAsReported(app, ReadWholeLinesRow, 155));
         await AssertDetailsAsync(app, ReadWholeLines, ReadWholeLinesRow);
         AssertFileListButtons(app, allFiles: false);
 
@@ -67,7 +67,7 @@ public sealed partial class Phase5ChecksB
         await AssertDetailsAsync(app, ReadWholeLinesAllFiles, ReadWholeLinesRow);
 
         // Step 4: line 3 in the gutter: Initial commit, with its all files.
-        app.Click(app.BlameGutterPoint(3));
+        app.Click(GutterPointAsReported(app, 3));
         await AssertDetailsAsync(app, InitialCommitAllFiles, InitialCommitRow);
         shot = Shot(app, "b7c-initial-commit");
         AssertNoClippedText(app);
@@ -79,7 +79,7 @@ public sealed partial class Phase5ChecksB
         await app.WaitForAsync(() => app.ShownPage is null && repository.ShowsGraph, "the page to close");
         Assert.Equal(InitialCommitRow, repository.SelectedIndex);
         AssertRowWhollyInView(app, InitialCommitRow, 493);
-        app.Click(app.GraphRowPoint(ReadWholeLinesRow));
+        app.Click(GraphRowPointAsReported(app, ReadWholeLinesRow, 155));
         await AssertDetailsAsync(app, ReadWholeLinesAllFiles, ReadWholeLinesRow);
 
         // Step 6: README.md's menu (every row's is ForCommitFile, 4.5).

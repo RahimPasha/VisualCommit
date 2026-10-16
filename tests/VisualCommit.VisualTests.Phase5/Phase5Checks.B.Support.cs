@@ -177,6 +177,48 @@ public sealed partial class Phase5ChecksB
     private static IEqualityComparer<Point> PointWithin(double tolerance) =>
         EqualityComparer<Point>.Create((a, b) => Math.Abs(a.X - b.X) <= tolerance && Math.Abs(a.Y - b.Y) <= tolerance, point => 0);
 
+    // ---- The points the rows state (the conventions' "Rows, lanes and colours": ±2) ----------------
+
+    /// <summary>The working-changes row's point from its bounds, asserted at the report's (468, 129).</summary>
+    private static Point WorkingRowPointAsReported(ShellDriver app)
+    {
+        var point = app.WorkingRowPoint();
+        Assert.Equal(new Point(468, 129), point, PointWithin(2));
+        return point;
+    }
+
+    /// <summary>Commit row <paramref name="row"/>'s point in its Message column from its bounds, asserted at the report's (468, <paramref name="y"/>).</summary>
+    private static Point GraphRowPointAsReported(ShellDriver app, int row, double y)
+    {
+        var point = app.GraphRowPoint(row);
+        Assert.Equal(new Point(468, y), point, PointWithin(2));
+        return point;
+    }
+
+    /// <summary>Blame line <paramref name="line"/>'s point in the gutter from the text's lines, asserted at the report's (300, 124 + (L − 0.5) × 15.84).</summary>
+    private static Point GutterPointAsReported(ShellDriver app, int line)
+    {
+        var point = app.BlameGutterPoint(line);
+        Assert.Equal(new Point(GutterPointX, BlameLineCentreY(line)), point, PointWithin(2));
+        return point;
+    }
+
+    /// <summary>History row <paramref name="row"/>'s point from its bounds, asserted at the report's (420, 137 + 26 k) (BD1): exactly, as a page's rows lie on whole pixels.</summary>
+    private static Point HistoryRowPointAsReported(ShellDriver app, int row)
+    {
+        var point = app.FileHistoryRowPoint(row);
+        Assert.Equal(PageRowPoint(row), point);
+        return point;
+    }
+
+    /// <summary>Backup row <paramref name="row"/>'s point from its bounds, asserted at the report's (420, 137 + 26 k) (BD1): exactly, as a page's rows lie on whole pixels.</summary>
+    private static Point BackupRowPointAsReported(ShellDriver app, int row)
+    {
+        var point = app.BackupRowPoint(Backups[row].Name);
+        Assert.Equal(PageRowPoint(row), point);
+        return point;
+    }
+
     /// <summary>The graph's selection behind a page: commit row <paramref name="row"/> alone, not the working-changes row; -1 for nothing selected.</summary>
     private static void AssertGraphSelection(ShellDriver app, int row)
     {
@@ -305,12 +347,14 @@ public sealed partial class Phase5ChecksB
     private static object? Resource(ShellDriver app, string key) =>
         app.Window.TryFindResource(key, app.Window.ActualThemeVariant, out var value) ? value : null;
 
-    /// <summary>Asserts the history page's header texts: the title, the folder, the <c>from</c> text or none, <c>Blame</c> enabled and the close button.</summary>
+    /// <summary>Asserts the history page's header texts: the title, the folder in the secondary colour, the <c>from</c> text or none, <c>Blame</c> enabled and the close button.</summary>
     private static void AssertHistoryHeader(ShellDriver app, FileHistorySnapshot page, string title, string? from)
     {
         Assert.Equal((title, (string?)SrcFolder, from, true), (page.Title, page.Folder, page.From, page.BlameEnabled));
         Assert.Equal(title, ((TrimmedTextBlock)app.FindByAutomationId("FileHistoryTitle")).Text);
-        Assert.Equal(SrcFolder, ((TextBlock)app.FindByAutomationId("FileHistoryFolder")).Text);
+        var folder = (TextBlock)app.FindByAutomationId("FileHistoryFolder");
+        Assert.Equal(SrcFolder, folder.Text);
+        Assert.Equal(PaletteOf(app).TextSecondary, (folder.Foreground as ISolidColorBrush)?.Color);
         var fromBlock = (TextBlock)app.FindByAutomationId("FileHistoryFrom");
         Assert.Equal(from is not null, fromBlock.IsEffectivelyVisible);
         if (from is not null)
@@ -324,8 +368,8 @@ public sealed partial class Phase5ChecksB
     }
 
     /// <summary>
-    /// Asserts the history's rows (4.1, BD2, BD13): letter and its colour, short SHA, subject,
-    /// secondary text, author and date (the surface holds both; the columns show as
+    /// Asserts the history's rows (4.1, BD2, BD13): letter and its colour, short SHA (in the code
+    /// font), subject, secondary text, author and date (the surface holds both; the columns show as
     /// <paramref name="authorShown"/> and <paramref name="dateShown"/> say), the rows'
     /// <c>FileHistoryRow</c> automation names <c>{short} {subject}</c>, each 26 high from the
     /// list's top, and the selected row with its background (the selection colour) and the
@@ -334,6 +378,7 @@ public sealed partial class Phase5ChecksB
     private static void AssertHistoryRows(ShellDriver app, FileHistorySnapshot page, IReadOnlyList<HistoryRow> expected, int selected, bool authorShown = false, bool dateShown = false)
     {
         var palette = PaletteOf(app);
+        var code = Resource(app, "VcCodeFontFamily");
         Assert.Equal(expected.Select(row => row.Name), page.Rows.Select(row => row.Name));
         var list = (ListBox)app.FindByAutomationId("FileHistoryList");
         for (var index = 0; index < expected.Count; index++)
@@ -345,6 +390,7 @@ public sealed partial class Phase5ChecksB
             Assert.Equal(new Rect(page.ListBounds.X, page.ListBounds.Y + (PageRowHeight * index), page.ListBounds.Width, PageRowHeight), bounds);
             Assert.Equal((want.Letter, want.ShortSha, want.Subject, want.Secondary, want.Author, want.Date), (row.Letter, row.ShortSha, row.Subject, row.Secondary, row.Author, row.Date));
             Assert.Equal(LetterColour(palette, want.Letter), row.LetterColor);
+            Assert.Same(code, Named<TextBlock>(list.ContainerFromIndex(index)!, "FileHistorySha").FontFamily);
             Assert.Equal((authorShown, dateShown), (row.AuthorShown, row.DateShown));
             Assert.Equal(index == selected, row.IsSelected);
             Assert.Equal(index == selected, row.HasFocus);
@@ -483,7 +529,7 @@ public sealed partial class Phase5ChecksB
         }
     }
 
-    /// <summary>Asserts the blame's gutter and text at 1100×700 (4.2, 13.4): the gutter 130 wide beside the text, both from the content's top; the number column; syntax colours where the check states them (<paramref name="highlighted"/>); no caret.</summary>
+    /// <summary>Asserts the blame's gutter and text at 1100×700 (4.2, 13.4): the gutter 130 wide beside the text, both from the content's top; the number column; syntax colours where the check states them (<paramref name="highlighted"/>); no caret; the header's caption in the secondary colour.</summary>
     private static void AssertBlameLayout(ShellDriver app, BlameSnapshot blame, bool? highlighted = null)
     {
         Assert.Equal(PageBounds, blame.Bounds);
@@ -498,7 +544,9 @@ public sealed partial class Phase5ChecksB
         Assert.Same(Brushes.Transparent, text.TextArea.CaretBrush);
         Assert.False(text.WordWrap, "The blame wraps its lines; a line longer than the text's width is to be cut at its edge.");
         Assert.Equal(blame.Title, ((TrimmedTextBlock)app.FindByAutomationId("BlameTitle")).Text);
-        Assert.Equal(blame.Caption, ((TrimmedTextBlock)app.FindByAutomationId("BlameCaption")).Text);
+        var caption = (TrimmedTextBlock)app.FindByAutomationId("BlameCaption");
+        Assert.Equal(blame.Caption, caption.Text);
+        Assert.Equal(PaletteOf(app).TextSecondary, (caption.Foreground as ISolidColorBrush)?.Color);
         Assert.Equal("File history", ((Button)app.FindByAutomationId("BlameHistory")).Content);
         Assert.True(app.FindByAutomationId("BlameClose").IsEffectivelyVisible, "The blame has no close button.");
         Assert.Equal(blame.Title, AutomationProperties.GetName(app.FindByAutomationId("Blame")));
@@ -531,6 +579,77 @@ public sealed partial class Phase5ChecksB
 
     /// <summary>How far a pixel of a text may lie from the text's colour in each channel (<see cref="AssertDrawnIn"/>).</summary>
     private const int TextColourTolerance = 8;
+
+    /// <summary>Every whole pixel inside <paramref name="area"/> of the picture is <paramref name="colour"/> (each channel within 2): nothing is drawn on that background there.</summary>
+    private static void AssertBlank(Screenshot picture, Rect area, Color colour, string what)
+    {
+        for (var y = (int)Math.Ceiling(area.Top); y < (int)Math.Floor(area.Bottom); y++)
+        {
+            for (var x = (int)Math.Ceiling(area.Left); x < (int)Math.Floor(area.Right); x++)
+            {
+                var pixel = picture.PixelAt(x, y);
+                if (Math.Abs(pixel.R - colour.R) > 2 || Math.Abs(pixel.G - colour.G) > 2 || Math.Abs(pixel.B - colour.B) > 2)
+                {
+                    throw new Xunit.Sdk.XunitException($"{what} at {area} is not blank: the pixel ({x}, {y}) is {pixel}, not {colour}.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asserts in the picture the blame text's line numbers 1 to <paramref name="lines"/> (13.4):
+    /// in the number column, right-aligned 8 from its right edge, each line draws as many digits as
+    /// its number has (ink in each digit's 7.2-wide cell) and nothing left of them; nothing is drawn
+    /// in the column where two more lines would be. Ink is a pixel that differs from the column's
+    /// background by more than <see cref="InkThreshold"/> in a channel (the report states the
+    /// numbers, not their colour; each digit's fullest pixels lie 149 from the dark background).
+    /// </summary>
+    private static void AssertLineNumbers(Screenshot picture, BlameSnapshot blame, int lines)
+    {
+        var left = blame.TextBounds.Left;
+        var background = picture.PixelAt(new Point(left + 1.5, blame.TextBounds.Top + 1.5));
+        var numbersRight = left + NumberColumnWidth - NumberPadding;
+        for (var line = 1; line <= lines; line++)
+        {
+            var top = blame.TextBounds.Top + ((line - 1) * BlameLineHeight);
+            var digits = line.ToString(CultureInfo.InvariantCulture).Length;
+            for (var digit = 1; digit <= digits; digit++)
+            {
+                var cell = new Rect(numbersRight - (digit * CodeDigitWidth), top, CodeDigitWidth, BlameLineHeight);
+                Assert.True(HasInk(picture, cell, background), $"Line {line}'s number has no digit drawn at {cell}.");
+            }
+
+            var before = new Rect(left, top, numbersRight - (digits * CodeDigitWidth) - 1 - left, BlameLineHeight);
+            Assert.False(HasInk(picture, before, background), $"Something is drawn at {before}, left of line {line}'s number.");
+        }
+
+        // Where the next two numbers would be: lower down, the text's horizontal scroll bar (its lines
+        // are wider than the text) lies across the whole editor, the number column too.
+        var lastBottom = blame.TextBounds.Top + (lines * BlameLineHeight);
+        var below = new Rect(left, lastBottom + 1, NumberColumnWidth, (2 * BlameLineHeight) - 1);
+        Assert.False(HasInk(picture, below, background), $"A line number is drawn at {below}, below line {lines}.");
+    }
+
+    /// <summary>Whether a whole pixel inside <paramref name="area"/> differs from <paramref name="background"/> by more than <see cref="InkThreshold"/> in a channel.</summary>
+    private static bool HasInk(Screenshot picture, Rect area, Color background)
+    {
+        for (var y = (int)Math.Ceiling(area.Top); y < (int)Math.Floor(area.Bottom); y++)
+        {
+            for (var x = (int)Math.Ceiling(area.Left); x < (int)Math.Floor(area.Right); x++)
+            {
+                var pixel = picture.PixelAt(x, y);
+                if (Math.Abs(pixel.R - background.R) > InkThreshold || Math.Abs(pixel.G - background.G) > InkThreshold || Math.Abs(pixel.B - background.B) > InkThreshold)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>How far in a channel a pixel must lie from the background to count as ink (<see cref="AssertLineNumbers"/>).</summary>
+    private const int InkThreshold = 48;
 
     /// <summary>How far a pixel of a 12-px line icon may lie from its colour in each channel: its fullest pixel of #E0A23B is #C79036.</summary>
     private const int IconColourTolerance = 32;
@@ -575,6 +694,7 @@ public sealed partial class Phase5ChecksB
             var selector = Named<TextBlock>(item, "ReflogSelector");
             Assert.Equal(palette.TextSecondary, (selector.Foreground as ISolidColorBrush)?.Color);
             Assert.Same(code, selector.FontFamily);
+            Assert.Same(code, Named<TextBlock>(item, "ReflogCommitSha").FontFamily);
             var action = Named<TrimmedTextBlock>(item, "ReflogAction");
             Assert.Equal(action.IsTrimmed ? action.Text : null, ToolTip.GetTip(action) as string);
             Assert.Equal(row.IsLost, row.LostMarkBounds is not null);

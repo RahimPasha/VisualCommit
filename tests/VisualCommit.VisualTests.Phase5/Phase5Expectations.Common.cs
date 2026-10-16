@@ -239,14 +239,17 @@ public static partial class Phase5Expectations
     /// other git (CI runs 2.55) they assert the classifying "key" line and that the dialog shows
     /// <c>GitOutputCleaner.Clean</c> of the failed call's own output.
     /// </summary>
-    public static Task<bool> IsReportGitAsync() => ReportGit.Value;
+    public static async Task<bool> IsReportGitAsync() => await MachineGitVersionAsync().ConfigureAwait(false) is { Major: 2, Minor: 36 };
 
-    private static readonly Lazy<Task<bool>> ReportGit = new(async () =>
+    /// <summary>The version of the git on this machine, read once with <c>git --version</c>; null when its output does not parse.</summary>
+    public static Task<GitVersion?> MachineGitVersionAsync() => MachineGit.Value;
+
+    private static readonly Lazy<Task<GitVersion?>> MachineGit = new(async () =>
     {
         var path = GitLocator.FindExecutable(GitSearchContext.FromSystem())
             ?? throw new InvalidOperationException("Git was not found on this machine.");
         var result = await new GitRunner(path).RunAsync(new GitCommand("--version"), CancellationToken.None).ConfigureAwait(false);
-        return GitVersion.TryParse(result.StandardOutput, out var version) && version.Major == 2 && version.Minor == 36;
+        return GitVersion.TryParse(result.StandardOutput, out var version) ? version : null;
     });
 
     /// <summary>

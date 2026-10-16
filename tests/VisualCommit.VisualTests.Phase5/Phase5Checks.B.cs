@@ -8,8 +8,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.Views.Diff;
 using VisualCommit.App.Views.Pages;
+using VisualCommit.Core.Diff;
 using VisualCommit.Core.Settings;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -44,9 +46,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         Assert.True(app.FindByAutomationId("DetailsPlaceholder").IsEffectivelyVisible, "The details placeholder does not show.");
 
         // Step 1: the working-changes row.
-        var working = app.WorkingRowPoint();
-        Assert.Equal(new Point(468, 129), working, PointWithin(2));
-        app.Click(working);
+        app.Click(WorkingRowPointAsReported(app));
         await AssertStagePanelAsync(app, UnstagedOneFile, HistoryUnstagedRows, StagedNone, []);
         Assert.True(repository.IsWorkingRowSelected, "The working-changes row is not selected.");
 
@@ -80,9 +80,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         Assert.Equal(HistoryStatus, await StatusAsync(repo));
 
         // Step 4: the rename's row.
-        var rowPoint = app.FileHistoryRowPoint(1);
-        Assert.Equal(PageRowPoint(1), rowPoint);
-        app.Click(rowPoint);
+        app.Click(HistoryRowPointAsReported(app, 1));
         await AssertHistoryDiffAsync(app, "R", "Reader.cs", SrcFolder, "renamed from src/Parser.cs", "0575c7f", RenameHunk);
         await AssertDetailsAsync(app, Rename, RenameRow);
         shot = Shot(app, "b5c-rename-row");
@@ -120,7 +118,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         AssertHistoryRows(app, page, ReaderHistoryFromRename, selected: 2);
         var added = Assert.Single(page.Diff!.TextDiff!.Hunks).Lines;
         Assert.Equal(AddTheParserRows, added.Count);
-        Assert.All(added, line => Assert.Equal(VisualCommit.Core.Diff.DiffLineKind.Added, line.Kind));
+        Assert.All(added, line => Assert.Equal(DiffLineKind.Added, line.Kind));
         Assert.Equal(FirstLine, added[0].Text);
         app.PressKey(Key.Up);
         await AssertHistoryDiffAsync(app, "M", "Parser.cs", SrcFolder, null, "365482b", HandleEmptyInputHunk);
@@ -146,6 +144,8 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         await app.WaitForAsync(() => repository.Diff?.ShowsText == true && app.ShownPage is null, "phase 2's diff over the page again");
         var line10 = app.DiffRowOfLine(10);
         Assert.True(line10 >= 0, "The diff has no row of new line 10.");
+        var cell = app.Find<DiffTextView>("DiffText").Rows[line10].Left!;
+        Assert.Equal((DiffLineKind.Added, (int?)null, (int?)10, ParserNewLine10), (cell.Kind, cell.OldNumber, cell.NewNumber, cell.Text));
         pointer = app.DiffTextPoint(line10);
         app.RightClick(pointer);
         menu = app.Menu();
@@ -167,9 +167,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         await AssertDetailsAsync(app, HandleEmptyInput, HandleEmptyInputRow);
 
         // Step 9: the row menu of Add the parser, which the right-click selects first (BD9).
-        pointer = app.FileHistoryRowPoint(1);
-        Assert.Equal(PageRowPoint(1), pointer);
-        app.RightClick(pointer);
+        app.RightClick(HistoryRowPointAsReported(app, 1));
         menu = app.Menu();
         await AssertHistoryDiffAsync(app, "A", "Parser.cs", SrcFolder, null, "1d5a7cf", AddTheParserHunk);
         await AssertDetailsAsync(app, AddTheParser, AddTheParserRow);
@@ -200,7 +198,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         Assert.Equal((116, 469), (graphBounds.Top, graphBounds.Bottom));
         Assert.Equal(new Rect(260, 454, 440, 26), RowInWindow(app, AddTheParserRow));
         Assert.Equal(480 - 469, RowInWindow(app, AddTheParserRow).Bottom - graphBounds.Bottom);
-        app.Click(app.WorkingRowPoint());
+        app.Click(WorkingRowPointAsReported(app));
         app.RightClick(await app.FileRowAsync("UnstagedFileList", "src/Reader.cs"));
         app.ClickMenuItem(FileHistoryItem);
         await app.WaitForAsync(() => app.ShownPage is FileHistoryView && app.FileHistorySnapshot().From is null && app.FileHistorySnapshot().Title == ReaderTitle, "the history of Reader.cs from HEAD");
@@ -212,8 +210,9 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         Assert.Equal((ContentTop, 262), (page.ListBounds.Top, page.ListBounds.Bottom));
         Assert.Equal((262, 469), (page.DiffBounds.Top, page.DiffBounds.Bottom));
         AssertHistoryRows(app, page, ReaderHistory, selected: 0);
-        app.Click(app.FileHistoryRowPoint(3));
+        app.Click(HistoryRowPointAsReported(app, 3));
         await AssertDetailsAsync(app, AddTheParser, AddTheParserRow);
+        AssertHistoryRows(app, app.FileHistorySnapshot(), ReaderHistory, selected: 3);
         app.PressKey(Key.Escape);
         await app.WaitForAsync(() => app.ShownPage is null && repository.ShowsGraph, "the page to close");
         await app.WaitForAsync(() => Graph(app).IsFocused, "the graph to take the focus");
@@ -242,16 +241,14 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         var palette = Light;
 
         // Step 12: Read whole lines' src/Reader.cs, its history from HEAD's own commit, the rename's row.
-        var row0 = app.GraphRowPoint(ReadWholeLinesRow);
-        Assert.Equal(new Point(468, 155), row0, PointWithin(2));
-        app.Click(row0);
+        app.Click(GraphRowPointAsReported(app, ReadWholeLinesRow, 155));
         await AssertDetailsAsync(app, ReadWholeLines, ReadWholeLinesRow);
         app.RightClick(await app.FileRowAsync("FileList", "src/Reader.cs"));
         app.ClickMenuItem(FileHistoryItem);
         await app.WaitForPageAsync<FileHistoryView>();
         await app.WaitForFileHistoryRowsAsync(4);
         await AssertHistoryDiffAsync(app, "M", "Reader.cs", SrcFolder, null, "c0bc2dd", ReadWholeLinesHunk);
-        app.Click(app.FileHistoryRowPoint(1));
+        app.Click(HistoryRowPointAsReported(app, 1));
         await AssertHistoryDiffAsync(app, "R", "Reader.cs", SrcFolder, "renamed from src/Parser.cs", "0575c7f", RenameHunk);
         await AssertDetailsAsync(app, Rename, RenameRow);
         var shot = Shot(app, "b5k-side-by-side-light");
@@ -288,7 +285,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         var palette = Dark;
 
         // Step 1: the working tree's blame from the stage panel's menu.
-        app.Click(app.WorkingRowPoint());
+        app.Click(WorkingRowPointAsReported(app));
         await AssertStagePanelAsync(app, UnstagedOneFile, HistoryUnstagedRows, StagedNone, []);
         app.RightClick(await app.FileRowAsync("UnstagedFileList", "src/Reader.cs"));
         app.ClickMenuItem(BlameItem);
@@ -302,6 +299,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         Assert.Equal(ReaderWorkingTree, blame.Text.TrimEnd('\n'));
         AssertRuns(blame, ReaderWorkingTreeRuns);
         AssertGutterColours(shot, blame, palette);
+        AssertLineNumbers(shot, blame, 24);
         await AssertStagePanelAsync(app, UnstagedOneFile, HistoryUnstagedRows, StagedNone, []);
         Assert.True(repository.IsWorkingRowSelected, "The working-changes row is not selected behind the page.");
         AssertNoClippedText(app);
@@ -314,15 +312,15 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         AssertToolTipShown(app, AddTheParserRunToolTip);
 
         // Step 3: line 22's tooltip; the menu of line 3, a run not committed yet.
-        Assert.Equal(NotCommittedYet, await app.RestPointerAtAsync(app.BlameGutterPoint(22)));
-        app.RightClick(app.BlameGutterPoint(3));
+        Assert.Equal(NotCommittedYet, await app.RestPointerAtAsync(GutterPointAsReported(app, 22)));
+        app.RightClick(GutterPointAsReported(app, 3));
         AssertMenuAsReported(app, app.Menu(), UncommittedRunMenu, ShowInGraph, UncommittedRunMenuHeight);
         Assert.True(repository.IsWorkingRowSelected, "The right-click on a run not committed yet did not select the working-changes row.");
         await AssertStagePanelAsync(app, UnstagedOneFile, HistoryUnstagedRows, StagedNone, []);
         await CloseMenuAsync(app);
 
         // Step 4: a click on line 13 in the gutter.
-        app.Click(app.BlameGutterPoint(13));
+        app.Click(GutterPointAsReported(app, 13));
         await AssertDetailsAsync(app, ReadWholeLines, ReadWholeLinesRow);
         shot = Shot(app, "b6c-run-clicked");
         AssertNoClippedText(app);
@@ -338,8 +336,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         AssertRuns(app.BlameSnapshot(), ReaderWorkingTreeRuns, selected: 6);
 
         // Step 6: the menu of line 4's run, which the right-click selects first (BD9).
-        var line4 = app.BlameGutterPoint(4);
-        app.RightClick(line4);
+        app.RightClick(GutterPointAsReported(app, 4));
         var menu = app.Menu();
         await AssertDetailsAsync(app, Rename, RenameRow);
         shot = Shot(app, "b6d-run-menu");
@@ -357,7 +354,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         AssertNoClippedText(app);
 
         // Step 8: line 1's run is the file's first commit: Blame before this commit is disabled.
-        app.RightClick(app.BlameGutterPoint(1));
+        app.RightClick(GutterPointAsReported(app, 1));
         menu = app.Menu();
         await AssertDetailsAsync(app, AddTheParser, AddTheParserRow);
         Assert.Equal(FilesFirstCommit, await app.RestPointerOnMenuItemAsync(BlameBeforeThisCommit));
@@ -385,7 +382,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         AssertParserBlame(blame);
 
         // Step 11: a double-click on line 20's run shows its commit in the graph.
-        app.DoubleClick(app.BlameGutterPoint(20));
+        app.DoubleClick(GutterPointAsReported(app, 20));
         await app.WaitForAsync(() => app.ShownPage is null && repository.ShowsGraph, "the page to close");
         await app.WaitForAsync(() => Graph(app).IsFocused, "the graph to take the focus");
         Shot(app, "b6h-shown-in-graph");
@@ -416,7 +413,8 @@ public sealed partial class Phase5ChecksB : Phase5Checks
     /// <summary>
     /// Asserts in the picture what the gutter draws (BD12): each run's background at its first
     /// line's right end, the short SHA in the primary text colour, the date in the secondary one,
-    /// <c>Not committed yet</c> in the warning colour.
+    /// <c>Not committed yet</c> in the warning colour; and on each of the run's other lines
+    /// nothing but its background (line 23, the second of run 13's, too).
     /// </summary>
     private static void AssertGutterColours(Screenshot picture, BlameSnapshot blame, Palette palette)
     {
@@ -434,6 +432,12 @@ public sealed partial class Phase5ChecksB : Phase5Checks
             {
                 var colour = part.Text == NotCommittedYet ? palette.Warning : part.Text == GutterDate ? palette.TextSecondary : palette.TextPrimary;
                 AssertDrawnIn(picture, new Rect(part.X, top, part.Width, BlameLineHeight), colour, $"run {run.Index}'s \"{part.Text}\"");
+            }
+
+            for (var line = run.FirstLine + 1; line <= run.LastLine; line++)
+            {
+                var lineTop = blame.GutterBounds.Top + ((line - 1) * BlameLineHeight);
+                AssertBlank(picture, new Rect(blame.GutterBounds.Left + 1, lineTop + 2, blame.GutterBounds.Width - 2, BlameLineHeight - 4), background, $"the gutter of line {line}, run {run.Index}'s");
             }
         }
     }

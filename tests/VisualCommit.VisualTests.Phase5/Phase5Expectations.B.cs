@@ -5,8 +5,6 @@
 // nothing of the app and no headless type.
 using System.Globalization;
 using Avalonia;
-using VisualCommit.Core.Git;
-using VisualCommit.Git;
 
 namespace VisualCommit.VisualTests.Phase5;
 
@@ -65,8 +63,14 @@ public static partial class Phase5Expectations
         /// <summary>Column <paramref name="column"/> of the blame text at 1100×700: the text's left + 30.4 + 2 + 7.2 × (C − 1).</summary>
         public static double BlameColumnX(int column) => 390 + 30.4 + 2 + (7.2 * (column - 1));
 
-        /// <summary>The number column's width up to 99 lines (13.4, phase 4's <c>ResultPoint</c>).</summary>
+        /// <summary>The number column's width up to 99 lines (13.4, phase 4's <c>ResultPoint</c>): 8 + 7.2 × 2 + 8.</summary>
         public const double NumberColumnWidth = 30.4;
+
+        /// <summary>The space right of the numbers in their column, and left of the widest (13.4).</summary>
+        public const double NumberPadding = 8;
+
+        /// <summary>A character's advance in the code font at 12: 7.2 (13.4).</summary>
+        public const double CodeDigitWidth = 7.2;
 
         /// <summary>The gutter's parts at 130 wide (BD12): 4 padding, the short SHA 50.4, 6, the date 61.1, 4.</summary>
         public const double GutterPadding = 4;
@@ -332,6 +336,12 @@ public static partial class Phase5Expectations
             "+        }",
             "+",
         ];
+
+        /// <summary>
+        /// New line 10 of src/Parser.cs at 365482b, the first added line of its hunk, whose text B5
+        /// step 7 right-clicks (the removed old line 10, <c>_text = text;</c>, lies just above it).
+        /// </summary>
+        public const string ParserNewLine10 = "        _text = text ?? string.Empty;";
 
         /// <summary>1d5a7cf's step: a new file of 17 added rows from <c>namespace History;</c>.</summary>
         public static ExpectedHunk AddTheParserHunk { get; } = new("@@ -0,0 +1,17 @@");
@@ -693,7 +703,6 @@ public static partial class Phase5Expectations
         /// <summary>The Local branches section after B8 step 7: its first-level rows ("▸" before a closed folder).</summary>
         public static IReadOnlyList<string> LocalBranchesAfterShortcut { get; } = ["▸ feature", "clash", "main", "shortcut", "topic"];
 
-
         // ---- The backups list (5.3, 12.3, BD4) ---------------------------------------------------------
 
         /// <summary>A backup row as the list holds it: name, time, words, short SHA, subject.</summary>
@@ -784,6 +793,10 @@ public static partial class Phase5Expectations
         public const string CreateShortcutCommand = "git branch shortcut d07c677b8a64284adc1f0f3ed0733f97ca3d3a7f";
         public const string ShortcutReflog = "branch: Created from d07c677b8a64284adc1f0f3ed0733f97ca3d3a7f";
         public const string RestoreDoomedCommand = "git update-ref -m \"VisualCommit: restore of branch doomed\" --create-reflog --stdin";
+
+        /// <summary>The restore's one line of standard input (design 7.3's <c>SetRef</c>, BD17): the branch created at Doomed work.</summary>
+        public const string RestoreDoomedInput = "create refs/heads/doomed " + DoomedWorkSha;
+
         public const string DoomedReflog = "VisualCommit: restore of branch doomed";
         public const string PushBackCommand = "git push --progress --force-with-lease=refs/heads/feature/gone: origin 7dd8e8f7958138d967be47cb167b84bac7fd7467:refs/heads/feature/gone";
         public const string PushBackSummary = " * [new branch]      7dd8e8f7958138d967be47cb167b84bac7fd7467 -> feature/gone";
@@ -834,7 +847,7 @@ public static partial class Phase5Expectations
         /// <summary>Doomed work's details (B9 step 3).</summary>
         public static ShownDetails DoomedWork { get; } = new(DoomedWorkSha, "Doomed work", null, TestAuthor, Date(26), null, ["9dd61fd"], "Changed files (1)", ["A doomed.txt docs"]);
 
-        // ---- Colours (the texts' "Colours", dark; light where B5 step 12 uses it) ----------------------
+        // ---- Git's own texts and the dates ------------------------------------------------------------
 
         /// <summary>
         /// Whether this machine's git wrote the reflog texts the report quotes (part B's "Git's own
@@ -842,15 +855,7 @@ public static partial class Phase5Expectations
         /// on both; on any other git the checks assert the selectors, commits, lost marks and the
         /// footer only.
         /// </summary>
-        public static Task<bool> IsReflogTextGitAsync() => ReflogTextGit.Value;
-
-        private static readonly Lazy<Task<bool>> ReflogTextGit = new(async () =>
-        {
-            var path = GitLocator.FindExecutable(GitSearchContext.FromSystem())
-                ?? throw new InvalidOperationException("Git was not found on this machine.");
-            var result = await new GitRunner(path).RunAsync(new GitCommand("--version"), CancellationToken.None).ConfigureAwait(false);
-            return GitVersion.TryParse(result.StandardOutput, out var version) && version.Major == 2 && version.Minor is 36 or 55;
-        });
+        public static async Task<bool> IsReflogTextGitAsync() => await MachineGitVersionAsync().ConfigureAwait(false) is { Major: 2, Minor: 36 or 55 };
 
         /// <summary>The scenario's date of the commit made at 12:<paramref name="minute"/> on 2026-01-01, as the Date column shows it.</summary>
         public static string Date(int minute) => string.Create(CultureInfo.InvariantCulture, $"2026-01-01 12:{minute:00}");

@@ -7,7 +7,13 @@ using static VisualCommit.VisualTests.Phase5.Phase5Expectations.PartB;
 
 namespace VisualCommit.VisualTests.Phase5;
 
-public sealed class PartBExpectationTests
+/// <summary>
+/// Part B's expectations (Phase5Expectations.B.cs) held against each other and against the report's
+/// formulas: the pages' and the blame's points, the menus' heights, the graphs, the histories, the
+/// runs, the reflogs and the backups. No app: a mistake copying the report shows here, apart from
+/// the app.
+/// </summary>
+public sealed class Phase5ExpectationTestsB
 {
     [Fact]
     public void The_page_and_blame_points_are_the_conventions_numbers()
@@ -26,6 +32,8 @@ public sealed class PartBExpectationTests
         Assert.Equal(480.0, BlameColumnX(9), 1);
         Assert.Equal(451.2, BlameColumnX(5), 1);
         Assert.Equal(GutterBounds.Right, BlameTextBounds.Left);
+        Assert.Equal(NumberColumnWidth, (2 * NumberPadding) + (2 * CodeDigitWidth), 6);
+        Assert.Equal(BlameTextBounds.Left + NumberColumnWidth + 2 + (8 * CodeDigitWidth), BlameColumnX(9), 6);
         Assert.True(GutterPadding + GutterShaWidth + GutterGap + GutterDateWidth + GutterPadding <= GutterBounds.Width, "BD12's parts do not fit the 130-wide gutter.");
         Assert.Equal(BackupTimeX.Right + 8, BackupWordsX.Left);
         Assert.Equal(BackupWordsX.Right + 8, BackupCommitX.Left);
@@ -89,6 +97,25 @@ public sealed class PartBExpectationTests
         Assert.Equal("        _text = text ?? string.Empty;", ReaderWorkingTree.Split('\n')[9]);
         Assert.Equal("    public string[] Lines()", ReaderWorkingTree.Split('\n')[12]);
         Assert.Equal(15, ReadWholeLinesHunk.Rows!.Count);
+    }
+
+    /// <summary>B5 step 7's line is the hunk's first added one, right after the removed old line 10, and the line 10 of the file that the working tree's blame shows.</summary>
+    [Fact]
+    public void B5s_new_line_10_is_the_first_added_line_of_365482bs_hunk()
+    {
+        Assert.Equal(["-        _text = text;", "+" + ParserNewLine10], HandleEmptyInputChanges.Take(2));
+        Assert.StartsWith("@@ -7,11 +7,16 @@", HandleEmptyInputHunk.Header, StringComparison.Ordinal);
+        Assert.Equal(ParserNewLine10, ReaderWorkingTree.Split('\n')[9]);
+    }
+
+    /// <summary>B9 step 4's update-ref creates doomed at Doomed work, whose short SHA the backups list shows.</summary>
+    [Fact]
+    public void The_restore_of_doomed_creates_the_branch_at_doomed_work()
+    {
+        Assert.Equal("create refs/heads/doomed 44e646bdcb1d920659f2b28b1b44e19f6ae45a7b", RestoreDoomedInput);
+        Assert.EndsWith(" --create-reflog --stdin", RestoreDoomedCommand, StringComparison.Ordinal);
+        Assert.Contains($"-m \"{DoomedReflog}\"", RestoreDoomedCommand, StringComparison.Ordinal);
+        Assert.StartsWith(Backups[DoomedBackupRow].ShortSha, RestoreDoomedInput.Split(' ')[^1], StringComparison.Ordinal);
     }
 
     [Fact]
