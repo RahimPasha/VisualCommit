@@ -267,6 +267,7 @@ public sealed partial class Phase5ChecksU
             PartU.ReadTree(PartU.OtherOneOntoMainSha, PartU.OtherOneSha),
             PartU.KeepMoveRef(PartU.Undo.Message(PartU.RebaseOtherText), "feature/other", PartU.OtherOneSha, PartU.OtherOneOntoMainSha),
             PartU.UndoSwitch("feature/topic"));
+        AssertNoReplay(app, calls);
         Assert.Equal(["## feature/topic...origin/feature/topic"], await StatusAsync(repo));
         Assert.Equal(PartU.OtherOneSha, await RevParseAsync(repo, "refs/heads/feature/other"));
         Assert.Equal(["checkout: moving from feature/other to feature/topic", PartU.Undo.Message(PartU.RebaseOtherText)], await ReflogAsync(repo, "HEAD", 2));
@@ -284,6 +285,7 @@ public sealed partial class Phase5ChecksU
             PartU.Refresh,
             PartU.ReadTree(PartU.OtherOneSha, PartU.OtherOneOntoMainSha),
             PartU.KeepMoveRef(PartU.Redo.Message(PartU.RebaseOtherText), "feature/other", PartU.OtherOneOntoMainSha, PartU.OtherOneSha));
+        AssertNoReplay(app, calls);
         Assert.Equal([PartU.Redo.Message(PartU.RebaseOtherText), "checkout: moving from feature/topic to feature/other"], await ReflogAsync(repo, "HEAD", 2));
         AssertGraph(app, PartU.R3, 2, showsDate: true, picture: shot);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.RebaseOtherText));
@@ -327,6 +329,7 @@ public sealed partial class Phase5ChecksU
             PartU.ReadTree(PartU.MergeOtherSha, PartU.MainMoreSha),
             PartU.KeepMoveRef(PartU.Undo.Message(PartU.MergeOtherText), "main", PartU.MainMoreSha, PartU.MergeOtherSha),
             PartU.UndoSwitch("feature/topic"));
+        AssertNoReplay(app, calls);
         Assert.Equal(["## feature/topic...origin/feature/topic"], await StatusAsync(repo));
         Assert.Null(WorkingFile(repo, "other/one.txt"));
         Assert.Equal(PartU.MainMoreSha, await RevParseAsync(repo, "refs/heads/main"));
@@ -344,6 +347,7 @@ public sealed partial class Phase5ChecksU
             PartU.Refresh,
             PartU.ReadTree(PartU.MainMoreSha, PartU.MergeOtherSha),
             PartU.KeepMoveRef(PartU.Redo.Message(PartU.MergeOtherText), "main", PartU.MergeOtherSha, PartU.MainMoreSha));
+        AssertNoReplay(app, calls);
         Assert.Equal(PartU.MergeOtherSha, await repo.HeadAsync());
         AssertGraph(app, PartU.R4, 3, showsDate: true, picture: shot);
         AssertArrows(app, 2, 0, "Local branches", "main");
@@ -528,6 +532,12 @@ public sealed partial class Phase5ChecksU
             PartU.ReadTree(from, to),
             PartU.KeepMoveRef(message, branch, to, from));
         Assert.Equal(0, app.GitCalls().Skip(calls).Last(call => call.CommandText == PartU.ReadTree(from, to)).ExitCode);
+        AssertNoReplay(app, calls);
+    }
+
+    /// <summary>A step since <paramref name="calls"/> neither merged, picked, reverted nor rebased again: the branch went back to commits that exist.</summary>
+    private static void AssertNoReplay(ShellDriver app, int calls)
+    {
         foreach (var command in new[] { "git merge", "git cherry-pick", "git revert", "git rebase" })
         {
             AssertNoCall(app, calls, command);

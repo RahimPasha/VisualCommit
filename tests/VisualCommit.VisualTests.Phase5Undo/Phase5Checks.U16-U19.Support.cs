@@ -271,14 +271,6 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         app.ClickMenuItem(item);
     }
 
-    /// <summary>Right-clicks a left-panel row, found by its path, waits for its menu and clicks <paramref name="item"/>.</summary>
-    private static async Task RightClickRefAndChooseAsync(ShellDriver app, string item, params string[] path)
-    {
-        app.RightClick(await app.RefRowAsync(path));
-        app.Menu();
-        app.ClickMenuItem(item);
-    }
-
     /// <summary>Clicks the working-changes row in its Message column (against the report's point, ±2, where it states one) and waits for the stage panel.</summary>
     private static async Task ClickWorkingRowAsync(ShellDriver app, Point? reported = null)
     {
@@ -444,10 +436,6 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         var result = await repo.GitAllowingFailureAsync("config", "--local", "--get-regexp", pattern);
         return result.ExitCode == 1 ? [] : result.EnsureSuccess(new GitCommand("config")).StandardOutput.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n').Split('\n');
     }
-
-    /// <summary>The refs the check names, as <c>git for-each-ref --format=%(refname) %(objectname)</c> lists them (the backups left out).</summary>
-    private static async Task<List<string>> RefsAsync(TempRepo repo, params string[] patterns) =>
-        [.. (await GitLinesAsync(repo, ["for-each-ref", "--format=%(refname) %(objectname)", .. patterns])).Where(line => !line.StartsWith(BackupRef.Prefix, StringComparison.Ordinal))];
 
     /// <summary>The backup refs as "name target" lines, in git's order of their names.</summary>
     private static async Task<List<string>> BackupLinesAsync(TempRepo repo) =>
