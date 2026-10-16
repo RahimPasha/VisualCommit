@@ -190,6 +190,8 @@ public sealed partial class Phase5ChecksP
         await AssertRefusedAsync(app, repo, calls, PartP.MergeOther, PartP.MergeFailedTitle, PartP.OneConflictPreventsMerge, PartP.MergeOtherCommand, PartP.Tp7, PartP.MergeChangesKey, mergeExit: true);
         Assert.Equal(PartP.AppLocal, WorkingFile(repo, "src/app.txt"));
         Assert.Equal([" M src/app.txt"], await PorcelainAsync(repo));
+
+        // A merge refused for an unstaged change writes no reflog entry, on every git (design 15.9).
         Assert.Equal(reflog, await ReflogAsync(repo));
         await CloseDialogAsync(app);
 
@@ -240,14 +242,15 @@ public sealed partial class Phase5ChecksP
         await AssertRefusedAsync(app, repo, calls, PartP.CherryPickOtherEdits, PartP.CherryPickFailedTitle, PartP.StagedPreventCherryPick, PartP.CherryPickOtherEditsCommand, PartP.Tp10, PartP.Tp10Key);
         await CloseDialogAsync(app);
 
-        // Step 8: the revert again (TP11); nothing changed in the whole part.
+        // Step 8: the revert again (TP11); nothing changed in the whole part, HEAD's reflog aside
+        // on gits after 2.36, where step 6's refused merge wrote a no-op entry (design 15.9).
         calls = await RevertDescribeAsync(app, repo);
         Shot(app, "p27f-revert-staged");
         await AssertRowSelectedAsync(app, PartP.DescribeRow, "Describe the app");
         await AssertRefusedAsync(app, repo, calls, PartP.RevertDescribe, PartP.RevertFailedTitle, PartP.StagedPreventRevert, PartP.RevertDescribeCommand, PartP.Tp11, PartP.Tp11Key);
         Assert.Equal(["M  README.md"], await PorcelainAsync(repo));
         Assert.Equal(PartP.ReadmeStaged, WorkingFile(repo, "README.md"));
-        Assert.Equal(reflog, await ReflogAsync(repo));
+        await AssertReflogAfterStagedMergeRefusalsAsync(repo, reflog, stagedRefusals: 1);
         await AssertNoBackupAsync(repo);
         Assert.Equal(refs, await RefsAsync(repo));
         await CloseDialogAsync(app);

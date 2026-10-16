@@ -1843,6 +1843,20 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   `GitFailureClassifier.BlockedPaths` (its own version missed the `would be removed by checkout:`
   block and failed with git's raw output: `UndoStepRefusalTests`), the undo walks a folder with
   `GitRepository.FilesUnder`, and phase 1's `AllIgnoredAsync` asks through `IgnoredAmongAsync`.
+- **A merge git refuses for something staged writes a reflog entry** (0.7, 7.7; found by CI run
+  38853641791 in P27): Git 2.43, 2.55 and 2.56 (exit 2, `Merge with strategy ort failed.`) write a
+  no-op entry `merge <the ref>: updating HEAD` into HEAD's reflog, its old and new value both HEAD's
+  commit; Git 2.36 writes none, and no git writes one for a merge refused for an unstaged change.
+  0.7's "A refusal changes nothing: … HEAD's reflog" holds for the checkouts its row is about, and
+  7.7's "a refused action still leaves HEAD's reflog as it was" for what the app's own reads write
+  (nothing); a refused merge on 2.43 and later adds this one entry. The app does not mind it: the
+  undo recording compares HEAD and the scope's refs before and after (7.7) and never reads HEAD's
+  reflog (only a remote-tracking ref's, for a force push's lease, 7.10), so the refused merge records
+  nothing (P27 asserts `Nothing to undo` after it on every git); the reflog page reads again after
+  the failed operation's refresh and shows the entry as `git reflog` does, git's message at HEAD's
+  commit, its menu that of any entry at HEAD's commit. P27's step 8 and
+  `Phase5ScenarioTests.Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_or_a_staged_file`
+  pin it.
 
 ## 16. Work breakdown
 

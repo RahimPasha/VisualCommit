@@ -669,23 +669,38 @@ public class Phase5ScenarioTests
             using var repo = await Scenarios.ProtectAsync();
             repo.WriteFile("src/app.txt", "app\nlocal\n");
             var before = await ExactStateAsync(repo);
+            var reflog = HeadLogFile(repo);
             var refused = await repo.GitAllowingFailureAsync(operation);
             Assert.False(refused.Succeeded, $"git {operation[0]} was not refused.");
             Assert.Equal(["src/app.txt"], BlockedPaths(refused.StandardError, "error: Your local changes to the following files would be overwritten by merge:"));
             Assert.Equal(before, await ExactStateAsync(repo));
+            Assert.Equal(reflog, HeadLogFile(repo));
             Assert.Empty(InProgressFiles(repo));
         }
 
         // A staged change to a file other does not touch refuses them too, git naming no conflict.
+        // Git after 2.36 (2.43, 2.55 and 2.56 seen) writes a no-op entry into HEAD's reflog for the
+        // refused merge, its old and new value HEAD's commit; 2.36 writes none (design 15.9).
         using (var merge = await Scenarios.ProtectAsync())
         {
             await merge.WriteFile("README.md", "# Protect\n\nStaged.\n").GitAsync("add", "--", "README.md");
             var before = await ExactStateAsync(merge);
+            var head = Subject(await merge.GitAsync("rev-parse", "HEAD"));
+            var reflog = HeadLogFile(merge);
             var refused = await merge.GitAllowingFailureAsync("merge", "--no-edit", "refs/heads/other");
             Assert.False(refused.Succeeded, "git merge was not refused.");
             Assert.Contains("Your local changes to the following files would be overwritten by merge:", refused.StandardError + refused.StandardOutput, StringComparison.Ordinal);
             Assert.Equal(before, await ExactStateAsync(merge));
             Assert.Empty(InProgressFiles(merge));
+            if (await SequenceTestSupport.GitVersionAsync(merge) is { Major: 2, Minor: 36 })
+            {
+                Assert.Equal(reflog, HeadLogFile(merge));
+            }
+            else
+            {
+                string[] expected = [$"{head} {head} merge refs/heads/other: updating HEAD", .. reflog];
+                Assert.Equal(expected, HeadLogFile(merge));
+            }
         }
 
         using var pick = await Scenarios.ProtectAsync();
@@ -1056,6 +1071,16 @@ public class Phase5ScenarioTests
             .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
         return string.Join('\n', [head, refs, index, status, .. files]);
     }
+
+    /// <summary>
+    /// HEAD's reflog as git's <c>logs/HEAD</c> holds it, newest first, each entry as "old new
+    /// message" (a no-op entry names the same commit twice).
+    /// </summary>
+    private static string[] HeadLogFile(TempRepo repo) =>
+        [.. File.ReadAllLines(Path.Combine(repo.Path, ".git", "logs", "HEAD"))
+            .Where(line => line.Length > 0)
+            .Reverse()
+            .Select(line => string.Join(' ', line.Split(' ', 3)[..2]) + " " + line[(line.IndexOf('\t', StringComparison.Ordinal) + 1)..])];
 
     /// <summary>Which of the files and folders that mark an operation in progress the git folder holds, in ordinal order.</summary>
     private static string[] InProgressFiles(TempRepo repo) =>
