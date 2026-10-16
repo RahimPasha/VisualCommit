@@ -75,12 +75,25 @@ public class BlameViewTests
 
         Assert.True(editor.IsHighlighted);
 
-        // A newer text replaces a tokenizing still running; without colours (D65) nothing is tokenized.
+        // A newer text replaces a tokenizing still running: the older one, cancelled, posts no
+        // colours, so its result neither ends the newer one's wait nor clears its colours. Only
+        // the newer one's tokens end the wait, and they colour the text.
         editor.Show(large, "src/Large.cs", highlighting: true);
+        editor.Show(large, "src/Large.cs", highlighting: true);
+        Assert.True(editor.IsTokenizing);
+        until = DateTime.UtcNow.AddSeconds(30);
+        while (editor.IsTokenizing)
+        {
+            Assert.True(DateTime.UtcNow < until, "The background tokenizing did not end.");
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        Assert.True(editor.IsHighlighted, "The replaced tokenizing ended the newer one's wait without its colours.");
+
+        // Without colours (D65) nothing is tokenized.
         editor.Show(large, "src/Large.cs", highlighting: false);
         Assert.False(editor.IsTokenizing);
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        DiffHost.Settle();
         Assert.False(editor.IsHighlighted);
     }
 

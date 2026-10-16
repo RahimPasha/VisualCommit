@@ -282,7 +282,7 @@ public class RepositoryOperationsProtectTests
         // P26 steps 5 and 6: with changes, the stash, the refusal, the stash popped back.
         await MakeChangesAsync(repo);
         await app.Repository.RefreshAsync();
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         calls = app.Calls.Snapshot().Count;
         await app.Operations.CheckoutAsync(AddTheGuide);
 
@@ -296,7 +296,7 @@ public class RepositoryOperationsProtectTests
                 "git stash pop --index stash@{0}",
             ],
             CallsSince(app, calls).Where(call => IsStashCall(call) || call.StartsWith("git switch", StringComparison.Ordinal)));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Empty(await repo.StashListAsync());
         Assert.Empty(await repo.BackupRefsAsync());
         app.AssertScriptFollowed();
@@ -623,20 +623,6 @@ public class RepositoryOperationsProtectTests
 
     private static async Task<IReadOnlyList<string>> StatusWithIgnoredAsync(TempRepo repo) =>
         [.. (await repo.GitAsync("status", "--porcelain=v1", "--untracked-files=all", "--ignored")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r'))];
-
-    /// <summary>The report's "exact state": HEAD, every ref, the index, the status with the ignored files, and every file with its contents.</summary>
-    private static async Task<string> ExactStateAsync(TempRepo repo)
-    {
-        var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
-        var refs = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
-        var index = (await repo.GitAsync("ls-files", "--stage")).StandardOutput;
-        var status = (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
-        var files = Directory.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories)
-            .Where(file => !Path.GetRelativePath(repo.Path, file).StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
-        return string.Join('\n', [head, refs, index, status, .. files]);
-    }
 
     /// <summary>
     /// The real repository, except for the methods <c>overrides</c> names: each answers with its

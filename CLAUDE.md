@@ -289,9 +289,11 @@ What to know about them:
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it. In that run, side by side: phases 0 to 2's
   walk-through 8 minutes, the phase 4 walk-through 16.5, `VisualCommit.Git.Tests` 18,
-  `VisualCommit.App.Tests` 21.5 and the phase 3 walk-through 22. CI takes about 15 minutes
-  (Windows), 15 (macOS) and 3 to 4 (Linux and the containers) per job, the Windows and macOS test
-  steps 13 to 14 of their 24-minute limit (D152). Phase 1's checks load and clone a 100k-commit repo,
+  `VisualCommit.App.Tests` 21.5 and the phase 3 walk-through 22. At phase 4's gate CI took
+  about 15 minutes (Windows), 15 (macOS) and 3 to 4 (Linux and the containers) per job; with phase
+  5's walk-throughs the Windows Test step reached 24 minutes, so the Test steps of Windows, macOS
+  and Linux now have a limit of 40 minutes and their jobs 50 (D184, amending D152); the
+  containers' limits stay. Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.

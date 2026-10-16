@@ -1,4 +1,5 @@
 using System.Text;
+using VisualCommit.Core.Diff;
 
 namespace VisualCommit.Git;
 
@@ -18,7 +19,7 @@ internal static class GitQuotedPaths
     {
         if (latin1.Length < 2 || latin1[0] != '"' || latin1[^1] != '"')
         {
-            return DecodeUtf8(latin1);
+            return DiffParser.DecodeUtf8(latin1);
         }
 
         var end = latin1.Length - 1;
@@ -60,7 +61,4 @@ internal static class GitQuotedPaths
 
         static bool IsOctal(char c) => c is >= '0' and <= '7';
     }
-
-    /// <summary>Text read as Latin-1 (one character per byte) decoded as the UTF-8 it is.</summary>
-    private static string DecodeUtf8(string latin1) => Utf8.GetString(Encoding.Latin1.GetBytes(latin1));
 }

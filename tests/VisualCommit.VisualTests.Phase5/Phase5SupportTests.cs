@@ -80,28 +80,28 @@ public sealed class Phase5SupportTests : Phase5Checks
     public async Task The_exact_state_tells_the_files_the_index_and_the_refs_apart()
     {
         using var repo = await Scenarios.ProtectAsync();
-        var built = await ExactStateAsync(repo);
-        Assert.Equal(built, await ExactStateAsync(repo));
+        var built = await repo.ExactStateAsync();
+        Assert.Equal(built, await repo.ExactStateAsync());
         Assert.Contains("settings.local.json: {", built, StringComparison.Ordinal);
         Assert.DoesNotContain(".git" + Path.DirectorySeparatorChar, built, StringComparison.Ordinal);
 
         repo.WriteFile("src/app.txt", "app\nlocal\n");
-        var changed = await ExactStateAsync(repo);
+        var changed = await repo.ExactStateAsync();
         Assert.NotEqual(built, changed);
         await repo.GitAsync("add", "--", "src/app.txt");
-        Assert.NotEqual(changed, await ExactStateAsync(repo));
+        Assert.NotEqual(changed, await repo.ExactStateAsync());
         await repo.GitAsync("reset", "--quiet", "--", "src/app.txt");
-        Assert.Equal(changed, await ExactStateAsync(repo));
+        Assert.Equal(changed, await repo.ExactStateAsync());
         await repo.GitAsync("checkout", "--", "src/app.txt");
-        Assert.Equal(built, await ExactStateAsync(repo));
+        Assert.Equal(built, await repo.ExactStateAsync());
 
         repo.WriteFile("scratch.txt", "scratch\n");
-        Assert.NotEqual(built, await ExactStateAsync(repo));
+        Assert.NotEqual(built, await repo.ExactStateAsync());
         File.Delete(Path.Combine(repo.Path, "scratch.txt"));
         await repo.GitAsync("branch", "topic");
-        Assert.NotEqual(built, await ExactStateAsync(repo));
+        Assert.NotEqual(built, await repo.ExactStateAsync());
         await repo.GitAsync("branch", "-D", "topic");
-        Assert.Equal(built, await ExactStateAsync(repo));
+        Assert.Equal(built, await repo.ExactStateAsync());
     }
 
     [Fact]

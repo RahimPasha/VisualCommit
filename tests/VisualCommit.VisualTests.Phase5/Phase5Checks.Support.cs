@@ -654,28 +654,6 @@ public abstract partial class Phase5Checks
         return [.. (await repo.BackupRefsAsync()).Select(entry => (BackupRef.Parse(entry.Name), entry.Name, entry.Sha))];
     }
 
-    /// <summary>
-    /// "The exact state" of a repository (the report's part P; the same reads as the pins'
-    /// <c>ExactStateAsync</c> in Phase5ScenarioTests), joined into one text to be compared whole:
-    /// HEAD (<c>git rev-parse HEAD</c>), every ref with its object (<c>git for-each-ref</c>), the
-    /// index (<c>git ls-files --stage</c>), the status with the untracked and ignored files
-    /// (<c>git status --porcelain=v2 --untracked-files=all --ignored</c>) and every file of the
-    /// working tree outside <c>.git</c> with its contents, in ordinal order.
-    /// </summary>
-    protected static async Task<string> ExactStateAsync(TempRepo repo)
-    {
-        ArgumentNullException.ThrowIfNull(repo);
-        var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
-        var refs = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
-        var index = (await repo.GitAsync("ls-files", "--stage")).StandardOutput;
-        var status = (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
-        var files = Directory.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories)
-            .Where(file => !Path.GetRelativePath(repo.Path, file).StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
-        return string.Join('\n', [head, refs, index, status, .. files]);
-    }
-
     /// <summary>The git calls the app made since <paramref name="mark"/> (a count of <see cref="ShellDriver.GitCalls"/> read before the input), as their command lines.</summary>
     protected static List<string> CallsSince(ShellDriver app, int mark)
     {

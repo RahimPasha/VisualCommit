@@ -30,9 +30,6 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
     /// </summary>
     public event EventHandler<int>? ScrollIntoViewRequested;
 
-    /// <summary>The open search bar's view model, or null.</summary>
-    public SearchViewModel? SearchBar => Search as SearchViewModel;
-
     /// <summary>The comparison the right panel shows (6.1, 6.2), or null.</summary>
     public CompareViewModel? Comparison => MultiSelection as CompareViewModel;
 
@@ -51,7 +48,7 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
 
         ClosePage();
         CloseDiff(returnFocus: false);
-        if (SearchBar is { } open)
+        if (Search is { } open)
         {
             open.RequestFocus();
             return;
@@ -193,20 +190,7 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
     /// <summary>How a comparison names a branch, a tag or HEAD: its short name as the menus give it.</summary>
     private string RefLabelOf(string fullName) =>
         Refs?.Refs.FirstOrDefault(gitRef => string.Equals(gitRef.FullName, fullName, StringComparison.Ordinal))?.Name
-        ?? ShortRefName(fullName);
-
-    private static string ShortRefName(string fullName)
-    {
-        foreach (var prefix in new[] { "refs/heads/", "refs/remotes/", "refs/tags/" })
-        {
-            if (fullName.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                return fullName[prefix.Length..];
-            }
-        }
-
-        return fullName;
-    }
+        ?? RepositoryOperations.ShortName(fullName);
 
     /// <summary>
     /// A reloaded or newly loading graph is searched where it left off (3.4), the comparison's links
@@ -215,12 +199,12 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
     /// </summary>
     partial void OnGraphChanged(CommitGraphData value)
     {
-        SearchBar?.OnGraphReplaced();
+        Search?.OnGraphReplaced();
         Comparison?.UpdateLinks();
         FollowLoadingGraph(value);
     }
 
-    partial void OnSelectedIndexChanged(int oldValue, int newValue) => SearchBar?.OnSelectionChanged();
+    partial void OnSelectedIndexChanged(int oldValue, int newValue) => Search?.OnSelectionChanged();
 
     /// <summary>Selecting the working-changes row ends a branch comparison (6.2).</summary>
     partial void OnIsWorkingRowSelectedChanged(bool oldValue, bool newValue)
@@ -271,7 +255,7 @@ public sealed partial class RepositoryViewModel : ISearchHost, ICompareHost
 
     void ISearchHost.CloseSearch()
     {
-        SearchBar?.Dispose();
+        Search?.Dispose();
         Search = null;
         SearchMarks = GraphSearchMarks.None;
         GraphFocusRequested?.Invoke(this, GraphFocusRequest.Graph);

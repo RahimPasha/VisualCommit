@@ -137,15 +137,5 @@ public partial class ReflogView : UserControl
     }
 
     /// <summary>Esc (11.1): the page closes, unless a diff covers it or a text box has the focus.</summary>
-    private bool HandleEscape()
-    {
-        if (_viewModel is not { IsClosed: false } viewModel || !IsEffectivelyVisible
-            || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
-        {
-            return false;
-        }
-
-        viewModel.Close();
-        return true;
-    }
+    private bool HandleEscape() => PageEscape.TryClose(this, _viewModel);
 }

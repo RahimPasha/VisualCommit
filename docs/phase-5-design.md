@@ -1844,12 +1844,14 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   block and failed with git's raw output: `UndoStepRefusalTests`), the undo walks a folder with
   `GitRepository.FilesUnder`, and phase 1's `AllIgnoredAsync` asks through `IgnoredAmongAsync`.
 - **A merge git refuses for something staged writes a reflog entry** (0.7, 7.7; found by CI run
-  38853641791 in P27): Git 2.43, 2.55 and 2.56 (exit 2, `Merge with strategy ort failed.`) write a
-  no-op entry `merge <the ref>: updating HEAD` into HEAD's reflog, its old and new value both HEAD's
-  commit; Git 2.36 writes none, and no git writes one for a merge refused for an unstaged change.
+  38853641791 in P27): Git 2.38 and later (2.38.0, 2.39.0, 2.43, 2.55 and 2.56; exit 2, `Merge
+  with strategy ort failed.`) write a no-op entry `merge <the ref>: updating HEAD` into HEAD's
+  reflog, its old and new value both HEAD's commit; Git 2.32.0, 2.34.1, 2.36.0 and 2.37.3 write none
+  (replayed by the review before the gate with MinGit), and no git writes one for a merge refused
+  for an unstaged change.
   0.7's "A refusal changes nothing: … HEAD's reflog" holds for the checkouts its row is about, and
   7.7's "a refused action still leaves HEAD's reflog as it was" for what the app's own reads write
-  (nothing); a refused merge on 2.43 and later adds this one entry. The app does not mind it: the
+  (nothing); a refused merge on 2.38 and later adds this one entry. The app does not mind it: the
   undo recording compares HEAD and the scope's refs before and after (7.7) and never reads HEAD's
   reflog (only a remote-tracking ref's, for a force push's lease, 7.10), so the refused merge records
   nothing (P27 asserts `Nothing to undo` after it on every git); the reflog page reads again after
@@ -1955,6 +1957,19 @@ The review before the gate (status step 25) found these; each is pinned by the t
   (`ReflogResult.ForcePushLeaseDepth`) (`ReflogTests`, `ReflogViewModelTests`).
 - **The activity log keeps no rows of a worktree not shown** (2.3): they held call records past the
   call log's bounds; `Show` makes them again (`ActivityLogViewModelTests`).
+- **One rule where two had grown** (the review's code-quality findings): the blame's and the
+  resolver's result's number column is one margin (`CodeNumberMargin`, the result's with its line
+  tints) and `PointAt` is `CodeTextEditor`'s; the three pages share their Esc rule (`PageEscape`);
+  "the exact state" of part P is `TempRepo.ExactStateAsync`, which the pins, the scripted run, the
+  real-window pass and the App and Git tests all read; the reflog's lost mark's tooltip is bound to
+  its constant; the git parsers decode UTF-8 with `DiffParser.DecodeUtf8`. 8.5's store tests are
+  `GraphFilterChangesTests`' (not a `SessionStoreTests`, which does not exist), and the toggle's
+  view tests are `HideAndSoloTests`'.
+- **Tests that the default run's load made fail** (CI run 38863530446): the app log is read while
+  the app may append to it only through `AppLogFile` (a plain `File.ReadAllText` is refused on
+  Windows while an entry is written); the 60,000-line diff's time is compared with a 6,000-line
+  one's under the same load instead of with 3 s; and the last wait for `git mergetool` to start
+  takes D185's form (`Scenarios.MergeToolTimeout`, outside the hang watchdog).
 
 ## 16. Work breakdown
 

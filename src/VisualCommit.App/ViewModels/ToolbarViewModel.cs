@@ -87,13 +87,13 @@ public sealed partial class ToolbarViewModel : ObservableObject
     public const string NoStashesText = "There are no stashes";
 
     /// <summary>Undo with an empty undo history (docs/phase-5-design.md 7.4's reason 4).</summary>
-    public const string NothingToUndoText = "Nothing to undo";
+    public const string NothingToUndoText = OperationTexts.NothingToUndo;
 
     /// <summary>Redo with nothing undone to redo (7.4's reason 4).</summary>
-    public const string NothingToRedoText = "Nothing to redo";
+    public const string NothingToRedoText = OperationTexts.NothingToRedo;
 
     /// <summary>Search, and Undo and Redo, while the interactive rebase's list is open (11.2, 12.4; 7.4's reason 3).</summary>
-    public const string CloseInteractiveRebaseText = "Close the interactive rebase first";
+    public const string CloseInteractiveRebaseText = OperationTexts.CloseInteractiveRebaseFirst;
 
     /// <summary>Search while the conflict resolver is open (11.2, 12.4).</summary>
     public const string CloseConflictResolverText = "Close the conflict resolver first";

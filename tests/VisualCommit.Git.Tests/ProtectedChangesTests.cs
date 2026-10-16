@@ -51,7 +51,7 @@ public class ProtectedChangesTests
         var repository = await OpenAsync(repo);
         var main = await repo.HeadAsync();
         var target = await ResolveCommitAsync(repo, "refs/heads/main~1");
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         var reflog = await HeadReflogAsync(repo);
 
         // Steps 3 and 4: the stash with the untracked files, without GIT_LITERAL_PATHSPECS (D108),
@@ -76,7 +76,7 @@ public class ProtectedChangesTests
         await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
         Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(stash!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
 
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Empty(await repo.StashListAsync());
     }
 
@@ -94,7 +94,7 @@ public class ProtectedChangesTests
 
         var repository = await OpenAsync(repo);
         var target = await ResolveCommitAsync(repo, "refs/heads/main~1");
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         void AssertFoldersKept(string when) =>
             Assert.True(folders.All(folder => Directory.Exists(Path.Combine(repo.Path, folder))), $"An empty folder was gone {when}.");
 
@@ -108,7 +108,7 @@ public class ProtectedChangesTests
         await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
         Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(stash!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
         AssertFoldersKept("after the way back");
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public class ProtectedChangesTests
         var repository = await OpenAsync(repo);
         var guide = await ResolveCommitAsync(repo, "refs/heads/main~3");
         var stash = withChanges ? await repository.StashAsync("Auto stash before checking out 73e0bab", includeUntracked: true, cancellationToken: TestCancelled) : null;
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         var reflog = await HeadReflogAsync(repo);
 
         var refused = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutDetachedAsync(guide, noOverwriteIgnore: true, cancellationToken: TestCancelled));
@@ -176,7 +176,7 @@ public class ProtectedChangesTests
         Assert.Equal(1, refused.ExitCode);
         Assert.Equal(GitFailureKind.CheckoutBlockedByUntrackedFiles, GitFailureClassifier.Classify(refused.StandardError, refused.StandardOutput, refused.ExitCode));
         Assert.Equal(["settings.local.json"], GitFailureClassifier.BlockedPaths(refused.StandardError));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Equal(reflog, await HeadReflogAsync(repo));
         Assert.Equal(Protect.SettingsLocal, Read(repo, "settings.local.json"));
         Assert.Equal(["settings.local.json"], await repository.FindIgnoredAsync(["settings.local.json"], TestCancelled));
@@ -287,7 +287,7 @@ public class ProtectedChangesTests
         await repo.WriteFile("todo.txt", "todo\n").GitAsync("add", "--", "todo.txt");
         File.Delete(Path.Combine(repo.Path, "docs", "guide.txt"));
         var repository = await OpenAsync(repo);
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         var stashBefore = await repo.RefTargetAsync("refs/stash");
 
         string? stash;
@@ -316,7 +316,7 @@ public class ProtectedChangesTests
 
         // Every change is in the working tree and the index again; the stash is a copy of them.
         await repo.GitAsync("stash", "drop", "--quiet");
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
     }
 
     // ---- The paths a stash would write (9.3) ------------------------------------------------------
@@ -384,7 +384,7 @@ public class ProtectedChangesTests
 
         repo.WriteFile("src/app.txt", "app\nlocal\n");
         var repository = await OpenAsync(repo);
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         var reflog = await HeadReflogAsync(repo);
 
         var refused = await Assert.ThrowsAsync<GitException>(() => checkout(repository));
@@ -392,7 +392,7 @@ public class ProtectedChangesTests
         Assert.Equal(1, refused.ExitCode);
         Assert.Equal(GitFailureKind.CheckoutBlockedByLocalChanges, GitFailureClassifier.Classify(refused.StandardError, refused.StandardOutput, refused.ExitCode));
         Assert.Equal(["src/app.txt"], GitFailureClassifier.BlockedPaths(refused.StandardError));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Equal(reflog, await HeadReflogAsync(repo));
         Assert.Equal("main", await repo.CurrentBranchAsync());
     }
@@ -414,21 +414,4 @@ public class ProtectedChangesTests
 
     private static string Read(TempRepo repo, string path) => File.ReadAllText(Path.Combine(repo.Path, path));
 
-    /// <summary>
-    /// What a refused operation must leave as it was (the pins' <c>ExactStateAsync</c>): HEAD,
-    /// every ref, the index's entries, the status with the ignored files, and every file of the
-    /// working tree with its contents.
-    /// </summary>
-    private static async Task<string> ExactStateAsync(TempRepo repo)
-    {
-        var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
-        var refs = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
-        var index = (await repo.GitAsync("ls-files", "--stage")).StandardOutput;
-        var status = (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
-        var files = Directory.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories)
-            .Where(file => !Path.GetRelativePath(repo.Path, file).StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
-        return string.Join('\n', [head, refs, index, status, .. files]);
-    }
 }

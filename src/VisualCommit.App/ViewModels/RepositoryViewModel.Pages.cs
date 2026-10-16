@@ -12,14 +12,14 @@ using VisualCommit.Core.Settings;
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
-/// The lead's hooks of phase 5 (docs/phase-5-design.md 11.1 to 11.3, 3.1, 3.3, 6.2, 7.9, 8.2 to
-/// 8.4): the pages that open in place of the graph and their host, a commit shown in the right
-/// panel from a page or a comparison, the graph's commit shown or revealed, the places of the
-/// comparison and the search with the search's marks, what the graph hides or solos with its
-/// reload, and the restore bar's tie to the undo history. The pages (WP6's file history, blame and
-/// reflog) open here; the comparison, the search and the filters (WP7) and the undo (WP3) fill
-/// the rest; until then nothing is searched, hidden or soloed, the restore bar is as in phase 4,
-/// and the comparison and the search throw.
+/// The graph area's pages and the graph's state of phase 5 (docs/phase-5-design.md 11.1 to 11.3,
+/// 3.1, 3.3, 7.9, 8.1 to 8.4): the page open in place of the graph (file history, blame, reflog)
+/// and its host; a commit shown in the right panel from a page or a comparison, or shown or
+/// revealed in the graph; the search bar's place and its marks (the search itself and the
+/// comparison are in RepositoryViewModel.Find.cs); what the graph hides or solos, with its
+/// reload (ApplyGraphFilterAsync; the filter's changes are in RepositoryViewModel.Filters.cs);
+/// and the restore bar's tie to the undo history (HideRestoreBar, ShowRestoreBarAsync, which
+/// RepositoryOperations.Undo.cs calls).
 /// </summary>
 public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
 {
@@ -43,7 +43,7 @@ public sealed partial class RepositoryViewModel : IFileHistoryHost, IBlameHost
     /// closed. <see cref="OpenSearch"/> opens it.
     /// </summary>
     [ObservableProperty]
-    public partial object? Search { get; private set; }
+    public partial SearchViewModel? Search { get; private set; }
 
     /// <summary>
     /// What the graph marks of the search (3.3), which <c>CommitGraphControl.Search</c> binds to:
