@@ -236,6 +236,178 @@ public class UndoStepRefusalTests
         Assert.Equal(still, await StillAsync(repo));
     }
 
+    // ---- What stands in the way of a file (15.9) -----------------------------------------------
+
+    [Theory]
+    [InlineData("notes", "notes/todo.txt")]
+    [InlineData("d/x", "d")]
+    public async Task A_discards_undo_and_its_restores_do_not_write_its_file_over_a_folder_or_a_file_made_in_its_way(string discarded, string made)
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        repo.WriteFile(discarded, "discarded file\n");
+        IReadOnlyList<string> paths = [discarded];
+        var discard = await RecordAsync(repository, UndoScope.Discard(paths), async () =>
+        {
+            var snapshot = await repository.SaveSnapshotAsync(paths, TestCancelled);
+            UndoCapture.Snapshot(snapshot);
+            await repository.DiscardAsync(paths, new HashSet<string>(StringComparer.Ordinal) { discarded }, TestCancelled);
+        });
+
+        // A folder holding the user's new work where the discarded file was, or a file where its
+        // folder was: git restore would delete either without a word.
+        repo.WriteFile(made, "my new work\n");
+        var start = await PictureAsync(repo);
+        var still = await StillAsync(repo);
+        var refusal = await RefusedAsync(repository, discard, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.FilesChanged, refusal.Kind);
+        Assert.Equal([discarded], refusal.Paths);
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(still, await StillAsync(repo));
+
+        // The backups list's restore (its step checks no recorded file) and phase 2's restore bar.
+        var snapshot = discard.Captured.Snapshot!;
+        var restore = await repository.RunUndoStepAsync(
+            new UndoStep(discard, UndoDirection.Redo, [new UndoEffect.RestoreSnapshot(snapshot, [])]) { Message = "VisualCommit: restore of the discarded files" },
+            NetworkOptions.None,
+            TestCancelled);
+        Assert.Equal(UndoRefusalKind.FilesChanged, restore.Refusal?.Kind);
+        Assert.Equal([discarded], restore.Refusal!.Paths);
+        var failure = await Assert.ThrowsAsync<IOException>(() => repository.RestoreSnapshotAsync(snapshot, TestCancelled));
+        Assert.Contains($"'{discarded}'", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal("my new work\n", ReadText(repo, made));
+    }
+
+    [Fact]
+    public async Task A_hard_resets_undo_does_not_write_a_saved_file_over_the_folder_the_user_filled_since()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+
+        // The reset's target tracks out/x.txt; main has an untracked file out, which the reset saves.
+        await repo.GitAsync("switch", "--quiet", "--create", "outs");
+        var target = await repo.CommitFileAsync("out/x.txt", "x\n", "o1");
+        await repo.CheckoutAsync("main");
+        repo.WriteFile("out", "my untracked out\n");
+        var entry = await RecordAsync(repository, UndoScope.Reset("main", target, ResetMode.Hard), () => UndoStepTests.AppHardResetAsync(repository, target));
+        Assert.Contains("out", entry.Captured.Snapshot!.Present);
+
+        // The user's own file in out/: the undo's move takes out/x.txt away, then the snapshot's
+        // file out would delete the folder with it.
+        repo.WriteFile("out/mine.txt", "mine\n");
+        var start = await PictureAsync(repo);
+        var refusal = await RefusedAsync(repository, entry, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.FilesChanged, refusal.Kind);
+        Assert.Equal(["out"], refusal.Paths);
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal("mine\n", ReadText(repo, "out/mine.txt"));
+
+        // With the folder as the reset left it, the undo goes through and the file comes back.
+        File.Delete(Path.Combine(repo.Path, "out", "mine.txt"));
+        await UndoAsync(repository, entry);
+        Assert.Equal("my untracked out\n", ReadText(repo, "out"));
+    }
+
+    // ---- A stash's pop and ignored files (15.9) -------------------------------------------------
+
+    [Fact]
+    public async Task A_stash_is_not_popped_back_over_an_ignored_file_made_where_it_adds_a_staged_one()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await StageIgnoredFileAsync(repo);
+        var stash = await RecordAsync(repository, UndoScope.Stash("wip"), async () =>
+        {
+            var made = await repository.StashAsync("wip", includeUntracked: true, cancellationToken: TestCancelled);
+            UndoCapture.Stash(made, includedUntracked: true, "wip");
+        });
+
+        // An ignored file where the stash adds its staged one: the status does not show it.
+        repo.WriteFile("s.local", "user ignored precious\n");
+        var start = await PictureAsync(repo);
+        var still = await StillAsync(repo);
+        var refusal = await RefusedAsync(repository, stash, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.IgnoredFilesInTheWay, refusal.Kind);
+        Assert.Equal(["s.local"], refusal.Paths);
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal(still, await StillAsync(repo));
+        Assert.Equal("user ignored precious\n", ReadText(repo, "s.local"));
+    }
+
+    [Fact]
+    public async Task The_automatic_stashs_checkout_is_not_undone_over_an_ignored_file_made_where_its_stash_adds_a_staged_one()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        await StageIgnoredFileAsync(repo);
+        var target = (await repo.GitAsync("rev-parse", "HEAD~2")).StandardOutput.Trim();
+        var message = $"Auto stash before checking out {target[..7]}";
+        var auto = await RecordAsync(repository, UndoScope.AutoStashCheckout(target[..7], "main"), async () =>
+        {
+            var made = await repository.StashAsync(message, includeUntracked: true, cancellationToken: TestCancelled);
+            UndoCapture.Stash(made, includedUntracked: true, message);
+            await repository.CheckoutDetachedAsync(target, noOverwriteIgnore: true, cancellationToken: TestCancelled);
+        });
+
+        // A build writes the ignored file again while HEAD is detached.
+        repo.WriteFile("s.local", "regenerated\n");
+        var start = await PictureAsync(repo);
+        var refusal = await RefusedAsync(repository, auto, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.IgnoredFilesInTheWay, refusal.Kind);
+        Assert.Equal(["s.local"], refusal.Paths);
+
+        // The switch back was put back: detached at the target, the stash listed, the file as written.
+        Assert.Equal(start, await PictureAsync(repo));
+        Assert.Equal("regenerated\n", ReadText(repo, "s.local"));
+    }
+
+    /// <summary>An ignored path (<c>.git/info/exclude</c>, for every commit) with a file staged at it by force.</summary>
+    private static async Task StageIgnoredFileAsync(TempRepo repo)
+    {
+        var exclude = Path.Combine(repo.Path, ".git", "info", "exclude");
+        Directory.CreateDirectory(Path.GetDirectoryName(exclude)!);
+        File.AppendAllText(exclude, "\n*.local\n");
+        repo.WriteFile("s.local", "staged secret\n");
+        await repo.GitAsync("add", "--force", "s.local");
+    }
+
+    // ---- A move git could not finish (15.9) -----------------------------------------------------
+
+    [Fact]
+    public async Task A_keep_move_that_git_stops_at_a_file_held_open_puts_back_the_files_it_rewrote()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        var merged = await PictureAsync(repo);
+
+        // The undo deletes f.txt and rewrites src/c.txt, held open as an editor or a build holds a
+        // file on Windows; elsewhere an open file can be replaced and the undo goes through.
+        var held = Path.Combine(repo.Path, "src", "c.txt");
+        using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                await UndoAsync(repository, merge);
+                return;
+            }
+
+            await Assert.ThrowsAsync<GitException>(() => repository.RunUndoStepAsync(UndoStep.For(merge, UndoDirection.Undo), NetworkOptions.None, TestCancelled));
+            Assert.Equal(merged, await PictureAsync(repo));
+        }
+
+        merge = await UndoAsync(repository, merge);
+        var undone = await PictureAsync(repo);
+
+        // The redo adds f.txt before it stops at the held file: the file it added goes again.
+        using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await Assert.ThrowsAsync<GitException>(() => repository.RunUndoStepAsync(UndoStep.For(merge, UndoDirection.Redo), NetworkOptions.None, TestCancelled));
+            Assert.Equal(undone, await PictureAsync(repo));
+        }
+    }
+
     /// <summary>What a refused step must leave as it was (7.5): every ref (the backups too), the index's entries, the files, the stash list and HEAD's reflog.</summary>
     private static async Task<(RepoPicture Picture, string Refs, string Reflog)> StillAsync(TempRepo repo) =>
         (await PictureAsync(repo) with { Status = string.Empty },

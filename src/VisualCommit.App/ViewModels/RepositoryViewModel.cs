@@ -1072,7 +1072,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>
     /// A hash of each working-tree file's bytes, null for a file that does not exist; a file that
-    /// cannot be read gets a value of its own, so that it counts as changed.
+    /// cannot be read gets a value of its own, so that it counts as changed, and so does a path
+    /// where a folder holding files or a file in a folder's place now stands (docs/phase-5-design.md
+    /// 15.9), which the restore then refuses rather than delete.
     /// </summary>
     private Task<Dictionary<string, string?>> FingerprintAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
@@ -1087,7 +1089,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     {
                         if (!File.Exists(full))
                         {
-                            return null;
+                            return WorkingTreeFiles.IsInTheWayOfFile(root, path) ? RecordedFile.InTheWay : null;
                         }
 
                         using var stream = File.OpenRead(full);

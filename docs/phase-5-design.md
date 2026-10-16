@@ -1875,6 +1875,41 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   (`HeadlessInputClock`), as a user's double-click carries the times of its presses however busy
   the app is (`ShellDriverTests.A_double_click_stays_one_when_its_first_click_takes_longer_than_the_double_tap_time`).
 
+The review before the gate (status step 25) found these; each is pinned by the tests named.
+
+- **What stands in a file's way** (7.3, 7.9, 7.10; `WorkingTreeFiles.IsInTheWayOfFile`): git's
+  `restore --source=<snapshot> --worktree` writes with force, so a folder holding files where the
+  snapshot has a file, or a file where it has a folder, goes without a word (2.36 and 2.55 alike),
+  and `File.Exists` had taken either for absence, which a discard's undo expects. The recorded
+  files (`RecordedFile.InTheWay`, neither a hash nor absence), the restore bar's hash of them and
+  its phase-2 fingerprint tell such a path apart, so the simulation refuses with `1 file has
+  changed since: notes`; the step's own check of a `RestoreSnapshot` refuses the same before it
+  writes (also at its place, after a hard reset's Keep move, where the state left was itself a
+  folder, and for the backups list's restores, which record none); and `RestoreSnapshotAsync`
+  itself throws (`Nothing was restored: …`) for phase 2's restore bar. An empty folder is replaced
+  and loses nothing, so it is no reason (`UndoStepRefusalTests`).
+- **A stash's pop and ignored files** (7.3, D169): `stash pop` overwrites an ignored file where the
+  stash adds a staged one (`git add -f`, or a path `info/exclude` ignores), which neither the status
+  nor the stash's untracked part shows. The undo's `StashPop` check adds the Keep move's ignored-files
+  guard against the stash's base (`diff-tree --diff-filter=A <s>^1 <s>`), refusing with `1 ignored
+  file is in the way: …` (the undo of a stash and of the automatic stash's checkout). The menus'
+  Apply and Pop keep git's behaviour, as 9.3 says (Q5).
+- **A stash git could not finish** (0.7, 9.2): a tracked file held open on Windows stops not git's
+  clean but its reset, after it rewrote every other tracked file, with no index written
+  (`unable to unlink old 'a.txt'`, `Could not reset index file`). `PutBackUnclearedStashAsync` puts
+  back from the stash both the untracked files and the tracked files that no longer match it
+  (`git diff --name-only <stash>`, then `git restore --source=<stash> --worktree`); "They are also
+  saved in the stash" is said only when every path matches again. The undo's own `StashPush` puts
+  back the same before its step fails (`ProtectedChangesTests`, `RepositoryOperationsProtectTests`).
+- **A Keep move git could not finish** (7.3, 7.5): `read-tree -m -u` that fails at a file held open
+  goes on past it and writes no index; the move's other files are put back from the index
+  (`checkout-index -f`, which skips the held file) and the files only the target has are deleted
+  where they hold its version, then the step fails with git's line (`UndoStepRefusalTests`).
+- **Empty untracked folders** (9.2): `stash push --include-untracked` removes them (its `clean -d`)
+  and no stash holds a folder; `StashAsync` makes again those that were empty before it
+  (`ls-files --others --directory`), for the automatic stash, its redo and the toolbar's stash
+  alike (`ProtectedChangesTests`).
+
 ## 16. Work breakdown
 
 Each package is built in its own worktree on a branch made **from `phase/5-history`**

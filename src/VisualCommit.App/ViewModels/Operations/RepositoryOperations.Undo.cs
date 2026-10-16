@@ -552,7 +552,11 @@ public sealed partial class RepositoryOperations
         return refusal;
     }
 
-    /// <summary>The SHA-256 of a working-tree file's bytes, upper-case hex, or null when it does not exist or cannot be read.</summary>
+    /// <summary>
+    /// The SHA-256 of a working-tree file's bytes, upper-case hex, as the history records it: null
+    /// when it does not exist, <see cref="RecordedFile.InTheWay"/> when a folder holding files or a
+    /// file in a folder's place stands there (15.9), <c>unreadable</c> when it cannot be read.
+    /// </summary>
     private static string? Sha256Of(string root, string path)
     {
         var full = System.IO.Path.Combine(root, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
@@ -560,7 +564,7 @@ public sealed partial class RepositoryOperations
         {
             if (!File.Exists(full))
             {
-                return null;
+                return WorkingTreeFiles.IsInTheWayOfFile(root, path) ? RecordedFile.InTheWay : null;
             }
 
             using var stream = File.OpenRead(full);

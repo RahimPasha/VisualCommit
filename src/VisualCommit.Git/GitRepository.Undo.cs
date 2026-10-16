@@ -217,7 +217,10 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// Each path's raw bytes kept as a blob (<c>hash-object -w --no-filters</c>, 0.5: written back
-    /// byte for byte, whatever <c>core.autocrlf</c> says) and their SHA-256, or absent.
+    /// byte for byte, whatever <c>core.autocrlf</c> says) and their SHA-256, or absent, or
+    /// <see cref="RecordedFile.InTheWay"/> where a folder holding files stands at the path or a
+    /// file where one of its folders should be (15.9): that is not absence, which a step may
+    /// write over.
     /// </summary>
     internal async Task<IReadOnlyList<RecordedFile>> RecordUndoFilesAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
@@ -229,10 +232,14 @@ public sealed partial class GitRepository
             {
                 hashes[path] = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(full, cancellationToken).ConfigureAwait(false)));
             }
+            else if (WorkingTreeFiles.IsInTheWayOfFile(WorkingDirectory, path))
+            {
+                hashes[path] = RecordedFile.InTheWay;
+            }
         }
 
         var blobs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var chunk in UndoPathChunks([.. paths.Where(hashes.ContainsKey)]))
+        foreach (var chunk in UndoPathChunks([.. paths.Where(path => hashes.TryGetValue(path, out var hash) && !string.Equals(hash, RecordedFile.InTheWay, StringComparison.Ordinal))]))
         {
             var command = new GitCommand(["hash-object", "-w", "--no-filters", "--", .. chunk]) { WorkingDirectory = WorkingDirectory };
             var ids = SplitLines((await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput);
@@ -244,7 +251,7 @@ public sealed partial class GitRepository
 
         return [.. paths.Select(path => blobs.TryGetValue(path, out var blob)
             ? new RecordedFile(path, blob, hashes[path])
-            : new RecordedFile(path, null, null))];
+            : new RecordedFile(path, null, hashes.GetValueOrDefault(path)))];
     }
 
     /// <summary>The paths' index entries as <c>ls-files --stage -z</c> prints them (unmerged stages included), without the NUL; a path names itself only, not what lies below it.</summary>
@@ -580,7 +587,9 @@ public sealed partial class GitRepository
             MoveDetachedHead { Mode: MoveMode.Keep } move => await IgnoredInTheWayAsync(move.From, move.To).ConfigureAwait(false),
             IndexTo index => await IndexHoldsAsync(index.From, index.Paths).ConfigureAwait(false) ? null : new UndoRefusal(UndoRefusalKind.IndexChanged),
             IndexEntries entries => await FlagsAsync(entries.Paths).ConfigureAwait(false),
-            StashPop { Sha: { } sha } => await StashUntrackedInTheWayAsync(sha).ConfigureAwait(false),
+            StashPop { Sha: { } sha } => await StashUntrackedInTheWayAsync(sha).ConfigureAwait(false)
+                ?? await IgnoredInTheWayAsync(sha + "^1", sha).ConfigureAwait(false),
+            RestoreSnapshot restore => SnapshotInTheWay(restore.Snapshot),
             GitignoreBytes => new FileInfo(_repository.WorkingTreePath(".gitignore")).LinkTarget is not null
                 ? new UndoRefusal(UndoRefusalKind.FilesChanged, Paths: [".gitignore"])
                 : null,
@@ -619,6 +628,9 @@ public sealed partial class GitRepository
         /// and an ignored file where it adds a folder, without a word, on every git from 2.34
         /// (0.4). So the paths the move adds (<c>diff-tree --diff-filter=A</c>), the files inside a
         /// folder at one of them and the parent folders that are files on disk are asked about.
+        /// A stash's pop has the same guard against the stash's base (15.9): <c>stash pop</c>
+        /// overwrites an ignored file where the stash adds a staged file, which neither the
+        /// status nor its untracked files show.
         /// </summary>
         private async Task<UndoRefusal?> IgnoredInTheWayAsync(string from, string to)
         {
@@ -682,6 +694,21 @@ public sealed partial class GitRepository
                 .Where(path => IsFileOrLink(_repository.WorkingTreePath(path)) || Directory.Exists(_repository.WorkingTreePath(path)))
                 .ToList();
             return inTheWay.Count > 0 ? new UndoRefusal(UndoRefusalKind.StatusChanged, Paths: inTheWay) : null;
+        }
+
+        /// <summary>
+        /// A snapshot's files whose restore would delete what stands at their path now (15.9): a
+        /// folder holding files, or a file where one of the path's folders should be. Git's
+        /// <c>restore --worktree</c> writes with force and deletes either without a word; the
+        /// simulation's hash check cannot see it where the state left was itself a folder (a hard
+        /// reset's undo) or was not recorded (the backups list's restores).
+        /// </summary>
+        private UndoRefusal? SnapshotInTheWay(DiscardSnapshot snapshot)
+        {
+            var inTheWay = snapshot.Paths
+                .Where(path => snapshot.Present.Contains(path) && WorkingTreeFiles.IsInTheWayOfFile(_repository.WorkingDirectory, path))
+                .ToList();
+            return inTheWay.Count > 0 ? new UndoRefusal(UndoRefusalKind.FilesChanged, Paths: inTheWay) : null;
         }
 
         // ---- Applying (7.5 step 4) ---------------------------------------------------------------
@@ -987,7 +1014,7 @@ public sealed partial class GitRepository
                     await _repository.RestoreSnapshotAsync(restore.Snapshot, Token).ConfigureAwait(false);
                     break;
                 case StashPush push:
-                    _madeStash = await _repository.StashAsync(push.Message, push.IncludeUntracked, _options, Token).ConfigureAwait(false);
+                    _madeStash = await StashPushAsync(push).ConfigureAwait(false);
                     _madeStashPopped = false;
                     break;
                 case StashPop pop:
@@ -1056,6 +1083,7 @@ public sealed partial class GitRepository
                         GitOutput: merged.StandardError.Trim());
                 }
 
+                await PutBackHalfMoveAsync(from, to).ConfigureAwait(false);
                 merged.EnsureSuccess(readTree);
             }
 
@@ -1083,6 +1111,63 @@ public sealed partial class GitRepository
                     Name: branch,
                     Sha: await _repository.ResolveAsync(HeadsPrefix + branch, Token).ConfigureAwait(false),
                     GitOutput: updated.StandardError.Trim());
+        }
+
+        /// <summary>
+        /// A Keep move's <c>read-tree -m -u</c> that failed after it began writing (a file held
+        /// open on Windows: <c>unable to unlink old 'a.txt'</c>, 15.9): git checks every path
+        /// before it writes and refuses for a local change, so it rewrote only clean files, went on
+        /// past the one it could not write, and wrote no index, which still holds
+        /// <paramref name="from"/>. The move's files go back to it: the paths only
+        /// <paramref name="to"/> has are deleted where they hold its version (<c>hash-object</c>
+        /// against <c>diff-tree</c>'s blob; anything else there stays), then the others are written
+        /// from the index (<c>checkout-index -f</c>, which skips an entry still up to date, the held
+        /// file among them). A failure here is logged: the move's own failure is what the step shows.
+        /// </summary>
+        private async Task PutBackHalfMoveAsync(string from, string to)
+        {
+            try
+            {
+                var raw = SplitNul(await ReadAsync("diff-tree", "-r", "-z", "--no-renames", from, to).ConfigureAwait(false));
+                var added = new List<(string Path, string Blob)>();
+                var others = new List<string>();
+                for (var i = 0; i + 1 < raw.Length; i += 2)
+                {
+                    var fields = raw[i].Split(' ');
+                    if (fields.Length >= 5 && fields[4] == "A")
+                    {
+                        added.Add((raw[i + 1], fields[3]));
+                    }
+                    else
+                    {
+                        others.Add(raw[i + 1]);
+                    }
+                }
+
+                var present = added.Where(file => File.Exists(_repository.WorkingTreePath(file.Path))).ToList();
+                if (present.Count > 0)
+                {
+                    var hashes = SplitLines(await ReadAsync(["hash-object", "--", .. present.Select(file => file.Path)]).ConfigureAwait(false));
+                    for (var i = 0; i < present.Count && i < hashes.Count; i++)
+                    {
+                        if (string.Equals(hashes[i], present[i].Blob, StringComparison.Ordinal))
+                        {
+                            _repository.DeleteWorkingFile(present[i].Path);
+                        }
+                    }
+                }
+
+                if (others.Count > 0)
+                {
+                    await WriteWithInputAsync(string.Concat(others.Select(path => path + "\0")), "checkout-index", "-f", "-q", "-z", "--stdin").ConfigureAwait(false);
+                }
+
+                _repository._log.Info($"Put back the files of a Keep move from {from[..Math.Min(7, from.Length)]} to {to[..Math.Min(7, to.Length)]} that git could not finish.");
+            }
+            catch (Exception ex) when (ex is GitException or IOException or UnauthorizedAccessException)
+            {
+                _repository._log.Error($"Could not put back the files of a Keep move from {from} to {to} that git could not finish.", ex);
+            }
         }
 
         /// <summary>
@@ -1255,6 +1340,40 @@ public sealed partial class GitRepository
             fullName.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? fullName[HeadsPrefix.Length..]
             : fullName.StartsWith(TagsPrefix, StringComparison.Ordinal) ? fullName[TagsPrefix.Length..]
             : fullName;
+
+        /// <summary>
+        /// The step's <c>stash push</c>. One that git saved but could not finish (a file held open
+        /// on Windows stops its clean or its reset, 0.7, 15.9) leaves its stash in the list, as git
+        /// does, and fails the step with git's output after what git took out of the working tree
+        /// is put back from the stash (<see cref="PutBackUnclearedStashAsync"/>); the step then
+        /// reverses what it applied before.
+        /// </summary>
+        private async Task<string?> StashPushAsync(StashPush push)
+        {
+            var before = await _repository.ResolveAsync("refs/stash", Token).ConfigureAwait(false);
+            try
+            {
+                return await _repository.StashAsync(push.Message, push.IncludeUntracked, _options, Token).ConfigureAwait(false);
+            }
+            catch (GitException failure)
+            {
+                var stash = await _repository.ResolveAsync("refs/stash", CancellationToken.None).ConfigureAwait(false);
+                if (stash is not null && !string.Equals(stash, before, StringComparison.Ordinal))
+                {
+                    _repository._log.Warning($"The {(_step.Direction == UndoDirection.Undo ? "undo" : "redo")} of {_step.Entry.Text}: git saved the stash {stash} but could not clear the working tree: {failure.Message}");
+                    try
+                    {
+                        await _repository.PutBackUnclearedStashAsync(stash, _options, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (GitException putBack)
+                    {
+                        _repository._log.Error($"Could not put back the working tree from the stash {stash} after a failed {(_step.Direction == UndoDirection.Undo ? "undo" : "redo")} of {_step.Entry.Text}.", putBack);
+                    }
+                }
+
+                throw;
+            }
+        }
 
         /// <summary>
         /// <c>stash pop --index stash@{n}</c>, found by its commit: the recorded one, or the one the

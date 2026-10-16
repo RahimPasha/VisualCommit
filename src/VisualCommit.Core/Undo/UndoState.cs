@@ -84,9 +84,21 @@ public sealed record ConfigEntry(string Key, string Value)
 /// </summary>
 /// <param name="Path">The repository-relative path, with <c>/</c>.</param>
 /// <param name="Blob">The blob that holds the file's bytes, or null when the file did not exist.</param>
-/// <param name="Sha256">The SHA-256 of the file's bytes, upper-case hex, or null when the file did not exist.</param>
+/// <param name="Sha256">
+/// The SHA-256 of the file's bytes, upper-case hex, or null when the file did not exist, or
+/// <see cref="InTheWay"/> when something other than a file stood at its path.
+/// </param>
 public sealed record RecordedFile(string Path, string? Blob, string? Sha256)
 {
+    /// <summary>
+    /// The <see cref="Sha256"/> of a path where something other than a file stands
+    /// (<see cref="WorkingTreeFiles.IsInTheWayOfFile"/>: a folder holding files, or a file where
+    /// one of the path's folders should be; docs/phase-5-design.md 15.9). It equals neither a
+    /// file's hash nor absence, so that the checks refuse a step that would write the file there:
+    /// git's restore would delete what stands there without a word.
+    /// </summary>
+    public const string InTheWay = "in the way";
+
     public bool Exists => Blob is not null;
 }
 

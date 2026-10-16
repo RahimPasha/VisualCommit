@@ -676,31 +676,64 @@ public class RepositoryOperationsProtectTests
         }
     }
 
+    [Fact]
+    public async Task A_stash_whose_reset_git_could_not_finish_puts_back_the_tracked_files_it_rewrote_before_it_says_they_are_in_both_places()
+    {
+        using var repo = await Scenarios.ProtectAsync();
+        repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("src/lib.txt", "lib\nlocal\n").WriteFile("other.txt", "other\n");
+        using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => HalfMadeStash.Wrap(inner, repo, failRestore: false, trackedHeld: true));
+        app.Dialogs.CloseError();
+
+        await app.Operations.CheckoutAsync(DescribeTheApp);
+
+        // Design 15.9: git's reset rewrote src/lib.txt before it stopped at the held src/app.txt;
+        // both are back with the untracked file before the dialog says the changes are in both places.
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            "Git could not clear your changes from the working tree, so nothing was checked out. They are also saved in the stash \"Auto stash before checking out f39ea2d\".",
+            dialog.Summary);
+        Assert.Contains("unable to unlink old 'src/app.txt'", dialog.Output, StringComparison.Ordinal);
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+        Assert.Single(await repo.StashListAsync());
+        Assert.Equal(("app\nlocal\n", "lib\nlocal\n", "other\n"), (Read(repo, "src/app.txt"), Read(repo, "src/lib.txt"), Read(repo, "other.txt")));
+        app.AssertScriptFollowed();
+    }
+
     /// <summary>
     /// The real repository, except that <see cref="IGitRepository.StashAsync"/> stops as git does
-    /// when another program holds an untracked file open on Windows (design 0.7): the stash is
-    /// saved, the other untracked file deleted, the held one and the tracked change left, and
-    /// git's warning thrown. With <c>failRestore</c>, putting the files back fails too.
+    /// when another program holds a file open on Windows (design 0.7, 15.9): the stash is saved,
+    /// the other untracked file deleted, and git's error thrown. An untracked file held
+    /// (<c>held.txt</c>) stops git's clean, leaving it and the tracked changes; a tracked one held
+    /// (<c>trackedHeld</c>: <c>src/app.txt</c>) stops git's reset after it rewrote the other tracked
+    /// file (<c>src/lib.txt</c>). With <c>failRestore</c>, putting the files back fails too.
     /// </summary>
     private static class HalfMadeStash
     {
-        public static IGitRepository Wrap(IGitRepository inner, TempRepo repo, bool failRestore) => Intercepting.Wrap(inner, new()
+        public static IGitRepository Wrap(IGitRepository inner, TempRepo repo, bool failRestore, bool trackedHeld = false) => Intercepting.Wrap(inner, new()
         {
-            [nameof(IGitRepository.StashAsync)] = args => StopHalfWayAsync(inner, repo, (string?)args[0]),
-            [nameof(IGitRepository.RestoreWorkingTreeFilesAsync)] = args => failRestore
-                ? Task.FromException(new GitException("git restore", 128, "error: unable to write other.txt\n"))
+            [nameof(IGitRepository.StashAsync)] = args => StopHalfWayAsync(inner, repo, (string?)args[0], trackedHeld),
+            [nameof(IGitRepository.PutBackUnclearedStashAsync)] = args => failRestore
+                ? Task.FromException<bool>(new GitException("git restore", 128, "error: unable to write other.txt\n"))
                 : null,
         });
 
-        private static async Task<string?> StopHalfWayAsync(IGitRepository inner, TempRepo repo, string? message)
+        private static async Task<string?> StopHalfWayAsync(IGitRepository inner, TempRepo repo, string? message, bool trackedHeld)
         {
             var stash = await inner.StashAsync(message, includeUntracked: true);
             await repo.GitAsync("stash", "apply", "--index", stash!);
             File.Delete(Path.Combine(repo.Path, "other.txt"));
+            if (trackedHeld)
+            {
+                // The reset rewrote src/lib.txt and wrote no index.
+                File.WriteAllText(Path.Combine(repo.Path, "src", "lib.txt"), Scenarios.ProtectFiles.Lib);
+            }
+
             throw new GitException(
                 $"git stash push --include-untracked --message \"{message}\"",
-                1,
-                "warning: failed to remove held.txt: Permission denied\n",
+                trackedHeld ? 128 : 1,
+                trackedHeld
+                    ? "error: unable to unlink old 'src/app.txt': Invalid argument\nfatal: Could not reset index file to revision 'HEAD'.\n"
+                    : "warning: failed to remove held.txt: Permission denied\n",
                 standardOutput: $"Saved working directory and index state On main: {message}\n");
         }
     }

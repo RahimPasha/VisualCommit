@@ -226,11 +226,13 @@ public sealed partial class RepositoryOperations
     /// 9.2 step 3's failure: when <c>refs/stash</c> did not move from <paramref name="before"/>,
     /// git saved nothing and changed nothing (a file another program held exclusively): the
     /// checkout's default dialog. When it moved, git saved the stash but stopped clearing the
-    /// working tree (a file held open for reading on Windows, 0.7: the other untracked files
-    /// deleted, the tracked changes left): every untracked file of the stash's third parent that is
-    /// missing now is put back (<c>git restore --source=&lt;stash&gt;^3 --worktree</c>), nothing is
-    /// checked out, the stash is kept, and "Checkout failed" says so with git's output. The stash
-    /// is not given to the undo history: nothing was checked out.
+    /// working tree (a file held open for reading on Windows, 0.7 and 15.9: an untracked one stops
+    /// its clean after it deleted the other untracked files; a tracked one stops its reset after it
+    /// rewrote the other tracked files): what git took out is put back from the stash
+    /// (<see cref="IGitRepository.PutBackUnclearedStashAsync"/>), nothing is checked out, the stash
+    /// is kept, and "Checkout failed" says so with git's output: that the changes are in both
+    /// places only when every path is back, otherwise to keep the stash. The stash is not given to
+    /// the undo history: nothing was checked out.
     /// </summary>
     private async Task<(FailureDisplay? Display, OperationReport Report)> StashNotFinishedAsync(OperationText text, string name, GitException failure, string? before, NetworkOptions options)
     {
@@ -244,14 +246,11 @@ public sealed partial class RepositoryOperations
         var allBack = false;
         try
         {
-            var untracked = (await Git.ReadStashPathsAsync(stash)).Untracked;
-            var missing = untracked.Where(path => !ExistsInWorkingTree(path)).ToList();
-            await Git.RestoreWorkingTreeFilesAsync(stash + "^3", missing, options);
-            allBack = untracked.All(ExistsInWorkingTree);
+            allBack = await Git.PutBackUnclearedStashAsync(stash, options);
         }
         catch (GitException ex)
         {
-            Log.Warning($"{Repository.Name}: {text.Title}: the untracked files git deleted could not all be put back.", ex);
+            Log.Warning($"{Repository.Name}: {text.Title}: the files git took out could not all be put back.", ex);
         }
 
         var display = new FailureDisplay(text.ErrorTitle, allBack ? OperationTexts.AutoStashNotCleared(name) : OperationTexts.AutoStashPartlyCleared(name));

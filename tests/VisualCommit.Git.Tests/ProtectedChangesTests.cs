@@ -81,6 +81,37 @@ public class ProtectedChangesTests
     }
 
     [Fact]
+    public async Task The_automatic_stash_keeps_the_empty_untracked_folders_through_the_checkout_and_the_way_back()
+    {
+        using var repo = await Scenarios.ProtectAsync();
+        await MakeChangesAsync(repo);
+        repo.WriteFile("work/file.txt", "work\n");
+        string[] folders = ["uploads", "data/cache", "work/empty"];
+        foreach (var folder in folders)
+        {
+            Directory.CreateDirectory(Path.Combine(repo.Path, folder));
+        }
+
+        var repository = await OpenAsync(repo);
+        var target = await ResolveCommitAsync(repo, "refs/heads/main~1");
+        var before = await ExactStateAsync(repo);
+        void AssertFoldersKept(string when) =>
+            Assert.True(folders.All(folder => Directory.Exists(Path.Combine(repo.Path, folder))), $"An empty folder was gone {when}.");
+
+        // git's clean -d removes them, and no stash holds a folder (15.9).
+        var stash = await repository.StashAsync(AutoStashMessage, includeUntracked: true, cancellationToken: TestCancelled);
+        Assert.False(File.Exists(Path.Combine(repo.Path, "work", "file.txt")));
+        AssertFoldersKept("after the stash");
+        await repository.CheckoutDetachedAsync(target, noOverwriteIgnore: true, cancellationToken: TestCancelled);
+        AssertFoldersKept("after the checkout");
+
+        await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
+        Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(stash!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
+        AssertFoldersKept("after the way back");
+        Assert.Equal(before, await ExactStateAsync(repo));
+    }
+
+    [Fact]
     public async Task The_stash_takes_nothing_on_a_clean_tree_or_with_only_a_staged_submodule_and_refuses_conflicted_files()
     {
         using var repo = await Scenarios.ProtectAsync();
@@ -246,6 +277,46 @@ public class ProtectedChangesTests
         Assert.Equal("other\n", Read(repo, "other.txt"));
         Assert.Equal("held\n", Read(repo, "held.txt"));
         Assert.Equal([" M src/app.txt", "?? held.txt", "?? other.txt"], await StatusAsync(repo, ignored: false));
+    }
+
+    [Fact]
+    public async Task A_tracked_file_held_open_stops_the_stashs_reset_after_it_rewrote_the_others_and_the_put_back_gives_them_back()
+    {
+        using var repo = await Scenarios.ProtectAsync();
+        await MakeChangesAsync(repo);
+        await repo.WriteFile("todo.txt", "todo\n").GitAsync("add", "--", "todo.txt");
+        File.Delete(Path.Combine(repo.Path, "docs", "guide.txt"));
+        var repository = await OpenAsync(repo);
+        var before = await ExactStateAsync(repo);
+        var stashBefore = await repo.RefTargetAsync("refs/stash");
+
+        string? stash;
+        using (new FileStream(Path.Combine(repo.Path, "src", "app.txt"), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                // Elsewhere an open file can be replaced: the stash completes.
+                Assert.NotNull(await repository.StashAsync("Held", includeUntracked: true, cancellationToken: TestCancelled));
+                return;
+            }
+
+            // 15.9: the stash is saved, git's clean deletes scratch.txt, its reset rewrites every
+            // tracked file it can (src/lib.txt, docs/guide.txt, todo.txt), stops at the held one
+            // ("unable to unlink") and writes no index.
+            var failure = await Assert.ThrowsAsync<GitException>(() => repository.StashAsync("Held", includeUntracked: true, cancellationToken: TestCancelled));
+            Assert.Contains("src/app.txt", failure.StandardError, StringComparison.Ordinal);
+            stash = await repo.RefTargetAsync("refs/stash");
+            Assert.NotEqual(stashBefore, stash);
+            Assert.Equal("lib\n", Read(repo, "src/lib.txt"));
+            Assert.Equal("app\nunstaged\n", Read(repo, "src/app.txt"));
+
+            // Put back while the file is still held, as the app does.
+            Assert.True(await repository.PutBackUnclearedStashAsync(stash!, cancellationToken: TestCancelled));
+        }
+
+        // Every change is in the working tree and the index again; the stash is a copy of them.
+        await repo.GitAsync("stash", "drop", "--quiet");
+        Assert.Equal(before, await ExactStateAsync(repo));
     }
 
     // ---- The paths a stash would write (9.3) ------------------------------------------------------

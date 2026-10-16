@@ -250,6 +250,19 @@ public interface IGitRepository
     Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// After a <c>git stash push</c> that saved <paramref name="stashCommit"/> but failed while it
+    /// cleared the working tree (a file held open on Windows, docs/phase-5-design.md 0.7, 15.9):
+    /// puts back from the stash what git had already taken out, leaving the index alone (git did
+    /// not write it). Its untracked files that are missing (<c>git restore
+    /// --source=&lt;stash&gt;^3 --worktree</c>: git's clean deleted them), then its tracked paths
+    /// whose files no longer match it (<c>git diff --name-only &lt;stash&gt;</c>, then <c>git
+    /// restore --source=&lt;stash&gt; --worktree</c>: git's reset rewrote every file it could
+    /// before it stopped at the held one, which still matches and is not touched). True when every
+    /// path of the stash is as the stash holds it again.
+    /// </summary>
+    Task<bool> PutBackUnclearedStashAsync(string stashCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Which of <paramref name="paths"/> (relative to the working tree, files or folders) git
     /// ignores: <c>git check-ignore --stdin -z</c> (9.3). A checkout refused only for ignored files
     /// in the way says so in words of its own. A read.
