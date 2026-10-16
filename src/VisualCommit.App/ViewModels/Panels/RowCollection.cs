@@ -58,6 +58,31 @@ public sealed class RowCollection<T> : ObservableCollection<T>
         }
     }
 
+    /// <summary>
+    /// Adds <paramref name="rows"/> after the last row and tells the view once, with one Add of
+    /// them all: a list that grows as git prints (the file history) lays itself out once per batch
+    /// instead of once per row, and keeps its selection, which a reset would drop.
+    /// </summary>
+    public void AddRange(IReadOnlyList<T> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        CheckReentrancy();
+        var start = Count;
+        foreach (var row in rows)
+        {
+            Items.Add(row);
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, rows.ToList(), start));
+    }
+
     /// <summary>Replaces every row with <paramref name="rows"/> and tells the view once.</summary>
     public void ReplaceAll(IEnumerable<T> rows)
     {
