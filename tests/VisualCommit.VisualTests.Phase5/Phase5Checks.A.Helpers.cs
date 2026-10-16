@@ -268,21 +268,38 @@ public sealed partial class Phase5ChecksA
     }
 
     /// <summary>
+    /// Asserts whether a row lies whole in the list's view, as the report says (<paramref
+    /// name="inView"/>): true, it does, and the row is asserted as drawn; false, the list, kept at
+    /// its end (AD15), has scrolled it out of the view; null where the report says neither.
+    /// </summary>
+    private static void AssertView(ActivityLogRowSnapshot row, bool? inView)
+    {
+        if (inView is { } expected)
+        {
+            Assert.True(
+                expected == row.IsInView,
+                $"The row \"{row.AutomationName}\" is {(row.IsInView ? "whole in" : "not whole in")} the list's view; the report says it is {(expected ? "in" : "out of")} view.");
+        }
+    }
+
+    /// <summary>
     /// Asserts an operation's row as the report writes it, <c>[glyph] time · title · message ·
     /// duration</c> (2.2): at the top level, its open state, its outcome, the frozen time
     /// <c>09:00:00</c>, its title (its automation name too), its message, and its duration
-    /// (<c>0 ms</c>; none while it runs, AD4). While the list draws the row: not indented, 24
-    /// high, its chevron, its glyph in its tone (none while running), the time in the secondary
-    /// colour and the message in <paramref name="messageColour"/>. A row that the list, kept at its
-    /// end, has scrolled out of reach is not drawn (AD15): then what the list holds for it.
+    /// (<c>0 ms</c>; none while it runs, AD4); whether it is in the list's view (<see
+    /// cref="AssertView"/>). While the list draws the row: not indented, 24 high, its chevron, its
+    /// glyph in its tone (none while running), the time in the secondary colour and the message in
+    /// <paramref name="messageColour"/>. A row that the list, kept at its end, has scrolled out of
+    /// reach is not drawn (AD15): then what the list holds for it.
     /// </summary>
-    private static void AssertOperationRow(ShellDriver app, ActivityLogRowSnapshot row, string? glyph, string title, string message, Color messageColour, bool open)
+    private static void AssertOperationRow(ShellDriver app, ActivityLogRowSnapshot row, string? glyph, string title, string message, Color messageColour, bool open, bool? inView = true)
     {
         var what = $"The row \"{row.AutomationName}\"";
         Assert.True(row.Kind == ActivityLogRowKind.Operation, $"{what} is a {row.Kind}, not an operation.");
         Assert.Equal(0, row.Depth);
         Assert.Equal(open, row.IsOpen);
         Assert.Equal(title, row.AutomationName);
+        AssertView(row, inView);
         if (row.Bounds is null)
         {
             var model = Assert.IsType<ActivityLogOperationRow>(ModelRow(app, row));
@@ -307,12 +324,13 @@ public sealed partial class Phase5ChecksA
     /// <summary>
     /// Asserts a call's row, <c>exit · command · duration</c> (2.2): at <paramref name="depth"/>,
     /// its open state, its exit text, its command (its automation name too), <c>(on a temporary
-    /// index)</c> after it or not, and <c>0 ms</c>. While the list draws it: indented 24 per level,
-    /// 22 high, its chevron, the exit text in the secondary colour for <c>exit 0</c> and
-    /// <c>cancelled</c> and the danger colour for another code, the command in the code font;
-    /// otherwise what the list holds for it (AD15).
+    /// index)</c> after it or not, and <c>0 ms</c>; whether it is in the list's view (<see
+    /// cref="AssertView"/>). While the list draws it: indented 24 per level, 22 high, its chevron,
+    /// the exit text in the secondary colour for <c>exit 0</c> and <c>cancelled</c> and the danger
+    /// colour for another code, the command in the code font; otherwise what the list holds for it
+    /// (AD15).
     /// </summary>
-    private static void AssertCallRow(ShellDriver app, ActivityLogRowSnapshot row, string exit, string command, bool open, int depth = 1, bool onTemporaryIndex = false)
+    private static void AssertCallRow(ShellDriver app, ActivityLogRowSnapshot row, string exit, string command, bool open, int depth = 1, bool onTemporaryIndex = false, bool? inView = true)
     {
         var what = $"The row \"{row.AutomationName}\"";
         var palette = PaletteOf(app);
@@ -321,6 +339,7 @@ public sealed partial class Phase5ChecksA
         Assert.Equal(depth, row.Depth);
         Assert.Equal(open, row.IsOpen);
         Assert.Equal(command, row.AutomationName);
+        AssertView(row, inView);
         if (row.Bounds is null)
         {
             var model = Assert.IsType<ActivityLogCallRow>(ModelRow(app, row));
@@ -342,17 +361,19 @@ public sealed partial class Phase5ChecksA
     }
 
     /// <summary>
-    /// Asserts a line under an opened operation (AD3): its kind and text; while drawn, indented 24,
-    /// 22 high, in the danger colour (the failure's summary) or the secondary one (a note);
-    /// otherwise what the list holds for it (AD15).
+    /// Asserts a line under an opened operation (AD3): its kind and text, and whether it is in the
+    /// list's view (<see cref="AssertView"/>); while drawn, indented 24, 22 high, in the danger
+    /// colour (the failure's summary) or the secondary one (a note); otherwise what the list holds
+    /// for it (AD15).
     /// </summary>
-    private static void AssertLineRow(ShellDriver app, ActivityLogRowSnapshot row, ActivityLogRowKind kind, string text)
+    private static void AssertLineRow(ShellDriver app, ActivityLogRowSnapshot row, ActivityLogRowKind kind, string text, bool? inView = true)
     {
         var what = $"The row \"{row.AutomationName}\"";
         var colour = kind == ActivityLogRowKind.FailureSummary ? PaletteOf(app).Danger : PaletteOf(app).TextSecondary;
         Assert.True(row.Kind == kind, $"{what} is a {row.Kind}, not a {kind}.");
         Assert.Equal(1, row.Depth);
         Assert.Equal(text, row.AutomationName);
+        AssertView(row, inView);
         if (row.Bounds is null)
         {
             var model = Assert.IsType<ActivityLogLineRow>(ModelRow(app, row));

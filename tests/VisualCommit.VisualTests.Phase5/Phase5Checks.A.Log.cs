@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
@@ -60,10 +61,12 @@ public sealed partial class Phase5ChecksA
             $"The clean-up's record: background {cleanUp.IsBackground}, {cleanUp.Kind}, {cleanUp.Outcome}.");
         Assert.Equal(PartA.CleanUpNotes, cleanUp.Notes);
         Assert.Equal(7, log.Rows.Count);
-        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: true);
+
+        // The box's wrapped input has scrolled the clean-up's row out of the list's view (AD15).
+        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: true, inView: false);
         for (var note = 0; note < 3; note++)
         {
-            AssertLineRow(app, log.Rows[1 + note], ActivityLogRowKind.Note, PartA.CleanUpNotes[note]);
+            AssertLineRow(app, log.Rows[1 + note], ActivityLogRowKind.Note, PartA.CleanUpNotes[note], inView: null);
         }
 
         AssertCallRow(app, log.Rows[4], PartA.Exit0, PartA.BackupsForEachRef, open: false);
@@ -108,17 +111,27 @@ public sealed partial class Phase5ChecksA
             Assert.Equal(string.Empty, switchCall.StandardOutput);
         }
 
+        // The checkout's row opened, its call not yet: the row and its summary are in the list's
+        // view, and asserted as drawn (the report's "Changed in this report after its first commit").
         ClickRow(app, PartA.CheckoutTitle);
+        log = app.ActivityLog();
+        var checkout = IndexOf(log, PartA.CheckoutTitle);
+        Assert.Equal(1, checkout);
+        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false);
+        AssertOperationRow(app, log.Rows[checkout], PartA.IconClose, PartA.CheckoutTitle, PartA.CheckoutFailed, palette.Danger, open: true);
+        AssertLineRow(app, log.Rows[checkout + 1], ActivityLogRowKind.FailureSummary, PartA.CheckoutSummary);
+
         ClickRow(app, PartA.CheckoutCommand);
         shot = Shot(app, PartA.A2CheckoutFailedOpened);
         log = app.ActivityLog();
         Assert.Equal(PartA.CleanUpTitle, log.Rows[0].AutomationName);
-        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false);
-        var checkout = IndexOf(log, PartA.CheckoutTitle);
-        Assert.Equal(1, checkout);
-        AssertOperationRow(app, log.Rows[checkout], PartA.IconClose, PartA.CheckoutTitle, PartA.CheckoutFailed, palette.Danger, open: true);
+        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false, inView: false);
+        Assert.Equal(checkout, IndexOf(log, PartA.CheckoutTitle));
+
+        // The switch's box has scrolled the checkout's row and its summary out of the list's view (AD15).
+        AssertOperationRow(app, log.Rows[checkout], PartA.IconClose, PartA.CheckoutTitle, PartA.CheckoutFailed, palette.Danger, open: true, inView: false);
         var under = Under(log, checkout);
-        AssertLineRow(app, under[0], ActivityLogRowKind.FailureSummary, PartA.CheckoutSummary);
+        AssertLineRow(app, under[0], ActivityLogRowKind.FailureSummary, PartA.CheckoutSummary, inView: false);
         Assert.DoesNotContain(under, line => line.Kind == ActivityLogRowKind.Note);
         var checkoutCalls = AssertOperationCalls(app, log, PartA.CheckoutTitle);
         Assert.Contains(PartA.CheckoutCommand, checkoutCalls.Select(call => call.CommandText));
@@ -168,7 +181,8 @@ public sealed partial class Phase5ChecksA
         var page = AssertBackupsList(app, PartA.A2Height);
         log = AssertPanelAt(app, PartA.A2Height, shot);
         Assert.Equal([PartA.CleanUpTitle, PartA.CheckoutTitle], log.Rows.Select(top => top.AutomationName));
-        Assert.All(log.Rows, top => Assert.False(top.IsOpen, $"The row \"{top.AutomationName}\" is open."));
+        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false);
+        AssertOperationRow(app, log.Rows[1], PartA.IconClose, PartA.CheckoutTitle, PartA.CheckoutFailed, palette.Danger, open: false);
         Assert.True(app.ActivityLogView.HasFocusWithin, "The keyboard focus is not in the activity log.");
         Assert.Equal(rightPanel, TextsIn(app.FindByAutomationId("RightPanel")));
         Assert.Equal(operations, app.Session.Operations.Snapshot().Count);
@@ -256,8 +270,8 @@ public sealed partial class Phase5ChecksA
         ClickRow(app, PartA.MergeCommand);
         var shot = Shot(app, PartA.A2MergeOutputOpened);
         log = AssertPanelAt(app, PartA.A2Height, shot);
-        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false);
-        AssertOperationRow(app, log.Rows[1], PartA.IconAlert, PartA.MergeTitle, PartA.MergeStopped, palette.Warning, open: true);
+        AssertOperationRow(app, log.Rows[0], PartA.IconCheck, PartA.CleanUpTitle, PartA.CleanUpMessage, palette.TextSecondary, open: false, inView: null);
+        AssertOperationRow(app, log.Rows[1], PartA.IconAlert, PartA.MergeTitle, PartA.MergeStopped, palette.Warning, open: true, inView: null);
         var under = Under(log, 1);
         Assert.DoesNotContain(under, line => line.Kind is ActivityLogRowKind.FailureSummary or ActivityLogRowKind.Note);
         var mergeCalls = AssertOperationCalls(app, log, PartA.MergeTitle);
@@ -299,7 +313,11 @@ public sealed partial class Phase5ChecksA
         AssertWorkingRowSelected(app);
         Assert.Equal(PartA.UnstagedAtStop, FileRows(app, "UnstagedFileList"));
         Assert.Equal(PartA.MergeMessage, BoxText(app, "CommitSummary"));
-        app.RightClick(await app.FileRowAsync("UnstagedFileList", PartA.NotesPath));
+        var notesRow = await app.FileRowAsync("UnstagedFileList", PartA.NotesPath);
+        var letter = notesRow.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("status"));
+        Assert.Equal("U", letter.Text);
+        Assert.True(palette.Danger == (letter.Foreground as ISolidColorBrush)?.Color, $"The U of notes.txt is drawn in {(letter.Foreground as ISolidColorBrush)?.Color}, expected {palette.Danger}.");
+        app.RightClick(notesRow);
         app.Menu();
         app.ClickMenuItem(PartA.OpenInMergeTool);
         await app.WaitForAsync(
@@ -370,10 +388,15 @@ public sealed partial class Phase5ChecksA
         Assert.Equal([PartA.CleanUpTitle, PartA.MergeTitle, PartA.MergeToolTitle, PartA.AbortTitle], TopLevel(log).Select(top => top.AutomationName));
         Assert.All(TopLevel(log).Take(3), top => Assert.False(top.IsOpen, $"The row \"{top.AutomationName}\" is open."));
         var abort = IndexOf(log, PartA.AbortTitle);
-        AssertOperationRow(app, log.Rows[abort], PartA.IconCheck, PartA.AbortTitle, PartA.Aborted, palette.TextSecondary, open: true);
+
+        // The row lies just above the list's top, its note the first row in view (AD15).
+        AssertOperationRow(app, log.Rows[abort], PartA.IconCheck, PartA.AbortTitle, PartA.Aborted, palette.TextSecondary, open: true, inView: false);
         under = Under(log, abort);
         Assert.DoesNotContain(under, line => line.Kind == ActivityLogRowKind.FailureSummary);
-        AssertLineRow(app, under.Single(line => line.Kind == ActivityLogRowKind.Note), ActivityLogRowKind.Note, PartA.AbortNote);
+        Assert.Equal(ActivityLogRowKind.Note, under[0].Kind);
+        AssertLineRow(app, under[0], ActivityLogRowKind.Note, PartA.AbortNote);
+        Assert.Equal(under[0].Index, log.Rows.First(line => line.IsInView).Index);
+        Assert.Single(under, line => line.Kind == ActivityLogRowKind.Note);
         Assert.Equal([PartA.AbortNote], Record(app, PartA.AbortTitle).Notes);
         var abortCalls = AssertOperationCalls(app, log, PartA.AbortTitle);
         AssertInOrder([.. abortCalls.Select(call => call.CommandText)], PartA.AbortCalls, "The abort's calls");
