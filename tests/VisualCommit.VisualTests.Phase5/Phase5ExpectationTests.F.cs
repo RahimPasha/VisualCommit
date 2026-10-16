@@ -96,6 +96,10 @@ public sealed class PartFExpectationTests
         Assert.Equal(PartF.RowCentre(11) - 13 + 2, PartF.FL0Stretches[0].Bottom);
         Assert.Equal(12, PartF.FL0Dashed.Count(line => line.From == 0));
         Assert.Equal(2, PartF.FL0Dashed.Count(line => line.From == 1));
+
+        // FL1's stash line goes from its ring at row 0 into Beta six, the next row.
+        Assert.True(PartF.FL1[PartF.FL1Dashed[0].Row].Stash);
+        Assert.Equal("Beta six", PartF.FL1[PartF.FL1Dashed[^1].Row].Message);
     }
 
     [Fact]

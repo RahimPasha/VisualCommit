@@ -10,7 +10,9 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Settings;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -47,23 +49,7 @@ public sealed partial class Phase5ChecksF : Phase5Checks
         var calls = app.GitCalls().Count;
         await OpenSearchAsync(app);
         var shot = Shot(app, PartF.F10BarOpen);
-        var bar = AssertBar(app, PartF.CommitsMode, string.Empty, PartF.CommitsPlaceholder, focus: true, count: string.Empty);
-        AssertBarLayout(app, bar, right: 700);
-        Assert.Equal(PartF.CloseRightAt1100, bar.CloseBounds.Right, PartF.PositionTolerance);
-        AssertNear(palette.Chrome, shot, PartF.BarChromeAt, "search bar's background");
-        AssertNear(palette.Border, shot, PartF.BarBorderAt, "search bar's bottom line");
-        AssertNear(palette.Chrome, shot, PartF.BarAboveBorderAt, "search bar's background above its 1-px bottom line");
-        AssertBarIcons(app);
-        AssertPlaceholderShown(app, PartF.CommitsPlaceholder, palette);
-        AssertHistoryRowsAt(app, barOpen: true);
-        Assert.Equal(PartF.MessageWidth, Graph(app).Columns.Message.Width, PartF.PositionTolerance);
-        Assert.True(Graph(app).Columns.ShowsDate, "The Date column is hidden with the bar open.");
-        AssertGraph(app, PartF.H0, PartF.HistoryLanes, PartF.Working, showsDate: true, picture: shot);
-        AssertMarks(app, marked: null);
-        AssertNear(palette.Lane(0), shot, PartF.Row0NodeAt, "row 0's node at full strength");
-        Assert.Empty(SearchCallsSince(app, calls));
-        AssertNothingSelected(app);
-        AssertNoClippedText(app);
+        AssertBarJustOpened(app, shot, palette, calls);
 
         // Step 2: "tokenizer", only in two commits' bodies.
         await SearchForAsync(app, PartF.Tokenizer);
@@ -210,21 +196,27 @@ public sealed partial class Phase5ChecksF : Phase5Checks
         using var app = await OpenAsync(data, repo);
         Assert.Equal(PartF.TraceAgainTime, repo.ClockTime);
 
-        // Step 1: Search, then the mode button: the mode menu at the button's bottom-left corner.
+        // Step 1: Search: the bar as F10 step 1, taken in a picture of its own before the menu covers
+        // row 0's node and takes the focus; then the mode button: the mode menu at the button's
+        // bottom-left corner, the bar's background and bottom line beside it.
+        var calls = app.GitCalls().Count;
         await OpenSearchAsync(app);
-        var bar = AssertBar(app, PartF.CommitsMode, string.Empty, PartF.CommitsPlaceholder, focus: true, count: string.Empty);
-        AssertBarLayout(app, bar, right: 700);
-        AssertBarIcons(app);
+        app.MoveToNeutral();
+        var bar = AssertBarJustOpened(app, app.Capture(), Dark, calls);
         app.Click(app.FindByAutomationId("SearchModeButton"));
         var menu = app.Menu();
-        Shot(app, PartF.F11ModeMenu);
+        var shot = Shot(app, PartF.F11ModeMenu);
         AssertMenuAsReported(app, menu, PartF.ModeMenu, PartF.ModeMenu[1], PartF.ModeMenuHeight);
         Assert.Equal(bar.ModeButtonBounds.BottomLeft.X, menu.Bounds.X, PartF.PositionTolerance);
         Assert.Equal(bar.ModeButtonBounds.BottomLeft.Y, menu.Bounds.Y, PartF.PositionTolerance);
         Assert.All(menu.Items, item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
+        AssertNear(Dark.Chrome, shot, PartF.BarChromeAt, "search bar's background beside the mode menu");
+        AssertNear(Dark.Border, shot, PartF.BarBorderAt, "search bar's bottom line beside the mode menu");
+        AssertMarks(app, marked: null);
+        Assert.Empty(SearchCallsSince(app, calls));
 
         // Step 2: Files; the box takes the focus again with the Files placeholder; "parser".
-        var calls = app.GitCalls().Count;
+        calls = app.GitCalls().Count;
         app.ClickMenuItem(PartF.FilesItem);
         await AssertNoMenuAsync(app, logMark: null);
         await app.WaitForAsync(() => app.SearchBar() is { BoxHasFocus: true }, "the focus back in the search box");
@@ -278,14 +270,14 @@ public sealed partial class Phase5ChecksF : Phase5Checks
             OutsideChangeTimeout);
         await app.WaitForSearchAsync(OutsideChangeTimeout);
         await app.WaitForIdleAsync(timeout: OutsideChangeTimeout);
-        var shot = Shot(app, PartF.F11AfterRefresh);
+        shot = Shot(app, PartF.F11AfterRefresh);
         Assert.Equal(PartF.TraceAgain, await repo.RefTargetAsync("refs/heads/main"));
         await AssertTraceAgainAsync(repo);
         Assert.Equal(PartF.HistoryStatus, await GitLinesAsync(repo, "status", "--porcelain"));
         Assert.Equal(PartF.TraceAgainStatusShort, await GitLinesAsync(repo, "status", "-sb"));
         AssertGraph(app, PartF.HF1, PartF.HistoryLanes, PartF.Working, showsDate: true);
         AssertNear(Dark.SearchMatch, shot, new PartF.Sample(261, (int)PartF.HistoryRowCentre(0, barOpen: true)), "mark of Trace again");
-        var main = (VisualCommit.App.ViewModels.Panels.RefItemRow)app.RefRowModel("Local branches", "main");
+        var main = (RefItemRow)app.RefRowModel("Local branches", "main");
         Assert.Equal((1, 0, true), (main.Ahead, main.Behind, main.IsHead));
         AssertBar(app, PartF.ChangesMode, PartF.TraceEverything, PartF.ChangesPlaceholder, focus: true, count: "3 matches");
         AssertMarks(app, PartF.ChangesMatchesAfterRefresh);
@@ -295,6 +287,36 @@ public sealed partial class Phase5ChecksF : Phase5Checks
         Assert.Equal([PartF.TraceAgain], OutputLines(search));
         await AssertNoDialogAsync(app);
         AssertNoClippedText(app);
+    }
+
+    /// <summary>
+    /// The bar just opened by the toolbar's Search on H0 at 1100×700 (F10 step 1; F11 step 1 "as
+    /// F10 step 1"): the Commits mode, the empty box with the focus and its placeholder in the
+    /// secondary colour, its place and parts, its background and bottom line in
+    /// <paramref name="shot"/>; the rows 36 lower, the columns as before; nothing marked or dimmed
+    /// (row 0's node at full strength in <paramref name="shot"/>), no search call since
+    /// <paramref name="calls"/>, nothing selected. Returns what the bar shows.
+    /// </summary>
+    private static SearchBarSnapshot AssertBarJustOpened(ShellDriver app, Screenshot shot, Palette palette, int calls)
+    {
+        var bar = AssertBar(app, PartF.CommitsMode, string.Empty, PartF.CommitsPlaceholder, focus: true, count: string.Empty);
+        AssertBarLayout(app, bar, right: 700);
+        Assert.Equal(PartF.CloseRightAt1100, bar.CloseBounds.Right, PartF.PositionTolerance);
+        AssertNear(palette.Chrome, shot, PartF.BarChromeAt, "search bar's background");
+        AssertNear(palette.Border, shot, PartF.BarBorderAt, "search bar's bottom line");
+        AssertNear(palette.Chrome, shot, PartF.BarAboveBorderAt, "search bar's background above its 1-px bottom line");
+        AssertBarIcons(app);
+        AssertPlaceholderShown(app, PartF.CommitsPlaceholder, palette);
+        AssertHistoryRowsAt(app, barOpen: true);
+        Assert.Equal(PartF.MessageWidth, Graph(app).Columns.Message.Width, PartF.PositionTolerance);
+        Assert.True(Graph(app).Columns.ShowsDate, "The Date column is hidden with the bar open.");
+        AssertGraph(app, PartF.H0, PartF.HistoryLanes, PartF.Working, showsDate: true, picture: shot);
+        AssertMarks(app, marked: null);
+        AssertNear(palette.Lane(0), shot, PartF.Row0NodeAt, "row 0's node at full strength");
+        Assert.Empty(SearchCallsSince(app, calls));
+        AssertNothingSelected(app);
+        AssertNoClippedText(app);
+        return bar;
     }
 
     /// <summary>"Trace again" as git stores it: parent Read whole lines, Test Author as author and committer at 12:14, M src/Config.cs.</summary>
@@ -322,7 +344,7 @@ public sealed partial class Phase5ChecksF : Phase5Checks
         var box = (TextBox)app.FindByAutomationId("SearchBox");
         var placeholder = TextsIn(box);
         Assert.Contains(text, placeholder);
-        var block = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(box).OfType<TextBlock>().First(candidate => candidate.Text == text && candidate.IsEffectivelyVisible);
+        var block = box.GetVisualDescendants().OfType<TextBlock>().First(candidate => candidate.Text == text && candidate.IsEffectivelyVisible);
         Assert.Equal(palette.TextSecondary, (block.Foreground as ISolidColorBrush)?.Color);
     }
 }

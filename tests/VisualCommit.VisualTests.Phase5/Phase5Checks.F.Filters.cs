@@ -140,6 +140,7 @@ public sealed partial class Phase5ChecksF
         AssertCall(app, calls, PartF.GraphLogCall(PartF.SoloRevisions));
         Assert.Equal(PartF.GraphLogCall(PartF.SoloRevisions), LastGraphLoad(app, calls).CommandText);
         AssertGraph(app, PartF.FL2, PartF.FilteredLanes, working: null, showsDate: true, picture: shot);
+        AssertDashedLines(app, PartF.FL1Dashed);
         AssertNothingSelected(app);
         AssertLeftPanel(app, PartF.FL2LeftPanel);
         await AssertRefMarksAsync(app, palette.TextPrimary, "solo", LocalBeta);
@@ -198,6 +199,7 @@ public sealed partial class Phase5ChecksF
                 await app.WaitForGraphReloadAsync();
                 AssertCall(app, calls, PartF.GraphLogCall(PartF.HideRevisions));
                 AssertGraph(app, PartF.FL1, PartF.FilteredLanes, working: null, showsDate: true);
+                AssertDashedLines(app, PartF.FL1Dashed);
                 await AssertAlphaFilterSavedAsync(data, repo);
                 return true;
             },
@@ -219,6 +221,7 @@ public sealed partial class Phase5ChecksF
                 Assert.NotEmpty(loads);
                 Assert.All(loads, load => Assert.Equal(PartF.GraphLogCall(PartF.HideRevisions), load.CommandText));
                 AssertGraph(app, PartF.FL1, PartF.FilteredLanes, working: null, showsDate: true, picture: shot);
+                AssertDashedLines(app, PartF.FL1Dashed);
                 AssertLeftPanel(app, PartF.FL1LeftPanel);
                 await AssertRefMarksAsync(app, Dark.TextDisabled, "eye", LocalAlpha);
                 await AssertRefMarksAsync(app, Dark.TextDisabled, "eye", RemoteAlpha);
@@ -254,8 +257,8 @@ public sealed partial class Phase5ChecksF
 
     /// <summary>
     /// F14 after "Hide feature/alpha" (step 3): the graph's load with the hide revisions, FL1 with
-    /// the Date column, nothing selected, both alpha rows in the disabled colour with the eye (the
-    /// local one's before its ↓1), the session's entry.
+    /// the Date column and its dashed stash line, nothing selected, both alpha rows in the disabled
+    /// colour with the eye (the local one's before its ↓1), the session's entry.
     /// </summary>
     private static async Task AssertAlphaHiddenAsync(ShellDriver app, TempDirectory data, TempRepo repo, int calls)
     {
@@ -264,6 +267,7 @@ public sealed partial class Phase5ChecksF
         Assert.Equal(PartF.GraphLogCall(PartF.HideRevisions), LastGraphLoad(app, calls).CommandText);
         Assert.False(app.Find<ProgressBar>("GraphReloading").IsVisible, "GraphReloading still shows.");
         AssertGraph(app, PartF.FL1, PartF.FilteredLanes, working: null, showsDate: true);
+        AssertDashedLines(app, PartF.FL1Dashed);
         AssertNothingSelected(app);
         AssertLeftPanel(app, PartF.FL1LeftPanel);
         await AssertRefMarksAsync(app, palette.TextDisabled, "eye", LocalAlpha);

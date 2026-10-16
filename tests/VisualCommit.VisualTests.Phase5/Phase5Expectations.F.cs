@@ -736,6 +736,13 @@ public static partial class Phase5Expectations
             new(2, "IntoNode", 1, 1),
         ];
 
+        /// <summary>FL1's dashed line, and FL2's (FL1's lines): lane 0 from row 0's ring (<c>stash@{1}</c>) into Beta six (row 1).</summary>
+        public static IReadOnlyList<LayoutLine> FL1Dashed { get; } =
+        [
+            new(0, "OutOfNode", 0, 0),
+            new(1, "IntoNode", 0, 0),
+        ];
+
         /// <summary>A stretch of a lane's centre the report samples: x, from y to y (both included), the lane colour, and how many dashes at least (0 for a solid stretch).</summary>
         public readonly record struct Stretch(int X, int Top, int Bottom, int Colour, int MinimumDashes, string What);
 
