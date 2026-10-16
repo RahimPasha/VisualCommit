@@ -66,9 +66,11 @@ public sealed partial class RepositoryOperations
     /// "Stash changes and check out"; a stash git saved but could not finish puts back the
     /// untracked files git had deleted and checks nothing out. The result names the stash, which
     /// nothing pops later (D153 (3)); the undo history records the checkout with the stash
-    /// (<see cref="UndoScope.AutoStashCheckout"/>, D166).
+    /// (<see cref="UndoScope.AutoStashCheckout"/>, D166). With <paramref name="checkExists"/> (a
+    /// reflog row's or a backup's commit, docs/phase-5-design.md 5.2) it is refused first when the
+    /// commit no longer exists.
     /// </summary>
-    private async Task CheckoutWithAutoStashAsync(string name, AutoStashTarget target, OperationText text)
+    private async Task CheckoutWithAutoStashAsync(string name, AutoStashTarget target, OperationText text, bool checkExists)
     {
         var message = OperationTexts.AutoStashMessage(name);
 
@@ -82,6 +84,12 @@ public sealed partial class RepositoryOperations
             async context =>
             {
                 var options = NetworkOptions.From(context);
+
+                // A reflog row's or a backup's commit (design 5.2): it still exists.
+                if (checkExists && await RefuseIfCommitGoneAsync(text, target.Commit) is { } gone)
+                {
+                    return gone;
+                }
 
                 // 1. HEAD and the status as they are now.
                 if (await RefuseIfAutoStashTargetMovedAsync(text, target) is { } moved)

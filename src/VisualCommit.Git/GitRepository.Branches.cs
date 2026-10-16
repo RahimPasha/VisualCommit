@@ -64,6 +64,21 @@ public sealed partial class GitRepository
         return sha.Length > 0 ? sha : null;
     }
 
+    public async Task<bool> CommitExistsAsync(string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        var command = Read("cat-file", "-e", sha + "^{commit}");
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+
+        // 128: "Not a valid object name" (no such object, or not a commit); 1: an object -e cannot find.
+        return result.ExitCode switch
+        {
+            0 => true,
+            1 or 128 => false,
+            _ => throw new GitException(command.DisplayText, result.ExitCode, result.StandardError, standardOutput: result.StandardOutput),
+        };
+    }
+
     public async Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default)
     {
         var output = await ReadOutputAsync(cancellationToken, "worktree", "list", "--porcelain").ConfigureAwait(false);
@@ -231,8 +246,8 @@ public sealed partial class GitRepository
     /// <summary>
     /// The files under a folder of the working tree (<paramref name="folder"/>, a repository path),
     /// as repository paths in byte order: what git would lose with it. A symbolic link is a file to
-    /// git, also one to a folder, and is not followed. The walk of the undo's
-    /// <c>UndoStepRun.FilesIn</c>, here for the checkout's refusal (9.3), which has no undo step.
+    /// git, also one to a folder, and is not followed. For the checkout's refusal (9.3) and the
+    /// undo's switch and Keep moves (<c>UndoStepRun</c>, 7.3).
     /// </summary>
     private List<string> FilesUnder(string folder)
     {

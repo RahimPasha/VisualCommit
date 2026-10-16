@@ -342,19 +342,6 @@ public sealed partial class Phase3ChecksA
     private const string NothingToRedo = "Nothing to redo";
 
     /// <summary>
-    /// Undo's tooltip at a step where phase 5's report gives another state than today's code can:
-    /// after a recorded action (<c>Undo {text}</c>, 7.6) or while a merge is in progress
-    /// (<c>PartA.FinishMerge</c>). Until work package WP3's app half fills
-    /// <c>RepositoryOperations.ReadUndoAvailability</c>, nothing is recorded and Undo stays
-    /// <c>Nothing to undo</c> everywhere. The commit that fills it replaces each use with the value
-    /// its comment names (the report's "Design 14.1's rows") and removes this constant.
-    /// </summary>
-    private const string UndoUntilRecorded = NothingToUndo;
-
-    /// <summary>Redo's tooltip at such a step (<see cref="UndoUntilRecorded"/>): only check 23's merge step, where the report gives <c>PartA.FinishMerge</c>.</summary>
-    private const string RedoUntilRecorded = NothingToRedo;
-
-    /// <summary>
     /// A stage or details file list's rows as text: status letter, name, folder (flat) and where a
     /// rename came from, as phase 2's checks write them ("R helpers.py src renamed from src/util.py").
     /// </summary>

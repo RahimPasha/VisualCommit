@@ -78,9 +78,10 @@ public class HideAndSoloTests
         Assert.True(app.RefRowMarks("Local branches", "feature", "alpha").ToggleBounds!.Value.Right <= app.BoundsOf(behind).Left);
         Assert.False(app.RefRowMarks("Local branches", "feature", "beta").ShowsHiddenToggle);
 
-        // The session: one entry for the repository, with the upstream recorded.
+        // The session: one entry for the repository, keyed by its folder as git reports it (as the
+        // tabs are: macOS's /private/var where the test's folder is under /var), with the upstream recorded.
         var entry = Assert.Single(Session(data).GraphFilters);
-        Assert.True(GraphFilterStore.SamePath(repo.Path, entry.RepositoryPath));
+        Assert.Equal(repository.Path, entry.RepositoryPath);
         Assert.Equal(["refs/heads/feature/alpha", "refs/remotes/origin/feature/alpha"], entry.Hidden);
         Assert.Empty(entry.Soloed);
         Assert.Empty(entry.HiddenRemotes);

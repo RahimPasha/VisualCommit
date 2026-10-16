@@ -90,7 +90,8 @@ public static partial class RepositoryMenus
     /// <summary>
     /// A row of the reflog page (5.2, BD8): header <c>{short} {subject}</c>; create branch here…,
     /// check out this commit — reset {cur} to this commit…, cherry-pick onto {cur} — show in
-    /// graph, copy SHA. Each is phase 3's operation with its own question and backup; their
+    /// graph, copy SHA. Each is phase 3's operation with its own question and backup, which first
+    /// checks that the commit still exists (5.2: a gc may have pruned it since the read); their
     /// reasons come from the entry (its parents, HEAD at it), not from the graph's selection.
     /// <paramref name="onHead"/> says whether HEAD's history holds the entry's commit (a lost one
     /// never is): its cherry-pick is disabled then, as phase 3's commit menu's is (2.12).
@@ -110,12 +111,12 @@ public static partial class RepositoryMenus
         return Build(
             Header(CommitHeader(sha, entry.Subject)),
             [
-                Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(sha)),
-                Item(actions, CheckOutThisCommit, () => actions.CheckoutAsync(sha), context.IsDetached && headIsHere ? AlreadyAtThisCommit : null),
+                Item(actions, CreateBranchHere, () => actions.CreateBranchAtKeptCommitAsync(sha)),
+                Item(actions, CheckOutThisCommit, () => actions.CheckoutKeptCommitAsync(sha), context.IsDetached && headIsHere ? AlreadyAtThisCommit : null),
             ],
             [
-                Item(actions, ResetTo(current), () => actions.ResetAsync(sha), context.IsUnborn ? ToolbarViewModel.UnbornText : null),
-                Item(actions, CherryPickOnto(current), () => actions.CherryPickAsync(sha), pickReason),
+                Item(actions, ResetTo(current), () => actions.ResetToKeptCommitAsync(sha), context.IsUnborn ? ToolbarViewModel.UnbornText : null),
+                Item(actions, CherryPickOnto(current), () => actions.CherryPickKeptCommitAsync(sha), pickReason),
             ],
             [
                 ShowInGraphItem(sha, inGraph, actions),
@@ -126,7 +127,8 @@ public static partial class RepositoryMenus
     /// <summary>
     /// A row of the backups list (5.3, 7.10, BD8): header the backup in words (12.3); its own
     /// restore, by kind — then, for a backup that holds a commit (a <c>discard-</c> snapshot
-    /// included), create branch here…, check out this commit — copy SHA.
+    /// included), create branch here…, check out this commit (each checks that the commit still
+    /// exists, as a reflog row's do) — copy SHA.
     /// <paramref name="hasForcePushLease"/> is, for a force push's backup, whether the
     /// remote-tracking reflog still has the commit the force push left (the list reads it,
     /// <see cref="ReflogViewModel.ForcePushLease"/>); false disables its restore, null leaves it to the restore.
@@ -143,8 +145,8 @@ public static partial class RepositoryMenus
             commit is null
                 ? []
                 : [
-                    Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(commit)),
-                    Item(actions, CheckOutThisCommit, () => actions.CheckoutAsync(commit), context.IsDetached && string.Equals(context.Head.Sha, commit, StringComparison.Ordinal) ? AlreadyAtThisCommit : null),
+                    Item(actions, CreateBranchHere, () => actions.CreateBranchAtKeptCommitAsync(commit)),
+                    Item(actions, CheckOutThisCommit, () => actions.CheckoutKeptCommitAsync(commit), context.IsDetached && string.Equals(context.Head.Sha, commit, StringComparison.Ordinal) ? AlreadyAtThisCommit : null),
                 ],
             commit is null ? [] : [Item(actions, CopySha, () => actions.CopyShaAsync(commit))]);
     }

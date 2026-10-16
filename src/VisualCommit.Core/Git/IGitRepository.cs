@@ -158,6 +158,14 @@ public interface IGitRepository
     /// </summary>
     Task<string?> ResolveAsync(string revision, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Whether <paramref name="sha"/> names a commit that exists: <c>git cat-file -e
+    /// &lt;sha&gt;^{commit}</c> (docs/phase-5-design.md 5.2). A commit a reflog entry or a backup
+    /// kept may have been pruned by a <c>gc</c> since the page read it; the operations started from
+    /// those rows check it first.
+    /// </summary>
+    Task<bool> CommitExistsAsync(string sha, CancellationToken cancellationToken = default);
+
     /// <summary>The repository's worktrees and the branch each has checked out: <c>git worktree list --porcelain</c> (2.7).</summary>
     Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default);
 

@@ -284,6 +284,23 @@ public interface IRepositoryActions
     /// <summary>"Show in graph" (4.1, 5.2, 11.3): closes the page, selects the commit and reveals it.</summary>
     Task ShowInGraphAsync(string sha);
 
+    // A reflog row's and a backup row's commit actions (5.2, 5.3): phase 3's operations, which
+    // first check inside their operation that the commit still exists (`git cat-file -e
+    // <sha>^{commit}`): a gc may have pruned it since the page read it. Refused otherwise, with
+    // "The commit {short} no longer exists." and nothing changed.
+
+    /// <summary>"Create branch here…" of a reflog row or a backup: <see cref="CreateBranchAsync"/> at the commit it keeps, which must still exist.</summary>
+    Task CreateBranchAtKeptCommitAsync(string sha);
+
+    /// <summary>"Check out this commit" of a reflog row or a backup: <see cref="CheckoutAsync"/> of the commit it keeps, which must still exist.</summary>
+    Task CheckoutKeptCommitAsync(string sha);
+
+    /// <summary>"Reset {cur} to this commit…" of a reflog row: <see cref="ResetAsync"/> to the commit it keeps, which must still exist.</summary>
+    Task ResetToKeptCommitAsync(string sha);
+
+    /// <summary>"Cherry-pick onto {cur}" of a reflog row: <see cref="CherryPickAsync"/> of the commit it keeps, which must still exist.</summary>
+    Task CherryPickKeptCommitAsync(string sha);
+
     /// <summary>
     /// A backup's own restore in the backups list (7.10): its kind decides ("Restore branch {b}",
     /// "Restore tag {t}", "Restore stash", "Restore the discarded files…", "Restore the changes…",

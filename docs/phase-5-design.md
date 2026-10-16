@@ -1793,8 +1793,9 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
 
 - **Dashes** (10, FD15): the dash pattern of every dashed line starts at the bottom of the row-0
   ring in content coordinates; in a sampled range every run is 2 to 4 pixels, the first and the
-  last cut by the range may be shorter but never longer than 4. The reload bar (8.2) lies over the
-  scroll bar too and takes no input.
+  last cut by the range may be shorter but never longer than 4. The pattern is global, so a stash
+  whose ring is not on a multiple of 3 starts with a partial dash (WP2b). The reload bar (8.2) lies
+  over the scroll bar too and takes no input.
 - **Closing the activity log** (2.1, AD6) gives the focus to whatever content is shown (the graph,
   a page, the interactive list, a diff or the resolver), never to a banner.
 - **C12's decision is made again inside the operation** (9.1): a checkout the click gave no
@@ -1812,6 +1813,11 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
 - **The backups list** (5.3, 7.10) reads a force-push backup's lease when it loads (the
   remote-tracking ref's reflog, two calls per such backup) and disables `Push {b} back to {r}…` when
   it is gone.
+- **BD16's paths** (7.10, WP3): the paths for which a reset's snapshot puts the index back (a
+  hard reset's index, a mixed reset's staged changes) are the `diff-tree` list less the paths whose
+  version in the snapshot equals HEAD's, since git refuses a path that neither side has (`did not
+  match any file(s) known to git`); the restore's undo and redo use the same paths
+  (`UndoRestoreTests`).
 - **Search** (3.1): Enter, Shift+Enter, previous and next during a running search select once git
   has searched every row between the selection and the target match (no nearer match can come) or
   when the search ends; afterwards at once.
@@ -1820,12 +1826,21 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
 - **Hide** (8.3, FD19): clicking a hidden branch's row clears the selection (no commit, no working
   row, a diff closed, the details placeholder shown). An upstream two branches track stays hidden
   until both are shown.
-- **Still to do** (lead): design 5.2's check that a reflog or backup commit still exists (`git
-  cat-file -e <sha>^{commit}`) inside the operations a reflog row or a backup starts and in
-  `RestoreBackupAsync`; the undo's `UndoStepRun.FilesIn` and `BlockedPaths` and phase 1's
-  `AllIgnoredAsync` to share WP4's `GitRepository.FilesUnder`, `GitFailureClassifier.BlockedPaths`
-  and `IgnoredAmongAsync` (the undo's own `BlockedPaths` misses `would be removed by checkout:`
-  blocks).
+- **A kept commit is checked** (5.2; the lead's follow-ups after the wave, `88ac924`): the reflog
+  page's and the backups list's "Create branch here…", "Check out this commit", "Reset {cur} to
+  this commit…" and "Cherry-pick onto {cur}" run phase 3's operations through actions of their own
+  (`CreateBranchAtKeptCommitAsync`, `CheckoutKeptCommitAsync`, `ResetToKeptCommitAsync`,
+  `CherryPickKeptCommitAsync`), which check `git cat-file -e <sha>^{commit}`
+  (`IGitRepository.CommitExistsAsync`) inside the operation, and before the reset's dialog and the
+  checkout's automatic-stash choice, which would read the commit: `The commit {short} no longer
+  exists.`, nothing changed. The graph's menus make no such call. The backups list's restores
+  refuse with 7.6's `Can't restore …: the commits no longer exist`: those that write the commit by
+  their step's own object check, the files' and the staged changes' before their snapshot is read,
+  a push back before its question (`KeptCommitGoneTests`).
+- **Shared helpers** (the follow-ups, `847d796`): the undo's switch reads git's refusal with
+  `GitFailureClassifier.BlockedPaths` (its own version missed the `would be removed by checkout:`
+  block and failed with git's raw output: `UndoStepRefusalTests`), the undo walks a folder with
+  `GitRepository.FilesUnder`, and phase 1's `AllIgnoredAsync` asks through `IgnoredAmongAsync`.
 
 ## 16. Work breakdown
 

@@ -49,6 +49,34 @@ public sealed class Phase3SupportTests : Phase3Checks
         Assert.True(File.Exists(Path.Combine(workingTree, marker)), $"{workingTree} is not the folder {repo.Path}.");
     }
 
+    /// <summary>
+    /// <see cref="Phase3Checks.WaitForStatusAsync"/>: it returns once the status bar shows the text,
+    /// and a wait that runs out says what the status bar showed and which git calls ran since the
+    /// mark, so that a slow operation and a wrong text can be told apart (check 23, run 38816004590).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_status_wait_returns_on_the_text_and_says_what_was_shown_when_it_runs_out()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+
+        var calls = app.GitCalls().Count;
+        var checkout = repository.Operations.CheckoutAsync("refs/heads/feature/ff");
+        await WaitForStatusAsync(app, "Checked out feature/ff", calls, WriteTimeout);
+        await checkout.WaitAsync(WriteTimeout, TestContext.Current.CancellationToken);
+        await app.WaitForIdleAsync();
+
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() => WaitForStatusAsync(app, "Stashed the changes", calls, TimeSpan.FromMilliseconds(300)));
+        Assert.Contains("waiting for \"Stashed the changes\"", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("The status bar showed \"Checked out feature/ff\" (running: False, 0 waiting)", ex.Message, StringComparison.Ordinal);
+        var since = app.GitCalls().Skip(calls).ToList();
+        Assert.Contains(since, call => call.CommandText == "git switch --no-guess feature/ff");
+        Assert.Contains($"{since.Count} git calls since the step, the last: ", ex.Message, StringComparison.Ordinal);
+        Assert.EndsWith($"{since[^1].CommandText} ({since[^1].Duration.TotalMilliseconds:0} ms, Completed)", ex.Message, StringComparison.Ordinal);
+    }
+
     [AvaloniaFact]
     public async Task The_banner_confirmation_error_dialog_and_absence_assertions_hold_on_a_stopped_merge()
     {

@@ -5,6 +5,7 @@ using VisualCommit.App.ViewModels.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
+using VisualCommit.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -53,8 +54,11 @@ public class RepositoryViewModelFilterTests
         Assert.Equal([true, false], reloading);
         Assert.Equal(repository.GraphFilter!.Key, repository.LoadedFilterKey);
         Assert.Equal([Alpha, OriginAlpha], repository.Filters!.Hidden);
+
+        // Keyed by the repository's folder as git reports it, as the tabs and the recent list are
+        // (macOS's /private/var where the test's folder is under /var).
         var entry = Assert.Single(app.Services.Session.Current.GraphFilters);
-        Assert.Equal(repo.Path, entry.RepositoryPath);
+        Assert.Equal(repository.Path, entry.RepositoryPath);
         Assert.Equal([Alpha, OriginAlpha], entry.Hidden);
         Assert.Contains(
             app.Calls.Snapshot(),
@@ -82,15 +86,17 @@ public class RepositoryViewModelFilterTests
         using var repo = await Scenarios.FiltersAsync();
         var services = await OperationsHarness.OpenAsync(repo);
         var session = services.Services.Session;
+        var key = services.Repository.Path;
         services.Dispose();
 
         // The session hides feature/alpha and names a branch that no longer exists, and solos only
-        // a gone one: solo mode ends at the first read, and the graph loads again (8.4).
+        // a gone one: solo mode ends at the first read, and the graph loads again (8.4). Its entry
+        // is keyed as the app keys it: the folder as git reports it.
         session.Update(state => state with
         {
             GraphFilters =
             [
-                new RepositoryGraphFilter(repo.Path, [Alpha, "refs/heads/gone", OriginAlpha], ["refs/heads/gone-too"], [], [new BranchUpstream(Alpha, OriginAlpha)], ["origin"], default),
+                new RepositoryGraphFilter(key, [Alpha, "refs/heads/gone", OriginAlpha], ["refs/heads/gone-too"], [], [new BranchUpstream(Alpha, OriginAlpha)], ["origin"], default),
             ],
         });
         using var app = await OperationsHarness.OpenAsync(repo, session);
@@ -106,6 +112,33 @@ public class RepositoryViewModelFilterTests
         var loads = app.Calls.Snapshot().Where(call => call.CommandText.StartsWith("git log --date-order", StringComparison.Ordinal)).ToList();
         Assert.Contains("--ignore-missing refs/heads/gone-too HEAD --", loads[0].CommandText, StringComparison.Ordinal);
         Assert.Contains("--exclude=feature/alpha --branches", loads[^1].CommandText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The session's filters are keyed by the repository's folder as git reports it (its top level,
+    /// the physical folder: macOS's /private/var for the temp folder's /var), which the app writes
+    /// and looks up under (<see cref="RepositoryViewModel.Path"/>), as the tabs and the recent list
+    /// keep it (phase 1's check 11): whichever spelling of the folder opens the repository (the
+    /// test's own path, the folder with a trailing separator, a subfolder), its filter has the
+    /// one key, and a filter written from one is found from another.
+    /// </summary>
+    [Fact]
+    public async Task A_filter_has_one_key_whichever_spelling_of_the_folder_opens_the_repository()
+    {
+        using var repo = await Scenarios.FiltersAsync();
+        Directory.CreateDirectory(Path.Combine(repo.Path, "deep", "er"));
+        var runner = new GitRunner(GitLocator.FindExecutable(GitSearchContext.FromSystem())!);
+        var fromFolder = await GitRepository.OpenAsync(runner, repo.Path + Path.DirectorySeparatorChar, TestContext.Current.CancellationToken);
+        var fromSubfolder = await GitRepository.OpenAsync(runner, Path.Combine(repo.Path, "deep", "er"), TestContext.Current.CancellationToken);
+        Assert.Equal(fromFolder.WorkingDirectory, fromSubfolder.WorkingDirectory);
+
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.Equal(fromFolder.WorkingDirectory, app.Repository.Path);
+        await app.Operations.HideBranchAsync(Alpha);
+        var entry = Assert.Single(app.Services.Session.Current.GraphFilters);
+        Assert.Equal(app.Repository.Path, entry.RepositoryPath);
+        Assert.Same(entry, app.Services.GraphFilters.Find(fromSubfolder.WorkingDirectory));
+        Assert.Same(entry, app.Services.GraphFilters.Find(fromFolder.WorkingDirectory + Path.DirectorySeparatorChar));
     }
 
     [Fact]

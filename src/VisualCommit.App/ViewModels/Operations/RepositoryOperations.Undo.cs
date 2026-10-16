@@ -210,7 +210,10 @@ public sealed partial class RepositoryOperations
     /// (BD16), then the snapshot's files; <c>Restore the staged changes</c> stages a mixed reset's
     /// snapshot for its own paths (BD16); <c>Push {b} back to {r}…</c> asks 7.5's question and pushes
     /// with a lease that says the branch must not exist, or for a force push's backup that it
-    /// still holds the commit the force push left. A kind without a restore does nothing.
+    /// still holds the commit the force push left. A kind without a restore does nothing. A backup
+    /// whose commit a <c>gc</c> pruned after the list read it (its ref gone meanwhile) is refused
+    /// with 7.6's "the commits no longer exist" (design 5.2's <c>cat-file</c> check): by the step's
+    /// own check of the objects it writes, and before the reads and questions that come first.
     /// </summary>
     public Task RestoreBackupAsync(BackupInfo backup)
     {
@@ -860,6 +863,13 @@ public sealed partial class RepositoryOperations
                 return;
             }
 
+            // Design 5.2: the snapshot must still exist before it is read; the step checks it again.
+            if (!await Git.CommitExistsAsync(backup.Target))
+            {
+                await ShowRefusalAsync(text, CommitsGoneSummary(text));
+                return;
+            }
+
             var snapshot = await ReadSnapshotAsync(backup.FullName, backup.Target, backup.Body);
             var changed = await ChangedSinceSnapshotAsync(snapshot);
             if (changed.Count > 0 && !await ConfirmAsync(OperationTexts.RestoreChangedFilesQuestion(changed)))
@@ -937,6 +947,12 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async context =>
             {
+                // Design 5.2: the snapshot must still exist before its paths are read.
+                if (!await Git.CommitExistsAsync(backup.Target))
+                {
+                    return await RestoreRefusedAsync(context, text, new UndoRefusal(UndoRefusalKind.CommitsGone));
+                }
+
                 var status = await Git.ReadStatusAsync();
                 if (status.Staged.Count > 0 || Conflicted(status).Count > 0)
                 {
@@ -1026,7 +1042,19 @@ public sealed partial class RepositoryOperations
     /// <summary>7.5's question for a push back, then the push with its lease (<paramref name="lease"/>: what the remote must hold; null: nothing), recorded as a push.</summary>
     private Task PushBackAsync(OperationText text, string remote, string remoteRef, string name, bool isTag, string? lease, BackupRefInfo backup) => GuardAsync(text, async () =>
     {
-        if (IsClosed || !await ConfirmAsync(OperationTexts.PushBackQuestion(name, remote, isTag, OperationTexts.Short(backup.Commit))))
+        if (IsClosed)
+        {
+            return;
+        }
+
+        // Design 5.2: no question about a commit that is gone; the step checks it again.
+        if (!await Git.CommitExistsAsync(backup.Target))
+        {
+            await ShowRefusalAsync(text, CommitsGoneSummary(text));
+            return;
+        }
+
+        if (!await ConfirmAsync(OperationTexts.PushBackQuestion(name, remote, isTag, OperationTexts.Short(backup.Commit))))
         {
             return;
         }
@@ -1088,6 +1116,10 @@ public sealed partial class RepositoryOperations
     /// <summary>A refused restore: <c>Can't restore branch doomed: a branch named doomed exists again</c>, or a lease's 7.5 summary.</summary>
     private async Task<OperationReport> RestoreRefusedAsync(OperationContext context, OperationText text, UndoRefusal refusal) =>
         Refused(context, text, refusal, OperationTexts.CantRestore(text, await ReasonOfAsync(refusal)));
+
+    /// <summary>7.6's "the commits no longer exist" after <c>Can't restore …: </c>, as the step's own check words it, for a restore refused before its step.</summary>
+    private string CommitsGoneSummary(OperationText text) =>
+        OperationTexts.CantRestore(text, OperationTexts.RefusalReason(new UndoRefusal(UndoRefusalKind.CommitsGone), Repository.Path));
 
     /// <summary>A restore refused before its operation: the error dialog with <paramref name="reason"/> alone.</summary>
     private Task ShowRefusalAsync(OperationText text, string reason)

@@ -139,26 +139,19 @@ public sealed partial class GitRepository : IGitRepository
         new RepositoryWatcher(GitDirectory, CommonDirectory, _log, workingDirectory: WorkingDirectory, allIgnored: AllIgnoredAsync);
 
     /// <summary>
-    /// Whether git ignores every one of <paramref name="paths"/> (relative to the working tree):
-    /// <c>git check-ignore</c> prints those it ignores, and exits with 1 when it ignores none.
+    /// Whether git ignores every one of <paramref name="paths"/> (relative to the working tree), the
+    /// watcher's question about a burst: <see cref="IgnoredAmongAsync"/>'s <c>git check-ignore</c>.
+    /// False for no paths.
     /// </summary>
     internal async Task<bool> AllIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
-        var command = new GitCommand("check-ignore", "--stdin", "-z")
-        {
-            WorkingDirectory = WorkingDirectory,
-
-            // check-ignore refuses literal pathspecs, and takes each path as it is anyway.
-            Environment = new Dictionary<string, string?>(ReadEnvironment) { ["GIT_LITERAL_PATHSPECS"] = null },
-            StandardInput = string.Concat(paths.Select(path => path + "\0")),
-        };
-        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode == 1)
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
         {
             return false;
         }
 
-        var ignored = result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        var ignored = (await IgnoredAmongAsync(paths, cancellationToken).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
         return paths.All(ignored.Contains);
     }
 
