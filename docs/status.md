@@ -14,7 +14,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 2. Diff and commit workflow | Done | `phase/2-diff-commit` | [phase-2](handoffs/phase-2.md) | [phase-2](test-reports/phase-2.md) |
 | 3. Branch, remote, stash and tag operations | Done | `phase/3-operations` | [phase-3](handoffs/phase-3.md) | [phase-3](test-reports/phase-3.md) |
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
-| 5. History, traceability and undo | In progress | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
+| 5. History, traceability and undo | Awaiting acceptance | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Not started | `phase/6-multi-repo` | | |
 | 7. Hosting | Not started | `phase/7-hosting` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
@@ -25,8 +25,11 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 5, History, traceability and undo, is in progress on `phase/5-history`, started on
-2026-10-12 from `master` at `0883669` on the Windows machine. At its start the owner settled C12
+Phase 5, History, traceability and undo, is awaiting the owner's acceptance on `phase/5-history`:
+its visual test gate passed on 2026-10-16 on the Windows machine (both passes on `1b2e734`, every
+picture inspected; the [report](test-reports/phase-5.md) and the
+[handoff](handoffs/phase-5.md) say what passed and what is left). It started on 2026-10-12 from
+`master` at `0883669`. At its start the owner settled C12
 and the matter-of-taste points (D153 to D163): C12 is built in this phase; undo reaches many steps
 back within a session; undoing a change to a remote asks, then pushes back with a lease; the
 activity log is a panel under the graph; search marks its matches in the graph; file history and
@@ -40,8 +43,8 @@ Phase 4 was accepted by the owner on 2026-10-12 and merged into `master` (merge 
 `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
 `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`).
 
-Gate commit: `1b2e734`, the commit both passes of the gate ran on (set to "Awaiting acceptance"
-at closing step 32); "Phase N accepted" checks that nothing but docs changed after it.
+Gate commit: `1b2e734`, the commit both passes of the gate ran on; "Phase N accepted" checks that
+nothing but docs changed after it.
 
 ### Progress
 
@@ -152,8 +155,8 @@ Closing:
 - [x] 28. `architecture.md` describes what is built. (`632efda`.)
 - [x] 29. `plan.md`: anything not delivered moved, risks updated. (`632efda`.)
 - [x] 30. Handoff `docs/handoffs/phase-5.md`. ([phase-5](handoffs/phase-5.md), `632efda`.)
-- [ ] 31. Cold-read check by a fresh agent; gaps fixed.
-- [ ] 32. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [x] 31. Cold-read check by a fresh agent; gaps fixed. (A fresh agent with only the repo, told that phase 5 is accepted and merged; it answered how to build, run and test the app and how to begin phase 6, and listed 26 gaps, fixed in `9fd2c46`; D186 came from it.)
+- [x] 32. `status.md`: links, CI, gate commit, waiting on the owner, state. (This commit.)
 - [ ] 33. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
@@ -246,12 +249,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The gate passed on `1b2e734` (step 26); the report's results, `architecture.md`, `plan.md` and the
-handoff are written (`632efda`). Now closing step 5, the cold-read check (step 31): a fresh agent
-with only the repo, told that phase 5 is accepted and merged, explains how to build, run and test the
-app and how it would begin phase 6; every gap it hits in the docs is fixed. Then step 32: phase 5 set
-to "Awaiting acceptance" with the links, the CI run of the gate commit and what waits on the owner;
-then step 33, the owner told.
+Wait for the owner. On "Phase 5 accepted", do what CLAUDE.md's table says: fetch, check that
+this file still says "Awaiting acceptance" and that nothing but docs changed after `1b2e734`
+(`git diff --stat 1b2e734 phase/5-history -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing),
+merge into `master` with `--no-ff`, set phase 5 to "Done" and reset this file for phase 6, then
+read the CI run of `master`. Phase 6 then starts on "Start phase 6"; the handoff's "For the next
+phase" says what to read first and what to ask the owner before its design.
 
 ### Notes for whoever resumes
 
@@ -319,6 +322,13 @@ then step 33, the owner told.
 
 ## Waiting on the owner
 
+- **Phase 5's acceptance.** Its gate passed on `1b2e734` (2026-10-16): `dotnet test` 3,233 of
+  3,233, the real-window pass 59 of 59 (run again rested after Q1 failed on a hot laptop), every
+  one of the 1,080 pictures inspected, CI run 38931127856 green in all five jobs. Say "Phase 5
+  accepted" to merge it, or name what is to change first. The decisions made during the phase
+  without the owner, which the owner may want to look at: D182 (tooltips take no input), D183 (the
+  report's rulings), D184 and D186 (CI's time limits, 40 and 50 minutes, raised past 32), D185
+  (the wait for git's merge tool not counted by the hang watchdog).
 - Answered during phase 5's design on 2026-10-12 (D164 to D166), after its reviews: the details
   panel gains an "All files" switch so that any line of any file is two clicks from its commit;
   an Abort is undone from the backups list, not by Undo; undoing the automatic stash's checkout
