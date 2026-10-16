@@ -455,7 +455,7 @@ public partial class Phase5RealWindowPass
         // neutral point, where nothing reacts to a click.
         app.ClickAt(RealApp.NeutralPoint.X, RealApp.NeutralPoint.Y);
         app.PressSearch();
-        app.WaitFor(() => app.IsSearchBarShown && RealApp.HasKeyboardFocus(app.Find("SearchBox")), "the search bar with the keyboard focus in its box", StepTimeout);
+        app.WaitFor(() => app.IsSearchBarShown && app.HasFocusOnScreen("SearchBox"), "the search bar with the keyboard focus in its box", StepTimeout);
         AssertSearchBarOpened(app);
         Compare(app, PartA.A4SearchByKey);
         app.PressKey(VirtualKeyShort.ESCAPE);

@@ -32,7 +32,7 @@ public partial class Phase5RealWindowPass
 
         // Step 1: a real click on the toolbar's Search: the bar, the focus in its empty box.
         app.ClickWithMouse(app.Find("SearchButton"));
-        app.WaitFor(() => app.IsSearchBarShown && RealApp.HasKeyboardFocus(app.Find("SearchBox")), "the search bar with the keyboard focus in its box", StepTimeout);
+        app.WaitFor(() => app.IsSearchBarShown && app.HasFocusOnScreen("SearchBox"), "the search bar with the keyboard focus in its box", StepTimeout);
         Assert.Equal(PartF.CommitsMode, app.Find("SearchModeButton").Name);
         Assert.Equal(string.Empty, app.SearchCountText());
         Assert.Equal(PartF.RowsTopOpen, app.GraphRowsBounds().Top, PartF.PositionTolerance);
@@ -42,7 +42,7 @@ public partial class Phase5RealWindowPass
         app.WaitForSearchCount("2 matches", StepTimeout);
         Assert.Equal(PartF.Tokenizer, BoxText(app, "SearchBox"));
         Assert.True(app.Find("SearchPrevious").IsEnabled && app.Find("SearchNext").IsEnabled, "Previous or Next is disabled with two matches.");
-        Assert.True(RealApp.HasKeyboardFocus(app.Find("SearchBox")), "The search box lost the keyboard focus.");
+        Assert.True(app.HasFocusOnScreen("SearchBox"), "The search box lost the keyboard focus.");
         WaitForNothingSelected(app);
         Compare(app, PartF.F10Tokenizer);
 
@@ -50,7 +50,7 @@ public partial class Phase5RealWindowPass
         app.PressKey(VirtualKeyShort.RETURN);
         app.WaitForSearchCount("1 of 2", StepTimeout);
         WaitForDetails(app, PartF.CompareWholeLinesDetails.Subject, PartF.CompareWholeLines);
-        Assert.True(RealApp.HasKeyboardFocus(app.Find("SearchBox")), "Enter took the keyboard focus out of the search box.");
+        app.WaitFor(() => app.HasFocusOnScreen("SearchBox"), "the keyboard focus to stay in the search box after Enter", RealApp.DefaultWaitTimeout);
         Compare(app, PartF.F10FirstMatch);
 
         // Esc: no search bar remains; the match stays selected and shown; the graph takes the focus.

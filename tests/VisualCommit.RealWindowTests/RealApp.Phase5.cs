@@ -349,10 +349,18 @@ public sealed partial class RealApp
             timeout ?? DefaultWaitTimeout,
             () => $"It reads \"{PageText(pageId, automationId) ?? "(nothing on screen)"}\".");
 
-    /// <summary>The blame's text (<c>BlameText</c>, a Document) read through its Value pattern.</summary>
+    /// <summary>
+    /// The blame's text (<c>BlameText</c>, a Document) read through its Value pattern, with its line
+    /// ends as line feeds; empty while the page shows no text yet (it is loading), so that a wait
+    /// can poll it.
+    /// </summary>
     public string BlameTextValue() =>
-        Find("BlameText").Patterns.Value.PatternOrDefault?.Value.ValueOrDefault
-        ?? throw new InvalidOperationException("The blame's text has no Value pattern.");
+        ShownElements("BlameText") is [var text]
+            ? (text.Patterns.Value.PatternOrDefault?.Value.ValueOrDefault ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal)
+            : string.Empty;
+
+    /// <summary>Whether the element <paramref name="automationId"/> is on screen and has the keyboard focus (a search box, a text box).</summary>
+    public bool HasFocusOnScreen(string automationId) => ShownElements(automationId) is [var element] && HasKeyboardFocus(element);
 
     /// <summary>
     /// The point of blame line <paramref name="line"/> (from 1) in the gutter: <see cref="BlameGutterPointX"/>
@@ -440,6 +448,11 @@ public sealed partial class RealApp
     public AutomationElement? RefRowToggle(string automationId, params string[] path)
     {
         ArgumentException.ThrowIfNullOrEmpty(automationId);
+        if (!HasRefRow(path))
+        {
+            return null;
+        }
+
         var row = BoundsOf(RefRow(path));
         var centre = row.Top + (row.Height / 2);
         return ShownElements(automationId).FirstOrDefault(toggle =>
