@@ -1,10 +1,10 @@
 // Part U's expected results (docs/test-reports/phase-5.md, "Part U: undo and redo": its
 // conventions, "Scenarios and graphs of part U", "Commits and objects the checks make", "Texts
-// these checks rely on (part U)" and the rows U16 to U23 of "Checks"), copied from the report. Its
-// members live in Phase5Expectations.PartU. Two writers share this file: each adds its members in
-// its own region (U16 to U19, U20 to U23) and edits no other. Compiled by the real-window pass
-// too: see Phase5Expectations.Common.cs for what may be used here (data and pure helpers, no
-// headless types).
+// these checks rely on (part U)" and the rows U16 to U23 of "Checks"), copied from the report. This
+// file holds the members of U16 to U19, in Phase5Expectations.PartU (their region); those of U20
+// to U23 are in a file of their own (Phase5Expectations.U2.cs, PartU2). Compiled by the
+// real-window pass too: see Phase5Expectations.Common.cs for what may be used here (data and pure
+// helpers, no headless types).
 using Avalonia;
 using VisualCommit.Core.Git;
 
@@ -51,6 +51,9 @@ public static partial class Phase5Expectations
         /// <summary>A Keep move's positional <c>update-ref</c> (7.3, D169): <c>git update-ref -m &lt;message&gt; refs/heads/&lt;b&gt; &lt;to&gt; &lt;from&gt;</c>.</summary>
         public static string KeepMoveRef(string message, string branch, string to, string from) =>
             Git("update-ref", "-m", message, "refs/heads/" + branch, to, from);
+
+        /// <summary>The backups' transaction (design 2.3): <c>git update-ref --stdin</c> with a <c>create</c> line for each backup ref, no message.</summary>
+        public static string BackupWrite { get; } = Git("update-ref", "--stdin");
 
         /// <summary>A Keep move's refresh before its <c>read-tree</c> (0.4).</summary>
         public static string Refresh { get; } = Git("update-index", "-q", "--refresh");
@@ -523,8 +526,24 @@ public static partial class Phase5Expectations
         /// <summary>D91's stash before the checkout.</summary>
         public const string D91StashMessage = "VisualCommit: before checking out feature/other";
 
-        /// <summary>The undo's stash of D91's round trip, as plain git makes it (popped at once).</summary>
+        // The transient stashes ("Commits and objects the checks make", U18 D91), each popped at
+        // once and kept as an unreferenced commit: the short id plain git gives it, its subject,
+        // and its first parent (HEAD where it was made).
+
+        /// <summary>The action's stash: D91's before the checkout, made on main.</summary>
+        public const string ActionStashShort = "1bd29db";
+
+        public const string ActionStashSubject = "On main: " + D91StashMessage;
+
+        /// <summary>The undo's stash (tracked files only, no message), made on feature/other.</summary>
         public const string UndoStashShort = "6cfd0e0";
+
+        public const string UndoStashSubject = "WIP on feature/other: 850a7c0 Other change";
+
+        /// <summary>The redo's stash, made on main.</summary>
+        public const string RedoStashShort = "18df809";
+
+        public const string RedoStashSubject = "WIP on main: 106efba Add notes";
 
         // ---- U19: history operations, each undone by a Keep move (7.3, D169) ----------------------
 
@@ -780,6 +799,12 @@ public static partial class Phase5Expectations
         public const string StatusPulledAndRebased = "Pulled and rebased main onto origin/main";
 
         public const string PullRebaseItem = "Pull from origin/main (rebase)";
+
+        /// <summary>The pull's fetch (phase 4's A4 part A).</summary>
+        public static string PullFetchCall { get; } = Git("fetch", "--progress", "origin");
+
+        /// <summary>The pull's rebase after the fetch and the backup: <c>git rebase</c> with no argument (phase 4's A4 part A).</summary>
+        public static string PullRebaseCall { get; } = Git("rebase");
 
         /// <summary>git's fetch line of the pull (Git 2.36's, standard error).</summary>
         public const string FetchMainLine = "   a7f2cfd..b2e9a9e  main       -> origin/main";

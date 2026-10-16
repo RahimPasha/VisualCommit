@@ -76,6 +76,14 @@ public class Phase5ExpectationTestsU16ToU19
         Assert.Equal($"update refs/heads/main {PartU.ReadWholeLinesSha} {PartU.U16CommitSha}", PartU.UpdateLine("refs/heads/main", PartU.ReadWholeLinesSha, PartU.U16CommitSha));
         Assert.Equal($"delete refs/heads/hotfix {PartU.MainWorkSha}", PartU.DeleteLine("refs/heads/hotfix", PartU.MainWorkSha));
         Assert.Equal($"create refs/heads/hotfix {PartU.MainWorkSha}", PartU.CreateLine("refs/heads/hotfix", PartU.MainWorkSha));
+        Assert.Equal("git update-ref --stdin", PartU.BackupWrite);
+        Assert.Equal("git fetch --progress origin", PartU.PullFetchCall);
+        Assert.Equal("git rebase", PartU.PullRebaseCall);
+
+        // D91's transient stashes: git's subjects name the branch and HEAD's short id and subject.
+        Assert.Equal("On main: VisualCommit: before checking out feature/other", PartU.ActionStashSubject);
+        Assert.Equal(PartU.UndoStashSubject, $"WIP on feature/other: {PartU.Short(PartU.OtherChangeSha)} Other change");
+        Assert.Equal(PartU.RedoStashSubject, $"WIP on main: {PartU.Short(PartU.AddNotesSha)} Add notes");
 
         // The summary counter: 72 less the summary's length.
         Assert.Equal(PartU.CommitSummaryCounter, (72 - PartU.CommitSummary.Length).ToString(System.Globalization.CultureInfo.InvariantCulture));

@@ -179,6 +179,8 @@ public sealed partial class Phase5ChecksU
             ["git restore", "git update-ref", "git read-tree"],
             PartU.Git("restore", "--staged", "--source=" + PartU.AddCoreSha, "--", "."),
             PartU.Transaction(PartU.Redo.Message(text)));
+        AssertTransaction(app, calls, PartU.Redo.Message(text), [PartU.UpdateLine("refs/heads/main", PartU.AddCoreSha, PartU.MainWorkSha)]);
+        Assert.Equal(PartU.AddCoreSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main [behind 1]", " M README.md", " M src/core.txt", "?? scratch.txt", "?? todo.txt"], await StatusAsync(repo));
         AssertPartCWorkingTree(repo);
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true, picture: shot);
@@ -240,10 +242,20 @@ public sealed partial class Phase5ChecksU
         await AssertStagePanelAsync(app, PartU.PartCUnstaged, PartU.PartCStaged);
         AssertGraph(app, PartU.G0, PartU.OpsLanes, PartU.WorkingRow, showsDate: true, picture: shot);
 
-        // Step 12: Redo: the app's hard reset with a new snapshot (the same commit), git's own reflog entry.
+        // Step 12: Redo: the app's hard reset with a new snapshot (the same commit): the two new
+        // backups in one transaction, then the reset, with git's own reflog entry.
         calls = await RedoAsync(app, repo, text);
         shot = Shot(app, "u17h-hard-redone");
-        AssertCalled(app, calls, PartU.Git("reset", "--hard", PartU.AddCoreSha, "--"));
+        var reset = PartU.Git("reset", "--hard", PartU.AddCoreSha, "--");
+        AssertCalledInOrder(app, calls, PartU.BackupWrite, reset);
+        AssertBackupWrite(
+            app,
+            calls,
+            [
+                PartU.CreateLine(PartU.BackupRefName("reset", 2), PartU.MainWorkSha),
+                PartU.CreateLine(PartU.BackupRefName("reset", 2, "-changes"), snapshot),
+            ]);
+        Assert.True(AssertCalled(app, calls, reset).Succeeded, $"\"{reset}\" failed.");
         Assert.Equal(["reset: moving to " + PartU.AddCoreSha], await ReflogAsync(repo, "HEAD", 1));
         Assert.Equal(["## main...origin/main [behind 1]", "?? todo.txt"], await StatusAsync(repo));
         AssertHardResetFiles(repo);

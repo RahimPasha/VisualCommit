@@ -482,8 +482,11 @@ public sealed partial class Phase5ChecksU
             Assert.Contains(PartU.FetchMainLine, fetch.StandardError.Split(['\r', '\n']).Select(line => line.TrimEnd()));
         }
 
-        AssertCalledInOrder(app, calls, fetch.CommandText, "git update-ref --stdin");
-        Assert.Contains(CallsSince(app, calls), call => call.StartsWith("git rebase", StringComparison.Ordinal));
+        // The fetch, the backup, then git rebase (phase 4's A4 part A).
+        Assert.Equal(PartU.PullFetchCall, fetch.CommandText);
+        AssertCalledInOrder(app, calls, PartU.PullFetchCall, PartU.BackupWrite, PartU.PullRebaseCall);
+        AssertBackupWrite(app, calls, [PartU.CreateLine(PartU.BackupRefName("rebase", 1, "/main"), PartU.LocalWorkSha)]);
+        Assert.Single(CallsSince(app, calls), call => call.StartsWith("git rebase", StringComparison.Ordinal));
         AssertStatus(app, PartU.StatusPulledAndRebased);
         Assert.Equal(PartU.LocalWorkRebasedSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal([$"{PartU.BackupRefName("rebase", 1, "/main")} {PartU.LocalWorkSha}"], await BackupLinesAsync(repo));

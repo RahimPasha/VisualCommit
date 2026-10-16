@@ -79,8 +79,9 @@ public sealed partial class Phase5ChecksU : Phase5Checks
 
     /// <summary>
     /// The open tooltip with <paramref name="text"/> lies inside the window and under the toolbar
-    /// button <paramref name="owner"/>: below its icon and label (the lowest text it draws), its
-    /// left edge within the button.
+    /// button <paramref name="owner"/>: its top at or below the button's bottom edge, read with the
+    /// report's ±2 for a stated position (the tooltip opens 20 below the pointer, which rests at
+    /// the 44-high button's centre: 2 above its bottom), and its left edge within the button.
     /// </summary>
     private static void AssertToolTipUnder(ShellDriver app, Control owner, string text)
     {
@@ -90,10 +91,9 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         var size = app.Window.ClientSize;
         Assert.True(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= size.Width && bounds.Bottom <= size.Height, $"The tooltip at {bounds} is not inside the {size.Width}x{size.Height} window.");
         var button = app.BoundsOf(owner);
-        var label = owner.GetVisualDescendants().OfType<TextBlock>().Where(block => block.IsEffectivelyVisible).Select(app.BoundsOf).Max(block => block.Bottom);
         Assert.True(
-            bounds.Top >= label - 0.5 && bounds.Left >= button.Left - 0.5 && bounds.Left <= button.Right,
-            $"The tooltip at {bounds} is not under {owner.Name} at {button} (its label ends at y {label}).");
+            bounds.Top >= button.Bottom - 2 - 0.5 && bounds.Left >= button.Left - 0.5 && bounds.Left <= button.Right,
+            $"The tooltip at {bounds} is not under {owner.Name} at {button} (its top above the button's bottom by more than 2).");
     }
 
     /// <summary>Waits until the graph shows HEAD at <paramref name="sha"/> with its history complete, and the tab is idle: a write of the stage panel has ended.</summary>
@@ -148,6 +148,18 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         Assert.True(call.Succeeded, $"\"{command}\" failed: {call.StandardError}");
         Assert.Equal(string.Concat(lines.Select(line => line + "\n")), call.StandardInput);
         Assert.Single(CallsSince(app, calls), text => text == command);
+    }
+
+    /// <summary>
+    /// Asserts the backups written since <paramref name="calls"/> (design 2.3): one
+    /// <c>git update-ref --stdin</c> transaction, which succeeded, with exactly these
+    /// <c>create</c> lines as its recorded input.
+    /// </summary>
+    private static void AssertBackupWrite(ShellDriver app, int calls, string[] lines)
+    {
+        var call = Assert.Single(app.GitCalls().Skip(calls), record => record.CommandText == PartU.BackupWrite);
+        Assert.True(call.Succeeded, $"\"{PartU.BackupWrite}\" failed: {call.StandardError}");
+        Assert.Equal(string.Concat(lines.Select(line => line + "\n")), call.StandardInput);
     }
 
     /// <summary>

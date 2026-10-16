@@ -277,6 +277,7 @@ public sealed partial class Phase5ChecksU
         AssertRestoreBar(app, null);
         AssertStatus(app, PartU.Ready);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.RestoreText));
+        AssertNoClippedText(app);
     }
 
     /// <summary>
@@ -318,6 +319,7 @@ public sealed partial class Phase5ChecksU
         AssertShort(PartU.ReaderWorkingBlob, await WorkingBlobAsync(repo, PartU.ReaderPath), "src/Reader.cs");
         AssertRestoreBar(app, null);
         AssertButtons(app, UndoRedoButtons.CanRedo(PartU.DiscardLinesText));
+        AssertNoClippedText(app);
 
         // Step 18: Redo: the bytes the discard left (the first hunk kept), the bar back.
         calls = await RedoAsync(app, repo, PartU.DiscardLinesText);
@@ -329,6 +331,7 @@ public sealed partial class Phase5ChecksU
         AssertRestoreBar(app, PartU.RestoreBarReader);
         Assert.Single(await BackupsAsync(repo));
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.DiscardLinesText));
+        AssertNoClippedText(app);
     }
 
     /// <summary>
@@ -371,6 +374,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal([PartU.FirstHunkHeader, PartU.SecondHunkHeader], HunkHeaders(app));
         AssertRestoreBar(app, null);
         AssertButtons(app, UndoRedoButtons.CanRedo(PartU.DiscardLinesText));
+        AssertNoClippedText(app);
 
         // Step 21: Redo: as after step 19.
         calls = await RedoAsync(app, repo, PartU.DiscardLinesText);
@@ -381,6 +385,7 @@ public sealed partial class Phase5ChecksU
         AssertWithoutLine23(app);
         AssertRestoreBar(app, PartU.RestoreBarReader);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.DiscardLinesText));
+        AssertNoClippedText(app);
     }
 
     /// <summary>
@@ -442,6 +447,7 @@ public sealed partial class Phase5ChecksU
         AssertRestoreBar(app, PartU.RestoreBarTwoFiles);
         await AssertStagePanelAsync(app, [], ["M README.md"]);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.DiscardTwoText));
+        AssertNoClippedText(app);
     }
 
     /// <summary>
@@ -504,6 +510,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(["## main...origin/main", " M src/Reader.cs", "?? docs/todo.md"], await StatusAsync(repo));
         AssertRestoreBar(app, null);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.RestoreText));
+        AssertNoClippedText(app);
     }
 
     /// <summary>
@@ -559,6 +566,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal([PartU.BackupRefName("discard", 1)], (await BackupsAsync(repo)).Select(backup => backup.Name));
         AssertRestoreBar(app, PartU.RestoreBarReader);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.CreateKeepText));
+        AssertNoClippedText(app);
     }
 
     // ---- U16's own helpers ----

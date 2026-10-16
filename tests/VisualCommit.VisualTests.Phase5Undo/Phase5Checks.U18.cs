@@ -493,6 +493,7 @@ public sealed partial class Phase5ChecksU
             PartU.Git("switch", "--no-guess", "feature/other"),
             PartU.Git("stash", "pop", "--index", "stash@{0}"));
         AssertStatus(app, PartU.StatusCheckedOutOtherWithChanges);
+        await AssertTransientStashAsync(repo, PartU.ActionStashShort, PartU.ActionStashSubject, PartU.AddNotesSha);
         await AssertOnOtherWithChangesAsync(repo);
         AssertGraph(app, PartU.G14b, 2, PartU.WorkingRow, showsDate: true);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.CheckoutOtherText));
@@ -507,6 +508,7 @@ public sealed partial class Phase5ChecksU
             PartU.Git("stash", "push"),
             PartU.UndoSwitch("main"),
             PartU.Git("stash", "pop", "--index", "stash@{0}"));
+        await AssertTransientStashAsync(repo, PartU.UndoStashShort, PartU.UndoStashSubject, PartU.OtherChangeSha);
         var pop = app.GitCalls().Skip(calls).Last(call => call.CommandText.StartsWith("git stash pop", StringComparison.Ordinal));
         if (await IsReportGitAsync())
         {
@@ -531,6 +533,7 @@ public sealed partial class Phase5ChecksU
             PartU.Git("stash", "push"),
             PartU.UndoSwitch("feature/other"),
             PartU.Git("stash", "pop", "--index", "stash@{0}"));
+        await AssertTransientStashAsync(repo, PartU.RedoStashShort, PartU.RedoStashSubject, PartU.AddNotesSha);
         await AssertOnOtherWithChangesAsync(repo);
         AssertGraph(app, PartU.G14b, 2, PartU.WorkingRow, showsDate: true, picture: shot);
         AssertButtons(app, UndoRedoButtons.CanUndo(PartU.CheckoutOtherText));
@@ -598,6 +601,19 @@ public sealed partial class Phase5ChecksU
         var at = Array.FindIndex(worktrees, line => line.StartsWith("worktree ", StringComparison.Ordinal) && line.EndsWith("/" + Scenarios.EdgeCasesWorktree, StringComparison.Ordinal));
         Assert.True(at >= 0, "No worktree edges-wt:\n" + string.Join('\n', worktrees));
         Assert.Contains("branch refs/heads/side", worktrees.Skip(at).TakeWhile(line => line.Length > 0));
+    }
+
+    /// <summary>
+    /// A transient stash of D91's round trip ("Commits and objects the checks make"), popped at once
+    /// and left as an unreferenced commit: the report's short id names a commit with
+    /// <paramref name="subject"/> whose first parent is <paramref name="parent"/>, on every git.
+    /// </summary>
+    private static async Task AssertTransientStashAsync(TempRepo repo, string shortId, string subject, string parent)
+    {
+        var sha = await RevParseAsync(repo, shortId + "^{commit}");
+        Assert.True(sha is not null, $"No commit {shortId}: the stash is not the one the report gives.");
+        var fields = (await GitTextAsync(repo, "log", "-1", "--format=%s%x1f%P", sha!)).Split('\x1f');
+        Assert.Equal((subject, parent), (fields[0], fields[1].Split(' ')[0]));
     }
 
     /// <summary>After U18 steps 28 and 30: on feature/other with the local change re-applied, newfile.txt untouched, no stash.</summary>
