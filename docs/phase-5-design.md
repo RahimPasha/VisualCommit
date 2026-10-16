@@ -1857,6 +1857,23 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   commit, its menu that of any entry at HEAD's commit. P27's step 8 and
   `Phase5ScenarioTests.Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_or_a_staged_file`
   pin it.
+- **Under the default run's load** (the full run on `4bec368`, 50 min: five of 3,196 failed on
+  waits): `git mergetool` is a shell script that starts about 30 git processes and forks its
+  shell (MSYS `sh`) about a hundred times before it runs the tool, 2.8 s alone on the development
+  laptop, where `git status` takes 0.09 s; under load every process start grows: with four of the
+  seven test projects side by side the script took 32 to 64 s while `git status` took 0.9 to
+  2.6 s, past the 60 s phase 4's C16 and the git tests waited for the tool and A2's 30 s. They
+  wait `Scenarios.MergeToolTimeout`, 120 s, now. A2's second method then took 146 s with the four
+  projects (the tool's start 55 s): a start of more than about 90 s would reach the hang
+  watchdog's 3 minutes before the wait's own limit, and the steps after the start (the cancel, the
+  abort) need the same app and its activity log, so a split does not shorten it. And a scripted
+  double-click is two presses that Avalonia counts as one only within its double-tap time, 500 ms,
+  by the window's input clock, which is real time: the jobs and frames the headless helpers run
+  between the presses took longer under load, and P25's double-click on `main` came as two single
+  clicks (its 60 s wait was for a "Check out main" that never started; that checkout makes 8 git
+  calls, 0.7 s alone). `ShellDriver.DoubleClick` stops the window's input clock for its presses
+  (`HeadlessInputClock`), as a user's double-click carries the times of its presses however busy
+  the app is (`ShellDriverTests.A_double_click_stays_one_when_its_first_click_takes_longer_than_the_double_tap_time`).
 
 ## 16. Work breakdown
 
