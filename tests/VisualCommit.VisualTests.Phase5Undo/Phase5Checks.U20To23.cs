@@ -65,9 +65,10 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         {
             var calls = app.GitCalls().Count;
             var mark = app.LogMark();
+            using var texts = app.RecordStatusTexts();
             await ClickAsync(app, direction);
             Assert.True(app.Session.Services.DialogHost.Current is not ConfirmationViewModel, $"{direction} {text} asked a question; only a step that changes a remote asks.");
-            await AssertRanAsync(app, repo, direction, text, mark);
+            await AssertRanAsync(app, repo, direction, text, mark, texts);
             return calls;
         }
 
@@ -97,13 +98,14 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         {
             var calls = app.GitCalls().Count;
             var mark = app.LogMark();
+            using var texts = app.RecordStatusTexts();
             ClickDialogButton(app, "ConfirmButton");
-            await AssertRanAsync(app, repo, direction, text, mark);
+            await AssertRanAsync(app, repo, direction, text, mark, texts);
             return calls;
         }
 
-        /// <summary>"Undo ran" after <paramref name="mark"/>: the log line, idle, no dialog, the status.</summary>
-        private static async Task AssertRanAsync(ShellDriver app, TempRepo repo, Direction direction, string text, int mark)
+        /// <summary>"Undo ran" after <paramref name="mark"/>: the running text the status bar showed, the log line, idle, no dialog, the status.</summary>
+        private static async Task AssertRanAsync(ShellDriver app, TempRepo repo, Direction direction, string text, int mark, StatusTextRecorder texts)
         {
             var result = (direction == Direction.Undo ? "Undid " : "Redid ") + text;
             var ended = AppLogFile.OperationEnded(NameOf(repo), Title(direction, text));
@@ -113,7 +115,11 @@ public sealed partial class Phase5ChecksU : Phase5Checks
             Assert.Equal(1, app.CountLogLines(ended, mark));
             await AssertNoDialogAsync(app);
             AssertStatus(app, result);
+            Assert.Contains(Running(direction, text), texts.Texts);
         }
+
+        /// <summary>The status bar's text while a step runs (12.1): <c>Undoing x…</c> or <c>Redoing x…</c>.</summary>
+        public static string Running(Direction direction, string text) => $"{(direction == Direction.Undo ? "Undoing" : "Redoing")} {text}…";
 
         /// <summary>The operation's title of a step: <c>Undo x</c> or <c>Redo x</c> (12.1).</summary>
         public static string Title(Direction direction, string text) => $"{direction} {text}";

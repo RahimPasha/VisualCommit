@@ -50,7 +50,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 3: "Undo": deleted on origin first, then the upstream's keys removed.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.PushTopicText);
-        Shot(app, "u21b-push-undone");
+        var shot = Shot(app, "u21b-push-undone");
         var delete = PartU2.StepPush("refs/heads/topic", PartU2.TopicWork, null);
         AssertCalledInOrder(app, calls, delete, PartU2.RemoveTopicSection);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, delete), PartU2.DeletedTopicLine);
@@ -60,7 +60,7 @@ public sealed partial class Phase5ChecksU
         Assert.Null(await Steps.RefAsync(repo, "refs/remotes/origin/topic"));
         Assert.Empty(await Steps.ConfigAsync(repo, @"^branch\.topic\."));
         Assert.Equal(PartU2.TopicWork, await Steps.RefAsync(repo, "refs/heads/topic"));
-        AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
+        AssertGraph(app, PartU2.Sync, PartU2.SyncLanes, picture: shot);
         Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
         Assert.Equal((0, 0), Steps.Arrows(app, "topic"));
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.PushTopicText));
@@ -71,7 +71,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 5: "Redo": pushed with an empty lease (the branch must not exist), then the keys added again.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.PushTopicText);
-        Shot(app, "u21d-push-redone");
+        shot = Shot(app, "u21d-push-redone");
         var again = PartU2.StepPush("refs/heads/topic", string.Empty, PartU2.TopicWork);
         AssertCalledInOrder(
             app,
@@ -80,7 +80,7 @@ public sealed partial class Phase5ChecksU
             "git config --local --add branch.topic.remote origin",
             "git config --local --add branch.topic.merge refs/heads/topic");
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, again), PartU2.NewTopicLine);
-        await U21.AssertTopicPushedAsync(app, repo);
+        await U21.AssertTopicPushedAsync(app, repo, picture: shot);
         AssertNoClippedText(app);
     }
 
@@ -120,14 +120,14 @@ public sealed partial class Phase5ChecksU
 
         // Step 8: "Undo": origin's published back at Published work, leased on Rewritten work.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.ForcePushText);
-        Shot(app, "u21f-force-undone");
+        var shot = Shot(app, "u21f-force-undone");
         var back = PartU2.StepPush("refs/heads/published", PartU2.RewrittenWork, PartU2.PublishedWork);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, back), PartU2.ForceUndoneLine);
         Assert.Contains($"{PartU2.PublishedWork} refs/heads/published", await Steps.LsRemoteAsync(repo, "--heads"));
         Assert.Equal(PartU2.PublishedWork, await Steps.RefAsync(repo, "refs/remotes/origin/published"));
         Assert.Equal(PartU2.RewrittenWork, await Steps.RefAsync(repo, "refs/heads/published"));
         Assert.Equal((1, 1), Steps.Arrows(app, "published"));
-        AssertGraph(app, PartU2.SyncRewritten, lanes: 3);
+        AssertGraph(app, PartU2.SyncRewritten, lanes: 3, picture: shot);
         Assert.Equal([backup], await Steps.BackupLinesAsync(repo));
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.ForcePushText));
 
@@ -137,11 +137,11 @@ public sealed partial class Phase5ChecksU
 
         // Step 10: "Redo": Rewritten work again, leased on Published work; no new backup.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.ForcePushText);
-        Shot(app, "u21h-force-redone");
+        shot = Shot(app, "u21h-force-redone");
         var forward = PartU2.StepPush("refs/heads/published", PartU2.PublishedWork, PartU2.RewrittenWork);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, forward), PartU2.ForceRedoneLine);
         Assert.Equal([backup], await Steps.BackupLinesAsync(repo));
-        await U21.AssertForcePushedAsync(app, repo);
+        await U21.AssertForcePushedAsync(app, repo, picture: shot);
         AssertNoClippedText(app);
     }
 
@@ -176,13 +176,13 @@ public sealed partial class Phase5ChecksU
 
         // Step 13: "Undo": pushed back with an empty lease.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.DeleteRemoteBranchText);
-        Shot(app, "u21j-delete-undone");
+        var shot = Shot(app, "u21j-delete-undone");
         var back = PartU2.StepPush("refs/heads/published", string.Empty, PartU2.PublishedWork);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, back), PartU2.NewPublishedLine);
         Assert.Contains($"{PartU2.PublishedWork} refs/heads/published", await Steps.LsRemoteAsync(repo, "--heads"));
         Assert.Equal(PartU2.PublishedWork, await Steps.RefAsync(repo, "refs/remotes/origin/published"));
         Assert.Equal((1, 0), Steps.Arrows(app, "published"));
-        AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
+        AssertGraph(app, PartU2.Sync, PartU2.SyncLanes, picture: shot);
         Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.DeleteRemoteBranchText));
 
@@ -192,9 +192,9 @@ public sealed partial class Phase5ChecksU
 
         // Step 15: "Redo": deleted again, leased on Published work.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.DeleteRemoteBranchText);
-        Shot(app, "u21l-delete-redone");
+        shot = Shot(app, "u21l-delete-redone");
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, delete), PartU2.DeletedPublishedLine);
-        await U21.AssertPublishedDeletedAsync(app, repo, backup);
+        await U21.AssertPublishedDeletedAsync(app, repo, backup, picture: shot);
         AssertNoClippedText(app);
     }
 
@@ -222,12 +222,12 @@ public sealed partial class Phase5ChecksU
 
         // Step 18: "Undo": deleted on origin, leased on Main work; the local v1.1 stays.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.PushTagText);
-        Shot(app, "u21n-tag-undone");
+        var shot = Shot(app, "u21n-tag-undone");
         var delete = PartU2.StepPush("refs/tags/v1.1", PartU2.MainWork, null);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, delete), PartU2.DeletedTagLine);
         Assert.Empty(await Steps.LsRemoteAsync(repo, "--tags"));
         Assert.Equal(PartU2.MainWork, await Steps.RefAsync(repo, "refs/tags/v1.1"));
-        AssertGraph(app, PartU2.G0, PartU2.G0Lanes);
+        AssertGraph(app, PartU2.G0, PartU2.G0Lanes, picture: shot);
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.PushTagText));
 
         // Step 19: Redo asks too.
@@ -236,10 +236,10 @@ public sealed partial class Phase5ChecksU
 
         // Step 20: "Redo": pushed again with an empty lease.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.PushTagText);
-        Shot(app, "u21p-tag-redone");
+        shot = Shot(app, "u21p-tag-redone");
         var again = PartU2.StepPush("refs/tags/v1.1", string.Empty, PartU2.MainWork);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, again), PartU2.NewTagLine);
-        await U21.AssertTagPushedAsync(app, repo, PartU2.PushTagText);
+        await U21.AssertTagPushedAsync(app, repo, PartU2.PushTagText, picture: shot);
         AssertNoClippedText(app);
     }
 
@@ -276,10 +276,10 @@ public sealed partial class Phase5ChecksU
 
         // Step 23: "Undo": pushed back with an empty lease.
         calls = await Steps.ConfirmAsync(app, repo, Undo, PartU2.DeleteRemoteTagText);
-        Shot(app, "u21r-tag-delete-undone");
+        var shot = Shot(app, "u21r-tag-delete-undone");
         var back = PartU2.StepPush("refs/tags/v1.1", string.Empty, PartU2.MainWork);
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, back), PartU2.NewTagLine);
-        await U21.AssertTagPushedAsync(app, repo, PartU2.DeleteRemoteTagText, canRedo: true);
+        await U21.AssertTagPushedAsync(app, repo, PartU2.DeleteRemoteTagText, canRedo: true, picture: shot);
 
         // Step 24: Redo asks too.
         await Steps.AskAsync(app, repo, Redo, PartU2.DeleteRemoteTagText, PartU2.RedoDeleteTag);
@@ -287,9 +287,9 @@ public sealed partial class Phase5ChecksU
 
         // Step 25: "Redo": deleted again; the backup stays.
         calls = await Steps.ConfirmAsync(app, repo, Redo, PartU2.DeleteRemoteTagText);
-        Shot(app, "u21t-tag-delete-redone");
+        shot = Shot(app, "u21t-tag-delete-redone");
         await Steps.AssertPrintedAsync(Steps.AssertSucceeded(app, calls, delete), PartU2.DeletedTagLine);
-        await U21.AssertRemoteTagDeletedAsync(app, repo, backup);
+        await U21.AssertRemoteTagDeletedAsync(app, repo, backup, picture: shot);
         AssertNoClippedText(app);
     }
 
@@ -373,55 +373,55 @@ public sealed partial class Phase5ChecksU
     private static class U21
     {
         /// <summary>U21 after steps 1 and 5: topic on origin and tracked, S-topic, Remotes 3, T+.</summary>
-        public static async Task AssertTopicPushedAsync(ShellDriver app, TempRepo repo)
+        public static async Task AssertTopicPushedAsync(ShellDriver app, TempRepo repo, Screenshot? picture = null)
         {
             Assert.Contains($"{PartU2.TopicWork} refs/heads/topic", await Steps.LsRemoteAsync(repo, "--heads"));
             Assert.Equal(PartU2.TopicWork, await Steps.RefAsync(repo, "refs/remotes/origin/topic"));
             Assert.Equal(["branch.topic.remote origin", "branch.topic.merge refs/heads/topic"], await Steps.ConfigAsync(repo, @"^branch\.topic\."));
-            AssertGraph(app, PartU2.SyncTopicPushed, PartU2.SyncLanes);
+            AssertGraph(app, PartU2.SyncTopicPushed, PartU2.SyncLanes, picture: picture);
             Assert.Equal(3, Steps.SectionCount(app, "Remotes"));
             Assert.Equal((0, 0), Steps.Arrows(app, "topic"));
             Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.PushTopicText));
         }
 
         /// <summary>U21 after steps 6 and 10: origin's published is Rewritten work, S-F1, T+.</summary>
-        public static async Task AssertForcePushedAsync(ShellDriver app, TempRepo repo)
+        public static async Task AssertForcePushedAsync(ShellDriver app, TempRepo repo, Screenshot? picture = null)
         {
             Assert.Contains($"{PartU2.RewrittenWork} refs/heads/published", await Steps.LsRemoteAsync(repo, "--heads"));
             Assert.Equal(PartU2.RewrittenWork, await Steps.RefAsync(repo, "refs/remotes/origin/published"));
             Assert.Equal((0, 0), Steps.Arrows(app, "published"));
-            AssertGraph(app, PartU2.SyncForcePushed, PartU2.SyncLanes);
+            AssertGraph(app, PartU2.SyncForcePushed, PartU2.SyncLanes, picture: picture);
             Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.ForcePushText));
         }
 
         /// <summary>U21 after steps 11 and 15: origin has main only, S-del, Remotes 1, one backup, T+.</summary>
-        public static async Task AssertPublishedDeletedAsync(ShellDriver app, TempRepo repo, string backup)
+        public static async Task AssertPublishedDeletedAsync(ShellDriver app, TempRepo repo, string backup, Screenshot? picture = null)
         {
             Assert.Equal([$"{PartU2.SharedWork} refs/heads/main"], await Steps.LsRemoteAsync(repo, "--heads"));
             Assert.Null(await Steps.RefAsync(repo, "refs/remotes/origin/published"));
             Assert.Equal([backup], await Steps.BackupLinesAsync(repo));
-            AssertGraph(app, PartU2.SyncPublishedDeleted, PartU2.SyncLanes);
+            AssertGraph(app, PartU2.SyncPublishedDeleted, PartU2.SyncLanes, picture: picture);
             Assert.Equal(1, Steps.SectionCount(app, "Remotes"));
             Assert.Equal((0, 0), Steps.Arrows(app, "published"));
             Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.DeleteRemoteBranchText));
         }
 
         /// <summary>U21 after steps 16, 20 and 23: origin has v1.1 at Main work (a remote's tags are not drawn: G0), T+ or T− of <paramref name="text"/>.</summary>
-        public static async Task AssertTagPushedAsync(ShellDriver app, TempRepo repo, string text, bool canRedo = false)
+        public static async Task AssertTagPushedAsync(ShellDriver app, TempRepo repo, string text, bool canRedo = false, Screenshot? picture = null)
         {
             Assert.Equal([$"{PartU2.MainWork} refs/tags/v1.1"], await Steps.LsRemoteAsync(repo, "--tags"));
             Assert.Equal(PartU2.MainWork, await Steps.RefAsync(repo, "refs/tags/v1.1"));
-            AssertGraph(app, PartU2.G0, PartU2.G0Lanes);
+            AssertGraph(app, PartU2.G0, PartU2.G0Lanes, picture: picture);
             Steps.AssertButtons(app, canRedo ? UndoRedoButtons.CanRedo(text) : UndoRedoButtons.CanUndo(text));
         }
 
         /// <summary>U21 after steps 21 and 25: origin has no tag, the local v1.1 and the backup stay, T+.</summary>
-        public static async Task AssertRemoteTagDeletedAsync(ShellDriver app, TempRepo repo, string backup)
+        public static async Task AssertRemoteTagDeletedAsync(ShellDriver app, TempRepo repo, string backup, Screenshot? picture = null)
         {
             Assert.Empty(await Steps.LsRemoteAsync(repo, "--tags"));
             Assert.Equal(PartU2.MainWork, await Steps.RefAsync(repo, "refs/tags/v1.1"));
             Assert.Equal([backup], await Steps.BackupLinesAsync(repo));
-            AssertGraph(app, PartU2.G0, PartU2.G0Lanes);
+            AssertGraph(app, PartU2.G0, PartU2.G0Lanes, picture: picture);
             Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.DeleteRemoteTagText));
         }
     }

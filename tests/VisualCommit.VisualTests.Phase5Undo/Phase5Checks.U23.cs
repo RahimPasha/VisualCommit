@@ -233,6 +233,7 @@ public sealed partial class Phase5ChecksU
         await repo.GitAsync("restore", "--worktree", "--", "docs/main.txt", "src/core.txt");
         await app.WaitForAsync(() => !Graph(app).ShowsWorkingRow, "the working-changes row to go", OutsideChangeTimeout);
         await app.WaitForIdleAsync();
+        Assert.Equal(["## feature/topic...origin/feature/topic [ahead 4, behind 2]"], await Steps.StatusAsync(repo));
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.RebaseText);
         AssertCalledInOrder(
             app,
@@ -241,6 +242,7 @@ public sealed partial class Phase5ChecksU
             readTree,
             PartU2.Command("update-ref", "-m", PartU2.UndoMessage(PartU2.RebaseText), "refs/heads/feature/topic", PartU2.TopicTwo, PartU2.TopicTwoOntoMain));
         Assert.Equal(PartU2.TopicTwo, await Steps.RefAsync(repo, "refs/heads/feature/topic"));
+        Assert.Equal(["## feature/topic...origin/feature/topic"], await Steps.StatusAsync(repo));
         AssertGraph(app, PartU2.R0, PartU2.RebaseLanes);
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.RebaseText));
         AssertNoClippedText(app);
