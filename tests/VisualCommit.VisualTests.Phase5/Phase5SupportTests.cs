@@ -72,6 +72,38 @@ public sealed class Phase5SupportTests : Phase5Checks
         Assert.Throws<FormatException>(() => BackupRef.Parse("refs/visualcommit/backup/merge-20260102T090000000Z"));
     }
 
+    /// <summary>
+    /// Part P's "exact state": the same for a state read twice, different when a file's contents,
+    /// the index, an untracked file or a ref changes, and the same again once each is put back.
+    /// </summary>
+    [Fact]
+    public async Task The_exact_state_tells_the_files_the_index_and_the_refs_apart()
+    {
+        using var repo = await Scenarios.ProtectAsync();
+        var built = await ExactStateAsync(repo);
+        Assert.Equal(built, await ExactStateAsync(repo));
+        Assert.Contains("settings.local.json: {", built, StringComparison.Ordinal);
+        Assert.DoesNotContain(".git" + Path.DirectorySeparatorChar, built, StringComparison.Ordinal);
+
+        repo.WriteFile("src/app.txt", "app\nlocal\n");
+        var changed = await ExactStateAsync(repo);
+        Assert.NotEqual(built, changed);
+        await repo.GitAsync("add", "--", "src/app.txt");
+        Assert.NotEqual(changed, await ExactStateAsync(repo));
+        await repo.GitAsync("reset", "--quiet", "--", "src/app.txt");
+        Assert.Equal(changed, await ExactStateAsync(repo));
+        await repo.GitAsync("checkout", "--", "src/app.txt");
+        Assert.Equal(built, await ExactStateAsync(repo));
+
+        repo.WriteFile("scratch.txt", "scratch\n");
+        Assert.NotEqual(built, await ExactStateAsync(repo));
+        File.Delete(Path.Combine(repo.Path, "scratch.txt"));
+        await repo.GitAsync("branch", "topic");
+        Assert.NotEqual(built, await ExactStateAsync(repo));
+        await repo.GitAsync("branch", "-D", "topic");
+        Assert.Equal(built, await ExactStateAsync(repo));
+    }
+
     [Fact]
     public void The_menu_height_is_4as_formula()
     {

@@ -626,11 +626,54 @@ public abstract partial class Phase5Checks
         Assert.NotEqual(colour, screenshot.PixelAt(centre));
     }
 
+    /// <summary>
+    /// Asserts which lines of the graph are drawn dashed (D161, design 10): exactly
+    /// <paramref name="lines"/>, each a commit row, the line's kind and the lane it starts in, of
+    /// all the lines of every row (<c>CommitGraphData.RowAt(row).Lines</c>) that carry
+    /// <see cref="GraphLine.IsDashed"/>. Every other line is solid.
+    /// </summary>
+    protected static void AssertDashedLines(ShellDriver app, params (int Row, GraphLineKind Kind, int Lane)[] lines)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(lines);
+        var data = Graph(app).Data ?? throw new Xunit.Sdk.XunitException("The graph has no data.");
+        var dashed = Enumerable.Range(0, data.Count)
+            .SelectMany(row => data.RowAt(row).Lines.Where(line => line.IsDashed).Select(line => (Row: row, line.Kind, Lane: line.FromLane)))
+            .ToList();
+        var expected = lines.OrderBy(line => line.Row).ThenBy(line => line.Kind).ThenBy(line => line.Lane).ToList();
+        var actual = dashed.OrderBy(line => line.Row).ThenBy(line => line.Kind).ThenBy(line => line.Lane).ToList();
+        Assert.True(
+            expected.SequenceEqual(actual),
+            "The dashed lines are not the expected ones.\nExpected:\n  " + string.Join("\n  ", expected) + "\nActual:\n  " + string.Join("\n  ", actual));
+    }
+
     /// <summary>The backup refs (<c>refs/visualcommit/backup/</c>), parsed (<see cref="BackupRef"/>), with what each points at, in git's order of their names.</summary>
     protected static async Task<List<(BackupRef Ref, string Name, string Sha)>> BackupsAsync(TempRepo repo)
     {
         ArgumentNullException.ThrowIfNull(repo);
         return [.. (await repo.BackupRefsAsync()).Select(entry => (BackupRef.Parse(entry.Name), entry.Name, entry.Sha))];
+    }
+
+    /// <summary>
+    /// "The exact state" of a repository (the report's part P; the same reads as the pins'
+    /// <c>ExactStateAsync</c> in Phase5ScenarioTests), joined into one text to be compared whole:
+    /// HEAD (<c>git rev-parse HEAD</c>), every ref with its object (<c>git for-each-ref</c>), the
+    /// index (<c>git ls-files --stage</c>), the status with the untracked and ignored files
+    /// (<c>git status --porcelain=v2 --untracked-files=all --ignored</c>) and every file of the
+    /// working tree outside <c>.git</c> with its contents, in ordinal order.
+    /// </summary>
+    protected static async Task<string> ExactStateAsync(TempRepo repo)
+    {
+        ArgumentNullException.ThrowIfNull(repo);
+        var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
+        var refs = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
+        var index = (await repo.GitAsync("ls-files", "--stage")).StandardOutput;
+        var status = (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
+        var files = Directory.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories)
+            .Where(file => !Path.GetRelativePath(repo.Path, file).StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
+        return string.Join('\n', [head, refs, index, status, .. files]);
     }
 
     /// <summary>The git calls the app made since <paramref name="mark"/> (a count of <see cref="ShellDriver.GitCalls"/> read before the input), as their command lines.</summary>
@@ -676,6 +719,20 @@ public abstract partial class Phase5Checks
         var limit = timeout ?? OperationChainTimeout;
         await app.WaitForLogLineAsync(AppLogFile.OperationEnded(NameOf(repo), title), mark: mark, timeout: limit);
         await app.WaitForIdleAsync(timeout: limit);
+    }
+
+    /// <summary>
+    /// After a change made outside the app (part P's conventions, PD16; phase 4's inline wait of
+    /// A4): waits, at most <see cref="OutsideChangeTimeout"/> each, for a status read logged after
+    /// <paramref name="mark"/> (<see cref="ShellDriver.LogMark"/>, read before the change) with
+    /// <paramref name="staged"/> staged and <paramref name="unstaged"/> unstaged files, then until
+    /// the tab is idle, and, where the counts do not change, until the repository's status
+    /// satisfies <paramref name="until"/> (<see cref="ShellDriver.WaitForStatusReadAsync"/>).
+    /// </summary>
+    protected static Task WaitForStatusReadAsync(ShellDriver app, int staged, int unstaged, int mark, Func<WorkingTreeStatus, bool>? until = null)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        return app.WaitForStatusReadAsync(staged, unstaged, mark, until, OutsideChangeTimeout);
     }
 
     /// <summary>The working tree's folder name: the tab's and the repository's name.</summary>
