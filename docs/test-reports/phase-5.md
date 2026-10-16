@@ -3430,8 +3430,9 @@ listed here as expected.
   is now the first row in view, whole, its note under it (`a2j`). Both rows say so now, and the
   check asserts the summary and the abort's row as drawn there. The calls themselves are "among
   them", as the convention "An operation's calls" has them, so no other expected result changes;
-  the pictures `a2c` and `a2j` change, and `a2g`, whose merge no longer reads the whole status
-  after it stopped (its last call, below the list's end before, is gone).
+  the pictures `a2c` and `a2j` change, `a2k` with them (the list one call shorter), and `a2g`,
+  whose merge no longer reads the whole status after it stopped (its last call, below the list's
+  end before, is gone).
 
 ## How the expected git states were derived
 
