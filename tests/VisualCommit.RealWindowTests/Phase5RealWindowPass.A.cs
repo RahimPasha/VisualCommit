@@ -380,7 +380,7 @@ public partial class Phase5RealWindowPass
             AssertToggle(app, enabled: true, open: true);
             AssertLogHeader(app, PartA.HistoryRepo, showReads: false);
             Assert.Empty(app.ActivityLogRows());
-            Assert.Null(SavedSession(data)?.ActivityLogHeight);
+            Assert.Null(ReadSession(data).ActivityLogHeight);
             Compare(app, PartA.A3DefaultHeight);
 
             // Step 2: the splitter dragged with the real mouse from its centre, 100 up in 5 steps; letting go saved it.
@@ -395,7 +395,7 @@ public partial class Phase5RealWindowPass
             Assert.Equal(0, app.Close());
         }
 
-        Assert.Equal(PartA.DraggedHeight, SavedSession(data)!.ActivityLogHeight!.Value, PartA.Tolerance);
+        Assert.Equal(PartA.DraggedHeight, ReadSession(data).ActivityLogHeight!.Value, PartA.Tolerance);
 
         // Second start, on the same data folder, writing no session. Step 4: the panel closed at start; opened, 300 high and empty.
         using (var app = Relaunch(data, name))

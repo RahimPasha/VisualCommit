@@ -39,6 +39,7 @@
 //   RealApp.BlameGutterPoint and BlameTextPoint (from BlameGutter's and BlameText's bounds).
 using System.Drawing;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.WindowsAPI;
@@ -470,16 +471,74 @@ public partial class Phase5RealWindowPass(Phase5Run fixture) : IClassFixture<Pha
     private static async Task<string> WorkingTreeAsync(TempRepo repo) =>
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(await GitTextAsync(repo, "rev-parse", "--show-toplevel")));
 
-    /// <summary>The session as the data folder holds it, read as the app reads it; null while the file is being written.</summary>
+    /// <summary>
+    /// The session as the data folder holds it (<see cref="SavedSession"/>), waited for while the
+    /// app is writing it: a condition polled every 100 ms, at most <see cref="StepTimeout"/>.
+    /// </summary>
+    private static SessionState ReadSession(string data)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            if (SavedSession(data) is { } session)
+            {
+                return session;
+            }
+
+            if (clock.Elapsed >= StepTimeout)
+            {
+                throw new TimeoutException($"The session file in {data} could not be read within {StepTimeout.TotalSeconds} s.");
+            }
+
+            Thread.Sleep(100);
+        }
+    }
+
+    /// <summary>
+    /// The session as the data folder holds it, read as the app reads it (<c>JsonSessionStore</c>),
+    /// or null while the app is writing it. The store reads a copy in a folder of its own: on a
+    /// file it cannot read, the store moves the file aside, which must never happen to the session
+    /// of the app that runs (and a restart reads).
+    /// </summary>
     private static SessionState? SavedSession(string data)
     {
+        var folder = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "session-" + Guid.NewGuid().ToString("N")[..12]);
         try
         {
-            return new JsonSessionStore(new AppPaths(data).SessionFile).Current;
+            string json;
+            using (var stream = new FileStream(new AppPaths(data).SessionFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(stream))
+            {
+                json = reader.ReadToEnd();
+            }
+
+            // Half a file, caught while the app swaps in its new one, is no session.
+            using (JsonDocument.Parse(json))
+            {
+            }
+
+            Directory.CreateDirectory(folder);
+            var copy = Path.Combine(folder, "session.json");
+            File.WriteAllText(copy, json);
+            return new JsonSessionStore(copy).Current;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             return null;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Left behind in the temp folder.
+            }
         }
     }
 

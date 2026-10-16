@@ -182,7 +182,7 @@ public partial class Phase5RealWindowPass
             Assert.Equal(0, app.Close());
         }
 
-        Assert.Empty(SavedSession(data)!.GraphFilters);
+        Assert.Empty(ReadSession(data).GraphFilters);
         Assert.Equal(refs, await RefsAsync(repo));
     }
 
@@ -205,7 +205,7 @@ public partial class Phase5RealWindowPass
     /// </summary>
     private static async Task AssertAlphaHiddenInSessionAsync(string data, TempRepo repo)
     {
-        var filter = Assert.Single(SavedSession(data)!.GraphFilters);
+        var filter = Assert.Single(ReadSession(data).GraphFilters);
         Assert.Equal(await WorkingTreeAsync(repo), filter.RepositoryPath);
         Assert.Equal([PartF.AlphaRef, PartF.OriginAlphaRef], filter.Hidden);
         Assert.Empty(filter.Soloed);
