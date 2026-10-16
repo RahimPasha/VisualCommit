@@ -263,6 +263,31 @@ public class HideAndSoloTests
         Assert.Empty(Session(data).GraphFilters);
     }
 
+    [AvaloniaFact]
+    public async Task The_pointer_resting_at_the_drivers_name_point_of_a_hidden_row_opens_the_names_tooltip()
+    {
+        // F14 step 4 (FD13): the name's text block stretches to the row's toggle, but only its
+        // text is hit by the pointer, so the driver's point is the text's centre, not the block's.
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.FiltersAsync();
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        await OpenFoldersAsync(app);
+        app.RightClick(await app.RefRowAsync("Local branches", "feature", "alpha"));
+        app.ClickMenuItem("Hide feature/alpha");
+        await app.WaitForGraphReloadAsync();
+
+        string[] path = ["Local branches", "feature", "alpha"];
+        await app.RefRowAsync(path);
+        var name = app.Find<ItemsControl>("RefList").GetVisualDescendants().OfType<TextBlock>()
+            .First(text => text.Name == "RefName" && text.DataContext is RefItemRow { Key: "ref:refs/heads/feature/alpha" });
+        var point = app.RefRowNamePoint(path);
+        Assert.InRange(point.X, app.BoundsOf(name).Left, app.BoundsOf(name).Left + name.TextLayout.Width);
+        Assert.Equal(app.BoundsOf(name).Center.Y, point.Y, 0.5);
+        Assert.Equal("feature/alpha is hidden in the graph", await app.RestPointerAtAsync(point));
+        Assert.True(ToolTip.GetIsOpen(name));
+    }
+
     /// <summary>Opens the <c>feature</c> folders under Local branches and Remotes › origin (F14 step 1).</summary>
     private static async Task OpenFoldersAsync(ShellDriver app)
     {
