@@ -3290,6 +3290,15 @@ listed here as expected.
   more git calls (a stash 17). No expected result changes; a wait ends as soon as its condition
   holds.
 
+- **A2 step 4, the reads of a tab opened through a link** (found by CI's macOS job, run
+  38847538648): on macOS the scenario's folder is reached through a link (`/var` to `/private/var`),
+  so the opening's first `rev-parse` runs in the folder as opened, which git's top level does not
+  hold as text; the activity log left that read out, and the first top-level row was the second
+  `rev-parse --git-common-dir`. The app now counts a read made in the folder a tab opened the
+  repository from as its worktree's (design 2.3, `15a252f`), and A2's model of the expected top
+  level counts the same folders. No expected result changes; where no link is involved the two
+  folders are the same.
+
 ### Made before this report
 
 - **Phase 3, check 15b, a pop refused by git exits 128 on Git 2.56** (`281dd69`). CI's Windows
