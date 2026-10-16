@@ -40,9 +40,8 @@ Phase 4 was accepted by the owner on 2026-10-12 and merged into `master` (merge 
 `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
 `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`).
 
-Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
-that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
-after it.
+Gate commit: `1b2e734`, the commit both passes of the gate ran on (set to "Awaiting acceptance"
+at closing step 32); "Phase N accepted" checks that nothing but docs changed after it.
 
 ### Progress
 
@@ -142,14 +141,14 @@ Visual checks:
 - [x] 23. Scripted walk-through: the checks of parts A, B, F and P in
   `VisualCommit.VisualTests.Phase5`, part U in `VisualCommit.VisualTests.Phase5Undo` (one action
   per test method), screenshots under `artifacts/visual/phase-5/scripted/`. (WP8, merged in `c29cd52`, `4e00bab`, `dfd147e`, `4bec368`; 89 test methods.)
-- [ ] 24. Real-window pass for the checks marked for it (`Phase5RealWindowPass`). Written and built (WP9, `310de48`): 48 captures for the 15 RW checks; it runs at the gate.
+- [x] 24. Real-window pass for the checks marked for it (`Phase5RealWindowPass`). Written and built (WP9, `310de48`): 48 captures for the 15 RW checks; it runs at the gate.
 
 Closing:
 
 - [x] 25. An independent review of the code before the gate; what it finds fixed, with tests. (Six lenses, each finding verified by a skeptic: 43 confirmed, 1 blocker, 9 major, 33 minor, 3 refuted; all fixed with tests, merged in `b175509` and `4281f4c`; the full run then passed 3,227 of 3,227.)
-- [ ] 26. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
-  inspected, report completed.
-- [ ] 27. CI run of the gate's commit read, every job.
+- [x] 26. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed. Passed on `1b2e734` (2026-10-16): `dotnet test` 3,233 of 3,233 in 43 min 22 s; the real-window pass 59 of 59 in 24 min 57 s (run again rested after Q1 measured 2,613 ms on a hot laptop; alone, rested, Q1 is 1,147 ms); all 1,080 pictures inspected. The first run, on `4281f4c`, found five problems, fixed in `1b2e734`.
+- [x] 27. CI run of the gate's commit read, every job. Run [38931127856](https://github.com/RahimPasha/VisualCommit/actions/runs/38931127856) on `1b2e734`: all five jobs green, 3,233 tests; Windows' Test step 25 min 15 s, macOS's 16 min 13 s, Ubuntu's 3 min 26 s, the containers' about 4 min.
 - [ ] 28. `architecture.md` describes what is built.
 - [ ] 29. `plan.md`: anything not delivered moved, risks updated.
 - [ ] 30. Handoff `docs/handoffs/phase-5.md`.
