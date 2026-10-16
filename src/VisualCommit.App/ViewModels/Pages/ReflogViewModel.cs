@@ -43,6 +43,15 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
     /// <summary>The refs as last read (every refresh hands them over), which the next read is made for.</summary>
     private RepoRefs? _refs;
 
+    /// <summary>
+    /// The last walk for the lost marks (5.2): what it was made for (the refs' fingerprint and the
+    /// reflog's distinct commits) and what it found. A commit is lost by the commits it names and
+    /// what HEAD, the branches, the tags and the remote branches reach, nothing else, so a read
+    /// again for the same refs and commits (a refresh after a stage, which moves no ref) takes it
+    /// as it is instead of walking again, which can take seconds in a large repository.
+    /// </summary>
+    private (string Key, IReadOnlySet<string> Lost)? _lastWalk;
+
     /// <param name="host">The repository.</param>
     /// <param name="source"><c>HEAD</c>, a local branch's full name, or null for the backups.</param>
     public ReflogViewModel(IGraphAreaPageHost host, string? source)
@@ -241,10 +250,29 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
 
             ShowReflog(reflog);
 
-            // The lost marks come once the list shows (5.2): one walk for every distinct commit.
-            // Until it ends, every row keeps the mark it had, so that the marks do not flicker.
+            // The lost marks come once the list shows (5.2): one walk for every distinct commit,
+            // unless the last one was made for the same refs and commits. Until it ends, every row
+            // keeps the mark it had, so that the marks do not flicker.
             var shas = reflog.Entries.Select(entry => entry.Sha).Distinct(StringComparer.Ordinal).ToList();
-            var lost = shas.Count == 0 ? new HashSet<string>(StringComparer.Ordinal) : await Host.Repository.FindLostCommitsAsync(shas, Lifetime);
+            var key = refs is null ? null : refs.Fingerprint + "\n" + string.Join('\n', shas.Order(StringComparer.Ordinal));
+            IReadOnlySet<string> lost;
+            if (shas.Count == 0)
+            {
+                lost = new HashSet<string>(StringComparer.Ordinal);
+            }
+            else if (key is not null && _lastWalk is { } last && string.Equals(last.Key, key, StringComparison.Ordinal))
+            {
+                lost = last.Lost;
+            }
+            else
+            {
+                lost = await Host.Repository.FindLostCommitsAsync(shas, Lifetime);
+                if (key is not null)
+                {
+                    _lastWalk = (key, lost);
+                }
+            }
+
             if (version == _version && !IsClosed)
             {
                 foreach (var row in Rows.OfType<ReflogRowViewModel>())
