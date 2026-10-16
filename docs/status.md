@@ -233,16 +233,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The third wave (WP8, step 23) is merged but for part B: parts U (U16 to U19 and U20 to U23, the
-Phase5Undo project), A, F and P (`c29cd52`, `4e00bab`, `dfd147e`), each written, run, its pictures
-looked at, reviewed and fixed; the Phase5 project passed 79 of 79 on `dfd147e`. Part B is in its
-fix stage on `wip/p5-checks-B`; at its merge, its expectations take part A's wider backups-list
-columns (BD4: the time column 136 px). CI run 38847538648 on `c29cd52` found an app defect on
-macOS: a repository opened through a folder link loses its opening read from the activity log (the
-attribution compares paths as text; A2's `Show reads`); being fixed on `wip/p5-linkreads`. Then:
-merge both, one full default run, CI; then WP9 (step 24: the real-window pass for the RW checks,
-written and built, run only at the gate), step 22's remaining earlier-phase changes, and step
-25's review (with the undo recording's cost, Notes).
+The third wave (WP8, step 23) is merged: all six parts of the report's scripted walk-through
+(`4bec368`), and the activity log's fix for a repository opened through a link (`15a252f`). The
+full default run on `4bec368` (50 min 25 s, alone) passed 3,191 of 3,196: four failures were
+stalls of git's merge tool starting under the run's load, one P25's checkout (60 s). CI run
+38853641791 failed: P27 on every CI git (Git 2.43 and later write a no-op reflog entry `merge <ref>:
+updating HEAD` on a refused merge, 2.36 none), a clean-up test's race in one container, and
+Windows' Test step stopped at its 24-minute limit (now 40, D184, `ca1f2e8`). Running now, side by
+side: the fixes on `wip/p5-fixes2` and WP9, the real-window pass for the RW checks (step 24,
+built only, never run outside the gate) on `wip/p5-realwindow`. Then: merge both, one full run,
+CI; then step 25's independent review (the undo recording's cost first), then the gate.
 
 ### Notes for whoever resumes
 
