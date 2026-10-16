@@ -97,7 +97,20 @@ public sealed partial class RealApp
 
     /// <summary>Waits until the activity log's panel is open (<paramref name="shown"/>) or closed.</summary>
     public void WaitForActivityLog(bool shown, TimeSpan? timeout = null) =>
-        WaitFor(() => ActivityLogBounds() is not null == shown, shown ? "the activity log to open" : "the activity log to close", timeout ?? DefaultWaitTimeout);
+        WaitFor(() => (ActivityLogBounds() is not null) == shown, shown ? "the activity log to open" : "the activity log to close", timeout ?? DefaultWaitTimeout);
+
+    /// <summary>The activity log's list's part in view (<c>ActivityLogList</c>); without it, the panel below its 30-high header (2.2).</summary>
+    private RectangleF ActivityLogListView(AutomationElement panel)
+    {
+        var list = panel.FindFirstDescendant(condition => condition.ByAutomationId("ActivityLogList"));
+        if (list is not null)
+        {
+            return BoundsOf(list);
+        }
+
+        var bounds = BoundsOf(panel);
+        return new RectangleF(bounds.Left, bounds.Top + 30, bounds.Width, bounds.Height - 30);
+    }
 
     /// <summary>
     /// Waits until the activity log's panel is open with its top at <paramref name="top"/> and its
@@ -131,8 +144,7 @@ public sealed partial class RealApp
             return [];
         }
 
-        var list = panel.FindFirstDescendant(condition => condition.ByAutomationId("ActivityLogList"));
-        var view = list is null ? BoundsOf(panel) : BoundsOf(list);
+        var view = ActivityLogListView(panel);
         return [.. panel.FindAllDescendants(condition => condition.ByAutomationId("ActivityLogOperation")
                 .Or(condition.ByAutomationId("ActivityLogLine"))
                 .Or(condition.ByAutomationId("ActivityLogCall")))
@@ -188,8 +200,7 @@ public sealed partial class RealApp
             return [];
         }
 
-        var list = panel.FindFirstDescendant(condition => condition.ByAutomationId("ActivityLogList"));
-        var view = list is null ? BoundsOf(panel) : BoundsOf(list);
+        var view = ActivityLogListView(panel);
         return [.. panel.FindAllDescendants(condition => condition.ByAutomationId("ActivityLogOutput"))
             .Where(element => element.BoundingRectangle is { Width: > 0, Height: > 0 })
             .Select(element => (Element: element, Bounds: BoundsOf(element)))

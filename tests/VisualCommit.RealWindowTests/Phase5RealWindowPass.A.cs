@@ -167,13 +167,15 @@ public partial class Phase5RealWindowPass
         NoteLogRows(app, PartA.A2CheckoutFailedOpened);
         Compare(app, PartA.A2CheckoutFailedOpened);
 
-        // Step 4: Show reads ticked: the reads join the rows; unticked: the rows as before (not pictured: they vary by nature).
+        // Step 4: Show reads ticked with a real click, then unticked: the rows as before, the
+        // operations in their order and open state. Not pictured (the number of reads varies by
+        // nature); which reads join the rows is asserted by structure in the scripted run, from the
+        // call log, which only that run reads. The rows in view while ticked go into run.txt.
         var before = app.ActivityLogNamesInView();
         var showReads = app.Find("ActivityLogShowReads").AsCheckBox();
         Assert.Equal(PartA.ShowReads, showReads.Name);
         app.ClickWithMouse(showReads);
         app.WaitFor(() => app.Find("ActivityLogShowReads").AsCheckBox().IsChecked == true, "Show reads to be ticked", StepTimeout);
-        app.WaitFor(() => !app.ActivityLogNamesInView().SequenceEqual(before), "the reads to join the log's rows", StepTimeout);
         Run.Note($"a2d (not captured): the activity log's rows in view with Show reads: {string.Join(" | ", app.ActivityLogNamesInView())}");
         app.ClickWithMouse(app.Find("ActivityLogShowReads"));
         app.WaitFor(() => app.Find("ActivityLogShowReads").AsCheckBox().IsChecked == false, "Show reads to be unticked", StepTimeout);
@@ -188,7 +190,7 @@ public partial class Phase5RealWindowPass
         app.WaitFor(() => app.ActivityLogOutputs().Count == 0, "the switch's box to close", StepTimeout);
         app.ClickActivityLogRow(PartA.CheckoutTitle);
         WaitForLogRowsInView(app, PartA.CleanUpTitle, PartA.CheckoutTitle);
-        app.WaitFor(() => RealApp.HasKeyboardFocus(app.WaitForActivityLogRow(PartA.CheckoutTitle).Element), "the keyboard focus on the checkout's row in the log", StepTimeout);
+        WaitForLogRowFocus(app, PartA.CheckoutTitle);
         AssertPageAt(app, "Reflog", bottom: PageBottom(PartA.A2Height));
         WaitForPanelAt(app, PartA.A2Height);
         WaitForDetails(app, "Kinds edits");
@@ -275,7 +277,7 @@ public partial class Phase5RealWindowPass
         app.ClickActivityLogRow(PartA.MergeCommand);
         app.WaitFor(() => app.ActivityLogOutputs().Count == 0, "the merge call's box to close", StepTimeout);
         app.PressKeys(VirtualKeyShort.LEFT);
-        app.WaitFor(() => RealApp.HasKeyboardFocus(app.WaitForActivityLogRow(PartA.MergeTitle).Element), "Left to bring the merge's row into view with the focus", StepTimeout);
+        WaitForLogRowFocus(app, PartA.MergeTitle);
         app.PressKeys(VirtualKeyShort.LEFT);
         WaitForLogRowsInView(app, PartA.CleanUpTitle, PartA.MergeTitle);
 
@@ -615,6 +617,13 @@ public partial class Phase5RealWindowPass
         app.WaitFor(
             () => app.ActivityLogNamesInView().SequenceEqual(names),
             $"the activity log's rows in view to be {string.Join(", ", names)} (they are {string.Join(", ", app.ActivityLogNamesInView())})",
+            StepTimeout);
+
+    /// <summary>Waits until the activity log's operation or call row <paramref name="name"/> lies whole in the list's view and has the keyboard focus.</summary>
+    private static void WaitForLogRowFocus(RealApp app, string name) =>
+        app.WaitFor(
+            () => app.ActivityLogRows().Any(row => row.Kind is "ActivityLogOperation" or "ActivityLogCall" && row.Name == name && row.InView && RealApp.HasKeyboardFocus(row.Element)),
+            $"the activity log's row \"{name}\" in view with the keyboard focus",
             StepTimeout);
 
     /// <summary>Asserts that the rows of kind <paramref name="kind"/> the list has made are <paramref name="names"/>, in this order.</summary>

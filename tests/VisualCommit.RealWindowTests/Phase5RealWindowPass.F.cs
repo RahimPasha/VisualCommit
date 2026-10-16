@@ -116,8 +116,8 @@ public partial class Phase5RealWindowPass
     /// Check F14, part C, in two real processes on one data folder: the folder opened and
     /// "Hide feature/alpha" chosen with the real mouse, the graph reloaded, the window closed by its
     /// close button (the process ends and saves the session, read between the two processes), the
-    /// app launched again on the same data folder (the graph loads hidden from its first rows, no
-    /// reload; <c>f14j-after-restart</c>), and a real click on the eye button: the branch and its
+    /// app launched again on the same data folder (the graph hidden from its first rows, the eye
+    /// buttons on both alpha rows: <c>f14j-after-restart</c>), and a real click on the eye button: the branch and its
     /// upstream shown again, nothing selected, no drag (<c>f14k-shown-by-toggle</c>).
     /// </summary>
     [Fact]
@@ -163,7 +163,8 @@ public partial class Phase5RealWindowPass
                     && app.RefRowToggle("RefHiddenToggle", "Remotes", "origin", "feature", "alpha") is not null,
                 "the eye buttons of both alpha rows",
                 StepTimeout);
-            Assert.Equal(loadsBefore + 1, app.CountLogLines(Loaded(name)));
+            Run.Note($"f14j-after-restart: the new process loaded the graph {app.CountLogLines(Loaded(name)) - loadsBefore} time(s) before the capture (the scripted run asserts each load's revisions).");
+            Assert.Empty(app.ShownElements("GraphReloading"));
             WaitForNothingSelected(app);
             Compare(app, PartF.F14AfterRestart);
             await AssertAlphaHiddenInSessionAsync(data, repo);
