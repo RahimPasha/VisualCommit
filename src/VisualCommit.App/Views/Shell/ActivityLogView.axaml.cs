@@ -172,7 +172,9 @@ public partial class ActivityLogView : UserControl
 
     /// <summary>
     /// While the list is at its end, anything that makes it longer keeps it there (2.2, AD15);
-    /// a scroll by the user decides whether it is at its end. The worktree keeps where it is.
+    /// a scroll by the user decides whether it is at its end, and so does a list that became
+    /// shorter after one: closed rows can bring its end back into view. The worktree keeps where
+    /// it is.
     /// </summary>
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
@@ -181,6 +183,10 @@ public partial class ActivityLogView : UserControl
             if (_keepAtEnd)
             {
                 ScrollToEnd();
+            }
+            else if (!_restoring)
+            {
+                _keepAtEnd = IsAtEnd();
             }
         }
         else if (e.OffsetDelta.Y != 0 && !_restoring)
