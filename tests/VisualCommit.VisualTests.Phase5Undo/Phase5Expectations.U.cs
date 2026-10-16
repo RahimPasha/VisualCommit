@@ -366,6 +366,166 @@ public static partial class Phase5Expectations
         /// <summary>The conventions' status with part C's changes on Main work.</summary>
         public static string[] PartCStatus { get; } = ["## main...origin/main", " M README.md", "A  scratch.txt", "MM src/core.txt", "?? todo.txt"];
 
+        // ---- U18: branch operations on "ops", "edges" and "blocked" (phase 3's checks 6, 13, 13b, 14, 30, 32) ----
+
+        /// <summary>Main work's labels with main not checked out (G0 ff✓, G0 alpha✓, G0 HEAD at Add core).</summary>
+        public static IReadOnlyList<string> MainWorkNotCurrent { get; } = ["main", "origin/main", "v1.1"];
+
+        /// <summary>G0 hotfix: hotfix created at Main work, not checked out.</summary>
+        public static IReadOnlyList<CommitRow> G0Hotfix { get; } = OpsRows(["main ✓", "hotfix", "origin/main", "v1.1"], ["v1.0"]);
+
+        /// <summary>G0 hotfix✓: hotfix created at Main work and checked out.</summary>
+        public static IReadOnlyList<CommitRow> G0HotfixCurrent { get; } = OpsRows(["hotfix ✓", "main", "origin/main", "v1.1"], ["v1.0"]);
+
+        /// <summary>G0 conflicting: feature/conflict renamed.</summary>
+        public static IReadOnlyList<CommitRow> G0Conflicting { get; } = OpsRows(["main ✓", "origin/main", "v1.1"], ["v1.0"], conflict: ["feature/conflicting"]);
+
+        /// <summary>G0 −alpha: the local feature/alpha gone, its upstream left.</summary>
+        public static IReadOnlyList<CommitRow> G0WithoutAlpha { get; } = OpsRows(["main ✓", "origin/main", "v1.1"], ["v1.0"], alphaTwo: ["origin/feature/alpha"]);
+
+        /// <summary>G0 ff✓: feature/ff checked out.</summary>
+        public static IReadOnlyList<CommitRow> G0FfCurrent { get; } = OpsRows(MainWorkNotCurrent, ["v1.0"], fastForward: ["feature/ff ✓"]);
+
+        /// <summary>G0 alpha✓: feature/alpha checked out.</summary>
+        public static IReadOnlyList<CommitRow> G0AlphaCurrent { get; } = OpsRows(MainWorkNotCurrent, ["v1.0"], alphaTwo: ["feature/alpha ✓", "origin/feature/alpha"]);
+
+        /// <summary>G0 HEAD at Add core: HEAD detached at Add core.</summary>
+        public static IReadOnlyList<CommitRow> G0HeadAtAddCore { get; } = OpsRows(MainWorkNotCurrent, ["HEAD", "v1.0"]);
+
+        public const string HotfixText = "creation of hotfix";
+
+        public const string RenameText = "rename of feature/conflict to feature/conflicting";
+
+        public const string DeleteAlphaText = "deletion of feature/alpha";
+
+        public const string CheckoutFfText = "checkout of feature/ff";
+
+        public const string CheckoutRemoteAlphaText = "checkout of origin/feature/alpha";
+
+        public const string CheckoutAddCoreText = "checkout of 8beca34";
+
+        public const string CheckoutMainText = "checkout of main";
+
+        public const string FastForwardLocText = "fast-forward of loc";
+
+        public const string CheckoutOtherText = "checkout of feature/other";
+
+        public const string StatusCreatedHotfix = "Created hotfix";
+
+        public const string StatusCreatedHotfixCheckedOut = "Created hotfix and checked it out";
+
+        public const string StatusRenamed = "Renamed feature/conflict to feature/conflicting";
+
+        public const string StatusDeletedAlpha = "Deleted feature/alpha";
+
+        public const string StatusCheckedOutFf = "Checked out feature/ff";
+
+        public const string StatusTrackingAlpha = "Created feature/alpha tracking origin/feature/alpha and checked it out";
+
+        public const string StatusDetachedAtAddCore = "HEAD is now detached at 8beca34";
+
+        public const string StatusCheckedOutMain = "Checked out main";
+
+        public const string StatusFastForwardedLoc = "Fast-forwarded loc to main";
+
+        public const string StatusCheckedOutOtherWithChanges = "Checked out feature/other and re-applied your changes";
+
+        public const string CreateBranchMenuItem = "Create branch here…";
+
+        public const string DeleteBranchTitle = "Delete branch?";
+
+        public const string DeleteAlphaQuestion = "Delete the branch feature/alpha? It has commits that main does not have.";
+
+        public const string DeleteBranchConfirm = "Delete";
+
+        /// <summary>Phase 3's question before leaving a detached HEAD's commit (check 32).</summary>
+        public const string LeaveTitle = "Leave these commits?";
+
+        public const string LeaveQuestion = "HEAD is detached on 1 commit that is on no branch. After this checkout it no longer shows in the graph.";
+
+        /// <summary>The upstream keys a tracking feature/alpha has, as <c>git config --local --get-regexp</c> lists them.</summary>
+        public static string[] AlphaUpstreamKeys { get; } = ["branch.feature/alpha.remote origin", "branch.feature/alpha.merge refs/heads/feature/alpha"];
+
+        // "edges" (phase 3's E0 and E1).
+
+        public const string DetachedWorkSha = "419190f40391bb6b4e317c793b9dd6c9939af6a0";
+
+        public const string EdgesMainWorkSha = "8e164080822465a9cb64c0278d3b30598acbeabf";
+
+        public const string EdgesInitialSha = "691f8cfa93e845f8ab8993d2595d227e967caff5";
+
+        /// <summary>E0: HEAD detached on Detached work, two lanes.</summary>
+        public static IReadOnlyList<CommitRow> E0 { get; } = EdgesRows(["main", "origin/main", "feature/alpha"], ["loc", "origin/main", "side"]);
+
+        /// <summary>E0 loc: loc fast-forwarded to Main work.</summary>
+        public static IReadOnlyList<CommitRow> E0Loc { get; } = EdgesRows(["loc", "main", "origin/main", "feature/alpha"], ["origin/main", "side"]);
+
+        private static IReadOnlyList<CommitRow> EdgesRows(IReadOnlyList<string> mainWork, IReadOnlyList<string> initial) =>
+        [
+            new CommitRow("Detached work", 0, 0, ["HEAD"], "419190f", Date: ScenarioDate(3)),
+            new CommitRow("Alpha work", 1, 1, ["feature/alpha"], "a024e50", Date: ScenarioDate(2)),
+            new CommitRow("Main work", 0, 0, mainWork, "8e16408", Date: ScenarioDate(1), Ends: [1]),
+            new CommitRow("Initial commit", 0, 0, initial, "691f8cf", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>E1: main checked out, Detached work left (one lane).</summary>
+        public static IReadOnlyList<CommitRow> E1 { get; } =
+        [
+            new CommitRow("Alpha work", 0, 0, ["feature/alpha"], "a024e50", Date: ScenarioDate(2)),
+            new CommitRow("Main work", 0, 0, ["main ✓", "origin/main", "feature/alpha"], "8e16408", Date: ScenarioDate(1)),
+            new CommitRow("Initial commit", 0, 0, ["loc", "origin/main", "side"], "691f8cf", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>git's line for the fast-forward of loc (Git 2.36's, standard error).</summary>
+        public const string FastForwardLocLine = "   691f8cf..8e16408  main       -> loc";
+
+        // "blocked" (phase 3's G14a and G14b, check 14).
+
+        public const string OtherChangeSha = "850a7c0db4553015af300aeed2cd7d0c6a095912";
+
+        public const string AddNotesSha = "106efba4a731d81895cbb9db6f3ef02453078d9a";
+
+        /// <summary>G14a: on main, the working-changes row above (2 lanes).</summary>
+        public static IReadOnlyList<CommitRow> G14a { get; } = BlockedRows(["feature/other"], ["main ✓"]);
+
+        /// <summary>G14b: on feature/other.</summary>
+        public static IReadOnlyList<CommitRow> G14b { get; } = BlockedRows(["feature/other ✓"], ["main"]);
+
+        private static IReadOnlyList<CommitRow> BlockedRows(IReadOnlyList<string> other, IReadOnlyList<string> main) =>
+        [
+            new CommitRow("Add newfile", 0, 0, ["feature/addfile"], Date: ScenarioDate(3)),
+            new CommitRow("Clashing change", 1, 1, ["feature/clash"], Date: ScenarioDate(2)),
+            new CommitRow("Other change", 0, 0, other, "850a7c0", Date: ScenarioDate(1)),
+            new CommitRow("Add notes", 0, 0, main, "106efba", Date: ScenarioDate(0), Ends: [1]),
+        ];
+
+        /// <summary>notes.txt with the local change on feature/other's version (re-applied by D91).</summary>
+        public const string NotesLocalOnOther = "one (local)\ntwo\nthree\nfour\nfive\nsix\nseven (other)\n";
+
+        /// <summary>The C12 checkout refusal (design 9.3).</summary>
+        public const string CheckoutBlockedTitle = "Checkout blocked";
+
+        public const string OneConflictPreventsCheckout = "1 conflict prevents checkout. Commit, stash, or discard your changes first.";
+
+        public const string StashAndCheckOut = "Stash changes and check out";
+
+        /// <summary>Phase 3's T2: git's refusal of a checkout over the changed notes.txt.</summary>
+        public static string[] T2 { get; } =
+        [
+            "error: Your local changes to the following files would be overwritten by checkout:",
+            "\tnotes.txt",
+            "Please commit your changes or stash them before you switch branches.",
+            "Aborting",
+        ];
+
+        public const string T2Key = "error: Your local changes to the following files would be overwritten by checkout:";
+
+        /// <summary>D91's stash before the checkout.</summary>
+        public const string D91StashMessage = "VisualCommit: before checking out feature/other";
+
+        /// <summary>The undo's stash of D91's round trip, as plain git makes it (popped at once).</summary>
+        public const string UndoStashShort = "6cfd0e0";
+
         #endregion
     }
 }

@@ -150,21 +150,38 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         Assert.Single(CallsSince(app, calls), text => text == command);
     }
 
-    /// <summary>Asserts that no call since <paramref name="calls"/> starts with <paramref name="prefix"/> (<c>git read-tree</c>, <c>git restore</c>).</summary>
+    /// <summary>
+    /// Asserts that no write since <paramref name="calls"/> starts with <paramref name="prefix"/>
+    /// (<c>git read-tree</c>, <c>git restore</c>, <c>git config</c>, <c>git stash</c>): the
+    /// history's reads before and after a step (7.7), which no check counts, are left out
+    /// (<see cref="IsRead"/>).
+    /// </summary>
     private static void AssertNoCall(ShellDriver app, int calls, string prefix)
     {
-        var found = CallsSince(app, calls).Where(call => call.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+        var found = CallsSince(app, calls).Where(call => call.StartsWith(prefix, StringComparison.Ordinal) && !IsRead(call)).ToList();
         Assert.True(found.Count == 0, $"The step ran \"{prefix}…\":\n" + string.Join('\n', found));
     }
 
-    /// <summary>Asserts the calls since <paramref name="calls"/> that start with one of <paramref name="prefixes"/>: exactly <paramref name="expected"/>, in order.</summary>
+    /// <summary>
+    /// Asserts the writes since <paramref name="calls"/> that start with one of
+    /// <paramref name="prefixes"/>: exactly <paramref name="expected"/>, in order. Reads of the
+    /// same commands (<see cref="IsRead"/>) are left out.
+    /// </summary>
     private static void AssertWrites(ShellDriver app, int calls, string[] prefixes, params string[] expected)
     {
-        var writes = CallsSince(app, calls).Where(call => prefixes.Any(prefix => call.StartsWith(prefix, StringComparison.Ordinal))).ToList();
+        var writes = CallsSince(app, calls).Where(call => prefixes.Any(prefix => call.StartsWith(prefix, StringComparison.Ordinal)) && !IsRead(call)).ToList();
         Assert.True(
             writes.SequenceEqual(expected),
             "The step's writes are not the report's.\nExpected:\n  " + string.Join("\n  ", expected) + "\nActual:\n  " + string.Join("\n  ", writes));
     }
+
+    /// <summary>
+    /// Whether a call is one of the reads the undo history makes before and after a step (7.7:
+    /// the configuration's keys, the stash list) rather than a write of the same command.
+    /// </summary>
+    private static bool IsRead(string call) =>
+        call.StartsWith("git stash list", StringComparison.Ordinal)
+        || (call.StartsWith("git config", StringComparison.Ordinal) && (call.Contains(" --list", StringComparison.Ordinal) || call.Contains(" --get", StringComparison.Ordinal)));
 
     // ---- The graph's selection ----
 
