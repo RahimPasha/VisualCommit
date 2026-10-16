@@ -227,16 +227,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The second wave is merged: WP2b (`17d8f97`), WP5 (`a7eb3c9`), WP4 (`43e8586`), WP6 (`2905f55`),
-WP7 (`e11ea7d`) and WP3's app half (`40cb5f5`); what it settled is in design 15.9. CI run
-38816004590 on `e11ea7d` failed: on macOS three of WP7's filter tests compare a repository path as
-`/var/...` against git's `/private/var/...`, and on Windows phase 3's check 23 timed out waiting 10 s
-for "Stashed the changes". The lead's follow-ups (Notes below) and these two failures are being
-done on `wip/p5-followups` (worktree `.claude/worktrees/p5-followups`), which ends with a full
-default run and a comparison of the walk-through pictures with phase 4's list. Then: merge it,
-push, read CI; then the third wave: the report's scripted checks part by part (WP8) and the
-real-window pass (WP9), fixing what they find; at most two or three worktrees at a time (each
-built one takes about 5 GB; C: had 6 GB free on 2026-10-15).
+The second wave and the lead's follow-ups are merged (`fe34b62`): its full run passed 3,042 of
+3,046, the four failures 10-second waits that ran out under the run's own load (the default wait
+is 30 s since `5bdd1de`). Now the third wave (WP8, step 23): the report's scripted checks part by
+part, each written, run, its pictures looked at, reviewed and fixed, in three lanes of worktrees
+`.claude/worktrees/p5-checks-<part>` (branches `wip/p5-checks-<part>`): U16 to U19 then B, U20 to
+U23 then F, A then P. Then merge each, one full run, CI; then WP9 (the real-window pass for the RW
+checks, step 24) and step 25's review.
 
 ### Notes for whoever resumes
 
@@ -275,6 +272,11 @@ built one takes about 5 GB; C: had 6 GB free on 2026-10-15).
     with `GitCallLog`) and `MainWindowViewModel.cs` (`ActivityLog`), taken over as merged. Bisect
     notes: WP6's `c546200` alone fails eight phase 3 checks (`4705121` fixes them), WP7's
     `b494d96` seven (`604c672`), WP4's `e26f320` two support tests (`e666b65`).
+- **For step 25's review: the cost of recording for undo.** Design 7.7 expected about two git
+  calls before and after an action; a stash now makes 17 calls in all (the history's reads before
+  and after, then the refresh): 1.2 s alone on the laptop, 3 s on CI. Measure the reads 7.7 makes
+  per action kind and cut what can be batched or skipped, without losing what an undo needs. The
+  headless harness's default wait is 30 s since `5bdd1de` because of it.
 - If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
   work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
   after building them; ask the owner before discarding any.

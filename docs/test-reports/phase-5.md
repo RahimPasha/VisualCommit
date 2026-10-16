@@ -3280,7 +3280,7 @@ listed here as expected.
   pattern.
 
 - **The headless harness's default wait** (`ShellDriver.DefaultWaitTimeout`, which phase 3's
-  report names as 10 s) is 30 s from `fe34b62`'s successor: in the full run's seven projects side
+  report names as 10 s) is 30 s from `5bdd1de`: in the full run's seven projects side
   by side, steps took 5 to 8 times as long as alone, and four waits for an operation's result ran
   out at 10 s (phase 2's check 24, phase 3's checks 06 and 07, the App window test of a merge);
   each passed alone in 5 to 15 s. Phase 5 records every action for undo, so each operation makes
