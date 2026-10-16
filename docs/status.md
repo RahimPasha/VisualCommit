@@ -175,7 +175,13 @@ read the screen too early); the runs were red until each was fixed (phase 4's re
 platforms", and its handoff, "Things that cost time").
 
 The last run on `phase/5-history` is
-[38772677755](https://github.com/RahimPasha/VisualCommit/actions/runs/38772677755), for `7e7d99d`
+[38831177542](https://github.com/RahimPasha/VisualCommit/actions/runs/38831177542), for `5bdd1de`
+(the second wave, the lead's follow-ups and the 30-second default wait): all five jobs succeeded
+with 3,046 tests each; the Windows Test step took 17 min 54 s of its 24 and macOS's 14 min 18 s.
+On the way, runs 38816004590 (`e11ea7d`: macOS path keys in WP7's tests, check 23's stash wait)
+and 38820513395 (`40cb5f5`: check 23 waiting for real Undo states) failed, as fixed in `fe34b62`.
+Before that,
+[38772677755](https://github.com/RahimPasha/VisualCommit/actions/runs/38772677755) for `7e7d99d`
 (the test speed-ups, whose `TempRepo` every test project uses): all five jobs succeeded with 2,765
 tests each; the Windows Test step took 16 min 38 s of its 24 and macOS's 11 min 45 s. The run
 before it, [38748240435](https://github.com/RahimPasha/VisualCommit/actions/runs/38748240435) for
