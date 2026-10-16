@@ -170,6 +170,7 @@ public class MergeToolTests
     /// <summary>Waits until <paramref name="path"/> exists; fails when <paramref name="run"/> ends first or after <see cref="Scenarios.MergeToolTimeout"/>.</summary>
     private static async Task WaitForFileAsync(string path, Task run)
     {
+        using var slow = HangWatchdogAttribute.WaitingForSlowProgram("git mergetool to start");
         var deadline = DateTime.UtcNow + Scenarios.MergeToolTimeout;
         while (!File.Exists(path))
         {

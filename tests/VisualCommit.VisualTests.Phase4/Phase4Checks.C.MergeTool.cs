@@ -98,7 +98,11 @@ public sealed partial class Phase4ChecksC
         await AssertConfirmationAsync(app, PartC2.DiscardTitle("notes.txt"), PartC2.MergeToolQuestion, string.Empty, PartC2.Discard, destructive: true, cancelText: PartC2.KeepEditing);
         using var statusTexts = app.RecordStatusTexts();
         C14To17.ClickDialogButton(app, "ConfirmButton");
-        await WaitForOperationAsync(app, repo, PartC2.MergeToolTitle, mark, Scenarios.MergeToolTimeout);
+        using (HangWatchdogAttribute.WaitingForSlowProgram("git mergetool to run the fake tool"))
+        {
+            await WaitForOperationAsync(app, repo, PartC2.MergeToolTitle, mark, Scenarios.MergeToolTimeout);
+        }
+
         Assert.Contains(PartC2.MergeToolRunning, statusTexts.Texts);
         Assert.Equal(PartC2.ResolvedInFake, statusTexts.Texts[^1]);
         await app.WaitForResolverClosedAsync();

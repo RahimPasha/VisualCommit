@@ -26,6 +26,7 @@ public class WaitingMergeToolTests
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
+            using var slow = HangWatchdogAttribute.WaitingForSlowProgram("git mergetool to start");
             while (!Scenarios.WaitingMergeToolStarted(repo))
             {
                 if (tool.IsCompleted)
