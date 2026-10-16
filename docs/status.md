@@ -233,16 +233,19 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 26, the gate, on `4281f4c`: both passes have run on it on 2026-10-16 on the Windows machine.
-`dotnet test` at the root passed 3,227 of 3,227 in 45 min 37 s (Git 2.36.0.windows.1, .NET SDK
-10.0.303); the real-window pass passed 59 of 59 in 26 min 26 s (200% scaling; Q1 1,749 ms of its
-2,000, on a laptop warm from the run before it; phase 4's gate measured 937 ms rested). CI run
-38909397699 on `4281f4c`: all five jobs green with 3,227 tests (Windows' Test step 22 min 54 s,
-macOS's 20 min 51 s). Now: the inspection of all 1,080 pictures, by Opus inspectors (phase 5's in
-full; the earlier ones against `D:/Projects/Personal/gate5-reference/` with
-`scripts/compare-pictures.py`'s difference pictures in `D:/Projects/Personal/gate5-inspection/`).
-The list `docs/test-reports/phase-5-pictures.sha256` is written (1,080 pictures) and is committed
-once the inspection passes. Then: the report's results, then the closing steps 28 to 33.
+Step 26, the gate. Its first run, on `4281f4c` (2026-10-16): `dotnet test` passed 3,227 of 3,227 in
+45 min 37 s, the real-window pass 59 of 59 in 26 min 26 s (Q1 1,749 ms of 2,000, the laptop warm),
+CI run 38909397699 green in all five jobs. The inspection of all 1,080 pictures (twelve Opus
+inspectors; verdicts in `D:/Projects/Personal/gate5-inspection/run1-verdicts.json`, the run's
+picture list in `run1-pictures.sha256` there) passed 1,033 and found: after an outside commit with
+the search open, the graph briefly showed the new rows with the old refs' labels (`f11f`); the
+search bar's disabled Previous and Next drawn as enabled (`VcIconButton` has no disabled style;
+`f10a`, `f11a`, `f11d`); seven earlier checks pictured the two-commit comparison still loading
+(phase 3's 11d, 11g, 12b, 24g; phase 4's a1g, a1h, b8a); a stray status-bar tooltip in phase 2's
+real-window 17c; the blame header's caption cut at 1100x700, which the report does not say
+(`b7b`, `b7c`, `b7e`, `b7f`). Being fixed on `wip/p5-gatefix`. Then the gate runs again on the new
+commit: both passes, and the inspection of every picture whose bytes changed since run 1 (the rest
+carry their verdict over); the report's results and "Found by the gate" record both runs.
 
 ### Notes for whoever resumes
 
