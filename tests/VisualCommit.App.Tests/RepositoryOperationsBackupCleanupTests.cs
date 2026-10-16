@@ -20,7 +20,12 @@ namespace VisualCommit.App.Tests;
 /// saved a backup, with the default retention and the restore bar's snapshot to keep
 /// (<see cref="ViewModels.RepositoryViewModel.BackupsToKeep"/>); it removes the old backups, which
 /// the git layer logs; an operation that saved none does not run it; and a clean-up that fails
-/// shows nothing on screen and logs a Warning.
+/// shows nothing on screen and logs a Warning. Each test makes its old backup only once the tab's
+/// clean-up at opening (section 9 (b)) has looked and found nothing to remove
+/// (<see cref="CleanUpSpy.OpeningReadAsync"/>): with an old backup already there, that background
+/// clean-up races the test's first operation for the queue, and where it wins (a machine that
+/// starts git quickly: CI's bare container) it is a clean-up of its own, keeping nothing, before
+/// the operation's.
 /// </summary>
 [Collection(RepositoryOperationsTestSupport.RebaseCollection)]
 public class RepositoryOperationsBackupCleanupTests
@@ -41,6 +46,7 @@ public class RepositoryOperationsBackupCleanupTests
         var gitLog = new RecordingLog();
         CleanUpSpy? spy = null;
         using var app = await OperationsHarness.OpenWrappedAsync(repo, _ => CleanUpSpy.Wrap(OpenLogged(repo, gitLog), failure: null, out spy));
+        Assert.Empty(await spy!.OpeningReadAsync());
 
         // The discard's snapshot is the restore bar's (D75): the clean-up must keep it. The
         // discard cleans up after it too (the review's finding 22; its own test is below).
@@ -82,18 +88,20 @@ public class RepositoryOperationsBackupCleanupTests
         // The review's finding 22: D67's discard snapshots are backups (section 9), and the
         // stage panel's discards saved them outside RunAsync, so no clean-up ever followed.
         using var repo = await Scenarios.RebaseAsync();
-        var old = OldBackupName("reset", days: 40);
-        await repo.GitAsync("update-ref", old, TopicOne);
         repo.WriteFile("README.md", "# Changed here\n");
         CleanUpSpy? spy = null;
         using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => CleanUpSpy.Wrap(inner, failure: null, out spy));
+        Assert.Empty(await spy!.OpeningReadAsync());
+        var old = OldBackupName("reset", days: 40);
+        await repo.GitAsync("update-ref", old, TopicOne);
         app.Dialogs.Confirm();
 
         await app.Operations.DiscardFilesAsync([app.Operations.Status.Unstaged.Single(file => file.Path == "README.md")]);
 
+        // The discard's own clean-up, the only one: it kept its snapshot and removed the old backup.
         var snapshot = Assert.Single(await repo.BackupRefsAsync()).Name;
         Assert.StartsWith("refs/visualcommit/backup/discard-", snapshot, StringComparison.Ordinal);
-        var call = Assert.Single(spy!.Calls);
+        var call = Assert.Single(spy.Calls);
         Assert.Equal((BackupRetention.Default, snapshot), (call.Retention, Assert.Single(call.Keep)));
 
         // A line discard (the whole hunk): its own snapshot is kept, and the discard's stays too
@@ -119,15 +127,16 @@ public class RepositoryOperationsBackupCleanupTests
     public async Task A_clean_up_that_fails_shows_nothing_and_logs_a_warning()
     {
         using var repo = await Scenarios.RebaseAsync();
-        var old = OldBackupName("reset", days: 40);
-        await repo.GitAsync("update-ref", old, TopicOne);
         CleanUpSpy? spy = null;
         using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => CleanUpSpy.Wrap(inner, new IOException("The backups could not be read."), out spy));
+        Assert.Empty(await spy!.OpeningReadAsync());
+        var old = OldBackupName("reset", days: 40);
+        await repo.GitAsync("update-ref", old, TopicOne);
 
         await app.Operations.RebaseAsync(new RebaseTarget(MainMore, "main"));
 
         // The rebase's own result is what shows: no dialog, its status in the secondary colour.
-        Assert.Single(spy!.Calls);
+        Assert.Single(spy.Calls);
         Assert.Empty(app.Dialogs.Shown);
         Assert.Equal(("Rebased feature/topic onto main", OperationStatusTone.Secondary), (app.StatusText, app.StatusTone));
         Assert.Equal(OperationOutcome.Succeeded, app.LastResult?.Outcome);
@@ -148,10 +157,16 @@ public class RepositoryOperationsBackupCleanupTests
     /// <summary>
     /// Passes every call to the repository it wraps and records each
     /// <see cref="IGitRepository.CleanUpBackupsAsync"/>'s retention and refs to keep; with a
-    /// failure, the clean-up throws it instead of running.
+    /// failure, the clean-up throws it instead of running. It also keeps the first
+    /// <see cref="IGitRepository.FindBackupsToRemoveAsync"/>, the read of the tab's clean-up at
+    /// opening (<see cref="OpeningReadAsync"/>).
     /// </summary>
     public class CleanUpSpy : DispatchProxy
     {
+        /// <summary>How long <see cref="OpeningReadAsync"/> waits for the read to come and to end.</summary>
+        private static readonly TimeSpan OpeningReadTimeout = TimeSpan.FromSeconds(60);
+
+        private readonly TaskCompletionSource<Task<IReadOnlyList<string>>> _openingRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private IGitRepository _inner = null!;
         private Exception? _failure;
 
@@ -164,6 +179,18 @@ public class RepositoryOperationsBackupCleanupTests
             spy._inner = inner;
             spy._failure = failure;
             return proxy;
+        }
+
+        /// <summary>
+        /// The backups the tab's clean-up at opening found to remove (docs/phase-4-design.md
+        /// section 9 (b)): the first <see cref="IGitRepository.FindBackupsToRemoveAsync"/>, which
+        /// the tab makes once its first load is done, waited for until it has ended. Only when it
+        /// found some does that clean-up start, so once it returned none, none runs.
+        /// </summary>
+        public async Task<IReadOnlyList<string>> OpeningReadAsync()
+        {
+            var read = await _openingRead.Task.WaitAsync(OpeningReadTimeout, TestContext.Current.CancellationToken);
+            return await read.WaitAsync(OpeningReadTimeout, TestContext.Current.CancellationToken);
         }
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
@@ -182,6 +209,18 @@ public class RepositoryOperationsBackupCleanupTests
                 }
             }
 
+            if (targetMethod.Name == nameof(IGitRepository.FindBackupsToRemoveAsync))
+            {
+                var read = (Task<IReadOnlyList<string>>)Forward(targetMethod, args)!;
+                _openingRead.TrySetResult(read);
+                return read;
+            }
+
+            return Forward(targetMethod, args);
+        }
+
+        private object? Forward(MethodInfo targetMethod, object?[]? args)
+        {
             try
             {
                 return targetMethod.Invoke(_inner, args);
