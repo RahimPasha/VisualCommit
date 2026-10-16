@@ -33,6 +33,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(PartU.AddCoreSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main [behind 1]", "M  src/core.txt"], await StatusAsync(repo));
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         AssertRowSelected(app, 6, PartU.AddCoreSha);
         Assert.Equal([$"{PartU.BackupRefName("reset", 1)} {PartU.MainWorkSha}"], await BackupLinesAsync(repo));
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
@@ -58,6 +59,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(PartU.AddCoreSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main [behind 1]", "M  src/core.txt"], await StatusAsync(repo));
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true, picture: shot);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         AssertRowSelected(app, 6, PartU.AddCoreSha);
         Assert.Equal([$"{PartU.BackupRefName("reset", 1)} {PartU.MainWorkSha}"], await BackupLinesAsync(repo));
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
@@ -79,6 +81,7 @@ public sealed partial class Phase5ChecksU
         AssertStatus(app, PartU.StatusReset("mixed"));
         Assert.Equal(["## main...origin/main [behind 1]", " M src/core.txt"], await StatusAsync(repo));
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         Assert.Equal([$"{PartU.BackupRefName("reset", 1)} {PartU.MainWorkSha}"], await BackupLinesAsync(repo));
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
 
@@ -110,6 +113,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(PartU.AddCoreSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main [behind 1]", " M src/core.txt"], await StatusAsync(repo));
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true, picture: shot);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         Assert.Equal([$"{PartU.BackupRefName("reset", 1)} {PartU.MainWorkSha}"], await BackupLinesAsync(repo));
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
         AssertNoClippedText(app);
@@ -140,6 +144,7 @@ public sealed partial class Phase5ChecksU
         AssertStatus(app, PartU.StatusReset("mixed"));
         Assert.Equal(["## main...origin/main [behind 1]", " M README.md", " M src/core.txt", "?? scratch.txt", "?? todo.txt"], await StatusAsync(repo));
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         var changes = await AssertMixedBackupsAsync(repo);
         Assert.Equal(indexBefore, await GitTextAsync(repo, "rev-parse", changes + "^{tree}"));
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
@@ -177,6 +182,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(["## main...origin/main [behind 1]", " M README.md", " M src/core.txt", "?? scratch.txt", "?? todo.txt"], await StatusAsync(repo));
         AssertPartCWorkingTree(repo);
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true, picture: shot);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         Assert.Equal(changes, await AssertMixedBackupsAsync(repo));
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
         AssertNoClippedText(app);
@@ -205,6 +211,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(["## main...origin/main [behind 1]", "?? todo.txt"], await StatusAsync(repo));
         AssertHardResetFiles(repo);
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         var (snapshot, index) = await AssertHardBackupsAsync(repo, indexBefore, 1);
         AssertButtons(app, UndoRedoButtons.CanUndo(text));
 
@@ -241,6 +248,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(["## main...origin/main [behind 1]", "?? todo.txt"], await StatusAsync(repo));
         AssertHardResetFiles(repo);
         AssertGraph(app, PartU.G6, PartU.OpsLanes, PartU.WorkingRow, showsDate: true, picture: shot);
+        AssertArrows(app, 0, 1, "Local branches", "main");
         Assert.Equal(
             [
                 $"{PartU.BackupRefName("reset", 1)} {PartU.MainWorkSha}",

@@ -526,6 +526,299 @@ public static partial class Phase5Expectations
         /// <summary>The undo's stash of D91's round trip, as plain git makes it (popped at once).</summary>
         public const string UndoStashShort = "6cfd0e0";
 
+        // ---- U19: history operations, each undone by a Keep move (7.3, D169) ----------------------
+
+        // "ops" (phase 3's checks 8, 11 and 12).
+
+        public const string MergeFfText = "merge of feature/ff into main";
+
+        public const string PickTwoText = "cherry-pick of 2 commits";
+
+        public const string RevertMainWorkText = "revert of 88d6b91";
+
+        public const string StatusFastForwardedMain = "Fast-forwarded main to feature/ff";
+
+        public const string StatusMergedFf = "Merged feature/ff into main";
+
+        public const string StatusPickedTwo = "Cherry-picked 2 commits onto main";
+
+        public const string StatusRevertedMainWork = "Reverted 88d6b91";
+
+        /// <summary>Phase 3's merge, which fast-forwards here (the report's change after its first commit, U19 part A).</summary>
+        public static string MergeFfCall { get; } = Git("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/ff'", "refs/heads/feature/ff");
+
+        public static string PickTwoCall { get; } = Git("cherry-pick", AlphaOneSha, AlphaTwoSha);
+
+        /// <summary>
+        /// HEAD's reflog after that merge fast-forwarded: git notes that the <c>-m</c> made no commit
+        /// (Git 2.36 and 2.55; the report's change after its first commit).
+        /// </summary>
+        public const string MergeFfReflog = "merge refs/heads/feature/ff: Fast-forward (no commit created; -m option ignored)";
+
+        public const string MergeCommitSha = "22a08ae80b78afd6ee714929be263ada7ad53abd";
+
+        public const string PickedAlphaOneSha = "d1f9fb5fa4728b88c1d36136f0f65fb8456ac586";
+
+        public const string PickedAlphaTwoSha = "c0f718d25dff3ea0ef8d67ada2d3411c9ab45b94";
+
+        public const string RevertSha = "13c773dd19dbe8f7d2261eb3a2d7c2392670cd22";
+
+        /// <summary>G1: main fast-forwarded to Fast-forward me; lanes, colours and lines as G0.</summary>
+        public static IReadOnlyList<CommitRow> G1 { get; } = OpsRows(["origin/main", "v1.1"], ["v1.0"], fastForward: ["main ✓", "feature/ff"]);
+
+        /// <summary>G2: the merge commit 22a08ae (4 lanes, no Date column).</summary>
+        public static IReadOnlyList<CommitRow> G2 { get; } =
+        [
+            new CommitRow("Merge branch 'feature/ff'", 0, 0, ["main ✓"], "22a08ae", Merge: true),
+            new CommitRow("On main: Experiment", 2, 2, ["stash@{0}"], "0e95aca", Stash: true),
+            new CommitRow("Conflicting change", 3, 3, ["feature/conflict"], ConflictingChangeShort),
+            new CommitRow("Fast-forward me", 1, 1, ["feature/ff"], "d93814d"),
+            new CommitRow("Main work", 0, 0, ["origin/main", "v1.1"], "88d6b91"),
+            new CommitRow("Alpha two", 1, 4, ["feature/alpha", "origin/feature/alpha"], "ce5ea6a"),
+            new CommitRow("Alpha one", 1, 4, [], "dff8fbf"),
+            new CommitRow("Add core", 0, 0, ["v1.0"], "8beca34"),
+            new CommitRow("Initial commit", 0, 0, [], "4ef1f7c"),
+        ];
+
+        /// <summary>G8: two picks on main (4 lanes).</summary>
+        public static IReadOnlyList<CommitRow> G8 { get; } =
+        [
+            new CommitRow("Alpha two", 0, 0, ["main ✓"], "c0f718d"),
+            new CommitRow("Alpha one", 0, 0, [], "d1f9fb5"),
+            new CommitRow("On main: Experiment", 1, 1, ["stash@{0}"], "0e95aca", Stash: true),
+            new CommitRow("Conflicting change", 2, 2, ["feature/conflict"], ConflictingChangeShort),
+            new CommitRow("Fast-forward me", 3, 3, ["feature/ff"], "d93814d"),
+            new CommitRow("Main work", 0, 0, ["origin/main", "v1.1"], "88d6b91"),
+            new CommitRow("Alpha two", 1, 4, ["feature/alpha", "origin/feature/alpha"], "ce5ea6a"),
+            new CommitRow("Alpha one", 1, 4, [], "dff8fbf"),
+            new CommitRow("Add core", 0, 0, ["v1.0"], "8beca34"),
+            new CommitRow("Initial commit", 0, 0, [], "4ef1f7c"),
+        ];
+
+        /// <summary>G9: the revert 13c773d on main (4 lanes).</summary>
+        public static IReadOnlyList<CommitRow> G9 { get; } =
+        [
+            new CommitRow("Revert \"Main work\"", 0, 0, ["main ✓"], "13c773d"),
+            new CommitRow("On main: Experiment", 1, 1, ["stash@{0}"], "0e95aca", Stash: true),
+            new CommitRow("Conflicting change", 2, 2, ["feature/conflict"], ConflictingChangeShort),
+            new CommitRow("Fast-forward me", 3, 3, ["feature/ff"], "d93814d"),
+            new CommitRow("Main work", 0, 0, ["origin/main", "v1.1"], "88d6b91"),
+            new CommitRow("Alpha two", 1, 4, ["feature/alpha", "origin/feature/alpha"], "ce5ea6a"),
+            new CommitRow("Alpha one", 1, 4, [], "dff8fbf"),
+            new CommitRow("Add core", 0, 0, ["v1.0"], "8beca34"),
+            new CommitRow("Initial commit", 0, 0, [], "4ef1f7c"),
+        ];
+
+        // "rebase" (phase 4's R0, R1, R3 and part U's R4).
+
+        public const string TopicTwoSha = "b0dfa3f405dffff59bea3f4f434b16e5490cc597";
+
+        public const string MainMoreSha = "1dd58b8cfc17d4d9b80550eddd80b11ebf94c146";
+
+        public const string OtherOneSha = "2d4d79a03112c8a5e2f9a783318d588df519af5d";
+
+        public const string TopicOneOntoMainSha = "befae2677a3a259f2c9423912af47575e319c852";
+
+        public const string TopicTwoOntoMainSha = "5f71ab8bad51a15fdfdfd19fc1b0084ef6e956c5";
+
+        public const string OtherOneOntoMainSha = "14e607bf248c8917ab93680c48cba392f60546ff";
+
+        public const string MergeOtherSha = "5e5d815290fed817a30eb0225e708a088a714a5c";
+
+        public const string RebaseTopicText = "rebase of feature/topic onto main";
+
+        public const string RebaseOtherText = "rebase of feature/other onto main";
+
+        public const string MergeOtherText = "merge of feature/other into main";
+
+        public const string StatusRebasedTopic = "Rebased feature/topic onto main";
+
+        public const string StatusRebasedOther = "Rebased feature/other onto main";
+
+        public const string StatusMergedOther = "Merged feature/other into main";
+
+        /// <summary>"Check out main and merge feature/other into it": the switch, then phase 3's merge.</summary>
+        public static string MergeOtherCall { get; } = Git("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/other'", "refs/heads/feature/other");
+
+        /// <summary>R0, "rebase" as built (HEAD on feature/topic): 3 lanes.</summary>
+        public static IReadOnlyList<CommitRow> R0 { get; } =
+        [
+            new CommitRow("Other one", 0, 0, ["feature/other"], "2d4d79a", Date: ScenarioDate(6)),
+            new CommitRow("Main more", 1, 1, ["main", "origin/main"], "1dd58b8", Date: ScenarioDate(5)),
+            new CommitRow("Main work", 1, 1, [], "dd6a6fc", Date: ScenarioDate(4)),
+            new CommitRow("Topic two", 2, 2, ["feature/topic ✓", "origin/feature/topic"], "b0dfa3f", Date: ScenarioDate(3)),
+            new CommitRow("Topic one", 2, 2, [], "1219e45", Date: ScenarioDate(2)),
+            new CommitRow("Add core", 0, 0, [], "996fdc1", Date: ScenarioDate(1), Ends: [1, 2]),
+            new CommitRow("Initial commit", 0, 0, [], "7bce6bf", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>R1, after "Rebase feature/topic onto main": 3 lanes.</summary>
+        public static IReadOnlyList<CommitRow> R1 { get; } =
+        [
+            new CommitRow("Topic two", 0, 0, ["feature/topic ✓"], "5f71ab8", Date: ScenarioDate(3)),
+            new CommitRow("Topic one", 0, 0, [], "befae26", Date: ScenarioDate(2)),
+            new CommitRow("Other one", 1, 1, ["feature/other"], "2d4d79a", Date: ScenarioDate(6)),
+            new CommitRow("Main more", 0, 0, ["main", "origin/main"], "1dd58b8", Date: ScenarioDate(5)),
+            new CommitRow("Main work", 0, 0, [], "dd6a6fc", Date: ScenarioDate(4)),
+            new CommitRow("Topic two", 2, 2, ["origin/feature/topic"], "b0dfa3f", Date: ScenarioDate(3)),
+            new CommitRow("Topic one", 2, 2, [], "1219e45", Date: ScenarioDate(2)),
+            new CommitRow("Add core", 0, 0, [], "996fdc1", Date: ScenarioDate(1), Ends: [1, 2]),
+            new CommitRow("Initial commit", 0, 0, [], "7bce6bf", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>R3, after "Check out feature/other and rebase it onto main": 2 lanes.</summary>
+        public static IReadOnlyList<CommitRow> R3 { get; } =
+        [
+            new CommitRow("Other one", 0, 0, ["feature/other ✓"], "14e607b", Date: ScenarioDate(6)),
+            new CommitRow("Main more", 0, 0, ["main", "origin/main"], "1dd58b8", Date: ScenarioDate(5)),
+            new CommitRow("Main work", 0, 0, [], "dd6a6fc", Date: ScenarioDate(4)),
+            new CommitRow("Topic two", 1, 1, ["feature/topic", "origin/feature/topic"], "b0dfa3f", Date: ScenarioDate(3)),
+            new CommitRow("Topic one", 1, 1, [], "1219e45", Date: ScenarioDate(2)),
+            new CommitRow("Add core", 0, 0, [], "996fdc1", Date: ScenarioDate(1), Ends: [1]),
+            new CommitRow("Initial commit", 0, 0, [], "7bce6bf", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>R4, after "Check out main and merge feature/other into it": 3 lanes.</summary>
+        public static IReadOnlyList<CommitRow> R4 { get; } =
+        [
+            new CommitRow("Merge branch 'feature/other'", 0, 0, ["main ✓"], "5e5d815", Merge: true, Date: "2026-01-02 09:00"),
+            new CommitRow("Other one", 1, 1, ["feature/other"], "2d4d79a", Date: ScenarioDate(6)),
+            new CommitRow("Main more", 0, 0, ["origin/main"], "1dd58b8", Date: ScenarioDate(5)),
+            new CommitRow("Main work", 0, 0, [], "dd6a6fc", Date: ScenarioDate(4)),
+            new CommitRow("Topic two", 2, 2, ["feature/topic", "origin/feature/topic"], "b0dfa3f", Date: ScenarioDate(3)),
+            new CommitRow("Topic one", 2, 2, [], "1219e45", Date: ScenarioDate(2)),
+            new CommitRow("Add core", 0, 0, [], "996fdc1", Date: ScenarioDate(1), Ends: [1, 2]),
+            new CommitRow("Initial commit", 0, 0, [], "7bce6bf", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>The drag of phase 4's check A3: five equal moves with the button held.</summary>
+        public const int DragSteps = 5;
+
+        // "interactive" (phase 4's G-I and G-B8, part U's G-U19).
+
+        public const string BaseSha = "4b4622c8ca70c5cfe305043f40ea99c288fbefb3";
+
+        public const string FiveSha = "57f089d442eea23fee65c387f560002ab1ccd1fc";
+
+        public const string TwoSha = "938844a7a995d3769fbac6d4e9ff4a3095f15898";
+
+        public const string InteractiveTipSha = "4ad730da7dcb81136e051ae3e0ee8d80bc5d368d";
+
+        public const string SquashTipSha = "eb6f702889d08c7879c1daba704553fea072a42c";
+
+        public const string InteractiveText = "interactive rebase of main";
+
+        public const string SquashText = "squash of 2 commits";
+
+        public const string StatusRebasedMainFive = "Rebased main: 5 commits";
+
+        public const string StatusSquashed = "Squashed 2 commits into f34248d";
+
+        public const string InteractiveFromHereItem = "Interactive rebase of main from here…";
+
+        public const string SquashItem = "Squash 2 commits…";
+
+        public const string RewordTwoTitle = "Reword 938844a";
+
+        public const string TwoReworded = "Two reworded";
+
+        public const string TwoRewordedSecondLine = "New message: Two reworded";
+
+        /// <summary>Phase 4's L0: the list's rows as "short id subject", newest first, as it opens from Base.</summary>
+        public static string[] L0Rows { get; } = ["57f089d Five", "eef5c15 Four", "ff42e7f Three", "ed58902 Fix one", "938844a Two", "fc6c8fd One"];
+
+        /// <summary>The list row Two's point in L0 (x 600, its centre y 259).</summary>
+        public static Point ListRowTwoPoint { get; } = new(600, 259);
+
+        /// <summary>G-I: "interactive" as built, one lane.</summary>
+        public static IReadOnlyList<CommitRow> GI { get; } =
+        [
+            new CommitRow("Five", 0, 0, ["main ✓"], "57f089d", Date: ScenarioDate(7)),
+            new CommitRow("Four", 0, 0, [], "eef5c15", Date: ScenarioDate(6)),
+            new CommitRow("Three", 0, 0, [], "ff42e7f", Date: ScenarioDate(5)),
+            new CommitRow("Fix one", 0, 0, [], "ed58902", Date: ScenarioDate(4)),
+            new CommitRow("Two", 0, 0, [], "938844a", Date: ScenarioDate(3)),
+            new CommitRow("One", 0, 0, [], "fc6c8fd", Date: ScenarioDate(2)),
+            new CommitRow("Base", 0, 0, [], "4b4622c", Date: ScenarioDate(1)),
+            new CommitRow("Initial commit", 0, 0, [], "da32da3", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>G-U19, after U19's interactive rebase (Five dropped, Two reworded): one lane, 7 rows.</summary>
+        public static IReadOnlyList<CommitRow> GU19 { get; } =
+        [
+            new CommitRow("Four", 0, 0, ["main ✓"], "4ad730d", Date: ScenarioDate(6)),
+            new CommitRow("Three", 0, 0, [], "ad3ce4e", Date: ScenarioDate(5)),
+            new CommitRow("Fix one", 0, 0, [], "4e61f14", Date: ScenarioDate(4)),
+            new CommitRow(TwoReworded, 0, 0, [], "97e6de9", Date: ScenarioDate(3)),
+            new CommitRow("One", 0, 0, [], "fc6c8fd", Date: ScenarioDate(2)),
+            new CommitRow("Base", 0, 0, [], "4b4622c", Date: ScenarioDate(1)),
+            new CommitRow("Initial commit", 0, 0, [], "da32da3", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>G-B8, after phase 4's B8 squash.</summary>
+        public static IReadOnlyList<CommitRow> GB8 { get; } =
+        [
+            new CommitRow("Five", 0, 0, ["main ✓"], "eb6f702", Date: ScenarioDate(7)),
+            new CommitRow("Three", 0, 0, [], "f34248d", Date: ScenarioDate(5)),
+            new CommitRow("Fix one", 0, 0, [], "ed58902", Date: ScenarioDate(4)),
+            new CommitRow("Two", 0, 0, [], "938844a", Date: ScenarioDate(3)),
+            new CommitRow("One", 0, 0, [], "fc6c8fd", Date: ScenarioDate(2)),
+            new CommitRow("Base", 0, 0, [], "4b4622c", Date: ScenarioDate(1)),
+            new CommitRow("Initial commit", 0, 0, [], "da32da3", Date: ScenarioDate(0)),
+        ];
+
+        // "sync" (phase 4's A4 part A, S1 and S2, and part U's S2u).
+
+        public const string LocalWorkSha = "f4f8c060b1e68a3e560113b942f1f984c6b5d4f0";
+
+        public const string ElsewhereWorkSha = "b2e9a9e3724a696d2565eaa632dc7b04bca768a0";
+
+        public const string LocalWorkRebasedSha = "8a1f07b0ca2c177d76be50610feaafb872a34863";
+
+        public const string PullText = "pull into main";
+
+        public const string StatusPulledAndRebased = "Pulled and rebased main onto origin/main";
+
+        public const string PullRebaseItem = "Pull from origin/main (rebase)";
+
+        /// <summary>git's fetch line of the pull (Git 2.36's, standard error).</summary>
+        public const string FetchMainLine = "   a7f2cfd..b2e9a9e  main       -> origin/main";
+
+        /// <summary>S1, the pull's start: 3 lanes.</summary>
+        public static IReadOnlyList<CommitRow> S1 { get; } =
+        [
+            new CommitRow("Local work", 0, 0, ["main ✓"], "f4f8c06", Date: ScenarioDate(6)),
+            new CommitRow("Topic work", 1, 1, ["topic"], "77d782e", Date: ScenarioDate(4)),
+            new CommitRow("Unpushed work", 2, 2, ["published"], "8e65315", Date: ScenarioDate(3)),
+            new CommitRow("Published work", 2, 2, ["origin/published"], "8c6f545", Date: ScenarioDate(2)),
+            new CommitRow("Shared work", 0, 0, ["origin/main"], "a7f2cfd", Date: ScenarioDate(1), Ends: [1, 2]),
+            new CommitRow("Initial commit", 0, 0, [], "6688774", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>S2, after "Pull from origin/main (rebase)": 3 lanes.</summary>
+        public static IReadOnlyList<CommitRow> S2 { get; } =
+        [
+            new CommitRow("Local work", 0, 0, ["main ✓"], "8a1f07b", Date: ScenarioDate(6)),
+            new CommitRow("Elsewhere work", 0, 0, ["origin/main"], "b2e9a9e", Date: ScenarioDate(5)),
+            new CommitRow("Topic work", 1, 1, ["topic"], "77d782e", Date: ScenarioDate(4)),
+            new CommitRow("Unpushed work", 2, 2, ["published"], "8e65315", Date: ScenarioDate(3)),
+            new CommitRow("Published work", 2, 2, ["origin/published"], "8c6f545", Date: ScenarioDate(2)),
+            new CommitRow("Shared work", 0, 0, [], "a7f2cfd", Date: ScenarioDate(1), Ends: [1, 2]),
+            new CommitRow("Initial commit", 0, 0, [], "6688774", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>S2u: S2's pull undone, origin/main still fetched (4 lanes, no Date column).</summary>
+        public static IReadOnlyList<CommitRow> S2u { get; } =
+        [
+            new CommitRow("Local work", 0, 0, ["main ✓"], "f4f8c06"),
+            new CommitRow("Elsewhere work", 1, 1, ["origin/main"], "b2e9a9e"),
+            new CommitRow("Topic work", 2, 2, ["topic"], "77d782e"),
+            new CommitRow("Unpushed work", 3, 3, ["published"], "8e65315"),
+            new CommitRow("Published work", 3, 3, ["origin/published"], "8c6f545"),
+            new CommitRow("Shared work", 0, 0, [], "a7f2cfd", Ends: [1, 2, 3]),
+            new CommitRow("Initial commit", 0, 0, [], "6688774"),
+        ];
+
         #endregion
     }
 }
