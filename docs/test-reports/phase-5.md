@@ -3311,14 +3311,14 @@ listed here as expected.
   refs/heads/feature/ff: Fast-forward`). The report said `git merge --ff-only
   refs/heads/feature/ff`, which is the drop menu's "Fast-forward main to feature/ff". U19's row
   now names the merge's command; U23, which merges "as in step 1", follows it.
-- **U20 part B, "After step 5"** (found by WP8's scripted run): the report expected the undo's
-  `git update-index -z --index-info` with `README.md`'s removal line and its entry `100644
-  114493d… 0` as its input. The call log keeps the input of `update-ref --stdin` alone (design
-  2.3; `GitCommand.RecordsStandardInput`), so neither harness can read those lines. The row now
-  asserts what they wrote instead: the command, and the index read back with `git ls-files
-  --stage` as before the apply, `README.md` at `100644 114493d… 0`. The lines themselves are the
-  merged effect's (`WriteIndexEntriesAsync`, 0.5); `UndoEffectTests` reads the index back after
-  the same effect.
+- **U20 part B, "After step 5"** (found by the review of WP8's scripted checks): the report
+  expected the undo's `git update-index -z --index-info` with `README.md`'s removal line and its
+  entry `100644 114493d… 0` as its input. The call log keeps the input of `update-ref --stdin`
+  alone (design 2.3; `GitCommand.RecordsStandardInput`), so neither harness can read those lines.
+  The row now asserts what they wrote instead: the command, and the index read back with `git
+  ls-files --stage` as before the apply, `README.md` at `100644 114493d… 0`. The lines themselves
+  are the merged effect's (`WriteIndexEntriesAsync`, 0.5); `UndoEffectTests` reads the index back
+  after the same effect.
 - **U19 part A, "After step 1"**, and so U23's steps 1, 17 and 22 (found by WP8's scripted run of
   U23): the entry above kept "the same reflog line" for phase 3's merge, but a merge given `-m`
   that fast-forwards says so in it: HEAD's reflog's newest entry is `merge
