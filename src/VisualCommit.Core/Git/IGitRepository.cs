@@ -815,8 +815,9 @@ public interface IGitRepository
     /// --symbolic-full-name HEAD</c>, or <c>symbolic-ref -q HEAD</c> while unborn), and what
     /// <paramref name="scope"/> names: its refs with one <c>for-each-ref</c> (their worktrees with
     /// <c>%(worktreepath)</c>; exact names filtered in code), the stash list, the configuration keys,
-    /// the files' raw bytes (<c>hash-object -w --no-filters</c>) and index entries, the status, the
-    /// <c>.gitignore</c>. Writes nothing but the files' blobs.
+    /// the files' SHA-256 and index entries, with their raw bytes (<c>hash-object -w
+    /// --no-filters</c>) when the scope keeps them (<see cref="Undo.UndoScope.KeepsFileBytes"/>),
+    /// the status, the <c>.gitignore</c>. Writes nothing but the files' blobs.
     /// </summary>
     Task<Undo.UndoState> ReadRefStatesAsync(Undo.UndoScope scope, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
