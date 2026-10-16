@@ -38,7 +38,7 @@ public sealed partial class Phase5ChecksU
         AssertButtons(app, UndoRedoButtons.Nothing);
 
         // Step 2: stage all, the message typed, Commit.
-        await ClickWorkingRowAsync(app);
+        await ClickWorkingRowAsync(app, PartU.WorkingRowPoint);
         app.Click(app.FindByAutomationId("StageAllButton"));
         await AssertStagePanelAsync(app, [], ["M Reader.cs src"]);
         app.Click(app.FindByAutomationId("CommitSummary"));

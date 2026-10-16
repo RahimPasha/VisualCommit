@@ -276,7 +276,95 @@ public static partial class Phase5Expectations
 
         /// <summary>A row of the history scenario, dated 2026-01-01 12:<paramref name="minute"/>.</summary>
         private static CommitRow HistoryRow(string message, int lane, int colour, string sha, int minute, params string[] labels) =>
-            new(message, lane, colour, labels, sha, Date: string.Create(System.Globalization.CultureInfo.InvariantCulture, $"2026-01-01 12:{minute:00}"));
+            new(message, lane, colour, labels, sha, Date: ScenarioDate(minute));
+
+        /// <summary>The Date column's text of a scenario commit made at 12:<paramref name="minute"/> on 2026-01-01.</summary>
+        private static string ScenarioDate(int minute) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"2026-01-01 12:{minute:00}");
+
+        // ---- "ops" (phase 3's G0 and the graphs part U derives from it) -------------------------
+
+        public const string MainWorkSha = "88d6b91e821a43cd39c94aa7892c8095b628caf8";
+
+        public const string AddCoreSha = "8beca345049bf7e8bab3a7b4f1427eff941b87e3";
+
+        public const string FastForwardMeSha = "d93814d4ea6e21d1a70dd93066dbb23512c03b56";
+
+        public const string AlphaTwoSha = "ce5ea6ab16759bede02ce706dd5c6865443c2051";
+
+        public const string AlphaOneSha = "dff8fbf3d84b0feb999ef8b3ea0e22c20d898be4";
+
+        public const string ExperimentStashSha = "0e95aca13f7975ef4a1fe029a8b5e9497f31028d";
+
+        public const string ConflictingChangeShort = "078ef05";
+
+        /// <summary>A short SHA as the screen and the entry texts write it: the first 7 characters.</summary>
+        public static string Short(string sha) => sha[..7];
+
+        /// <summary>
+        /// G0: "ops" as built, the stash's line dashed (3 lanes, Message from x 454). With
+        /// <see cref="WorkingRow"/> above it, G0+w.
+        /// </summary>
+        public static IReadOnlyList<CommitRow> G0 { get; } = OpsRows(["main ✓", "origin/main", "v1.1"], ["v1.0"]);
+
+        /// <summary>
+        /// G0's rows with other labels on Main work (row 3) and Add core (row 6), the label-only
+        /// changes of G0 (G0 hotfix, G0 HEAD at Add core, …), and G6's rows under its working-changes row.
+        /// </summary>
+        public static IReadOnlyList<CommitRow> OpsRows(
+            IReadOnlyList<string> mainWork,
+            IReadOnlyList<string> addCore,
+            IReadOnlyList<string>? conflict = null,
+            IReadOnlyList<string>? fastForward = null,
+            IReadOnlyList<string>? alphaTwo = null) =>
+        [
+            new CommitRow("On main: Experiment", 0, 0, ["stash@{0}"], "0e95aca", Stash: true, Date: ScenarioDate(7)),
+            new CommitRow("Conflicting change", 1, 1, conflict ?? ["feature/conflict"], ConflictingChangeShort, Date: ScenarioDate(6)),
+            new CommitRow("Fast-forward me", 2, 2, fastForward ?? ["feature/ff"], "d93814d", Date: ScenarioDate(5)),
+            new CommitRow("Main work", 0, 0, mainWork, "88d6b91", Date: ScenarioDate(4), Ends: [2]),
+            new CommitRow("Alpha two", 2, 3, alphaTwo ?? ["feature/alpha", "origin/feature/alpha"], "ce5ea6a", Date: ScenarioDate(3)),
+            new CommitRow("Alpha one", 2, 3, [], "dff8fbf", Date: ScenarioDate(2)),
+            new CommitRow("Add core", 0, 0, addCore, "8beca34", Date: ScenarioDate(1), Ends: [1, 2]),
+            new CommitRow("Initial commit", 0, 0, [], "4ef1f7c", Date: ScenarioDate(0)),
+        ];
+
+        /// <summary>G0's lanes.</summary>
+        public const int OpsLanes = 3;
+
+        /// <summary>G6: main reset to Add core (a working-changes row above, its ring's dashed line to Add core's node).</summary>
+        public static IReadOnlyList<CommitRow> G6 { get; } = OpsRows(["origin/main", "v1.1"], ["main ✓", "v1.0"]);
+
+        // ---- U17: resets on "ops" (phase 3's check 10) -------------------------------------------
+
+        public static string ResetText(string mode) => $"reset of main to 8beca34 ({mode})";
+
+        public static string StatusReset(string mode) => $"Reset main to 8beca34 ({mode})";
+
+        public const string ResetMenuItem = "Reset main to this commit…";
+
+        /// <summary>Phase 3's check 10 part C changes (UD5), every line ending in a line feed.</summary>
+        public const string CoreStaged = "core\nmain work\nstaged line\n";
+
+        public const string CoreUnstaged = "core\nmain work\nstaged line\nunstaged line\n";
+
+        public const string ReadmeLocalEdit = "# Operations\n\nLocal edit.\n";
+
+        public const string Scratch = "scratch\n";
+
+        public const string OpsTodo = "todo\n";
+
+        public const string MixedIndexSubject = "VisualCommit: index before a mixed reset";
+
+        public const string HardIndexSubject = "VisualCommit: index before a hard reset";
+
+        public const string HardSnapshotSubject = "VisualCommit: snapshot before a hard reset to 8beca34";
+
+        /// <summary>The stage panel before U17's steps 7 and 10 (phase 3's check 10 step 7).</summary>
+        public static string[] PartCUnstaged { get; } = ["M README.md", "M core.txt src", "A todo.txt"];
+
+        public static string[] PartCStaged { get; } = ["A scratch.txt", "M core.txt src"];
+
+        /// <summary>The conventions' status with part C's changes on Main work.</summary>
+        public static string[] PartCStatus { get; } = ["## main...origin/main", " M README.md", "A  scratch.txt", "MM src/core.txt", "?? todo.txt"];
 
         #endregion
     }

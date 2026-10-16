@@ -105,6 +105,22 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         await app.WaitForIdleAsync();
     }
 
+    /// <summary>
+    /// Runs an action of an earlier phase: <paramref name="act"/> (the click that starts it), then
+    /// a wait until one more operation the user started has ended and the tab is idle, its refresh
+    /// included. Returns the number of git calls before the click, a mark for <see cref="CallsSince"/>.
+    /// </summary>
+    private static async Task<int> ActAsync(ShellDriver app, Action act, TimeSpan? timeout = null)
+    {
+        var calls = app.GitCalls().Count;
+        var before = ForegroundOperations(app).Count;
+        act();
+        await app.WaitForAsync(() => ForegroundOperations(app).Count > before && app.Session.Shell.ActiveTab.Repository?.Queue.Current is null, "the action's operation to end", timeout ?? OperationChainTimeout);
+        await app.WaitForIdleAsync(timeout: timeout ?? OperationChainTimeout);
+        await AssertNoDialogAsync(app);
+        return calls;
+    }
+
     /// <summary>The operations the active tab's queue ran that the user started (no background ones), oldest first.</summary>
     private static List<OperationRecord> ForegroundOperations(ShellDriver app) =>
         [.. app.Session.Operations.Snapshot().Where(record => !record.IsBackground)];
@@ -246,11 +262,11 @@ public sealed partial class Phase5ChecksU : Phase5Checks
         app.ClickMenuItem(item);
     }
 
-    /// <summary>Clicks the working-changes row (the report's point, ±2) and waits for the stage panel.</summary>
-    private static async Task ClickWorkingRowAsync(ShellDriver app)
+    /// <summary>Clicks the working-changes row in its Message column (against the report's point, ±2, where it states one) and waits for the stage panel.</summary>
+    private static async Task ClickWorkingRowAsync(ShellDriver app, Point? reported = null)
     {
         var point = app.WorkingRowPoint();
-        AssertNear(PartU.WorkingRowPoint, point, "the working-changes row's Message column");
+        AssertNear(reported, point, "the working-changes row's Message column");
         app.Click(point);
         await app.WaitForAsync(() => Shown(app, "StagePanel") is not null && app.StagePanelSettled, "the stage panel");
         await app.WaitForIdleAsync();
