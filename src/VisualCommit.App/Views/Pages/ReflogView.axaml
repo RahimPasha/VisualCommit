@@ -13,7 +13,7 @@
        A reflog row: 8, the selector 72 (code font, secondary), 8, the time 112, 8, the action (at
        least 140), 8, the commit 160 (short SHA 56 in the code font, 6, the subject), 8, the lost
        mark 20, 8; the time and then the selector go first as the page narrows (BD3). A backup
-       row: 8, the time 128, 8, the words (at least 120), 8, the commit 160, 8 (BD4). Colours are
+       row: 8, the time 136, 8, the words (at least 112), 8, the commit 160, 8 (BD4). Colours are
        tokens only. -->
   <UserControl.Styles>
     <Style Selector="ListBox.pageList">
@@ -112,7 +112,7 @@
         <TextBlock DockPanel.Dock="Left"
                    Name="BackupTime"
                    Classes="cell"
-                   Width="128"
+                   Width="136"
                    Margin="0,0,8,0"
                    Text="{Binding TimeText}" />
         <DockPanel DockPanel.Dock="Right" Width="160" Margin="8,0,0,0">

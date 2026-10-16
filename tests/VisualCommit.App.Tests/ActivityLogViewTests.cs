@@ -204,6 +204,114 @@ public class ActivityLogViewTests
         Assert.Equal(("Drawn title", "Clean up backups"), (app.ActivityLog().Rows[0].Title, ((ActivityLogOperationRow)app.ActivityLogModel.Current!.Rows[0]).Title));
     }
 
+    /// <summary>
+    /// A list scrolled up that becomes short enough to show its end (its rows closed) keeps to its
+    /// end again (AD15): an operation opened afterwards shows its last call (found by phase 5's A2,
+    /// which closes a row the keys brought into view).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_list_scrolled_up_then_shortened_to_its_end_keeps_to_its_end_again()
+    {
+        using var repo = await Scenarios.HistoryAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        var key = WorktreeKey.Of(repository.Repository.GitDirectory);
+        app.ClickActivityLogToggle();
+        AddOperation(app, key, "op-s1", "Merge feature/theirs", OperationOutcome.Conflicts, "Merge stopped: 1 file has conflicts");
+        for (var i = 0; i < 12; i++)
+        {
+            AddCall(app, repo.Path, "op-s1", $"git status {i}");
+        }
+
+        // Opened, the merge's calls run past the list's end, which the list keeps in view.
+        app.ClickActivityLogRow("Merge feature/theirs");
+        Assert.True(app.ActivityLog().Rows[^1].IsInView, "The list did not keep to its end as the row opened.");
+
+        // As A2 does: a call's box opened and closed by a click, Left to the merge's row, which
+        // the list scrolls up to, and Left again closes it: the one row left is the list's end.
+        app.ClickActivityLogRow("git status 9");
+        app.ClickActivityLogRow("git status 9");
+        Assert.Equal("git status 9", FocusedRow(app)?.AutomationName);
+        app.PressKey(Key.Left);
+        app.Settle();
+        Assert.Equal("Merge feature/theirs", FocusedRow(app)?.AutomationName);
+        Assert.True(app.ActivityLogRow("Merge feature/theirs").IsInView);
+        app.PressKey(Key.Left);
+        app.Settle();
+        Assert.Single(app.ActivityLog().Rows);
+        var list = app.Find<ScrollViewer>("ActivityLogList");
+
+        // A row opened now makes the list longer, and the list keeps to its end again.
+        AddOperation(app, key, "op-s2", "Abort the merge", OperationOutcome.Succeeded, "Aborted the merge");
+        for (var i = 0; i < 12; i++)
+        {
+            AddCall(app, repo.Path, "op-s2", $"git merge --abort {i}");
+        }
+
+        app.ClickActivityLogRow("Abort the merge");
+        var rows = app.ActivityLog().Rows;
+        Assert.Equal("git merge --abort 11", rows[^1].AutomationName);
+        Assert.True(rows[^1].IsInView, "The list did not keep to its end once it was at its end again.");
+        Assert.True(list.Offset.Y > 0, "The list did not scroll to its end.");
+    }
+
+    /// <summary>
+    /// A click on the list's last call opens its box at the list's end, which the list scrolls to
+    /// (AD15): the call keeps the keyboard focus, so that the keys of 2.2 and Esc go on working,
+    /// in a short list and in one that runs past its view (found by phase 5's A2).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_call_opened_by_a_click_at_the_lists_end_keeps_the_focus()
+    {
+        using var repo = await Scenarios.HistoryAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        var key = WorktreeKey.Of(repository.Repository.GitDirectory);
+        app.ClickActivityLogToggle();
+        AddOperation(app, key, "op-f1", "Merge tool for notes.txt", OperationOutcome.Cancelled, "Merge tool for notes.txt cancelled");
+        AddCall(app, repo.Path, "op-f1", "git ls-files --unmerged -z -- notes.txt", output: "100644 624b469 1\tnotes.txt\n");
+        AddCall(app, repo.Path, "op-f1", "git mergetool --tool=slow --no-prompt -- notes.txt", output: "Merging:\nnotes.txt\n");
+
+        // A short list: the box opens under the last call, all of it in view.
+        app.ClickActivityLogRow("Merge tool for notes.txt");
+        app.ClickActivityLogRow("git mergetool --tool=slow --no-prompt -- notes.txt");
+        Assert.Equal(ActivityLogRowKind.Output, app.ActivityLog().Rows[^1].Kind);
+        Assert.Equal("git mergetool --tool=slow --no-prompt -- notes.txt", FocusedRow(app)?.AutomationName);
+        app.ClickActivityLogRow("git mergetool --tool=slow --no-prompt -- notes.txt");
+        app.ClickActivityLogRow("Merge tool for notes.txt");
+
+        // A list that runs past its view: the box opens at its end, which the list scrolls to.
+        AddOperation(app, key, "op-f2", "Abort the merge", OperationOutcome.Succeeded, "Aborted the merge");
+        for (var i = 0; i < 12; i++)
+        {
+            AddCall(app, repo.Path, "op-f2", $"git merge --abort {i}", output: "one\ntwo\nthree\nfour\n");
+        }
+
+        app.ClickActivityLogRow("Abort the merge");
+        app.ClickActivityLogRow("git merge --abort 11");
+        var rows = app.ActivityLog().Rows;
+        Assert.Equal(ActivityLogRowKind.Output, rows[^1].Kind);
+        Assert.True(rows[^1].IsInView, "The list did not keep to its end as the call opened.");
+        Assert.Equal("git merge --abort 11", FocusedRow(app)?.AutomationName);
+
+        // The keys work from there and keep the focus too: Left closes the call, Right opens it
+        // again at the list's end, Up goes to the call above it.
+        app.PressKey(Key.Left);
+        app.Settle();
+        Assert.Equal(ActivityLogRowKind.Call, app.ActivityLog().Rows[^1].Kind);
+        Assert.Equal("git merge --abort 11", FocusedRow(app)?.AutomationName);
+        app.PressKey(Key.Right);
+        app.Settle();
+        rows = app.ActivityLog().Rows;
+        Assert.True(rows[^1] is { Kind: ActivityLogRowKind.Output, IsInView: true }, "Right did not open the call's box at the list's end.");
+        Assert.Equal("git merge --abort 11", FocusedRow(app)?.AutomationName);
+        app.PressKey(Key.Up);
+        app.Settle();
+        Assert.Equal("git merge --abort 10", FocusedRow(app)?.AutomationName);
+    }
+
     [AvaloniaFact]
     public async Task The_splitter_keeps_the_panel_between_its_limits_and_the_session_keeps_its_height_across_a_restart()
     {
