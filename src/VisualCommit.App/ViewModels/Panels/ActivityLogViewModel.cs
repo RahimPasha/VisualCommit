@@ -14,16 +14,27 @@ namespace VisualCommit.App.ViewModels.Panels;
 
 /// <summary>The worktree whose log the panel shows (docs/phase-5-design.md 2.1, 2.3).</summary>
 /// <param name="Key">The worktree's key (<see cref="WorktreeKey"/>): its own git folder, as the operation records name it.</param>
-/// <param name="WorkingTree">The folder of its working tree: a read made in it, or in a folder under it, is its read.</param>
+/// <param name="WorkingTree">The folder of its working tree, as git reports it: a read made in it, or in a folder under it, is its read.</param>
 /// <param name="Name">Its repository's name, which the panel's header shows.</param>
-public sealed record ActivityLogSource(string Key, string WorkingTree, string Name)
+/// <param name="OpenedFolder">
+/// The folder its repository was opened from (<see cref="IGitRepository.OpenedFolder"/>): a read made
+/// in it, or in a folder under it, is its read too. The opening's first read runs there, and when
+/// the folder was reached through a symbolic link or a junction, git reports the working tree by
+/// another path. It is <paramref name="WorkingTree"/> itself for a repository opened from there;
+/// null adds no folder.
+/// </param>
+public sealed record ActivityLogSource(string Key, string WorkingTree, string Name, string? OpenedFolder = null)
 {
     /// <summary>The worktree of an open repository.</summary>
     public static ActivityLogSource Of(RepositoryViewModel repository)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        return new ActivityLogSource(WorktreeKey.Of(repository.Repository.GitDirectory), repository.Path, repository.Name);
+        return new ActivityLogSource(WorktreeKey.Of(repository.Repository.GitDirectory), repository.Path, repository.Name, repository.Repository.OpenedFolder);
     }
+
+    /// <summary>The folders whose reads are this worktree's: its working tree, and the folder it was opened from when that is another.</summary>
+    internal IEnumerable<string> Folders =>
+        OpenedFolder is null ? [WorkingTree] : [WorkingTree, OpenedFolder];
 }
 
 /// <summary>
@@ -33,9 +44,37 @@ public sealed record ActivityLogSource(string Key, string WorkingTree, string Na
 /// </summary>
 public sealed class ActivityLogWorktree
 {
-    internal ActivityLogWorktree(ActivityLogSource source) => Source = source;
+    internal ActivityLogWorktree(ActivityLogSource source)
+    {
+        Source = source;
+        AddFolders(source);
+    }
 
     public ActivityLogSource Source { get; internal set; }
+
+    /// <summary>
+    /// The folders whose reads are this worktree's (2.3): those of every source it was shown for,
+    /// so that two tabs that opened it from different folders, or a working tree that moved, give
+    /// each read made in one of them to it whichever tab is shown. Kept in full, without a trailing
+    /// separator.
+    /// </summary>
+    internal List<string> Folders { get; } = [];
+
+    /// <summary>Adds <paramref name="source"/>'s folders to <see cref="Folders"/>; true when one was new.</summary>
+    internal bool AddFolders(ActivityLogSource source)
+    {
+        var added = false;
+        foreach (var folder in source.Folders)
+        {
+            if (ActivityLogViewModel.Normalized(folder) is { } full && !Folders.Contains(full, WorktreeKey.Comparer))
+            {
+                Folders.Add(full);
+                added = true;
+            }
+        }
+
+        return added;
+    }
 
     /// <summary>The list's rows, top to bottom: the operations and, with "Show reads", the reads, in the order they started; under an opened row what it opens to.</summary>
     public ObservableCollection<ActivityLogRow> Rows { get; } = [];
@@ -259,7 +298,12 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
         else if (worktree.Source != source)
         {
             worktree.Source = source;
-            _readOwners.Clear();
+            if (worktree.AddFolders(source))
+            {
+                // Another tab opened it from another folder: the reads made there are its too.
+                _readOwners.Clear();
+                worktree.IsStale = true;
+            }
         }
 
         if (worktree.IsStale || !ReferenceEquals(Current, worktree))
@@ -664,7 +708,12 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The worktree whose working tree holds the read's folder (2.3), the innermost when they nest; null for none (<c>git --version</c>).</summary>
+    /// <summary>
+    /// The worktree whose working tree, or the folder it was opened from, holds the read's folder
+    /// (2.3), the innermost when they nest; null for none (<c>git --version</c>). A folder reached
+    /// through a link is compared as the read named it: the opening's first read runs in the folder
+    /// as it was opened, while git reports the working tree with the links resolved.
+    /// </summary>
     private string? OwnerOf(GitCallRecord read)
     {
         if (read.WorkingDirectory is not { Length: > 0 } folder)
@@ -679,14 +728,18 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
 
         string? owner = null;
         var longest = -1;
-        var full = Normalized(folder);
-        foreach (var worktree in _worktrees.Values)
+        if (Normalized(folder) is { } full)
         {
-            var tree = Normalized(worktree.Source.WorkingTree);
-            if (full is not null && tree is not null && tree.Length > longest && IsSameOrUnder(full, tree))
+            foreach (var worktree in _worktrees.Values)
             {
-                owner = worktree.Source.Key;
-                longest = tree.Length;
+                foreach (var tree in worktree.Folders)
+                {
+                    if (tree.Length > longest && IsSameOrUnder(full, tree))
+                    {
+                        owner = worktree.Source.Key;
+                        longest = tree.Length;
+                    }
+                }
             }
         }
 
@@ -694,7 +747,8 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
         return owner;
     }
 
-    private static string? Normalized(string folder)
+    /// <summary>A folder in full, without a trailing separator; null for a path that cannot be one.</summary>
+    internal static string? Normalized(string folder)
     {
         try
         {

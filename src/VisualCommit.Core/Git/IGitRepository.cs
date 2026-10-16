@@ -20,6 +20,14 @@ public interface IGitRepository
     /// <summary>The name the tab shows: the working tree's folder name.</summary>
     string Name { get; }
 
+    /// <summary>
+    /// The folder the repository was opened from, full and without a trailing separator: the one
+    /// the opening's first git call ran in. It is <see cref="WorkingDirectory"/>, a folder inside
+    /// it, or either reached by another path, such as through a symbolic link or a junction,
+    /// which git resolves in the paths it reports (docs/phase-5-design.md 2.3).
+    /// </summary>
+    string OpenedFolder => WorkingDirectory;
+
     /// <summary>Reads HEAD, the branches with their upstreams and ahead/behind counts, the remote branches, the tags, the stashes and the remotes.</summary>
     Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default);
 

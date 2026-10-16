@@ -146,13 +146,16 @@ public sealed partial class Phase5ChecksA
 
         AssertListAtEnd(app);
 
-        // Step 4: Show reads: the worktree's reads at the top level among the operations, in start order.
+        // Step 4: Show reads: the worktree's reads at the top level among the operations, in start
+        // order. Its reads are those made in its working tree as git names it and in the folder the
+        // tab opened, as the tab named it: the two differ where that folder is reached through a
+        // link (macOS's /var, a link to /private/var), and the opening's first read runs there.
         var key = await WorktreeKeyAsync(repo);
-        var workingTree = await WorkingTreeAsync(repo);
+        string[] folders = [await WorkingTreeAsync(repo), Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Path))];
         app.Click(app.FindByAutomationId("ActivityLogShowReads"));
         ActivityLogSnapshot? withReads = null;
         await app.WaitForAsync(
-            () => ShowsTheWorktreesReads(app, withReads = app.ActivityLog(), key, workingTree),
+            () => ShowsTheWorktreesReads(app, withReads = app.ActivityLog(), key, folders),
             "the log to show the worktree's reads and operations in start order");
         AssertShowReads(app, withReads!);
         Shot(app, PartA.A2ShowReads);
@@ -576,15 +579,16 @@ public sealed partial class Phase5ChecksA
     }
 
     /// <summary>Whether a snapshot's top level is what <see cref="ExpectedTopLevel"/> gives now: the reads still coming settle first.</summary>
-    private static bool ShowsTheWorktreesReads(ShellDriver app, ActivityLogSnapshot log, string key, string workingTree) =>
-        TopLevel(log).Select(row => row.AutomationName).SequenceEqual(ExpectedTopLevel(app, key, workingTree).Select(entry => entry.Name));
+    private static bool ShowsTheWorktreesReads(ShellDriver app, ActivityLogSnapshot log, string key, IReadOnlyList<string> folders) =>
+        TopLevel(log).Select(row => row.AutomationName).SequenceEqual(ExpectedTopLevel(app, key, folders).Select(entry => entry.Name));
 
     /// <summary>
     /// The top level under "Show reads", from the logs and not from the panel: this worktree's
-    /// operations (their key) and the reads (no operation id) made in its working tree or a folder
-    /// under it, in the order of their sequence numbers.
+    /// operations (their key) and the reads (no operation id) made in one of its
+    /// <paramref name="folders"/> (its working tree, the folder its tab opened) or a folder under
+    /// one, in the order of their sequence numbers.
     /// </summary>
-    private static List<(long Sequence, string Name)> ExpectedTopLevel(ShellDriver app, string key, string workingTree)
+    private static List<(long Sequence, string Name)> ExpectedTopLevel(ShellDriver app, string key, IReadOnlyList<string> folders)
     {
         var comparison = WorktreeKey.Comparer.Equals("a", "A") ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         bool InWorkingTree(string? folder)
@@ -595,8 +599,8 @@ public sealed partial class Phase5ChecksA
             }
 
             var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
-            return string.Equals(full, workingTree, comparison)
-                || (full.StartsWith(workingTree + Path.DirectorySeparatorChar, comparison) || full.StartsWith(workingTree + Path.AltDirectorySeparatorChar, comparison));
+            return folders.Any(tree => string.Equals(full, tree, comparison)
+                || full.StartsWith(tree + Path.DirectorySeparatorChar, comparison) || full.StartsWith(tree + Path.AltDirectorySeparatorChar, comparison));
         }
 
         var operations = app.Session.Operations.Snapshot()
