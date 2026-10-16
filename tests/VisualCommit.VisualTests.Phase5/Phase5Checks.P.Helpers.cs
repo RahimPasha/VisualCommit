@@ -343,14 +343,14 @@ public sealed partial class Phase5ChecksP
 
     /// <summary>
     /// HEAD's reflog after <paramref name="stagedRefusals"/> merges of <c>other</c> that git
-    /// refused for something staged (P27; design 15.9): on Git 2.36, the report's,
-    /// <paramref name="before"/> as it was; on a later git <paramref name="before"/> under one
-    /// no-op entry per such merge, <see cref="PartP.RefusedMergeReflog"/>, whose old and new values
-    /// are both Main work, where HEAD stayed.
+    /// refused for something staged (P27; design 15.9): before Git 2.38 (the report's 2.36
+    /// among them), <paramref name="before"/> as it was; from 2.38 on <paramref name="before"/>
+    /// under one no-op entry per such merge, <see cref="PartP.RefusedMergeReflog"/>, whose old and
+    /// new values are both Main work, where HEAD stayed.
     /// </summary>
     private static async Task AssertReflogAfterStagedMergeRefusalsAsync(TempRepo repo, string[] before, int stagedRefusals)
     {
-        var added = await IsReportGitAsync() ? 0 : stagedRefusals;
+        var added = await MachineGitVersionAsync() is { } version && version >= new GitVersion(2, 38, 0) ? stagedRefusals : 0;
         string[] expected = [.. Enumerable.Repeat(PartP.RefusedMergeReflog, added), .. before];
         Assert.Equal(expected, await ReflogAsync(repo));
         Assert.All(HeadReflogValues(repo).Take(added), values => Assert.Equal((PartP.MainWorkSha, PartP.MainWorkSha), values));

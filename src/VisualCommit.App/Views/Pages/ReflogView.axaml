@@ -81,7 +81,7 @@
           <Border Name="ReflogLostMark"
                   Background="Transparent"
                   IsVisible="{Binding IsLost}"
-                  ToolTip.Tip="No branch, tag or remote branch reaches this commit"
+                  ToolTip.Tip="{x:Static vm:ReflogRowViewModel.LostToolTip}"
                   AutomationProperties.AutomationId="ReflogLostMark"
                   AutomationProperties.Name="Lost">
             <c:Icon Data="{StaticResource IconAlert}"

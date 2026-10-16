@@ -111,6 +111,68 @@ public class CompareViewModelTests
         await comparison.LoadAsync();
         Assert.Equal(notice, comparison.NoticeText);
         Assert.True(comparison.ShowsNoDifferences);
+
+        // With no common history the list is the two trees: the switch is not offered (6.3, 15.9).
+        Assert.Equal(kind != CompareBase.NoCommonHistory, comparison.OffersAllDifferences);
+    }
+
+    [Fact]
+    public async Task The_counts_stay_through_the_switch_and_the_swaps()
+    {
+        var host = new FakeHost { Result = BranchResult };
+        using var comparison = new CompareViewModel(host, new CompareSide("refs/heads/main", "main"), new CompareSide("refs/heads/feature/compare", "feature/compare"), isBranches: true);
+        await comparison.LoadAsync();
+        Assert.Equal(MainToFeature, comparison.CountsText);
+
+        // All differences, then a swap and a swap back: each direction's counts (FD9, F13; 15.9).
+        comparison.AllDifferences = true;
+        await host.WhenCalledAsync(2);
+        await WaitAsync(() => comparison.ChangedFiles.Count == 2);
+        Assert.Equal(MainToFeature, comparison.CountsText);
+        await comparison.SwapCommand.ExecuteAsync(null);
+        Assert.Equal("7 commits only on main, 2 only on feature/compare", comparison.CountsText);
+        await comparison.SwapCommand.ExecuteAsync(null);
+        Assert.Equal(MainToFeature, comparison.CountsText);
+    }
+
+    [Fact]
+    public async Task The_switch_ticked_while_the_first_read_runs_reads_the_counts_that_read_carried()
+    {
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var host = new FakeHost { Result = BranchResult, Hold = call => call == 1 ? first.Task : null };
+        using var comparison = new CompareViewModel(host, new CompareSide("refs/heads/main", "main"), new CompareSide("refs/heads/feature/compare", "feature/compare"), isBranches: true);
+        var loading = comparison.LoadAsync();
+        await host.WhenCalledAsync(1);
+
+        // The switch cancels the first read, which carried the counts: its own read asks for them.
+        comparison.AllDifferences = true;
+        await loading;
+        await host.WhenCalledAsync(2);
+        await WaitAsync(() => !comparison.IsLoading);
+        Assert.Equal(("refs/heads/main", "refs/heads/feature/compare", false, true), host.Calls[1]);
+        Assert.Equal(MainToFeature, comparison.CountsText);
+
+        comparison.AllDifferences = false;
+        await host.WhenCalledAsync(3);
+        await WaitAsync(() => !comparison.IsLoading && comparison.ChangedFiles.Count == 1);
+        Assert.Equal(MainToFeature, comparison.CountsText);
+    }
+
+    /// <summary>The counts' line of main compared with feature/compare.</summary>
+    private const string MainToFeature = "2 commits only on feature/compare, 7 only on main";
+
+    /// <summary>main and feature/compare compared either way, by name or by commit: three-dot lists one file, the trees two; the counts when asked.</summary>
+    private static CompareResult BranchResult(string from, string to, bool threeDot, bool count)
+    {
+        var fromMain = from is Main or "refs/heads/main";
+        return new CompareResult(
+            fromMain ? Main : Feature,
+            fromMain ? Feature : Main,
+            threeDot ? CompareBase.MergeBase : CompareBase.Trees,
+            threeDot ? Base : (fromMain ? Main : Feature),
+            threeDot ? [new ChangedFile("README.md", FileChangeKind.Modified)] : [new ChangedFile("README.md", FileChangeKind.Modified), new ChangedFile("src/Config.cs", FileChangeKind.Modified)],
+            false,
+            count ? (fromMain ? new CompareCounts(OnlyOnFrom: 7, OnlyOnTo: 2) : new CompareCounts(OnlyOnFrom: 2, OnlyOnTo: 7)) : null);
     }
 
     [Fact]
@@ -176,10 +238,18 @@ public class CompareViewModelTests
 
         public bool Closed { get; private set; }
 
-        public Task<CompareResult> CompareAsync(string from, string to, bool threeDot, bool countCommits, CancellationToken cancellationToken)
+        /// <summary>What a call waits for before it answers, by its number from 1; null answers at once.</summary>
+        public Func<int, Task?>? Hold { get; set; }
+
+        public async Task<CompareResult> CompareAsync(string from, string to, bool threeDot, bool countCommits, CancellationToken cancellationToken)
         {
             Calls.Add((from, to, threeDot, countCommits));
-            return Task.FromResult(Result(from, to, threeDot, countCommits));
+            if (Hold?.Invoke(Calls.Count) is { } hold)
+            {
+                await hold.WaitAsync(cancellationToken);
+            }
+
+            return Result(from, to, threeDot, countCommits);
         }
 
         public async Task WhenCalledAsync(int calls) => await WaitAsync(() => Calls.Count >= calls);

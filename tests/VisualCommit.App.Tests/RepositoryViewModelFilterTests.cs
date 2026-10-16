@@ -1,6 +1,9 @@
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.ViewModels.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -160,15 +163,48 @@ public class RepositoryViewModelFilterTests
         await app.Operations.ShowRemoteAsync("origin");
         Assert.Null(repository.Filters);
 
-        // Solo mode: a branch the app creates is soloed too; a rename moves its entry, a delete removes it (8.1, 8.4).
+        // Solo mode: a branch the app creates is soloed too; its rename moves the entry, its delete
+        // removes it (8.1, 8.4), each by the operation itself.
         await app.Operations.SoloBranchAsync("refs/heads/feature/beta");
-        app.Operations.FollowCreatedBranch("refs/heads/new");
-        Assert.Contains("refs/heads/new", repository.Filters!.Soloed);
-        app.Operations.FollowRenamedBranch("refs/heads/new", "refs/heads/newer");
-        Assert.Contains("refs/heads/newer", repository.Filters!.Soloed);
-        app.Operations.FollowDeletedBranch("refs/heads/newer");
-        Assert.DoesNotContain("refs/heads/newer", repository.Filters!.Soloed);
+        app.Dialogs.EnterName("new", option: false);
+        await app.Operations.CreateBranchAsync(AlphaOne);
+        // Soloing a branch solos its upstream too; only the local names are looked at here.
+        string[] LocalSoloed() => [.. repository.Filters!.Soloed.Where(name => name.StartsWith("refs/heads/", StringComparison.Ordinal)).Order(StringComparer.Ordinal)];
+        Assert.Equal(["refs/heads/feature/beta", "refs/heads/new"], LocalSoloed());
+        Assert.True(repository.Graph.IndexOf(AlphaOne) >= 0, "The branch created in solo mode vanished.");
+        app.Dialogs.EnterName("newer");
+        await app.Operations.RenameBranchAsync("refs/heads/new");
+        Assert.Equal(["refs/heads/feature/beta", "refs/heads/newer"], LocalSoloed());
+        app.Dialogs.Confirm();
+        await app.Operations.DeleteBranchAsync("refs/heads/newer");
+        Assert.Equal(["refs/heads/feature/beta"], LocalSoloed());
         Assert.Same(repository.Filters, Assert.Single(app.Services.Session.Current.GraphFilters));
+
+        // The only soloed branch renamed: solo mode goes with it, and the graph still shows its history.
+        var soloed = repository.Graph.Count;
+        app.Dialogs.EnterName("feature/gamma");
+        await app.Operations.RenameBranchAsync("refs/heads/feature/beta");
+        Assert.Equal(["refs/heads/feature/gamma"], LocalSoloed());
+        Assert.Equal(soloed, repository.Graph.Count);
+        Assert.Equal(repository.GraphFilter!.Key, repository.LoadedFilterKey);
+
+        // Its undo moves the entry back (15.9).
+        await app.Operations.UndoAsync();
+        Assert.Equal(["refs/heads/feature/beta"], LocalSoloed());
+        Assert.Equal(soloed, repository.Graph.Count);
+
+        // A hidden branch renamed stays hidden under its new name, its upstream too; deleted, its entry goes.
+        await app.Operations.StopSoloingAsync();
+        await app.Operations.HideBranchAsync(Alpha);
+        app.Dialogs.EnterName("feature/alpha2");
+        await app.Operations.RenameBranchAsync(Alpha);
+        Assert.Equal(["refs/heads/feature/alpha2", OriginAlpha], repository.Filters!.Hidden.Order(StringComparer.Ordinal));
+        Assert.Equal(repository.GraphFilter!.Key, repository.LoadedFilterKey);
+        Assert.Contains("--exclude=feature/alpha2", repository.GraphFilter.RevisionArguments);
+        app.Dialogs.Confirm();
+        await app.Operations.DeleteBranchAsync("refs/heads/feature/alpha2");
+        Assert.DoesNotContain("refs/heads/feature/alpha2", repository.Filters?.Hidden ?? []);
+        app.AssertScriptFollowed();
     }
 
     [Fact]
@@ -199,6 +235,46 @@ public class RepositoryViewModelFilterTests
         await app.Operations.CompareBranchesAsync("refs/heads/main", Alpha);
         app.Select(repository.Graph.CommitAt(3).Sha);
         Assert.Null(repository.Comparison);
+
+        // So does a commit a page shows that the graph lacks (a lost reflog entry, 11.3, 15.9):
+        // its details show, not the comparison over them.
+        var lost = (await repo.GitAsync("commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "Lost")).StandardOutput.Trim();
+        await app.Operations.CompareBranchesAsync("refs/heads/main", Alpha);
+        Assert.NotNull(repository.Comparison);
+        repository.ShowCommit(lost);
+        Assert.Null(repository.MultiSelection);
+        Assert.False(repository.Details.IsMultiSelection);
+        await RepositoryOperationsTestSupport.WaitUntilAsync(() => repository.Details.Sha == lost, "the lost commit's details");
+    }
+
+    [Fact]
+    public async Task A_file_the_comparison_deletes_is_blamed_on_the_side_its_list_was_read_from()
+    {
+        // feature deletes old.txt, then edits a.txt: To's first parent lacks old.txt too (15.9).
+        using var repo = await TempRepo.CreateAsync("compare-blame");
+        await repo.WriteFile("a.txt", "a\n").WriteFile("old.txt", "old\n").CommitAsync("Base");
+        await repo.GitAsync("switch", "--quiet", "--create", "feature");
+        await repo.DeleteFile("old.txt").CommitAsync("Remove old");
+        await repo.CommitFileAsync("a.txt", "a\nfeature\n", "Edit a");
+        await repo.CheckoutAsync("main");
+        await repo.CommitFileAsync("b.txt", "b\n", "Main work");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        await app.Operations.CompareBranchesAsync("refs/heads/main", "refs/heads/feature");
+        var comparison = app.Repository.Comparison!;
+        var deleted = comparison.ChangedFiles.Single(file => file.Path == "old.txt");
+        Assert.Equal(FileChangeKind.Deleted, deleted.Kind);
+
+        var layer = new MenuLayerViewModel();
+        var (actions, recorder) = RecordingActions.Create();
+        app.Repository.MenuActions = actions;
+        Assert.True(app.Repository.OpenCompareFileMenu(layer, comparison, deleted, default, MenuOpenedBy.Pointer));
+        layer.Current!.Items.Single(item => item.Label == OperationTexts.MenuTexts.Blame).Invoke();
+
+        // The merge base, as the file's diff starts there, not feature's first parent.
+        Assert.Equal(
+            [$"ShowBlameAsync({new BlameRequest("old.txt", comparison.Old, OperationTexts.MenuTexts.Before(comparison.ToSha!))})"],
+            recorder.Calls.Select(call => call.ToString()));
+        Assert.Equal((await repo.GitAsync("merge-base", "main", "feature")).StandardOutput.Trim(), comparison.Old);
     }
 
     [Fact]

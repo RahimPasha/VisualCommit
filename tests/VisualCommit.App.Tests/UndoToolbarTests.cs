@@ -14,7 +14,7 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// The toolbar's Undo and Redo as the operations give them (docs/phase-5-design.md 1.1, 7.4; the
 /// report's part U, T0, T+ and T−): enabled with what they would do, or disabled with the first
-/// reason that holds, in 7.4's order: a user operation that runs (a background one gives none), an
+/// reason that holds, in 7.4's order: a user operation that runs or waits (a background one alone gives none), an
 /// operation in progress or conflicts (except those an apply's undo puts back), the interactive
 /// list, nothing to do, then the entry's own check against what the app last read, which an
 /// outside change makes fail and its return passes again; none before the refs are read and after
@@ -59,8 +59,21 @@ public class UndoToolbarTests
             return OperationReport.Done(string.Empty);
         })));
         AssertStates(app, undoable);
+
+        // A user operation that waits behind the background one is reason 1 too (7.4: "runs or
+        // waits"): a click would queue behind it and find the history moved.
+        var waits = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waiting = app.Repository.Queue.RunAsync(new GitOperation("Commit", "Committing…", OperationKind.Local, RefreshScope.Refs, async _ =>
+        {
+            await waits.Task;
+            return OperationReport.Done(string.Empty);
+        }));
+        AssertStates(app, new UndoAvailability(false, "Wait for Commit to finish", false, "Wait for Commit to finish"));
         background.SetResult();
+        waits.SetResult();
+        await waiting;
         await app.WaitForIdleAsync();
+        AssertStates(app, undoable);
 
         // 2. An operation in progress gives its reason to both, before "Nothing to redo" (UD14).
         await app.Operations.MergeAsync("refs/heads/feature/conflict", MergeMode.Default);

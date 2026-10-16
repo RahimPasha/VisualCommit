@@ -244,6 +244,12 @@ public sealed partial class BlameViewModel : GraphAreaPageViewModel
 
     private void Show(BlameResult blame)
     {
+        if (blame.IsSubmodule)
+        {
+            ShowMessage($"{FileName} is a submodule: it has no lines to blame", isError: false);
+            return;
+        }
+
         if (blame.IsBinary)
         {
             ShowMessage($"{FileName} is a binary file: it has no lines to blame", isError: false);

@@ -230,7 +230,8 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// The paths of the stash commits read so far, by full SHA: a commit never changes, so C12's
-    /// check and the undo history's reads before and after an apply or a pop read them once.
+    /// check, the undo history's reads before and after an apply or a pop, and an undo step's check
+    /// of a pop read them once.
     /// </summary>
     private readonly ConcurrentDictionary<string, Task<StashPaths>> _stashPaths = new(StringComparer.OrdinalIgnoreCase);
 
@@ -265,22 +266,38 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// <see cref="ReadStashPathsAsync"/>'s reads, side by side: what the stash's working-tree commit
-    /// and its index commit change against its base (both sides of a rename, <c>--no-renames</c>)
-    /// and, when it has a third parent, its untracked files (a stash made without them has two
-    /// parents: <c>^3</c> names nothing, the report's PD15).
+    /// changes against its base, with each path's status (<c>--name-status</c>: the paths it adds,
+    /// <see cref="StashPaths.Added"/>), and what its index commit changes (both sides of a rename,
+    /// <c>--no-renames</c>), and, when it has a third parent, its untracked files (a stash made
+    /// without them has two parents: <c>^3</c> names nothing, the report's PD15).
     /// </summary>
     private async Task<StashPaths> ReadStashPathsUncachedAsync(string stashCommit, CancellationToken cancellationToken)
     {
-        var changed = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit);
+        var changed = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-status", stashCommit + "^1", stashCommit);
         var staged = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit + "^2");
         var third = ResolveAsync(stashCommit + "^3", cancellationToken);
         await Task.WhenAll((Task[])[changed, staged, third]).ConfigureAwait(false);
         var untracked = await third.ConfigureAwait(false) is { } tree
             ? await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", tree).ConfigureAwait(false)
             : string.Empty;
-        return new StashPaths(SplitPaths(await changed.ConfigureAwait(false)), SplitPaths(untracked))
+
+        // "<status>\0<path>\0" per path: --no-renames gives one path to every status.
+        var statuses = SplitPaths(await changed.ConfigureAwait(false));
+        var paths = new List<string>(statuses.Length / 2);
+        var added = new List<string>();
+        for (var i = 0; i + 1 < statuses.Length; i += 2)
+        {
+            paths.Add(statuses[i + 1]);
+            if (statuses[i] == "A")
+            {
+                added.Add(statuses[i + 1]);
+            }
+        }
+
+        return new StashPaths(paths, SplitPaths(untracked))
         {
             Staged = SplitPaths(await staged.ConfigureAwait(false)),
+            Added = added,
         };
 
         static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);

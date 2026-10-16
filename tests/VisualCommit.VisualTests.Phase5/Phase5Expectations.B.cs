@@ -660,8 +660,8 @@ public static partial class Phase5Expectations
         /// <summary>The reads of HEAD's reflog (5.2), as the call log writes them.</summary>
         public static IReadOnlyList<string> HeadReflogReads { get; } =
         [
-            "git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 500 --format=%gD%x1f%H%x1f%P%x1f%gs%x1f%s HEAD --",
-            "git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 500 --date=raw --format=%gD%x1f%H HEAD --",
+            "git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 501 --format=%gD%x1f%H%x1f%P%x1f%gs%x1f%s HEAD --",
+            "git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 501 --date=raw --format=%gD%x1f%H HEAD --",
             "git rev-list --ignore-missing --stdin --not --branches --tags --remotes HEAD --",
         ];
 

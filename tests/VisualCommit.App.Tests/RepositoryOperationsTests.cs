@@ -666,6 +666,8 @@ public class RepositoryOperationsTests
 
         public int Waiting => 0;
 
+        public string? FirstWaitingTitle => null;
+
         public OperationResult? LastResult => null;
 
         public bool Has(string title) => _operations.Any(operation => operation.Title == title);

@@ -129,7 +129,7 @@ public sealed partial class Phase5ChecksP
         mark = app.LogMark();
         await MakeP25ChangesAsync(repo);
         await WaitForStatusReadAsync(app, 1, 3, mark);
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         AssertGraph(app, PartP.P0, PartP.Lanes, PartP.Working, showsDate: true);
         Assert.Equal(PartP.P25Status, await StatusAsync(repo));
         AssertUndoRedo(app, UndoRedoButtons.Nothing);
@@ -151,7 +151,7 @@ public sealed partial class Phase5ChecksP
         Assert.Equal([push.CommandText, pop.CommandText], app.StashCallsSince(calls).Select(call => call.CommandText));
         await AssertErrorDialogAsync(app, dialog);
         AssertStatus(app, PartP.Failed(PartP.CheckOut(PartP.AddGuideSha)), OperationStatusTone.Danger);
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         AssertP25Files(repo);
         Assert.Empty(await StashListAsync(repo));
         await AssertOnMainAsync(repo);
@@ -243,7 +243,7 @@ public sealed partial class Phase5ChecksP
         await CloseDialogAsync(app);
 
         // Step 8: the revert again (TP11); nothing changed in the whole part, HEAD's reflog aside
-        // on gits after 2.36, where step 6's refused merge wrote a no-op entry (design 15.9).
+        // on Git 2.38 and later, where step 6's refused merge wrote a no-op entry (design 15.9).
         calls = await RevertDescribeAsync(app, repo);
         Shot(app, "p27f-revert-staged");
         await AssertRowSelectedAsync(app, PartP.DescribeRow, "Describe the app");

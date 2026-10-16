@@ -112,7 +112,7 @@ public sealed partial class Phase5ChecksP
     {
         using var repo = await Scenarios.ProtectAsync();
         await MakeP25ChangesAsync(repo);
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo);
 
@@ -163,7 +163,7 @@ public sealed partial class Phase5ChecksP
         AssertWorkingRowSelected(app);
         Assert.Equal(PartP.P25Unstaged, FileRows(app, "UnstagedFileList"));
         Assert.Equal(PartP.P25Staged, FileRows(app, "StagedFileList"));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         AssertNoClippedText(app);
     }
 
@@ -277,7 +277,7 @@ public sealed partial class Phase5ChecksP
         AssertUndoRedo(app, UndoRedoButtons.CanRedo(DescribeCheckout));
         await AssertOnMainAsync(repo);
         Assert.Equal(PartP.P25Status, await StatusAsync(repo));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Empty(await StashListAsync(repo));
         await AssertNoBackupAsync(repo);
     }

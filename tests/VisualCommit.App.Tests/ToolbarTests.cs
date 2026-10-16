@@ -297,8 +297,8 @@ public class ToolbarTests
     [Fact]
     public async Task With_a_repository_Search_is_enabled_with_its_key_and_Undo_and_Redo_have_nothing_to_do()
     {
-        // docs/phase-5-design.md 1.1 and 7.4: until the undo history gives Undo and Redo a state,
-        // each is disabled with its reason 4; Search needs only the repository (11.2).
+        // docs/phase-5-design.md 1.1 and 7.4: with nothing in the undo history, Undo and Redo are
+        // each disabled with its reason 4; Search needs only the repository (11.2).
         var repository = new StateRepository(OpsRefs(), WorkingTreeStatus.Clean);
         using var viewModel = Open(repository);
         Assert.Equal((ToolbarViewModel.SearchText, true), (viewModel.Toolbar.SearchToolTip, viewModel.Toolbar.CanSearch));

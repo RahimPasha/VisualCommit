@@ -439,7 +439,7 @@ At 1100×700 (440 wide) the parts take about 90 + 6 + box + 6 + count + 6 + 22 +
 when the area is too narrow for the box's 120 the count is cut with "…" (its whole text in the
 tooltip), then hidden; the close button never moves out. While a Changes search runs, a 2-px
 determinate progress bar (`SearchProgress`, `VcAccentBrush`) lies along the bar's bottom edge, its
-help text and tooltip `Searched {k} of {n} commits`.
+help text and tooltip `Searched {k} of {n} commits` (`Searched {k} of 1 commit` for one, D113).
 
 Opening the bar puts the keyboard focus in the box with its text selected. The box searches as the
 user types, 300 ms after the last key (Commits) or 600 ms (Files, Changes), and at once on Enter when
@@ -662,7 +662,7 @@ and the close button (`ReflogClose`).
 `.git/logs`, which reftable lacks) with two calls whose rows are zipped by position, because no
 placeholder gives an entry's time together with its index (0.2):
 
-1. `git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 500
+1. `git log --walk-reflogs --no-show-signature --no-color --encoding=UTF-8 --ignore-missing -z -n 501
    --format=%gD%x1f%H%x1f%P%x1f%gs%x1f%s <full ref> --`: the selector, the commit, its parents, the
    entry's message and the commit's subject.
 2. The same walk with `--date=raw --format=%gD%x1f%H`: the selector becomes `<ref>@{<seconds>
@@ -1844,12 +1844,14 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   block and failed with git's raw output: `UndoStepRefusalTests`), the undo walks a folder with
   `GitRepository.FilesUnder`, and phase 1's `AllIgnoredAsync` asks through `IgnoredAmongAsync`.
 - **A merge git refuses for something staged writes a reflog entry** (0.7, 7.7; found by CI run
-  38853641791 in P27): Git 2.43, 2.55 and 2.56 (exit 2, `Merge with strategy ort failed.`) write a
-  no-op entry `merge <the ref>: updating HEAD` into HEAD's reflog, its old and new value both HEAD's
-  commit; Git 2.36 writes none, and no git writes one for a merge refused for an unstaged change.
+  38853641791 in P27): Git 2.38 and later (2.38.0, 2.39.0, 2.43, 2.55 and 2.56; exit 2, `Merge
+  with strategy ort failed.`) write a no-op entry `merge <the ref>: updating HEAD` into HEAD's
+  reflog, its old and new value both HEAD's commit; Git 2.32.0, 2.34.1, 2.36.0 and 2.37.3 write none
+  (replayed by the review before the gate with MinGit), and no git writes one for a merge refused
+  for an unstaged change.
   0.7's "A refusal changes nothing: … HEAD's reflog" holds for the checkouts its row is about, and
   7.7's "a refused action still leaves HEAD's reflog as it was" for what the app's own reads write
-  (nothing); a refused merge on 2.43 and later adds this one entry. The app does not mind it: the
+  (nothing); a refused merge on 2.38 and later adds this one entry. The app does not mind it: the
   undo recording compares HEAD and the scope's refs before and after (7.7) and never reads HEAD's
   reflog (only a remote-tracking ref's, for a force push's lease, 7.10), so the refused merge records
   nothing (P27 asserts `Nothing to undo` after it on every git); the reflog page reads again after
@@ -1892,9 +1894,11 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
     decides no empty stop) and, for conflicts, `git ls-files --unmerged -z`
     (`ReadConflictedPathsAsync`), not the whole status.
   - A stash commit's paths (`ReadStashPathsAsync`, now with what its index commit stages,
-    `StashPaths.Staged`) are read once per stash commit named by its full id, the three reads side
-    by side, and shared by C12's check (9.3) and the recording's reads before and after an apply or
-    a pop; a name such as `stash@{0}` is read each time.
+    `StashPaths.Staged`, and, since the merge with the review's other fixes, the paths it adds,
+    `StashPaths.Added`, from the same `diff-tree` with `--name-status`) are read once per stash
+    commit named by its full id, the three reads side by side, and shared by C12's check (9.3), the
+    recording's reads before and after an apply or a pop, `PutBackUnclearedStashAsync` and an undo
+    step's check of a `StashPop` (below); a name such as `stash@{0}` is read each time.
   - **A file's raw bytes are kept as a blob only where an undo writes them back** (7.7 step 2,
     `UndoScope.KeepsFileBytes`): the read before an apply, a pop or a restore
     (`UndoScope.BeforeAction`). The read before a discard and every read after an action
@@ -1907,7 +1911,8 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
     the content it overwrites, once. A `FilesTo` whose bytes were never kept is refused (`the
     commits no longer exist`) and writes nothing; a file is never deleted for want of its bytes.
     The recording compares files by path and SHA-256 (`RecordedFile.SameContent`), and a file
-    exists when it has a SHA-256.
+    exists when it has a SHA-256 other than `RecordedFile.InTheWay` (below), the mark of a path
+    where something other than a file stands, which has no bytes to keep.
   - The git calls inside the operation (Git 2.55, the ops scenario, before → after): commit 6 → 6;
     checkout of a branch 8 → 6; the automatic stash's checkout 15 → 13; merge 14 → 10; a
     cherry-pick that stops 14 → 10; mixed reset 13 → 10; hard reset with a local change 25 → 18;
@@ -1915,7 +1920,11 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
     tag 5 → 5; branch deletion 9 → 9; undo and redo of an apply 10 → 10 each, of a discard 6 → 6
     each (a full status became `ls-files --unmerged`), of a stash 8 → 8; undo of a hard reset
     13 → 13, its redo 20 → 16. 7.7's push config read, the HEAD read of the kinds that never use it
-    and the stash's own reads stay as 7.7 and 0.5 have them.
+    and the stash's own reads stay as 7.7 and 0.5 have them. The review's other fixes (below) add
+    to these counts: a stash with its untracked files lists the untracked folders first
+    (`ls-files --others --directory`), and an undo's `StashPop` reads the stash's paths through
+    the shared read (three side by side, then `ls-tree`; none when the stash was read before) and
+    asks `check-ignore` about the files that stand where the stash adds one, when any does.
 - **The reflog's lost marks** (5.2): a read again for the same refs (`RepoRefs.Fingerprint`) and the
   same distinct commits takes the last walk's marks; the walk runs again when an entry is new or a
   ref moved (`ReflogViewModelTests.A_read_again_for_the_same_refs_and_commits_takes_the_last_walks_marks`).
@@ -1925,6 +1934,103 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
   input until a file with thousands of commits had all its rows.
 - **Blame's gutter** (4.2) finds a line's run by a binary search over the runs, which follow one
   another in line order.
+
+The review before the gate (status step 25) found these; each is pinned by the tests named.
+
+- **What stands in a file's way** (7.3, 7.9, 7.10; `WorkingTreeFiles.IsInTheWayOfFile`): git's
+  `restore --source=<snapshot> --worktree` writes with force, so a folder holding files where the
+  snapshot has a file, or a file where it has a folder, goes without a word (2.36 and 2.55 alike),
+  and `File.Exists` had taken either for absence, which a discard's undo expects. The recorded
+  files (`RecordedFile.InTheWay`, neither a hash nor absence), the restore bar's hash of them and
+  its phase-2 fingerprint tell such a path apart, so the simulation refuses with `1 file has
+  changed since: notes`; the step's own check of a `RestoreSnapshot` refuses the same before it
+  writes (also at its place, after a hard reset's Keep move, where the state left was itself a
+  folder, and for the backups list's restores, which record none); and `RestoreSnapshotAsync`
+  itself throws (`Nothing was restored: …`) for phase 2's restore bar. An empty folder is replaced
+  and loses nothing, so it is no reason (`UndoStepRefusalTests`).
+- **A stash's pop and ignored files** (7.3, D169): `stash pop` overwrites an ignored file where the
+  stash adds a staged one (`git add -f`, or a path `info/exclude` ignores), which neither the status
+  nor the stash's untracked part shows. The undo's `StashPop` check adds the Keep move's ignored-files
+  guard against the stash's base (the paths the stash adds, `StashPaths.Added`: `diff-tree
+  --name-status <s>^1 <s>`'s `A`, from the stash's paths as `ReadStashPathsAsync` reads them once,
+  which also give the check its untracked files), refusing with `1 ignored file is in the way: …`
+  (the undo of a stash and of the automatic stash's checkout; `UndoStepRefusalTests`, and
+  `UndoEffectTests.An_undos_pop_checks_what_stands_in_its_way_from_the_stashs_paths_as_read_once`
+  for the shared read). The menus' Apply and Pop keep git's behaviour, as 9.3 says (Q5).
+- **A stash git could not finish** (0.7, 9.2): a tracked file held open on Windows stops not git's
+  clean but its reset, after it rewrote every other tracked file, with no index written
+  (`unable to unlink old 'a.txt'`, `Could not reset index file`). `PutBackUnclearedStashAsync` puts
+  back from the stash both the untracked files and the tracked files that no longer match it
+  (`git diff --name-only <stash>`, then `git restore --source=<stash> --worktree`); "They are also
+  saved in the stash" is said only when every path matches again. The undo's own `StashPush` puts
+  back the same before its step fails (`ProtectedChangesTests`, `RepositoryOperationsProtectTests`).
+- **A Keep move git could not finish** (7.3, 7.5): `read-tree -m -u` that fails at a file held open
+  goes on past it and writes no index; the move's other files are put back from the index
+  (`checkout-index -f`, which skips the held file) and the files only the target has are deleted
+  where they hold its version, then the step fails with git's line (`UndoStepRefusalTests`).
+- **Empty untracked folders** (9.2): `stash push --include-untracked` removes them (its `clean -d`)
+  and no stash holds a folder; `StashAsync` makes again those that were empty before it
+  (`ls-files --others --directory`), for the automatic stash, its redo and the toolbar's stash
+  alike (`ProtectedChangesTests`).
+- **D75 decided inside the operation** (7.10, D124): the backups list's "Restore the discarded
+  files…" and "Restore the changes…", and the restore bar's phase-2 Restore, save the files that
+  differ when their operation runs, also one written while the question was open or while it
+  waited in the queue (the question still names those it found when it asked). Their backups'
+  clean-up follows the recording, whose entry keeps the snapshot restored from (7.8), as every
+  operation that saves a backup does (`UndoRestoreTests`, `UndoStepTests`).
+- **The restore bar's Restore is the discard's Undo only while no operation of the user runs or
+  waits** (7.9): queued behind one that records, the Undo would find the history moved and do
+  nothing, or undo that operation instead. Otherwise it runs as in phase 2, after it, recorded as
+  an entry of its own; after its hash of the discarded files it looks at the entry and the queue
+  again (`UndoStepTests`). The toolbar's Undo and Redo give 7.4's first reason for a user operation
+  that waits behind a background one too (`UndoToolbarTests`).
+- **Two tabs on one worktree take turns at the history** (7.1, 7.5): a step holds the history's
+  turn (`UndoHistory.TakeTurnAsync`) from its check of the entry at the cursor to its cursor move,
+  and a recording around its writes, so that the other tab's entry lands after the move, never in
+  the stepped entry's place (`UndoStepTests`).
+- **The filter follows the app's own branch changes** (8.1, 8.4): create (and a remote branch's
+  tracking branch), rename and delete call the `Follow…` members inside their operations, and so
+  do the undo's steps (an undone rename moves the entries back, an undone creation removes them,
+  a branch brought back in solo mode is soloed) and the backups list's "Restore branch"
+  (`RepositoryViewModelFilterTests`).
+- **A page's commit the graph lacks ends a branch comparison** (6.2, 11.3) as a selected commit
+  does: its details would otherwise show under the comparison. **A file a comparison deletes is
+  blamed on the side the list was read from** (6.4: the merge base or From, as its diff is),
+  captioned `before {To}` (`RepositoryViewModelFilterTests`).
+- **The comparison's counts are kept apart from its lists** (6.4): a read by the switch asks for
+  them where they are missing (the first read cancelled or failed), and a swap back shows the
+  counts read before. With no common history the switch is not shown (6.3: three-dot is not
+  offered) (`CompareViewModelTests`).
+- **A submodule has no lines to blame** (4.2): git's blame fails on a gitlink (`unsupported file
+  type`, `no such path … in …`); the page then says `{name} is a submodule: it has no lines to
+  blame`, as for a binary file, whichever menu or click opened it. The menus still offer the item
+  (`BlameTests`, `BlameViewModelTests`).
+- **A graph swapped during a search does not stop its git call** (3.4, D174): the pass that gives
+  git the old graph's rows ends after the call that runs (the git layer looks at the token only
+  between calls), the rows git reported are kept, and the next pass gives git the new graph's rows
+  not searched yet; a search waiting for rows reads the new graph at once
+  (`SearchViewModelTests`). The progress text has its singular, `Searched {k} of 1 commit` (D113).
+- **The reflog page** (5.2): a newer read cancels the one it replaces, whose git calls (the two
+  walks, the lost-commit walk, the force pushes' reflogs) stop; and a reflog with more entries than
+  the page reads (500) says so in the footer, `Only the newest 500 entries are shown`, before the
+  skipped entries' text (`ReflogResult.More`, read as one entry past the limit). The force push's
+  lease rule is one, `ReflogResult.ForcePushLease`, read as deep by the list's item and the restore
+  (`ReflogResult.ForcePushLeaseDepth`) (`ReflogTests`, `ReflogViewModelTests`).
+- **The activity log keeps no rows of a worktree not shown** (2.3): they held call records past the
+  call log's bounds; `Show` makes them again (`ActivityLogViewModelTests`).
+- **One rule where two had grown** (the review's code-quality findings): the blame's and the
+  resolver's result's number column is one margin (`CodeNumberMargin`, the result's with its line
+  tints) and `PointAt` is `CodeTextEditor`'s; the three pages share their Esc rule (`PageEscape`);
+  "the exact state" of part P is `TempRepo.ExactStateAsync`, which the pins, the scripted run, the
+  real-window pass and the App and Git tests all read; the reflog's lost mark's tooltip is bound to
+  its constant; the git parsers decode UTF-8 with `DiffParser.DecodeUtf8`. 8.5's store tests are
+  `GraphFilterChangesTests`' (not a `SessionStoreTests`, which does not exist), and the toggle's
+  view tests are `HideAndSoloTests`'.
+- **Tests that the default run's load made fail** (CI run 38863530446): the app log is read while
+  the app may append to it only through `AppLogFile` (a plain `File.ReadAllText` is refused on
+  Windows while an entry is written); the 60,000-line diff's time is compared with a 6,000-line
+  one's under the same load instead of with 3 s; and the last wait for `git mergetool` to start
+  takes D185's form (`Scenarios.MergeToolTimeout`, outside the hang watchdog).
 
 ## 16. Work breakdown
 

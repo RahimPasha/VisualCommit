@@ -381,8 +381,8 @@ public partial class CommitGraphControlTests
         Assert.False(bar.IsIndeterminate);
         Assert.Equal("GraphReloading", AutomationProperties.GetAutomationId(bar));
 
-        // The lead's join sets these (WP7's reload of a filter, the search's view model); their
-        // setters are the view model's own, so the test sets them as that code will.
+        // A filter's reload sets it (ApplyGraphFilterAsync); its setter is the view model's own,
+        // so this view test sets it directly.
         SetViewModelProperty(viewModel, nameof(RepositoryViewModel.IsReloadingGraph), true);
         var reloading = host.Capture();
 
@@ -427,7 +427,7 @@ public partial class CommitGraphControlTests
         Assert.False(bar.IsIndeterminate);
     }
 
-    /// <summary>Sets one of the view model's properties whose setter is its own (the lead's joins set them).</summary>
+    /// <summary>Sets one of the view model's properties whose setter is private, for a view test that needs the state without the work that sets it.</summary>
     private static void SetViewModelProperty(RepositoryViewModel viewModel, string name, object value) =>
         typeof(RepositoryViewModel).GetProperty(name)!.SetValue(viewModel, value);
 

@@ -45,6 +45,37 @@ public class ReflogViewModelTests
         page.OnRefsRead(host.Refs);
         await WaitForAsync(() => page.ReadsShown == 2);
         Assert.Equal("1 entry is not shown: it names no commit that exists", page.Footer);
+
+        // More entries than the page reads: the footer says so first (5.2, 15.9).
+        repository.Reflogs["HEAD"] = repository.Reflogs["HEAD"] with { More = true };
+        page.OnRefsRead(host.Refs);
+        await WaitForAsync(() => page.ReadsShown == 3);
+        Assert.Equal("Only the newest 500 entries are shown. 1 entry is not shown: it names no commit that exists", page.Footer);
+        repository.Reflogs["HEAD"] = repository.Reflogs["HEAD"] with { Skipped = 0 };
+        page.OnRefsRead(host.Refs);
+        await WaitForAsync(() => page.ReadsShown == 4);
+        Assert.Equal(ReflogViewModel.MoreText, page.Footer);
+    }
+
+    [Fact]
+    public async Task A_newer_read_cancels_the_lost_commits_walk_of_the_read_it_replaces()
+    {
+        var repository = new PageFakeRepository();
+        repository.Reflogs["HEAD"] = new ReflogResult([Entry("HEAD@{0}", 0, Notes, "a", "Write the notes", 27), Entry("HEAD@{1}", 1, Shortcut, "b", "Try a shortcut", 23)], 0);
+        var host = new RecordingPageHost(repository);
+        using var page = new ReflogViewModel(host, "HEAD");
+        await page.LoadAsync();
+
+        // Two refreshes in a row (15.9): the first read's walk stops; only the second one's shows.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        repository.LostGate = gate;
+        page.OnRefsRead(host.Refs);
+        await WaitForAsync(() => repository.ReadCount("lost") == 2);
+        page.OnRefsRead(host.Refs);
+        await WaitForAsync(() => repository.CancelledLostWalks == 1);
+        gate.SetResult();
+        await WaitForAsync(() => page.ReadsShown == 2);
+        Assert.Equal((1, 3), (repository.CancelledLostWalks, repository.ReadCount("lost")));
     }
 
     [Fact]
@@ -243,9 +274,9 @@ public class ReflogViewModelTests
         using var page = new ReflogViewModel(host, source: null);
 
         // 7.10: the lease is the "update by push" entry whose older neighbour is the backup's commit.
-        Assert.Equal(Pushed, ReflogViewModel.ForcePushLease(remote, Before));
-        Assert.Null(ReflogViewModel.ForcePushLease(remote, Pushed));
-        Assert.Null(ReflogViewModel.ForcePushLease(remote with { Entries = [remote.Entries[0] with { Message = "fetch: forced-update" }, remote.Entries[1]] }, Before));
+        Assert.Equal(Pushed, remote.ForcePushLease(Before));
+        Assert.Null(remote.ForcePushLease(Pushed));
+        Assert.Null((remote with { Entries = [remote.Entries[0] with { Message = "fetch: forced-update" }, remote.Entries[1]] }).ForcePushLease(Before));
 
         await page.LoadAsync();
         var row = Assert.IsType<BackupRowViewModel>(Assert.Single(page.Rows));

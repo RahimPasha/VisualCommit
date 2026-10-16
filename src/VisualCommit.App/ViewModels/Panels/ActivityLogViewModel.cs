@@ -281,9 +281,11 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
     /// <summary>Shows the log of <paramref name="source"/>'s worktree, or hides the panel for a tab without a repository (null).</summary>
     public void Show(ActivityLogSource? source)
     {
+        var previous = Current;
         if (source is null)
         {
             Current = null;
+            Release(previous);
             return;
         }
 
@@ -313,6 +315,25 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
 
         Current = worktree;
         OnPropertyChanged(nameof(RepositoryName));
+        if (!ReferenceEquals(previous, worktree))
+        {
+            Release(previous);
+        }
+    }
+
+    /// <summary>
+    /// A worktree no longer shown keeps no rows (15.9): they hold call records the call log may
+    /// drop under its bounds, and <see cref="Show"/> makes them again. What the user left (which
+    /// rows are open, where the list was scrolled) is kept apart from the rows. Called after the
+    /// view has left them.
+    /// </summary>
+    private static void Release(ActivityLogWorktree? worktree)
+    {
+        if (worktree is not null)
+        {
+            worktree.Rows.Clear();
+            worktree.IsStale = true;
+        }
     }
 
     /// <summary>Opens the panel (the status bar's toggle).</summary>

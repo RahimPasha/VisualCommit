@@ -76,6 +76,13 @@ public sealed partial class CompareViewModel : ObservableObject, IDisposable
     private readonly ICompareHost _host;
     private readonly ChangedFileList _fileList = new();
     private readonly Dictionary<(string From, string To, bool ThreeDot), CompareResult> _read = [];
+
+    /// <summary>
+    /// The counts read, by From and To as asked and as resolved (15.9): kept apart from the lists,
+    /// so that a list read without them (the switch's) never leaves the line empty, and a read
+    /// that a swap or the switch cancelled is made again where they are still missing.
+    /// </summary>
+    private readonly Dictionary<(string From, string To), CompareCounts> _counts = [];
     private CancellationTokenSource? _loading;
     private bool _disposed;
 
@@ -92,6 +99,7 @@ public sealed partial class CompareViewModel : ObservableObject, IDisposable
         From = from;
         To = to;
         IsBranches = isBranches;
+        OffersAllDifferences = isBranches;
         FileList = host.Settings.Current.FileList;
         _fileList.SetMode(FileList);
     }
@@ -149,6 +157,13 @@ public sealed partial class CompareViewModel : ObservableObject, IDisposable
     /// <summary>The switch <c>All differences</c> (6.3): the two trees instead of the changes since the merge base. A branch comparison starts without it (FD9).</summary>
     [ObservableProperty]
     public partial bool AllDifferences { get; set; }
+
+    /// <summary>
+    /// The switch shows (6.3): for branches, until their first read finds no common history, when
+    /// the list is the two trees already and three-dot is not offered (15.9).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool OffersAllDifferences { get; private set; }
 
     /// <summary>The list is being read: <c>Loading…</c> shows under the header (6.4, 12.5).</summary>
     [ObservableProperty]
@@ -342,13 +357,22 @@ public sealed partial class CompareViewModel : ObservableObject, IDisposable
 
         try
         {
-            if (!_read.TryGetValue(key, out var result))
+            // The counts are read with any list while they are missing for these sides: also by
+            // the switch when the first read was cancelled or failed.
+            var needCounts = IsBranches && !_counts.ContainsKey((from.Revision, to.Revision));
+            if (!_read.TryGetValue(key, out var result) || (needCounts && result.Counts is null))
             {
-                result = await _host.CompareAsync(from.Revision, to.Revision, threeDot, countCommits: IsBranches && !keepCounts, loading.Token);
+                result = await _host.CompareAsync(from.Revision, to.Revision, threeDot, countCommits: needCounts, loading.Token);
                 _read[key] = result;
 
                 // The same comparison by the resolved SHAs, which the switch and the swap read by.
                 _read[(result.From, result.To, threeDot)] = result;
+            }
+
+            if (IsBranches && result.Counts is { } counts)
+            {
+                _counts[(from.Revision, to.Revision)] = counts;
+                _counts[(result.From, result.To)] = counts;
             }
 
             if (!ReferenceEquals(_loading, loading))
@@ -356,7 +380,7 @@ public sealed partial class CompareViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            Show(result, keepCounts);
+            Show(result);
         }
         catch (OperationCanceledException) when (loading.IsCancellationRequested)
         {
@@ -382,16 +406,23 @@ public sealed partial class CompareViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void Show(CompareResult result, bool keepCounts)
+    private void Show(CompareResult result)
     {
         FromSha = result.From;
         ToSha = result.To;
         UpdateLinks();
         Old = result.Old;
 
-        if (!keepCounts && IsBranches && result.Counts is { } counts)
+        if (IsBranches && _counts.TryGetValue((result.From, result.To), out var counts))
         {
             CountsText = Counts(counts, To.Label, From.Label);
+        }
+
+        // No common history: the list is the two trees, and the switch is not offered (6.3); a
+        // merge base is the same both ways, so a swap keeps it so.
+        if (result.Base == CompareBase.NoCommonHistory)
+        {
+            OffersAllDifferences = false;
         }
 
         if (result.IsSameCommit)

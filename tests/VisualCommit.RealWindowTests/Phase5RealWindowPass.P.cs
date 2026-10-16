@@ -79,7 +79,7 @@ public partial class Phase5RealWindowPass
     {
         using var repo = await Scenarios.ProtectAsync();
         await MakeP25ChangesAsync(repo);
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
         using var app = Launch(repo);
         var name = NameOf(repo);
         var describeCheckout = PartP.CheckoutEntry(PartP.DescribeSha[..7]);
@@ -134,7 +134,7 @@ public partial class Phase5RealWindowPass
         Assert.Equal("refs/heads/main", await GitTextAsync(repo, "symbolic-ref", "-q", "HEAD"));
         Assert.Equal(PartP.MainWorkSha, await repo.HeadAsync());
         Assert.Equal(PartP.P25Status, await GitLinesAsync(repo, "status", "--porcelain=v1", "--untracked-files=all", "--ignored"));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Empty(await GitLinesAsync(repo, "stash", "list"));
         Assert.Empty(await repo.BackupRefsAsync());
         Assert.Equal([PartP.ResetToHeadReflog, PartP.DescribeToMainReflog], (await GitLinesAsync(repo, "log", "-g", "--format=%gs", "HEAD")).Take(2));
@@ -153,25 +153,6 @@ public partial class Phase5RealWindowPass
         repo.WriteFile("src/lib.txt", PartP.LibStagedAndMore)
             .WriteFile("src/app.txt", PartP.AppUnstaged)
             .WriteFile("scratch.txt", PartP.Scratch);
-    }
-
-    /// <summary>
-    /// "The exact state" of a repository (the report's part P; the scripted run's
-    /// <c>ExactStateAsync</c>): HEAD, every ref with its object, the index, the status with the
-    /// untracked and ignored files, and every file of the working tree outside <c>.git</c> with its
-    /// contents, in ordinal order, joined into one text to be compared whole.
-    /// </summary>
-    private static async Task<string> ExactStateAsync(TempRepo repo)
-    {
-        var head = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
-        var refs = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
-        var index = (await repo.GitAsync("ls-files", "--stage")).StandardOutput;
-        var status = (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
-        var files = Directory.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories)
-            .Where(file => !Path.GetRelativePath(repo.Path, file).StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
-        return string.Join('\n', [head, refs, index, status, .. files]);
     }
 
     /// <summary>Plain git's output trimmed, or null when the call fails (<c>symbolic-ref -q HEAD</c> on a detached HEAD).</summary>

@@ -98,6 +98,9 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _pending;
     private CancellationTokenSource? _running;
     private TaskCompletionSource? _rowsCame;
+
+    /// <summary>1 when the graph was replaced while a pass of the running search gives git the old graph's rows; the pass ends after its git call (D174, 15.9).</summary>
+    private int _graphReplaced;
     private CommitGraphData? _watched;
     private int _generation;
     private bool _disposed;
@@ -186,8 +189,8 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(ProgressText))]
     public partial int ProgressMaximum { get; private set; }
 
-    /// <summary>The progress bar's help text and tooltip: <c>Searched {k} of {n} commits</c>.</summary>
-    public string ProgressText => string.Create(CultureInfo.InvariantCulture, $"Searched {ProgressValue} of {ProgressMaximum} commits");
+    /// <summary>The progress bar's help text and tooltip: <c>Searched {k} of {n} commits</c>, <c>Searched {k} of 1 commit</c> (D113).</summary>
+    public string ProgressText => string.Create(CultureInfo.InvariantCulture, $"Searched {ProgressValue} of {ProgressMaximum} {(ProgressMaximum == 1 ? "commit" : "commits")}");
 
     /// <summary>The matches as the graph marks them; <see cref="GraphSearchMarks.None"/> while the box is empty.</summary>
     public GraphSearchMarks Marks { get; private set; } = GraphSearchMarks.None;
@@ -268,7 +271,9 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     /// <summary>
     /// The repository's graph was replaced (a refresh loaded it again, 3.4): the marks and the
     /// count stay, the author and SHA matches are made again over its rows, and git is given only
-    /// its rows not searched yet.
+    /// its rows not searched yet. A git call that runs is not stopped (D174, 15.9): the search
+    /// goes on with the new graph's rows once it has ended, and a search waiting for rows reads
+    /// the new graph at once.
     /// </summary>
     public void OnGraphReplaced()
     {
@@ -279,10 +284,19 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
 
         Watch(_host.Graph);
         Apply();
-        if (SearchedText.Length > 0 && !IsPending)
+        if (SearchedText.Length == 0 || IsPending)
+        {
+            return;
+        }
+
+        if (_running is null)
         {
             Run();
+            return;
         }
+
+        Volatile.Write(ref _graphReplaced, 1);
+        _rowsCame?.TrySetResult();
     }
 
     /// <summary>The graph's selection changed: <c>{k} of {n}</c> follows it.</summary>
@@ -505,6 +519,9 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
         {
             while (!token.IsCancellationRequested)
             {
+                // A pass over the graph as it is now; a graph replaced meanwhile ends it after the
+                // git call that runs (SearchProgress), and the next pass reads the new one.
+                Volatile.Write(ref _graphReplaced, 0);
                 var graph = _host.Graph;
                 var rows = Unsearched(graph);
                 if (rows.Count == 0)
@@ -521,8 +538,30 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
                     continue;
                 }
 
-                var progress = new SearchProgress(this, generation, rows, _searched.Count(sha => graph.IndexOf(sha) >= 0));
-                await _host.SearchAsync(mode, text, rows, sha => Arrived(generation, sha), progress, token);
+                using var pass = CancellationTokenSource.CreateLinkedTokenSource(token);
+                var progress = new SearchProgress(this, generation, rows, _searched.Count(sha => graph.IndexOf(sha) >= 0), pass);
+                try
+                {
+                    await _host.SearchAsync(mode, text, rows, sha => Arrived(generation, sha), progress, pass.Token);
+                }
+                catch (OperationCanceledException) when (pass.IsCancellationRequested && !token.IsCancellationRequested)
+                {
+                    // The graph was replaced: the rows git searched are kept, the others go to
+                    // git again with the new graph's.
+                    if (generation != _generation)
+                    {
+                        return;
+                    }
+
+                    for (var i = 0; i < Math.Min(progress.Reported, rows.Count); i++)
+                    {
+                        _searched.Add(rows[i]);
+                    }
+
+                    ApplyArrived();
+                    continue;
+                }
+
                 if (generation != _generation || token.IsCancellationRequested)
                 {
                     return;
@@ -834,8 +873,9 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     /// matches it handed over for them, so that Enter can go on (<see cref="IsKnown"/>), and a
     /// Changes search's progress bar follows.
     /// </summary>
-    private sealed class SearchProgress(SearchViewModel search, int generation, IReadOnlyList<string> rows, int searchedBefore) : IProgress<int>
+    private sealed class SearchProgress(SearchViewModel search, int generation, IReadOnlyList<string> rows, int searchedBefore, CancellationTokenSource pass) : IProgress<int>
     {
+        private readonly CancellationToken _pass = pass.Token;
         private int _reported;
 
         /// <summary>How many of the rows given git has searched.</summary>
@@ -844,9 +884,17 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
         public void Report(int value)
         {
             Volatile.Write(ref _reported, value);
+
+            // Between two git calls (the git layer looks at the token before it starts the next):
+            // a graph replaced meanwhile ends the pass here, the call that ran having finished.
+            if (Volatile.Read(ref search._graphReplaced) == 1 && value < rows.Count)
+            {
+                pass.Cancel();
+            }
+
             search.OnUi(() =>
             {
-                if (generation == search._generation && !search._disposed)
+                if (generation == search._generation && !search._disposed && !_pass.IsCancellationRequested)
                 {
                     // Git hands over a call's matches before it reports the call's rows searched.
                     for (var i = 0; i < Math.Min(value, rows.Count); i++)

@@ -620,7 +620,7 @@ public class Phase5ScenarioTests
         var target = await ShaOfAsync(repo, "Describe the app");
         await repo.WriteFile("src/lib.txt", "lib\nstaged\n").GitAsync("add", "--", "src/lib.txt");
         repo.WriteFile("src/lib.txt", "lib\nstaged\nand more\n").WriteFile("src/app.txt", "app\nunstaged\n").WriteFile("scratch.txt", "scratch\n");
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
 
         // Design 9.2's steps 3 and 4, as the app runs them (stash push without GIT_LITERAL_PATHSPECS, D108).
         await repo.GitWithEnvironmentAsync(WithoutLiteralPathspecs, "stash", "push", "--include-untracked", "--message", $"Auto stash before checking out {target[..7]}");
@@ -634,7 +634,7 @@ public class Phase5ScenarioTests
 
         await repo.GitAsync("switch", "main");
         await repo.GitAsync("stash", "pop", "--index", "stash@{0}");
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Equal(Protect.SettingsLocal, WorkingFile(repo, "settings.local.json"));
     }
 
@@ -668,31 +668,32 @@ public class Phase5ScenarioTests
         {
             using var repo = await Scenarios.ProtectAsync();
             repo.WriteFile("src/app.txt", "app\nlocal\n");
-            var before = await ExactStateAsync(repo);
+            var before = await repo.ExactStateAsync();
             var reflog = HeadLogFile(repo);
             var refused = await repo.GitAllowingFailureAsync(operation);
             Assert.False(refused.Succeeded, $"git {operation[0]} was not refused.");
             Assert.Equal(["src/app.txt"], BlockedPaths(refused.StandardError, "error: Your local changes to the following files would be overwritten by merge:"));
-            Assert.Equal(before, await ExactStateAsync(repo));
+            Assert.Equal(before, await repo.ExactStateAsync());
             Assert.Equal(reflog, HeadLogFile(repo));
             Assert.Empty(InProgressFiles(repo));
         }
 
         // A staged change to a file other does not touch refuses them too, git naming no conflict.
-        // Git after 2.36 (2.43, 2.55 and 2.56 seen) writes a no-op entry into HEAD's reflog for the
-        // refused merge, its old and new value HEAD's commit; 2.36 writes none (design 15.9).
+        // Git from 2.38 on (2.38.0, 2.39.0, 2.43, 2.55 and 2.56 seen) writes a no-op entry into
+        // HEAD's reflog for the refused merge, its old and new value HEAD's commit; 2.32.0, 2.34.1,
+        // 2.36.0 and 2.37.3 write none (design 15.9).
         using (var merge = await Scenarios.ProtectAsync())
         {
             await merge.WriteFile("README.md", "# Protect\n\nStaged.\n").GitAsync("add", "--", "README.md");
-            var before = await ExactStateAsync(merge);
+            var before = await merge.ExactStateAsync();
             var head = Subject(await merge.GitAsync("rev-parse", "HEAD"));
             var reflog = HeadLogFile(merge);
             var refused = await merge.GitAllowingFailureAsync("merge", "--no-edit", "refs/heads/other");
             Assert.False(refused.Succeeded, "git merge was not refused.");
             Assert.Contains("Your local changes to the following files would be overwritten by merge:", refused.StandardError + refused.StandardOutput, StringComparison.Ordinal);
-            Assert.Equal(before, await ExactStateAsync(merge));
+            Assert.Equal(before, await merge.ExactStateAsync());
             Assert.Empty(InProgressFiles(merge));
-            if (await SequenceTestSupport.GitVersionAsync(merge) is { Major: 2, Minor: 36 })
+            if (await SequenceTestSupport.GitVersionAsync(merge) < new GitVersion(2, 38, 0))
             {
                 Assert.Equal(reflog, HeadLogFile(merge));
             }
@@ -705,11 +706,11 @@ public class Phase5ScenarioTests
 
         using var pick = await Scenarios.ProtectAsync();
         await pick.WriteFile("README.md", "# Protect\n\nStaged.\n").GitAsync("add", "--", "README.md");
-        var pickBefore = await ExactStateAsync(pick);
+        var pickBefore = await pick.ExactStateAsync();
         var pickRefused = await pick.GitAllowingFailureAsync("cherry-pick", "refs/heads/other~1");
         Assert.False(pickRefused.Succeeded, "git cherry-pick was not refused.");
         Assert.Contains("error: your local changes would be overwritten by cherry-pick.", pickRefused.StandardError, StringComparison.Ordinal);
-        Assert.Equal(pickBefore, await ExactStateAsync(pick));
+        Assert.Equal(pickBefore, await pick.ExactStateAsync());
         Assert.Empty(InProgressFiles(pick));
     }
 
@@ -1036,13 +1037,13 @@ public class Phase5ScenarioTests
     {
         using var repo = await Scenarios.ProtectAsync();
         change(repo);
-        var before = await ExactStateAsync(repo);
+        var before = await repo.ExactStateAsync();
 
         var refused = await repo.GitAllowingFailureAsync("switch", "--no-guess", "other");
 
         Assert.Equal(1, refused.ExitCode);
         Assert.Equal(paths, BlockedPaths(refused.StandardError, header));
-        Assert.Equal(before, await ExactStateAsync(repo));
+        Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Equal("main", await repo.CurrentBranchAsync());
     }
 
@@ -1053,23 +1054,6 @@ public class Phase5ScenarioTests
         var start = Array.IndexOf(lines, header);
         Assert.True(start >= 0, $"Git did not say \"{header}\". It said:\n{text}");
         return [.. lines.Skip(start + 1).TakeWhile(line => line.StartsWith('\t')).Select(line => line[1..])];
-    }
-
-    /// <summary>
-    /// Everything a refused operation must leave as it was: HEAD, every ref, the index's entries,
-    /// the status with the ignored files, and the working tree's files and their contents.
-    /// </summary>
-    private static async Task<string> ExactStateAsync(TempRepo repo)
-    {
-        var head = Subject(await repo.GitAsync("rev-parse", "HEAD"));
-        var refs = (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
-        var index = (await repo.GitAsync("ls-files", "--stage")).StandardOutput;
-        var status = (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
-        var files = Directory.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories)
-            .Where(file => !Path.GetRelativePath(repo.Path, file).StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetRelativePath(repo.Path, file)}: {File.ReadAllText(file)}");
-        return string.Join('\n', [head, refs, index, status, .. files]);
     }
 
     /// <summary>
