@@ -2034,6 +2034,15 @@ The review before the gate (status step 25) found these; each is pinned by the t
   one's under the same load instead of with 3 s; and the last wait for `git mergetool` to start
   takes D185's form (`Scenarios.MergeToolTimeout`, outside the hang watchdog).
 
+The gate's inspection of the pictures taken on `4281f4c` found these; each is pinned by the tests
+named.
+
+- **A page's header may cut its texts** (4.1, 4.2): the history's and the blame's titles and the
+  blame's caption are `TrimmedTextBlock`s, cut with "…" with the whole text in the tooltip, as the
+  history's subjects and the reflog's action and commit; at 1100×700 (a header 440 wide) the
+  caption `at {short} {subject}` of a blame is cut when the subject is long (the report's part B,
+  "Text that may be cut").
+
 ## 16. Work breakdown
 
 Each package is built in its own worktree on a branch made **from `phase/5-history`**
