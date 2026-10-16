@@ -171,10 +171,6 @@ public sealed partial class BlameViewModel : GraphAreaPageViewModel
         }
     }
 
-    /// <summary>The run line <paramref name="line"/> (from 1) belongs to, or null outside the file.</summary>
-    public BlameRun? RunAt(int line) =>
-        Runs.FirstOrDefault(run => line >= run.FirstLine && line <= run.LastLine);
-
     /// <summary>
     /// A click on a run, in the gutter or on its text (4.2, 11.3): its lines take the selection
     /// background, and the right panel shows its commit, selected behind the page when the graph

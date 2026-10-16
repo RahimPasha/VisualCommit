@@ -49,6 +49,32 @@ public class BlameViewTests
         Assert.False(text.IsTokenizing);
     }
 
+    /// <summary>
+    /// Step 25's review: the gutter found a line's run by scanning every run from the first, for
+    /// every visible line of every frame. It is a binary search over the runs, which follow one
+    /// another in line order: the first, a middle and the last line of each run, and none outside.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_gutter_finds_the_run_of_every_line_and_none_outside_the_file()
+    {
+        const int Count = 20_001;
+        var gutter = new BlameGutter
+        {
+            Runs = [.. Enumerable.Range(0, Count).Select(index => new BlameGutterRun(1 + (index * 3), 3 + (index * 3), index % 2 == 0, "abc1234", "A", "2026-01-01", false, string.Empty))],
+        };
+
+        foreach (var index in new[] { 0, 1, 2, Count / 2, Count - 2, Count - 1 })
+        {
+            Assert.Equal(index, gutter.RunOfLine(1 + (index * 3)));
+            Assert.Equal(index, gutter.RunOfLine(2 + (index * 3)));
+            Assert.Equal(index, gutter.RunOfLine(3 + (index * 3)));
+        }
+
+        Assert.Null(gutter.RunOfLine(0));
+        Assert.Null(gutter.RunOfLine(4 + ((Count - 1) * 3)));
+        Assert.Null(new BlameGutter().RunOfLine(1));
+    }
+
     [AvaloniaFact]
     public async Task A_large_files_colours_are_made_on_a_background_thread_and_a_small_files_before_it_is_drawn()
     {
