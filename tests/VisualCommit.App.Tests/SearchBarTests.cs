@@ -1,9 +1,13 @@
 using Avalonia;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
@@ -64,10 +68,14 @@ public class SearchBarTests
         Assert.False(app.SearchMarks().IsActive);
         Assert.DoesNotContain(app.GitCalls(), call => call.CommandText.StartsWith("git log --no-walk=unsorted", StringComparison.Ordinal));
 
-        // Its colours (F10 step 1): the chrome, and the border line along its bottom.
+        // Its colours (F10 step 1): the chrome, and the border line along its bottom; previous and
+        // next, with nothing to go to, in the disabled text colour (the gate's f10a).
         var shot = app.Capture();
         Assert.Equal(Brush(app, "VcChromeBackgroundBrush"), shot.PixelAt(new Point(262, 90)));
         Assert.Equal(Brush(app, "VcBorderBrush"), shot.PixelAt(new Point(262, 123)));
+        Assert.Equal(Brush(app, "VcTextDisabledBrush"), IconColour(app.Find<Button>("SearchPrevious")));
+        Assert.Equal(Brush(app, "VcTextDisabledBrush"), IconColour(app.Find<Button>("SearchNext")));
+        Assert.Equal(Brush(app, "VcTextSecondaryBrush"), IconColour(app.Find<Button>("SearchClose")));
 
         // Its root is a control element, a pane named "Search".
         var view = app.Window.GetVisualDescendants().OfType<SearchBarView>().Single();
@@ -84,6 +92,8 @@ public class SearchBarTests
         Assert.Equal([CompareWholeLines, HandleEmptyInput], marks.Marked);
         Assert.Equal(12, marks.Dimmed.Count);
         Assert.True(app.SearchBar()!.NextEnabled);
+        Assert.Equal(Brush(app, "VcTextSecondaryBrush"), IconColour(app.Find<Button>("SearchPrevious")));
+        Assert.Equal(Brush(app, "VcTextSecondaryBrush"), IconColour(app.Find<Button>("SearchNext")));
         var call = Assert.Single(app.GitCalls(), candidate => candidate.CommandText.StartsWith("git log --no-walk=unsorted", StringComparison.Ordinal));
         Assert.Equal("git log --no-walk=unsorted --stdin --no-show-signature --no-color --encoding=UTF-8 --format=%H -F --regexp-ignore-case --grep=tokenizer --", call.CommandText);
 
@@ -237,8 +247,50 @@ public class SearchBarTests
         Assert.False(app.SearchMarks().IsActive);
     }
 
-    private static Color Brush(ShellDriver app, string key) =>
-        app.Window.TryFindResource(key, app.Window.ActualThemeVariant, out var value) && value is ISolidColorBrush brush
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void A_disabled_icon_button_draws_its_icon_in_the_disabled_text_colour(string variant)
+    {
+        // The gate's f10a, f11a and f11d: the bar's previous and next, disabled, were drawn as when
+        // enabled. VcIconButton now has the rule of every other button theme of the app.
+        Assert.True(Application.Current!.TryFindResource("VcIconButton", out var resource), "VcIconButton is not a resource.");
+        var theme = Assert.IsType<ControlTheme>(resource);
+        Assert.True(Application.Current!.TryFindResource("IconChevronUp", out var chevron), "IconChevronUp is not a resource.");
+        Button Make(bool enabled) => new()
+        {
+            Theme = theme,
+            IsEnabled = enabled,
+            Content = new Icon { Data = (Geometry)chevron!, Width = 14, Height = 14 },
+        };
+        var (enabled, disabled) = (Make(true), Make(false));
+        var window = new Window
+        {
+            Width = 120,
+            Height = 60,
+            RequestedThemeVariant = variant == "Light" ? ThemeVariant.Light : ThemeVariant.Dark,
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { enabled, disabled } },
+        };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(window.CaptureRenderedFrame());
+
+        Assert.Equal(Brush(window, "VcTextSecondaryBrush"), IconColour(enabled));
+        Assert.Equal(Brush(window, "VcTextDisabledBrush"), IconColour(disabled));
+        Assert.NotEqual(IconColour(enabled), IconColour(disabled));
+        window.Close();
+    }
+
+    /// <summary>The colour the icon inside <paramref name="button"/> is drawn in.</summary>
+    private static Color IconColour(Button button) =>
+        button.GetVisualDescendants().OfType<Icon>().Single().Foreground is ISolidColorBrush brush
+            ? brush.Color
+            : throw new InvalidOperationException($"{button.Name}'s icon has no solid colour.");
+
+    private static Color Brush(ShellDriver app, string key) => Brush(app.Window, key);
+
+    private static Color Brush(Window window, string key) =>
+        window.TryFindResource(key, window.ActualThemeVariant, out var value) && value is ISolidColorBrush brush
             ? brush.Color
             : throw new InvalidOperationException($"No brush {key}.");
 }
