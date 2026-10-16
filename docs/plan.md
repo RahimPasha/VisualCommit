@@ -35,6 +35,28 @@ How context passes from one phase to the next:
   reads only the repo and explains how it would build, test and start the next phase. Gaps it
   hits are fixed in the docs.
 
+The project's practice since phase 3. No rule in `CLAUDE.md` asks for these; phases 3, 4 and 5
+each did them:
+
+- **A design before the checks.** The phase's design is written into `docs/phase-N-design.md`
+  before its code and before the report's checks: every git fact derived with real git, the
+  texts, the layouts, the tests and harness, the work packages and the design's own decisions,
+  which go into `decisions.md`. Independent reviews check it first (phase 5: five reviews, each
+  finding checked by an adversarial verifier, status step 3), and the questions of taste they
+  raise go to the owner. The work packages are built by sub-agents in git worktrees, contracts
+  and stubs first (section 16 of `phase-5-design.md`; the phase 3 to 5 handoffs, "Things that
+  cost time"). The file is kept as history; its last sections record what the build, the
+  reviews and the gate settled (`phase-5-design.md` 15.8 and 15.9). The report's checks are
+  reviewed independently too before they are committed.
+- **An independent review of the code before the gate.** Agents that did not build the code
+  review it, each from one angle, and every confirmed finding is fixed with tests before the gate
+  runs. Phase 3: six reviewers, 49 findings, one of them a data-loss blocker (D123 to D132; the
+  phase 3 handoff, "State of the repo"). Phase 4: five reviewers, each finding verified by a
+  second agent, 31 confirmed (design 14.5 of `phase-4-design.md`). Phase 5: six lenses (git safety, threads and lifetimes, performance,
+  conformance with the report and design, code quality, test quality), each finding verified by
+  a skeptic, 43 confirmed and 3 refuted (status step 25; `phase-5-design.md` 15.9; the phase 5
+  handoff, "State of the repo"). It is a step of the Progress checklist, before the gate.
+
 Branches and commits:
 
 - Each phase is built on its own branch in small commits. Branch names are listed in `status.md`.
@@ -86,7 +108,18 @@ too, but they do not replace it.
    "Sessions away from the Windows machine" in `CLAUDE.md`).
 5. **Inspection.** Every screenshot is opened and compared with the expected result in the
    report: layout, text, colours and state. A check passes only when the screenshot shows the
-   expected result and the repo's real git state matches it.
+   expected result and the repo's real git state matches it. The practice since phase 3: Opus
+   inspector agents each judge a batch (the new phase's pictures by part
+   against the report, the earlier phases' pictures, the real-window captures with their scripted
+   twins). Earlier pictures are compared rather than read afresh. Phases 3 and 4 opened again
+   those whose bytes differ from the lists of the earlier gates (`phase-N-pictures.sha256`, the
+   Commands in `CLAUDE.md`). Phase 5, which changed nearly every earlier picture, made reference
+   pictures of phases 0 to 4 before its gate (their walk-throughs run on `master` in a worktree,
+   and a copy of the last gate's real-window files) and compared them with
+   `scripts/compare-pictures.py`, which makes a difference picture per changed picture and a
+   summary by window region; the inspectors judged each change against the report's "Changes to
+   expected results", and in full where it lay outside those regions (design 15.7 of
+   `phase-5-design.md`; the phase 5 handoff, "Running the visual gate").
 6. **Fix and re-run.** Failures are fixed, then the phase's checks and all earlier phases' checks
    are run again. Earlier phases' checks stay in the default test run for this reason. When a
    later phase changes on purpose what an earlier check shows (a placeholder becomes real
@@ -348,9 +381,12 @@ Delivers:
 - From phase 3: the settings screen covers `AutoFetchMinutes` (default 5, 0 turns auto-fetch off; only in `settings.json` today, and `VISUALCOMMIT_AUTO_FETCH_MINUTES` overrides it, D85), `StashIncludeUntracked` (today the stash dialog remembers its last choice), and the extensions "Open file" asks about before opening a file (a fixed list in `RepositoryOperations.Files.cs`, plus the executable bit on Unix, D130). Its pull mode has to work through git's own `pull.rebase`, `pull.ff` and `branch.<name>.rebase`, which Pull follows (D78, D84), or D78 is reopened with the owner. Its external tools give the file menus an "Open in editor" beside "Open file", which uses the system's application for the file (requirements' "open in editor or file manager").
 - From phase 4: the external merge tool is git's own `merge.tool` (D149); without it the resolver's "Merge tool…" and the file menu's "Open in merge tool" are disabled with "Set merge.tool in git's configuration to use a merge tool". The settings screen's external tools are where the user chooses it, through git's configuration, so that `git mergetool` in a terminal and the app use the same tool (Q5).
 - From phase 3: the dashboard's bulk fetch and pull run through each repository's `OperationQueue`, as the toolbar's do (D81), with the same titles, Cancel and error dialog. Auto-fetch fetches only the active tab's repository (D79, D85).
-- From phase 3: renaming a branch to a name that differs only in case, which the name dialog refuses on Windows and macOS because Git 2.36 refuses it for a loose ref (D131).
 - From phase 3: no code reads `remote.<r>.fetch`, so the push of a drop onto a remote branch and a remote branch's "Delete <b> on <r>…" take the branch's name on the remote from its remote-tracking name; with a fetch refspec that maps names differently they act on the wrong name. Read the refspec and set `DropFacts.RemoteMapsBranchesDifferently`, which the drop menu (`RepositoryMenus.ForDrop`) already turns into a disabled item with its reason.
 - From phase 5 (design 9.1, 14.2): whether every checkout keeps ignored files. Of the checkouts a user starts, only that of a commit the current branch reaches, other than HEAD's own, passes git's `--no-overwrite-ignore` (D179, D183; undo's switches pass it too, D169); every other checkout follows git's default (Q5), which overwrites an ignored file the target tracks and deletes an ignored folder where the target has a file, without a word (design 0.7). The settings screen may offer it for every checkout.
+
+Dropped from this list: renaming a branch to a name that differs only in case, which the name
+dialog refuses on Windows and macOS because Git 2.36 refuses it for a loose ref. Settled with the
+owner on 2026-10-12: it stays refused (D131); two renames in a terminal do it.
 
 Visual checks:
 - The dashboard with ten repos in mixed states; bulk fetch progress.
@@ -418,7 +454,7 @@ resolver's halves; Continue and Skip for `git am`, which the banner leaves to a 
 | 5 | Public sign-in needs app registrations with GitHub, GitLab and Microsoft; personal access tokens work without them. | Phase 7 |
 | 6 | Code-signing certificate and Apple Developer membership cost money. | Phase 8 |
 | 7 | A built-in terminal (O13) is harder in Avalonia than in web technology. | Backlog |
-| 8 | Settled on 2026-10-06: the owner made the GitHub repo public, so CI no longer runs on a monthly allowance of minutes (D38). While it was private, phase 0 used the allowance up. Still true: a job that hangs wastes time, so `ci.yml` keeps a time limit on every job and its test step, raised as the tests grow (in phase 4 to 24 minutes for the test step and 32 per job of the three platforms, D152; in phase 5 to 40 and 50, D184; risk 12). | Settled |
+| 8 | Settled on 2026-10-06: the owner made the GitHub repo public, so CI no longer runs on a monthly allowance of minutes (D38). While it was private, phase 0 used the allowance up. Still true: a job that hangs wastes time, so `ci.yml` keeps a time limit on every job and its test step, raised as the tests grow (in phase 4 to 24 minutes for the test step and 32 per job of the three platforms, D152; in phase 5 to 40 and 50, D184; risk 12), and raised again when the Windows or macOS Test step passes 32 minutes (D186). | Settled |
 | 9 | The tests are pinned to xunit.v3 3.2.2 because Avalonia's headless test package does not work with xunit.v3 4.x (D24). Check for a newer Avalonia.Headless.XUnit when Avalonia is updated. | Whenever packages are updated |
 | 10 | Q1 (the test fails above 2000 ms) had about 0.8 s to spare in the gates' real-window passes up to phase 4 (1002 ms at phase 1's gate, 1058 ms at phase 2's, 1189 ms at phase 3's, 937 ms at phase 4's), but only 0.17 to 0.25 s at phase 5's: 1,749 ms in the first run's pass, which started straight after the default run (the laptop warm), and 1,826 ms in the second run's pass, run after a rest. Measured alone after that rest, it was 1,147 ms. A hot laptop fails a gate by itself: the second run's first attempt, started straight after the 43-minute default run (risk 12), measured 2,613 ms (the pass's only failure), and on phase 3's gate day other runs measured 1438 to 2268 ms. Run alternately on the same machine that day, the phase 2 build needed 1688 to 1911 ms and phase 3's 1618 to 2002 ms: the spread is the machine's temperature, and phase 3 costs no more than that noise. With no branch hidden, phase 5's graph loads with the same git command as phase 4's (design 8.2); whether the rise (1,147 ms alone and 1,826 ms in the pass, against 937 ms in phase 4's pass) is the build or the machine, only the two builds run alternately can tell, and phase 5's gate made no such run. Rest the laptop before the real-window pass, and to tell a slower build from a warm machine, run the old and the new build alternately on the same machine. Most of the time is `git log --date-order`, which reads the whole history before its first commit when the repository has no commit-graph file. A much larger repository, or a slower machine, could need another way to the first page. | Each phase's gate; whenever the graph or its loading changes |
 | 11 | GitHub moves the `ubuntu-latest` CI runner to Ubuntu 26 from 2026-10-19 (an annotation on every run). The Linux job and the set-up script may need attention then, and its git may change (risk 26). | The first CI run after 2026-10-19 |

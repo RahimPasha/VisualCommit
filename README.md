@@ -6,15 +6,20 @@ conflict resolution with clicks, right-clicks, double-clicks and drag-and-drop. 
 
 VisualCommit is in early development. It opens, initialises and clones repositories in tabs that
 come back after a restart, and draws a repository's commit graph with its branches, tags and
-stashes; 100,000 commits load in a few seconds and the first rows show after about one. A left
+stashes; 100,000 commits load in a few seconds and the first rows show in under two. A left
 panel lists branches, remotes, tags and stashes with ahead/behind counts and a filter, a details
 panel shows a commit's message and changed files, and changes made in a terminal appear by
 themselves. It stages and commits by file, hunk and line, and runs branch, merge, reset,
 cherry-pick, revert, fetch, pull, push, stash and tag operations from context menus,
 drag-and-drop and the toolbar. It rebases (from the menus, by dragging a branch, or
 interactively: reorder, squash, fixup, reword, drop), continues, skips or aborts what git stopped,
-and resolves conflicts in its own resolver or an external merge tool. History, blame and undo come
-next.
+and resolves conflicts in its own resolver or an external merge tool. It shows a file's history
+across renames and its blame, the reflog with restore, and an activity log of the git commands it
+ran; it searches commits by message, author, SHA, file or the text of their changes, compares two
+commits or branches, and hides or solos branches in the graph. Undo and redo step back and forward
+through the session's git actions, and a checkout that would overwrite uncommitted changes is
+refused, with an offer to stash them first. Workspaces with a dashboard, a command palette and a
+settings screen come next.
 [docs/status.md](docs/status.md) says which phase is being built and [docs/plan.md](docs/plan.md)
 what each phase adds.
 
@@ -32,7 +37,7 @@ dotnet test
 
 `dotnet test` runs the unit and integration tests and a scripted walk-through of the whole app in
 a headless window; it saves screenshots under `artifacts/visual/`. It does not open a window and
-does not touch your settings. It takes about 22 minutes on the development laptop, and the first run builds a 100,000-commit
+does not touch your settings. It takes about 45 minutes on the development laptop, and the first run builds a 100,000-commit
 test repository in the temporary folder, which later runs reuse. The tests need Git 2.32 or
 newer. All commands, including the Windows-only real-window test pass, are
 listed in [CLAUDE.md](CLAUDE.md#commands).

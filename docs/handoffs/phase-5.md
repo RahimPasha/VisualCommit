@@ -2,7 +2,7 @@
 
 Written at the end of phase 5 for the session that runs phase 6. That session has not seen any
 of this phase's conversation. How the app is built is in [architecture.md](../architecture.md),
-why in [decisions.md](../decisions.md) (D153 to D185 are this phase's); the phase's design, kept
+why in [decisions.md](../decisions.md) (D153 to D186 are this phase's); the phase's design, kept
 as history, is [phase-5-design.md](../phase-5-design.md), whose sections 15.8 and 15.9 say what the
 report, the build, the review and the gate settled. The report,
 [test-reports/phase-5.md](../test-reports/phase-5.md), holds the 27 checks and its own decisions
@@ -83,8 +83,9 @@ the gate's commit (2026-10-16):
   checks; phases 0 to 4: 107) and 151 difference pictures. The first run's inspection (twelve Opus
   inspectors) judged all 1,080; it opened every one but the 24 earlier scripted pictures that are
   byte-identical to their reference, which keep phase 4's verdict. Fifteen scripted pictures and
-  three real-window captures showed the five problems above (phase 3's real-window `11d` and `11g`
-  were right, their scripted twins were not), and every other picture passed. The second run's
+  one real-window capture (phase 2's `17c`) showed the five problems above; the inspectors also
+  flagged phase 3's real-window `11d` and `11g`, which were right, because their scripted twins
+  were not. Every other picture passed. The second run's
   inspection opened the 32 scripted pictures and 16
   real-window captures whose bytes changed since the first run, with their 17 changed difference
   pictures, and all passed (the fixes, and variance by nature: temporary names, progress, carets,
@@ -192,9 +193,10 @@ reference pictures for the earlier phases (design 15.7):
    `VISUALCOMMIT_BACKUP_CLOCK=fixed`). Q1 is phase 1's
    `Checks_8_and_9_the_100k_commit_repo_and_Q1`; running it alone with `--filter-method` empties
    phase 1's `real-window/` folder, so the whole pass runs again afterwards.
-4. Save `sha256sum` of the pictures before anything else runs (CLAUDE.md gives the command), then
-   inspect. Phase 5's gate gave twelve Opus inspectors, started side by side by one Claude Code
-   workflow, a batch each: phase 5's scripted pictures by part (A, B, F, P, U16 to U19, U20 to
+4. Write the list of the pictures' hashes right after the two passes, before anything else runs
+   (CLAUDE.md gives the command), then inspect; commit the list once the inspection has passed, as
+   phase 5 did (`ae41eb8`). Phase 5's gate gave twelve Opus inspectors, started side by side by
+   one Claude Code workflow, a batch each: phase 5's scripted pictures by part (A, B, F, P, U16 to U19, U20 to
    U23), its real-window captures, phases 0 to 2's scripted, phase 3's in two halves, phase 4's,
    and the earlier real-window captures. Phase 5's pictures were judged in full against the
    report; the earlier ones against their reference, their difference picture and the changes the
@@ -260,7 +262,7 @@ classify by files and states, never by git's sentences):
 
 ## Deviations from the plan
 
-Phase 5's decisions are D153 to D185, in groups:
+Phase 5's decisions are D153 to D186, in groups:
 
 | What | Decision |
 |---|---|
@@ -274,6 +276,7 @@ Phase 5's decisions are D153 to D185, in groups:
 | The report's decisions bind the builders; the lead's rulings on its questions | D183 |
 | CI's Test step 40 minutes, the three platforms' jobs 50 | D184 (amends D152) |
 | The wait for `git mergetool` to start does not count against the hang watchdog | D185 |
+| CI's limit is raised when the Windows or macOS Test step passes 32 of its 40 minutes | D186 |
 
 ## Known issues
 
@@ -372,6 +375,15 @@ Do first:
    `VisualCommit.slnx` (CI picks up every test project of the solution); a `Phase6Expectations*.cs`
    link in the real-window csproj; the timing script; CLAUDE.md's Commands. Two projects can share
    one picture folder (`VisualRun` empties it once per phase and run).
+6. If the new walk-through runs a test git server (`AuthRemoteServer`, say for the dashboard's
+   bulk fetch), give it a fixed port of its own: the pictures show the server's URL, and phase 3's
+   walk-through (47391, `AuthRemoteServer.VisualChecksPort`, D97) and phase 1's clone checks
+   (47392, `Phase1VisualChecksPort`, D150) run in processes side by side with it. The ports are
+   constants in `tests/VisualCommit.Testing/AuthRemoteServer.cs`, pinned by
+   `AuthRemoteServerTests`; add one beside them, pin it the same way, pass it to
+   `StartForVisualChecksAsync(..., port)`, and record it as a decision that amends D97, as D150
+   did. A port that is taken falls back to a free one (`PortWasTaken`), and the pictures then show
+   another URL.
 
 Open points for phase 6 (record each as a decision; ask the owner those that are a matter of
 taste, before the design):
@@ -392,12 +404,20 @@ taste, before the design):
 - **The theme sweep**: phase 5's new screens (the activity log, the pages, the search bar, the
   comparison, C12's message) were pictured in the dark theme, apart from B5's side-by-side history
   and F10's search at 1920×1080 in the light one.
+- **Questions for the owner that phase 6 raises** beyond those above, matters of taste to ask
+  before the design: where workspaces are kept (in `session.json` with the tabs, or in
+  `settings.json` with the preferences: D46 keeps what changes as the app is used in the session
+  file and preferences in the settings file); whether opening a workspace opens its repositories
+  as tabs; where the dashboard lives (a tab, a page in place of the graph, or a window of its
+  own); and which scope the settings screen's identity writes (git's global configuration or the
+  repository's own).
 
 Risks to watch:
 
 - The run time (plan risks 12 and 18): 45 minutes for the default run on the laptop, 25 for the
-  real-window pass, 25 of 40 for CI's Windows Test step. D152's rule (past 20 minutes of the old
-  24, the lead raises the limit and records it) led to D184; do the same before the step nears 40.
+  real-window pass, 25 of 40 for CI's Windows Test step. When the Windows or macOS Test step
+  passes 32 minutes, the lead raises the limit and records the new one as a decision (D186; the
+  same rule at the old limit, past 20 of 24, led to D184).
 - Q1 on a warm laptop (plan risk 10).
 - Git keeps changing between versions, and CI's gits are 2.43 to 2.56 (plan risk 26);
   `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19 (plan risk 11).

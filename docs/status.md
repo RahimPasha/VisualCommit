@@ -161,22 +161,25 @@ Closing:
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-The last run on `phase/4-rebase-conflicts` was
-[38320711773](https://github.com/RahimPasha/VisualCommit/actions/runs/38320711773), for the
-gate's commit `6badab7`: all five jobs succeeded, each with 2,411 tests passed: `windows-latest`
-(14 min 59 s; its Test step 13 min 9 s), `macos-latest` (15 min 14 s; Test step 13 min 57 s),
-`ubuntu-latest` (3 min 6 s) and the two "bare ubuntu container" jobs (3 min 54 s and 4 min 5 s).
-The commits after it changed only docs, which start no run. CI's Test step has a limit of 24
-minutes and each of the three platforms' jobs 32 (D152, amending D134); the owner looks again at
-CI's duration when the project is over (D134). During phase 4 CI found what the Windows machine
-could not (Git 2.55's own files and words, a background clean-up that held the queue, checks that
-read the screen too early); the runs were red until each was fixed (phase 4's report, "Other
-platforms", and its handoff, "Things that cost time").
-
 The last run on `phase/5-history` is
+[38931127856](https://github.com/RahimPasha/VisualCommit/actions/runs/38931127856), for the
+gate's commit `1b2e734`: all five jobs succeeded, each with 3,233 tests passed: `windows-latest`
+(27 min 50 s; its Test step 25 min 15 s, and its step "Build the real-window pass" green),
+`macos-latest` (17 min 43 s; Test step 16 min 13 s), `ubuntu-latest` (4 min 48 s; Test step 3 min
+26 s) and the two "bare ubuntu container" jobs (5 min 38 s and 6 min 2 s; Test steps 3 min 56 s
+and 4 min 14 s). The commits after it change only docs, which start no run. The gate's first run,
+on `4281f4c`, had run 38909397699: all five jobs green with 3,227 tests. CI's Test step on
+Windows, macOS and Linux has a limit of 40 minutes and each of their jobs 50 (D184, amending
+D152); the lead raises the limit when the Windows or macOS Test step passes 32 minutes, and
+records the new one as a decision (D186). The two container jobs keep 14 minutes for the Test
+step and 25 per job. The owner looks again at CI's duration when the project is over (D134).
+
+Earlier on `phase/5-history`:
 [38831177542](https://github.com/RahimPasha/VisualCommit/actions/runs/38831177542), for `5bdd1de`
 (the second wave, the lead's follow-ups and the 30-second default wait): all five jobs succeeded
-with 3,046 tests each; the Windows Test step took 17 min 54 s of its 24 and macOS's 14 min 18 s.
+with 3,046 tests each; the Windows Test step took 17 min 54 s of its then 24 and macOS's 14 min
+18 s. The runs that failed after it on the way to the gate, and what each found, are in the phase 5
+report's "Other platforms".
 On the way, runs 38816004590 (`e11ea7d`: macOS path keys in WP7's tests, check 23's stash wait)
 and 38820513395 (`40cb5f5`: check 23 waiting for real Undo states) failed, as fixed in `fe34b62`.
 Before that,
@@ -198,6 +201,17 @@ Phase 5's first run is
 `ubuntu-latest` (3 min 36 s) and the two "bare ubuntu container" jobs (4 min 14 s and 4 min 11 s).
 GitHub announced that `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19; the Linux job and the
 containers may then see other package versions.
+
+The last run on `phase/4-rebase-conflicts` was
+[38320711773](https://github.com/RahimPasha/VisualCommit/actions/runs/38320711773), for the
+gate's commit `6badab7`: all five jobs succeeded, each with 2,411 tests passed: `windows-latest`
+(14 min 59 s; its Test step 13 min 9 s), `macos-latest` (15 min 14 s; Test step 13 min 57 s),
+`ubuntu-latest` (3 min 6 s) and the two "bare ubuntu container" jobs (3 min 54 s and 4 min 5 s).
+The commits after it changed only docs, which start no run. CI's Test step then had a limit of 24
+minutes and each of the three platforms' jobs 32 (D152, amending D134). During phase 4 CI found
+what the Windows machine could not (Git 2.55's own files and words, a background clean-up that
+held the queue, checks that read the screen too early); the runs were red until each was fixed
+(phase 4's report, "Other platforms", and its handoff, "Things that cost time").
 
 The run for phase 4's merge on `master` is
 [38336234442](https://github.com/RahimPasha/VisualCommit/actions/runs/38336234442), for `50cf35c`
@@ -241,46 +255,12 @@ then step 33, the owner told.
 
 ### Notes for whoever resumes
 
-- **The flaky Cancel test was an app defect, fixed (D182, `3dcba5d`)**: at the window's bottom
-  edge a status bar control's tooltip slid over the pointer and took the press. Tooltips now take
-  no input.
-- **CI's Windows runner moved to Git 2.56.0.windows.2** on 2026-10-15 (run 38723225901; 2.55.0
-  before). There a `git stash pop` refused by local changes exits 128, not 1: phase 3's check 15b
-  now accepts both (`281dd69`). Phase 5's report lists this under "Changes to expected results"
-  (phase 3's report says "exit 1" in 15b's step 2 and in T5). Only 2.36 and 2.55 are on the
-  development machine; CI is the only check on 2.56 so far.
-- **Test speed-ups merged (`7e7d99d`)**: `TempRepo` copies a blank git folder made once per
-  process, reads a commit's SHA from its summary line, and sets `maintenance.auto=false` (and
-  `receive.autogc=false` on bare remotes); every test project uses it. `architecture.md`'s TempRepo
-  row is updated at closing. The reflog template takes 88 git calls (11 s alone); the undo tests
-  run one action each. In that branch's full run (beside other agents) two earlier merge-tool
-  tests (`MergeToolTests`' cancelled tool, phase 4's C16) waited a minute for `git mergetool` to
-  start and failed; both pass alone. Watch for them in later full runs.
-- **Lead follow-ups from the second wave** (do them before its full run; what the wave settled
-  is recorded in design 15.9 and the report's "Beyond design 14.1"):
-  - After WP3's app half is merged: replace `UndoUntilRecorded` and `RedoUntilRecorded` in phase
-    3's `Phase3Checks.A.Toolbar.cs` (check 23) with the report's values (after the branch: `Undo
-    creation of topic/new`; after the stash: `Undo stash "Toolbar stash"`; after the pop: `Undo
-    pop of stash "Toolbar stash"`; at the merge step: `PartA.FinishMerge` for both) and remove the
-    two constants. Check 23 fails until then, on purpose (WP5).
-  - Design 5.2's check that a reflog or backup commit still exists (`git cat-file -e
-    <sha>^{commit}`) in the operations a reflog row or a backup starts and in
-    `RestoreBackupAsync`; and `UndoStepRun.FilesIn`, `UndoStepRun.BlockedPaths` (it misses `would be
-    removed by checkout:` blocks and throws git's raw failure) and `AllIgnoredAsync` to call WP4's
-    `GitRepository.FilesUnder`, `GitFailureClassifier.BlockedPaths` and `IgnoredAmongAsync`
-    (design 15.9's last item).
-  - For WP9: `Phase3RealWindowPass.B.cs` (steps 11d, 11g, 11h) still expects "2 commits selected";
-    two selected commits now show their comparison (D162).
-  - At closing, in `architecture.md`: the TempRepo row (the speed-ups), the quote of the old list
-    refusal text (about line 864), and WP5's edits to `AppSession.cs` (one `OperationLog` shared
-    with `GitCallLog`) and `MainWindowViewModel.cs` (`ActivityLog`), taken over as merged. Bisect
-    notes: WP6's `c546200` alone fails eight phase 3 checks (`4705121` fixes them), WP7's
-    `b494d96` seven (`604c672`), WP4's `e26f320` two support tests (`e666b65`).
-- **For step 25's review: the cost of recording for undo.** Design 7.7 expected about two git
-  calls before and after an action; a stash now makes 17 calls in all (the history's reads before
-  and after, then the refresh): 1.2 s alone on the laptop, 3 s on CI. Measure the reads 7.7 makes
-  per action kind and cut what can be batched or skipped, without losing what an undo needs. The
-  headless harness's default wait is 30 s since `5bdd1de` because of it.
+- **CI's gits differ from the development machine's.** Since 2026-10-15 the jobs run Windows
+  2.56.0.windows.2 (2.55.0 before), macOS 2.56.0 (Homebrew), `ubuntu-latest` 2.55.0 and the two
+  containers 2.43.0. On 2.56 a `git stash pop` refused by local changes exits 128, not 1: phase 3's
+  check 15b accepts both (`281dd69`), as phase 5's report records under "Changes to expected
+  results" (phase 3's report says "exit 1" in 15b's step 2 and in T5). Only 2.36 and 2.55 are on
+  the development machine; CI is the only check on 2.43 and 2.56 (plan risk 26).
 - **The gate's references (design 15.7), made on 2026-10-16 outside the repository** in
   `D:/Projects/Personal/gate5-reference/`: `real-window/` holds phases 0 to 4's 210 real-window
   pictures from phase 4's gate (all match `phase-4-pictures.sha256`), copied before phase 5's
@@ -288,27 +268,30 @@ then step 33, the owner told.
   on `master` (`0883669`, 221 checks passed); 485 match phase 4's list, and the 25 that vary by
   nature are named in `master-differs-from-phase4-list.txt` (inspect those in full). Compare a
   gate run with `python scripts/compare-pictures.py D:/Projects/Personal/gate5-reference/scripted
-  artifacts/visual <output folder>` (and the real-window ones against `.../real-window`).
-- If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
-  work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
-  after building them; ask the owner before discarding any.
-- Phase 5 started on 2026-10-12 on the Windows machine. No worktree, `wip/*` or `worktree-*`
-  branch existed at its start; two git file-system monitor daemons were running.
+  artifacts/visual <output folder>` (and the real-window ones against `.../real-window`). The
+  inspectors' verdicts of phase 5's gate are in `D:/Projects/Personal/gate5-inspection/`. These
+  references show phases 0 to 4 as phase 4 left them; for phase 6's gate,
+  `docs/test-reports/phase-5-pictures.sha256` names the pictures phase 5's gate inspected.
 - **Git 2.55 (CI's version) is on the development machine**, inside Visual Studio:
   `C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team Explorer/Git/mingw64/bin/git.exe`.
   Put that `mingw64/bin` first on `PATH` (otherwise its child processes fall back to the 2.36 on
   `PATH`). Phase 5's research used it to check what 2.55 writes differently, which phase 4 could only
-  learn from CI runs.
-- Phases 1 to 4 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
-  (git-ignored); the phase 3 and phase 4 handoffs' "Things that cost time" say what to watch
+  learn from CI runs. With it first on `PATH`, 7 fetch and pull tests of `VisualCommit.App.Tests`
+  fail locally and pass on CI, for reasons not yet known (plan risk 28).
+- Phases 1 to 5 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
+  (git-ignored); the phase 3, 4 and 5 handoffs' "Things that cost time" say what to watch
   for: a worktree starts from `master` and its agent must create its branch from the phase
-  branch first; merged worktrees must be removed at once (each build folder is about 580 MB per
-  project); a global `core.fsmonitor=true` leaves a git daemon per worktree running (phase 4's
-  handoff says how to list and stop them before a gate).
-- The default run takes about 45 minutes on the development laptop (43 min 22 s at phase 5's gate)
-  and about 16 to 25 minutes per job on CI's Windows and macOS; the real-window pass about 25
-  minutes, after a rest (a hot laptop fails Q1). See phase 5's handoff, "Running the visual
-  gate", for how to run both and what to stop first.
+  branch first; merged worktrees must be removed at once (a built worktree takes about 5 GB);
+  a global `core.fsmonitor=true` leaves a git daemon per worktree running (phase 4's handoff says
+  how to list and stop them before a gate). No worktree or `wip/*` branch was left at phase 5's
+  end.
+- The default run takes about 45 minutes on the development laptop (43 min 22 s at phase 5's gate,
+  3,233 tests in seven projects). On CI at phase 5's gate (run 38931127856) the Windows job took
+  27 min 50 s (its Test step 25 min 15 s of 40), macOS's 17 min 43 s (Test step 16 min 13 s),
+  `ubuntu-latest`'s 4 min 48 s (Test step 3 min 26 s) and the containers' 5 min 38 s and 6 min 2 s.
+  The real-window pass takes about 25 minutes (24 min 57 s at phase 5's gate), after a rest (a hot
+  laptop fails Q1). See phase 5's handoff, "Running the visual gate", for how to run both and what
+  to stop first.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
@@ -317,13 +300,16 @@ then step 33, the owner told.
   scaling: 1500×1000 logical pixels, of which 1500×952 is the work area. A 1920×1080 window does
   not fit, so the real-window pass can only use sizes up to 1400×900 there. The laptop is slower
   when hot: let it rest a few minutes before the gate's `dotnet test` and again before the
-  real-window pass, which times Q1 (limit 2000 ms; 937 ms on phase 4's gate commit, rested; up
-  to 2268 ms on a warm machine during phase 3).
+  real-window pass, which times Q1 (limit 2,000 ms; 937 ms on phase 4's gate commit, rested; at
+  phase 5's gate 1,749 ms and 1,826 ms in its two passes, 1,147 ms alone after a rest, and
+  2,613 ms on the laptop hot from the 43-minute default run, which failed that attempt; up to
+  2,268 ms on a warm machine during phase 3; plan risk 10).
 - Packages: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and
   TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
-  FlaUI.UIA3 5.0.0. Phases 3 and 4 added no packages.
+  FlaUI.UIA3 5.0.0. Phases 3, 4 and 5 added no packages.
 - Git 2.55 on CI writes its own files and messages differently from 2.36 here; phase 4's
-  handoff, "Rules worth keeping", lists what it found and how the checks compare git's files.
+  handoff, "Rules worth keeping", lists what it found and how the checks compare git's files, and
+  phase 5's adds the exit codes and side effects that differ between versions.
 - Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled
   the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
   apostrophes fails and turns `\n` in a string into a line break, and `sed -i` drops a CRLF
@@ -355,12 +341,14 @@ then step 33, the owner told.
   graph with the newest commit on top.
 - The virus-scanner exclusion on the development machine (the repository folder and
   `C:\Users\rpkha\AppData\Local\Temp\VisualCommit.Tests`) was set up by the owner on
-  2026-10-12. Whether it is in effect cannot be read without administrator rights; phase 4's gate
-  ran the default tests in 21 min 52 s with five test projects (phase 3's: 19 min with four).
+  2026-10-12. Whether it is in effect cannot be read without administrator rights; phase 5's gate
+  ran the default tests in 43 min 22 s with seven test projects (phase 4's: 21 min 52 s with
+  five; phase 3's: 19 min with four).
 - Settled on 2026-10-12: the working-changes row's dashed line crossing another branch's node
   (06f) is left for now; case-only branch renames on Windows and macOS stay refused (D131);
   auto-fetch gets no ssh timeout, only Cancel by hand (D125).
-- When you have a Mac at hand: the eight-step checklist at the end of the
+- When you have a Mac at hand: the thirteen-step checklist at the end of the
+  [phase 5 test report](test-reports/phase-5.md), the eight-step one at the end of the
   [phase 4 test report](test-reports/phase-4.md), the eleven-step one at the end of the
   [phase 3 test report](test-reports/phase-3.md), the seven-step one at the end of the
   [phase 2 test report](test-reports/phase-2.md), the nine-step one at the end of the
