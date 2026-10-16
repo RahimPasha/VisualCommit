@@ -69,19 +69,25 @@ public static class LayoutAudit
                 problems.Add($"{label} is shortened with an ellipsis.");
             }
 
+            // What the text should show: all of it, or with allowScrolledOutOfView, the part inside
+            // its scrolling lists' views. Only a cut of that part by anything else is a fault: a
+            // row that a list at a page's bottom shows in part is cut by the page there too.
             var area = AreaInWindow(text, window);
+            var shown = area;
             var visible = area.Intersect(windowArea);
             foreach (var ancestor in text.GetVisualAncestors().OfType<Control>().Where(a => a.ClipToBounds))
             {
                 if (allowScrolledOutOfView && ancestor is Avalonia.Controls.Presenters.ScrollContentPresenter or ScrollViewer or ItemsControl)
                 {
+                    shown = shown.Intersect(AreaInWindow(ancestor, window));
                     continue;
                 }
 
                 visible = visible.Intersect(AreaInWindow(ancestor, window));
             }
 
-            if (visible.Width < area.Width - Tolerance || visible.Height < area.Height - Tolerance)
+            visible = visible.Intersect(shown);
+            if (visible.Width < shown.Width - Tolerance || visible.Height < shown.Height - Tolerance)
             {
                 problems.Add($"{label} at {area} is cut off to {visible}.");
             }
