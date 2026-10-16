@@ -496,6 +496,7 @@ public sealed partial class Phase5ChecksB
         }
         var text = (BlameTextEditor)app.FindByAutomationId("BlameText");
         Assert.Same(Brushes.Transparent, text.TextArea.CaretBrush);
+        Assert.False(text.WordWrap, "The blame wraps its lines; a line longer than the text's width is to be cut at its edge.");
         Assert.Equal(blame.Title, ((TrimmedTextBlock)app.FindByAutomationId("BlameTitle")).Text);
         Assert.Equal(blame.Caption, ((TrimmedTextBlock)app.FindByAutomationId("BlameCaption")).Text);
         Assert.Equal("File history", ((Button)app.FindByAutomationId("BlameHistory")).Content);

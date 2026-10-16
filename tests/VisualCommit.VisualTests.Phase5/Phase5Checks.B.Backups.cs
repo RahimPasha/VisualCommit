@@ -35,9 +35,9 @@ public sealed partial class Phase5ChecksB
         await WaitForCleanUpAsync(app, repo);
 
         // Step 1: the backups list.
-        var page = await OpenBackupsAsync(app);
+        await OpenBackupsAsync(app);
         var shot = Shot(app, "b9a-backups");
-        page = app.ReflogSnapshot();
+        var page = app.ReflogSnapshot();
         AssertPageInPlaceOfGraph(app, PageBounds, page.Bounds);
         AssertReflogHeader(app, page, BackupsTitle, BackupsTitle);
         AssertBackupRows(app, page, Backups);
