@@ -139,10 +139,10 @@ App:
 
 Visual checks:
 
-- [ ] 23. Scripted walk-through: the checks of parts A, B, F and P in
+- [x] 23. Scripted walk-through: the checks of parts A, B, F and P in
   `VisualCommit.VisualTests.Phase5`, part U in `VisualCommit.VisualTests.Phase5Undo` (one action
-  per test method), screenshots under `artifacts/visual/phase-5/scripted/`.
-- [ ] 24. Real-window pass for the checks marked for it (`Phase5RealWindowPass`).
+  per test method), screenshots under `artifacts/visual/phase-5/scripted/`. (WP8, merged in `c29cd52`, `4e00bab`, `dfd147e`, `4bec368`; 89 test methods.)
+- [ ] 24. Real-window pass for the checks marked for it (`Phase5RealWindowPass`). Written and built (WP9, `310de48`): 48 captures for the 15 RW checks; it runs at the gate.
 
 Closing:
 
@@ -233,16 +233,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The third wave (WP8, step 23) is merged: all six parts of the report's scripted walk-through
-(`4bec368`), and the activity log's fix for a repository opened through a link (`15a252f`). The
-full default run on `4bec368` (50 min 25 s, alone) passed 3,191 of 3,196: four failures were
-stalls of git's merge tool starting under the run's load, one P25's checkout (60 s). CI run
-38853641791 failed: P27 on every CI git (Git 2.43 and later write a no-op reflog entry `merge <ref>:
-updating HEAD` on a refused merge, 2.36 none), a clean-up test's race in one container, and
-Windows' Test step stopped at its 24-minute limit (now 40, D184, `ca1f2e8`). Running now, side by
-side: the fixes on `wip/p5-fixes2` and WP9, the real-window pass for the RW checks (step 24,
-built only, never run outside the gate) on `wip/p5-realwindow`. Then: merge both, one full run,
-CI; then step 25's independent review (the undo recording's cost first), then the gate.
+Step 25, the independent review of the code before the gate, runs as a workflow: six reviewers
+(git safety, threads and lifetimes, performance with the undo recording's cost first,
+conformance with the report and design, code quality, test quality), each finding verified by a
+skeptic, the confirmed ones fixed on `wip/p5-review-perf` and `wip/p5-review-rest`. Merged before
+it: WP9's real-window pass (`310de48`, written and built, never run outside the gate), the fixes
+for the full run's and CI's failures (`6d76c4f`: P27's no-op reflog entry on later gits, the
+clean-up tests' race, the merge tool's start under load, the headless double-click's clock) and
+D185 (`ed680ff`). Then: merge the review's fixes, one full run, CI; then the gate (design 15.7:
+the reference pictures from `master`, the comparison script, `dotnet test` and the real-window
+pass on one commit, after telling the owner, every picture inspected), then the closing steps.
 
 ### Notes for whoever resumes
 
