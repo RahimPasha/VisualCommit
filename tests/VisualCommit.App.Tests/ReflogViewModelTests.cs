@@ -66,12 +66,15 @@ public class ReflogViewModelTests
         using var page = new ReflogViewModel(host, "HEAD");
         await page.LoadAsync();
 
-        // Two refreshes in a row (15.9): the first read's walk stops; only the second one's shows.
+        // Two refreshes in a row after a ref moved (15.9; with the same refs and commits the last
+        // walk's marks are taken, and nothing walks): the first read's walk stops; only the second
+        // one's shows. The stopped walk is not kept, so the second read walks again.
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         repository.LostGate = gate;
-        page.OnRefsRead(host.Refs);
+        var moved = host.Refs with { Head = new HeadState("main", Shortcut) };
+        page.OnRefsRead(moved);
         await WaitForAsync(() => repository.ReadCount("lost") == 2);
-        page.OnRefsRead(host.Refs);
+        page.OnRefsRead(moved);
         await WaitForAsync(() => repository.CancelledLostWalks == 1);
         gate.SetResult();
         await WaitForAsync(() => page.ReadsShown == 2);

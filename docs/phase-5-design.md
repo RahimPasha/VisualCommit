@@ -1928,6 +1928,8 @@ each is pinned by the tests named in its merge (`17d8f97`, `a7eb3c9`, `43e8586`,
 - **The reflog's lost marks** (5.2): a read again for the same refs (`RepoRefs.Fingerprint`) and the
   same distinct commits takes the last walk's marks; the walk runs again when an entry is new or a
   ref moved (`ReflogViewModelTests.A_read_again_for_the_same_refs_and_commits_takes_the_last_walks_marks`).
+  A walk that a newer read cancels (below) is not kept
+  (`ReflogViewModelTests.A_newer_read_cancels_the_lost_commits_walk_of_the_read_it_replaces`).
 - **The file history's rows** (4.1, "rows come as git prints them"): they reach the list in
   batches, one UI job and one change of the list (`RowCollection.AddRange`) for whatever has come
   since the last, the first row as soon as it comes; one job per row kept the window from taking
