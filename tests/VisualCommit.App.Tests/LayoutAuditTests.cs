@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -27,6 +28,32 @@ public class LayoutAuditTests
             wrapped.TextLayout.WidthIncludingTrailingWhitespace > wrapped.Bounds.Width + 0.75,
             "The first line's trailing space hangs past the edge, the case this test is about.");
         Assert.Empty(LayoutAudit.FindClippedText(host.Window));
+    }
+
+    /// <summary>
+    /// A list at the bottom of a page that clips shows its last row in part: the page cuts that
+    /// row where the list's view ends anyway, so with scrolled-out text let through it is not a
+    /// fault (phase 5's backups list above the status bar); without, it still is.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_row_cut_at_a_lists_edge_is_let_through_also_where_a_page_around_the_list_ends_there()
+    {
+        var list = new ListBox
+        {
+            ItemsSource = Enumerable.Range(0, 12).Select(row => $"Row {row}").ToList(),
+            ItemTemplate = new FuncDataTemplate<string>((text, _) => new TextBlock { Text = text, Height = 26 }),
+        };
+        var page = new Border { Width = 300, Height = 100, ClipToBounds = true, Child = list, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        using var host = DiffHost.Show(page, 400, 200, ThemeVariant.Dark);
+
+        Assert.NotEmpty(LayoutAudit.FindClippedText(host.Window, allowShortenedWithToolTip: false, allowScrolledOutOfView: false));
+        Assert.Empty(LayoutAudit.FindClippedText(host.Window, allowShortenedWithToolTip: false, allowScrolledOutOfView: true));
+
+        // A text the page cuts inside the list's view is still a fault.
+        page.Height = 60;
+        list.Height = 100;
+        DiffHost.Settle();
+        Assert.NotEmpty(LayoutAudit.FindClippedText(host.Window, allowShortenedWithToolTip: false, allowScrolledOutOfView: true));
     }
 
     [AvaloniaFact]
