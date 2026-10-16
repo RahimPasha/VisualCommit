@@ -17,9 +17,6 @@ namespace VisualCommit.VisualTests.Phase5Undo;
 
 public sealed partial class Phase5ChecksU
 {
-    /// <summary>The sync scenario's left panel under Remotes as it is built: origin, open, with main and published.</summary>
-    private static readonly string[] OriginRemotes = ["origin (open)", "  main", "  published"];
-
     /// <summary>U22 part A: topic's upstream set with the pick dialog, undone (its keys removed) and redone.</summary>
     [AvaloniaFact]
     public async Task Check_U22_set_upstream()
@@ -45,7 +42,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.SetUpstream);
         AssertStatus(app, PartU2.TracksPublished);
-        await AssertUpstreamSetAsync(app, repo);
+        await U22.AssertUpstreamSetAsync(app, repo);
 
         // Step 2: Undo: the keys removed.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.UpstreamText);
@@ -64,17 +61,8 @@ public sealed partial class Phase5ChecksU
             calls,
             "git config --local --add branch.topic.remote origin",
             "git config --local --add branch.topic.merge refs/heads/published");
-        await AssertUpstreamSetAsync(app, repo);
+        await U22.AssertUpstreamSetAsync(app, repo);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U22 after steps 1 and 3: topic tracks origin/published (↑1 ↓1), the graph unchanged, T+.</summary>
-    private static async Task AssertUpstreamSetAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Equal(["branch.topic.remote origin", "branch.topic.merge refs/heads/published"], await Steps.ConfigAsync(repo, @"^branch\.topic\."));
-        Assert.Equal((1, 1), Steps.Arrows(app, "topic"));
-        AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.UpstreamText));
     }
 
     /// <summary>U22 part B: mirror added with "Fetch now" (the copy's origin.git), undone (its keys and its fetched refs gone) and redone without a fetch.</summary>
@@ -112,7 +100,7 @@ public sealed partial class Phase5ChecksU
             [$"refs/remotes/mirror/main {PartU2.SharedWork}", $"refs/remotes/mirror/published {PartU2.PublishedWork}"],
             await Steps.RefsUnderAsync(repo, "refs/remotes/mirror/"));
         Assert.Equal(4, Steps.SectionCount(app, "Remotes"));
-        Assert.Equal(["mirror (open)", "  main", "  published", .. OriginRemotes], Steps.SectionLines(app, "Remotes"));
+        Assert.Equal(["mirror (open)", "  main", "  published", .. U22.OriginRemotes], Steps.SectionLines(app, "Remotes"));
         AssertGraph(app, PartU2.SyncWithMirror, PartU2.SyncLanes);
         Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.AddRemoteText));
 
@@ -129,7 +117,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(config, await File.ReadAllBytesAsync(Path.Combine(repo.Path, ".git", "config")));
         AssertGraph(app, PartU2.Sync, PartU2.SyncLanes, picture: shot);
         Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
-        Assert.Equal(OriginRemotes, Steps.SectionLines(app, "Remotes"));
+        Assert.Equal(U22.OriginRemotes, Steps.SectionLines(app, "Remotes"));
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.AddRemoteText));
 
         // Step 6: Redo: the keys added again, and no fetch: the state right after the add.
@@ -144,7 +132,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal([$"remote.mirror.url {url}", "remote.mirror.fetch +refs/heads/*:refs/remotes/mirror/*"], await Steps.ConfigAsync(repo, @"^remote\.mirror\."));
         Assert.Empty(await Steps.RefsUnderAsync(repo, "refs/remotes/mirror/"));
         Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
-        Assert.Equal(["mirror (open)", .. OriginRemotes], Steps.SectionLines(app, "Remotes"));
+        Assert.Equal(["mirror (open)", .. U22.OriginRemotes], Steps.SectionLines(app, "Remotes"));
         AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
         Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.AddRemoteText));
         AssertNoClippedText(app);
@@ -174,7 +162,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.RenameRemote);
         AssertStatus(app, PartU2.RenamedRemote);
-        await AssertRenamedAsync(app, repo);
+        await U22.AssertRenamedAsync(app, repo);
 
         // Step 8: Undo: renamed back.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.RenameRemoteText);
@@ -185,30 +173,15 @@ public sealed partial class Phase5ChecksU
             [$"refs/remotes/origin/main {PartU2.SharedWork}", $"refs/remotes/origin/published {PartU2.PublishedWork}"],
             await Steps.RefsUnderAsync(repo, "refs/remotes/"));
         AssertGraph(app, PartU2.Sync, PartU2.SyncLanes, picture: shot);
-        Assert.Equal(OriginRemotes, Steps.SectionLines(app, "Remotes"));
+        Assert.Equal(U22.OriginRemotes, Steps.SectionLines(app, "Remotes"));
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.RenameRemoteText));
 
         // Step 9: Redo: renamed again.
         calls = await Steps.StepAsync(app, repo, Redo, PartU2.RenameRemoteText);
         Shot(app, "u22f-rename-redone");
         Steps.AssertSucceeded(app, calls, PartU2.RenameRemote);
-        await AssertRenamedAsync(app, repo);
+        await U22.AssertRenamedAsync(app, repo);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U22 after steps 7 and 9: the remote-tracking refs and the upstreams under upstream, S-up, T+.</summary>
-    private static async Task AssertRenamedAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Equal(["upstream"], await Steps.GitLinesAsync(repo, "remote"));
-        Assert.Equal(
-            [$"refs/remotes/upstream/main {PartU2.SharedWork}", $"refs/remotes/upstream/published {PartU2.PublishedWork}"],
-            await Steps.RefsUnderAsync(repo, "refs/remotes/"));
-        Assert.Equal(["branch.main.remote upstream"], await Steps.ConfigAsync(repo, @"^branch\.main\.remote$"));
-        Assert.Equal(["branch.published.remote upstream"], await Steps.ConfigAsync(repo, @"^branch\.published\.remote$"));
-        AssertGraph(app, PartU2.SyncRenamed, PartU2.SyncLanes);
-        Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
-        Assert.Equal(["upstream (open)", "  main", "  published"], Steps.SectionLines(app, "Remotes"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.RenameRemoteText));
     }
 
     /// <summary>U22 part D: origin's URL changed in the Remotes dialog, undone (the URL read at the start back) and redone.</summary>
@@ -233,7 +206,7 @@ public sealed partial class Phase5ChecksU
         Steps.ClickDialogButton(app, "CancelButton");
         await AssertNoDialogAsync(app);
         AssertStatus(app, PartU2.ChangedUrl);
-        await AssertUrlChangedAsync(app, repo);
+        await U22.AssertUrlChangedAsync(app, repo);
 
         // Step 11: Undo: the URL read at the start back.
         var calls = await Steps.StepAsync(app, repo, Undo, PartU2.UrlText);
@@ -247,16 +220,8 @@ public sealed partial class Phase5ChecksU
         calls = await Steps.StepAsync(app, repo, Redo, PartU2.UrlText);
         Shot(app, "u22h-url-redone");
         Steps.AssertSucceeded(app, calls, PartU2.Command("remote", "set-url", "--", "origin", PartU2.ExampleUrl));
-        await AssertUrlChangedAsync(app, repo);
+        await U22.AssertUrlChangedAsync(app, repo);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U22 after steps 10 and 12: origin's URL is the example's, the graph unchanged, T+.</summary>
-    private static async Task AssertUrlChangedAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Equal(PartU2.ExampleUrl, await Steps.OriginUrlAsync(repo));
-        AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.UrlText));
     }
 
     /// <summary>U22 part E: origin removed with the confirmation stacked over the Remotes dialog, undone (its keys, upstreams and remote branches back) and redone.</summary>
@@ -290,7 +255,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.RemoveRemote);
         AssertStatus(app, PartU2.RemovedRemote);
-        await AssertRemoteRemovedAsync(app, repo, backups);
+        await U22.AssertRemoteRemovedAsync(app, repo, backups);
 
         // Step 14: Undo: the remote's keys and its branches' upstreams added, its remote branches created.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.RemoveRemoteText);
@@ -319,7 +284,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal((1, 0), Steps.Arrows(app, "published"));
         AssertGraph(app, PartU2.Sync, PartU2.SyncLanes, picture: shot);
         Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
-        Assert.Equal(OriginRemotes, Steps.SectionLines(app, "Remotes"));
+        Assert.Equal(U22.OriginRemotes, Steps.SectionLines(app, "Remotes"));
         Assert.Equal(backups, await Steps.BackupLinesAsync(repo));
         Steps.AssertButtons(app, UndoRedoButtons.CanRedo(PartU2.RemoveRemoteText));
 
@@ -335,23 +300,8 @@ public sealed partial class Phase5ChecksU
             AssertCalledInOrder(app, calls, transaction.CommandText, $"git config --local --remove-section {section}");
         }
 
-        await AssertRemoteRemovedAsync(app, repo, backups);
+        await U22.AssertRemoteRemovedAsync(app, repo, backups);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U22 after steps 13 and 15: no remote, no upstream keys, no remote branches, the backups, S-none, Remotes 0, T+.</summary>
-    private static async Task AssertRemoteRemovedAsync(ShellDriver app, TempRepo repo, IReadOnlyList<string> backups)
-    {
-        Assert.Empty(await Steps.GitLinesAsync(repo, "remote"));
-        Assert.Empty(await Steps.ConfigAsync(repo, @"^remote\.origin\."));
-        Assert.Empty(await Steps.ConfigAsync(repo, @"^branch\.(main|published)\.(remote|merge)$"));
-        Assert.Empty(await Steps.RefsUnderAsync(repo, "refs/remotes/"));
-        Assert.Equal(backups, await Steps.BackupLinesAsync(repo));
-        AssertGraph(app, PartU2.SyncWithoutRemote, PartU2.SyncLanes);
-        Assert.Equal(0, Steps.SectionCount(app, "Remotes"));
-        Assert.Equal((0, 0), Steps.Arrows(app, "published"));
-        Assert.Equal((0, 0), Steps.Arrows(app, "main"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.RemoveRemoteText));
     }
 
     /// <summary>U22 part F: "Ignore run.log" on an untracked file, undone (the .gitignore it created deleted) and redone.</summary>
@@ -374,7 +324,7 @@ public sealed partial class Phase5ChecksU
         await Steps.RunMenuItemAsync(app, repo, "Ignore run.log", "Ignore run.log");
         await AssertNoDialogAsync(app);
         AssertStatus(app, PartU2.Ignored);
-        await AssertIgnoredAsync(app, repo);
+        await U22.AssertIgnoredAsync(app, repo);
 
         // Step 17: Undo: the .gitignore the app created deleted.
         await Steps.StepAsync(app, repo, Undo, PartU2.IgnoreText);
@@ -389,18 +339,72 @@ public sealed partial class Phase5ChecksU
         // Step 18: Redo: .gitignore again.
         await Steps.StepAsync(app, repo, Redo, PartU2.IgnoreText);
         Shot(app, "u22l-ignore-redone");
-        await AssertIgnoredAsync(app, repo);
+        await U22.AssertIgnoredAsync(app, repo);
         AssertNoClippedText(app);
     }
 
-    /// <summary>U22 after steps 16 and 18: .gitignore exactly "/logs/run.log\n", untracked alone, the stage panel's one row, T+.</summary>
-    private static async Task AssertIgnoredAsync(ShellDriver app, TempRepo repo)
+    /// <summary>The helpers of check U22's methods.</summary>
+    private static class U22
     {
-        Assert.Equal(System.Text.Encoding.ASCII.GetBytes(PartU2.Gitignore), await File.ReadAllBytesAsync(Path.Combine(repo.Path, ".gitignore")));
-        Assert.Equal([PartU2.OnMain, "?? .gitignore"], await Steps.StatusAsync(repo));
-        await Steps.WaitForUnstagedAsync(app, "Unstaged files (1)");
-        await app.WaitForAsync(() => Steps.FileRows(app, "UnstagedFileList").SequenceEqual(["A .gitignore"]), "the stage panel to list .gitignore alone");
-        AssertGraph(app, PartU2.G0, PartU2.G0Lanes, PartU2.Working);
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.IgnoreText));
+        /// <summary>The sync scenario's left panel under Remotes as it is built: origin, open, with main and published.</summary>
+        public static readonly string[] OriginRemotes = ["origin (open)", "  main", "  published"];
+
+        /// <summary>U22 after steps 1 and 3: topic tracks origin/published (↑1 ↓1), the graph unchanged, T+.</summary>
+        public static async Task AssertUpstreamSetAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal(["branch.topic.remote origin", "branch.topic.merge refs/heads/published"], await Steps.ConfigAsync(repo, @"^branch\.topic\."));
+            Assert.Equal((1, 1), Steps.Arrows(app, "topic"));
+            AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.UpstreamText));
+        }
+
+        /// <summary>U22 after steps 7 and 9: the remote-tracking refs and the upstreams under upstream, S-up, T+.</summary>
+        public static async Task AssertRenamedAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal(["upstream"], await Steps.GitLinesAsync(repo, "remote"));
+            Assert.Equal(
+                [$"refs/remotes/upstream/main {PartU2.SharedWork}", $"refs/remotes/upstream/published {PartU2.PublishedWork}"],
+                await Steps.RefsUnderAsync(repo, "refs/remotes/"));
+            Assert.Equal(["branch.main.remote upstream"], await Steps.ConfigAsync(repo, @"^branch\.main\.remote$"));
+            Assert.Equal(["branch.published.remote upstream"], await Steps.ConfigAsync(repo, @"^branch\.published\.remote$"));
+            AssertGraph(app, PartU2.SyncRenamed, PartU2.SyncLanes);
+            Assert.Equal(2, Steps.SectionCount(app, "Remotes"));
+            Assert.Equal(["upstream (open)", "  main", "  published"], Steps.SectionLines(app, "Remotes"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.RenameRemoteText));
+        }
+
+        /// <summary>U22 after steps 10 and 12: origin's URL is the example's, the graph unchanged, T+.</summary>
+        public static async Task AssertUrlChangedAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal(PartU2.ExampleUrl, await Steps.OriginUrlAsync(repo));
+            AssertGraph(app, PartU2.Sync, PartU2.SyncLanes);
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.UrlText));
+        }
+
+        /// <summary>U22 after steps 13 and 15: no remote, no upstream keys, no remote branches, the backups, S-none, Remotes 0, T+.</summary>
+        public static async Task AssertRemoteRemovedAsync(ShellDriver app, TempRepo repo, IReadOnlyList<string> backups)
+        {
+            Assert.Empty(await Steps.GitLinesAsync(repo, "remote"));
+            Assert.Empty(await Steps.ConfigAsync(repo, @"^remote\.origin\."));
+            Assert.Empty(await Steps.ConfigAsync(repo, @"^branch\.(main|published)\.(remote|merge)$"));
+            Assert.Empty(await Steps.RefsUnderAsync(repo, "refs/remotes/"));
+            Assert.Equal(backups, await Steps.BackupLinesAsync(repo));
+            AssertGraph(app, PartU2.SyncWithoutRemote, PartU2.SyncLanes);
+            Assert.Equal(0, Steps.SectionCount(app, "Remotes"));
+            Assert.Equal((0, 0), Steps.Arrows(app, "published"));
+            Assert.Equal((0, 0), Steps.Arrows(app, "main"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.RemoveRemoteText));
+        }
+
+        /// <summary>U22 after steps 16 and 18: .gitignore exactly "/logs/run.log\n", untracked alone, the stage panel's one row, T+.</summary>
+        public static async Task AssertIgnoredAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal(System.Text.Encoding.ASCII.GetBytes(PartU2.Gitignore), await File.ReadAllBytesAsync(Path.Combine(repo.Path, ".gitignore")));
+            Assert.Equal([PartU2.OnMain, "?? .gitignore"], await Steps.StatusAsync(repo));
+            await Steps.WaitForUnstagedAsync(app, "Unstaged files (1)");
+            await app.WaitForAsync(() => Steps.FileRows(app, "UnstagedFileList").SequenceEqual(["A .gitignore"]), "the stage panel to list .gitignore alone");
+            AssertGraph(app, PartU2.G0, PartU2.G0Lanes, PartU2.Working);
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.IgnoreText));
+        }
     }
 }

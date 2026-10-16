@@ -39,7 +39,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.StashPush);
         AssertStatus(app, PartU2.Stashed);
-        await AssertStashedAsync(app, repo);
+        await U20.AssertStashedAsync(app, repo);
 
         // Step 2: Undo: popped with its index, found by its commit.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.StashText);
@@ -58,18 +58,8 @@ public sealed partial class Phase5ChecksU
         calls = await Steps.StepAsync(app, repo, Redo, PartU2.StashText);
         Shot(app, "u20b-stash-redone");
         Steps.AssertSucceeded(app, calls, PartU2.StashPush);
-        await AssertStashedAsync(app, repo);
+        await U20.AssertStashedAsync(app, repo);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U20 after steps 1 and 3: the stash list, a clean tree, G0-S, Stashes 2 and T+.</summary>
-    private static async Task AssertStashedAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Equal(PartU2.TwoStashes, await Steps.StashListAsync(repo));
-        Assert.Equal([PartU2.OnMain], await Steps.StatusAsync(repo));
-        AssertGraph(app, PartU2.G0TwoStashes, lanes: 4);
-        Assert.Equal(2, Steps.SectionCount(app, "Stashes"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.StashText));
     }
 
     /// <summary>U20 part B: "Apply stash" from the stash's menu, undone by the index entries and the files' bytes (no stash call), and redone.</summary>
@@ -88,7 +78,7 @@ public sealed partial class Phase5ChecksU
         var calls = await Steps.RunMenuItemAsync(app, repo, "Apply stash", "Apply stash@{0}");
         Steps.AssertSucceeded(app, calls, PartU2.StashApply);
         AssertStatus(app, PartU2.Applied);
-        await AssertAppliedAsync(app, repo);
+        await U20.AssertAppliedAsync(app, repo);
 
         // Step 5: Undo: the index entries, then README.md's recorded bytes; no git stash call.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.ApplyText);
@@ -97,7 +87,7 @@ public sealed partial class Phase5ChecksU
             [PartU2.IndexInfo],
             Steps.OperationCallsSince(app, calls).Where(call => call.StartsWith("git update-index", StringComparison.Ordinal)));
         Steps.AssertSucceeded(app, calls, PartU2.IndexInfo);
-        AssertNoStashWrite(app, calls);
+        U20.AssertNoStashWrite(app, calls);
         Assert.Equal(index, await Steps.GitLinesAsync(repo, "ls-files", "--stage"));
         Assert.Contains(index, line => line.StartsWith($"100644 {PartU2.ReadmeBlob}", StringComparison.Ordinal) && line.EndsWith("\tREADME.md", StringComparison.Ordinal));
         Assert.Equal(Scenarios.OperationsFiles.Readme, Steps.FileText(repo, "README.md"));
@@ -110,28 +100,9 @@ public sealed partial class Phase5ChecksU
         calls = await Steps.StepAsync(app, repo, Redo, PartU2.ApplyText);
         Shot(app, "u20d-apply-redone");
         Steps.AssertSucceeded(app, calls, PartU2.IndexInfo);
-        AssertNoStashWrite(app, calls);
-        await AssertAppliedAsync(app, repo);
+        U20.AssertNoStashWrite(app, calls);
+        await U20.AssertAppliedAsync(app, repo);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>
-    /// "No git stash call" in an apply's undo and redo (7.3: index entries and files): no stash
-    /// command but the stash list the history reads before and after every step (7.7).
-    /// </summary>
-    private static void AssertNoStashWrite(ShellDriver app, int mark) =>
-        Assert.DoesNotContain(
-            CallsSince(app, mark),
-            call => call.StartsWith("git stash", StringComparison.Ordinal) && !call.StartsWith("git stash list", StringComparison.Ordinal));
-
-    /// <summary>U20 after steps 4 and 6: README.md changed, the stash kept, G0+w, T+.</summary>
-    private static async Task AssertAppliedAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Equal([PartU2.OnMain, " M README.md"], await Steps.StatusAsync(repo));
-        Assert.Equal(Scenarios.OperationsFiles.ReadmeStashed, Steps.FileText(repo, "README.md"));
-        Assert.Equal(PartU2.ExperimentOnly, await Steps.StashListAsync(repo));
-        AssertGraph(app, PartU2.G0, PartU2.G0Lanes, PartU2.Working);
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.ApplyText));
     }
 
     /// <summary>U20 part C: "Pop stash" (a backup saved first, D171), undone by storing the stash again and putting the files back, and redone.</summary>
@@ -149,7 +120,7 @@ public sealed partial class Phase5ChecksU
         var calls = await Steps.RunMenuItemAsync(app, repo, "Pop stash", "Pop stash@{0}");
         Steps.AssertSucceeded(app, calls, PartU2.StashPop);
         AssertStatus(app, PartU2.Popped);
-        await AssertPoppedAsync(app, repo, PartU2.PopText);
+        await U20.AssertPoppedAsync(app, repo, PartU2.PopText);
 
         // Step 8: Undo: the stash stored again first, then the index entries and README.md's bytes.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.PopText);
@@ -168,20 +139,8 @@ public sealed partial class Phase5ChecksU
         calls = await Steps.StepAsync(app, repo, Redo, PartU2.PopText);
         Shot(app, "u20f-pop-redone");
         AssertCalledInOrder(app, calls, PartU2.IndexInfo, PartU2.StashDrop);
-        await AssertPoppedAsync(app, repo, PartU2.PopText);
+        await U20.AssertPoppedAsync(app, repo, PartU2.PopText);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U20 after steps 7 and 9: README.md changed, no stash, one backup, G0-s with the working row in Main work's lane, Stashes 0, T+.</summary>
-    private static async Task AssertPoppedAsync(ShellDriver app, TempRepo repo, string text)
-    {
-        Assert.Equal([PartU2.OnMain, " M README.md"], await Steps.StatusAsync(repo));
-        Assert.Equal(Scenarios.OperationsFiles.ReadmeStashed, Steps.FileText(repo, "README.md"));
-        Assert.Empty(await Steps.StashListAsync(repo));
-        Assert.Equal([$"{PartU2.FirstBackup("stash")} {PartU2.Experiment}"], await Steps.BackupLinesAsync(repo));
-        AssertGraph(app, PartU2.G0NoStash, PartU2.G0Lanes, PartU2.WorkingAfterPop);
-        Assert.Equal(0, Steps.SectionCount(app, "Stashes"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(text));
     }
 
     /// <summary>U20 part D: "Drop stash…" with phase 3's confirmation, undone by storing the stash again, and redone.</summary>
@@ -205,7 +164,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.StashDrop);
         AssertStatus(app, PartU2.Dropped);
-        await AssertDroppedAsync(app, repo);
+        await U20.AssertDroppedAsync(app, repo);
 
         // Step 11: Undo: the stash stored again.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.DropText);
@@ -221,19 +180,8 @@ public sealed partial class Phase5ChecksU
         calls = await Steps.StepAsync(app, repo, Redo, PartU2.DropText);
         Shot(app, "u20h-drop-redone");
         Steps.AssertSucceeded(app, calls, PartU2.StashDrop);
-        await AssertDroppedAsync(app, repo);
+        await U20.AssertDroppedAsync(app, repo);
         AssertNoClippedText(app);
-    }
-
-    /// <summary>U20 after steps 10 and 12: no stash, its backup, G0-s, Stashes 0, T+.</summary>
-    private static async Task AssertDroppedAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Empty(await Steps.StashListAsync(repo));
-        Assert.Equal([PartU2.OnMain], await Steps.StatusAsync(repo));
-        Assert.Equal([$"{PartU2.FirstBackup("stash")} {PartU2.Experiment}"], await Steps.BackupLinesAsync(repo));
-        AssertGraph(app, PartU2.G0NoStash, PartU2.G0Lanes);
-        Assert.Equal(0, Steps.SectionCount(app, "Stashes"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.DropText));
     }
 
     /// <summary>U20 part E: an annotated tag created, undone (its object kept in a tag-undone- backup first) and redone as the same tag object.</summary>
@@ -260,7 +208,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.CreateTag);
         AssertStatus(app, PartU2.CreatedTag);
-        await AssertTagCreatedAsync(app, repo);
+        await U20.AssertTagCreatedAsync(app, repo);
         Assert.Empty(await Steps.BackupLinesAsync(repo));
 
         // Step 14: Undo: the tag object kept in a tag-undone- backup first, then the tag deleted in the step's transaction.
@@ -270,7 +218,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal([$"{backupName} {PartU2.V12TagObject}"], await Steps.BackupLinesAsync(repo));
         var transaction = Steps.AssertSucceeded(app, calls, PartU2.Transaction(PartU2.UndoMessage(PartU2.CreateTagText)));
         Assert.Equal($"delete refs/tags/v1.2 {PartU2.V12TagObject}\n", transaction.StandardInput);
-        AssertBackupBeforeTransaction(app, calls, backupName, transaction.CommandText);
+        U20.AssertBackupBeforeTransaction(app, calls, backupName, transaction.CommandText);
         Assert.Equal(["v1.0", "v1.1"], await Steps.TagsAsync(repo));
         AssertGraph(app, PartU2.G0, PartU2.G0Lanes, picture: shot);
         Assert.Equal(2, Steps.SectionCount(app, "Tags"));
@@ -282,32 +230,9 @@ public sealed partial class Phase5ChecksU
         transaction = Steps.AssertSucceeded(app, calls, PartU2.Transaction(PartU2.RedoMessage(PartU2.CreateTagText)));
         Assert.Equal($"create refs/tags/v1.2 {PartU2.V12TagObject}\n", transaction.StandardInput);
         Assert.Equal(["tag"], await Steps.GitLinesAsync(repo, "cat-file", "-t", "v1.2"));
-        await AssertTagCreatedAsync(app, repo);
+        await U20.AssertTagCreatedAsync(app, repo);
         Assert.Equal([$"{backupName} {PartU2.V12TagObject}"], await Steps.BackupLinesAsync(repo));
         AssertNoClippedText(app);
-    }
-
-    /// <summary>
-    /// The tag-undone- backup ref was written before the step's transaction: the call that wrote it
-    /// (the backup's own <c>update-ref</c>, whatever its form) comes before the transaction in the
-    /// step's calls.
-    /// </summary>
-    private static void AssertBackupBeforeTransaction(ShellDriver app, int mark, string backupName, string transaction)
-    {
-        var calls = app.GitCalls().Skip(mark).ToList();
-        var backup = calls.FindIndex(call => call.CommandText.Contains(backupName, StringComparison.Ordinal) || (call.StandardInput?.Contains(backupName, StringComparison.Ordinal) ?? false));
-        var delete = calls.FindIndex(call => call.CommandText == transaction);
-        Assert.True(backup >= 0 && backup < delete, "The backup was not written before the tag's deletion:\n" + string.Join('\n', calls.Select(call => call.CommandText)));
-    }
-
-    /// <summary>U20 after steps 13 and 15: v1.2 the annotated tag object, G0 v1.2, Tags 3, T+.</summary>
-    private static async Task AssertTagCreatedAsync(ShellDriver app, TempRepo repo)
-    {
-        Assert.Equal(PartU2.V12TagObject, await Steps.RefAsync(repo, "refs/tags/v1.2"));
-        Assert.Equal(PartU2.V12Object, (await repo.GitAsync("cat-file", "-p", "v1.2")).StandardOutput.TrimEnd('\n').Split('\n'));
-        AssertGraph(app, PartU2.G0WithV12, PartU2.G0Lanes);
-        Assert.Equal(3, Steps.SectionCount(app, "Tags"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.CreateTagText));
     }
 
     /// <summary>U20 part F: a tag deleted with phase 3's confirmation, undone (the tag object back) and redone.</summary>
@@ -332,7 +257,7 @@ public sealed partial class Phase5ChecksU
         await AssertNoDialogAsync(app);
         Steps.AssertSucceeded(app, calls, PartU2.DeleteTag);
         AssertStatus(app, PartU2.DeletedTag);
-        await AssertTagDeletedAsync(app, repo, backupName);
+        await U20.AssertTagDeletedAsync(app, repo, backupName);
 
         // Step 17: Undo: the tag object back, in the step's transaction.
         calls = await Steps.StepAsync(app, repo, Undo, PartU2.DeleteTagText);
@@ -353,18 +278,97 @@ public sealed partial class Phase5ChecksU
         Shot(app, "u20l-tag-delete-redone");
         transaction = Steps.AssertSucceeded(app, calls, PartU2.Transaction(PartU2.RedoMessage(PartU2.DeleteTagText)));
         Assert.Equal($"delete refs/tags/v1.0 {PartU2.V10TagObject}\n", transaction.StandardInput);
-        await AssertTagDeletedAsync(app, repo, backupName);
+        await U20.AssertTagDeletedAsync(app, repo, backupName);
         AssertNoClippedText(app);
     }
 
-    /// <summary>U20 after steps 16 and 18: no v1.0, its backup, G0 −v1.0, Tags 1, T+.</summary>
-    private static async Task AssertTagDeletedAsync(ShellDriver app, TempRepo repo, string backupName)
+    /// <summary>The helpers of check U20's methods.</summary>
+    private static class U20
     {
-        Assert.Null(await Steps.RefAsync(repo, "refs/tags/v1.0"));
-        Assert.Equal(["v1.1"], await Steps.TagsAsync(repo));
-        Assert.Equal([$"{backupName} {PartU2.V10TagObject}"], await Steps.BackupLinesAsync(repo));
-        AssertGraph(app, PartU2.G0WithoutV10, PartU2.G0Lanes);
-        Assert.Equal(1, Steps.SectionCount(app, "Tags"));
-        Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.DeleteTagText));
+        /// <summary>U20 after steps 1 and 3: the stash list, a clean tree, G0-S, Stashes 2 and T+.</summary>
+        public static async Task AssertStashedAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal(PartU2.TwoStashes, await Steps.StashListAsync(repo));
+            Assert.Equal([PartU2.OnMain], await Steps.StatusAsync(repo));
+            AssertGraph(app, PartU2.G0TwoStashes, lanes: 4);
+            Assert.Equal(2, Steps.SectionCount(app, "Stashes"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.StashText));
+        }
+
+        /// <summary>
+        /// "No git stash call" in an apply's undo and redo (7.3: index entries and files): no stash
+        /// command but the stash list the history reads before and after every step (7.7).
+        /// </summary>
+        public static void AssertNoStashWrite(ShellDriver app, int mark) =>
+            Assert.DoesNotContain(
+                CallsSince(app, mark),
+                call => call.StartsWith("git stash", StringComparison.Ordinal) && !call.StartsWith("git stash list", StringComparison.Ordinal));
+
+        /// <summary>U20 after steps 4 and 6: README.md changed, the stash kept, G0+w, T+.</summary>
+        public static async Task AssertAppliedAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal([PartU2.OnMain, " M README.md"], await Steps.StatusAsync(repo));
+            Assert.Equal(Scenarios.OperationsFiles.ReadmeStashed, Steps.FileText(repo, "README.md"));
+            Assert.Equal(PartU2.ExperimentOnly, await Steps.StashListAsync(repo));
+            AssertGraph(app, PartU2.G0, PartU2.G0Lanes, PartU2.Working);
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.ApplyText));
+        }
+
+        /// <summary>U20 after steps 7 and 9: README.md changed, no stash, one backup, G0-s with the working row in Main work's lane, Stashes 0, T+.</summary>
+        public static async Task AssertPoppedAsync(ShellDriver app, TempRepo repo, string text)
+        {
+            Assert.Equal([PartU2.OnMain, " M README.md"], await Steps.StatusAsync(repo));
+            Assert.Equal(Scenarios.OperationsFiles.ReadmeStashed, Steps.FileText(repo, "README.md"));
+            Assert.Empty(await Steps.StashListAsync(repo));
+            Assert.Equal([$"{PartU2.FirstBackup("stash")} {PartU2.Experiment}"], await Steps.BackupLinesAsync(repo));
+            AssertGraph(app, PartU2.G0NoStash, PartU2.G0Lanes, PartU2.WorkingAfterPop);
+            Assert.Equal(0, Steps.SectionCount(app, "Stashes"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(text));
+        }
+
+        /// <summary>U20 after steps 10 and 12: no stash, its backup, G0-s, Stashes 0, T+.</summary>
+        public static async Task AssertDroppedAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Empty(await Steps.StashListAsync(repo));
+            Assert.Equal([PartU2.OnMain], await Steps.StatusAsync(repo));
+            Assert.Equal([$"{PartU2.FirstBackup("stash")} {PartU2.Experiment}"], await Steps.BackupLinesAsync(repo));
+            AssertGraph(app, PartU2.G0NoStash, PartU2.G0Lanes);
+            Assert.Equal(0, Steps.SectionCount(app, "Stashes"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.DropText));
+        }
+
+        /// <summary>
+        /// The tag-undone- backup ref was written before the step's transaction: the call that wrote it
+        /// (the backup's own <c>update-ref</c>, whatever its form) comes before the transaction in the
+        /// step's calls.
+        /// </summary>
+        public static void AssertBackupBeforeTransaction(ShellDriver app, int mark, string backupName, string transaction)
+        {
+            var calls = app.GitCalls().Skip(mark).ToList();
+            var backup = calls.FindIndex(call => call.CommandText.Contains(backupName, StringComparison.Ordinal) || (call.StandardInput?.Contains(backupName, StringComparison.Ordinal) ?? false));
+            var delete = calls.FindIndex(call => call.CommandText == transaction);
+            Assert.True(backup >= 0 && backup < delete, "The backup was not written before the tag's deletion:\n" + string.Join('\n', calls.Select(call => call.CommandText)));
+        }
+
+        /// <summary>U20 after steps 13 and 15: v1.2 the annotated tag object, G0 v1.2, Tags 3, T+.</summary>
+        public static async Task AssertTagCreatedAsync(ShellDriver app, TempRepo repo)
+        {
+            Assert.Equal(PartU2.V12TagObject, await Steps.RefAsync(repo, "refs/tags/v1.2"));
+            Assert.Equal(PartU2.V12Object, (await repo.GitAsync("cat-file", "-p", "v1.2")).StandardOutput.TrimEnd('\n').Split('\n'));
+            AssertGraph(app, PartU2.G0WithV12, PartU2.G0Lanes);
+            Assert.Equal(3, Steps.SectionCount(app, "Tags"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.CreateTagText));
+        }
+
+        /// <summary>U20 after steps 16 and 18: no v1.0, its backup, G0 −v1.0, Tags 1, T+.</summary>
+        public static async Task AssertTagDeletedAsync(ShellDriver app, TempRepo repo, string backupName)
+        {
+            Assert.Null(await Steps.RefAsync(repo, "refs/tags/v1.0"));
+            Assert.Equal(["v1.1"], await Steps.TagsAsync(repo));
+            Assert.Equal([$"{backupName} {PartU2.V10TagObject}"], await Steps.BackupLinesAsync(repo));
+            AssertGraph(app, PartU2.G0WithoutV10, PartU2.G0Lanes);
+            Assert.Equal(1, Steps.SectionCount(app, "Tags"));
+            Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.DeleteTagText));
+        }
     }
 }
