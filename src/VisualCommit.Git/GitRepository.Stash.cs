@@ -148,7 +148,7 @@ public sealed partial class GitRepository
         }
 
         var wanted = changed.ToHashSet(StringComparer.Ordinal);
-        var output = await ReadOutputAsync(cancellationToken, "diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", stashCommit, "--").ConfigureAwait(false);
+        var output = await ReadOutputAsync(cancellationToken, "diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", "--no-color", stashCommit, "--").ConfigureAwait(false);
         return [.. SplitNul(output).Where(wanted.Contains)];
     }
 
