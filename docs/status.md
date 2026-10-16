@@ -286,6 +286,14 @@ pass on one commit, after telling the owner, every picture inspected), then the 
   and after, then the refresh): 1.2 s alone on the laptop, 3 s on CI. Measure the reads 7.7 makes
   per action kind and cut what can be batched or skipped, without losing what an undo needs. The
   headless harness's default wait is 30 s since `5bdd1de` because of it.
+- **The gate's references (design 15.7), made on 2026-10-16 outside the repository** in
+  `D:/Projects/Personal/gate5-reference/`: `real-window/` holds phases 0 to 4's 210 real-window
+  pictures from phase 4's gate (all match `phase-4-pictures.sha256`), copied before phase 5's
+  first real-window pass; `scripted/` holds the 510 pictures of phases 0 to 4's walk-throughs run
+  on `master` (`0883669`, 221 checks passed); 485 match phase 4's list, and the 25 that vary by
+  nature are named in `master-differs-from-phase4-list.txt` (inspect those in full). Compare a
+  gate run with `python scripts/compare-pictures.py D:/Projects/Personal/gate5-reference/scripted
+  artifacts/visual <output folder>` (and the real-window ones against `.../real-window`).
 - If a session resumes while `.claude/worktrees/p5-*` exist: each holds a package's unmerged
   work on its `wip/p5-*` branch (local only, not pushed). Merge the finished ones with `--no-ff`
   after building them; ask the owner before discarding any.
