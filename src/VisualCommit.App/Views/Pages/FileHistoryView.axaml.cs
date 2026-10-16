@@ -185,15 +185,26 @@ public partial class FileHistoryView : UserControl
     /// Esc (11.1, <see cref="EscapeOrder.Page"/>): the page closes and the graph takes the focus;
     /// it declines while a diff covers the page (it is not visible then) or a text box has the focus.
     /// </summary>
-    private bool HandleEscape()
+    private bool HandleEscape() => PageEscape.TryClose(this, _viewModel);
+}
+
+/// <summary>
+/// Esc on a page of the graph area (11.1, <see cref="EscapeOrder.Page"/>), one rule for the file
+/// history, the blame and the reflog: the page closes and the graph takes the focus; it declines
+/// while a diff covers the page (it is not visible then) or a text box has the focus.
+/// </summary>
+internal static class PageEscape
+{
+    /// <summary>Closes <paramref name="page"/>, shown by <paramref name="view"/>, when Esc is the page's; true when it did.</summary>
+    public static bool TryClose(Control view, GraphAreaPageViewModel? page)
     {
-        if (_viewModel is not { IsClosed: false } viewModel || !IsEffectivelyVisible
-            || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
+        if (page is not { IsClosed: false } open || !view.IsEffectivelyVisible
+            || TopLevel.GetTopLevel(view)?.FocusManager?.GetFocusedElement() is TextBox)
         {
             return false;
         }
 
-        viewModel.Close();
+        open.Close();
         return true;
     }
 }

@@ -113,6 +113,12 @@ public class BlameViewModelTests
         await empty.LoadAsync();
         Assert.Equal("empty.txt is empty", empty.Message);
 
+        // A submodule (15.9): git cannot blame it, and the page says so as for a binary file.
+        repository.Blame = (_, _) => new BlameResult([]) { IsSubmodule = true };
+        using var submodule = new BlameViewModel(host, new BlameRequest("libs/sub", HeadSha));
+        await submodule.LoadAsync();
+        Assert.Equal(("sub is a submodule: it has no lines to blame", false, true), (submodule.Message, submodule.IsError, submodule.ShowsMessage));
+
         repository.Blame = (_, _) => throw new BlameIgnoreRevsFileMissingException(".git-blame-ignore-revs", "fatal: could not open object name list: .git-blame-ignore-revs\n");
         using var ignoreRevs = new BlameViewModel(host, new BlameRequest("a.txt", null));
         await ignoreRevs.LoadAsync();

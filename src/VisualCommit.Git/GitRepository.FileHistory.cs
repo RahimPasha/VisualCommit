@@ -94,6 +94,12 @@ public sealed partial class GitRepository
             throw new BlameIgnoreRevsFileMissingException(file, result.StandardError);
         }
 
+        if (!result.Succeeded && await IsGitlinkAsync(sha, path, cancellationToken).ConfigureAwait(false))
+        {
+            // A submodule has no lines: git refuses it with a fatal error of its own (15.9).
+            return new BlameResult([]) { IsSubmodule = true };
+        }
+
         result.EnsureSuccess(command);
         try
         {
@@ -102,6 +108,26 @@ public sealed partial class GitRepository
         catch (FormatException ex)
         {
             throw new GitException(command.DisplayText, result.ExitCode, $"Unexpected output: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is a submodule in <paramref name="sha"/>'s tree
+    /// (<c>ls-tree</c>), or in the index for the working tree's blame (<c>ls-files --stage</c>):
+    /// its entry's mode is 160000. False when that cannot be read.
+    /// </summary>
+    private async Task<bool> IsGitlinkAsync(string? sha, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var output = sha is null
+                ? await ReadOutputAsync(cancellationToken, "ls-files", "--stage", "-z", "--", path).ConfigureAwait(false)
+                : await ReadOutputAsync(cancellationToken, "ls-tree", "-z", sha, "--", path).ConfigureAwait(false);
+            return SplitNul(output).Any(entry => entry.StartsWith("160000 ", StringComparison.Ordinal));
+        }
+        catch (GitException)
+        {
+            return false;
         }
     }
 

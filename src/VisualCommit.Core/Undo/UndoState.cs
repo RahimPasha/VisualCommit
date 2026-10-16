@@ -84,13 +84,29 @@ public sealed record ConfigEntry(string Key, string Value)
 /// (<see cref="UndoScope.KeepsFileBytes"/>).
 /// </summary>
 /// <param name="Path">The repository-relative path, with <c>/</c>.</param>
-/// <param name="Blob">The blob that holds the file's bytes; null when the file did not exist, or when only its SHA-256 was recorded.</param>
-/// <param name="Sha256">The SHA-256 of the file's bytes, upper-case hex, or null when the file did not exist.</param>
+/// <param name="Blob">
+/// The blob that holds the file's bytes; null when the file did not exist, when something other
+/// than a file stood at its path (<see cref="InTheWay"/>), or when only its SHA-256 was recorded.
+/// </param>
+/// <param name="Sha256">
+/// The SHA-256 of the file's bytes, upper-case hex, or null when the file did not exist, or
+/// <see cref="InTheWay"/> when something other than a file stood at its path.
+/// </param>
 public sealed record RecordedFile(string Path, string? Blob, string? Sha256)
 {
-    public bool Exists => Sha256 is not null;
+    /// <summary>
+    /// The <see cref="Sha256"/> of a path where something other than a file stands
+    /// (<see cref="WorkingTreeFiles.IsInTheWayOfFile"/>: a folder holding files, or a file where
+    /// one of the path's folders should be; docs/phase-5-design.md 15.9). It equals neither a
+    /// file's hash nor absence, so that the checks refuse a step that would write the file there:
+    /// git's restore would delete what stands there without a word.
+    /// </summary>
+    public const string InTheWay = "in the way";
 
-    /// <summary>Whether this is the same file content as <paramref name="other"/>: the same path, both absent or both with the same SHA-256, whether or not either kept its bytes.</summary>
+    /// <summary>Whether a file stood at the path: a SHA-256 was recorded, and it is not <see cref="InTheWay"/>. Its bytes may not have been kept (<see cref="Blob"/>).</summary>
+    public bool Exists => Sha256 is not null && !string.Equals(Sha256, InTheWay, StringComparison.Ordinal);
+
+    /// <summary>Whether this is the same file content as <paramref name="other"/>: the same path, both absent, both <see cref="InTheWay"/> or both with the same SHA-256, whether or not either kept its bytes.</summary>
     public bool SameContent(RecordedFile other)
     {
         ArgumentNullException.ThrowIfNull(other);

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -695,14 +696,22 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             }
         }
 
+        // What is saved is decided inside the operation (docs/phase-5-design.md 15.9): a file
+        // edited while the question was open, or while the restore waited in the queue, is saved
+        // too, also one the question did not name.
+        var backupSaved = new StrongBox<bool>();
         return await WriteAsync(
             "Restore",
             "Restoring…",
             async cancellationToken =>
             {
-                if (changed.Count > 0)
+                var newer = await ChangedSinceDiscardAsync(cancellationToken);
+                if (newer.Count > 0)
                 {
-                    await Repository.SaveSnapshotAsync(changed, cancellationToken);
+                    // The newer changes' snapshot is a backup too (D139): the clean-up follows the
+                    // recording, whose entry keeps the snapshot restored from (7.8).
+                    await Repository.SaveSnapshotAsync(newer, cancellationToken);
+                    backupSaved.Value = true;
                 }
 
                 await Repository.RestoreSnapshotAsync(snapshot, cancellationToken);
@@ -710,13 +719,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 _lastSnapshot = null;
                 _afterDiscard = null;
                 Changes.HideRestore();
-                if (changed.Count > 0)
-                {
-                    // The newer changes' snapshot is a backup too (D139).
-                    await Operations.CleanUpBackupsAsync();
-                }
             },
-            UndoScope.Restore(snapshot.Paths));
+            UndoScope.Restore(snapshot.Paths),
+            backupSaved: backupSaved);
     }
 
     public async Task<string?> CommitAsync(string message, bool amend)
@@ -1072,7 +1077,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>
     /// A hash of each working-tree file's bytes, null for a file that does not exist; a file that
-    /// cannot be read gets a value of its own, so that it counts as changed.
+    /// cannot be read gets a value of its own, so that it counts as changed, and so does a path
+    /// where a folder holding files or a file in a folder's place now stands (docs/phase-5-design.md
+    /// 15.9), which the restore then refuses rather than delete.
     /// </summary>
     private Task<Dictionary<string, string?>> FingerprintAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
@@ -1087,7 +1094,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     {
                         if (!File.Exists(full))
                         {
-                            return null;
+                            return WorkingTreeFiles.IsInTheWayOfFile(root, path) ? RecordedFile.InTheWay : null;
                         }
 
                         using var stream = File.OpenRead(full);
@@ -1111,9 +1118,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// dialog. A write asked for after the tab closed (a confirmation was still open) does
     /// nothing. A write that has started runs to its end, also when the tab closes (1.8). The undo
     /// history records it as <paramref name="undo"/> says, as every operation of
-    /// <see cref="RepositoryOperations.RunAsync"/> (docs/phase-5-design.md 7.7).
+    /// <see cref="RepositoryOperations.RunAsync"/> (docs/phase-5-design.md 7.7). When the write
+    /// sets <paramref name="backupSaved"/>, the backups' clean-up follows the recording, as it
+    /// follows that of an operation that saved a backup, so that it keeps what the entry needs.
     /// </summary>
-    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, UndoScope undo, bool refsChange = false)
+    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, UndoScope undo, bool refsChange = false, StrongBox<bool>? backupSaved = null)
     {
         var result = await _queue.RunAsync(new GitOperation(
             title,
@@ -1135,6 +1144,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     finally
                     {
                         await Operations.EndRecordingAsync(recording, capture.Captured, report, title);
+                        if (backupSaved?.Value == true)
+                        {
+                            await Operations.CleanUpBackupsAsync();
+                        }
                     }
                 }
             })

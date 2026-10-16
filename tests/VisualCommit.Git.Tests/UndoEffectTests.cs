@@ -555,6 +555,75 @@ public class UndoEffectTests
         Assert.Equal(4, diffTrees);
     }
 
+    /// <summary>
+    /// Where step 25's two fixes meet (design 15.9): an undo's pop checks what stands in its way,
+    /// the stash's untracked files that exist again and an ignored file where the stash adds a
+    /// staged one, from the stash's paths as the repository reads them once, which give the paths
+    /// the stash adds (<see cref="StashPaths.Added"/>) with the rest. A stash read before costs the
+    /// step's check no <c>diff-tree</c>.
+    /// </summary>
+    [Fact]
+    public async Task An_undos_pop_checks_what_stands_in_its_way_from_the_stashs_paths_as_read_once()
+    {
+        using var repo = await UndoRepoAsync();
+        var diffTrees = 0;
+        var runner = new InterceptingRunner(NewRunner(), command =>
+        {
+            if (command.Arguments is ["diff-tree", ..])
+            {
+                Interlocked.Increment(ref diffTrees);
+            }
+
+            return Task.CompletedTask;
+        });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestCancelled);
+
+        // Staged: a.txt changed, and s.local new, which info/exclude ignores (added by force);
+        // untracked: notes/u.txt.
+        var exclude = Path.Combine(repo.Path, ".git", "info", "exclude");
+        Directory.CreateDirectory(Path.GetDirectoryName(exclude)!);
+        File.AppendAllText(exclude, "\n*.local\n");
+        repo.WriteFile("a.txt", "a-staged\n").WriteFile("s.local", "staged secret\n");
+        await repo.GitAsync("add", "--force", "a.txt", "s.local");
+        repo.WriteFile("notes/u.txt", "untracked\n");
+        var entry = await RecordAsync(repository, UndoScope.Stash("wip"), async () =>
+        {
+            var made = await repository.StashAsync("wip", includeUntracked: true, cancellationToken: TestCancelled);
+            UndoCapture.Stash(made, includedUntracked: true, "wip");
+        });
+        var stash = await ShaAsync(repo, "refs/stash");
+        var paths = await repository.ReadStashPathsAsync(stash, TestCancelled);
+        Assert.Equal(["a.txt", "s.local"], paths.Changed);
+        Assert.Equal(["s.local"], paths.Added);
+        Assert.Equal(["notes/u.txt"], paths.Untracked);
+
+        // An ignored file where the stash adds its staged one: refused, from the read made above.
+        repo.WriteFile("s.local", "user ignored precious\n");
+        diffTrees = 0;
+        var refusal = await RefusedAsync(repository, entry, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.IgnoredFilesInTheWay, refusal.Kind);
+        Assert.Equal(["s.local"], refusal.Paths);
+        Assert.Equal(0, diffTrees);
+
+        // Its untracked file there again, ignored now so that the status does not show it: in the
+        // way first, from the same read.
+        File.AppendAllText(exclude, "notes/\n");
+        repo.WriteFile("notes/u.txt", "again\n");
+        refusal = await RefusedAsync(repository, entry, UndoDirection.Undo);
+        Assert.Equal(UndoRefusalKind.StatusChanged, refusal.Kind);
+        Assert.Equal(["notes/u.txt"], refusal.Paths);
+        Assert.Equal(0, diffTrees);
+        Assert.Equal("user ignored precious\n", ReadText(repo, "s.local"));
+
+        // Both moved away: the stash comes back.
+        File.Delete(Path.Combine(repo.Path, "s.local"));
+        File.Delete(Path.Combine(repo.Path, "notes", "u.txt"));
+        await UndoAsync(repository, entry);
+        Assert.Equal("staged secret\n", ReadText(repo, "s.local"));
+        Assert.Equal("untracked\n", ReadText(repo, "notes/u.txt"));
+        Assert.Equal("a-staged\n", ReadText(repo, "a.txt"));
+    }
+
     [Fact]
     public async Task Index_entries_come_back_with_their_conflict_stages_and_flags_git_cannot_keep_refuse()
     {

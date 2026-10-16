@@ -1,4 +1,7 @@
+using System.Globalization;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using Xunit;
@@ -116,6 +119,58 @@ public class UndoRestoreTests
         await app.Operations.UndoAsync();
         Assert.Equal("app\nmy own edit\n", ReadText(repo, "src/app.txt"));
         Assert.False(File.Exists(Path.Combine(repo.Path, "notes", "todo.txt")));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_file_written_while_D75s_question_is_open_is_saved_with_the_newer_versions_before_the_restore()
+    {
+        using var repo = await Scenarios.ReflogAsync();
+        repo.WriteFile("src/app.txt", "app\nmy own edit\n");
+        using var app = await OpenWithBackupClockAsync(repo);
+        var backup = await BackupAsync(app, "discard");
+        var before = await repo.BackupRefsAsync();
+
+        // The question names src/app.txt; notes/todo.txt is written before it is answered (15.9).
+        app.Dialogs.Answer<ConfirmationViewModel>(dialog =>
+        {
+            repo.WriteFile("notes/todo.txt", "typed while the question was open\n");
+            dialog.ConfirmCommand.Execute(null);
+        });
+        await app.Operations.RestoreBackupAsync(backup);
+
+        Assert.Equal("app.txt has changed since the discard. Put back the version from before the discard?", Assert.Single(app.Dialogs.Confirmations).Question);
+        var saved = Assert.Single(await repo.BackupRefsAsync(), entry => !before.Contains(entry));
+        Assert.Equal("app\nmy own edit\n", (await repo.GitAsync("show", saved.Sha + ":src/app.txt")).StandardOutput);
+        Assert.Equal("typed while the question was open\n", (await repo.GitAsync("show", saved.Sha + ":notes/todo.txt")).StandardOutput);
+        Assert.Equal(("app\nmain work\nstaged\n", "todo\n"), (ReadText(repo, "src/app.txt"), ReadText(repo, "notes/todo.txt")));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_restored_snapshot_past_the_retention_stays_while_the_restores_entry_needs_it()
+    {
+        using var repo = await Scenarios.ReflogAsync();
+        repo.WriteFile("src/app.txt", "app\nmy own edit\n");
+        using var app = await OpenWithBackupClockAsync(repo);
+
+        // The discard's snapshot under a name 40 days before the backups' clock: past the 30 days.
+        var discard = await BackupAsync(app, "discard");
+        var old = "refs/visualcommit/backup/discard-" + AppClocks.HarnessTime.AddDays(-40).ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        await repo.GitAsync("update-ref", old, discard.Main!.Target);
+        var backup = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Main?.FullName == old);
+
+        // D75's newer snapshot makes the restore clean up, after its entry is recorded (7.8).
+        app.Dialogs.Confirm();
+        await app.Operations.RestoreBackupAsync(backup);
+        Assert.Equal("Restored 2 files", app.StatusText);
+        Assert.Contains(old, app.Repository.BackupsToKeep);
+        Assert.Contains(old, (await repo.BackupRefsAsync()).Select(entry => entry.Name));
+
+        // So the entry's redo still has its snapshot.
+        await app.Operations.UndoAsync();
+        await app.Operations.RedoAsync();
+        Assert.Equal(("app\nmain work\nstaged\n", "todo\n"), (ReadText(repo, "src/app.txt"), ReadText(repo, "notes/todo.txt")));
         app.AssertScriptFollowed();
     }
 

@@ -82,7 +82,9 @@ public sealed class FileAppLog : IAppLog
                     Directory.CreateDirectory(_directory);
 
                     // No other writer while this one appends: two writers that both seek to the
-                    // end would overwrite each other. Readers are still let in.
+                    // end would overwrite each other. Readers that open the file sharing it for
+                    // writing are still let in (the tests' AppLogFile.ReadText); a plain
+                    // File.ReadAllText is refused on Windows while an entry is being written.
                     using var stream = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.Read);
                     stream.Write(bytes);
                     return;

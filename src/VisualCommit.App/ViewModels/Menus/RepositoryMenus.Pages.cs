@@ -131,7 +131,7 @@ public static partial class RepositoryMenus
     /// exists, as a reflog row's do) — copy SHA.
     /// <paramref name="hasForcePushLease"/> is, for a force push's backup, whether the
     /// remote-tracking reflog still has the commit the force push left (the list reads it,
-    /// <see cref="ReflogViewModel.ForcePushLease"/>); false disables its restore, null leaves it to the restore.
+    /// <see cref="ReflogResult.ForcePushLease"/>); false disables its restore, null leaves it to the restore.
     /// </summary>
     public static MenuModel ForBackup(RepositoryMenuContext context, BackupInfo backup, IRepositoryActions actions, bool? hasForcePushLease = null)
     {

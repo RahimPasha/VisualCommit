@@ -316,6 +316,36 @@ public class SearchViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task A_graph_replaced_during_a_git_call_lets_the_call_end_and_gives_git_only_the_rows_left()
+    {
+        // D174, 15.9: a reload must not restart a long Changes search. Git has searched rows 0 and 1
+        // and runs its call for rows 2 to 4 when a refresh brings a new commit at the top.
+        var commits = Commits(11).ToList();
+        var host = new FakeHost(Graph(commits[1..])) { FirstChunk = 2, LaterChunk = 3 };
+        var clock = new ManualTimeProvider();
+        using var search = new SearchViewModel(host, SearchMode.Changes, clock);
+        var release = new TaskCompletionSource();
+        host.Blocking = release.Task;
+        search.Text = "zzz";
+        clock.Advance(TimeSpan.FromMilliseconds(600));
+        Pump();
+        await WaitUntilAsync(() => search.ProgressValue == 2);
+
+        host.Graph = Graph(commits);
+        search.OnGraphReplaced();
+        release.SetResult();
+        await search.Completion;
+
+        // The call that ran ended (rows 2 to 4 searched), the pass stopped before the next, and git
+        // got the new commit with the rows it had not searched, never one twice.
+        Assert.Equal(2, host.Calls.Count);
+        Assert.Equal([commits[0].Sha, .. commits[6..].Select(commit => commit.Sha)], host.Calls[1].Shas);
+        Assert.Equal(10, host.Calls[0].Shas.Count);
+        Pump();
+        Assert.Equal("Searched 11 of 11 commits", search.ProgressText);
+    }
+
+    [AvaloniaFact]
     public async Task A_graph_that_still_loads_is_searched_as_its_rows_come()
     {
         var commits = Commits(5).ToList();
@@ -365,6 +395,24 @@ public class SearchViewModelTests
         Assert.Single(host.Calls);
         Assert.False(search.IsSearching);
         Assert.Equal(SearchViewModel.NoMatchesText, search.CountText);
+    }
+
+    [AvaloniaFact]
+    public async Task The_progress_text_uses_the_singular_for_a_graph_of_one_commit()
+    {
+        // D113: every text with a count uses the singular for one.
+        var host = new FakeHost(Graph(1));
+        var clock = new ManualTimeProvider();
+        using var search = new SearchViewModel(host, SearchMode.Changes, clock);
+        var release = new TaskCompletionSource();
+        host.Blocking = release.Task;
+        search.Text = "zzz";
+        clock.Advance(TimeSpan.FromMilliseconds(600));
+        Pump();
+        Assert.True(search.ShowsProgress);
+        Assert.Equal("Searched 0 of 1 commit", search.ProgressText);
+        release.SetResult();
+        await search.Completion;
     }
 
     [AvaloniaFact]
@@ -458,6 +506,9 @@ public class SearchViewModelTests
         /// </summary>
         public int? FirstChunk { get; set; }
 
+        /// <summary>After <see cref="Blocking"/>, the rest in calls of this many rows, each reported; null: the rest at once.</summary>
+        public int? LaterChunk { get; set; }
+
         public List<(SearchMode Mode, string Text, IReadOnlyList<string> Shas)> Calls { get; } = [];
 
         /// <summary>How many matches the searches have handed over.</summary>
@@ -493,6 +544,27 @@ public class SearchViewModelTests
             if (Blocking is { } blocking)
             {
                 await blocking.WaitAsync(cancellationToken);
+            }
+
+            if (LaterChunk is { } later)
+            {
+                // The rest in calls of LaterChunk rows, the token looked at before each as the git
+                // layer does: a call that started is not stopped.
+                for (var done = chunk; done < shas.Count;)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var next = Math.Min(done + later, shas.Count);
+                    foreach (var sha in shas.Skip(done).Take(next - done).Where(sha => Match(mode, text, sha)))
+                    {
+                        Handed++;
+                        onMatch(sha);
+                    }
+
+                    done = next;
+                    progress?.Report(done);
+                }
+
+                return;
             }
 
             foreach (var sha in shas.Skip(chunk).Where(sha => Match(mode, text, sha)))

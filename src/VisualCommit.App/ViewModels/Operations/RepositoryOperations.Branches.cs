@@ -382,6 +382,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     }
 
                     await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
+                    FollowCreatedBranch(HeadsPrefix + name);
                     return OperationReport.Done(OperationTexts.CreatedBranch(name, checkout));
                 },
                 new RunOptions
@@ -419,6 +420,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
             async _ =>
             {
                 await Git.RenameBranchAsync(branch, newName);
+                FollowRenamedBranch(HeadsPrefix + branch, HeadsPrefix + newName);
                 return OperationReport.Done(OperationTexts.RenamedBranch(branch, newName));
             },
             new RunOptions { Undo = UndoScope.RenameBranch(branch, newName) }));
@@ -450,6 +452,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 async (_, _) =>
                 {
                     await Git.DeleteBranchAsync(branch);
+                    FollowDeletedBranch(HeadsPrefix + branch);
                     return OperationReport.Done(OperationTexts.DeletedBranch(branch));
                 },
                 new RunOptions { Undo = UndoScope.DeleteBranch(branch) });
@@ -999,6 +1002,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
         }
 
         await Git.CheckoutTrackingBranchAsync(local, remoteRef, options);
+        FollowCreatedBranch(HeadsPrefix + local);
         return OperationTexts.CreatedTrackingAndCheckedOut(local, shown);
     }
 

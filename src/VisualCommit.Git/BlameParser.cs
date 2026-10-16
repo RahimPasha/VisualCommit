@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.Text;
 using System.Text.RegularExpressions;
+using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 
 namespace VisualCommit.Git;
@@ -20,8 +20,6 @@ namespace VisualCommit.Git;
 /// </summary>
 internal static partial class BlameParser
 {
-    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
-
     /// <summary>Parses the porcelain of one blame.</summary>
     /// <param name="latin1">Git's output, read as Latin-1.</param>
     /// <exception cref="FormatException">The output is not a blame: a line out of place, a field missing, or final line numbers that do not run 1 to N.</exception>
@@ -90,10 +88,10 @@ internal static partial class BlameParser
                 switch (key)
                 {
                     case "author":
-                        current.AuthorName = DecodeUtf8(value);
+                        current.AuthorName = DiffParser.DecodeUtf8(value);
                         break;
                     case "author-mail":
-                        current.AuthorEmail = DecodeUtf8(value.StartsWith('<') && value.EndsWith('>') ? value[1..^1] : value);
+                        current.AuthorEmail = DiffParser.DecodeUtf8(value.StartsWith('<') && value.EndsWith('>') ? value[1..^1] : value);
                         break;
                     case "author-time":
                         current.AuthorSeconds = value;
@@ -103,7 +101,7 @@ internal static partial class BlameParser
                         break;
                     case "summary":
                         // Git names a commit with an empty message by its id in parentheses.
-                        current.Summary = value == $"({current.Sha})" ? string.Empty : DecodeUtf8(value);
+                        current.Summary = value == $"({current.Sha})" ? string.Empty : DiffParser.DecodeUtf8(value);
                         break;
                     case "boundary":
                         current.IsBoundary = true;
@@ -137,8 +135,6 @@ internal static partial class BlameParser
     }
 
     /// <summary>Text read as Latin-1 (one character per byte) decoded as the UTF-8 it is.</summary>
-    private static string DecodeUtf8(string latin1) => Utf8.GetString(Encoding.Latin1.GetBytes(latin1));
-
     private static string Shorten(string text) => text.Length <= 80 ? text : text[..80] + "…";
 
     /// <summary>A group header: the commit (40 or 64 hex digits), its line there, the line in the file, and the group's size on its first line.</summary>

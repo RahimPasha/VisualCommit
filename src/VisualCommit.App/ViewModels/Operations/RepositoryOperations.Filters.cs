@@ -2,8 +2,9 @@
 // and a drop's) and section 8 (what the graph hides or solos, kept per repository in the session,
 // D159). None is an operation of the queue: a comparison only reads, and a filter reloads the graph
 // through the refresh (RepositoryViewModel.ChangeFiltersAsync). The branch operations of
-// .Branches.cs call the Follow… members so that a rename, a delete or a branch created in solo mode
-// keeps the filter right (8.1, 8.4).
+// .Branches.cs (create, rename, delete, a remote branch's tracking branch), the undo's steps and
+// the backups list's "Restore branch" (.Undo.cs) call the Follow… members inside their operations
+// so that a rename, a delete or a branch created in solo mode keeps the filter right (8.1, 8.4).
 
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.Core.Logging;

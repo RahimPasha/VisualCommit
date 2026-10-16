@@ -122,8 +122,9 @@ public partial class RepositoryMenusTests
         TestPictures.Save(app, "03f-empty-area-menu");
         app.PressKey(Key.Escape);
 
-        // The log has the line for every menu (D106).
-        var log = string.Concat(Directory.GetFiles(Path.Combine(data.Path, "logs")).Select(File.ReadAllText));
+        // The log has the line for every menu (D106). Read while the app may write it: a plain
+        // File.ReadAllText is refused on Windows while an entry is being written.
+        var log = AppLogFile.ReadText(data.Path);
         Assert.Contains("Context menu opened: ce5ea6a Alpha two by pointer", log, StringComparison.Ordinal);
         Assert.Contains("Context menu opened: ce5ea6a Alpha two by keyboard", log, StringComparison.Ordinal);
     }

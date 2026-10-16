@@ -27,7 +27,7 @@ namespace VisualCommit.App.Controls.Blame;
 /// </summary>
 public sealed class BlameTextEditor : CodeTextEditor
 {
-    private readonly BlameNumberMargin _numbers;
+    private readonly CodeNumberMargin _numbers;
     private DiffPalette? _palette;
     private DiffSyntax? _syntax;
     private string? _filePath;
@@ -60,7 +60,7 @@ public sealed class BlameTextEditor : CodeTextEditor
         area.SelectionForeground = null;
         area.SelectionCornerRadius = 0;
         area.CaretBrush = Brushes.Transparent;
-        _numbers = new BlameNumberMargin(this);
+        _numbers = new CodeNumberMargin(this, () => Palette);
         area.LeftMargins.Add(_numbers);
         TextView.LineTransformers.Add(new BlameSyntaxColorizer(this));
         DocumentChanged += (_, _) => _numbers.UpdateWidth();
@@ -124,27 +124,6 @@ public sealed class BlameTextEditor : CodeTextEditor
         var top = this.TranslatePoint(new Point(0, y), textView)?.Y ?? y;
         var line = textView.GetDocumentLineByVisualTop(top + textView.VerticalOffset);
         return line is null || top < 0 || top + textView.VerticalOffset >= textView.DocumentHeight ? null : Math.Min(line.LineNumber, document.LineCount);
-    }
-
-    /// <summary>
-    /// Where column <paramref name="column"/> of line <paramref name="line"/> (both from 1) starts,
-    /// halfway down the line, in this control's coordinates; null when the line is not laid out in view.
-    /// </summary>
-    public Point? PointAt(int line, int column)
-    {
-        var textView = TextView;
-        if (Document is not { } document || line < 1 || line > document.LineCount || !textView.VisualLinesValid || textView.GetVisualLine(line) is null)
-        {
-            return null;
-        }
-
-        var point = textView.GetVisualPosition(new TextViewPosition(line, column), VisualYPosition.LineMiddle) - textView.ScrollOffset;
-        if (point.X < 0 || point.Y < 0 || point.X > textView.Bounds.Width || point.Y > textView.Bounds.Height)
-        {
-            return null;
-        }
-
-        return textView.TranslatePoint(point, this);
     }
 
     /// <summary>The number column's width: 30.4 for up to 99 lines at the code font's 7.2 per digit.</summary>
@@ -236,72 +215,6 @@ public sealed class BlameTextEditor : CodeTextEditor
 
         protected override bool IsControlElementCore() => true;
     }
-}
-
-/// <summary>The blame text's number column: the numbers right-aligned 8 from its right edge in the secondary colour, as the resolver's result's.</summary>
-internal sealed class BlameNumberMargin(BlameTextEditor editor) : AbstractMargin
-{
-    private double _width;
-
-    /// <summary>Sizes the column for the document's last line number.</summary>
-    public void UpdateWidth()
-    {
-        var digits = Math.Max(2, (editor.Document?.LineCount ?? 1).ToString(CultureInfo.InvariantCulture).Length);
-        var width = (2 * DiffGutter.NumberPadding) + (DigitWidth() * digits);
-        if (width != _width)
-        {
-            _width = width;
-            InvalidateMeasure();
-        }
-
-        InvalidateVisual();
-    }
-
-    protected override Size MeasureOverride(Size availableSize) => new(_width, 0);
-
-    public override void Render(DrawingContext context)
-    {
-        var textView = TextView;
-        if (textView is null || !textView.VisualLinesValid)
-        {
-            return;
-        }
-
-        var palette = editor.Palette;
-        var typeface = new Typeface(palette.CodeFont);
-        foreach (var line in textView.VisualLines)
-        {
-            var number = line.FirstDocumentLine.LineNumber;
-            var text = new FormattedText(number.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, DiffPalette.CodeFontSize, palette.TextSecondary);
-            context.DrawText(text, new Point(Bounds.Width - DiffGutter.NumberPadding - text.WidthIncludingTrailingWhitespace, line.VisualTop - textView.VerticalOffset));
-        }
-    }
-
-    protected override void OnTextViewChanged(TextView oldTextView, TextView newTextView)
-    {
-        if (oldTextView is not null)
-        {
-            oldTextView.ScrollOffsetChanged -= OnTextViewScrolled;
-        }
-
-        base.OnTextViewChanged(oldTextView!, newTextView);
-        if (newTextView is not null)
-        {
-            newTextView.ScrollOffsetChanged += OnTextViewScrolled;
-        }
-    }
-
-    protected override void OnTextViewVisualLinesChanged()
-    {
-        base.OnTextViewVisualLinesChanged();
-        InvalidateVisual();
-    }
-
-    private void OnTextViewScrolled(object? sender, EventArgs e) => InvalidateVisual();
-
-    /// <summary>The advance of a digit in the code font: 7.2 at 12 pixels in JetBrains Mono.</summary>
-    private double DigitWidth() =>
-        new FormattedText("0", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(editor.Palette.CodeFont), DiffPalette.CodeFontSize, Brushes.Transparent).WidthIncludingTrailingWhitespace;
 }
 
 /// <summary>Colours each line by the diff's syntax colours (D64): the tokens of its context line in the synthetic diff.</summary>

@@ -47,6 +47,30 @@ public class BlameTests(BlameTests.Repository fixture) : IClassFixture<BlameTest
     }
 
     [Fact]
+    public async Task A_submodule_has_no_lines_to_blame_in_a_commit_or_in_the_working_tree()
+    {
+        // A gitlink (mode 160000) committed, and a folder at its path: git blame says
+        // "no such path sub in <commit>" and "unsupported file type sub" (15.9).
+        using var repo = await TempRepo.CreateAsync("blame-submodule");
+        var first = await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.GitAsync("update-index", "--add", "--cacheinfo", $"160000,{first},sub");
+        var commit = TempRepo.CommittedSha(await repo.GitAsync(TempRepo.CommitArguments("--message", "Add the submodule")));
+        Directory.CreateDirectory(Path.Combine(repo.Path, "sub"));
+        repo.WriteFile("sub/inside.txt", "inside\n");
+        var git = await OpenAsync(repo);
+
+        var atCommit = await git.ReadBlameAsync(commit, "sub", TestCancelled);
+        var inWorkingTree = await git.ReadBlameAsync(null, "sub", TestCancelled);
+
+        Assert.Equal((true, 0), (atCommit.IsSubmodule, atCommit.Lines.Count));
+        Assert.Equal((true, 0), (inWorkingTree.IsSubmodule, inWorkingTree.Lines.Count));
+        Assert.False((await git.ReadBlameAsync(commit, "a.txt", TestCancelled)).IsSubmodule);
+
+        // Any other failure is still git's own.
+        await Assert.ThrowsAsync<GitException>(() => git.ReadBlameAsync(commit, "missing.txt", TestCancelled));
+    }
+
+    [Fact]
     public async Task A_commits_version_names_each_lines_commit_across_a_rename()
     {
         var result = await fixture.Git.ReadBlameAsync(fixture.Renamed, "docs/new.txt", TestCancelled);

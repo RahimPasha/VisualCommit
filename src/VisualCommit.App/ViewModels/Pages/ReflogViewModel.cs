@@ -35,10 +35,16 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
     /// <summary>The empty backups list.</summary>
     public const string NoBackupsText = "There are no backups";
 
+    /// <summary>The footer when the reflog has more entries than the page reads (5.2, 15.9).</summary>
+    public const string MoreText = "Only the newest 500 entries are shown";
+
     private const string HeadsPrefix = "refs/heads/";
 
     private int _version;
     private bool _selectingQuietly;
+
+    /// <summary>The read that runs: a newer one cancels it, so that its git calls stop (15.9).</summary>
+    private CancellationTokenSource? _reading;
 
     /// <summary>The refs as last read (every refresh hands them over), which the next read is made for.</summary>
     private RepoRefs? _refs;
@@ -98,7 +104,7 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
     [ObservableProperty]
     public partial bool IsError { get; private set; }
 
-    /// <summary>The footer (<c>ReflogFooter</c>, BD5) when git skipped entries; null otherwise.</summary>
+    /// <summary>The footer (<c>ReflogFooter</c>, BD5) when git skipped entries or the reflog has more than <see cref="Limit"/>; null otherwise.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFooter))]
     public partial string? Footer { get; private set; }
@@ -221,18 +227,26 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
         OnPropertyChanged(nameof(ShowsBackups));
     }
 
-    /// <summary>One read of the source; a newer read, or another source, makes an older one show nothing.</summary>
+    /// <summary>
+    /// One read of the source; a newer read, or another source, cancels an older one, whose git
+    /// calls stop, and which shows nothing (15.9).
+    /// </summary>
     private async Task ReadAsync()
     {
         var version = ++_version;
         var source = Source;
         var refs = _refs;
+        _reading?.Cancel();
+        _reading?.Dispose();
+        var reading = CancellationTokenSource.CreateLinkedTokenSource(Lifetime);
+        _reading = reading;
+        var token = reading.Token;
         try
         {
             if (source is null)
             {
-                var backups = await Host.Repository.ReadBackupsAsync(Lifetime);
-                var leases = await ReadForcePushLeasesAsync(backups);
+                var backups = await Host.Repository.ReadBackupsAsync(token);
+                var leases = await ReadForcePushLeasesAsync(backups, token);
                 if (version == _version && !IsClosed)
                 {
                     ShowBackupsList(backups, leases);
@@ -242,7 +256,7 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
                 return;
             }
 
-            var reflog = await Host.Repository.ReadReflogAsync(source, Limit, Lifetime);
+            var reflog = await Host.Repository.ReadReflogAsync(source, Limit, token);
             if (version != _version || IsClosed)
             {
                 return;
@@ -266,7 +280,8 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
             }
             else
             {
-                lost = await Host.Repository.FindLostCommitsAsync(shas, Lifetime);
+                // A walk a newer read cancels is not kept: it ends with the cancellation.
+                lost = await Host.Repository.FindLostCommitsAsync(shas, token);
                 if (key is not null)
                 {
                     _lastWalk = (key, lost);
@@ -283,8 +298,9 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
                 Shown(refs);
             }
         }
-        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
+            // A newer read, or the page closed.
         }
         catch (Exception ex)
         {
@@ -294,6 +310,14 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
                 var reason = ex is GitException { StandardError: { } error } && !string.IsNullOrWhiteSpace(error) ? error.Trim() : ex.Message;
                 Replace([], reason, null, isError: true);
                 Shown(refs);
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_reading, reading))
+            {
+                _reading = null;
+                reading.Dispose();
             }
         }
     }
@@ -314,11 +338,17 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
             IsLost = lostBefore.Contains(entry.Sha),
         }).ToList();
         Replace(rows, rows.Count == 0 ? $"{SourceLabel} has no reflog" : null, rows.Count == 0 ? ExpiryText : null, isError: false);
-        Footer = reflog.Skipped switch
+        var skippedText = reflog.Skipped switch
         {
             0 => null,
             1 => "1 entry is not shown: it names no commit that exists",
             var skipped => string.Create(CultureInfo.InvariantCulture, $"{skipped} entries are not shown: they name no commit that exists"),
+        };
+        Footer = (reflog.More, skippedText) switch
+        {
+            (true, null) => MoreText,
+            (true, { } skipped) => $"{MoreText}. {skipped}",
+            (false, var skipped) => skipped,
         };
     }
 
@@ -339,10 +369,11 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
 
     /// <summary>
     /// For each force push's backup, whether the remote-tracking reflog of its ref still has the
-    /// commit the force push left (7.10, <see cref="ForcePushLease"/>): its restore is disabled
-    /// otherwise. A reflog that cannot be read leaves the backup out: the restore decides.
+    /// commit the force push left (7.10, <see cref="ReflogResult.ForcePushLease"/>, read as deep as
+    /// the restore reads it): its restore is disabled otherwise. A reflog that cannot be read
+    /// leaves the backup out: the restore decides.
     /// </summary>
-    private async Task<IReadOnlyDictionary<string, bool>> ReadForcePushLeasesAsync(IReadOnlyList<BackupInfo> backups)
+    private async Task<IReadOnlyDictionary<string, bool>> ReadForcePushLeasesAsync(IReadOnlyList<BackupInfo> backups, CancellationToken token)
     {
         var leases = new Dictionary<string, bool>(StringComparer.Ordinal);
         foreach (var backup in backups)
@@ -354,8 +385,8 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
 
             try
             {
-                var reflog = await Host.Repository.ReadReflogAsync("refs/remotes/" + name, Limit, Lifetime);
-                leases[backup.Name] = ForcePushLease(reflog, commit) is not null;
+                var reflog = await Host.Repository.ReadReflogAsync("refs/remotes/" + name, ReflogResult.ForcePushLeaseDepth, token);
+                leases[backup.Name] = reflog.ForcePushLease(commit) is not null;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -364,29 +395,6 @@ public sealed partial class ReflogViewModel : GraphAreaPageViewModel
         }
 
         return leases;
-    }
-
-    /// <summary>
-    /// The commit a force push left on the remote (7.10), the lease of its backup's restore: in the
-    /// remote-tracking ref's reflog (newest first), the <c>update by push</c> entry whose older
-    /// neighbour is <paramref name="backupCommit"/>, the commit the push replaced. Null when the
-    /// reflog no longer has it.
-    /// </summary>
-    public static string? ForcePushLease(ReflogResult remoteReflog, string backupCommit)
-    {
-        ArgumentNullException.ThrowIfNull(remoteReflog);
-        ArgumentNullException.ThrowIfNull(backupCommit);
-        var entries = remoteReflog.Entries;
-        for (var index = 0; index + 1 < entries.Count; index++)
-        {
-            if (string.Equals(entries[index].Message, "update by push", StringComparison.Ordinal)
-                && string.Equals(entries[index + 1].Sha, backupCommit, StringComparison.Ordinal))
-            {
-                return entries[index].Sha;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

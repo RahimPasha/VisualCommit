@@ -38,7 +38,7 @@ public sealed partial class ShellDriver
     /// <exception cref="InvalidOperationException">The search bar is not open.</exception>
     public async Task WaitForSearchAsync(TimeSpan? timeout = null)
     {
-        var search = ActiveRepository.SearchBar ?? throw new InvalidOperationException("The search bar is not open.");
+        var search = ActiveRepository.Search ?? throw new InvalidOperationException("The search bar is not open.");
         await WaitForAsync(() => search.IsSettled && ReferenceEquals(ActiveRepository.SearchMarks, search.Marks), "the search to end and its matches to be applied", timeout);
     }
 

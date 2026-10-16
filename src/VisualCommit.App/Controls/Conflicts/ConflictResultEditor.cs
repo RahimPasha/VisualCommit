@@ -58,7 +58,7 @@ public sealed class ConflictResultEditor : CodeTextEditor
 
     private static readonly ConditionalWeakTable<TextDocument, string> Originals = [];
 
-    private readonly ResultGutter _gutter;
+    private readonly CodeNumberMargin _gutter;
     private readonly ResultCaretLayer _caret;
     private ConflictTint[] _tints = [];
     private DiffPalette? _palette;
@@ -100,7 +100,7 @@ public sealed class ConflictResultEditor : CodeTextEditor
         area.CaretBrush = Brushes.Transparent;
         RemoveOwnUndoBindings(area);
 
-        _gutter = new ResultGutter(this);
+        _gutter = new CodeNumberMargin(this, () => Palette, line => ResultTintRenderer.BrushOf(TintAt(line), Palette));
         area.LeftMargins.Add(_gutter);
         TextView.BackgroundRenderers.Add(new ResultTintRenderer(this));
         TextView.LineTransformers.Add(new ResultMarkerColorizer(this));
@@ -159,28 +159,6 @@ public sealed class ConflictResultEditor : CodeTextEditor
 
     /// <summary>The tint of line <paramref name="line"/> (from 1); none outside the document.</summary>
     public ConflictTint TintAt(int line) => line >= 1 && line <= _tints.Length ? _tints[line - 1] : ConflictTint.None;
-
-    /// <summary>
-    /// Where the caret goes for line <paramref name="line"/> and column <paramref name="column"/>
-    /// (both from 1): the left edge of that column, halfway down the line, in this control's
-    /// coordinates; null when the line is not laid out in view.
-    /// </summary>
-    public Point? PointAt(int line, int column)
-    {
-        var textView = TextView;
-        if (Document is not { } document || line < 1 || line > document.LineCount || !textView.VisualLinesValid || textView.GetVisualLine(line) is null)
-        {
-            return null;
-        }
-
-        var point = textView.GetVisualPosition(new TextViewPosition(line, column), VisualYPosition.LineMiddle) - textView.ScrollOffset;
-        if (point.X < 0 || point.Y < 0 || point.X > textView.Bounds.Width || point.Y > textView.Bounds.Height)
-        {
-            return null;
-        }
-
-        return textView.TranslatePoint(point, this);
-    }
 
     /// <summary>
     /// Scrolls so that line <paramref name="line"/> (from 1) is the row
@@ -452,83 +430,6 @@ internal sealed class ResultTextArea : TextArea
 
         base.OnKeyDown(e);
     }
-}
-
-/// <summary>
-/// The result's gutter: one number column 8 + 7.2 × d + 8 wide for the d digits of the last line's
-/// number (at least 2), the numbers right-aligned 8 from its right edge in the secondary colour, on
-/// each line's tint.
-/// </summary>
-internal sealed class ResultGutter(ConflictResultEditor editor) : AbstractMargin
-{
-    private double _width;
-
-    /// <summary>Sizes the column for the document's last line number.</summary>
-    public void UpdateWidth()
-    {
-        var digits = Math.Max(2, (editor.Document?.LineCount ?? 1).ToString(CultureInfo.InvariantCulture).Length);
-        var width = (2 * DiffGutter.NumberPadding) + (DigitWidth() * digits);
-        if (width != _width)
-        {
-            _width = width;
-            InvalidateMeasure();
-        }
-
-        InvalidateVisual();
-    }
-
-    protected override Size MeasureOverride(Size availableSize) => new(_width, 0);
-
-    public override void Render(DrawingContext context)
-    {
-        var textView = TextView;
-        if (textView is null || !textView.VisualLinesValid)
-        {
-            return;
-        }
-
-        var palette = editor.Palette;
-        var typeface = new Typeface(palette.CodeFont);
-        foreach (var line in textView.VisualLines)
-        {
-            var number = line.FirstDocumentLine.LineNumber;
-            var top = Math.Round(line.VisualTop - textView.VerticalOffset);
-            var bottom = Math.Round(line.VisualTop + line.Height - textView.VerticalOffset);
-            if (ResultTintRenderer.BrushOf(editor.TintAt(number), palette) is { } tint)
-            {
-                context.FillRectangle(tint, new Rect(0, top, Bounds.Width, bottom - top));
-            }
-
-            var text = new FormattedText(number.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, DiffPalette.CodeFontSize, palette.TextSecondary);
-            context.DrawText(text, new Point(Bounds.Width - DiffGutter.NumberPadding - text.WidthIncludingTrailingWhitespace, line.VisualTop - textView.VerticalOffset));
-        }
-    }
-
-    protected override void OnTextViewChanged(TextView oldTextView, TextView newTextView)
-    {
-        if (oldTextView is not null)
-        {
-            oldTextView.ScrollOffsetChanged -= OnTextViewScrolled;
-        }
-
-        base.OnTextViewChanged(oldTextView!, newTextView);
-        if (newTextView is not null)
-        {
-            newTextView.ScrollOffsetChanged += OnTextViewScrolled;
-        }
-    }
-
-    protected override void OnTextViewVisualLinesChanged()
-    {
-        base.OnTextViewVisualLinesChanged();
-        InvalidateVisual();
-    }
-
-    private void OnTextViewScrolled(object? sender, EventArgs e) => InvalidateVisual();
-
-    /// <summary>The advance of a digit in the code font: 7.2 at 12 pixels in JetBrains Mono.</summary>
-    private double DigitWidth() =>
-        new FormattedText("0", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(editor.Palette.CodeFont), DiffPalette.CodeFontSize, Brushes.Transparent).WidthIncludingTrailingWhitespace;
 }
 
 /// <summary>Draws each line's tint behind its text, across the text column's whole width.</summary>

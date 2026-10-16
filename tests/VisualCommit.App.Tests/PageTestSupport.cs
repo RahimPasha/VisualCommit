@@ -101,6 +101,11 @@ internal sealed class PageFakeRepository : FakeRepositoryBase
     /// <summary>When set, the walk for lost commits waits for it, then answers from <see cref="Lost"/> as it is then.</summary>
     public TaskCompletionSource? LostGate { get; set; }
 
+    /// <summary>How many lost-commit walks waiting at <see cref="LostGate"/> were cancelled.</summary>
+    public int CancelledLostWalks => Volatile.Read(ref _cancelledLostWalks);
+
+    private int _cancelledLostWalks;
+
     /// <summary>The backups.</summary>
     public List<BackupInfo> Backups { get; } = [];
 
@@ -177,7 +182,15 @@ internal sealed class PageFakeRepository : FakeRepositoryBase
         Count("lost");
         if (LostGate is { } gate)
         {
-            await gate.Task.WaitAsync(cancellationToken);
+            try
+            {
+                await gate.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Interlocked.Increment(ref _cancelledLostWalks);
+                throw;
+            }
         }
 
         return new HashSet<string>(shas.Where(Lost.Contains), StringComparer.Ordinal);

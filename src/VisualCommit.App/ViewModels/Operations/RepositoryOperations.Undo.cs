@@ -25,9 +25,6 @@ public sealed partial class RepositoryOperations
     /// <summary>How many bytes of a file the backups list's question compares (BD15); a larger file counts as changed.</summary>
     private const long CompareBytes = 64L * 1024 * 1024;
 
-    /// <summary>How many entries of a remote-tracking reflog a force push's lease is looked for in (7.10).</summary>
-    private const int ForcePushReflogEntries = 500;
-
     /// <summary>The kinds whose action can stop with the banner showing (7.2): their entry is pending until it ends.</summary>
     private static readonly HashSet<UndoKind> StoppingKinds =
     [
@@ -69,8 +66,8 @@ public sealed partial class RepositoryOperations
     /// The toolbar's Undo and Redo as they stand (1.1, 7.4): each enabled with <c>Undo {text}</c>
     /// (<c>Redo {text}</c>) when its entry passes the checks that need no git against what the app
     /// last read, otherwise disabled with the first reason that holds: <c>Wait for {title} to
-    /// finish</c> while a user operation runs (a background one gives none: a click queues behind
-    /// it), <c>Finish or abort the {kind} first</c> or <c>Resolve the conflicts first</c>, <c>Close
+    /// finish</c> while a user operation runs or waits (a background one alone gives none: a click
+    /// queues behind it), <c>Finish or abort the {kind} first</c> or <c>Resolve the conflicts first</c>, <c>Close
     /// the interactive rebase first</c>, <c>Nothing to undo</c> (<c>Nothing to redo</c>), or the
     /// check's own text (7.6, without its <c>Can't undo …: </c>). Both disabled without a tooltip
     /// before the refs are read and after the tab closed. Cheap enough to read on every change of
@@ -173,13 +170,16 @@ public sealed partial class RepositoryOperations
     /// that saved it is the entry before the history's cursor, Undo would be enabled for it, and its
     /// files are still as the discard left them, the Restore is that entry's Undo: it runs, and the
     /// result is true. Otherwise false, and the Restore runs as in phase 2 (D75's question when a file
-    /// changed since), recorded as an entry of its own.
+    /// changed since), recorded as an entry of its own. Only while no operation of the user runs or
+    /// waits (15.9): one that records would end before the Undo ran, which would then undo it, or
+    /// find the history moved and do nothing; a background one (a fetch) records nothing.
     /// </summary>
     public async Task<bool> TryRestoreAsUndoAsync(DiscardSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (IsClosed
             || Refs is null
+            || !QueueFreeForRestore()
             || Repository.UndoHistory.ToUndo is not { Kind: UndoKind.Discard, State: UndoEntryState.Done } entry
             || !string.Equals(entry.Captured.Snapshot?.Ref, snapshot.Ref, StringComparison.Ordinal)
             || !ReasonAgainst(UndoDirection.Undo, includeBusy: false).Enabled)
@@ -190,14 +190,19 @@ public sealed partial class RepositoryOperations
         // The bar's own check first (D75): a file changed since the discard asks instead.
         var root = Git.WorkingDirectory;
         var unchanged = await Task.Run(() => entry.After.Files.All(file => string.Equals(Sha256Of(root, file.Path), file.Sha256, StringComparison.OrdinalIgnoreCase)));
-        if (!unchanged)
+
+        // The hash takes a while for a large file: the entry and the queue are looked at again.
+        if (!unchanged || IsClosed || !ReferenceEquals(Repository.UndoHistory.ToUndo, entry) || !QueueFreeForRestore())
         {
             return false;
         }
 
-        await StepAsync(UndoDirection.Undo);
+        await StepAsync(UndoDirection.Undo, entry);
         return true;
     }
+
+    /// <summary>Nothing but a background operation (which records nothing) runs, and nothing waits.</summary>
+    private bool QueueFreeForRestore() => (Queue.Current is null or { IsBackground: true }) && Queue.Waiting == 0;
 
     /// <summary>
     /// A backup's own restore in the backups list (7.10): its kind decides, as the list's menu
@@ -251,10 +256,11 @@ public sealed partial class RepositoryOperations
     /// One step as one operation of the queue (7.5): the entry at the cursor, asked about first when
     /// the step changes a remote (D155, D170: 7.5's questions), a network operation then; titled
     /// <c>Undo {text}</c> or <c>Redo {text}</c>, refreshing the refs. Nothing happens when there is
-    /// no finished entry to step over; a click while the step for the same entry has not ended
+    /// no finished entry to step over, and when it is not <paramref name="expected"/> (the restore
+    /// bar's, which checked its entry); a click while the step for the same entry has not ended
     /// gets that step's task.
     /// </summary>
-    private Task StepAsync(UndoDirection direction)
+    private Task StepAsync(UndoDirection direction, UndoEntry? expected = null)
     {
         if (IsClosed)
         {
@@ -265,6 +271,12 @@ public sealed partial class RepositoryOperations
         if ((direction == UndoDirection.Undo ? history.ToUndo : history.ToRedo) is not { State: UndoEntryState.Done } entry)
         {
             Log.Info($"{Repository.Name}: {(direction == UndoDirection.Undo ? OperationTexts.NothingToUndo : OperationTexts.NothingToRedo)}.");
+            return Task.CompletedTask;
+        }
+
+        if (expected is not null && !ReferenceEquals(entry, expected))
+        {
+            Log.Info($"{Repository.Name}: the {direction} of {expected.Text} was asked for, but the history moved; nothing was done.");
             return Task.CompletedTask;
         }
 
@@ -307,29 +319,36 @@ public sealed partial class RepositoryOperations
     {
         var history = Repository.UndoHistory;
         var entry = step.Entry;
-        if (!ReferenceEquals(step.Direction == UndoDirection.Undo ? history.ToUndo : history.ToRedo, entry))
-        {
-            // The history moved between the click and now (another tab on this worktree): this is
-            // not the step that was asked for.
-            Log.Info($"{Repository.Name}: {text.Title}: the undo history changed before it ran; nothing was done.");
-            throw new OperationCanceledException();
-        }
+        (string Subject, string Body)? message;
 
-        // The commit an undo leaves staged, whose message the stage panel gets back (7.5).
-        var message = entry.Kind is UndoKind.Commit or UndoKind.Amend ? await ReadMessageAsync(entry.After.Head.Sha) : null;
-        var result = await Git.RunUndoStepAsync(step, NetworkOptions.From(context), context.CancellationToken);
-        if (result.Refusal is { } refusal)
+        // The history's turn from the check to the cursor move (15.9): another tab on this
+        // worktree records only after it, never into the stepped entry's place.
+        using (await history.TakeTurnAsync())
         {
-            return Refused(context, text, refusal, OperationTexts.CantStep(step.Direction, entry.Text, await ReasonOfAsync(refusal)));
-        }
+            if (!ReferenceEquals(step.Direction == UndoDirection.Undo ? history.ToUndo : history.ToRedo, entry))
+            {
+                // The history moved between the click and now (another tab on this worktree): this is
+                // not the step that was asked for.
+                Log.Info($"{Repository.Name}: {text.Title}: the undo history changed before it ran; nothing was done.");
+                throw new OperationCanceledException();
+            }
 
-        if (step.Direction == UndoDirection.Undo)
-        {
-            history.Undone(result.Entry);
-        }
-        else
-        {
-            history.Redone(result.Entry);
+            // The commit an undo leaves staged, whose message the stage panel gets back (7.5).
+            message = entry.Kind is UndoKind.Commit or UndoKind.Amend ? await ReadMessageAsync(entry.After.Head.Sha) : null;
+            var result = await Git.RunUndoStepAsync(step, NetworkOptions.From(context), context.CancellationToken);
+            if (result.Refusal is { } refusal)
+            {
+                return Refused(context, text, refusal, OperationTexts.CantStep(step.Direction, entry.Text, await ReasonOfAsync(refusal)));
+            }
+
+            if (step.Direction == UndoDirection.Undo)
+            {
+                history.Undone(result.Entry);
+            }
+            else
+            {
+                history.Redone(result.Entry);
+            }
         }
 
         await AfterStepAsync(step, message, context.CancellationToken);
@@ -343,6 +362,7 @@ public sealed partial class RepositoryOperations
     /// </summary>
     private async Task AfterStepAsync(UndoStep step, (string Subject, string Body)? message, CancellationToken cancellationToken)
     {
+        FollowBranchesOf(step.Effects);
         var undo = step.Direction == UndoDirection.Undo;
         if (step.Entry is { Kind: UndoKind.Discard, Captured.Snapshot: { } snapshot })
         {
@@ -365,6 +385,31 @@ public sealed partial class RepositoryOperations
             else
             {
                 Repository.Changes.TakeBackRedoneMessage(filled.Subject, filled.Body);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The branches a step or a restore renamed, deleted or created, followed by what the graph
+    /// hides and solos as the app's own branch operations are (8.1, 8.4, 15.9): an undone rename
+    /// moves the entries back, an undone creation removes them, a branch brought back in solo
+    /// mode is soloed.
+    /// </summary>
+    private void FollowBranchesOf(IReadOnlyList<UndoEffect> effects)
+    {
+        foreach (var effect in effects)
+        {
+            switch (effect)
+            {
+                case UndoEffect.RenameBranch rename:
+                    FollowRenamedBranch(HeadsPrefix + rename.From, HeadsPrefix + rename.To);
+                    break;
+                case UndoEffect.SetRef { From: not null, To: null } set when set.Ref.StartsWith(HeadsPrefix, StringComparison.Ordinal):
+                    FollowDeletedBranch(set.Ref);
+                    break;
+                case UndoEffect.SetRef { From: null, To: not null } set when set.Ref.StartsWith(HeadsPrefix, StringComparison.Ordinal):
+                    FollowCreatedBranch(set.Ref);
+                    break;
             }
         }
     }
@@ -474,8 +519,8 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// The state of Undo or Redo: enabled with its tooltip, or the first of 7.4's reasons that holds.
-    /// <paramref name="includeBusy"/> false leaves out the running operation (the restore bar's
-    /// Restore, which queues as any write does).
+    /// <paramref name="includeBusy"/> false leaves out the running and waiting operations (the
+    /// restore bar's Restore, which checks the queue itself).
     /// </summary>
     private (bool Enabled, string ToolTip) ReasonAgainst(UndoDirection direction, bool includeBusy)
     {
@@ -483,9 +528,11 @@ public sealed partial class RepositoryOperations
         var entry = direction == UndoDirection.Undo ? history.ToUndo : history.ToRedo;
         var status = Status;
         string? reason = null;
-        if (includeBusy && Queue.Current is { IsBackground: false } current)
+        if (includeBusy && (Queue.Current is { IsBackground: false } current ? current.Title : Queue.FirstWaitingTitle) is { } busy)
         {
-            reason = OperationTexts.WaitFor(current.Title);
+            // A user operation runs, or waits behind a background one (7.4 reason 1): a click
+            // would queue behind it and find the history moved.
+            reason = OperationTexts.WaitFor(busy);
         }
         else if (status.InProgress.IsActive)
         {
@@ -552,7 +599,11 @@ public sealed partial class RepositoryOperations
         return refusal;
     }
 
-    /// <summary>The SHA-256 of a working-tree file's bytes, upper-case hex, or null when it does not exist or cannot be read.</summary>
+    /// <summary>
+    /// The SHA-256 of a working-tree file's bytes, upper-case hex, as the history records it: null
+    /// when it does not exist, <see cref="RecordedFile.InTheWay"/> when a folder holding files or a
+    /// file in a folder's place stands there (15.9), <c>unreadable</c> when it cannot be read.
+    /// </summary>
     private static string? Sha256Of(string root, string path)
     {
         var full = System.IO.Path.Combine(root, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
@@ -560,7 +611,7 @@ public sealed partial class RepositoryOperations
         {
             if (!File.Exists(full))
             {
-                return null;
+                return WorkingTreeFiles.IsInTheWayOfFile(root, path) ? RecordedFile.InTheWay : null;
             }
 
             using var stream = File.OpenRead(full);
@@ -606,7 +657,15 @@ public sealed partial class RepositoryOperations
     {
         try
         {
-            await RecordAsync(recording, captured);
+            if (recording is not null)
+            {
+                // The history's turn around its writes (15.9): a step of another tab on this
+                // worktree moves its cursor before or after them, never in between.
+                using (await Repository.UndoHistory.TakeTurnAsync())
+                {
+                    await RecordAsync(recording, captured);
+                }
+            }
         }
         finally
         {
@@ -816,8 +875,15 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async context =>
             {
-                var refusal = await RunEffectsAsync(context, UndoKind.CreateBranch, UndoTexts.RestoreBranch(branch), [new UndoEffect.SetRef(HeadsPrefix + branch, null, backup.Commit) { CreateReflog = true }]);
-                return refusal is null ? OperationReport.Done(OperationTexts.RestoredBranch(branch)) : await RestoreRefusedAsync(context, text, refusal);
+                UndoEffect[] effects = [new UndoEffect.SetRef(HeadsPrefix + branch, null, backup.Commit) { CreateReflog = true }];
+                var refusal = await RunEffectsAsync(context, UndoKind.CreateBranch, UndoTexts.RestoreBranch(branch), effects);
+                if (refusal is not null)
+                {
+                    return await RestoreRefusedAsync(context, text, refusal);
+                }
+
+                FollowBranchesOf(effects);
+                return OperationReport.Done(OperationTexts.RestoredBranch(branch));
             },
             new RunOptions { Undo = UndoScope.RestoreBranch(branch) }));
     }
@@ -856,10 +922,11 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// "Restore the discarded files…" and "Restore the changes…" (7.10, BD15, BD16, BD20): D75's
-    /// question when a file of the snapshot would be overwritten; on Restore those files are saved
-    /// in a snapshot of their own first; a hard reset's snapshot puts the index back for its own
-    /// paths when nothing is staged now; then the snapshot's files; then the clean-up when a
-    /// snapshot was saved. The status counts every path of the snapshot. The undo history learns
+    /// question when a file of the snapshot would be overwritten; on Restore the files that differ
+    /// when the operation runs are saved in a snapshot of their own first (15.9: also one changed
+    /// after the question); a hard reset's snapshot puts the index back for its own paths when
+    /// nothing is staged now; then the snapshot's files; then, after the recording, the clean-up
+    /// when a snapshot was saved. The status counts every path of the snapshot. The undo history learns
     /// what was put back only when the step went through: a refused or failed one changed nothing,
     /// and would otherwise be recorded as an entry whose undo refuses and blocks the older ones.
     /// </summary>
@@ -893,10 +960,15 @@ public sealed partial class RepositoryOperations
                 RefreshScope.Refs,
                 async context =>
                 {
-                    if (changed.Count > 0)
+                    // D75: the newer version first, in a snapshot of its own, decided now (15.9): a
+                    // file edited while the question was open or while this waited is saved too.
+                    // The backups' clean-up follows the recording, whose entry keeps the snapshot
+                    // restored from (7.8).
+                    var newer = await ChangedSinceSnapshotAsync(snapshot);
+                    if (newer.Count > 0)
                     {
-                        // D75: the newer version first, in a snapshot of its own.
-                        await Git.SaveSnapshotAsync(changed);
+                        await Git.SaveSnapshotAsync(newer);
+                        MarkBackupSaved();
                     }
 
                     var index = putsIndexBack ? await IndexOfHardResetAsync(snapshot.Commit) : null;
@@ -911,11 +983,6 @@ public sealed partial class RepositoryOperations
                         {
                             UndoCapture.IndexRestored(index.Source, index.Paths);
                         }
-                    }
-
-                    if (changed.Count > 0)
-                    {
-                        await CleanUpBackupsAsync();
                     }
 
                     return refusal is null ? OperationReport.Done(OperationTexts.RestoredFiles(snapshot.Paths.Count)) : await RestoreRefusedAsync(context, text, refusal);
@@ -1038,7 +1105,7 @@ public sealed partial class RepositoryOperations
 
         return GuardAsync(text, async () =>
         {
-            var lease = ForcePushLease(await Git.ReadReflogAsync(RemotesPrefix + name, ForcePushReflogEntries), backup.Commit);
+            var lease = (await Git.ReadReflogAsync(RemotesPrefix + name, ReflogResult.ForcePushLeaseDepth)).ForcePushLease(backup.Commit);
             if (lease is null)
             {
                 await ShowRefusalAsync(text, OperationTexts.ForcePushCommitNotFound);
@@ -1087,28 +1154,6 @@ public sealed partial class RepositoryOperations
             },
             new RunOptions { Undo = isTag ? UndoScope.PushTagBack(name, remote) : UndoScope.PushBack(name, remote) });
     });
-
-    /// <summary>
-    /// The commit a force push left on the remote (7.10), its backup's lease: in the remote-tracking
-    /// ref's reflog (newest first), the <c>update by push</c> entry whose older neighbour is the
-    /// commit the push replaced. Null when the reflog no longer has it.
-    /// </summary>
-    public static string? ForcePushLease(ReflogResult remoteReflog, string backupCommit)
-    {
-        ArgumentNullException.ThrowIfNull(remoteReflog);
-        ArgumentNullException.ThrowIfNull(backupCommit);
-        var entries = remoteReflog.Entries;
-        for (var index = 0; index + 1 < entries.Count; index++)
-        {
-            if (string.Equals(entries[index].Message, "update by push", StringComparison.Ordinal)
-                && string.Equals(entries[index + 1].Sha, backupCommit, StringComparison.Ordinal))
-            {
-                return entries[index].Sha;
-            }
-        }
-
-        return null;
-    }
 
     /// <summary>
     /// Runs a restore's effects as a step of their own inside its operation (7.10): the git layer's
