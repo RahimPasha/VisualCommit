@@ -49,6 +49,15 @@ of `c299939`'s second parent (`git show phase/5-history:docs/status.md`).
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+The run for phase 5's merge on `master` is
+[39078809291](https://github.com/RahimPasha/VisualCommit/actions/runs/39078809291), for `7bcb5c0`
+(the merge commit `c299939` and the commit that set phase 5 to "Done"): all five jobs succeeded,
+each with 3,233 tests passed: `windows-latest` (16 min 51 s; its Test step 14 min 59 s of 40),
+`macos-latest` (19 min 43 s; Test step 17 min 40 s), `ubuntu-latest` (5 min 19 s; Test step 3 min
+50 s) and the two "bare ubuntu container" jobs (4 min 29 s and 5 min 30 s; Test steps 2 min 58 s
+and 3 min 48 s). The Windows Test step's 15 minutes against the gate run's 25 for the same tests
+is the runners' spread.
+
 The last run on `phase/5-history` was
 [38931127856](https://github.com/RahimPasha/VisualCommit/actions/runs/38931127856), for the
 gate's commit `1b2e734`: all five jobs succeeded, each with 3,233 tests passed: `windows-latest`
