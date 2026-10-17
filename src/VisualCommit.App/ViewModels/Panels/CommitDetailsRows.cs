@@ -44,14 +44,19 @@ public sealed partial class ChangedFileRow : ObservableObject
         ToggleCommand = new RelayCommand(() => toggle?.Invoke(this), () => toggle is not null);
     }
 
-    /// <summary>A file row: in the flat list with its folder, in the tree without.</summary>
-    internal static ChangedFileRow ForFile(ChangedFile file, int depth, bool showFolder)
+    /// <summary>
+    /// A file row: in the flat list with its folder, in the tree without. With
+    /// <paramref name="isUnchanged"/>, a file of "All files" that the commit did not change
+    /// (docs/phase-5-design.md 4.5): no status letter.
+    /// </summary>
+    internal static ChangedFileRow ForFile(ChangedFile file, int depth, bool showFolder, bool isUnchanged = false)
     {
         var slash = file.Path.LastIndexOf('/');
         return new ChangedFileRow(file.Path, file.Path[(slash + 1)..], depth, toggle: null)
         {
             File = file,
             Folder = showFolder && slash > 0 ? file.Path[..slash] : string.Empty,
+            IsUnchanged = isUnchanged,
         };
     }
 
@@ -78,6 +83,12 @@ public sealed partial class ChangedFileRow : ObservableObject
 
     public bool IsFile => File is not null;
 
+    /// <summary>
+    /// A file of the commit's tree that the commit did not change, listed while "All files" is on
+    /// (docs/phase-5-design.md 4.5, D164): no status letter, and a click opens its blame.
+    /// </summary>
+    public bool IsUnchanged { get; private init; }
+
     /// <summary>A folder whose content is shown below it.</summary>
     public bool IsOpen { get; private init; }
 
@@ -89,8 +100,8 @@ public sealed partial class ChangedFileRow : ObservableObject
 
     public bool HasFolder => Folder.Length > 0;
 
-    /// <summary>The status letter: A, M, D, R, C, T, U for a conflict, or ? for a status the app does not know. Empty for a folder.</summary>
-    public string StatusLetter => File?.Kind switch
+    /// <summary>The status letter: A, M, D, R, C, T, U for a conflict, or ? for a status the app does not know. Empty for a folder and an unchanged file.</summary>
+    public string StatusLetter => IsUnchanged ? string.Empty : File?.Kind switch
     {
         null => string.Empty,
         FileChangeKind.Added => "A",

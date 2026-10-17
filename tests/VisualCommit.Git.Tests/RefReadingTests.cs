@@ -144,6 +144,51 @@ public class RefReadingTests
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Head_and_its_branch_come_from_one_read_when_a_commit_lands_between_the_reads(bool listFirst)
+    {
+        // The phase 5 gate's f11f: a commit made in a terminal while the refs are read. The five
+        // reads run side by side; here one of for-each-ref and rev-parse HEAD runs before the
+        // commit and the other after it, the order a busy machine can give them.
+        using var repo = await TempRepo.CreateAsync();
+        var first = await repo.CommitFileAsync("a.txt", "a\n", "First");
+        string? second = null;
+        var armed = false;
+        var firstDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        static bool IsList(GitCommand command) => command.Arguments[0] == "for-each-ref";
+        static bool IsHeadSha(GitCommand command) => command.Arguments.SequenceEqual(["rev-parse", "-q", "--verify", "HEAD"]);
+        var runner = new OrderingRunner(
+            NewRunner(),
+            before: async command =>
+            {
+                if (armed && (listFirst ? IsHeadSha(command) : IsList(command)))
+                {
+                    await firstDone.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+                    second = await repo.CommitFileAsync("a.txt", "b\n", "Second");
+                }
+            },
+            after: command =>
+            {
+                if (armed && (listFirst ? IsList(command) : IsHeadSha(command)))
+                {
+                    firstDone.TrySetResult();
+                }
+            });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestCancelled);
+        armed = true;
+
+        var refs = await repository.ReadRefsAsync(TestCancelled);
+
+        // The branch as for-each-ref saw it, and HEAD with it: before the commit when the list
+        // came first, after it otherwise.
+        Assert.NotNull(second);
+        var main = Assert.Single(refs.Refs, gitRef => gitRef.IsHead);
+        Assert.Equal(listFirst ? first : second, main.TargetSha);
+        Assert.Equal(new HeadState("main", main.TargetSha), refs.Head);
+    }
+
+    [Theory]
     [InlineData("", 0, 0, false)]
     [InlineData("[ahead 3]", 3, 0, false)]
     [InlineData("[behind 12]", 0, 12, false)]
@@ -151,4 +196,18 @@ public class RefReadingTests
     [InlineData("[gone]", 0, 0, true)]
     public void Reads_the_upstream_track_text(string track, int ahead, int behind, bool gone) =>
         Assert.Equal((ahead, behind, gone), GitRepository.ParseTrack(track));
+
+    /// <summary>A runner that runs <paramref name="before"/> ahead of each call and <paramref name="after"/> once it has ended: the order of calls that run side by side, made certain.</summary>
+    private sealed class OrderingRunner(IGitRunner real, Func<GitCommand, Task> before, Action<GitCommand> after) : IGitRunner
+    {
+        public string ExecutablePath => real.ExecutablePath;
+
+        public async Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
+        {
+            await before(command);
+            var result = await real.RunAsync(command, cancellationToken);
+            after(command);
+            return result;
+        }
+    }
 }

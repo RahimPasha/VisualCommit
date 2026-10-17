@@ -1,6 +1,7 @@
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Session;
 
 namespace VisualCommit.App.ViewModels.Menus;
 
@@ -140,6 +141,14 @@ public sealed record RepositoryMenuContext(
     /// </summary>
     public string? MergeTool { get; init; }
 
+    /// <summary>
+    /// What the graph hides and solos (docs/phase-5-design.md 8.1, 8.3): the hidden and soloed
+    /// branches, the hidden remotes, by full names, for the labels and disabled reasons of Hide or
+    /// Show, Solo or Stop soloing, and the sections' and remotes' items. Null while nothing is
+    /// hidden or soloed.
+    /// </summary>
+    public RepositoryGraphFilter? Filters { get; init; }
+
     public HeadState Head => Refs.Head;
 
     public bool IsDetached => Head.IsDetached;
@@ -241,6 +250,18 @@ public sealed record FileMenuTarget(ChangedFile File, bool IsUntracked, bool Exi
 
     /// <summary>An untracked folder git lists with a slash: a repository of its own, never discarded (D75).</summary>
     public bool IsNestedRepository => Path.EndsWith('/');
+
+    /// <summary>
+    /// The conflict resolver's header menu (docs/phase-5-design.md 4.4): it leaves out File history
+    /// and Blame, since opening a page would close the resolver.
+    /// </summary>
+    public bool InConflictResolver { get; init; }
+
+    /// <summary>
+    /// For a commit's file, the commit's first parent (a stash's: the commit it was made on), or
+    /// null: the blame of a file the commit deleted is its parent's version (docs/phase-5-design.md 4.4).
+    /// </summary>
+    public string? CommitParent { get; init; }
 }
 
 /// <summary>A right-click in the diff view (4b): which file and side, and what is selected or under the pointer.</summary>

@@ -36,6 +36,11 @@ namespace VisualCommit.App.Controls;
 /// (<see cref="ContextRequestedAt"/>), and a branch label can be dragged onto another
 /// (CommitGraphControl.Drag.cs, with the window's <c>BranchDragService</c>).
 /// </para>
+/// <para>
+/// Phase 5: a stash's line down to the commit it was made on is dashed, as the working-changes
+/// row's is (docs/phase-5-design.md section 10, D161), and a search marks its matches and dims the
+/// other rows (3.3, CommitGraphControl.Search.cs).
+/// </para>
 /// </remarks>
 public sealed partial class CommitGraphControl : Control
 {
@@ -88,6 +93,14 @@ public sealed partial class CommitGraphControl : Control
     public static readonly StyledProperty<string?> WorkingRowTextProperty =
         AvaloniaProperty.Register<CommitGraphControl, string?>(nameof(WorkingRowText), DefaultWorkingRowText);
 
+    /// <summary>
+    /// What a search marks (docs/phase-5-design.md 3.3): while it is active, each matching row is
+    /// marked and every other commit row dimmed (CommitGraphControl.Search.cs). Bound to the
+    /// repository's <see cref="ViewModels.RepositoryViewModel.SearchMarks"/>.
+    /// </summary>
+    public static readonly StyledProperty<GraphSearchMarks> SearchProperty =
+        AvaloniaProperty.Register<CommitGraphControl, GraphSearchMarks>(nameof(Search), GraphSearchMarks.None);
+
     /// <summary>The typeface family of every text the control draws: inherited, so it is the app's Inter (D28).</summary>
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
         TextElement.FontFamilyProperty.AddOwner<CommitGraphControl>();
@@ -124,7 +137,7 @@ public sealed partial class CommitGraphControl : Control
     {
         FocusableProperty.OverrideDefaultValue<CommitGraphControl>(true);
         ClipToBoundsProperty.OverrideDefaultValue<CommitGraphControl>(true);
-        AffectsRender<CommitGraphControl>(SelectedIndexProperty, ScrollOffsetProperty, IsWorkingRowSelectedProperty, SelectionProperty);
+        AffectsRender<CommitGraphControl>(SelectedIndexProperty, ScrollOffsetProperty, IsWorkingRowSelectedProperty, SelectionProperty, SearchProperty);
     }
 
     public CommitGraphControl()
@@ -215,6 +228,13 @@ public sealed partial class CommitGraphControl : Control
     {
         get => GetValue(WorkingRowTextProperty);
         set => SetValue(WorkingRowTextProperty, value);
+    }
+
+    /// <summary>What a search marks (3.3); <see cref="GraphSearchMarks.None"/> without a search.</summary>
+    public GraphSearchMarks Search
+    {
+        get => GetValue(SearchProperty);
+        set => SetValue(SearchProperty, value);
     }
 
     public FontFamily FontFamily
@@ -410,6 +430,10 @@ public sealed partial class CommitGraphControl : Control
         {
             _workingRowLayout = null;
             InvalidateVisual();
+        }
+        else if (change.Property == SearchProperty)
+        {
+            OnSearchChanged(change.GetOldValue<GraphSearchMarks?>(), change.GetNewValue<GraphSearchMarks?>());
         }
     }
 

@@ -40,6 +40,11 @@ public class StatusBarTests
                 .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
                 .OrderBy(text => app.BoundsOf(text).X)
                 .Select(text => text.Text!));
+
+        // Phase 0's toggle on a tab without a repository, which phase 5 keeps (docs/phase-5-design.md 1.2).
+        var toggle = app.FindByAutomationId("ActivityLogToggle");
+        Assert.False(toggle.IsEffectivelyEnabled);
+        Assert.Equal("Show every git command the app has run", ToolTip.GetTip(toggle));
     }
 
     [AvaloniaFact]
@@ -51,6 +56,9 @@ public class StatusBarTests
         await app.WaitUntilReadyAsync();
         var repository = await GraphShownAsync(app);
         var parts = Parts(app);
+
+        // Phase 5 (docs/phase-5-design.md 1.2, 14.1): with a repository the activity log's toggle is enabled.
+        Assert.True(app.FindByAutomationId("ActivityLogToggle").IsEffectivelyEnabled);
 
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var fetching = repository.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async context =>
@@ -78,14 +86,98 @@ public class StatusBarTests
         Assert.Equal(order.Order(), order);
         Pictures(app, "statusbar-fetch-progress");
 
+        // Within a bound: a click that missed Cancel fails here with a message instead of hanging.
         app.Click(parts.Cancel);
+        await app.WaitForAsync(() => fetching.IsCompleted, "the fetch to end after Cancel");
         Assert.Equal(OperationOutcome.Cancelled, (await fetching).Outcome);
+        await app.WaitForAsync(() => waiting.IsCompleted, "the waiting operation to run after the fetch");
         await waiting;
         await app.WaitForIdleAsync(repository);
         Assert.Equal("Created hotfix and checked it out", parts.Status.Text);
         Assert.False(parts.Progress.IsVisible);
         Assert.False(parts.Cancel.IsVisible);
         Assert.False(parts.Waiting.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public async Task While_the_merge_tool_runs_Cancel_says_it_stops_git_and_the_merge_tool()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+
+        var tool = RunMergeTool(repository);
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+
+        Assert.Equal("Stop git and the merge tool", ToolTip.GetTip(parts.Cancel));
+
+        // The operation runs until it is cancelled, so the wait is bounded: a click that missed
+        // fails here with a message instead of hanging.
+        app.Click(parts.Cancel);
+        await app.WaitForAsync(() => tool.IsCompleted, "the merge tool's operation to end after Cancel");
+        Assert.Equal(OperationOutcome.Cancelled, (await tool).Outcome);
+        await app.WaitForIdleAsync(repository);
+        Assert.False(parts.Cancel.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public async Task Resting_on_Cancel_until_its_tooltip_shows_and_then_clicking_cancels()
+    {
+        // Cancel sits on the window's bottom edge, where its tooltip slides up over the pointer
+        // (D105). A tooltip takes no input (Theme/Controls.axaml): the press reaches Cancel, which
+        // keeps its hover look while its tooltip is open.
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+
+        var tool = RunMergeTool(repository);
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+        app.MoveMouse(parts.Cancel);
+        Assert.Equal("Stop git and the merge tool", await app.WaitForToolTipAsync(parts.Cancel));
+        Assert.True(parts.Cancel.IsPointerOver, "Cancel lost its hover look when its tooltip opened.");
+
+        // The click's move goes to where the pointer already is.
+        app.Click(parts.Cancel);
+        await app.WaitForAsync(() => tool.IsCompleted, "the merge tool's operation to end after a click under Cancel's open tooltip");
+        Assert.Equal(OperationOutcome.Cancelled, (await tool).Outcome);
+        Assert.False(ToolTip.GetIsOpen(parts.Cancel));
+        await app.WaitForIdleAsync(repository);
+        Assert.False(parts.Cancel.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public async Task A_click_during_which_Cancel_s_tooltip_opens_still_cancels()
+    {
+        // A slow click: under load the headless window rendered for longer than the show delay
+        // between the click's move and its press, and Cancel's tooltip opened over the pointer in
+        // between. A show delay of 0 opens it during the move every time.
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        var opened = false;
+        parts.Cancel.PropertyChanged += (_, e) => opened |= e.Property == ToolTip.IsOpenProperty && e.NewValue is true;
+
+        var tool = RunMergeTool(repository);
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+        app.MoveToNeutral();
+        ToolTip.SetShowDelay(parts.Cancel, 0);
+        app.Click(parts.Cancel);
+        parts.Cancel.ClearValue(ToolTip.ShowDelayProperty);
+
+        Assert.True(opened, "Cancel's tooltip did not open during the click.");
+        await app.WaitForAsync(() => tool.IsCompleted, "the merge tool's operation to end after a click during which Cancel's tooltip opened");
+        Assert.Equal(OperationOutcome.Cancelled, (await tool).Outcome);
+        await app.WaitForIdleAsync(repository);
+        Assert.False(parts.Cancel.IsVisible);
     }
 
     [AvaloniaFact]
@@ -258,6 +350,17 @@ public class StatusBarTests
         app.Settle();
         Assert.Equal("Ready", parts.Status.Text);
     }
+
+    /// <summary>The merge tool's operation (docs/phase-4-design.md 11.9): local, it can be cancelled (D149), and it runs until it is.</summary>
+    private static Task<OperationResult> RunMergeTool(RepositoryViewModel repository) =>
+        repository.Queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for fake to close…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Resolved notes.txt");
+        })
+        {
+            CanBeCancelled = true,
+        });
 
     private static async Task<RepositoryViewModel> GraphShownAsync(ShellDriver app)
     {

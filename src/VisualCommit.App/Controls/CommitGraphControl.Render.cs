@@ -58,8 +58,14 @@ public sealed partial class CommitGraphControl
     /// <summary>What the working-changes row says in the Message column (D60) unless <see cref="WorkingRowText"/> says otherwise.</summary>
     public const string DefaultWorkingRowText = "Working changes";
 
-    /// <summary>The working-changes row's dashed line: dashes and gaps of 3 pixels, in units of the line's thickness.</summary>
+    /// <summary>
+    /// The dashes and the gaps of a dashed line, in pixels: the working-changes row's line (D60)
+    /// and a stash's line down to its base (docs/phase-5-design.md section 10, D161).
+    /// </summary>
     private const double DashLength = 3;
+
+    /// <summary>A dash and a gap: where a dashed line's pattern repeats.</summary>
+    private const double DashPeriod = 2 * DashLength;
 
     /// <summary>
     /// How many rows keep their laid-out text. A view shows at most about 40 rows; the rest of
@@ -99,6 +105,7 @@ public sealed partial class CommitGraphControl
 
         var columns = Columns;
         var selection = Selection;
+        var search = ActiveSearch;
 
         for (var display = first; display <= last; display++)
         {
@@ -109,9 +116,15 @@ public sealed partial class CommitGraphControl
             }
         }
 
+        if (search is not null)
+        {
+            DrawSearchMarks(context, data, search, first, last, offset, palette);
+        }
+
         using (context.PushClip(new Rect(columns.Graph.X, 0, columns.Graph.Width, size.Height)))
         {
             // Under everything else in the column: what it passes is drawn over it.
+            var dashOrigin = DashOrigin(offset);
             if (rowOffset > 0)
             {
                 DrawWorkingRowLine(context, data, offset, size.Height, palette);
@@ -127,7 +140,8 @@ public sealed partial class CommitGraphControl
                 }
                 else
                 {
-                    DrawGraphCell(context, data, display - rowOffset, top, background, palette);
+                    var index = display - rowOffset;
+                    DrawGraphCell(context, data, index, top, dashOrigin, background, palette, IsDimmed(data, index, search));
                 }
             }
         }
@@ -140,6 +154,7 @@ public sealed partial class CommitGraphControl
                 if (data.LabelsAt(index).Count > 0)
                 {
                     var dimmed = _draggedLabel is { } dragged && dragged.Sha == data.CommitAt(index).Sha ? dragged.RefName : null;
+                    using var opacity = IsDimmed(data, index, search) ? context.PushOpacity(SearchDimmedOpacity) : default(DrawingContext.PushedState?);
                     DrawLabels(context, GetRowVisual(data, index), data.RowAt(index).NodeColor, RowTop(display, offset), palette, dimmed);
                 }
             }
@@ -154,7 +169,9 @@ public sealed partial class CommitGraphControl
             }
             else
             {
-                DrawTextCells(context, GetRowVisual(data, display - rowOffset), RowTop(display, offset), columns);
+                var index = display - rowOffset;
+                using var opacity = IsDimmed(data, index, search) ? context.PushOpacity(SearchDimmedOpacity) : default(DrawingContext.PushedState?);
+                DrawTextCells(context, GetRowVisual(data, index), RowTop(display, offset), columns);
             }
         }
 
@@ -215,7 +232,7 @@ public sealed partial class CommitGraphControl
         }
 
         var x = LaneCenterX(lane);
-        var from = RowTop(0, offset) + (RowHeight / 2) + (NodeDiameter / 2);
+        var from = DashOrigin(offset);
         var headCommit = data.CommitAt(head);
         var headRadius = (headCommit.Parents.Count > 1 ? MergeNodeDiameter : NodeDiameter) / 2;
         var to = RowTop(head + 1, offset) + (RowHeight / 2) - headRadius;
@@ -227,15 +244,17 @@ public sealed partial class CommitGraphControl
             return;
         }
 
-        var period = 2 * DashLength;
-        var phase = (start - from) % period;
-        var dashes = new ImmutableDashStyle([DashLength / LineThickness, DashLength / LineThickness], phase / LineThickness);
-        var pen = new ImmutablePen(palette.Lanes[color], LineThickness, dashes, PenLineCap.Flat);
-        context.DrawLine(pen, new Point(x, start), new Point(x, end));
+        context.DrawLine(DashedPen(palette, color, start - from), new Point(x, start), new Point(x, end));
     }
 
-    /// <summary>The lines and the node of one row: lines first, so the node lies on top of them.</summary>
-    private void DrawGraphCell(DrawingContext context, CommitGraphData data, int index, double top, IBrush rowBackground, Palette palette)
+    /// <summary>
+    /// The lines and the node of one row: lines first, so the node lies on top of them. A stash's
+    /// line down to its base is dashed from <paramref name="dashOrigin"/> (<see cref="DashOrigin"/>);
+    /// a curve into the base's node takes the pattern where it starts and carries it along its
+    /// length. A row the search dims (3.3) has its node at <see cref="SearchDimmedOpacity"/>; its
+    /// lines stay at full strength, so the history's shape stays readable.
+    /// </summary>
+    private void DrawGraphCell(DrawingContext context, CommitGraphData data, int index, double top, double dashOrigin, IBrush rowBackground, Palette palette, bool dimmed)
     {
         var row = data.RowAt(index);
         var middle = top + (RowHeight / 2);
@@ -246,7 +265,9 @@ public sealed partial class CommitGraphControl
         for (var i = 0; i < lines.Count; i++)
         {
             var line = lines[i];
-            var pen = palette.LanePens[Modulo(line.Color)];
+            var pen = line.IsDashed
+                ? DashedPen(palette, Modulo(line.Color), (line.Kind == GraphLineKind.OutOfNode ? middle : top) - dashOrigin)
+                : palette.LanePens[Modulo(line.Color)];
             var fromX = LaneCenterX(line.FromLane);
             var toX = LaneCenterX(line.ToLane);
             switch (line.Kind)
@@ -266,17 +287,62 @@ public sealed partial class CommitGraphControl
         var center = new Point(LaneCenterX(row.NodeLane), middle);
         var color = Modulo(row.NodeColor);
         var commit = data.CommitAt(index);
-        if (commit.Kind == CommitKind.Stash)
+        var isStash = commit.Kind == CommitKind.Stash;
+        var outerRadius = (isStash || commit.Parents.Count < 2 ? NodeDiameter : MergeNodeDiameter) / 2;
+        if (dimmed)
+        {
+            // A dimmed node still covers the lines that meet in it, as a node at full strength
+            // does: the row's background first, then the node faded over it.
+            context.DrawEllipse(rowBackground, null, center, outerRadius, outerRadius);
+        }
+
+        using var opacity = dimmed ? context.PushOpacity(SearchDimmedOpacity) : default(DrawingContext.PushedState?);
+        if (isStash)
         {
             // A ring 10 across and 2 wide: the stroke is centred 1 inside the outer edge.
-            var radius = (NodeDiameter / 2) - (RingThickness / 2);
+            var radius = outerRadius - (RingThickness / 2);
             context.DrawEllipse(rowBackground, palette.RingPens[color], center, radius, radius);
         }
         else
         {
-            var radius = (commit.Parents.Count > 1 ? MergeNodeDiameter : NodeDiameter) / 2;
-            context.DrawEllipse(palette.Lanes[color], null, center, radius, radius);
+            context.DrawEllipse(palette.Lanes[color], null, center, outerRadius, outerRadius);
         }
+    }
+
+    /// <summary>
+    /// Where the pattern of every dashed line starts, in the control's coordinates: the bottom of a
+    /// ring in the first drawn row, where the working-changes row's line starts (D60). A stash's
+    /// line (docs/phase-5-design.md section 10, D161) takes its dashes from the same place, so its
+    /// pattern depends only on the absolute y: drawn row by row and cut by the view's edges, it is
+    /// one pattern, and where it shares a lane with the working-changes row's line (a stash made on
+    /// HEAD's commit) the two dash as one.
+    /// </summary>
+    private static double DashOrigin(double offset) => RowTop(0, offset) + (RowHeight / 2) + (NodeDiameter / 2);
+
+    /// <summary>
+    /// A dashed pen in lane colour <paramref name="color"/> whose pattern is <paramref name="phase"/>
+    /// pixels in where the line starts (any number: it is taken modulo the pattern). Pens for whole
+    /// pixels, which every row of the graph gives, are made once per theme.
+    /// </summary>
+    private static IPen DashedPen(Palette palette, int color, double phase)
+    {
+        var into = ((phase % DashPeriod) + DashPeriod) % DashPeriod;
+        var step = (int)into;
+        if (step == into)
+        {
+            var slot = (color * (int)DashPeriod) + step;
+            return palette.DashedLanePens[slot] ??= MakeDashedPen(palette.Lanes[color], into);
+        }
+
+        return MakeDashedPen(palette.Lanes[color], into);
+
+        // The dash style counts in units of the line's thickness.
+        static IPen MakeDashedPen(IImmutableBrush brush, double phase) =>
+            new ImmutablePen(
+                brush,
+                LineThickness,
+                new ImmutableDashStyle([DashLength / LineThickness, DashLength / LineThickness], phase / LineThickness),
+                PenLineCap.Flat);
     }
 
     /// <summary>A line between two points of one row: straight in one lane, otherwise a curve that leaves and arrives vertically.</summary>
@@ -413,7 +479,8 @@ public sealed partial class CommitGraphControl
         var typeface = CellTypeface;
 
         var messageBrush = commit.Kind == CommitKind.Stash ? palette.TextSecondary : palette.TextPrimary;
-        var message = CellLayout(commit.Subject, typeface, messageBrush, columns.Message);
+        var messageTypeface = SearchStateOf(data, index, ActiveSearch) == GraphSearchRowState.Marked ? MatchTypeface : typeface;
+        var message = CellLayout(commit.Subject, messageTypeface, messageBrush, columns.Message);
         var author = AuthorLayout(commit.AuthorName, typeface, palette, columns.Author);
         var date = CellLayout(dates.Format(commit.AuthorDate), typeface, palette.TextSecondary, columns.Date);
         var sha = CellLayout(commit.ShortSha, typeface, palette.TextSecondary, columns.Sha);
@@ -670,10 +737,20 @@ public sealed partial class CommitGraphControl
 
         public required IPen BorderPen { get; init; }
 
+        /// <summary>The mark at the left edge of a row a search matches (docs/phase-5-design.md 3.3).</summary>
+        public required IBrush SearchMatch { get; init; }
+
         public required IImmutableBrush[] Lanes { get; init; }
 
         /// <summary>Lines in each lane colour, 2 wide.</summary>
         public required IPen[] LanePens { get; init; }
+
+        /// <summary>
+        /// Dashed lines in each lane colour, made as they are first drawn
+        /// (<see cref="DashedPen"/>): for colour c, the pattern p whole pixels in at the line's
+        /// start is at c × 6 + p.
+        /// </summary>
+        public IPen?[] DashedLanePens { get; } = new IPen?[LaneCount * (int)DashPeriod];
 
         /// <summary>Stash rings in each lane colour.</summary>
         public required IPen[] RingPens { get; init; }
@@ -730,6 +807,7 @@ public sealed partial class CommitGraphControl
                 LabelText = labelText,
                 ControlBackground = Brush("VcControlBackgroundBrush"),
                 BorderPen = new ImmutablePen(Brush("VcBorderBrush"), 1),
+                SearchMatch = Brush("VcSearchMatchBrush"),
                 IconPenOnFill = new ImmutablePen(labelText, iconStroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round),
                 IconPenOnControl = new ImmutablePen(textPrimary, iconStroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round),
                 Lanes = lanes,

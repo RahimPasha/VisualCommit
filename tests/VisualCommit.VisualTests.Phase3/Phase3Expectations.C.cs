@@ -145,7 +145,7 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
-        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items; 380 high.</summary>
+        /// <summary>Check 13 step 6 (HEAD on hotfix at Main work), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 493 high.</summary>
         public static readonly string[] Check13BranchMenu =
         [
             "feature/conflict",
@@ -164,10 +164,15 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare feature/conflict with hotfix",
+            "Show reflog of feature/conflict",
+            "Hide feature/conflict",
+            "Solo feature/conflict",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>Check 13 step 8 (main, whose tip hotfix is on), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 571 high.</summary>
         public static readonly string[] Check13MainMenu =
         [
             "main",
@@ -189,9 +194,15 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/main",
             "—",
+            "Compare main with hotfix",
+            "Show reflog of main",
+            "Hide main",
+            "Solo main",
+            "—",
             "Copy branch name",
         ];
 
+        /// <summary>Check 13 step 10: the current branch hotfix, with phase 5's reflog, hide and solo items; 328 high (241 before phase 5).</summary>
         public static readonly string[] Check13HotfixMenu =
         [
             "hotfix",
@@ -204,6 +215,10 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Show reflog of hotfix",
+            "Hide hotfix (disabled: \"The checked-out branch is always shown\")",
+            "Solo hotfix",
+            "—",
             "Copy branch name",
         ];
 
@@ -211,7 +226,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 13b ----
 
-        /// <summary>Check 13b step 1: check 2 step 4's list, with phase 4's rebase items; 293 high.</summary>
+        /// <summary>Check 13b step 1: check 2 step 4's list, with phase 4's rebase items and phase 5's compare, hide and solo items; 380 high.</summary>
         public static readonly string[] Check13bRemoteMenu =
         [
             "origin/feature/alpha",
@@ -226,6 +241,10 @@ public static partial class Phase3Expectations
             "—",
             "Delete feature/alpha on origin… (danger)",
             "—",
+            "Compare origin/feature/alpha with main",
+            "Hide origin/feature/alpha",
+            "Solo origin/feature/alpha",
+            "—",
             "Copy branch name",
         ];
 
@@ -238,6 +257,8 @@ public static partial class Phase3Expectations
             "Push v1.0 to origin",
             "Delete v1.0… (danger)",
             "Delete v1.0 on origin… (danger)",
+            "—",
+            "Compare v1.0 with main",
             "—",
             "Copy tag name",
         ];
@@ -313,9 +334,17 @@ public static partial class Phase3Expectations
 
         public const string T4Key = "error: you need to resolve your current index first";
 
-        public const string UntrackedSummary = "Untracked files are in the way: feature/addfile has files with the same names. Move or delete them, then check out again.";
+        /// <summary>
+        /// Check 14 step 2's summary, phase 5's C12 (docs/phase-5-design.md 9.3, D153): T1 names
+        /// notes.txt under git's tracked header and newfile.txt under its untracked one.
+        /// </summary>
+        public const string TwoConflictsSummary = "2 conflicts prevent checkout. Commit, stash, or discard your changes first.";
 
-        public static string BlockedSummary(string branch) => $"Your changes to these files would be overwritten by checking out {branch}.";
+        /// <summary>Check 14 steps 4 and 7 (T2: notes.txt), with "Stash changes and check out" kept.</summary>
+        public const string OneConflictSummary = "1 conflict prevents checkout. Commit, stash, or discard your changes first.";
+
+        /// <summary>Check 14b step 2: notes.txt conflicted with nothing in progress, refused before git (C12, 9.3); T4 shows in no dialog now.</summary>
+        public const string ResolveConflictsSummary = "Resolve the conflicts first";
 
         public const string Check14ConflictsSummary =
             "Checked out feature/clash. Re-applying your changes stopped with conflicts in 1 file. Your changes are kept in the stash \"VisualCommit: before checking out feature/clash\".";
@@ -387,7 +416,13 @@ public static partial class Phase3Expectations
             R("Initial commit", 0, 0),
         ];
 
-        /// <summary>T5, git's refusal of the pop over the edited README.md (standard error).</summary>
+        /// <summary>
+        /// Check 15b step 2's summary since phase 5's C12 (docs/phase-5-design.md 9.3): the app
+        /// refuses the pop before git, README.md having a local change that the stash changes.
+        /// </summary>
+        public const string PopRefusedSummary = "1 conflict prevents applying the stash. Commit, stash, or discard your changes first.";
+
+        /// <summary>T5, git's refusal of the pop over the edited README.md (standard error); since phase 5's C12 no dialog shows it, git not being asked.</summary>
         public static readonly string[] T5 =
         [
             "error: Your local changes to the following files would be overwritten by merge:",
@@ -442,6 +477,8 @@ public static partial class Phase3Expectations
             "Push v1.2 to origin",
             "Delete v1.2… (danger)",
             "Delete v1.2 on origin… (danger)",
+            "—",
+            "Compare v1.2 with main",
             "—",
             "Copy tag name",
         ];

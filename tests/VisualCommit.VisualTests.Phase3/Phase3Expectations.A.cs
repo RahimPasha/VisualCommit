@@ -171,7 +171,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 2: branch menus. ----
 
-        /// <summary>Check 2 step 1: <c>feature/alpha</c>'s menu with phase 4's rebase items (458 high).</summary>
+        /// <summary>Check 2 step 1: <c>feature/alpha</c>'s menu with phase 4's rebase items and phase 5's compare, reflog, hide and solo items (571 high).</summary>
         public static readonly string[] FeatureAlphaMenu =
         [
             "feature/alpha",
@@ -193,13 +193,18 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/feature/alpha",
             "—",
+            "Compare feature/alpha with main",
+            "Show reflog of feature/alpha",
+            "Hide feature/alpha",
+            "Solo feature/alpha",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 2 step 1: the menu is 458 high (406 before phase 4).</summary>
-        public const double FeatureAlphaMenuHeight = 458;
+        /// <summary>Check 2 step 1: the menu is 571 high (458 before phase 5, 406 before phase 4).</summary>
+        public const double FeatureAlphaMenuHeight = 571;
 
-        /// <summary>Check 2 step 2: <c>feature/ff</c>'s menu (no upstream; 380 high with phase 4's items).</summary>
+        /// <summary>Check 2 step 2: <c>feature/ff</c>'s menu (no upstream; 493 high with phase 4's and phase 5's items).</summary>
         public static readonly string[] FeatureFfMenu =
         [
             "feature/ff",
@@ -218,10 +223,15 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare feature/ff with main",
+            "Show reflog of feature/ff",
+            "Hide feature/ff",
+            "Solo feature/ff",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 2 step 3 (and check 5 step 5): the current branch's menu, with phase 4's pull with rebase (354 high).</summary>
+        /// <summary>Check 2 step 3 (and check 5 step 5): the current branch's menu, with phase 4's pull with rebase and phase 5's reflog, hide and solo items (441 high).</summary>
         public static readonly string[] MainMenu =
         [
             "main",
@@ -238,6 +248,10 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/main",
+            "—",
+            "Show reflog of main",
+            "Hide main (disabled: \"The checked-out branch is always shown\")",
+            "Solo main",
             "—",
             "Copy branch name",
         ];
@@ -260,11 +274,15 @@ public static partial class Phase3Expectations
             "—",
             "Delete feature/alpha on origin… (danger)",
             "—",
+            "Compare origin/feature/alpha with main",
+            "Hide origin/feature/alpha",
+            "Solo origin/feature/alpha",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>Check 6 step 5: the remote-branch menu is 293 high (241 before phase 4).</summary>
-        public const double OriginFeatureAlphaMenuHeight = 293;
+        /// <summary>Check 6 step 5: the remote-branch menu is 380 high (293 before phase 5, 241 before phase 4).</summary>
+        public const double OriginFeatureAlphaMenuHeight = 380;
 
         /// <summary>Check 2 step 5: <c>origin/main</c>'s menu while <c>main</c> is checked out.</summary>
         public static readonly string[] OriginMainCheckedOutMenu =
@@ -280,6 +298,10 @@ public static partial class Phase3Expectations
             "Create tag here…",
             "—",
             "Delete main on origin… (danger)",
+            "—",
+            "Compare origin/main with main",
+            "Hide origin/main",
+            "Solo origin/main",
             "—",
             "Copy branch name",
         ];
@@ -321,6 +343,10 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking main",
             "—",
+            "Show reflog of loc",
+            "Hide loc (disabled: \"The checked-out branch is always shown\")",
+            "Solo loc",
+            "—",
             "Copy branch name",
         ];
 
@@ -342,6 +368,11 @@ public static partial class Phase3Expectations
             "Delete side… (danger)",
             "—",
             "Set upstream…",
+            "—",
+            "Compare side with loc",
+            "Show reflog of side",
+            "Hide side",
+            "Solo side",
             "—",
             "Copy branch name",
         ];
@@ -365,6 +396,11 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare origin/main with loc",
+            "Show reflog of origin/main",
+            "Hide origin/main",
+            "Solo origin/main",
+            "—",
             "Copy branch name",
         ];
 
@@ -383,6 +419,10 @@ public static partial class Phase3Expectations
             "—",
             "Delete main on origin… (danger)",
             "—",
+            "Compare origin/main with loc",
+            "Hide origin/main",
+            "Solo origin/main",
+            "—",
             "Copy branch name",
         ];
 
@@ -397,6 +437,8 @@ public static partial class Phase3Expectations
             "Push v1.0 to origin",
             "Delete v1.0… (danger)",
             "Delete v1.0 on origin… (danger)",
+            "—",
+            "Compare v1.0 with main",
             "—",
             "Copy tag name",
         ];
@@ -420,13 +462,15 @@ public static partial class Phase3Expectations
             "Rename origin…",
             "Remove origin… (danger)",
             "—",
+            "Hide every branch of origin",
+            "—",
             "Copy URL",
             "Manage remotes…",
         ];
 
-        public static readonly string[] LocalBranchesHeaderMenu = ["Local branches", "Create branch…"];
+        public static readonly string[] LocalBranchesHeaderMenu = ["Local branches", "Create branch…", "Show reflog", "Show backups", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"];
 
-        public static readonly string[] RemotesHeaderMenu = ["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…"];
+        public static readonly string[] RemotesHeaderMenu = ["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"];
 
         public static readonly string[] TagsHeaderMenu = ["Tags", "Create tag at HEAD…"];
 
@@ -438,7 +482,7 @@ public static partial class Phase3Expectations
         /// <summary>Check 3 step 6: where the empty graph area is right-clicked, 100 below "Initial commit".</summary>
         public static readonly (double X, double Y) EmptyAreaPoint = (520, 424);
 
-        /// <summary>Check 3 step 6 and check 5b step 1: the empty area's menu (206 high).</summary>
+        /// <summary>Check 3 step 6 and check 5b step 1: the empty area's menu, with phase 5's reflog and backups (258 high).</summary>
         public static readonly string[] OpsEmptyAreaMenu =
         [
             "ops",
@@ -449,10 +493,12 @@ public static partial class Phase3Expectations
             "Create branch…",
             "Stash changes… (disabled: \"There are no changes to stash\")",
             "—",
+            "Show reflog",
+            "Show backups",
             "Manage remotes…",
         ];
 
-        public const double EmptyAreaMenuHeight = 206;
+        public const double EmptyAreaMenuHeight = 258;
 
         /// <summary>Check 3 step 8: the tag dialog's context.</summary>
         public const string MainWorkTagContext = "At 88d6b91 \"Main work\"";
@@ -496,6 +542,9 @@ public static partial class Phase3Expectations
             "Ignore Calculator.cs (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.cs files (disabled: \"Only untracked files can be ignored\")",
             "—",
+            "File history",
+            "Blame",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
@@ -513,12 +562,15 @@ public static partial class Phase3Expectations
             "Ignore guide.md",
             "Ignore all *.md files",
             "—",
+            "File history (disabled: \"This file is in no commit yet\")",
+            "Blame (disabled: \"This file is in no commit yet\")",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
         ];
 
-        public static readonly string[] SettingsStagedMenu = ["settings.json", "Unstage", "—", "Open file", "Show in folder", "Copy path"];
+        public static readonly string[] SettingsStagedMenu = ["settings.json", "Unstage", "—", "File history (disabled: \"This file is in no commit yet\")", "Blame (disabled: \"This file is in no commit yet\")", "—", "Open file", "Show in folder", "Copy path"];
 
         /// <summary>Check 4 step 3, after "Unstage": the staged list (phase 2's notation).</summary>
         public static readonly string[] StagedAfterUnstage = ["M README.md", "R helpers.py src renamed from src/util.py"];
@@ -556,12 +608,15 @@ public static partial class Phase3Expectations
             "—",
             "Unstage file",
             "—",
+            "File history",
+            "Blame",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
         ];
 
-        public const double ReadmeStagedDiffMenuHeight = 180;
+        public const double ReadmeStagedDiffMenuHeight = 241;
 
         public static readonly string[] CalculatorDiffMenu =
         [
@@ -571,6 +626,9 @@ public static partial class Phase3Expectations
             "—",
             "Stage file",
             "Discard file…",
+            "—",
+            "File history",
+            "Blame",
             "—",
             "Open file",
             "Show in folder",
@@ -588,6 +646,9 @@ public static partial class Phase3Expectations
             "—",
             "Stage file",
             "Discard file…",
+            "—",
+            "File history",
+            "Blame",
             "—",
             "Open file",
             "Show in folder",
@@ -616,9 +677,9 @@ public static partial class Phase3Expectations
 
         public static readonly string[] StagedAfterNegate = ["M README.md", "M Calculator.cs src", "R helpers.py src renamed from src/util.py"];
 
-        public static readonly string[] CommitFileMenu = ["Calculator.cs", "Open file", "Show in folder", "Copy path"];
+        public static readonly string[] CommitFileMenu = ["Calculator.cs", "File history", "Blame", "—", "Open file", "Show in folder", "Copy path"];
 
-        public const double CommitFileMenuHeight = 110;
+        public const double CommitFileMenuHeight = 171;
 
         public static readonly string[] WorkingRowMenu =
         [
@@ -630,6 +691,8 @@ public static partial class Phase3Expectations
             "Stash changes…",
             "Create branch here…",
             "—",
+            "Show reflog",
+            "Show backups",
             "Show in folder",
         ];
 
@@ -657,6 +720,8 @@ public static partial class Phase3Expectations
             "Stash changes…",
             "Create branch here…",
             "—",
+            "Show reflog",
+            "Show backups",
             "Show in folder",
         ];
 
@@ -690,7 +755,7 @@ public static partial class Phase3Expectations
         /// <summary>Check 5b step 2: the right-click on core.txt's row in the details panel, at window x 1090.</summary>
         public const double DetailsFileRowX = 1090;
 
-        public static readonly string[] CoreFileMenu = ["core.txt", "Open file", "Show in folder", "Copy path"];
+        public static readonly string[] CoreFileMenu = ["core.txt", "File history", "Blame", "—", "Open file", "Show in folder", "Copy path"];
 
         /// <summary>Check 5b step 6: where the wheel turns, over the left panel.</summary>
         public static readonly (double X, double Y) LeftPanelWheelPoint = (130, 400);
@@ -755,7 +820,7 @@ public static partial class Phase3Expectations
         /// <summary>Check 7 step 1: the pill is this far right of and below the pointer (4g).</summary>
         public const double PillOffset = 8;
 
-        /// <summary>Check 7 steps 2 and 7: phase 3's drop menu with phase 4's group "Check out … and rebase it" (171 high).</summary>
+        /// <summary>Check 7 steps 2 and 7: phase 3's drop menu with phase 4's group "Check out … and rebase it" (206 high).</summary>
         public static readonly string[] AlphaOntoMainDropMenu =
         [
             "feature/alpha → main",
@@ -765,12 +830,14 @@ public static partial class Phase3Expectations
             "—",
             "Check out feature/alpha and rebase it onto main",
             "Check out feature/alpha and rebase it onto main interactively…",
+            "—",
+            "Compare feature/alpha with main",
         ];
 
-        /// <summary>Check 7: a local branch's drop onto the current branch makes a menu 171 high (110 before phase 4).</summary>
-        public const double DropMenuHeight = 171;
+        /// <summary>Check 7: a local branch's drop onto the current branch makes a menu 206 high (171 before phase 5, 110 before phase 4).</summary>
+        public const double DropMenuHeight = 206;
 
-        /// <summary>Check 7 step 3 (171 high).</summary>
+        /// <summary>Check 7 step 3 (206 high).</summary>
         public static readonly string[] FfOntoMainDropMenu =
         [
             "feature/ff → main",
@@ -780,9 +847,11 @@ public static partial class Phase3Expectations
             "—",
             "Check out feature/ff and rebase it onto main (disabled: \"feature/ff is up to date with main\")",
             "Check out feature/ff and rebase it onto main interactively…",
+            "—",
+            "Compare feature/ff with main",
         ];
 
-        /// <summary>Check 7 step 4 (145 high).</summary>
+        /// <summary>Check 7 step 4 (180 high).</summary>
         public static readonly string[] AlphaOntoConflictDropMenu =
         [
             "feature/alpha → feature/conflict",
@@ -791,9 +860,11 @@ public static partial class Phase3Expectations
             "—",
             "Check out feature/alpha and rebase it onto feature/conflict",
             "Check out feature/alpha and rebase it onto feature/conflict interactively…",
+            "—",
+            "Compare feature/alpha with feature/conflict",
         ];
 
-        /// <summary>Check 7 step 5 (145 high).</summary>
+        /// <summary>Check 7 step 5 (180 high).</summary>
         public static readonly string[] MainOntoOriginAlphaDropMenu =
         [
             "main → origin/feature/alpha",
@@ -802,6 +873,8 @@ public static partial class Phase3Expectations
             "—",
             "Rebase main onto origin/feature/alpha",
             "Interactive rebase of main onto origin/feature/alpha…",
+            "—",
+            "Compare main with origin/feature/alpha",
         ];
 
         /// <summary>Check 7 step 7: the merge commit plain git gives for the same merge.</summary>
@@ -898,6 +971,8 @@ public static partial class Phase3Expectations
             "Create branch… (disabled: \"Make the first commit first\")",
             "Stash changes… (disabled: \"Make the first commit first\")",
             "—",
+            "Show reflog",
+            "Show backups",
             "Manage remotes…",
         ];
 
@@ -922,6 +997,9 @@ public static partial class Phase3Expectations
             "Ignore run.log",
             "Ignore all *.log files",
             "—",
+            "File history (disabled: \"This file is in no commit yet\")",
+            "Blame (disabled: \"This file is in no commit yet\")",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
@@ -939,6 +1017,9 @@ public static partial class Phase3Expectations
             "Ignore trace.log",
             "Ignore all *.log files",
             "—",
+            "File history (disabled: \"This file is in no commit yet\")",
+            "Blame (disabled: \"This file is in no commit yet\")",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
@@ -951,6 +1032,9 @@ public static partial class Phase3Expectations
             "Discard changes…",
             "—",
             "Ignore TODO",
+            "—",
+            "File history (disabled: \"This file is in no commit yet\")",
+            "Blame (disabled: \"This file is in no commit yet\")",
             "—",
             "Open file",
             "Show in folder",
@@ -965,6 +1049,9 @@ public static partial class Phase3Expectations
             "—",
             "Ignore core.txt (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.txt files (disabled: \"Only untracked files can be ignored\")",
+            "—",
+            "File history",
+            "Blame",
             "—",
             "Open file",
             "Show in folder",

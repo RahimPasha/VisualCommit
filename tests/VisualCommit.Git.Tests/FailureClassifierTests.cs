@@ -142,12 +142,198 @@ public class FailureClassifierTests
         },
     };
 
+    /// <summary>
+    /// Refusals for changes in the way (docs/phase-5-design.md 0.7, 9.3), recorded from Git 2.36 and
+    /// 2.55 on the "protect" scenario (the report's TP1 to TP12): standard error, standard output,
+    /// the kind and the paths the error dialog counts.
+    /// </summary>
+    public static TheoryData<string, string, string, GitFailureKind, string[]> RecordedRefusals => new()
+    {
+        {
+            "TP1, git switch --no-guess other (2.36 and 2.55)",
+            "error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/app.txt\n" +
+            "Please commit your changes or stash them before you switch branches.\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByLocalChanges,
+            ["src/app.txt"]
+        },
+        {
+            "TP3, three changed files",
+            "error: Your local changes to the following files would be overwritten by checkout:\n\tdocs/guide.txt\n\tsrc/app.txt\n\tsrc/lib.txt\n" +
+            "Please commit your changes or stash them before you switch branches.\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByLocalChanges,
+            ["docs/guide.txt", "src/app.txt", "src/lib.txt"]
+        },
+        {
+            "TP4, an untracked file",
+            "error: The following untracked working tree files would be overwritten by checkout:\n\tnotes\n" +
+            "Please move or remove them before you switch branches.\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByUntrackedFiles,
+            ["notes"]
+        },
+        {
+            "TP5, a folder with an untracked file (the empty line before Aborting)",
+            "error: Updating the following directories would lose untracked files in them:\n\tnotes\n\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByUntrackedFolder,
+            ["notes"]
+        },
+        {
+            "a changed file and a folder",
+            "error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/app.txt\n" +
+            "Please commit your changes or stash them before you switch branches.\n" +
+            "error: Updating the following directories would lose untracked files in them:\n\tnotes\n\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByUntrackedFolder,
+            ["src/app.txt", "notes"]
+        },
+        {
+            "a changed file and an untracked one, one Aborting (design 0.7)",
+            "error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/app.txt\n" +
+            "Please commit your changes or stash them before you switch branches.\n" +
+            "error: The following untracked working tree files would be overwritten by checkout:\n\tnotes\n" +
+            "Please move or remove them before you switch branches.\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByUntrackedFiles,
+            ["src/app.txt", "notes"]
+        },
+        {
+            "an untracked file where the target has a folder",
+            "error: The following untracked working tree files would be removed by checkout:\n\tdocs\n" +
+            "Please move or remove them before you switch branches.\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByUntrackedFiles,
+            ["docs"]
+        },
+        {
+            "TP6, an ignored file with --no-overwrite-ignore",
+            "error: The following untracked working tree files would be overwritten by checkout:\n\tsettings.local.json\n" +
+            "Please move or remove them before you switch branches.\nAborting\n",
+            string.Empty,
+            GitFailureKind.CheckoutBlockedByUntrackedFiles,
+            ["settings.local.json"]
+        },
+        {
+            "TP7, git merge over a changed file (2.36: exit 128)",
+            "error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.txt\n" +
+            "Please commit your changes or stash them before you merge.\nAborting\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["src/app.txt"]
+        },
+        {
+            "TP7 on 2.55 (exit 2, a fifth line)",
+            "error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.txt\n" +
+            "Please commit your changes or stash them before you merge.\nAborting\nMerge with strategy ort failed.\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["src/app.txt"]
+        },
+        {
+            "git merge over an untracked file",
+            "error: The following untracked working tree files would be overwritten by merge:\n\tnotes\n" +
+            "Please move or remove them before you merge.\nAborting\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["notes"]
+        },
+        {
+            "TP8, git cherry-pick over a changed file",
+            "error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.txt\n" +
+            "Please commit your changes or stash them before you merge.\nAborting\nfatal: cherry-pick failed\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["src/app.txt"]
+        },
+        {
+            "TP12, git revert over a changed file",
+            "error: Your local changes to the following files would be overwritten by merge:\n\tREADME.md\n" +
+            "Please commit your changes or stash them before you merge.\nAborting\nfatal: revert failed\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["README.md"]
+        },
+        {
+            "TP9, git merge over a staged file on 2.36 (standard error, no error:, no final line feed)",
+            "Your local changes to the following files would be overwritten by merge:\n  README.md",
+            string.Empty,
+            GitFailureKind.MergeBlockedByStagedChanges,
+            []
+        },
+        {
+            "TP9 on 2.55 (exit 2, the same first line as TP7's)",
+            "error: Your local changes to the following files would be overwritten by merge:\n  README.md\nMerge with strategy ort failed.\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByStagedChanges,
+            []
+        },
+        {
+            "TP10, git cherry-pick over a staged file",
+            "error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes or stash them to proceed.\nfatal: cherry-pick failed\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByStagedChanges,
+            []
+        },
+        {
+            "TP11, git revert over a staged file",
+            "error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\nfatal: revert failed\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByStagedChanges,
+            []
+        },
+        {
+            "git switch with a conflicted file",
+            "error: you need to resolve your current index first\n",
+            "notes.txt: needs merge\n",
+            GitFailureKind.Other,
+            []
+        },
+    };
+
     [Theory]
     [MemberData(nameof(RecordedTexts))]
     public void A_recorded_text_gives_its_kind(string command, string standardError, GitFailureKind kind)
     {
         Assert.False(string.IsNullOrEmpty(command));
         Assert.Equal(kind, GitFailureClassifier.Classify(standardError, string.Empty, 1));
+    }
+
+    [Theory]
+    [MemberData(nameof(RecordedRefusals))]
+    public void A_recorded_refusal_gives_its_kind_and_the_paths_under_gits_headers(string command, string standardError, string standardOutput, GitFailureKind kind, string[] paths)
+    {
+        Assert.False(string.IsNullOrEmpty(command));
+        Assert.Equal(kind, GitFailureClassifier.Classify(standardError, standardOutput, 1));
+        Assert.Equal(paths, GitFailureClassifier.BlockedPaths(standardError + "\n" + standardOutput));
+
+        // The error dialog's failure reads them from its cleaned output (design 1.6), the same paths.
+        var failure = new GitFailure(kind, "x failed.", GitOutputCleaner.Clean(standardError, standardOutput), "git x", 1);
+        Assert.Equal(paths, failure.BlockedPaths);
+    }
+
+    [Fact]
+    public void Every_path_counts_once_names_keep_their_spaces_and_accents_and_a_line_that_is_no_path_ends_a_block()
+    {
+        var many = Enumerable.Range(1, 43).Select(n => $"src/file {n:00}.txt").ToArray();
+        var text =
+            "error: Your local changes to the following files would be overwritten by checkout:\n" +
+            string.Concat(many.Select(path => "\t" + path + "\n")) +
+            "\tdocs/café notes.md\n" +
+            "Please commit your changes or stash them before you switch branches.\n" +
+            "\tnot/a/path.txt\n" +
+            "error: The following untracked working tree files would be overwritten by checkout:\n" +
+            "\tsrc/file 01.txt\n\tnew file.txt\n" +
+            "Please move or remove them before you switch branches.\r\n" +
+            "error: Updating the following directories would lose untracked files in them:\r\n\tbuild\r\n\r\nAborting\n";
+
+        Assert.Equal([.. many, "docs/café notes.md", "new file.txt", "build"], GitFailureClassifier.BlockedPaths(text));
+        Assert.Equal(46, GitFailureClassifier.BlockedPaths(text).Count);
+        Assert.Empty(GitFailureClassifier.BlockedPaths("fatal: cannot switch branch while merging\n"));
+        // Failures without a block still compare equal as records.
+        Assert.Equal(new GitFailure(GitFailureKind.Other, "x", "out", "git x", 1), new GitFailure(GitFailureKind.Other, "x", "out", "git x", 1));
+        Assert.Throws<ArgumentNullException>(() => GitFailureClassifier.BlockedPaths(null!));
     }
 
     [Fact]
@@ -170,6 +356,54 @@ public class FailureClassifierTests
         var both = await blocked.GitAllowingFailureAsync("switch", "--no-guess", "feature/addfile");
         Assert.False(both.Succeeded);
         Assert.Equal(GitFailureKind.CheckoutBlockedByUntrackedFiles, GitFailureClassifier.Classify(both.StandardError, both.StandardOutput, both.ExitCode));
+    }
+
+    [Fact]
+    public async Task Real_checkouts_of_the_protect_scenario_give_each_kind_with_gits_paths()
+    {
+        // The report's TP1, TP3, TP4 and TP5, on the git that runs the tests.
+        await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.CheckoutBlockedByLocalChanges, ["src/app.txt"], "switch", "--no-guess", "other");
+        await AssertRefusedAsync(
+            repo => repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("src/lib.txt", "lib\nlocal\n").WriteFile("docs/guide.txt", "guide\nlocal\n"),
+            GitFailureKind.CheckoutBlockedByLocalChanges,
+            ["docs/guide.txt", "src/app.txt", "src/lib.txt"],
+            "switch",
+            "--no-guess",
+            "other");
+        await AssertRefusedAsync(repo => repo.WriteFile("notes", "my own notes\n"), GitFailureKind.CheckoutBlockedByUntrackedFiles, ["notes"], "switch", "--no-guess", "other");
+        await AssertRefusedAsync(repo => repo.WriteFile("notes/today.txt", "today\n"), GitFailureKind.CheckoutBlockedByUntrackedFolder, ["notes"], "switch", "--no-guess", "other");
+        await AssertRefusedAsync(
+            repo => repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("notes", "my own notes\n"),
+            GitFailureKind.CheckoutBlockedByUntrackedFiles,
+            ["src/app.txt", "notes"],
+            "switch",
+            "--no-guess",
+            "other");
+
+        // TP6: the ignored settings an old commit tracks, with --no-overwrite-ignore.
+        await AssertRefusedAsync(_ => { }, GitFailureKind.CheckoutBlockedByUntrackedFiles, ["settings.local.json"], "switch", "--detach", "--no-overwrite-ignore", "main~3");
+    }
+
+    [Fact]
+    public async Task Real_merges_picks_and_reverts_refused_for_changes_give_the_merge_kinds_on_any_git()
+    {
+        // The report's TP7, TP8, TP12 (a changed file: git's "by merge" block) and TP9 to TP11
+        // (a staged one: no names), each changing nothing; 2.55's merge exits 2 with a line more.
+        await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.MergeBlockedByLocalChanges, ["src/app.txt"], "merge", "--no-edit", "refs/heads/other");
+        await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.MergeBlockedByLocalChanges, ["src/app.txt"], "cherry-pick", "refs/heads/other~1");
+        await AssertRefusedAsync(repo => repo.WriteFile("notes", "my own notes\n"), GitFailureKind.MergeBlockedByLocalChanges, ["notes"], "merge", "--no-edit", "refs/heads/other");
+        await AssertRefusedAsync(
+            repo => repo.WriteFile("README.md", "# Protect\n\nLocal.\n").WriteFile("src/app.txt", "app\nlocal\n"),
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["README.md"],
+            "revert",
+            "--no-edit",
+            "refs/heads/main~1");
+
+        static void Staged(TempRepo repo) => repo.WriteFile("README.md", "# Protect\n\nStaged.\n");
+        await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "merge", "--no-edit", "refs/heads/other");
+        await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "cherry-pick", "refs/heads/other~1");
+        await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "revert", "--no-edit", "refs/heads/main~1");
     }
 
     [Fact]
@@ -213,4 +447,41 @@ public class FailureClassifierTests
 
         Assert.Equal(GitFailureKind.AuthenticationFailed, GitFailureClassifier.Classify(failure.StandardError, failure.StandardOutput, failure.ExitCode));
     }
+
+    /// <summary>
+    /// On a fresh copy of the protect scenario with <paramref name="change"/> made (a staged change
+    /// when the change writes README.md "Staged."): git refuses <paramref name="arguments"/>, the
+    /// classifier gives <paramref name="kind"/> and <paramref name="paths"/>, and nothing changed:
+    /// HEAD, the refs, the index, the status and no operation in progress (design 0.7).
+    /// </summary>
+    private static async Task AssertRefusedAsync(Action<TempRepo> change, GitFailureKind kind, string[] paths, params string[] arguments)
+    {
+        using var repo = await Scenarios.ProtectAsync();
+        change(repo);
+        if (File.ReadAllText(Path.Combine(repo.Path, "README.md")).EndsWith("Staged.\n", StringComparison.Ordinal))
+        {
+            await repo.GitAsync("add", "--", "README.md");
+        }
+
+        var before = await StateAsync(repo);
+        var refused = await repo.GitAllowingFailureAsync(arguments);
+
+        Assert.False(refused.Succeeded, $"git {string.Join(' ', arguments)} was not refused.");
+        Assert.Equal(kind, GitFailureClassifier.Classify(refused.StandardError, refused.StandardOutput, refused.ExitCode));
+        Assert.Equal(paths, GitFailureClassifier.BlockedPaths(refused.StandardError + "\n" + refused.StandardOutput));
+        Assert.Equal(paths, new GitFailure(kind, "x failed.", GitOutputCleaner.Clean(refused.StandardError, refused.StandardOutput), "git x", refused.ExitCode).BlockedPaths);
+        Assert.Equal(before, await StateAsync(repo));
+        foreach (var name in new[] { "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "sequencer" })
+        {
+            Assert.False(Path.Exists(Path.Combine(repo.Path, ".git", name)), $"git left {name} after refusing.");
+        }
+    }
+
+    /// <summary>HEAD, the refs, the index's entries and the status with the ignored files, as one text.</summary>
+    private static async Task<string> StateAsync(TempRepo repo) => string.Join(
+        '\n',
+        (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput,
+        (await repo.GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput,
+        (await repo.GitAsync("ls-files", "--stage")).StandardOutput,
+        (await repo.GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput);
 }

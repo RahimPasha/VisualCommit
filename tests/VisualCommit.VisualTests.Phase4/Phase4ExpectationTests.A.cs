@@ -47,8 +47,8 @@ public sealed class Phase4ExpectationTestsA
     public void The_menu_counts_leave_out_the_header_and_count_the_separators()
     {
         Assert.Equal((9, 2), PartA.MenuCounts(PartA.MainMoreCommitMenu));
-        Assert.Equal((15, 4), PartA.MenuCounts(PartA.MainBranchMenu));
-        Assert.Equal((3, 0), PartA.MenuCounts(PartA.OriginMainOntoTopicDropMenu));
+        Assert.Equal((19, 5), PartA.MenuCounts(PartA.MainBranchMenu));
+        Assert.Equal((4, 1), PartA.MenuCounts(PartA.OriginMainOntoTopicDropMenu));
     }
 
     /// <summary>"Main work"'s menu is "Main more"'s with its own header (A2 step 4: A1 step 1's items).</summary>

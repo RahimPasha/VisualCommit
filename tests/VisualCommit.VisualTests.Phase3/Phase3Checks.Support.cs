@@ -42,9 +42,10 @@
 //   scripted run can measure (a label's centre, for check 7's drag) goes into the part's
 //   expectations as a constant that the scripted check asserts (±1) and the pass uses.
 // - Menus are asserted with AssertMenu (the report's notation), AssertHighlighted, AssertMenuShape
-//   and AssertMenuAtPointer (AssertMenuPlaced where phase 4's taller menus no longer fit below
-//   the pointer); "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the
-//   error dialog with AssertErrorDialogAsync (git's lines word for word only on Git 2.36); the
+//   and AssertMenuAtPointer (AssertMenuPlaced where phase 4's and phase 5's taller menus no
+//   longer fit below the pointer: every branch, tag, remote, section-header and drop menu);
+//   "no menu" with AssertNoMenuAsync(app, app.LogMark() read before the input); the error
+//   dialog with AssertErrorDialogAsync (git's lines word for word only on Git 2.36); the
 //   in-progress banner with AssertBanner (its text, phase 4's Continue and Skip, Abort, and
 //   whether the buttons stand under the text); the status bar with AssertStatus and AssertBranch.
 using System.Globalization;
@@ -88,6 +89,17 @@ public abstract partial class Phase3Checks
     /// the git calls go through a real HTTP server and git's own helper processes.
     /// </summary>
     protected static readonly TimeSpan NetworkTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// How long a step waits for the end of an operation of the app's that runs many git calls one
+    /// after another: since phase 5 a stash or a pop reads the undo history's state before and
+    /// after it (check 23's stash: 17 calls, 1.2 s alone on the development machine, 3 s on CI's
+    /// Windows job in run 38812370566), and a pop saves a backup first. With the default run's
+    /// test processes side by side, 10 s was not enough there once (run 38816004590): 30 s, as
+    /// phase 2's <c>WriteTimeout</c>. The expected result is the state after the wait, not how long
+    /// it took; <see cref="WaitForStatusAsync"/> says what the status bar showed if it runs out.
+    /// </summary>
+    protected static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
 
     private static readonly Lock TimingGate = new();
     private static readonly HashSet<string> TimingsStarted = [];
@@ -272,8 +284,9 @@ public abstract partial class Phase3Checks
     /// right of and 2 below the pointer (<see cref="AssertMenuAtPointer"/>) when it fits there;
     /// flipped to the left of the pointer (its right edge 2 left of it) when it would cross the
     /// window's right edge, above it when it would cross the bottom; then kept 4 inside the window
-    /// (±2). Phase 4's items make some of phase 3's menus too high to fit below the pointer
-    /// (phase 4's report: "the position only where its expected result states it").
+    /// (±2). Phase 4's items, and phase 5's Compare, Hide and Solo, make some of phase 3's menus
+    /// too high to fit below the pointer (phase 4's report: "the position only where its expected
+    /// result states it").
     /// </summary>
     protected static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
     {
@@ -334,6 +347,34 @@ public abstract partial class Phase3Checks
         var current = app.Session.Services.DialogHost.Current;
         Assert.True(current is null, $"A dialog is open: {current?.GetType().Name} \"{current?.Title}\".");
         Assert.Null(app.TopDialogView);
+    }
+
+    /// <summary>
+    /// Waits until the status bar's operation text is <paramref name="text"/> (the result of the
+    /// operation the step started). If the wait runs out, the failure says what the status bar
+    /// showed (an operation still running, or another text in its place) and the last git calls
+    /// since <paramref name="callMark"/> (<see cref="ShellDriver.GitCalls"/><c>().Count</c> read
+    /// before the step's input), so that a slow step and a wrong one can be told apart.
+    /// </summary>
+    protected static async Task WaitForStatusAsync(ShellDriver app, string text, int callMark, TimeSpan timeout)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        var status = app.Session.Shell.ActiveTab.OperationStatus;
+        try
+        {
+            await app.WaitForAsync(() => status.Text == text, $"\"{text}\"", timeout);
+        }
+        catch (TimeoutException ex)
+        {
+            var calls = app.GitCalls().Skip(callMark).ToList();
+            var last = calls.TakeLast(8).Select(call => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{call.CommandText} ({call.Duration.TotalMilliseconds:0} ms, {call.Outcome})"));
+            throw new TimeoutException(
+                $"{ex.Message} The status bar showed \"{status.Text}\" (running: {status.IsRunning}, {status.Waiting} waiting); "
+                + $"{calls.Count} git calls since the step, the last: {string.Join(" || ", last)}",
+                ex);
+        }
     }
 
     /// <summary>

@@ -20,6 +20,14 @@ public interface IGitRepository
     /// <summary>The name the tab shows: the working tree's folder name.</summary>
     string Name { get; }
 
+    /// <summary>
+    /// The folder the repository was opened from, full and without a trailing separator: the one
+    /// the opening's first git call ran in. It is <see cref="WorkingDirectory"/>, a folder inside
+    /// it, or either reached by another path, such as through a symbolic link or a junction,
+    /// which git resolves in the paths it reports (docs/phase-5-design.md 2.3).
+    /// </summary>
+    string OpenedFolder => WorkingDirectory;
+
     /// <summary>Reads HEAD, the branches with their upstreams and ahead/behind counts, the remote branches, the tags, the stashes and the remotes.</summary>
     Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default);
 
@@ -57,11 +65,46 @@ public interface IGitRepository
         await LoadCommitsAsync(await refs.ConfigureAwait(false), onPage, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// As <see cref="LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>
+    /// with what the graph hides or solos (docs/phase-5-design.md 8.2, D178): git gets
+    /// <paramref name="filter"/>'s revisions, and a stash whose base is not shown waits until its base
+    /// comes and is left out if it never does (amending D54 while a filter is on). A null filter is
+    /// exactly the overload without one: the same command, byte for byte. The default
+    /// implementation takes only a null filter.
+    /// </summary>
+    Task LoadCommitsAsync(Task<RepoRefs> refs, Graph.GraphFilter? filter, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) =>
+        filter is null
+            ? LoadCommitsAsync(refs, onPage, cancellationToken)
+            : throw new NotSupportedException("This repository does not load a filtered graph.");
+
     /// <summary>Reads the full message, the author and committer and the changed files of one commit or stash.</summary>
     Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default);
 
     /// <summary>Reads the staged, unstaged and untracked files (<c>git status --porcelain=v2</c>).</summary>
     Task<WorkingTreeStatus> ReadStatusAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The operation in progress alone, read from the files git leaves in the git folder without
+    /// the status: no git call while nothing is in progress (D89). For the checks that need only
+    /// whether one is in progress and its kind (<see cref="InProgressState.IsActive"/>,
+    /// <see cref="InProgressState.Kind"/>): whether a stop is empty
+    /// (<see cref="InProgressState.Empty"/>, <see cref="RebaseStopKind.Empty"/>) needs the status,
+    /// so no stop is read as empty here. The default implementation reads the status.
+    /// </summary>
+    async Task<InProgressState> ReadInProgressStateAsync(CancellationToken cancellationToken = default) =>
+        (await ReadStatusAsync(cancellationToken).ConfigureAwait(false)).InProgress;
+
+    /// <summary>
+    /// The conflicted paths, each once: those with unmerged index entries (<c>git ls-files
+    /// --unmerged -z</c>), the status's conflicted files without the rest of the status. The default
+    /// implementation reads the status.
+    /// </summary>
+    async Task<IReadOnlyList<string>> ReadConflictedPathsAsync(CancellationToken cancellationToken = default) =>
+        [.. (await ReadStatusAsync(cancellationToken).ConfigureAwait(false)).Unstaged
+            .Where(file => file.Kind == FileChangeKind.Conflicted)
+            .Select(file => file.Path)
+            .Distinct(StringComparer.Ordinal)];
 
     /// <summary>Reads one file's diff, byte for byte (D66). A file without changes on that side gives <see cref="Diff.FileDiff.Empty"/>.</summary>
     Task<Diff.FileDiff> ReadDiffAsync(Diff.DiffTarget target, CancellationToken cancellationToken = default);
@@ -145,6 +188,14 @@ public interface IGitRepository
     /// </summary>
     Task<string?> ResolveAsync(string revision, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Whether <paramref name="sha"/> names a commit that exists: <c>git cat-file -e
+    /// &lt;sha&gt;^{commit}</c> (docs/phase-5-design.md 5.2). A commit a reflog entry or a backup
+    /// kept may have been pruned by a <c>gc</c> since the page read it; the operations started from
+    /// those rows check it first.
+    /// </summary>
+    Task<bool> CommitExistsAsync(string sha, CancellationToken cancellationToken = default);
+
     /// <summary>The repository's worktrees and the branch each has checked out: <c>git worktree list --porcelain</c> (2.7).</summary>
     Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default);
 
@@ -175,6 +226,16 @@ public interface IGitRepository
     Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// <see cref="SnapshotForHardResetAsync"/>, with what the undo history needs of the snapshot
+    /// it made (docs/phase-5-design.md 7.7 step 3): its second parent and its files, which the
+    /// recorder would otherwise read back from the commit. The default implementation knows only
+    /// the commit (<see cref="HardResetSnapshot.Paths"/> null).
+    /// </summary>
+    /// <exception cref="IOException">A repository is nested in a folder the reset would delete.</exception>
+    async Task<HardResetSnapshot?> SnapshotForHardResetWithFilesAsync(string target, CancellationToken cancellationToken = default) =>
+        await SnapshotForHardResetAsync(target, cancellationToken).ConfigureAwait(false) is { } commit ? new HardResetSnapshot(commit) : null;
+
+    /// <summary>
     /// Before a mixed reset, which replaces the index: a commit of the real index's tree with HEAD
     /// as its parent, or null when the index holds HEAD's tree or has a conflict (2.11). It keeps a
     /// staged version that differs from the working tree's, and goes into the reset's backup batch
@@ -202,6 +263,43 @@ public interface IGitRepository
 
     /// <summary>Detaches HEAD at <paramref name="commit"/>: <c>git switch --detach &lt;sha&gt;</c> (2.3).</summary>
     Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Detaches HEAD at <paramref name="commit"/>, with <paramref name="noOverwriteIgnore"/>
+    /// refusing where an ignored file is in the way: <c>git switch --detach --no-overwrite-ignore
+    /// &lt;sha&gt;</c> (docs/phase-5-design.md 9.1, D179). Every checkout of a commit the current
+    /// branch reaches uses it: git would otherwise overwrite an ignored file that the commit
+    /// tracks, and the way back would delete it. A refusal changes nothing.
+    /// </summary>
+    Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes <paramref name="paths"/> of <paramref name="source"/> (a tree-ish: <c>&lt;stash&gt;^3</c>)
+    /// into the working tree, leaving the index alone: <c>git restore --source=&lt;source&gt;
+    /// --worktree -- &lt;paths&gt;</c>. The automatic stash puts back the untracked files git deleted
+    /// before it failed half-way (9.2 step 3).
+    /// </summary>
+    Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// After a <c>git stash push</c> that saved <paramref name="stashCommit"/> but failed while it
+    /// cleared the working tree (a file held open on Windows, docs/phase-5-design.md 0.7, 15.9):
+    /// puts back from the stash what git had already taken out, leaving the index alone (git did
+    /// not write it). Its untracked files that are missing (<c>git restore
+    /// --source=&lt;stash&gt;^3 --worktree</c>: git's clean deleted them), then its tracked paths
+    /// whose files no longer match it (<c>git diff --name-only &lt;stash&gt;</c>, then <c>git
+    /// restore --source=&lt;stash&gt; --worktree</c>: git's reset rewrote every file it could
+    /// before it stopped at the held one, which still matches and is not touched). True when every
+    /// path of the stash is as the stash holds it again.
+    /// </summary>
+    Task<bool> PutBackUnclearedStashAsync(string stashCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Which of <paramref name="paths"/> (relative to the working tree, files or folders) git
+    /// ignores: <c>git check-ignore --stdin -z</c> (9.3). A checkout refused only for ignored files
+    /// in the way says so in words of its own. A read.
+    /// </summary>
+    Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates the branch <paramref name="name"/> at <paramref name="startPoint"/> (a full SHA,
@@ -297,8 +395,10 @@ public interface IGitRepository
     /// Pushes a local branch: <c>git push --progress [--set-upstream] &lt;remote&gt;
     /// refs/heads/&lt;branch&gt;:&lt;remote ref&gt;</c>, or with a lease
     /// <c>--force-with-lease=&lt;remote ref&gt; --force-if-includes</c> (2.19, 2.20, 4g, D100).
+    /// Returns what it changed on the remote, read from git's own summary lines (docs/phase-5-design.md
+    /// 7.7, D170): the undo history's lease values.
     /// </summary>
-    Task PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default);
+    Task<PushOutcome> PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>Makes <paramref name="remoteBranchRef"/> (<c>refs/remotes/&lt;r&gt;/&lt;x&gt;</c>) the upstream of a local branch: <c>git branch --set-upstream-to=&lt;ref&gt; &lt;branch&gt;</c> (2.21).</summary>
     Task SetUpstreamAsync(string branch, string remoteBranchRef, CancellationToken cancellationToken = default);
@@ -325,8 +425,11 @@ public interface IGitRepository
     /// <summary>Removes a remote and its remote branches: <c>git remote remove &lt;name&gt;</c>. Save the backups of its remote branches first (2.23).</summary>
     Task RemoveRemoteAsync(string name, CancellationToken cancellationToken = default);
 
-    /// <summary>Pushes a tag: <c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29).</summary>
-    Task PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Pushes a tag: <c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29).
+    /// Returns what it changed on the remote, as <see cref="PushAsync"/>.
+    /// </summary>
+    Task<PushOutcome> PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes the tag <paramref name="tag"/> on <paramref name="remote"/> only when it is the tag
@@ -356,6 +459,19 @@ public interface IGitRepository
 
     /// <summary>Drops the stash whose commit is <paramref name="stashCommit"/>, found by its id as <see cref="ApplyStashAsync"/> finds it: <c>git stash drop stash@{n}</c>. Save its backup first (2.26).</summary>
     Task DropStashAsync(string stashCommit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The paths the stash <paramref name="stashCommit"/> would write (docs/phase-5-design.md 9.2,
+    /// 9.3): those its changes touch, both sides of a rename (<c>git diff-tree -r -z --no-renames
+    /// --name-status &lt;s&gt;^1 &lt;s&gt;</c>, whose added ones are <see cref="StashPaths.Added"/>),
+    /// and its untracked files (<c>git ls-tree -r -z --name-only &lt;s&gt;^3</c>, none without a
+    /// third parent); with what its index commit changes (<see cref="StashPaths.Staged"/>,
+    /// <c>&lt;s&gt;^1 &lt;s&gt;^2</c>). The app checks an apply or a pop against them before git runs,
+    /// the undo history records them, and an undo's pop checks what stands in its way. A read,
+    /// made once per stash commit named by its full id (a commit never changes): later calls
+    /// share it.
+    /// </summary>
+    Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a tag at <paramref name="target"/>: lightweight (<c>git tag &lt;t&gt; &lt;sha&gt;</c>),
@@ -403,12 +519,15 @@ public interface IGitRepository
     /// <summary>
     /// The commits an interactive rebase of <paramref name="branch"/> (a full ref name: HEAD's
     /// branch, or a drop's source that is not checked out) would replay, read when its list opens
-    /// (2.3). <paramref name="fromCommit"/> ("from here", 2.1): <c>git rev-list --reverse
+    /// (2.3). <paramref name="fromCommit"/> ("from here", 2.1): <c>git log --reverse
     /// --topo-order &lt;onto&gt;..&lt;branch&gt;</c>, <paramref name="onto"/> being the base
-    /// commit; otherwise the commits git's own todo would hold, <c>git rev-list --reverse
-    /// --topo-order --no-merges --right-only --cherry-pick &lt;onto&gt;...&lt;branch&gt;</c>, with
-    /// <c>git rev-list --merges --count &lt;onto&gt;..&lt;branch&gt;</c> for
-    /// <see cref="RebaseList.MergeCount"/>. A read: <c>GIT_OPTIONAL_LOCKS=0</c>.
+    /// commit; otherwise the commits git's own todo would hold, as git's sequencer chooses them:
+    /// <c>git log --reverse --topo-order --no-merges --right-only --cherry-mark
+    /// &lt;onto&gt;...&lt;branch&gt;</c>, less the commits marked <c>=</c> (their patch is already
+    /// upstream) that do not start empty; a commit that starts empty is kept even when marked, as
+    /// git keeps it (docs/phase-4-design.md 14.5). <c>git rev-list --merges --count
+    /// &lt;onto&gt;..&lt;branch&gt;</c> gives <see cref="RebaseList.MergeCount"/>. A read:
+    /// <c>GIT_OPTIONAL_LOCKS=0</c>.
     /// </summary>
     Task<RebaseList> ReadRebaseListAsync(string onto, string branch, bool fromCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
@@ -610,6 +729,124 @@ public interface IGitRepository
         IReadOnlySet<string> keep,
         NetworkOptions? options = null,
         CancellationToken cancellationToken = default);
+
+    // Phase 5: history, traceability and undo (docs/phase-5-design.md; the work packages of its
+    // section 16). The reads run with GIT_OPTIONAL_LOCKS=0 outside the queue; an undo step runs
+    // inside one operation of the queue.
+
+    // File history, blame and the tree's files (sections 4.1 to 4.5; WP1).
+
+    /// <summary>
+    /// A file's history (4.1, 0.1): <c>git -c core.quotePath=true log --follow --root -M
+    /// --name-status --no-show-signature --no-color --encoding=UTF-8 --format=&lt;the graph's&gt;
+    /// &lt;start&gt; -- &lt;path&gt;</c>, newest first, following renames, without merges.
+    /// <paramref name="onRow"/> receives each commit as git prints it, on a background thread,
+    /// never two at once. No commit has touched an untracked path: no row. Unborn HEAD throws
+    /// <see cref="GitException"/>.
+    /// </summary>
+    /// <param name="startSha">The commit the history starts from, a full SHA resolved when the page opened (it stays fixed).</param>
+    /// <param name="path">The file's path at <paramref name="startSha"/>, repository-relative with <c>/</c>.</param>
+    /// <param name="onRow">Receives each row.</param>
+    /// <param name="cancellationToken">Closing the page cancels the read.</param>
+    Task ReadFileHistoryAsync(string startSha, string path, Action<FileHistoryRow> onRow, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// A file's blame (4.2, 0.1): <c>git -c i18n.logOutputEncoding=UTF-8 blame --porcelain
+    /// --no-textconv [&lt;sha&gt;] -- &lt;path&gt;</c>, of the commit <paramref name="sha"/>'s version,
+    /// or of the working tree's with null. Git's failure throws <see cref="GitException"/> with
+    /// git's message; a <c>blame.ignoreRevsFile</c> naming a missing file throws
+    /// <see cref="BlameIgnoreRevsFileMissingException"/>.
+    /// </summary>
+    Task<BlameResult> ReadBlameAsync(string? sha, string path, CancellationToken cancellationToken = default);
+
+    /// <summary>Every file of the commit <paramref name="sha"/>'s tree, by path: <c>git ls-tree -r -z --name-only &lt;sha&gt;</c> (4.5, D164).</summary>
+    Task<IReadOnlyList<string>> ReadTreeFilesAsync(string sha, CancellationToken cancellationToken = default);
+
+    // The reflog and the backups (section 5; WP1).
+
+    /// <summary>
+    /// One reflog (5.2, D180) through git, never <c>.git/logs</c>: <c>git log --walk-reflogs
+    /// --ignore-missing -z -n &lt;limit&gt;</c> twice (the entries, then their times with
+    /// <c>--date=raw</c>), zipped by position and read again when the two disagree (the ref moved
+    /// between them). A ref without a reflog gives <see cref="ReflogResult.Empty"/>.
+    /// </summary>
+    /// <param name="fullRef">
+    /// <c>HEAD</c>, or the full name of any ref that has a reflog: a local branch's (the page's
+    /// sources), or a remote branch's (<c>refs/remotes/…</c>), whose <c>update by push</c> entries
+    /// give a force push's backup its lease (7.10); the page's source menu leaves those out.
+    /// </param>
+    /// <param name="limit">The most entries to read (the page reads 500).</param>
+    /// <param name="cancellationToken">Closing the page cancels the read.</param>
+    Task<ReflogResult> ReadReflogAsync(string fullRef, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Which of <paramref name="shas"/> no branch, tag or remote branch reaches, HEAD aside (5.2):
+    /// one <c>git rev-list --ignore-missing --stdin --not --branches --tags --remotes HEAD</c> with
+    /// the SHAs on standard input. A SHA that no longer exists is not lost: it is not in the result.
+    /// </summary>
+    Task<IReadOnlySet<string>> FindLostCommitsAsync(IReadOnlyCollection<string> shas, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The backups the clean-up has left (5.3), newest first, read with one <c>git for-each-ref</c>
+    /// of <c>refs/visualcommit/backup/</c> and grouped as the clean-up groups them (phase 4's
+    /// pattern); a ref that fits no scheme is left out.
+    /// </summary>
+    Task<IReadOnlyList<BackupInfo>> ReadBackupsAsync(CancellationToken cancellationToken = default);
+
+    // Compare and search (sections 3 and 6; WP1).
+
+    /// <summary>
+    /// What two commits or branches differ in (6.3, D177): the names resolved to commits first; for
+    /// <paramref name="threeDot"/> <c>git merge-base &lt;from&gt; &lt;to&gt;</c> (none: all differences,
+    /// <see cref="CompareBase.NoCommonHistory"/>); then <c>git diff-tree -r -z --name-status -M
+    /// --no-ext-diff --no-color --no-commit-id &lt;old&gt; &lt;new&gt;</c> with two SHAs; and with
+    /// <paramref name="countCommits"/> <c>git rev-list --left-right --count &lt;from&gt;...&lt;to&gt;</c>.
+    /// The same commit on both sides runs no git beyond the names'.
+    /// </summary>
+    /// <param name="from">The side compared from: a full ref name or a full SHA.</param>
+    /// <param name="to">The side compared to: a full ref name or a full SHA.</param>
+    /// <param name="threeDot">The changes on <paramref name="to"/> since it left <paramref name="from"/> (branches); false for the two trees.</param>
+    /// <param name="countCommits">Count the commits only on each side (branches).</param>
+    /// <param name="cancellationToken">Closing the comparison cancels it.</param>
+    Task<CompareResult> CompareAsync(string from, string to, bool threeDot, bool countCommits, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Searches exactly the graph's rows (3.2, D174): <c>git log --no-walk=unsorted --stdin
+    /// --no-show-signature --no-color --encoding=UTF-8 --format=%H &lt;mode's options&gt;</c> with
+    /// <paramref name="shas"/> on standard input, the first 2,000, then 20,000 per call, one call
+    /// after another. <paramref name="onMatch"/> receives each matching SHA as git prints it, on a
+    /// background thread; <paramref name="progress"/> how many SHAs have been searched, after each
+    /// call. <see cref="SearchMode.Commits"/> matches the message only (the app matches authors and
+    /// SHAs itself). An empty <paramref name="text"/> is never searched. A <c>fatal: bad object</c>
+    /// (the graph is older than a <c>gc</c>) ends the search quietly.
+    /// </summary>
+    Task SearchAsync(SearchMode mode, string text, IReadOnlyList<string> shas, Action<string> onMatch, IProgress<int>? progress, CancellationToken cancellationToken = default);
+
+    // Undo and redo (section 7; WP3).
+
+    /// <summary>
+    /// What the undo history reads before and after a recorded action, inside its operation (7.7
+    /// steps 2 and 4), and what an undo step reads first (7.5 step 2): HEAD (<c>rev-parse HEAD
+    /// --symbolic-full-name HEAD</c>, or <c>symbolic-ref -q HEAD</c> while unborn), and what
+    /// <paramref name="scope"/> names: its refs with one <c>for-each-ref</c> (their worktrees with
+    /// <c>%(worktreepath)</c>; exact names filtered in code), the stash list, the configuration keys,
+    /// the files' SHA-256 and index entries, with their raw bytes (<c>hash-object -w
+    /// --no-filters</c>) when the scope keeps them (<see cref="Undo.UndoScope.KeepsFileBytes"/>),
+    /// the status, the <c>.gitignore</c>. Writes nothing but the files' blobs.
+    /// </summary>
+    Task<Undo.UndoState> ReadRefStatesAsync(Undo.UndoScope scope, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs one undo or redo step (7.5, D167, D169): refuses while an operation is in progress, reads
+    /// what the effects check, simulates the sequence (each check against the state the earlier
+    /// effects leave), applies the effects grouped as 7.5 step 4 says (what another machine can
+    /// refuse first, then what git can refuse locally, then one <c>update-ref --stdin</c>
+    /// transaction with <c>verify</c> lines, then configuration and file writes), reverses what it
+    /// applied when a later effect refuses, and returns the entry rewritten with the objects it made.
+    /// A refusal changes nothing but <c>update-index --refresh</c>'s stat data; git's own failure
+    /// throws <see cref="GitException"/>.
+    /// </summary>
+    Task<Undo.UndoStepResult> RunUndoStepAsync(Undo.UndoStep step, NetworkOptions options, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A snapshot taken before a discard (D67).</summary>
@@ -618,6 +855,23 @@ public interface IGitRepository
 /// <param name="Paths">The files it was taken for.</param>
 /// <param name="Present">Those of <paramref name="Paths"/> that existed in the working tree; the others were deleted there.</param>
 public sealed record DiscardSnapshot(string Ref, string Commit, IReadOnlyList<string> Paths, IReadOnlySet<string> Present);
+
+/// <summary>
+/// The snapshot a hard reset saves first (<see cref="IGitRepository.SnapshotForHardResetWithFilesAsync"/>):
+/// its commit and, when known, what the undo of the reset needs of it.
+/// </summary>
+/// <param name="Commit">The snapshot commit.</param>
+public sealed record HardResetSnapshot(string Commit)
+{
+    /// <summary>Its second parent, the real index's tree before the reset; null when the index had conflicts, or when <see cref="Paths"/> is not known.</summary>
+    public string? Index { get; init; }
+
+    /// <summary>The paths it holds, in byte order as its message lists them; null when not known.</summary>
+    public IReadOnlyList<string>? Paths { get; init; }
+
+    /// <summary>Those of <see cref="Paths"/> it holds a file for (the others were gone from the working tree); null when not known.</summary>
+    public IReadOnlySet<string>? Present { get; init; }
+}
 
 /// <summary>Opens, initialises and clones repositories. The app's implementation waits for git to be found first.</summary>
 public interface IRepositoryProvider

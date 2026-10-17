@@ -1,12 +1,16 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
 using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -277,6 +281,137 @@ public class ToolbarTests
         await viewModel.Toolbar.FetchCommand.ExecuteAsync(null);
     }
 
+    [Fact]
+    public void A_tab_without_a_repository_has_Undo_Redo_and_Search_disabled_without_a_reason()
+    {
+        var toolbar = new ToolbarViewModel(null);
+
+        Assert.Equal(
+            (false, (string?)null, false, (string?)null, false, (string?)null),
+            (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip, toolbar.CanSearch, toolbar.SearchToolTip));
+        Assert.False(toolbar.UndoCommand.CanExecute(null));
+        Assert.False(toolbar.RedoCommand.CanExecute(null));
+        Assert.False(toolbar.SearchCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task With_a_repository_Search_is_enabled_with_its_key_and_Undo_and_Redo_have_nothing_to_do()
+    {
+        // docs/phase-5-design.md 1.1 and 7.4: with nothing in the undo history, Undo and Redo are
+        // each disabled with its reason 4; Search needs only the repository (11.2).
+        var repository = new StateRepository(OpsRefs(), WorkingTreeStatus.Clean);
+        using var viewModel = Open(repository);
+        Assert.Equal((ToolbarViewModel.SearchText, true), (viewModel.Toolbar.SearchToolTip, viewModel.Toolbar.CanSearch));
+
+        await viewModel.StartAsync();
+
+        var toolbar = viewModel.Toolbar;
+        Assert.Equal((false, "Nothing to undo", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+        Assert.Equal((ToolbarViewModel.SearchText, true), (toolbar.SearchToolTip, toolbar.CanSearch));
+        Assert.True(toolbar.SearchCommand.CanExecute(null));
+
+        // Ctrl+F, or Cmd+F where the platform's command modifier is Cmd (macOS).
+        Assert.Contains(ToolbarViewModel.SearchGestureText, new[] { "Ctrl+F", "Cmd+F" });
+        Assert.Equal($"Search commits ({ToolbarViewModel.SearchGestureText})", ToolbarViewModel.SearchText);
+    }
+
+    [Fact]
+    public async Task Undo_and_Redo_show_the_state_the_undo_history_gives_and_call_their_actions()
+    {
+        using var viewModel = await StartAsync(OpsRefs(), Changed);
+        var toolbar = viewModel.Toolbar;
+        var actions = new FakeActions();
+        toolbar.Actions = actions;
+        toolbar.UndoStates = () => new UndoAvailability(true, "Undo commit \"Describe the lines\"", false, "Nothing to redo");
+
+        toolbar.UpdateUndoStates();
+        Assert.Equal((true, "Undo commit \"Describe the lines\"", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+        Assert.True(toolbar.UndoCommand.CanExecute(null));
+        Assert.False(toolbar.RedoCommand.CanExecute(null));
+        await toolbar.UndoCommand.ExecuteAsync(null);
+
+        toolbar.UndoStates = () => new UndoAvailability(false, "Nothing to undo", true, "Redo commit \"Describe the lines\"");
+        toolbar.UpdateUndoStates();
+        Assert.Equal((false, "Nothing to undo", true, "Redo commit \"Describe the lines\""), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+        await toolbar.RedoCommand.ExecuteAsync(null);
+
+        // A state given without a tooltip (not known yet) is its reason 4, never an enabled button without words.
+        toolbar.UndoStates = () => UndoAvailability.Disabled with { CanUndo = true };
+        toolbar.UpdateUndoStates();
+        Assert.Equal((false, "Nothing to undo", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+
+        Assert.Equal(["undo", "redo"], actions.Calls);
+    }
+
+    [Fact]
+    public async Task Undo_and_Redo_are_read_again_when_the_queue_changes_without_a_refresh()
+    {
+        // 7.4's reason 1 and the entry an action adds show as soon as the queue has started, waited
+        // or finished an operation: the toolbar listens to the queue itself.
+        using var viewModel = await StartAsync(OpsRefs(), WorkingTreeStatus.Clean);
+        var toolbar = viewModel.Toolbar;
+        var reads = 0;
+        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        toolbar.UndoStates = () =>
+        {
+            Interlocked.Increment(ref reads);
+            return viewModel.Queue.Current is { } current
+                ? new UndoAvailability(false, $"Wait for {current.Title} to finish", false, $"Wait for {current.Title} to finish")
+                : new UndoAvailability(true, "Undo creation of hotfix", false, "Nothing to redo");
+        };
+
+        var operation = viewModel.Queue.RunAsync(new GitOperation("Create branch hotfix", "Creating hotfix…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            await running.Task;
+            return OperationReport.Done("Created hotfix");
+        }));
+        await WaitForAsync(() => toolbar.UndoToolTip == "Wait for Create branch hotfix to finish", "the running operation's reason");
+        Assert.False(toolbar.CanUndo);
+
+        running.SetResult();
+        await operation.WaitAsync(TestContext.Current.CancellationToken);
+        await WaitForAsync(() => toolbar.CanUndo, "Undo after the operation");
+        Assert.Equal("Undo creation of hotfix", toolbar.UndoToolTip);
+        Assert.True(reads >= 2, $"The states were read {reads} times: at the start and after the end at least.");
+    }
+
+    [Fact]
+    public async Task Search_is_disabled_while_the_interactive_rebase_list_is_open_and_runs_its_action_otherwise()
+    {
+        using var viewModel = await StartAsync(OpsRefs(), WorkingTreeStatus.Clean);
+        var toolbar = viewModel.Toolbar;
+        var searches = 0;
+        toolbar.SearchAction = () => searches++;
+        toolbar.SearchCommand.Execute(null);
+        Assert.Equal(1, searches);
+
+        var request = new InteractiveRebaseRequest(new RebaseTarget(Older, "8beca34"), "refs/heads/main", FromHere: true, CheckoutFirst: false);
+        await viewModel.ShowInteractiveRebaseAsync(request, new RebaseList(Older, Main, [new RebaseListEntry(Main, "Main work", "Test Author", "Main work\n")], 0));
+
+        Assert.True(viewModel.IsInteractiveRebaseOpen);
+        Assert.Equal((false, "Close the interactive rebase first"), (toolbar.CanSearch, toolbar.SearchToolTip));
+        Assert.False(toolbar.SearchCommand.CanExecute(null));
+
+        viewModel.InteractiveRebase!.CancelCommand.Execute(null);
+        await WaitForAsync(() => !viewModel.IsInteractiveRebaseOpen, "the list closed");
+        Assert.Equal((true, ToolbarViewModel.SearchText), (toolbar.CanSearch, toolbar.SearchToolTip));
+    }
+
+    [Fact]
+    public async Task A_Search_that_fails_is_logged_and_the_toolbar_goes_on()
+    {
+        var log = new RecordingLog();
+        var repository = new StateRepository(OpsRefs(), WorkingTreeStatus.Clean);
+        using var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc), log);
+        await viewModel.StartAsync();
+        viewModel.Toolbar.SearchAction = () => throw new InvalidOperationException("boom");
+
+        viewModel.Toolbar.SearchCommand.Execute(null);
+
+        Assert.Contains(log.Messages, message => message.Contains("the toolbar's Search failed", StringComparison.Ordinal));
+        Assert.True(viewModel.Toolbar.CanSearch);
+    }
+
     [AvaloniaFact]
     public async Task In_the_window_the_buttons_follow_the_active_tab_and_a_disabled_one_shows_its_reason()
     {
@@ -285,12 +420,13 @@ public class ToolbarTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path, null], activeTab: 1);
         await app.WaitUntilReadyAsync();
 
-        // An empty tab: only Theme is enabled, as in phase 0, and no button has a tooltip.
+        // An empty tab: only Theme is enabled, as in phase 0, and no button has a tooltip or a help text.
         foreach (var id in new[] { "UndoButton", "RedoButton", "FetchButton", "PullButton", "PushButton", "BranchButton", "StashButton", "PopButton", "SearchButton" })
         {
             var button = (Button)app.FindByAutomationId(id);
             Assert.False(button.IsEffectivelyEnabled, $"{id} is disabled in an empty tab.");
             Assert.Null(ToolTip.GetTip(button));
+            Assert.True(string.IsNullOrEmpty(AutomationProperties.GetHelpText(button)), $"{id} has a help text in an empty tab.");
         }
 
         Assert.True(app.FindByAutomationId("ThemeSwitch").IsEffectivelyEnabled);
@@ -308,11 +444,23 @@ public class ToolbarTests
             Assert.Equal(Brush(app, "VcTextPrimaryBrush"), ((ISolidColorBrush)button.Foreground!).Color);
         }
 
-        foreach (var id in new[] { "UndoButton", "RedoButton", "SearchButton" })
+        // Phase 5 (docs/phase-5-design.md 1.1, 7.4, 14.1): with nothing recorded, Undo and Redo are
+        // disabled and say so; Search is enabled with its key. Their tooltips are their help texts.
+        foreach (var (id, tip) in new[] { ("UndoButton", "Nothing to undo"), ("RedoButton", "Nothing to redo") })
         {
-            Assert.False(app.FindByAutomationId(id).IsEffectivelyEnabled);
-            Assert.Null(ToolTip.GetTip(app.FindByAutomationId(id)));
+            var button = (ToolbarButton)app.FindByAutomationId(id);
+            Assert.False(button.IsEffectivelyEnabled, $"{id} is enabled.");
+            Assert.Equal(tip, ToolTip.GetTip(button));
+            Assert.Equal(tip, AutomationProperties.GetHelpText(button));
+            Assert.Equal(Brush(app, "VcTextDisabledBrush"), ((ISolidColorBrush)button.Foreground!).Color);
         }
+
+        var search = (ToolbarButton)app.FindByAutomationId("SearchButton");
+        var searchText = $"Search commits ({(app.CommandModifier == Avalonia.Input.KeyModifiers.Meta ? "Cmd" : "Ctrl")}+F)";
+        Assert.True(search.IsEffectivelyEnabled);
+        Assert.Equal(searchText, ToolTip.GetTip(search));
+        Assert.Equal(searchText, AutomationProperties.GetHelpText(search));
+        Assert.Equal(Brush(app, "VcTextPrimaryBrush"), ((ISolidColorBrush)search.Foreground!).Color);
 
         var stash = (ToolbarButton)app.FindByAutomationId("StashButton");
         Assert.False(stash.IsEffectivelyEnabled);
@@ -354,6 +502,21 @@ public class ToolbarTests
         var viewModel = Open(new StateRepository(refs, status));
         await viewModel.StartAsync();
         return viewModel;
+    }
+
+    /// <summary>Waits for a condition that a post to the test's context or the thread pool makes true.</summary>
+    private static async Task WaitForAsync(Func<bool> condition, string what)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (clock.Elapsed > TimeSpan.FromSeconds(10))
+            {
+                throw new TimeoutException($"Timed out waiting for {what}.");
+            }
+
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
     }
 
     private static void AssertReasons(ToolbarViewModel toolbar, string? fetch, string? pull, string? push, string? branch, string? stash, string? pop) =>
@@ -402,6 +565,10 @@ public class ToolbarTests
         public Task StashAsync() => Record("stash");
 
         public Task PopAsync() => Record("pop");
+
+        public Task UndoAsync() => Record("undo");
+
+        public Task RedoAsync() => Record("redo");
 
         private Task Record(string call)
         {

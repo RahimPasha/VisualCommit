@@ -227,24 +227,25 @@ public class ShellDriverCheckSupportTests
     [AvaloniaFact]
     public async Task The_error_dialog_reads_as_it_shows_and_its_output_is_the_cleaned_output_of_the_failed_call()
     {
-        using var repo = await Scenarios.StoppedAsync(Scenarios.InProgressKind.Merge);
+        using var repo = await Scenarios.CheckoutBlockedAsync();
         using var data = new TempDirectory("data");
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
         var repository = await app.WaitForRepositoryAsync();
 
-        // Check 9 step 7: a checkout git refuses during the merge.
-        var checkout = repository.Operations.CheckoutAsync("refs/heads/feature/alpha");
+        // Check 14 step 2: a checkout git refuses for files in the way. (Check 9 step 7's checkout
+        // during a merge no longer reaches git since phase 5's C12, design 9.3.)
+        var checkout = repository.Operations.CheckoutAsync("refs/heads/feature/addfile");
         await app.WaitForDialogAsync<ErrorDialogViewModel>(NetworkTimeout);
         var dialog = app.ErrorDialog();
 
-        Assert.Equal(("Checkout failed", "In ops"), (dialog.Title, dialog.Repository));
-        Assert.Equal("git switch --no-guess feature/alpha", dialog.Command);
+        Assert.Equal(("Checkout blocked", "In blocked"), (dialog.Title, dialog.Repository));
+        Assert.Equal("git switch --no-guess feature/addfile", dialog.Command);
         Assert.Equal(["Copy output", "Close"], dialog.Buttons);
         var call = app.LastCall(dialog.Command!);
         Assert.False(call.Succeeded);
         Assert.Equal(ShellDriver.CleanedOutputOf(call), dialog.Output);
         Assert.Equal(dialog.Output!.Split('\n'), dialog.OutputLines);
-        Assert.Contains(dialog.OutputLines, output => output.StartsWith("fatal: ", StringComparison.Ordinal));
+        Assert.Contains(dialog.OutputLines, output => output.StartsWith("error: ", StringComparison.Ordinal));
         Assert.Throws<InvalidOperationException>(() => app.LastCall("git switch --no-guess no-such-branch"));
 
         // The neutral point is on the backdrop: no tooltip there either.

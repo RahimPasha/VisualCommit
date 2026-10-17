@@ -412,8 +412,11 @@ public class BackupCleanupTests
         Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
     }
 
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    /// <summary>A backup clock that always says <paramref name="now"/>: for naming, so that two batches collide, and for the clean-up.</summary>
+    private sealed class FixedClock(DateTimeOffset now) : BackupClock(TimeProvider.System)
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public override DateTimeOffset Now => now;
+
+        public override DateTimeOffset NextName() => now;
     }
 }

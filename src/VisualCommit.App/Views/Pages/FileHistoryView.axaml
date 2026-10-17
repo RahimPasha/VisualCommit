@@ -1,0 +1,232 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:diff="using:VisualCommit.App.Views.Diff"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Pages"
+             x:Class="VisualCommit.App.Views.Pages.FileHistoryView"
+             x:DataType="vm:FileHistoryViewModel"
+             AutomationProperties.AutomationId="FileHistory"
+             AutomationProperties.Name="{Binding Title}">
+
+  <!-- The file history page in place of the graph (docs/phase-5-design.md 4.1, D158): a header
+       of 36 with the title, the folder, where the history starts, Blame and close; then the list
+       of commits (rows of 26) and the diff part of the selected row, side by side from a page
+       760 wide (list 45 %), otherwise the list above (40 % of the height, at least 3 rows) and
+       the diff below (decision BD2), a 1-px line between them. Within a row: 8, the status
+       letter 16, 8, the short SHA 56, 8, the subject (at least 120, cut with "…"), 8, the
+       secondary text (at most 170), 8, the author 110, 8, the date 100, 8; the date, the author
+       and the secondary text go first as the list narrows. Colours are tokens only. -->
+  <UserControl.Styles>
+    <Style Selector="ListBox.pageList">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="AutomationProperties.AutomationId" Value="FileHistoryRow" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Name}" x:DataType="vm:FileHistoryRowViewModel" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcRowHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.status.added">
+      <Setter Property="Foreground" Value="{DynamicResource VcSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.modified">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.deleted">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.sha">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.cell">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- Header, 36. -->
+    <Border Name="FileHistoryHeader"
+            DockPanel.Dock="Top"
+            Height="36"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1"
+            AutomationProperties.AutomationId="FileHistoryHeader">
+      <DockPanel Margin="12,0,4,0">
+        <Button DockPanel.Dock="Right"
+                Name="FileHistoryClose"
+                Theme="{StaticResource VcIconButton}"
+                Width="28" Height="28" Padding="7"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="Close"
+                AutomationProperties.AutomationId="FileHistoryClose"
+                AutomationProperties.Name="Close">
+          <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+        </Button>
+        <Button DockPanel.Dock="Right"
+                Name="FileHistoryBlame"
+                Theme="{StaticResource VcActionButton}"
+                Padding="10,3"
+                Margin="8,0,6,0"
+                VerticalAlignment="Center"
+                Content="Blame"
+                Command="{Binding BlameCommand}"
+                AutomationProperties.AutomationId="FileHistoryBlame"
+                AutomationProperties.Name="Blame" />
+        <c:Icon DockPanel.Dock="Left"
+                Data="{StaticResource IconHistory}"
+                Width="14" Height="14"
+                Margin="0,0,8,0"
+                Foreground="{DynamicResource VcTextSecondaryBrush}"
+                VerticalAlignment="Center" />
+        <c:TrimmedTextBlock DockPanel.Dock="Left"
+                            Name="FileHistoryTitle"
+                            Text="{Binding Title}"
+                            FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="FileHistoryTitle" />
+        <TextBlock DockPanel.Dock="Left"
+                   Name="FileHistoryFolder"
+                   Classes="secondary"
+                   Text="{Binding Folder}"
+                   IsVisible="{Binding HasFolder}"
+                   Margin="8,0,0,0"
+                   TextTrimming="CharacterEllipsis"
+                   VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="FileHistoryFolder" />
+        <TextBlock Name="FileHistoryFrom"
+                   Classes="secondary"
+                   Text="{Binding FromText}"
+                   IsVisible="{Binding HasFrom}"
+                   Margin="8,0,0,0"
+                   TextTrimming="CharacterEllipsis"
+                   VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="FileHistoryFrom" />
+      </DockPanel>
+    </Border>
+
+    <!-- The list and the diff part; the code-behind lays them out by the page's width. -->
+    <Grid Name="FileHistoryBody">
+      <Panel Name="FileHistoryListPart">
+        <ListBox Name="FileHistoryList"
+                 Focusable="True"
+                 Classes="pageList"
+                 ItemsSource="{Binding Rows}"
+                 SelectedItem="{Binding SelectedRow}"
+                 SelectionMode="Single"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.AutomationId="FileHistoryList"
+                 AutomationProperties.Name="{Binding Title}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:FileHistoryRowViewModel">
+              <DockPanel Margin="8,0" Background="Transparent">
+                <TextBlock DockPanel.Dock="Left"
+                           Name="FileHistoryStatus"
+                           Classes="status"
+                           Classes.added="{Binding IsAdded}"
+                           Classes.modified="{Binding IsModified}"
+                           Classes.deleted="{Binding IsDeleted}"
+                           Classes.renamed="{Binding IsRenamedOrCopied}"
+                           Width="16"
+                           Text="{Binding StatusLetter}" />
+                <TextBlock DockPanel.Dock="Left"
+                           Name="FileHistorySha"
+                           Classes="sha"
+                           Width="56"
+                           Margin="8,0,0,0"
+                           Text="{Binding ShortSha}" />
+                <TextBlock DockPanel.Dock="Right"
+                           Name="FileHistoryDate"
+                           Classes="cell secondary"
+                           Width="100"
+                           Margin="8,0,0,0"
+                           Text="{Binding DateText}"
+                           IsVisible="{Binding $parent[ListBox].((vm:FileHistoryViewModel)DataContext).ShowsDate, FallbackValue=False}" />
+                <TextBlock DockPanel.Dock="Right"
+                           Name="FileHistoryAuthor"
+                           Classes="cell secondary"
+                           Width="110"
+                           Margin="8,0,0,0"
+                           Text="{Binding Author}"
+                           IsVisible="{Binding $parent[ListBox].((vm:FileHistoryViewModel)DataContext).ShowsAuthor, FallbackValue=False}" />
+                <Panel DockPanel.Dock="Right"
+                       IsVisible="{Binding $parent[ListBox].((vm:FileHistoryViewModel)DataContext).ShowsSecondary, FallbackValue=False}">
+                  <c:TrimmedTextBlock Name="FileHistorySecondary"
+                                      Classes="cell secondary"
+                                      MaxWidth="170"
+                                      Margin="8,0,0,0"
+                                      Text="{Binding SecondaryText}"
+                                      IsVisible="{Binding HasSecondary}" />
+                </Panel>
+                <c:TrimmedTextBlock Name="FileHistorySubject"
+                                    Classes="cell"
+                                    Margin="8,0,0,0"
+                                    Text="{Binding Subject}" />
+              </DockPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock Name="FileHistoryLoading"
+                   Classes="secondary"
+                   Text="Loading…"
+                   IsVisible="{Binding ShowsLoading}"
+                   Margin="12,10"
+                   HorizontalAlignment="Left" VerticalAlignment="Top" />
+        <TextBlock Name="FileHistoryMessage"
+                   Classes="secondary"
+                   Classes.error="{Binding IsError}"
+                   Text="{Binding Message}"
+                   IsVisible="{Binding HasMessage}"
+                   TextWrapping="Wrap"
+                   Margin="12,10"
+                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                   AutomationProperties.AutomationId="FileHistoryMessage" />
+      </Panel>
+
+      <!-- The diff part: phase 2's diff view, which takes no focus and has no close button. -->
+      <Border Name="FileHistoryDiff"
+              BorderBrush="{DynamicResource VcBorderBrush}"
+              AutomationProperties.AutomationId="FileHistoryDiff">
+        <diff:DiffView Name="FileHistoryDiffView"
+                       DataContext="{Binding Diff}"
+                       TakesFocusOnOpen="False"
+                       IsVisible="{Binding $parent[UserControl].((vm:FileHistoryViewModel)DataContext).Diff, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

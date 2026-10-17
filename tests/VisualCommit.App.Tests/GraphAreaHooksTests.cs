@@ -5,7 +5,9 @@ using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.ViewModels.Rebase;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -19,7 +21,8 @@ namespace VisualCommit.App.Tests;
 /// repositories: the resolver opened from a conflicted file across the graph and right-panel
 /// columns with the right panel hidden, the interactive list in place of the graph, and where the
 /// focus goes when each closes; a list whose Start waits in the queue cannot be left, and the
-/// repository starts and closes only the list it shows.
+/// repository starts and closes only the list it shows. Phase 5's (docs/phase-5-design.md 11.1,
+/// 11.3): a page in place of the graph, and "Show in graph" of a line not committed yet.
 /// </summary>
 public class GraphAreaHooksTests
 {
@@ -70,7 +73,9 @@ public class GraphAreaHooksTests
         using var data = new TempDirectory("data");
         using var repo = await Scenarios.InteractiveAsync();
         await repo.GitAsync("update-ref", "refs/visualcommit/backup/reset-20250101T120000000Z/main", "HEAD");
-        var recent = "refs/visualcommit/backup/reset-" + DateTime.UtcNow.AddDays(-1).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture) + "/main";
+
+        // A day before the harness's backup clock (docs/phase-5-design.md 2.3), whatever the date is.
+        var recent = "refs/visualcommit/backup/reset-" + AppClocks.HarnessTime.AddDays(-1).ToString("yyyyMMdd'T'HHmmssfff'Z'", System.Globalization.CultureInfo.InvariantCulture) + "/main";
         await repo.GitAsync("update-ref", recent, "HEAD");
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
@@ -85,6 +90,12 @@ public class GraphAreaHooksTests
         var left = (await repo.GitAsync("for-each-ref", "--format=%(refname)", "refs/visualcommit/backup/")).StandardOutput.Trim();
         Assert.Equal(recent, left);
         Assert.Equal("Ready", repository.OperationStatus.Text);
+
+        // Its record for the activity log (docs/phase-5-design.md 2.3): the count as its message,
+        // which the status bar never shows, and each removal as a note in the log file's words.
+        var record = Assert.Single(app.Session.Operations.Snapshot(), candidate => candidate.Title == RepositoryViewModel.CleanUpBackupsTitle);
+        Assert.Equal(("Removed 1 backup", true), (record.Message, record.IsBackground));
+        Assert.Equal(["Removed backup reset-20250101T120000000Z (older than 30 days)"], record.Notes);
     }
 
     [AvaloniaFact]
@@ -216,6 +227,69 @@ public class GraphAreaHooksTests
         Assert.Same(shown, repository.InteractiveRebase);
         Assert.True(repository.ShowsInteractiveRebase);
         Assert.Equal(tip, (await repo.GitAsync("rev-parse", "main")).StandardOutput.Trim());
+    }
+
+    [AvaloniaFact]
+    public async Task A_page_shows_in_place_of_the_graph_and_Show_in_graph_of_a_line_not_committed_yet_selects_the_working_changes_row()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.CheckoutBlockedAsync();
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        await app.WaitForRepositoryAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.HasWorkingChanges, "the working changes read", TimeSpan.FromSeconds(30));
+
+        // A page in place of the graph, in the slot after the diff's and the resolver's (11.1).
+        var page = new RecordingPage();
+        await repository.OpenPageAsync(page);
+        Assert.True(repository.ShowsPage);
+        Assert.False(repository.ShowsGraph);
+        var slot = app.Window.GetVisualDescendants().OfType<ContentControl>().Single(control => control.Name == "PageSlot");
+        Assert.Same(page, slot.Content);
+        Assert.True(slot.IsEffectivelyVisible);
+
+        // Blame's zero id stands for the working-changes row (4.2, 4.3): "Show in graph" selects it.
+        IGraphAreaPageHost host = repository;
+        var notCommitted = new string('0', 40);
+        Assert.True(host.HasCommit(notCommitted));
+        host.ShowInGraph(notCommitted);
+
+        Assert.True(page.IsDisposed);
+        Assert.Null(repository.Page);
+        Assert.True(repository.ShowsGraph);
+        Assert.True(repository.IsWorkingRowSelected);
+        await app.WaitForAsync(
+            () => app.Window.FocusManager?.GetFocusedElement() is CommitGraphControl,
+            "the focus on the graph",
+            TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>A page that shows nothing of its own and records that it was disposed.</summary>
+    private sealed class RecordingPage : IGraphAreaPage
+    {
+        public string Title => "Recording page";
+
+        public bool IsDisposed { get; private set; }
+
+        public event EventHandler? FocusRequested
+        {
+            add { }
+            remove { }
+        }
+
+        public void Close()
+        {
+        }
+
+        public void RequestFocus()
+        {
+        }
+
+        public void OnRefsRead(RepoRefs refs)
+        {
+        }
+
+        public void Dispose() => IsDisposed = true;
     }
 
     /// <summary>"Interactive rebase of main from here…" on Base (<c>main~6</c>), and the list the git layer reads for it.</summary>

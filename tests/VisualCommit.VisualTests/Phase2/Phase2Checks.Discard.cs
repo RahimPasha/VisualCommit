@@ -47,8 +47,8 @@ public partial class Phase2Checks
         await ClickRowButtonAsync(app, "UnstagedFileList", "src/Calculator.cs", "RowDiscardButton");
         await WaitForDialogAsync(app);
         app.Click(app.Find<Button>("ConfirmButton"));
-        await WaitForStagePanelAsync(app, unstaged: 6, staged: 3);
-        await app.WaitForAsync(() => app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar");
+        await WaitForStagePanelAsync(app, unstaged: 6, staged: 3, WriteTimeout);
+        await app.WaitForAsync(() => app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar", WriteTimeout);
         app.MoveMouse(new Point(130, 700 - 13));
         var discarded = app.Capture();
         discarded.Save(Phase, "17b-discarded");
@@ -67,8 +67,8 @@ public partial class Phase2Checks
         Assert.DoesNotContain(ShellExpectations.TextsIn(app.FindByAutomationId("LeftPanel")), text => text.Contains("visualcommit", StringComparison.OrdinalIgnoreCase));
 
         app.Click(app.Find<Button>("RestoreDiscardButton"));
-        await WaitForStagePanelAsync(app, unstaged: 7, staged: 3);
-        await app.WaitForAsync(() => !app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar to go");
+        await WaitForStagePanelAsync(app, unstaged: 7, staged: 3, WriteTimeout);
+        await app.WaitForAsync(() => !app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar to go", WriteTimeout);
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "17c-restored");
         Assert.Equal(before, File.ReadAllBytes(file));
@@ -78,8 +78,8 @@ public partial class Phase2Checks
         await ClickRowButtonAsync(app, "UnstagedFileList", "src/Calculator.cs", "RowDiscardButton");
         await WaitForDialogAsync(app);
         app.Click(app.Find<Button>("ConfirmButton"));
-        await WaitForStagePanelAsync(app, unstaged: 6, staged: 3);
-        await app.WaitForAsync(() => app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar");
+        await WaitForStagePanelAsync(app, unstaged: 6, staged: 3, WriteTimeout);
+        await app.WaitForAsync(() => app.Find<Border>("RestoreBar").IsEffectivelyVisible, "the restore bar", WriteTimeout);
         app.Click(app.Find<Button>("DismissRestoreButton"));
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "17d-dismissed");

@@ -7,6 +7,7 @@ using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.Views.Dialogs;
 using VisualCommit.App.Views.Shell;
 
 namespace VisualCommit.App.Views.Graph;
@@ -24,6 +25,9 @@ public partial class RepositoryGraphView : UserControl
 
     /// <summary>The context request on its way to the rows came from the keyboard (Shift+F10, the Menu key): it has no pointer position.</summary>
     private bool _requestedByKeyboard;
+
+    /// <summary>The search slot's view model is the search's, whose view is the bar (docs/phase-5-design.md 3.1).</summary>
+    static RepositoryGraphView() => DialogViewLocator.Register<SearchViewModel>(() => new SearchBarView());
 
     public RepositoryGraphView()
     {
@@ -52,12 +56,14 @@ public partial class RepositoryGraphView : UserControl
         if (_viewModel is not null)
         {
             _viewModel.RevealRequested -= OnRevealRequested;
+            _viewModel.ScrollIntoViewRequested -= OnScrollIntoViewRequested;
         }
 
         _viewModel = DataContext as RepositoryViewModel;
         if (_viewModel is not null)
         {
             _viewModel.RevealRequested += OnRevealRequested;
+            _viewModel.ScrollIntoViewRequested += OnScrollIntoViewRequested;
         }
 
         ConnectDropMenu();
@@ -139,6 +145,8 @@ public partial class RepositoryGraphView : UserControl
         label.IsOverflow ? null : new RefLabel(label.FullText, label.Kind, label.RefName);
 
     private void OnRevealRequested(object? sender, int index) => GraphRows.Reveal(index);
+
+    private void OnScrollIntoViewRequested(object? sender, int index) => GraphRows.ScrollIntoView(index);
 
     private void OnGraphRowsPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {

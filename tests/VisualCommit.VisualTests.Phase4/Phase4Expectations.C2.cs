@@ -488,7 +488,7 @@ public static partial class Phase4Expectations
 
         // ---- Menus (7.1, 11.12, 14.3) -------------------------------------------------------------
 
-        /// <summary>The conflicted file's menu (7.1): 9 items and 2 separators, 284 high.</summary>
+        /// <summary>The conflicted file's menu (7.1), with phase 5's File history and Blame: 11 items and 3 separators, 345 high.</summary>
         public static IReadOnlyList<string> NotesFileMenu { get; } =
         [
             "notes.txt",
@@ -500,12 +500,15 @@ public static partial class Phase4Expectations
             "Ignore notes.txt (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.txt files (disabled: \"Only untracked files can be ignored\")",
             "—",
+            "File history",
+            "Blame",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
         ];
 
-        public const double NotesFileMenuHeight = 284;
+        public const double NotesFileMenuHeight = 345;
 
         /// <summary>The result's menu after typing, nothing selected (C14 step 3): 6 items and 1 separator, 197 high.</summary>
         public static IReadOnlyList<string> ResultMenuAfterTyping { get; } =

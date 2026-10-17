@@ -69,7 +69,7 @@ public sealed partial class Phase3ChecksD : Phase3Checks
         AssertMenu(menu, PartD.OriginMenu);
         AssertHighlighted(menu, "Fetch origin");
         AssertMenuShape(app, menu);
-        AssertMenuAtPointer(menu, pointer);
+        AssertMenuPlaced(app, menu, pointer);
         AssertNothingSelected(app);
         app.ClickMenuItem("Fetch origin");
         await app.WaitForProgressPercentAsync(NetworkTimeout);

@@ -14,6 +14,18 @@ public sealed partial class GitRepository
     private static readonly (string Name, InProgressKind Kind)[] PickHeads =
         [(CherryPickHead, InProgressKind.CherryPick), (RevertHead, InProgressKind.Revert)];
 
+    public Task<InProgressState> ReadInProgressStateAsync(CancellationToken cancellationToken = default) =>
+        ReadInProgressAsync(null, cancellationToken);
+
+    public async Task<IReadOnlyList<string>> ReadConflictedPathsAsync(CancellationToken cancellationToken = default)
+    {
+        // One line per stage: "<mode> <object> <stage>\t<path>".
+        var output = await ReadOutputAsync(cancellationToken, "ls-files", "--unmerged", "-z").ConfigureAwait(false);
+        return [.. output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(entry => entry.IndexOf('\t', StringComparison.Ordinal) is var tab and >= 0 ? entry[(tab + 1)..] : entry)
+            .Distinct(StringComparer.Ordinal)];
+    }
+
     public Task AbortAsync(InProgressKind kind, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         string[] arguments = kind switch
@@ -38,7 +50,8 @@ public sealed partial class GitRepository
     /// something is in progress (D89): the subject of the commit being applied, HEAD when a
     /// sequencer is there (D110), the abbreviated commit of a paused list's first line, and the
     /// commits a list has made (<see cref="ReadListProgressAsync"/>).
-    /// <paramref name="status"/> tells whether a stop is empty.
+    /// <paramref name="status"/> tells whether a stop is empty; without one (null,
+    /// <see cref="ReadInProgressStateAsync"/>) no stop is read as empty.
     /// <para>
     /// A list (<see cref="InProgressState.Sequenced"/>) without a pick head is paused: committed in a
     /// terminal (<see cref="InProgressState.AbortKeepsHead"/>), an empty revert (git leaves
@@ -47,7 +60,7 @@ public sealed partial class GitRepository
     /// is <c>sequencer/todo</c>'s first line, the stopped command (section 4, 5.1).
     /// </para>
     /// </summary>
-    internal async Task<InProgressState> ReadInProgressAsync(WorkingTreeStatus status, CancellationToken cancellationToken)
+    internal async Task<InProgressState> ReadInProgressAsync(WorkingTreeStatus? status, CancellationToken cancellationToken)
     {
         var rebaseMerge = Path.Combine(GitDirectory, "rebase-merge");
         if (Directory.Exists(rebaseMerge))
@@ -190,7 +203,7 @@ public sealed partial class GitRepository
     /// <c>git-rebase-todo</c> after the current one; <see cref="InProgressState.Total"/> is both.
     /// </para>
     /// </summary>
-    private async Task<InProgressState> ReadRebaseMergeAsync(string folder, WorkingTreeStatus status, CancellationToken cancellationToken)
+    private async Task<InProgressState> ReadRebaseMergeAsync(string folder, WorkingTreeStatus? status, CancellationToken cancellationToken)
     {
         var done = ParseTodo(ReadFile(Path.Combine(folder, "done")));
         var todo = ParseTodo(ReadFile(Path.Combine(folder, "git-rebase-todo")));
@@ -281,9 +294,9 @@ public sealed partial class GitRepository
         return new InProgressState(InProgressKind.Rebase, commit, subject, branch, FirstLine(ReadFile(Path.Combine(folder, "onto"))), remaining, false);
     }
 
-    /// <summary>Nothing is staged (the index holds HEAD's tree) and nothing conflicts, by the status just read.</summary>
-    private static bool NothingStaged(WorkingTreeStatus status) =>
-        status.Staged.Count == 0 && !status.Unstaged.Any(entry => entry.Kind == FileChangeKind.Conflicted);
+    /// <summary>Nothing is staged (the index holds HEAD's tree) and nothing conflicts, by the status just read; false without one.</summary>
+    private static bool NothingStaged(WorkingTreeStatus? status) =>
+        status is not null && status.Staged.Count == 0 && !status.Unstaged.Any(entry => entry.Kind == FileChangeKind.Conflicted);
 
     /// <summary>
     /// The group the app wrote whose guarded amend still waits (2.5, 5.3): the <c>&lt;n&gt;</c> of

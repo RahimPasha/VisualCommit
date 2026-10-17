@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using VisualCommit.Core.Git;
 
@@ -8,7 +9,8 @@ namespace VisualCommit.Git;
 /// create, rename, delete, the fast-forward of a branch that is not checked out, and merge. Each
 /// write is one git call (merge: two) that throws <see cref="GitException"/> with git's own text
 /// when git refuses; a merge's conflicts are returned, not thrown. The queue and the confirmations
-/// around them are the caller's (WP7).
+/// around them are the caller's (WP7). Phase 5 adds C12's reads and writes (docs/phase-5-design.md
+/// section 9): the checkout that keeps ignored files and the automatic stash's steps.
 /// </summary>
 public sealed partial class GitRepository
 {
@@ -61,6 +63,21 @@ public sealed partial class GitRepository
 
         var sha = result.EnsureSuccess(command).StandardOutput.Trim();
         return sha.Length > 0 ? sha : null;
+    }
+
+    public async Task<bool> CommitExistsAsync(string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        var command = Read("cat-file", "-e", sha + "^{commit}");
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+
+        // 128: "Not a valid object name" (no such object, or not a commit); 1: an object -e cannot find.
+        return result.ExitCode switch
+        {
+            0 => true,
+            1 or 128 => false,
+            _ => throw new GitException(command.DisplayText, result.ExitCode, result.StandardError, standardOutput: result.StandardOutput),
+        };
     }
 
     public async Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default)
@@ -143,6 +160,181 @@ public sealed partial class GitRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
         return RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. Positional(commit)]);
+    }
+
+    // ---- C12: protected changes and the automatic stash (docs/phase-5-design.md 9, D179) ---------
+    // The automatic stash itself is StashAsync with untracked files, then the checkout below; the
+    // operation (RepositoryOperations.Branches.cs) runs the steps of 9.2 with these.
+
+    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
+
+        // --no-overwrite-ignore (a switch option since Git 2.23) refuses where git would otherwise
+        // overwrite an ignored file the commit tracks, or delete an ignored folder where it has a
+        // file (0.7); the refusal is git's untracked-files block and changes nothing.
+        return noOverwriteIgnore
+            ? RunWriteAsync(options, cancellationToken, ["switch", "--detach", "--no-overwrite-ignore", .. Positional(commit)])
+            : CheckoutDetachedAsync(commit, options, cancellationToken);
+    }
+
+    public async Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        // The paths on standard input, NUL-separated: as many as there are, any name. They stay
+        // literal (GIT_LITERAL_PATHSPECS, D74), and the index is left alone (--worktree only).
+        var command = new GitCommand("restore", $"--source={source}", "--worktree", "--pathspec-from-file=-", "--pathspec-file-nul")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = (options ?? NetworkOptions.None).Environment,
+            StandardInput = string.Concat(paths.Select(path => path + "\0")),
+        };
+        (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+    }
+
+    public async Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var ignored = new HashSet<string>(StringComparer.Ordinal);
+        if (paths.Count == 0)
+        {
+            return ignored;
+        }
+
+        // A folder git names ("would lose untracked files in them") is asked about by its files,
+        // which check-ignore matches where the folder's own name may not (*.log in logs/): it is
+        // ignored when every file in it is. A symbolic link is asked about as a file. The same
+        // rules and the same check-ignore call as the undo's switch (GitRepository.Undo.cs).
+        var asked = paths.Distinct(StringComparer.Ordinal).ToDictionary(
+            path => path,
+            path => !IsFileOrLink(WorkingTreePath(path)) && Directory.Exists(WorkingTreePath(path)) ? FilesUnder(path) : [path],
+            StringComparer.Ordinal);
+        var matched = (await IgnoredAmongAsync([.. asked.Values.SelectMany(files => files).Distinct(StringComparer.Ordinal)], cancellationToken).ConfigureAwait(false))
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var (path, files) in asked)
+        {
+            if (files.Count > 0 && files.All(matched.Contains))
+            {
+                ignored.Add(path);
+            }
+        }
+
+        return ignored;
+    }
+
+    /// <summary>
+    /// The paths of the stash commits read so far, by full SHA: a commit never changes, so C12's
+    /// check, the undo history's reads before and after an apply or a pop, and an undo step's check
+    /// of a pop read them once.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Task<StashPaths>> _stashPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stashCommit);
+        if (!IsFullObjectId(stashCommit))
+        {
+            // A name (stash@{0}) may name another commit tomorrow: read, not kept.
+            return ReadStashPathsUncachedAsync(stashCommit, cancellationToken);
+        }
+
+        if (_stashPaths.TryGetValue(stashCommit, out var known))
+        {
+            return known.WaitAsync(cancellationToken);
+        }
+
+        // One read for every caller, not cancelled by any one of them; a failed read is not kept.
+        var read = ReadStashPathsUncachedAsync(stashCommit, CancellationToken.None);
+        var kept = _stashPaths.GetOrAdd(stashCommit, read);
+        if (ReferenceEquals(kept, read))
+        {
+            _ = read.ContinueWith(
+                failed => _stashPaths.TryRemove(new KeyValuePair<string, Task<StashPaths>>(stashCommit, failed)),
+                CancellationToken.None,
+                TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        return kept.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="ReadStashPathsAsync"/>'s reads, side by side: what the stash's working-tree commit
+    /// changes against its base, with each path's status (<c>--name-status</c>: the paths it adds,
+    /// <see cref="StashPaths.Added"/>), and what its index commit changes (both sides of a rename,
+    /// <c>--no-renames</c>), and, when it has a third parent, its untracked files (a stash made
+    /// without them has two parents: <c>^3</c> names nothing, the report's PD15).
+    /// </summary>
+    private async Task<StashPaths> ReadStashPathsUncachedAsync(string stashCommit, CancellationToken cancellationToken)
+    {
+        var changed = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-status", stashCommit + "^1", stashCommit);
+        var staged = ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", stashCommit + "^1", stashCommit + "^2");
+        var third = ResolveAsync(stashCommit + "^3", cancellationToken);
+        await Task.WhenAll((Task[])[changed, staged, third]).ConfigureAwait(false);
+        var untracked = await third.ConfigureAwait(false) is { } tree
+            ? await ReadOutputAsync(cancellationToken, "ls-tree", "-r", "-z", "--name-only", tree).ConfigureAwait(false)
+            : string.Empty;
+
+        // "<status>\0<path>\0" per path: --no-renames gives one path to every status.
+        var statuses = SplitPaths(await changed.ConfigureAwait(false));
+        var paths = new List<string>(statuses.Length / 2);
+        var added = new List<string>();
+        for (var i = 0; i + 1 < statuses.Length; i += 2)
+        {
+            paths.Add(statuses[i + 1]);
+            if (statuses[i] == "A")
+            {
+                added.Add(statuses[i + 1]);
+            }
+        }
+
+        return new StashPaths(paths, SplitPaths(untracked))
+        {
+            Staged = SplitPaths(await staged.ConfigureAwait(false)),
+            Added = added,
+        };
+
+        static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>Whether <paramref name="value"/> is a whole object id (SHA-1 or SHA-256, hex), which names one object for good.</summary>
+    private static bool IsFullObjectId(string value) =>
+        value.Length is 40 or 64 && value.All(char.IsAsciiHexDigit);
+
+    /// <summary>
+    /// The files under a folder of the working tree (<paramref name="folder"/>, a repository path),
+    /// as repository paths in byte order: what git would lose with it. A symbolic link is a file to
+    /// git, also one to a folder, and is not followed. For the checkout's refusal (9.3) and the
+    /// undo's switch and Keep moves (<c>UndoStepRun</c>, 7.3).
+    /// </summary>
+    private List<string> FilesUnder(string folder)
+    {
+        var files = new List<string>();
+        var folders = new Stack<string>([folder]);
+        while (folders.TryPop(out var relative))
+        {
+            foreach (var entry in new DirectoryInfo(WorkingTreePath(relative)).EnumerateFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }))
+            {
+                var path = relative + "/" + entry.Name;
+                if (entry is DirectoryInfo && entry.LinkTarget is null)
+                {
+                    folders.Push(path);
+                }
+                else
+                {
+                    files.Add(path);
+                }
+            }
+        }
+
+        files.Sort(StringComparer.Ordinal);
+        return files;
     }
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
@@ -418,14 +610,8 @@ public sealed partial class GitRepository
     }
 
     /// <summary>The number of conflicted paths in the index: the distinct paths of <c>git ls-files --unmerged -z</c> (one line per stage).</summary>
-    private async Task<int> CountConflictedFilesAsync(CancellationToken cancellationToken)
-    {
-        var output = await ReadOutputAsync(cancellationToken, "ls-files", "--unmerged", "-z").ConfigureAwait(false);
-        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Select(entry => entry.IndexOf('\t', StringComparison.Ordinal) is var tab and >= 0 ? entry[(tab + 1)..] : entry)
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-    }
+    private async Task<int> CountConflictedFilesAsync(CancellationToken cancellationToken) =>
+        (await ReadConflictedPathsAsync(cancellationToken).ConfigureAwait(false)).Count;
 
     /// <summary>Whether the repository stores its refs in the reftable format (null: not asked yet), asked once per <see cref="GitRepository"/> (8.1).</summary>
     private bool? _usesReftable;

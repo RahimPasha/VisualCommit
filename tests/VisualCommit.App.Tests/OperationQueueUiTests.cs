@@ -54,12 +54,12 @@ public class OperationQueueUiTests
         Assert.Null(restored);
         Assert.False(viewModel.Changes.HasRestore);
         Assert.Equal(Scenarios.ChangesFiles.CalculatorWorking, File.ReadAllText(Path.Combine(repo.Path, "src", "Calculator.cs")).ReplaceLineEndings("\n"));
+        // Right after the discard, the restore bar's Restore is the discard's Undo
+        // (docs/phase-5-design.md 7.9, D172), an operation of the toolbar's, which says what it did.
         Assert.Equal(
-            [("Probe", true, OperationOutcome.Succeeded), ("Discard", true, OperationOutcome.Succeeded), ("Restore", true, OperationOutcome.Succeeded)],
+            [("Probe", true, OperationOutcome.Succeeded), ("Discard", true, OperationOutcome.Succeeded), ("Undo discard of Calculator.cs", true, OperationOutcome.Succeeded)],
             finished);
-
-        // The stage panel's operations leave no message in the status bar (1.9).
-        Assert.Equal(OperationStatusViewModel.ReadyText, viewModel.OperationStatus.Text);
+        Assert.Equal("Undid discard of Calculator.cs", viewModel.OperationStatus.Text);
     }
 
     [AvaloniaFact]

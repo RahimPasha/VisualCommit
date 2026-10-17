@@ -92,6 +92,75 @@ public class GraphReviewFixTests
         Assert.Equal("On main: Work in progress on README", viewModel.Graph.CommitAt(viewModel.SelectedIndex).Subject);
     }
 
+    [AvaloniaFact]
+    public async Task A_commit_landing_while_the_refs_are_read_never_shows_its_row_without_its_branchs_label()
+    {
+        // The phase 5 gate's f11f: a commit made in a terminal while a refresh reads the refs. The
+        // reads run side by side; here for-each-ref lists main before the commit and rev-parse
+        // HEAD reads HEAD after it, the order a busy machine can give them. Every graph swapped
+        // in must draw main's label on main's commit: no row of the new commit without it, and
+        // no label of before on the row below.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.CommitFileAsync("a.txt", "b\n", "Second");
+        await repo.CreateBranchAsync("other", "HEAD~1");
+        var armed = 0;
+        var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        static bool IsRefList(GitCommand command) => command.Arguments is ["for-each-ref", _, "refs/heads", "refs/remotes", "refs/tags"];
+        static bool IsHeadSha(GitCommand command) => command.Arguments is ["rev-parse", "-q", "--verify", "HEAD"];
+        var runner = new OrderingRunner(
+            new GitRunner(GitLocator.FindExecutable(GitSearchContext.FromSystem())!),
+            before: async command =>
+            {
+                if (IsHeadSha(command) && Interlocked.CompareExchange(ref armed, 2, 1) == 1)
+                {
+                    await listed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+                    await repo.CommitFileAsync("a.txt", "c\n", "Third");
+                }
+            },
+            after: command =>
+            {
+                if (IsRefList(command) && Volatile.Read(ref armed) > 0)
+                {
+                    listed.TrySetResult();
+                }
+            });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestContext.Current.CancellationToken);
+        using var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), Utc);
+        await viewModel.StartAsync();
+        var swapped = new List<CommitGraphData>();
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RepositoryViewModel.Graph))
+            {
+                swapped.Add(viewModel.Graph);
+            }
+        };
+
+        Volatile.Write(ref armed, 1);
+        await viewModel.RefreshAsync();
+        Assert.Equal(2, Volatile.Read(ref armed));
+
+        // The refresh the commit's own change brings (the watcher's, or this one).
+        await viewModel.RefreshAsync();
+
+        Assert.NotEmpty(swapped);
+        Assert.Same(viewModel.Graph, swapped[^1]);
+        var (window, control) = Show(swapped[0], 900, 300);
+        foreach (var data in swapped)
+        {
+            control.Data = data;
+            Dispatcher.UIThread.RunJobs();
+            window.CaptureRenderedFrame();
+            Assert.Equal(["Third", "Second", "First"], Enumerable.Range(0, data.Count).Select(row => data.CommitAt(row).Subject));
+            Assert.Equal([("main", RefLabelKind.CurrentBranch)], control.LabelsInRow(0).Select(label => (label.FullText, label.Kind)));
+            Assert.Empty(control.LabelsInRow(1));
+            Assert.Equal([("other", RefLabelKind.LocalBranch)], control.LabelsInRow(2).Select(label => (label.FullText, label.Kind)));
+        }
+
+        window.Close();
+    }
+
     [Fact]
     public void Opening_a_folder_inserts_its_rows_without_resetting_the_list()
     {
@@ -175,5 +244,19 @@ public class GraphReviewFixTests
         }
 
         Assert.True(condition(), "The condition did not come true within 5 seconds.");
+    }
+
+    /// <summary>A runner that runs <paramref name="before"/> ahead of each call and <paramref name="after"/> once it has ended: the order of calls that run side by side, made certain.</summary>
+    private sealed class OrderingRunner(IGitRunner real, Func<GitCommand, Task> before, Action<GitCommand> after) : IGitRunner
+    {
+        public string ExecutablePath => real.ExecutablePath;
+
+        public async Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
+        {
+            await before(command);
+            var result = await real.RunAsync(command, cancellationToken);
+            after(command);
+            return result;
+        }
     }
 }

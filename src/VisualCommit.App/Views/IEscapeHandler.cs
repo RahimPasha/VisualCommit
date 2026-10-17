@@ -31,8 +31,20 @@ public static class EscapeOrder
     /// </summary>
     public const int Resolver = 350;
 
+    /// <summary>
+    /// The activity log (docs/phase-5-design.md 2.1): it closes, but only while the focus is inside
+    /// it, before the resolver, the list and a page, which would otherwise take Esc wherever the focus is.
+    /// </summary>
+    public const int ActivityLog = 340;
+
     /// <summary>The interactive rebase's list (2.2): a row drag in progress is cancelled first; otherwise the list closes, asking first when it was changed.</summary>
     public const int InteractiveRebase = 360;
+
+    /// <summary>A page of the graph area (docs/phase-5-design.md 11.1): it closes, unless a diff is open over it or a text box has the focus.</summary>
+    public const int Page = 370;
+
+    /// <summary>The search bar (docs/phase-5-design.md 3.1): it closes while the focus is in it, before the diff.</summary>
+    public const int Search = 390;
 
     /// <summary>The open diff closes, unless a text box has the focus (D63).</summary>
     public const int Diff = 400;

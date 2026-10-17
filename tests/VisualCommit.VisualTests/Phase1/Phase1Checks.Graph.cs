@@ -344,8 +344,11 @@ public partial class Phase1Checks
         // D71) a working-changes row can show in between, until the next refresh.
         await app.WaitForAsync(() => !graph.ShowsWorkingRow, "no working-changes row", TimeSpan.FromSeconds(30));
 
-        // The history is swapped in before the labels of its first row are laid out: on a loaded
-        // machine the check looked at them too early (CI run 38203733545).
+        // On a loaded machine the check once saw the new row without its label (CI run
+        // 38203733545). The likely cause, found by phase 5's gate (f11f): a refresh read the refs
+        // around the commit, the branch before it and HEAD after it, and the graph loaded with
+        // that mix until the next refresh. HEAD's commit now comes from its branch's line of the
+        // same read (GitRepository.ReadRefsAsync); the wait stays as the label's own check.
         await app.WaitForAsync(
             () => graph.LabelsInRow(0).Select(label => label.FullText).SequenceEqual(["main"]),
             "the new commit to carry the label of its branch",

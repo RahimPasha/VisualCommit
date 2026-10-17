@@ -12,7 +12,8 @@ namespace VisualCommit.Git;
 /// The calls also pass the options that keep the user's git configuration from changing the
 /// output they parse: signatures, colours, output encoding, rename detection and external diff
 /// tools are fixed on the command line, and paths are read in the <c>-z</c> form, which
-/// <c>core.quotepath</c> does not touch.
+/// <c>core.quotepath</c> does not touch, or, where a line-by-line stream matters (file history,
+/// blame), C-quoted with <c>core.quotePath=true</c> fixed by <c>-c</c> (<see cref="GitQuotedPaths"/>).
 /// </para>
 /// </summary>
 public sealed partial class GitRepository : IGitRepository
@@ -26,13 +27,14 @@ public sealed partial class GitRepository : IGitRepository
     private readonly IGitRunner _runner;
     private readonly IAppLog _log;
 
-    private GitRepository(IGitRunner runner, IAppLog log, string workingDirectory, string gitDirectory, string commonDirectory)
+    private GitRepository(IGitRunner runner, IAppLog log, string workingDirectory, string gitDirectory, string commonDirectory, string openedFolder)
     {
         _runner = runner;
         _log = log;
         WorkingDirectory = workingDirectory;
         GitDirectory = gitDirectory;
         CommonDirectory = commonDirectory;
+        OpenedFolder = openedFolder;
         var name = Path.GetFileName(workingDirectory);
         Name = name.Length > 0 ? name : workingDirectory;
     }
@@ -44,6 +46,8 @@ public sealed partial class GitRepository : IGitRepository
     public string CommonDirectory { get; }
 
     public string Name { get; }
+
+    public string OpenedFolder { get; }
 
     /// <summary>
     /// Opens the repository whose working tree contains <paramref name="path"/>: its top-level
@@ -110,7 +114,7 @@ public sealed partial class GitRepository : IGitRepository
         var commonDirectory = await ResolveCommonDirectoryAsync(runner, lines[3], folder, workingDirectory, cancellationToken).ConfigureAwait(false);
 
         log.Info($"Opened the repository at {workingDirectory}.");
-        return new GitRepository(runner, log, workingDirectory, gitDirectory, commonDirectory);
+        return new GitRepository(runner, log, workingDirectory, gitDirectory, commonDirectory, Path.TrimEndingDirectorySeparator(folder));
     }
 
     /// <summary>
@@ -138,26 +142,19 @@ public sealed partial class GitRepository : IGitRepository
         new RepositoryWatcher(GitDirectory, CommonDirectory, _log, workingDirectory: WorkingDirectory, allIgnored: AllIgnoredAsync);
 
     /// <summary>
-    /// Whether git ignores every one of <paramref name="paths"/> (relative to the working tree):
-    /// <c>git check-ignore</c> prints those it ignores, and exits with 1 when it ignores none.
+    /// Whether git ignores every one of <paramref name="paths"/> (relative to the working tree), the
+    /// watcher's question about a burst: <see cref="IgnoredAmongAsync"/>'s <c>git check-ignore</c>.
+    /// False for no paths.
     /// </summary>
     internal async Task<bool> AllIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
-        var command = new GitCommand("check-ignore", "--stdin", "-z")
-        {
-            WorkingDirectory = WorkingDirectory,
-
-            // check-ignore refuses literal pathspecs, and takes each path as it is anyway.
-            Environment = new Dictionary<string, string?>(ReadEnvironment) { ["GIT_LITERAL_PATHSPECS"] = null },
-            StandardInput = string.Concat(paths.Select(path => path + "\0")),
-        };
-        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode == 1)
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
         {
             return false;
         }
 
-        var ignored = result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        var ignored = (await IgnoredAmongAsync(paths, cancellationToken).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal);
         return paths.All(ignored.Contains);
     }
 

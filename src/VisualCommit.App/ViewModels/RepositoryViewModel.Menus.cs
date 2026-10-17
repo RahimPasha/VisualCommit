@@ -45,7 +45,8 @@ public sealed partial class RepositoryViewModel
     /// refs, the status, the selected commits in row order with whether HEAD's history holds them
     /// (4h) and where they are on HEAD's linear line (phase 4 design 2.1), the toolbar's states,
     /// whether an operation runs, the other worktrees as last read by
-    /// <see cref="ReadMenuContextAsync"/> (empty before), and the branch tips HEAD reaches (1.1).
+    /// <see cref="ReadMenuContextAsync"/> (empty before), the branch tips HEAD reaches (1.1), and
+    /// what the graph hides and solos (docs/phase-5-design.md 8.3).
     /// Before the refs are read: an unborn HEAD without refs, every toolbar button disabled.
     /// </summary>
     public RepositoryMenuContext MenuContext => new(
@@ -60,6 +61,7 @@ public sealed partial class RepositoryViewModel
         OtherWorktrees = _otherWorktrees,
         TipsOnHead = BranchTipsOnHead(),
         MergeTool = _mergeTool,
+        Filters = Filters,
     };
 
     /// <summary>
@@ -242,11 +244,18 @@ public sealed partial class RepositoryViewModel
         }
 
         var context = MenuContext;
+
+        // A commit's file is the shown commit's, which a page may show without selecting it in
+        // the graph (docs/phase-5-design.md 11.3); its first parent names a deleted file's blame (4.4).
+        var shown = place == FileMenuPlace.CommitFiles ? Details.Details : null;
         var target = new FileMenuTarget(
             file,
             IsUntracked: place == FileMenuPlace.Unstaged && Status.IsUntracked(file.Path),
             ExistsInWorkingTree: ExistsInWorkingTree(file.Path),
-            CommitSha: place == FileMenuPlace.CommitFiles ? Selection.Single : null);
+            CommitSha: place == FileMenuPlace.CommitFiles ? shown?.Sha ?? Selection.Single : null)
+        {
+            CommitParent = shown?.Parents.FirstOrDefault(),
+        };
         var menu = place switch
         {
             FileMenuPlace.Unstaged => RepositoryMenus.ForUnstagedFile(context, target, MenuActions),
@@ -271,7 +280,10 @@ public sealed partial class RepositoryViewModel
             new ChangedFile(target.Path, target.Kind, target.OldPath),
             target.IsUntracked,
             ExistsInWorkingTree(target.Path),
-            target.Side == DiffSide.Commit ? target.Commit : null);
+            target.Side == DiffSide.Commit ? target.Commit : null)
+        {
+            CommitParent = target.Side == DiffSide.Commit ? target.Parent : null,
+        };
         var hunkInDiff = hunk is { } index && diff.Diff is { } read && index >= 0 && index < read.Hunks.Count ? hunk : null;
         var menu = RepositoryMenus.ForDiff(
             MenuContext,

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using VisualCommit.Core.Logging;
@@ -10,7 +11,9 @@ namespace VisualCommit.Git.Tests;
 /// <summary>
 /// <see cref="RepositoryWatcher"/>: changes made outside the app, debounced (D52). The timing
 /// tests watch a plain folder and write files into it; what a repository's own git calls do is
-/// tested against real repositories.
+/// tested against real repositories. The tests of the quiet period and the maximum delay hold the
+/// watcher's clock (<see cref="ManualTimeProvider"/>) and move it only once the watcher has
+/// counted every event they wait for, so that a slow machine cannot split a burst (D160).
 /// </summary>
 public class RepositoryWatcherTests
 {
@@ -83,20 +86,36 @@ public class RepositoryWatcherTests
     [Fact]
     public async Task A_burst_of_changes_raises_changed_once()
     {
-        // A quiet period longer than any pause a busy test machine puts between the writes, so
-        // the burst stays one burst whatever the load (a full parallel run once split it in two).
+        // On a clock the test holds: however long the writes and their events take on a busy
+        // machine, the burst stays one burst (on the system's clock, CI's loaded runner once
+        // split it in two), and the quiet period runs only when the test moves the clock.
         using var folder = new TempDirectory("watch");
-        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: TimeSpan.FromSeconds(1));
+        var clock = new ManualTimeProvider();
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
         var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
         watcher.Start();
 
-        for (var i = 0; i < 20; i++)
+        var names = Enumerable.Range(0, 20).Select(i => $"burst-{i}").ToList();
+        foreach (var name in names)
         {
-            File.WriteAllText(folder.Combine($"burst-{i}"), "x");
+            File.WriteAllText(folder.Combine(name), "x");
         }
 
-        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
-        await Task.Delay(TimeSpan.FromSeconds(2), TestCancelled);
+        Assert.True(await counted.WaitForAsync(names, Timeout), $"The watcher did not count events for {counted.Missing(names)}.");
+        Assert.Equal(0, changed.Count);
+
+        clock.Advance(Quiet - TimeSpan.FromTicks(1));
+        Assert.Equal(0, changed.Count);
+
+        // The raise runs on this thread, within the advance.
+        clock.Advance(TimeSpan.FromTicks(1));
+        Assert.Equal(1, changed.Count);
+        Assert.True(changed.Last!.GitFolder);
+
+        // A late event of the burst (a second notice of a write) may start another burst, but
+        // that cannot be raised while the clock stands still.
+        await Task.Delay(Settle, TestCancelled);
         Assert.Equal(1, changed.Count);
     }
 
@@ -104,21 +123,29 @@ public class RepositoryWatcherTests
     public async Task Changes_that_keep_coming_are_still_reported_after_the_maximum_delay()
     {
         using var folder = new TempDirectory("watch");
-        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, maximumDelay: TimeSpan.FromMilliseconds(500));
+        var clock = new ManualTimeProvider();
+        var maximumDelay = TimeSpan.FromMilliseconds(500);
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, maximumDelay: maximumDelay, time: clock);
         var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
         watcher.Start();
 
-        // A write every 50 ms for 2 seconds: never quiet for the quiet period.
-        var writing = Stopwatch.StartNew();
-        var countWhileWriting = 0;
-        for (var i = 0; writing.Elapsed < TimeSpan.FromSeconds(2); i++)
+        // A change every 100 ms of the clock, each counted before the clock moves on: never quiet
+        // for the quiet period (250 ms). The first change is at 0 ms, the last at 400 ms.
+        var step = TimeSpan.FromMilliseconds(100);
+        for (var i = 0; clock.Elapsed < maximumDelay; i++)
         {
-            File.WriteAllText(folder.Combine("busy"), i.ToString(CultureInfo.InvariantCulture));
-            await Task.Delay(50, TestCancelled);
-            countWhileWriting = changed.Count;
+            Assert.True(changed.Count == 0, $"Changed was raised {clock.Elapsed.TotalMilliseconds} ms after the first change, while the changes kept coming.");
+            var name = $"busy-{i}";
+            File.WriteAllText(folder.Combine(name), i.ToString(CultureInfo.InvariantCulture));
+            Assert.True(await counted.WaitForAsync([name], Timeout), $"The watcher did not count the event for {name}.");
+            clock.Advance(step);
         }
 
-        Assert.True(countWhileWriting >= 1, "Changed was not raised while the changes kept coming.");
+        // At 500 ms, the maximum delay, although the last change was only 100 ms before.
+        Assert.Equal(1, changed.Count);
+        await Task.Delay(Settle, TestCancelled);
+        Assert.Equal(1, changed.Count);
     }
 
     [Fact]
@@ -312,5 +339,39 @@ public class RepositoryWatcherTests
 
             return true;
         }
+    }
+
+    /// <summary>The names of the events the watcher counted in a burst, through its test hook (<see cref="RepositoryWatcher.EventCounted"/>).</summary>
+    private sealed class CountedEvents
+    {
+        private readonly ConcurrentDictionary<string, bool> _names = new(StringComparer.Ordinal);
+
+        public CountedEvents(RepositoryWatcher watcher) =>
+            watcher.EventCounted = name =>
+            {
+                if (name is not null)
+                {
+                    _names[name] = true;
+                }
+            };
+
+        /// <summary>Waits, polling, until an event for each of <paramref name="names"/> has been counted; false if that does not happen within <paramref name="timeout"/>.</summary>
+        public async Task<bool> WaitForAsync(IReadOnlyCollection<string> names, TimeSpan timeout)
+        {
+            var waited = Stopwatch.StartNew();
+            while (!names.All(_names.ContainsKey))
+            {
+                if (waited.Elapsed > timeout)
+                {
+                    return false;
+                }
+
+                await Task.Delay(10, TestCancelled);
+            }
+
+            return true;
+        }
+
+        public string Missing(IEnumerable<string> names) => string.Join(", ", names.Where(name => !_names.ContainsKey(name)));
     }
 }

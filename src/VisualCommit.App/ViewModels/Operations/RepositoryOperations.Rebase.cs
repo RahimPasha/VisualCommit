@@ -14,6 +14,7 @@ using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 using VisualCommit.Git;
 
 namespace VisualCommit.App.ViewModels.Operations;
@@ -61,13 +62,13 @@ public sealed partial class RepositoryOperations
                         return refusal;
                     }
 
-                    var tip = await Git.ResolveAsync("HEAD") ?? throw new InvalidOperationException("HEAD names no commit.");
+                    var tip = (await ReadHeadAtStartAsync()).Sha ?? throw new InvalidOperationException("HEAD names no commit.");
                     selection.Follows = await SelectedCommitIsRebasedAsync(tip, onto.Sha);
                     await SaveRebaseBackupAsync(branch, tip);
                     var result = await Git.RebaseAsync(onto.Sha, NetworkOptions.From(context));
                     return await RebaseReportAsync(context, result, branch, onto.Name, selection, notice);
                 },
-                new RunOptions { DescribeFailure = RebaseFailureDisplay });
+                new RunOptions { DescribeFailure = RebaseFailureDisplay, Undo = UndoScope.Rebase(branch, onto.Name) });
             await FinishAsync(notice, selection);
         });
     }
@@ -118,7 +119,7 @@ public sealed partial class RepositoryOperations
                     }
 
                     // 2. Phase 3's checkout.
-                    var previous = (await Git.ReadHeadAsync()).BranchName;
+                    var previous = (await ReadHeadAtStartAsync()).BranchName;
                     try
                     {
                         await Git.CheckoutBranchAsync(branch, options);
@@ -155,7 +156,7 @@ public sealed partial class RepositoryOperations
 
                     return await RebaseReportAsync(context, result, branch, onto.Name, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = _ => display });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = _ => display, Undo = UndoScope.CheckoutAndRebase(branch, onto.Name) });
             await FinishAsync(notice, selection);
         });
     }
@@ -263,7 +264,7 @@ public sealed partial class RepositoryOperations
                                 return detached;
                             }
 
-                            previous = (await Git.ReadHeadAsync()).BranchName;
+                            previous = (await ReadHeadAtStartAsync()).BranchName;
                             try
                             {
                                 await Git.CheckoutBranchAsync(branch, options);
@@ -313,7 +314,12 @@ public sealed partial class RepositoryOperations
                         selection.NewTip = tip;
                         return Rebased(OperationTexts.InteractiveRebased(branch, await Git.CountCommitsAsync(plan.Onto, tip)), result.AutostashConflicted);
                     },
-                    new RunOptions { HasSeveralSteps = request.CheckoutFirst, DescribeFailure = _ => display });
+                    new RunOptions
+                    {
+                        HasSeveralSteps = request.CheckoutFirst,
+                        DescribeFailure = _ => display,
+                        Undo = UndoScope.InteractiveRebase(branch, Refs?.Head.BranchName),
+                    });
                 await FinishAsync(notice, selection);
                 return started;
             },
@@ -392,7 +398,7 @@ public sealed partial class RepositoryOperations
                     selection.NewTip = squashed;
                     return Rebased(OperationTexts.Squashed(count, squashed), result.AutostashConflicted);
                 },
-                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text, squash: true) });
+                new RunOptions { DescribeFailure = failure => InteractiveRefusalDisplay(failure, text, squash: true), Undo = UndoScope.Squash(count, current) });
             await FinishAsync(notice, selection);
         });
     }
@@ -444,7 +450,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.ContinueAsync(now, message, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: false, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text), Undo = UndoScope.Continuation });
             await FinishAsync(notice, selection);
         });
     }
@@ -495,7 +501,7 @@ public sealed partial class RepositoryOperations
                     var result = await Git.SkipAsync(now, NetworkOptions.From(context));
                     return await SequenceStepReportAsync(context, now, result, onto, skipped: true, selection, notice);
                 },
-                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text) });
+                new RunOptions { HasSeveralSteps = true, DescribeFailure = failure => ContinueRefusalDisplay(failure, text), Undo = UndoScope.Continuation });
             await FinishAsync(notice, selection);
         });
     }
@@ -597,7 +603,7 @@ public sealed partial class RepositoryOperations
             return moved;
         }
 
-        return (await Git.ReadHeadAsync()).BranchName is null
+        return (await ReadHeadAtStartAsync()).BranchName is null
             ? Refused(text, OperationTexts.MenuTexts.CheckOutABranchToRebase)
             : null;
     }
@@ -607,7 +613,23 @@ public sealed partial class RepositoryOperations
     /// conflict without one ("Resolve the conflicts first"), from a fresh status (1.3); null otherwise.
     /// </summary>
     private async Task<OperationReport?> RefuseWhileInProgressOrConflictedAsync(OperationText text) =>
-        RefusalOf(await Git.ReadStatusAsync()) is { } summary ? Refused(text, summary) : null;
+        await InProgressOrConflictedRefusalAsync() is { } summary ? Refused(text, summary) : null;
+
+    /// <summary>
+    /// <see cref="RefusalOf"/> read fresh without the whole status: the operation in progress from
+    /// the git folder (no git call while there is none, D89), then the conflicted paths
+    /// (<c>git ls-files --unmerged</c>) only when nothing is in progress.
+    /// </summary>
+    private async Task<string?> InProgressOrConflictedRefusalAsync()
+    {
+        var state = await Git.ReadInProgressStateAsync();
+        if (state.IsActive)
+        {
+            return OperationTexts.FinishOrAbortFirst(state.Kind);
+        }
+
+        return (await Git.ReadConflictedPathsAsync()).Count > 0 ? OperationTexts.MenuTexts.ResolveTheConflictsFirst : null;
+    }
 
     /// <summary>Why a rebase cannot start on <paramref name="status"/>: the menus' reasons (D119), or null.</summary>
     private static string? RefusalOf(WorkingTreeStatus status) =>
@@ -673,7 +695,7 @@ public sealed partial class RepositoryOperations
     /// </summary>
     private async Task<OperationReport?> RefuseIfListMovedAsync(OperationText text, RebasePlan plan, string branch, bool squash = false)
     {
-        var head = await Git.ReadHeadAsync();
+        var head = await ReadHeadAtStartAsync();
         if (!string.Equals(HeadsPrefix + head.BranchName, plan.BranchRef, StringComparison.Ordinal))
         {
             return Refused(text, OperationTexts.HeadMoved(new HeadState(branch, plan.ExpectedTip), head, squash ? OperationTexts.NothingSquashed : OperationTexts.NothingRebased));

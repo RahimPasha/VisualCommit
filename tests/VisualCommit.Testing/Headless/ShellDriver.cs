@@ -10,6 +10,7 @@ using VisualCommit.App;
 using VisualCommit.App.Services;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 
@@ -23,8 +24,14 @@ namespace VisualCommit.Testing.Headless;
 /// </summary>
 public sealed partial class ShellDriver : IDisposable
 {
-    /// <summary>How long <see cref="WaitForAsync"/> waits when the test names no time.</summary>
-    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// How long <see cref="WaitForAsync"/> waits when the test names no time: 30 s, the limit
+    /// phases 2 to 4 gave a wait after a write. Phase 5 records every action for undo (a stash
+    /// makes 17 git calls), and in the full run's seven projects side by side a step took 5 to 8
+    /// times as long as alone, so 10 s ran out for operations that end in 1 to 3 s alone. A wait
+    /// still ends as soon as its condition holds.
+    /// </summary>
+    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// The pause between two looks at a condition in <see cref="WaitForAsync"/>: short enough that
@@ -59,6 +66,8 @@ public sealed partial class ShellDriver : IDisposable
     /// <see cref="Launcher"/>, <see cref="Clipboard"/>), so nothing outside the window is opened or
     /// changed. Prompts of git and ssh go to the app's own dialogs, unless
     /// <paramref name="promptHandler"/> (a <see cref="ScriptedPromptHandler"/>) answers them instead.
+    /// The record clock stands at <see cref="AppClocks.HarnessTime"/> and the backup clock is fixed
+    /// there (docs/phase-5-design.md 2.3), as the real-window pass's are.
     /// </summary>
     public static ShellDriver Start(string dataDirectory, int? width = 1100, int? height = 700, IGitPromptHandler? promptHandler = null)
     {
@@ -71,7 +80,17 @@ public sealed partial class ShellDriver : IDisposable
         var folders = new FakeFolderPicker();
         var launcher = new FakeFileLauncher();
         var clipboard = new FakeClipboard();
-        var session = AppSession.Start(new AppPaths(dataDirectory), application, folders, launcher, clipboard, promptHandler);
+        // The activity log's times read 09:00:00 and its durations 0 ms, and the backups get the
+        // same names in every run, still in order (docs/phase-5-design.md 2.3).
+        var session = AppSession.Start(
+            new AppPaths(dataDirectory),
+            application,
+            folders,
+            launcher,
+            clipboard,
+            promptHandler,
+            recordClock: new FrozenClock(AppClocks.HarnessTime),
+            backupClock: BackupClock.Fixed(AppClocks.HarnessTime));
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -227,15 +246,28 @@ public sealed partial class ShellDriver : IDisposable
     /// <summary>Moves the mouse to the centre of a control and double-clicks the left button.</summary>
     public void DoubleClick(Visual visual) => DoubleClick(BoundsOf(visual).Center);
 
-    /// <summary>Moves the mouse to a window position and double-clicks the left button.</summary>
+    /// <summary>
+    /// Moves the mouse to a window position and double-clicks the left button: two presses at one
+    /// spot, which Avalonia counts as a double-click when the second comes within the platform's
+    /// double-tap time, 500 ms, of the first by the window's input clock. That clock is real time,
+    /// and the public helpers run the dispatcher's jobs and render a frame around every event, so
+    /// the presses lay as far apart as the first click's work took: in the full run's projects
+    /// side by side more than 500 ms, and the double-click came as two single clicks (P25's on
+    /// Local branches › main checked nothing out; 700 ms between the presses does the same alone).
+    /// The clock stands still for the presses (<see cref="HeadlessInputClock"/>), as a user's
+    /// double-click carries the times of the presses however busy the app is; the app handles
+    /// them as before.
+    /// </summary>
     public void DoubleClick(Point position)
     {
         Window.MouseMove(position);
-        for (var click = 0; click < 2; click++)
+        using (HeadlessInputClock.Pause(Window))
         {
-            // Two presses at one spot in quick succession: Avalonia counts them as a double-click.
-            Window.MouseDown(position, MouseButton.Left);
-            Window.MouseUp(position, MouseButton.Left);
+            for (var click = 0; click < 2; click++)
+            {
+                Window.MouseDown(position, MouseButton.Left);
+                Window.MouseUp(position, MouseButton.Left);
+            }
         }
 
         Settle();

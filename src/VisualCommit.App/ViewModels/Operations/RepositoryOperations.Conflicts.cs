@@ -10,6 +10,7 @@ using VisualCommit.Core.Conflicts;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -169,7 +170,7 @@ public sealed partial class RepositoryOperations : IConflictActions
                         _runningMergeTool = null;
                     }
                 },
-                new RunOptions { CanBeCancelled = true }));
+                new RunOptions { CanBeCancelled = true, Undo = UndoScope.None }));
         }
         finally
         {
@@ -391,7 +392,10 @@ public sealed partial class RepositoryOperations : IConflictActions
                 text,
                 OperationKind.Local,
                 RefreshScope.Status,
-                async context => await resolve(NetworkOptions.From(context)) ?? OperationReport.Done(OperationTexts.Resolved(file))),
+                async context => await resolve(NetworkOptions.From(context)) ?? OperationReport.Done(OperationTexts.Resolved(file)),
+
+                // A resolution happens inside a stopped operation, while undo is off (docs/phase-5-design.md 7.2).
+                new RunOptions { Undo = UndoScope.None }),
             fallback: null);
         return result?.Outcome == OperationOutcome.Succeeded;
     }

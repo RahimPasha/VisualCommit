@@ -104,6 +104,20 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
     }
 
     /// <summary>
+    /// Notes that the current test waits from now, until the result is disposed, for a program
+    /// outside the app to start that starts slowly when the default run's projects run side by
+    /// side (<paramref name="what"/>: git's merge tool, a shell script of over a hundred process
+    /// starts, which took 32 to 64 s there and about 3 s alone; D185). The wait does not count
+    /// against the test, as a shared preparation does not, and it is held to the limit on its
+    /// own; the test's own wait has a shorter limit of its own (<c>Scenarios.MergeToolTimeout</c>).
+    /// </summary>
+    public static IDisposable WaitingForSlowProgram(string what)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        return Clock.Preparing(TestContext.Current.Test?.UniqueID, what);
+    }
+
+    /// <summary>
     /// The time the current test has run so far, less its waits for shared preparations: what
     /// the watchdog holds to the limit. Null outside a test, or in an assembly without the watchdog.
     /// </summary>

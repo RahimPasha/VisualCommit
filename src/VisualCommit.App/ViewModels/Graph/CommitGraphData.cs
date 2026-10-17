@@ -40,17 +40,25 @@ public sealed class CommitGraphData
     private readonly Dictionary<string, int> _indexBySha = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<RefLabel>> _labelsBySha;
 
-    public CommitGraphData(RepoRefs refs)
+    /// <param name="refs">The refs the graph was loaded with: the labels and the HEAD walks come from them.</param>
+    /// <param name="filter">
+    /// What the graph was loaded hiding or soloing (docs/phase-5-design.md 8.2), whose refs get no
+    /// label; null when nothing is hidden or soloed.
+    /// </param>
+    public CommitGraphData(RepoRefs refs, GraphFilter? filter = null)
     {
         ArgumentNullException.ThrowIfNull(refs);
         Refs = refs;
-        _labelsBySha = BuildLabels(refs);
+        _labelsBySha = BuildLabels(refs, filter);
     }
 
     /// <summary>An empty graph: no refs, no commits, complete.</summary>
     public static CommitGraphData Empty { get; } = CreateEmpty();
 
-    /// <summary>The refs the labels come from.</summary>
+    /// <summary>
+    /// The refs the labels come from, all of them, also those a filter hides: the details panel
+    /// and the HEAD walks use them.
+    /// </summary>
     public RepoRefs Refs { get; }
 
     /// <summary>The number of rows loaded so far.</summary>
@@ -271,9 +279,20 @@ public sealed class CommitGraphData
         return empty;
     }
 
-    private static Dictionary<string, List<RefLabel>> BuildLabels(RepoRefs refs)
+    /// <summary>
+    /// The labels of every row, by commit: HEAD's when detached, each ref's, each stash's. Under a
+    /// filter (docs/phase-5-design.md 8.2) a hidden branch has none, and in solo mode only the
+    /// soloed branches have theirs; the checked-out branch always keeps its label, and tags keep
+    /// theirs on the rows shown.
+    /// </summary>
+    private static Dictionary<string, List<RefLabel>> BuildLabels(RepoRefs refs, GraphFilter? filter)
     {
         var labels = new Dictionary<string, List<RefLabel>>(StringComparer.Ordinal);
+        // The refs the filter names: those it solos in solo mode, else those it hides.
+        var solo = filter is { IsSolo: true };
+        var named = filter is null ? null : new HashSet<string>(solo ? filter.Soloed : filter.Hidden, StringComparer.Ordinal);
+        bool HasLabel(GitRef gitRef) =>
+            named is null || gitRef.Kind == RefKind.Tag || gitRef.IsHead || named.Contains(gitRef.FullName) == solo;
 
         void Add(string sha, RefLabel label)
         {
@@ -293,6 +312,11 @@ public sealed class CommitGraphData
 
         foreach (var gitRef in refs.Refs)
         {
+            if (!HasLabel(gitRef))
+            {
+                continue;
+            }
+
             var kind = gitRef.Kind switch
             {
                 RefKind.LocalBranch when gitRef.IsHead => RefLabelKind.CurrentBranch,

@@ -24,11 +24,13 @@ public sealed partial class GitRepository
     private const string BackupTimeFormat = "yyyyMMdd'T'HHmmssfff'Z'";
 
     /// <summary>
-    /// The clock of the backup refs' timestamps, the discard snapshots' included, and the clean-up's
-    /// "now". Tests set a fixed one to make two batches collide (2.0's retry naming) and to age
-    /// backups (section 9).
+    /// The clock of the backup refs' timestamps, the discard snapshots' included
+    /// (<see cref="Core.Git.BackupClock.NextName"/>), and the clean-up's "now"
+    /// (<see cref="Core.Git.BackupClock.Now"/>). The system clock unless the app gives every
+    /// repository it opens its own (docs/phase-5-design.md 2.3: the harnesses' fixed clock); tests
+    /// set a fixed one to make two batches collide (2.0's retry naming) and to age backups (section 9).
     /// </summary>
-    internal TimeProvider BackupClock { get; set; } = TimeProvider.System;
+    public BackupClock BackupClock { get; set; } = BackupClock.System;
 
     /// <summary>
     /// Called by the clean-up between its read of the backup refs and its deletion, for tests that
@@ -44,7 +46,7 @@ public sealed partial class GitRepository
         // One timestamp for the whole operation; a retry puts its suffix on the kind-and-time
         // part, never on the whole ref, so a "-changes" ref keeps its pair's name and a name with
         // slashes cannot clash with a folder of the same name (2.0).
-        var time = BackupClock.GetUtcNow().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
+        var time = BackupClock.NextName().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
         var names = BackupNames(request.Entries);
         for (var attempt = 1; ; attempt++)
         {
@@ -65,7 +67,7 @@ public sealed partial class GitRepository
                 input.Append("create ").Append(name).Append(' ').Append(target).Append('\n');
             }
 
-            var command = new GitCommand("update-ref", "--stdin") { WorkingDirectory = WorkingDirectory, StandardInput = input.ToString() };
+            var command = new GitCommand("update-ref", "--stdin") { WorkingDirectory = WorkingDirectory, StandardInput = input.ToString(), RecordsStandardInput = true };
             var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
             if (result.Succeeded)
             {
@@ -195,7 +197,10 @@ public sealed partial class GitRepository
         }
     }
 
-    public async Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default)
+    public async Task<string?> SnapshotForHardResetAsync(string target, CancellationToken cancellationToken = default) =>
+        (await SnapshotForHardResetWithFilesAsync(target, cancellationToken).ConfigureAwait(false))?.Commit;
+
+    public async Task<HardResetSnapshot?> SnapshotForHardResetWithFilesAsync(string target, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         var status = await ReadPlainStatusAsync(cancellationToken).ConfigureAwait(false);
@@ -235,12 +240,13 @@ public sealed partial class GitRepository
         }
 
         var shortTarget = target.Length > 7 ? target[..7] : target;
-        return await CommitSnapshotAsync(
+        var (commit, present) = await CommitSnapshotAsync(
             paths,
             head,
             indexCommit,
             $"VisualCommit: snapshot before a hard reset to {shortTarget}",
             cancellationToken).ConfigureAwait(false);
+        return new HardResetSnapshot(commit) { Index = indexCommit, Paths = [.. paths], Present = present };
     }
 
     /// <summary>
@@ -385,7 +391,7 @@ public sealed partial class GitRepository
         }
 
         var head = await ResolveAsync("HEAD", cancellationToken).ConfigureAwait(false);
-        return await CommitSnapshotAsync(paths, head, null, "VisualCommit: snapshot before an abort", cancellationToken).ConfigureAwait(false);
+        return (await CommitSnapshotAsync(paths, head, null, "VisualCommit: snapshot before an abort", cancellationToken).ConfigureAwait(false)).Commit;
     }
 
     private static string[] SplitNul(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
@@ -451,9 +457,10 @@ public sealed partial class GitRepository
     /// A snapshot commit made D67's way, without a ref: an index of its own, read from HEAD, with
     /// <paramref name="paths"/> added as they are in the working tree (a path gone from it as
     /// deleted). Its parents are HEAD and <paramref name="secondParent"/>. The paths go to git on
-    /// standard input, so any number of them fits.
+    /// standard input, so any number of them fits. Returns the commit and the paths it holds a
+    /// file for, as D62's snapshot tells them (a file or a link in the working tree).
     /// </summary>
-    private async Task<string> CommitSnapshotAsync(
+    private async Task<(string Commit, IReadOnlySet<string> Present)> CommitSnapshotAsync(
         IReadOnlyCollection<string> paths,
         string? head,
         string? secondParent,
@@ -496,7 +503,7 @@ public sealed partial class GitRepository
             var message = $"{subject}\n\n{string.Join('\n', paths)}\n";
             var commit = (await RunAsync(SnapshotIdentity, message, cancellationToken, [.. arguments]).ConfigureAwait(false)).Trim();
             _log.Info($"Made a snapshot of {Count(paths.Count, "file")} ({commit[..Math.Min(7, commit.Length)]}): {subject}.");
-            return commit;
+            return (commit, present.ToHashSet(StringComparer.Ordinal));
         }
         finally
         {
@@ -544,6 +551,7 @@ public sealed partial class GitRepository
             WorkingDirectory = WorkingDirectory,
             Environment = (options ?? NetworkOptions.None).Environment,
             StandardInput = input.ToString(),
+            RecordsStandardInput = true,
         };
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded)
@@ -555,11 +563,9 @@ public sealed partial class GitRepository
         var removedBackups = new List<RemovedBackup>(removed.Count);
         foreach (var (backup, reason) in removed)
         {
-            var why = reason == BackupRemovalReason.OlderThanDays
-                ? $"older than {Count(retention.Days, "day")}"
-                : $"more than {Count(retention.Count, "backup")}";
-            _log.Info($"{Name}: Removed backup {backup.Name} ({why})");
-            removedBackups.Add(new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason));
+            var removedBackup = new RemovedBackup(backup.Name, [.. backup.Refs.Select(entry => entry.Ref)], reason);
+            _log.Info($"{Name}: {removedBackup.Describe(retention)}");
+            removedBackups.Add(removedBackup);
         }
 
         return removedBackups;
@@ -598,7 +604,7 @@ public sealed partial class GitRepository
         }
 
         var output = await ReadOutputAsync(cancellationToken, "for-each-ref", "--format=%(refname) %(objectname)", BackupRefPrefix).ConfigureAwait(false);
-        var now = BackupClock.GetUtcNow();
+        var now = BackupClock.Now;
         var backups = new Dictionary<string, Backup>(StringComparer.Ordinal);
         foreach (var line in SplitLines(output))
         {

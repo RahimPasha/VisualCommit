@@ -299,7 +299,8 @@ public class BranchDragTests
         app.ReleaseMouse(LabelPoint(app, MainWork, "main"));
 
         Assert.Equal(2, repository.Selection.Count);
-        Assert.Equal("2 commits selected", ((ViewModels.Shell.MultiSelectionViewModel)repository.MultiSelection!).Title);
+        // Two selected commits compare at once (docs/phase-5-design.md 6.1, D162); the comparison stays.
+        Assert.Equal("From dff8fbf Alpha one", Assert.IsType<ViewModels.Shell.CompareViewModel>(repository.MultiSelection).FromText);
     }
 
     /// <summary>The centre of a row's label named <paramref name="text"/>, in the window.</summary>

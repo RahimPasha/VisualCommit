@@ -261,12 +261,13 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertTip(stash, FinishMergeFirst);
         app.MoveToNeutral();
 
-        // Step 7: a checkout git refuses.
+        // Step 7: a checkout refused before git (phase 5's C12, design 9.3): no git switch runs.
+        var callsBefore = app.GitCalls().Count;
         await RunOperationAsync(app, "Check out feature/alpha", () => app.DoubleClick(LabelPoint(app, 4, "feature/alpha")));
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
         Shot(app, "09e-checkout-refused");
-        await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
-            CheckoutFailedTitle, CheckoutFailedSummary, Ops, CheckoutCommand, ["Copy output", "Close"], CheckoutWhileMergingLines, KeyLine: CheckoutWhileMergingLines[0]));
+        await AssertErrorDialogAsync(app, new ExpectedErrorDialog(CheckoutBlockedTitle, FinishMergeFirst, Ops, null, ["Close"], []));
+        Assert.DoesNotContain(app.GitCalls().Skip(callsBefore), call => call.CommandText == CheckoutCommand);
         AssertStatus(app, StatusCheckoutAlphaFailed, OperationStatusTone.Danger);
         AssertNoClippedText(app);
         Assert.NotNull(GitDirFile(repo, "MERGE_HEAD"));
@@ -610,7 +611,9 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         // Step 5: a click and a Ctrl+click.
         app.Click(app.GraphRowPoint(5));
         app.Click(app.GraphRowPoint(4), command);
-        await app.WaitForAsync(() => Shown(app, "MultiSelectionView") is not null, "the multi-selection view");
+        // Two selected commits compare at once (docs/phase-5-design.md 6.1, D162); the picture shows
+        // their changed files once the comparison is read.
+        await app.WaitForComparisonShownAsync();
         var two = Shot(app, "11d-two-selected");
         AssertSelected(app, two, 4, 5);
         AssertMultiSelection(app, "ce5ea6a Alpha two", "dff8fbf Alpha one");
@@ -653,6 +656,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
 
         // Step 10: a right-click on a selected row keeps the selection. Every item is enabled but
         // phase 4's squash (no longer "all enabled": neither commit is on main).
+        await app.WaitForComparisonShownAsync();
         OpenMenu(app, app.GraphRowPoint(5), TwoCommitsMenu, "Cherry-pick 2 commits onto main");
         var menu = Shot(app, "11g-multi-menu");
         Assert.All(app.Menu().Items.Where(item => item.Label != "Squash 2 commits…"), item => Assert.True(item.IsEnabled, $"\"{item.Label}\" is disabled."));
@@ -661,6 +665,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         // Step 11: the pick of two, oldest first.
         await RunOperationAsync(app, "Cherry-pick 2 commits", () => app.ClickMenuItem("Cherry-pick 2 commits onto main"));
         await WaitForGraphAsync(app, 10, "c0f718d");
+        await app.WaitForComparisonShownAsync();
         var picked = Shot(app, "11h-two-picked");
         AssertGraph(app, G8, picked);
         AssertSelected(app, picked, 6, 7);
@@ -682,6 +687,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         AssertSelected(app, null, 2);
         await WaitForDetailsAsync(app, "On main: Experiment");
         Assert.Null(Shown(app, "MultiSelectionView"));
+        Assert.Null(Shown(app, "Compare"));
     }
 
     /// <summary>
@@ -832,6 +838,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         // Step 4: the merge and "Main work" together.
         app.Click(app.GraphRowPoint(0));
         app.Click(app.GraphRowPoint(4), command);
+        await app.WaitForComparisonShownAsync();
         OpenMenu(app, app.GraphRowPoint(4), MergeAndOtherMenu, "Copy SHAs");
         var both = Shot(app, "12b-merge-and-other-menu");
         AssertSelected(app, both, 0, 4);
@@ -1250,7 +1257,7 @@ public sealed partial class Phase3ChecksB : Phase3Checks
     /// <summary>
     /// The label feature/conflict's menu with HEAD on main, nothing in progress, with phase 4's
     /// rebase items: phase 4's report gives this list for check 27 step 3 ("check 13 step 6's list
-    /// with main for hotfix"; 380 high).
+    /// with main for hotfix"; 380 high, 493 with phase 5's compare, reflog, hide and solo items).
     /// </summary>
     private static readonly string[] FeatureConflictMenu =
     [
@@ -1270,6 +1277,11 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         "—",
         "Set upstream…",
         "—",
+        "Compare feature/conflict with main",
+        "Show reflog of feature/conflict",
+        "Hide feature/conflict",
+        "Solo feature/conflict",
+        "—",
         "Copy branch name",
     ];
 
@@ -1286,7 +1298,8 @@ public sealed partial class Phase3ChecksB : Phase3Checks
     /// The local branch feature/alpha's menu with HEAD on <paramref name="current"/>, nothing in
     /// progress (check 2 step 1's), with phase 4's rebase items: "Rebase {cur} onto feature/alpha"
     /// disabled with <c>{cur} is up to date with feature/alpha</c> when HEAD already reaches it
-    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha).
+    /// (<paramref name="upToDate"/>: check 8 step 9, after the merge of origin/feature/alpha); and
+    /// phase 5's compare, reflog, hide and solo items (docs/phase-5-design.md 5.1, 13.1, 14.1).
     /// </summary>
     private static string[] AlphaMenu(string current, bool upToDate = false) =>
     [
@@ -1308,6 +1321,11 @@ public sealed partial class Phase3ChecksB : Phase3Checks
         "—",
         "Change upstream…",
         "Stop tracking origin/feature/alpha",
+        "—",
+        $"Compare feature/alpha with {current}",
+        "Show reflog of feature/alpha",
+        "Hide feature/alpha",
+        "Solo feature/alpha",
         "—",
         "Copy branch name",
     ];

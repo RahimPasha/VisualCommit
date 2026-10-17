@@ -3,6 +3,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -48,6 +49,13 @@ public sealed record RunOptions
     /// the operation has ended, so an operation can also hand over a display it chose while it ran.
     /// </summary>
     public Func<GitFailure, FailureDisplay?>? DescribeFailure { get; init; }
+
+    /// <summary>
+    /// What the undo history records of the operation (docs/phase-5-design.md 7.2, 7.7): its kind,
+    /// its entry's text and what it may change, read inside the operation before and after its
+    /// work; <see cref="UndoScope.None"/> (the default) for an operation that is not recorded.
+    /// </summary>
+    public UndoScope Undo { get; init; } = UndoScope.None;
 }
 
 /// <summary>
@@ -66,7 +74,8 @@ public sealed record RunOptions
 ///     var confirmation = OperationTexts.ConfirmDeleteBranch(branch, …);
 ///     await ConfirmAndRunAsync(confirmation, text, OperationKind.Local, RefreshScope.Refs,
 ///         _ =&gt; Task.FromResult&lt;BackupRequest?&gt;(new BackupRequest("branch", [new BackupEntry(branch, branchRef)])),
-///         async (context, _) =&gt; { await Git.DeleteBranchAsync(branch); return OperationReport.Done(OperationTexts.DeletedBranch(branch)); });
+///         async (context, _) =&gt; { await Git.DeleteBranchAsync(branch); return OperationReport.Done(OperationTexts.DeletedBranch(branch)); },
+///         new RunOptions { Undo = UndoScope.DeleteBranch(branch) });
 /// });
 /// </code>
 /// </para>
@@ -82,6 +91,14 @@ public sealed partial class RepositoryOperations
 
     /// <summary>Set while an operation of <see cref="RunAsync"/> runs: <see cref="SaveBackupAsync"/> marks it, and the operation then ends with the backups' clean-up (D139).</summary>
     private readonly AsyncLocal<StrongBox<bool>?> _backupSaved = new();
+
+    /// <summary>
+    /// Set while a recorded operation of <see cref="RunAsync"/> runs: HEAD as the undo history's
+    /// recording read it just before the operation's work (docs/phase-5-design.md 7.7), which the
+    /// operation's own checks of HEAD share (<see cref="ReadHeadAtStartAsync"/>). Null when the
+    /// operation is not recorded or completes a pending entry.
+    /// </summary>
+    private readonly AsyncLocal<HeadState?> _headAtStart = new();
 
     // The repository's state.
 
@@ -290,15 +307,28 @@ public sealed partial class RepositoryOperations
             // section 9, D139): a rebase git refused still leaves its backup.
             var saved = new StrongBox<bool>();
             _backupSaved.Value = saved;
-            try
+
+            // The undo history (docs/phase-5-design.md 7.7): what the operation's scope names is
+            // read before its work and after it, inside the operation, also when the work failed
+            // half-way; what the reads cannot see is captured while it runs. The entry is added
+            // before the clean-up, which then keeps the backups it needs.
+            var recording = await BeginRecordingAsync(options.Undo, context, text.Title);
+            _headAtStart.Value = recording?.Before?.Head;
+            OperationReport? report = null;
+            using (UndoCapture.Begin(out var capture))
             {
-                return await run(context);
-            }
-            finally
-            {
-                if (saved.Value)
+                try
                 {
-                    await CleanUpBackupsAsync();
+                    report = await run(context);
+                    return report;
+                }
+                finally
+                {
+                    await EndRecordingAsync(recording, capture.Captured, report, text.Title);
+                    if (saved.Value)
+                    {
+                        await CleanUpBackupsAsync();
+                    }
                 }
             }
         })
@@ -371,12 +401,85 @@ public sealed partial class RepositoryOperations
 
         var saved = await Git.SaveBackupRefsAsync(request, CancellationToken.None);
         Log.Info($"{Repository.Name}: saved the backup {string.Join(", ", saved.Refs)}");
+        MarkBackupSaved();
+
+        // The undo entry needs it: the clean-up keeps it while the entry exists (7.8, D171).
+        UndoCapture.Backups(saved.Refs);
+        return saved;
+    }
+
+    /// <summary>
+    /// The running operation saved a backup (a snapshot too): it ends with the backups' clean-up,
+    /// after its undo entry is recorded, which keeps the backups the entry needs (D139, 7.8).
+    /// </summary>
+    private void MarkBackupSaved()
+    {
         if (_backupSaved.Value is { } flag)
         {
             flag.Value = true;
         }
+    }
 
-        return saved;
+    // The undo history's recording (docs/phase-5-design.md 7.7, D167), around the work of every
+    // operation of RunAsync and of the stage panel's writes (RepositoryViewModel.WriteAsync).
+    // Work package WP3 implements the two hooks in RepositoryOperations.Undo.cs.
+
+    /// <summary>
+    /// Hook (7.7 steps 1 and 2): inside the operation, before its work, reads what
+    /// <paramref name="scope"/> names (HEAD always) and returns what
+    /// <see cref="EndUndoRecordingAsync"/> needs, or null when nothing is recorded
+    /// (<see cref="UndoScope.None"/>, and no pending entry to complete or remove).
+    /// </summary>
+    internal partial Task<UndoRecording?> BeginUndoRecordingAsync(UndoScope scope, OperationContext context);
+
+    /// <summary>
+    /// Hook (7.7 steps 4 and 5): after the work, still inside the operation, reads the same again
+    /// and, when anything changed, adds the entry with <paramref name="captured"/> (Done, or Pending
+    /// while the action stopped) and drops what lay after the cursor; or completes or removes the
+    /// pending entry. <paramref name="report"/> is null when the work threw: what changed is still
+    /// recorded (7.2). Runs on the operation's context, the UI's.
+    /// </summary>
+    internal partial Task EndUndoRecordingAsync(UndoRecording? recording, UndoCaptured captured, OperationReport? report);
+
+    /// <summary>
+    /// <see cref="BeginUndoRecordingAsync"/>, which never fails the operation: a failure is logged
+    /// and nothing is recorded. The stage panel's writes call it too.
+    /// </summary>
+    internal async Task<UndoRecording?> BeginRecordingAsync(UndoScope scope, OperationContext context, string title)
+    {
+        try
+        {
+            return await BeginUndoRecordingAsync(scope, context);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"{Repository.Name}: {title}: the undo history could not read the state before it; it is not recorded.", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// HEAD at the start of the running operation's work: the undo history's read of it when the
+    /// operation is recorded (docs/phase-5-design.md 7.7: "Operations that already read HEAD for
+    /// D124 share that read"), otherwise read now. Only for the checks an operation makes before
+    /// it writes anything that can move HEAD (a backup ref moves nothing): D124's "HEAD moved
+    /// while this waited", 2.1's detached commits, and the commit a reset or a rebase starts from.
+    /// A check made after such a write, or after a wait such as a pull's fetch, reads HEAD itself.
+    /// </summary>
+    private Task<HeadState> ReadHeadAtStartAsync() =>
+        _headAtStart.Value is { } head ? Task.FromResult(head) : Git.ReadHeadAsync();
+
+    /// <summary><see cref="EndUndoRecordingAsync"/>, which never fails the operation: a failure is logged.</summary>
+    internal async Task EndRecordingAsync(UndoRecording? recording, UndoCaptured captured, OperationReport? report, string title)
+    {
+        try
+        {
+            await EndUndoRecordingAsync(recording, captured, report);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"{Repository.Name}: {title}: the undo history could not record it.", ex);
+        }
     }
 
     /// <summary>
@@ -384,17 +487,29 @@ public sealed partial class RepositoryOperations
     /// section 9, D139): the backups older than 30 days, then the oldest beyond 50, never the
     /// restore bar's snapshot (<see cref="RepositoryViewModel.BackupsToKeep"/>). It never fails the
     /// operation and shows nothing: the git layer logs each backup it removed, or why it waits;
-    /// a failure is logged at Warning.
+    /// a failure is logged at Warning. Each removal is also a note of the operation it runs in, for
+    /// the activity log (docs/phase-5-design.md 2.3). Returns what it removed, empty after a failure.
     /// </summary>
-    public async Task CleanUpBackupsAsync()
+    public async Task<IReadOnlyList<RemovedBackup>> CleanUpBackupsAsync()
     {
         try
         {
-            await Git.CleanUpBackupsAsync(BackupRetention.Default, Repository.BackupsToKeep, options: null, cancellationToken: CancellationToken.None);
+            var retention = BackupRetention.Default;
+            var removed = await Git.CleanUpBackupsAsync(retention, Repository.BackupsToKeep, options: null, cancellationToken: CancellationToken.None);
+            if (GitOperationScope.Current is { } operationId && Services?.Operations is { } operations)
+            {
+                foreach (var backup in removed)
+                {
+                    operations.Note(operationId, backup.Describe(retention));
+                }
+            }
+
+            return removed;
         }
         catch (Exception ex)
         {
             Log.Warning($"{Repository.Name}: the backups' clean-up failed; the backups stay.", ex);
+            return [];
         }
     }
 
@@ -405,13 +520,22 @@ public sealed partial class RepositoryOperations
     /// in the "&lt;Title&gt; cancelled" dialog (1.8). A success, a conflict (the banner shows it)
     /// and a plain cancel show nothing here. After the tab closed, a failure is only logged.
     /// <paramref name="operationId"/> names the operation, whose last git call the lock-file dialog
-    /// shows as its command (4f: "the cancelled git call").
+    /// shows as its command (4f: "the cancelled git call"), and whose record in the operation log
+    /// gets the failure's summary as the dialog gives it, also when no dialog opens
+    /// (docs/phase-5-design.md 2.3).
     /// </summary>
     public async Task ShowResultAsync(OperationText text, OperationResult result, RunOptions? options = null, string? operationId = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(result);
         options ??= RunOptions.Default;
+        var failure = result.Outcome == OperationOutcome.Failed ? result.Failure : null;
+        var display = failure is null ? null : options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
+        if (display is not null && operationId is not null)
+        {
+            Services?.Operations.SetFailureSummary(operationId, display.Summary);
+        }
+
         if (IsClosed)
         {
             if (result.Outcome == OperationOutcome.Failed)
@@ -422,9 +546,9 @@ public sealed partial class RepositoryOperations
             return;
         }
 
-        if (result is { Outcome: OperationOutcome.Failed, Failure: { } failure } && options.ShowsErrorDialog)
+        if (failure is not null && display is not null && options.ShowsErrorDialog)
         {
-            await ShowFailureAsync(options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure), failure);
+            await ShowFailureAsync(display, failure);
         }
         else if (result is { Outcome: OperationOutcome.Cancelled, StaleLockFiles.Count: > 0 })
         {
@@ -618,43 +742,14 @@ public sealed partial class RepositoryOperations
         return OperationReport.Failed($"{text.Title} failed", failure);
     }
 
-    // The error dialog's extra buttons (D95).
-
-    /// <summary>"Stash changes and check out" (2.31): only for a checkout blocked by tracked changes.</summary>
-    public ErrorAction StashAndCheckoutAction(string target) =>
-        new(OperationTexts.StashAndCheckOutButton, () => StashAndCheckoutAsync(target));
+    // The error dialog's extra buttons (D95); the checkouts' are with their dialog in
+    // RepositoryOperations.Branches.cs.
 
     /// <summary>"Pull" (2.19): after a rejected push of the current branch to its upstream.</summary>
     public ErrorAction PullAction() => new(OperationTexts.PullButton, PullAsync);
 
     /// <summary>"Fetch &lt;r&gt;" (2.19): after a rejected push of another branch.</summary>
     public ErrorAction FetchAction(string remote) => new(OperationTexts.FetchButton(remote), () => FetchAsync(remote));
-
-    /// <summary>
-    /// The dialog of a checkout's failure (2.1 to 2.3): "Checkout blocked" for tracked changes, with
-    /// "Stash changes and check out" when <paramref name="offerStash"/> (not after 4g's drop), or
-    /// for untracked files in the way, without it; null for any other failure (2.33's default).
-    /// </summary>
-    /// <param name="failure">The failure.</param>
-    /// <param name="target">What is checked out, as <see cref="CheckoutAsync"/> names it.</param>
-    /// <param name="offerStash">Offer "Stash changes and check out".</param>
-    public FailureDisplay? CheckoutFailureDisplay(GitFailure failure, string target, bool offerStash)
-    {
-        ArgumentNullException.ThrowIfNull(failure);
-        ArgumentNullException.ThrowIfNull(target);
-        var name = ShortName(target);
-        return failure.Kind switch
-        {
-            GitFailureKind.CheckoutBlockedByLocalChanges => new FailureDisplay(
-                OperationTexts.CheckoutBlockedTitle,
-                OperationTexts.CheckoutBlockedByChanges(name),
-                offerStash ? StashAndCheckoutAction(target) : null),
-            GitFailureKind.CheckoutBlockedByUntrackedFiles => new FailureDisplay(
-                OperationTexts.CheckoutBlockedTitle,
-                OperationTexts.CheckoutBlockedByUntrackedFiles(name)),
-            _ => null,
-        };
-    }
 
     /// <summary>
     /// The dialog of a push's failure (2.19): "Push rejected" with "Pull" when the current branch

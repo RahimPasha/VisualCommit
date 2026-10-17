@@ -20,6 +20,10 @@ namespace VisualCommit.App.Views.Diff;
 /// </summary>
 public partial class DiffView : UserControl
 {
+    /// <summary>Defines <see cref="TakesFocusOnOpen"/>.</summary>
+    public static readonly StyledProperty<bool> TakesFocusOnOpenProperty =
+        AvaloniaProperty.Register<DiffView, bool>(nameof(TakesFocusOnOpen), defaultValue: true);
+
     private DiffViewModel? _viewModel;
 
     public DiffView()
@@ -38,6 +42,18 @@ public partial class DiffView : UserControl
         // Menu key or Shift+F10. A right-press leaves the text's selection as it is (the panes
         // select with the left button only).
         AddHandler(ContextRequestedEvent, OnContextRequested);
+    }
+
+    /// <summary>
+    /// Whether a diff that opens, or whose text arrives, takes the keyboard focus (true, the main
+    /// diff's way: Ctrl+End and the like work at once). False for the diff a file history page
+    /// hosts (docs/phase-5-design.md 4.1), so that the focus stays in the page's list and Up and
+    /// Down walk it.
+    /// </summary>
+    public bool TakesFocusOnOpen
+    {
+        get => GetValue(TakesFocusOnOpenProperty);
+        set => SetValue(TakesFocusOnOpenProperty, value);
     }
 
     /// <summary>
@@ -113,7 +129,10 @@ public partial class DiffView : UserControl
             _viewModel.SelectionResetRequested += OnSelectionResetRequested;
 
             // A diff that opens takes the keyboard focus, so that Ctrl+End and the like work at once.
-            Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
+            if (TakesFocusOnOpen)
+            {
+                Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
+            }
         }
 
         ShowImages();
@@ -124,7 +143,7 @@ public partial class DiffView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DiffViewModel.Body) && _viewModel?.ShowsText == true)
+        if (e.PropertyName == nameof(DiffViewModel.Body) && _viewModel?.ShowsText == true && TakesFocusOnOpen)
         {
             Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
         }

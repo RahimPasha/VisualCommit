@@ -32,15 +32,20 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     private readonly string? _workingDirectory;
     private readonly Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? _allIgnored;
     private readonly IAppLog _log;
-    private readonly long _quietMilliseconds;
-    private readonly long _maximumDelayMilliseconds;
-    private readonly Timer _timer;
+    private readonly TimeProvider _time;
+    private readonly TimeSpan _quietPeriod;
+    private readonly TimeSpan _maximumDelay;
+    private readonly ITimer _timer;
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly HashSet<string> _changedPaths = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _lifetime = new();
     private bool _started;
     private volatile bool _disposed;
+
+    /// <summary>The time (a <see cref="TimeProvider.GetTimestamp"/>) of the burst's latest change.</summary>
     private long _lastChange;
+
+    /// <summary>The time of the burst's first change; null while no burst is waiting.</summary>
     private long? _firstChange;
     private bool _gitFolderChanged;
     private bool _workingTreeChanged;
@@ -57,6 +62,11 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     /// Whether git ignores every one of these paths (relative to the working tree, with forward
     /// slashes). A burst of working-tree changes for which it says yes is dropped. Null: none is.
     /// </param>
+    /// <param name="time">
+    /// The clock the quiet period and the maximum delay are measured on, and whose timer raises
+    /// <see cref="Changed"/>. Null: the system's, whose timer raises it on the thread pool. A test
+    /// passes a clock it moves by hand, so that a slow machine cannot split a burst.
+    /// </param>
     public RepositoryWatcher(
         string gitDirectory,
         string commonDirectory,
@@ -64,7 +74,8 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         TimeSpan? quietPeriod = null,
         TimeSpan? maximumDelay = null,
         string? workingDirectory = null,
-        Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? allIgnored = null)
+        Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? allIgnored = null,
+        TimeProvider? time = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gitDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(commonDirectory);
@@ -72,12 +83,26 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         _workingDirectory = workingDirectory is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(workingDirectory));
         _allIgnored = allIgnored;
         _log = log ?? NullAppLog.Instance;
-        _quietMilliseconds = Math.Max(1, (long)(quietPeriod ?? DefaultQuietPeriod).TotalMilliseconds);
-        _maximumDelayMilliseconds = Math.Max(_quietMilliseconds, (long)(maximumDelay ?? DefaultMaximumDelay).TotalMilliseconds);
-        _timer = new Timer(OnTimer, null, Timeout.Infinite, Timeout.Infinite);
+        _time = time ?? TimeProvider.System;
+
+        // Whole milliseconds, at least one, as the timer counts them.
+        var quietMilliseconds = Math.Max(1, (long)(quietPeriod ?? DefaultQuietPeriod).TotalMilliseconds);
+        _quietPeriod = TimeSpan.FromMilliseconds(quietMilliseconds);
+        _maximumDelay = TimeSpan.FromMilliseconds(Math.Max(quietMilliseconds, (long)(maximumDelay ?? DefaultMaximumDelay).TotalMilliseconds));
+        _timer = _time.CreateTimer(OnTimer, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     public event EventHandler<RepositoryChangedEventArgs>? Changed;
+
+    /// <summary>
+    /// For tests: called with the name of each event (relative to the folder that reported it;
+    /// null when the system did not say, or events were lost) once the event has been counted in
+    /// the burst that waits, outside the watcher's locks, on the thread that reported it. An event
+    /// the watcher leaves out, or that comes while it is paused or after it is disposed, is not
+    /// passed on. A test that holds the clock waits for this to know that every event of a burst
+    /// has arrived before it moves the clock.
+    /// </summary>
+    internal Action<string?>? EventCounted { get; set; }
 
     /// <summary>The git folders being watched: the git folder, and the common folder when it does not contain the git folder.</summary>
     public IReadOnlyList<string> Folders => _folders;
@@ -259,9 +284,9 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         }
 
         var relevant = IsRelevant(e.Name) || (e is RenamedEventArgs renamed && IsRelevant(renamed.OldName));
-        if (relevant)
+        if (relevant && Signal(gitFolder: true, null))
         {
-            Signal(gitFolder: true, null);
+            EventCounted?.Invoke(e.Name);
         }
     }
 
@@ -274,13 +299,19 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
         foreach (var name in e is RenamedEventArgs renamed ? new[] { e.Name, renamed.OldName } : [e.Name])
         {
+            var counted = false;
             if (string.IsNullOrEmpty(name))
             {
-                Signal(gitFolder: false, string.Empty);
+                counted = Signal(gitFolder: false, string.Empty);
             }
             else if (!IsInGitFolder(name))
             {
-                Signal(gitFolder: false, name.Replace('\\', '/'));
+                counted = Signal(gitFolder: false, name.Replace('\\', '/'));
+            }
+
+            if (counted)
+            {
+                EventCounted?.Invoke(name);
             }
         }
     }
@@ -289,18 +320,22 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     {
         // Mostly a buffer overflow: events were lost, so anything may have changed.
         _log.Debug($"The repository watcher lost events: {e.GetException().Message}");
-        Signal(gitFolder: true, string.Empty);
+        if (Signal(gitFolder: true, string.Empty))
+        {
+            EventCounted?.Invoke(null);
+        }
     }
 
     /// <param name="gitFolder">The change is in a git folder.</param>
     /// <param name="workingTreePath">The working-tree path that changed; empty when the system did not say; null for a git-folder change alone.</param>
-    private void Signal(bool gitFolder, string? workingTreePath)
+    /// <returns>Whether the change was counted: false while paused or once disposed.</returns>
+    private bool Signal(bool gitFolder, string? workingTreePath)
     {
         lock (_gate)
         {
             if (_disposed || _pauses > 0)
             {
-                return;
+                return false;
             }
 
             _gitFolderChanged |= gitFolder;
@@ -317,13 +352,15 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
                 }
             }
 
-            var now = Environment.TickCount64;
+            var now = _time.GetTimestamp();
             _lastChange = now;
             if (_firstChange is null)
             {
                 _firstChange = now;
-                _timer.Change(_quietMilliseconds, Timeout.Infinite);
+                _timer.Change(_quietPeriod, Timeout.InfiniteTimeSpan);
             }
+
+            return true;
         }
     }
 
@@ -349,13 +386,16 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
                 return;
             }
 
-            var now = Environment.TickCount64;
-            var quietFor = now - _lastChange;
-            var waitingFor = now - firstChange;
-            if (quietFor < _quietMilliseconds && waitingFor < _maximumDelayMilliseconds)
+            var now = _time.GetTimestamp();
+            var quietFor = _time.GetElapsedTime(_lastChange, now);
+            var waitingFor = _time.GetElapsedTime(firstChange, now);
+            if (quietFor < _quietPeriod && waitingFor < _maximumDelay)
             {
-                var wait = Math.Min(_quietMilliseconds - quietFor, _maximumDelayMilliseconds - waitingFor);
-                _timer.Change(Math.Max(1, wait), Timeout.Infinite);
+                var wait = TimeSpan.FromTicks(Math.Min((_quietPeriod - quietFor).Ticks, (_maximumDelay - waitingFor).Ticks));
+
+                // Rounded up to whole milliseconds, at least one: the timer counts whole
+                // milliseconds, and a wait it cut short would only wake this again too early.
+                _timer.Change(TimeSpan.FromMilliseconds(Math.Max(1, Math.Ceiling(wait.TotalMilliseconds))), Timeout.InfiniteTimeSpan);
                 return;
             }
 

@@ -47,6 +47,34 @@ public class BranchOperationTests
         Assert.Equal(0, await repository.CountDetachedCommitsAsync(TestCancelled));
     }
 
+    /// <summary>
+    /// Phase 5's check for a reflog row's or a backup's commit (docs/phase-5-design.md 5.2):
+    /// <c>git cat-file -e &lt;sha&gt;^{commit}</c>, true for a commit; false for an id no object has,
+    /// for one a gc pruned, and for an object that is not a commit.
+    /// </summary>
+    [Fact]
+    public async Task A_commit_exists_until_a_gc_prunes_it_and_another_object_is_no_commit()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var repository = await OpenAsync(repo);
+        var mainWork = await RevAsync(repo, "refs/heads/main");
+        Assert.True(await repository.CommitExistsAsync(mainWork, TestCancelled));
+        Assert.True(await repository.CommitExistsAsync(await RevAsync(repo, "refs/tags/v1.0"), TestCancelled));
+        Assert.False(await repository.CommitExistsAsync("0123456789abcdef0123456789abcdef01234567", TestCancelled));
+        Assert.False(await repository.CommitExistsAsync(await RevAsync(repo, "refs/heads/main^{tree}"), TestCancelled));
+
+        // A commit only HEAD's reflog keeps: there until the reflog expires and a gc prunes it.
+        repo.WriteFile("lost.txt", "lost\n");
+        await repo.GitAsync("add", "lost.txt");
+        await repo.GitAsync("commit", "-q", "-m", "Lost work");
+        var lost = await RevAsync(repo, "HEAD");
+        await repo.GitAsync("reset", "-q", "--hard", mainWork);
+        Assert.True(await repository.CommitExistsAsync(lost, TestCancelled));
+        await repo.GitAsync("reflog", "expire", "--expire-unreachable=now", "--all");
+        await repo.GitAsync("gc", "--prune=now", "--quiet");
+        Assert.False(await repository.CommitExistsAsync(lost, TestCancelled));
+    }
+
     [Fact]
     public async Task The_worktrees_are_read_with_the_branch_each_has_checked_out()
     {

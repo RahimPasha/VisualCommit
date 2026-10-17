@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 5's part U: the
+       undo and redo checks (docs/phase-5-design.md 15.3, 15.4, D181). A project of its own beside
+       VisualCommit.VisualTests.Phase5, which holds parts A, B, F and P: the undo checks alone are
+       about 100 operations, and a test assembly runs its headless tests one at a time on its one
+       UI thread, so a second assembly, a second test process, halves the walk-through's time
+       (D133, D151). It compiles that project's base class, support and common expectations, so
+       that both parts check with the same helpers, numbers and texts, and saves its pictures in
+       the same folder, artifacts/visual/phase-5/scripted/: VisualRun empties it once per run of
+       both projects, not once per process. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- Phase 5's base class, its support and its common expectations, from the walk-through of parts
+       A, B, F and P. The part files of that project are left out: each project holds its own parts. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase5\Phase5Checks.cs" Link="Phase5\Phase5Checks.cs" />
+    <Compile Include="..\VisualCommit.VisualTests.Phase5\Phase5Checks.Support.cs" Link="Phase5\Phase5Checks.Support.cs" />
+    <Compile Include="..\VisualCommit.VisualTests.Phase5\Phase5Expectations.Common.cs" Link="Phase5\Phase5Expectations.Common.cs" />
+  </ItemGroup>
+
+</Project>

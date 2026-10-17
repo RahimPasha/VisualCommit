@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
@@ -304,9 +305,10 @@ public sealed partial class GitRepository
     /// <summary>
     /// <c>git push --progress [--set-upstream] [--force-with-lease=&lt;remote ref&gt; --force-if-includes]
     /// &lt;remote&gt; refs/heads/&lt;branch&gt;:&lt;remote ref&gt;</c> (2.19, 2.20, D100). The lease names
-    /// no expected value, so that git also applies <c>--force-if-includes</c>.
+    /// no expected value, so that git also applies <c>--force-if-includes</c>. What it changed on
+    /// the remote is read from git's summary line (<see cref="ReadPushOutcomeAsync"/>).
     /// </summary>
-    public Task PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default)
+    public async Task<PushOutcome> PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(options);
@@ -328,7 +330,9 @@ public sealed partial class GitRepository
 
         arguments.Add(request.Remote);
         arguments.Add($"{HeadsPrefix}{request.Branch}:{request.RemoteRef}");
-        return RunRemoteCommandAsync([.. arguments], options, cancellationToken);
+        var command = RemoteCommand([.. arguments], options);
+        var result = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+        return await ReadPushOutcomeAsync(result.StandardError, HeadsPrefix + request.Branch, request.RemoteRef, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary><c>git branch --set-upstream-to=&lt;ref&gt; &lt;branch&gt;</c>: a remote branch, or a local branch for a local upstream (2.21).</summary>
@@ -448,13 +452,19 @@ public sealed partial class GitRepository
         return WriteAsync(cancellationToken, "remote", "remove", name);
     }
 
-    /// <summary><c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29).</summary>
-    public Task PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// <c>git push --progress &lt;remote&gt; refs/tags/&lt;t&gt;:refs/tags/&lt;t&gt;</c> (2.29). What it
+    /// changed on the remote is read from git's summary line, as <see cref="PushAsync"/>'s: a new
+    /// tag, or nothing when the remote has it already.
+    /// </summary>
+    public async Task<PushOutcome> PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
         ArgumentNullException.ThrowIfNull(options);
         RemoteArguments.RequireRemote(remote);
-        return RunRemoteCommandAsync(["push", "--progress", remote, $"{TagsPrefix}{tag}:{TagsPrefix}{tag}"], options, cancellationToken);
+        var command = RemoteCommand(["push", "--progress", remote, $"{TagsPrefix}{tag}:{TagsPrefix}{tag}"], options);
+        var result = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+        return await ReadPushOutcomeAsync(result.StandardError, TagsPrefix + tag, TagsPrefix + tag, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -727,6 +737,126 @@ public sealed partial class GitRepository
         var command = RemoteCommand(arguments, options);
         (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
     }
+
+    // ---- What a push changed on the remote (docs/phase-5-design.md 0.5, 7.7, D170) --------------
+
+    /// <summary>
+    /// What a push of the local ref <paramref name="source"/> to the remote ref
+    /// <paramref name="destination"/> changed, read from git's summary line for it
+    /// (<see cref="ReadPushSummary"/>), never from the remote-tracking ref, which can be stale
+    /// (0.5): <c>[new branch]</c> or <c>[new tag]</c> created it; <c>&lt;old&gt;..&lt;new&gt;</c> and
+    /// a forced update's <c>&lt;old&gt;...&lt;new&gt;</c> moved it. The line abbreviates the old
+    /// value as this repository's unique abbreviation, which <c>rev-parse --disambiguate</c> gives
+    /// back whole (the old value of a fast-forward is an ancestor of the new one, and a lease's is
+    /// the remote-tracking ref's, so it is here); the new value is the source's. No line for it
+    /// (<c>Everything up-to-date</c>) means nothing changed. An old value not found here leaves the
+    /// ref out: its undo would have no lease.
+    /// </summary>
+    private async Task<PushOutcome> ReadPushOutcomeAsync(string standardError, string source, string destination, CancellationToken cancellationToken)
+    {
+        var shown = PushDisplayName(destination);
+        var refs = new List<PushedRef>();
+        foreach (var line in ReadPushSummary(standardError))
+        {
+            if (!string.Equals(line.Destination, shown, StringComparison.Ordinal) || line.Flag is not ('*' or ' ' or '+'))
+            {
+                continue;
+            }
+
+            var pushed = await ResolveAsync(source, cancellationToken).ConfigureAwait(false);
+            if (line.NewAbbreviation is { } abbreviation && (pushed is null || !pushed.StartsWith(abbreviation, StringComparison.OrdinalIgnoreCase)))
+            {
+                pushed = await DisambiguateAsync(abbreviation, cancellationToken).ConfigureAwait(false);
+            }
+
+            string? old = null;
+            if (line.OldAbbreviation is { } oldAbbreviation && (old = await DisambiguateAsync(oldAbbreviation, cancellationToken).ConfigureAwait(false)) is null)
+            {
+                _log.Warning($"The push of {source} to {destination} moved it from {oldAbbreviation}, which this repository does not have: it is not recorded.");
+                continue;
+            }
+
+            if (pushed is not null)
+            {
+                refs.Add(new PushedRef(destination, old, pushed));
+            }
+        }
+
+        return refs.Count == 0 ? PushOutcome.None : new PushOutcome(refs);
+    }
+
+    /// <summary>The one object whose id starts with <paramref name="abbreviation"/>, or null when none or several do.</summary>
+    private async Task<string?> DisambiguateAsync(string abbreviation, CancellationToken cancellationToken)
+    {
+        var command = Read("rev-parse", "--disambiguate=" + abbreviation);
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        var ids = result.Succeeded ? SplitLines(result.StandardOutput) : [];
+        return ids.Count == 1 ? ids[0] : null;
+    }
+
+    /// <summary>A ref's name as git's push summary shows it (<c>prettify_refname</c>): without <c>refs/heads/</c>, <c>refs/tags/</c> or <c>refs/remotes/</c>.</summary>
+    private static string PushDisplayName(string fullName)
+    {
+        foreach (var prefix in new[] { HeadsPrefix, TagsPrefix, RemotesPrefix })
+        {
+            if (fullName.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return fullName[prefix.Length..];
+            }
+        }
+
+        return fullName;
+    }
+
+    /// <summary>
+    /// The ref lines of a push's summary on standard error (0.5), as git 2.30 to 2.55 print them
+    /// without <c>--porcelain</c>: a space, the flag, a space, the summary padded with spaces, then
+    /// <c>&lt;from&gt; -&gt; &lt;to&gt;</c> (only <c>&lt;to&gt;</c> for a deletion) and a reason in
+    /// parentheses: <c>   a1b2c3d..e4f5a6b  main -&gt; main</c>, <c> + a1b2c3d...e4f5a6b main -&gt; main
+    /// (forced update)</c>, <c> * [new branch]      main -&gt; main</c>, <c> - [deleted]         x</c>,
+    /// <c> ! [rejected]        main -&gt; main (stale info)</c>. Progress, <c>To &lt;url&gt;</c>,
+    /// <c>remote:</c> and hint lines are left out.
+    /// </summary>
+    internal static IReadOnlyList<PushSummaryLine> ReadPushSummary(string standardError)
+    {
+        ArgumentNullException.ThrowIfNull(standardError);
+        var lines = new List<PushSummaryLine>();
+        foreach (var raw in standardError.Split('\n'))
+        {
+            var match = PushSummaryPattern().Match(raw.TrimEnd('\r'));
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var refs = match.Groups["refs"].Value;
+            var arrow = refs.IndexOf(" -> ", StringComparison.Ordinal);
+            var range = match.Groups["range"];
+            lines.Add(new PushSummaryLine(
+                match.Groups["flag"].Value[0],
+                match.Groups["summary"].Value,
+                arrow < 0 ? null : refs[..arrow],
+                arrow < 0 ? refs : refs[(arrow + " -> ".Length)..],
+                match.Groups["reason"].Success ? match.Groups["reason"].Value : null,
+                range.Success ? match.Groups["old"].Value : null,
+                range.Success ? match.Groups["new"].Value : null));
+        }
+
+        return lines;
+    }
+
+    [GeneratedRegex(@"^ (?<flag>[ +*=!-]) (?<summary>\[[^\]]+\]|(?<range>(?<old>[0-9a-f]{4,})\.\.\.?(?<new>[0-9a-f]{4,})))\s+(?<refs>\S+(?: -> \S+)?)(?: \((?<reason>[^)]*)\))?$")]
+    private static partial Regex PushSummaryPattern();
+
+    /// <summary>One ref line of a push's summary (<see cref="ReadPushSummary"/>).</summary>
+    /// <param name="Flag">git's flag: <c>' '</c> a fast-forward, <c>'+'</c> a forced update, <c>'*'</c> a new ref, <c>'-'</c> a deletion, <c>'!'</c> rejected, <c>'='</c> up to date.</param>
+    /// <param name="Summary">The summary: <c>a1b2c3d..e4f5a6b</c>, <c>[new branch]</c>, <c>[rejected]</c>.</param>
+    /// <param name="Source">What was pushed as git shows it (a short name or a full SHA), or null for a deletion.</param>
+    /// <param name="Destination">The remote ref as git shows it: <c>main</c> for <c>refs/heads/main</c>.</param>
+    /// <param name="Reason">The reason in parentheses: <c>forced update</c>, <c>stale info</c>; null without one.</param>
+    /// <param name="OldAbbreviation">The remote's old value, abbreviated, for an update; null otherwise.</param>
+    /// <param name="NewAbbreviation">Its new value, abbreviated, for an update; null otherwise.</param>
+    internal sealed record PushSummaryLine(char Flag, string Summary, string? Source, string Destination, string? Reason, string? OldAbbreviation, string? NewAbbreviation);
 
     /// <summary>The pure parts of <see cref="GitRepository"/>'s remote calls, kept out of the partial class so that their names cannot meet another package's.</summary>
     private static class RemoteArguments

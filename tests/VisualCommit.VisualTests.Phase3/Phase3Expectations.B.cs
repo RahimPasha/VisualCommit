@@ -418,7 +418,7 @@ public static partial class Phase3Expectations
             "Copy SHA",
         ];
 
-        /// <summary>Check 8 steps 2 and 4: the label feature/ff's menu (no upstream); 380 high (328 before phase 4).</summary>
+        /// <summary>Check 8 steps 2 and 4: the label feature/ff's menu (no upstream); 493 high (380 before phase 5, 328 before phase 4).</summary>
         public static readonly string[] FeatureFfMenu =
         [
             "feature/ff",
@@ -437,10 +437,15 @@ public static partial class Phase3Expectations
             Sep,
             "Set upstream…",
             Sep,
+            "Compare feature/ff with main",
+            "Show reflog of feature/ff",
+            "Hide feature/ff",
+            "Solo feature/ff",
+            Sep,
             "Copy branch name",
         ];
 
-        /// <summary>Check 8 step 6, the first menu: the remote branch origin/main, whose main is checked out; 293 high (241 before phase 4).</summary>
+        /// <summary>Check 8 step 6, the first menu: the remote branch origin/main, whose main is checked out; 380 high (293 before phase 5, 241 before phase 4).</summary>
         public static readonly string[] RemoteMainMenu =
         [
             "origin/main",
@@ -455,10 +460,14 @@ public static partial class Phase3Expectations
             Sep,
             "Delete main on origin… (danger)",
             Sep,
+            "Compare origin/main with main",
+            "Hide origin/main",
+            "Solo origin/main",
+            Sep,
             "Copy branch name",
         ];
 
-        /// <summary>Check 8 step 6, the second menu: the remote branch origin/feature/alpha; 293 high (241 before phase 4).</summary>
+        /// <summary>Check 8 step 6, the second menu: the remote branch origin/feature/alpha; 380 high (293 before phase 5, 241 before phase 4).</summary>
         public static readonly string[] RemoteAlphaMenu =
         [
             "origin/feature/alpha",
@@ -473,10 +482,14 @@ public static partial class Phase3Expectations
             Sep,
             "Delete feature/alpha on origin… (danger)",
             Sep,
+            "Compare origin/feature/alpha with main",
+            "Hide origin/feature/alpha",
+            "Solo origin/feature/alpha",
+            Sep,
             "Copy branch name",
         ];
 
-        /// <summary>Check 9 step 5: the label feature/alpha's menu while the merge is stopped; 458 high (406 before phase 4).</summary>
+        /// <summary>Check 9 step 5: the label feature/alpha's menu while the merge is stopped; 571 high (458 before phase 5, 406 before phase 4).</summary>
         public static readonly string[] AlphaMenuWhileMerging =
         [
             "feature/alpha",
@@ -498,13 +511,18 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/feature/alpha",
             Sep,
+            "Compare feature/alpha with main",
+            "Show reflog of feature/alpha",
+            "Hide feature/alpha",
+            "Solo feature/alpha",
+            Sep,
             "Copy branch name",
         ];
 
         /// <summary>
         /// Check 9b step 3: the conflicted src/core.txt's menu in the stage panel, with phase 4's
         /// "Resolve conflict" (highlighted) and "Open in merge tool" (no <c>merge.tool</c> set);
-        /// 284 high (232 before phase 4).
+        /// and phase 5's File history and Blame; 345 high (232 before phase 4, 284 before phase 5).
         /// </summary>
         public static readonly string[] ConflictedFileMenu =
         [
@@ -516,6 +534,9 @@ public static partial class Phase3Expectations
             Sep,
             "Ignore core.txt (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.txt files (disabled: \"Only untracked files can be ignored\")",
+            Sep,
+            "File history",
+            "Blame",
             Sep,
             "Open file",
             "Show in folder",
@@ -603,7 +624,7 @@ public static partial class Phase3Expectations
             "Copy SHA",
         ];
 
-        /// <summary>Check 32 step 3: main's menu while HEAD is detached on its child; 458 high (406 before phase 4).</summary>
+        /// <summary>Check 32 step 3: main's menu while HEAD is detached on its child; 571 high (458 before phase 5, 406 before phase 4).</summary>
         public static readonly string[] MainMenuWhileDetached =
         [
             "main",
@@ -624,6 +645,11 @@ public static partial class Phase3Expectations
             Sep,
             "Change upstream…",
             "Stop tracking origin/main",
+            Sep,
+            "Compare main with HEAD",
+            "Show reflog of main",
+            "Hide main",
+            "Solo main",
             Sep,
             "Copy branch name",
         ];
@@ -739,12 +765,11 @@ public static partial class Phase3Expectations
         public const string StatusCheckedOutMain = "Checked out main";
         public const string StatusDetachedAtInitial = "HEAD is now detached at 691f8cf";
 
-        // Check 9 step 7: the checkout git refuses during the merge (the error dialog's parts).
-        public const string CheckoutFailedTitle = "Checkout failed";
-        public const string CheckoutFailedSummary = "Git could not check out feature/alpha.";
+        // Check 9 step 7: the checkout refused during the merge (the error dialog's parts). Phase 5's
+        // C12 refuses it before git (docs/phase-5-design.md 9.3, the phase 5 report's "Beyond design
+        // 14.1"): "Checkout blocked" with the menus' reason (FinishMergeFirst), no output, no command.
+        public const string CheckoutBlockedTitle = "Checkout blocked";
         public const string CheckoutCommand = "git switch --no-guess feature/alpha";
-        public static readonly string[] CheckoutWhileMergingLines =
-            ["fatal: cannot switch branch while merging", "Consider \"git merge --quit\" or \"git worktree add\"."];
 
         // Check 12 step 11: the revert that changes nothing (D117), on Git 2.36.
         public const string RevertFailedTitle = "Revert failed";

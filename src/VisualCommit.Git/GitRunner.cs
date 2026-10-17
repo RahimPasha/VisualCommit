@@ -51,13 +51,23 @@ public sealed class GitRunner : IGitRunner
 
     private readonly IGitCallLog? _callLog;
     private readonly IAppLog _log;
+    private readonly TimeProvider _recordClock;
 
-    public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null)
+    /// <param name="executablePath">The git executable.</param>
+    /// <param name="callLog">Where every call is recorded; null records none.</param>
+    /// <param name="log">The app's log, which gets one line per call.</param>
+    /// <param name="recordClock">
+    /// The clock of the times the activity log shows (<see cref="GitCallRecord.DisplayedStart"/> and
+    /// its duration, docs/phase-5-design.md 2.3); the system clock by default. The record's own
+    /// <see cref="GitCallRecord.StartedAt"/> and <see cref="GitCallRecord.Duration"/> stay the system's.
+    /// </param>
+    public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null, TimeProvider? recordClock = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ExecutablePath = executablePath;
         _callLog = callLog;
         _log = log ?? NullAppLog.Instance;
+        _recordClock = recordClock ?? TimeProvider.System;
     }
 
     public string ExecutablePath { get; }
@@ -75,7 +85,8 @@ public sealed class GitRunner : IGitRunner
         ArgumentNullException.ThrowIfNull(command);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var startedAt = DateTimeOffset.Now;
+        // The number that orders the call in the activity log, taken as it starts (2.3).
+        var startedAt = new CallStart(DateTimeOffset.Now, RecordSequence.Next(), _recordClock.GetUtcNow(), _recordClock.GetTimestamp());
         var stopwatch = Stopwatch.StartNew();
         using var process = new Process { StartInfo = BuildStartInfo(command) };
 
@@ -361,7 +372,7 @@ public sealed class GitRunner : IGitRunner
 
     private void Record(
         GitCommand command,
-        DateTimeOffset startedAt,
+        CallStart startedAt,
         TimeSpan duration,
         GitCallOutcome outcome,
         int? exitCode,
@@ -372,9 +383,10 @@ public sealed class GitRunner : IGitRunner
         // is: git remote -v and some error texts print URLs with tokens in them (D103). Git's
         // streams arrive hidden and cut already (OutputCollector.Head hides before it cuts), and
         // hiding again changes nothing. The call belongs to the operation the queue is running in
-        // this flow, if any (1.7).
+        // this flow, if any (1.7). Standard input is kept only where the command records it
+        // (update-ref --stdin's ref names and SHAs, docs/phase-5-design.md 2.3), hidden and cut the same way.
         var record = new GitCallRecord(
-            startedAt,
+            startedAt.Time,
             duration,
             command.DisplayText,
             command.WorkingDirectory,
@@ -382,7 +394,14 @@ public sealed class GitRunner : IGitRunner
             exitCode,
             GitCommand.HideCredentials(standardOutput),
             GitCommand.HideCredentials(standardError),
-            GitOperationScope.Current);
+            GitOperationScope.Current)
+        {
+            Sequence = startedAt.Sequence,
+            DisplayedStart = startedAt.DisplayedTime,
+            DisplayedDuration = _recordClock.GetElapsedTime(startedAt.DisplayedTimestamp),
+            StandardInput = command.RecordsStandardInput ? Head(GitCommand.HideCredentials(command.StandardInput ?? string.Empty)) : null,
+            OnTemporaryIndex = command.Environment.TryGetValue(TemporaryIndexVariable, out var index) && index is not null,
+        };
 
         var result = outcome == GitCallOutcome.Completed ? $"exit {exitCode}" : outcome.ToString();
         var where = command.WorkingDirectory is null ? string.Empty : $" in {command.WorkingDirectory}";
@@ -400,6 +419,16 @@ public sealed class GitRunner : IGitRunner
             _log.Error("A git call log listener failed.", ex);
         }
     }
+
+    /// <summary>The start of <paramref name="text"/> as the call record keeps it: at most <see cref="GitCallRecord.MaxOutputLength"/> characters, then the cut's marker.</summary>
+    private static string Head(string text) =>
+        text.Length > GitCallRecord.MaxOutputLength ? text[..GitCallRecord.MaxOutputLength] + GitCallRecord.TruncationMarker : text;
+
+    /// <summary>The variable that points git at another index than the user's: a snapshot's temporary one.</summary>
+    private const string TemporaryIndexVariable = "GIT_INDEX_FILE";
+
+    /// <summary>When a call started: the system's time for the record and the log, the number that orders it, and the record clock's time and timestamp for the activity log.</summary>
+    private readonly record struct CallStart(DateTimeOffset Time, long Sequence, DateTimeOffset DisplayedTime, long DisplayedTimestamp);
 
     /// <summary>
     /// Reads one of git's output streams to its end: splits it into lines for the handler, keeps

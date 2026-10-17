@@ -27,8 +27,9 @@ namespace VisualCommit.App.Tests;
 /// Headless tests of the commit graph control and the repository graph view (D49), drawn with
 /// Skia and checked pixel by pixel against the phase 1 test report. The expected values (the
 /// graph scenario's table, the colours, the sizes) are copied from the report, not from the app.
+/// Phase 5's dashed stash lines and search marks are in CommitGraphControlTests.Phase5.cs.
 /// </summary>
-public class CommitGraphControlTests
+public partial class CommitGraphControlTests
 {
     /// <summary>The graph area at 1100×700: 440 wide, rows area 558 high under the 28 of the headers.</summary>
     private const double AreaWidth = 440;
@@ -111,8 +112,10 @@ public class CommitGraphControlTests
         }
 
         // Lines, from "Lines:" under the table: lane 0 through row 1, lane 1 (colour 1) through
-        // row 3, lane 2 (colour 3) through row 6, and lane 1 (colour 4) through row 8.
-        AssertColor(theme.Lanes[0], shot.PixelAt(host.ToWindow(control, new Point(control.LaneCenterX(0), control.RowBounds(1).Y + 3))), "lane 0 in row 1");
+        // row 3, lane 2 (colour 3) through row 6, and lane 1 (colour 4) through row 8. Lane 0 in
+        // row 1 is the stash's line, dashed since phase 5 (docs/phase-5-design.md 10 and 14.1):
+        // sampled in a dash, 5 below the row's top (3 below it is a gap).
+        AssertColor(theme.Lanes[0], shot.PixelAt(host.ToWindow(control, new Point(control.LaneCenterX(0), control.RowBounds(1).Y + 5))), "lane 0 in row 1");
         AssertColor(theme.Lanes[1], shot.PixelAt(host.ToWindow(control, new Point(control.LaneCenterX(1), control.RowBounds(3).Center.Y))), "lane 1 in row 3");
         AssertColor(theme.Lanes[3], shot.PixelAt(host.ToWindow(control, new Point(control.LaneCenterX(2), control.RowBounds(6).Center.Y))), "lane 2 in row 6");
         AssertColor(theme.Lanes[4], shot.PixelAt(host.ToWindow(control, new Point(control.LaneCenterX(1), control.RowBounds(8).Center.Y))), "lane 1 in row 8");
@@ -803,12 +806,12 @@ public class CommitGraphControlTests
     /// </summary>
     private static Task<CommitGraphData> GraphScenarioAsync() => GraphScenarioData.Value;
 
-    private static readonly Lazy<Task<CommitGraphData>> GraphScenarioData = new(LoadGraphScenarioAsync);
+    private static readonly Lazy<Task<CommitGraphData>> GraphScenarioData = new(() => LoadScenarioAsync(Scenarios.GraphAsync));
 
-    /// <summary>Loads the graph scenario's data the way the view model does, without a view model.</summary>
-    private static async Task<CommitGraphData> LoadGraphScenarioAsync()
+    /// <summary>Loads a scenario's graph data the way the view model does, without a view model.</summary>
+    private static async Task<CommitGraphData> LoadScenarioAsync(Func<Task<TempRepo>> build)
     {
-        using var repo = await Scenarios.GraphAsync().ConfigureAwait(false);
+        using var repo = await build().ConfigureAwait(false);
         var repository = await GitRepository.OpenAsync(Runner, repo.Path).ConfigureAwait(false);
         var refs = await repository.ReadRefsAsync().ConfigureAwait(false);
         var pages = new List<IReadOnlyList<CommitInfo>>();

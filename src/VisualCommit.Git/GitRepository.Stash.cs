@@ -36,7 +36,17 @@ public sealed partial class GitRepository
         // "git clean ... :/", and the variable would make ":/" a file name, leaving them behind.
         // The app passes no path here, so the variable protects nothing.
         var command = StashCommand(options, literalPathspecs: false, [.. arguments]);
-        var result = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+        var emptyFolders = includeUntracked ? await EmptyUntrackedFoldersAsync(cancellationToken).ConfigureAwait(false) : [];
+        GitResult result;
+        try
+        {
+            result = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+        }
+        finally
+        {
+            KeepFolders(emptyFolders);
+        }
+
         if (result.StandardOutput.Contains(NothingToStash, StringComparison.Ordinal)
             || result.StandardError.Contains(NothingToStash, StringComparison.Ordinal))
         {
@@ -45,6 +55,101 @@ public sealed partial class GitRepository
 
         var stash = await _runner.RunAsync(Read("rev-parse", "--verify", "--quiet", "refs/stash"), cancellationToken).ConfigureAwait(false);
         return stash.Succeeded ? stash.StandardOutput.Trim() : null;
+    }
+
+    /// <summary>
+    /// The empty folders among the untracked ones, nested ones too (docs/phase-5-design.md 15.9):
+    /// <c>git stash push --include-untracked</c> removes them with its <c>clean -d</c>, and no stash
+    /// holds a folder, so neither a pop nor an undo would bring them back. <c>ls-files --others
+    /// --exclude-standard --directory</c> names an untracked folder with a trailing slash (an
+    /// ignored one is left out, and so kept by git); each is walked on disk for the folders with
+    /// nothing in them, a nested repository's left alone. Full paths.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> EmptyUntrackedFoldersAsync(CancellationToken cancellationToken)
+    {
+        var output = await ReadOutputAsync(cancellationToken, "ls-files", "-z", "--others", "--exclude-standard", "--directory").ConfigureAwait(false);
+        var empty = new List<string>();
+        var options = new EnumerationOptions { AttributesToSkip = 0 };
+        foreach (var folder in SplitNul(output).Where(entry => entry.EndsWith('/')))
+        {
+            var folders = new Stack<DirectoryInfo>([new DirectoryInfo(WorkingTreePath(folder.TrimEnd('/')))]);
+            while (folders.TryPop(out var current))
+            {
+                try
+                {
+                    var entries = current.EnumerateFileSystemInfos("*", options).ToList();
+                    if (entries.Count == 0)
+                    {
+                        empty.Add(current.FullName);
+                    }
+                    else if (!entries.Any(entry => string.Equals(entry.Name, ".git", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        foreach (var inner in entries.OfType<DirectoryInfo>().Where(entry => entry.LinkTarget is null))
+                        {
+                            folders.Push(inner);
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _log.Warning($"Could not read the untracked folder {current.FullName} before a stash.", ex);
+                }
+            }
+        }
+
+        return empty;
+    }
+
+    /// <summary>Makes again the empty folders a stash removed (<see cref="EmptyUntrackedFoldersAsync"/>); a path that is now a file stays so.</summary>
+    private void KeepFolders(IReadOnlyList<string> folders)
+    {
+        foreach (var folder in folders.Where(folder => !Directory.Exists(folder) && !File.Exists(folder)))
+        {
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.Warning($"Could not make the empty folder {folder} again after a stash.", ex);
+            }
+        }
+    }
+
+    public async Task<bool> PutBackUnclearedStashAsync(string stashCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stashCommit);
+        var paths = await ReadStashPathsAsync(stashCommit, cancellationToken).ConfigureAwait(false);
+        bool Exists(string path) => IsFileOrLink(WorkingTreePath(path)) || Directory.Exists(WorkingTreePath(path));
+
+        // git's clean deleted the untracked files first.
+        await RestoreWorkingTreeFilesAsync(stashCommit + "^3", [.. paths.Untracked.Where(path => !Exists(path))], options, cancellationToken).ConfigureAwait(false);
+
+        // Then its reset rewrote the tracked files it could, up to the one it could not; the index
+        // still holds what it held, so the working tree alone goes back to the stash's files. A path
+        // the stash deletes is deleted again by the restore, which removes what its source lacks.
+        var reverted = await StashDifferencesAsync(stashCommit, paths.Changed, cancellationToken).ConfigureAwait(false);
+        await RestoreWorkingTreeFilesAsync(stashCommit, reverted, options, cancellationToken).ConfigureAwait(false);
+
+        var left = await StashDifferencesAsync(stashCommit, paths.Changed, cancellationToken).ConfigureAwait(false);
+        var back = left.Count == 0 && paths.Untracked.All(Exists);
+        _log.Info(back
+            ? $"Put back the working tree from the stash {stashCommit[..Math.Min(7, stashCommit.Length)]} git could not finish."
+            : $"The working tree could not all be put back from the stash {stashCommit[..Math.Min(7, stashCommit.Length)]}: {left.Count} tracked paths differ.");
+        return back;
+    }
+
+    /// <summary>The tracked paths among <paramref name="changed"/> whose working-tree file differs from the stash's: <c>git diff --name-only -z --no-renames &lt;stash&gt;</c>.</summary>
+    private async Task<IReadOnlyList<string>> StashDifferencesAsync(string stashCommit, IReadOnlyList<string> changed, CancellationToken cancellationToken)
+    {
+        if (changed.Count == 0)
+        {
+            return [];
+        }
+
+        var wanted = changed.ToHashSet(StringComparer.Ordinal);
+        var output = await ReadOutputAsync(cancellationToken, "diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", "--no-color", stashCommit, "--").ConfigureAwait(false);
+        return [.. SplitNul(output).Where(wanted.Contains)];
     }
 
     public async Task<ApplyResult> ApplyStashAsync(string stashCommit, StashApplyMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default)

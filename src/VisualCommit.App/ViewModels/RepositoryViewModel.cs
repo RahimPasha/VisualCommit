@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -15,6 +16,7 @@ using VisualCommit.Core.Graph;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Settings;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -102,16 +104,26 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             services?.Prompts,
             services?.Operations,
             _log,
-            since => LockFiles.FindSince([repository.GitDirectory, repository.CommonDirectory], since));
+            since => LockFiles.FindSince([repository.GitDirectory, repository.CommonDirectory], since),
+            services?.RecordClock);
         OperationStatus = new OperationStatusViewModel(_queue, services?.DialogHost.Notices);
         Operations = new RepositoryOperations(this, _queue, services, _log);
         Toolbar = new ToolbarViewModel(this);
 
+        // The session's history of this worktree, which a tab on the same worktree shares and
+        // which outlives the tab (docs/phase-5-design.md 7.1); a history of its own without services.
+        UndoHistory = services?.UndoHistories.For(repository.GitDirectory, repository.CommonDirectory) ?? new UndoHistory();
+
         LeftPanel = new LeftPanelViewModel();
         LeftPanel.RefActivated += (_, sha) => Select(sha, reveal: true);
+        ConnectLeftPanelFilters();
         Details = new CommitDetailsViewModel(repository, settings, dates, _log);
         Details.ParentActivated += (_, sha) => Select(sha, reveal: true);
         Details.FileActivated += (_, file) => OpenCommitDiff(file);
+
+        // "All files": a file the shown commit did not change opens its blame (docs/phase-5-design.md 4.5).
+        Details.BlameRequested += (_, request) => _ = MenuActions.ShowBlameAsync(request);
+
         Changes = new WorkingChangesViewModel(this, settings);
     }
 
@@ -129,6 +141,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>The toolbar's buttons for this repository (4d).</summary>
     public ToolbarViewModel Toolbar { get; }
 
+    /// <summary>The undo history of the repository's worktree (docs/phase-5-design.md 7.1): what the toolbar's Undo and Redo step through.</summary>
+    public UndoHistory UndoHistory { get; }
+
     /// <summary>
     /// The commits selected in the graph, as SHAs (4h, D88). One selected commit is also
     /// <see cref="SelectedIndex"/>; several leave <see cref="SelectedIndex"/> at -1. The graph
@@ -137,7 +152,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     [ObservableProperty]
     public partial GraphSelection Selection { get; set; } = GraphSelection.Empty;
 
-    /// <summary>What the details panel shows instead of one commit's details while several are selected (4h); null otherwise. WP8 sets it.</summary>
+    /// <summary>
+    /// What the details panel's slot shows instead of one commit's details (4h): the list of three
+    /// or more selected commits, or a comparison (docs/phase-5-design.md 6: two selected commits,
+    /// or branches from their menus, <see cref="Comparison"/>); null otherwise.
+    /// </summary>
     [ObservableProperty]
     public partial object? MultiSelection { get; private set; }
 
@@ -207,6 +226,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     [NotifyPropertyChangedFor(nameof(IsDiffOpen))]
     [NotifyPropertyChangedFor(nameof(ShowsGraph))]
     [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
+    [NotifyPropertyChangedFor(nameof(ShowsPage))]
     [NotifyPropertyChangedFor(nameof(ShowsDiff))]
     public partial DiffViewModel? Diff { get; private set; }
 
@@ -249,8 +269,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: opened after {_sinceOpening.ElapsedMilliseconds} ms"));
             var reading = Repository.ReadRefsAsync(cancellationToken);
             var status = Repository.ReadStatusAsync(cancellationToken);
-            var data = new Lazy<CommitGraphData>(() => new CommitGraphData(reading.Result), LazyThreadSafetyMode.ExecutionAndPublication);
-            var loading = LoadAsync(reading, data, cancellationToken);
+
+            // What the graph hides or solos comes from the session, so that git starts before the
+            // refs are read, as without a filter (docs/phase-5-design.md 8.2, 8.4).
+            var filter = LoadSessionFilter();
+            var data = new Lazy<CommitGraphData>(() => new CommitGraphData(reading.Result, filter), LazyThreadSafetyMode.ExecutionAndPublication);
+            var loading = LoadAsync(reading, data, filter, cancellationToken);
 
             RepoRefs refs;
             try
@@ -266,7 +290,14 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             }
 
             _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: refs read after {_sinceOpening.ElapsedMilliseconds} ms"));
+            if (CorrectFilters(refs, firstRead: true))
+            {
+                // Names that no longer exist went from the filter: the graph loads again once loaded.
+                _changedWhileStarting = true;
+            }
+
             ApplyRefs(refs);
+            _loadedFilterKey = filter?.Key;
             Graph = data.Value;
             var statusShown = ShowStatusAsync(status);
             await loading;
@@ -358,18 +389,26 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 }
 
                 var refs = await Repository.ReadRefsAsync(cancellationToken);
-                if (refs.Fingerprint == _fingerprint)
+
+                // A filter's change joins the refs' in the comparison (docs/phase-5-design.md 8.2):
+                // the new graph loads off screen and is swapped in when complete.
+                CorrectFilters(refs, firstRead: false);
+                var filter = GraphFilter;
+                if (refs.Fingerprint == _fingerprint && filter?.Key == _loadedFilterKey)
                 {
                     // Upstreams and their counts can change without moving a ref.
                     ApplyRefs(refs);
                 }
                 else
                 {
-                    var data = new CommitGraphData(refs);
-                    await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), cancellationToken);
+                    var data = new CommitGraphData(refs, filter);
+                    await LoadAsync(Task.FromResult(refs), new Lazy<CommitGraphData>(data), filter, cancellationToken);
                     ApplyRefs(refs);
+                    _loadedFilterKey = filter?.Key;
                     SwapGraph(data);
                 }
+
+                IsReloadingGraph = GraphFilter?.Key != _loadedFilterKey;
 
                 // The index lives in the git folder: a change there may be a change of the status.
                 await RefreshStatusAsync();
@@ -382,6 +421,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         catch (Exception ex)
         {
             _log.Error($"{Name}: refreshing after an outside change failed.", ex);
+            IsReloadingGraph = false;
         }
     }
 
@@ -480,7 +520,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             return;
         }
 
-        if (IsInteractiveRebaseOpen || IsResolverOpen)
+        // A page is left too, as the list is (docs/phase-5-design.md 11.1).
+        if (IsInteractiveRebaseOpen || IsResolverOpen || Page is not null)
         {
             _ = OpenDiffAfterLeavingAsync(file, staged);
             return;
@@ -503,8 +544,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     }
 
     /// <summary>
-    /// Closes the diff view and shows the graph again, or the interactive rebase's list it was
-    /// opened over, which takes the keyboard focus back (2.2); the file row loses its selection.
+    /// Closes the diff view and shows the graph again, or the interactive rebase's list or the page
+    /// it was opened over, which takes the keyboard focus back (2.2, docs/phase-5-design.md 11.1);
+    /// the file row loses its selection.
     /// </summary>
     public void CloseDiff() => CloseDiff(returnFocus: true);
 
@@ -517,6 +559,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             if (returnFocus)
             {
                 InteractiveRebase?.RequestFocus();
+                Page?.RequestFocus();
             }
         }
 
@@ -540,6 +583,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         _lifetime.Cancel();
         _watcher?.Dispose();
         Diff?.Dispose();
+        Page?.Dispose();
         _resolver?.Dispose();
         LogFrameStatistics();
         _lifetime.Dispose();
@@ -550,9 +594,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     public Task<string?> StageAsync(IReadOnlyList<ChangedFile> files)
     {
         ArgumentNullException.ThrowIfNull(files);
+        // Staging prepares a commit and is undone in the stage panel: not recorded (docs/phase-5-design.md 7.2).
         return files.Count == 0
             ? Task.FromResult<string?>(null)
-            : WriteAsync("Stage", "Staging…", cancellationToken => Repository.StageAsync([.. files.Select(file => file.Path)], cancellationToken));
+            : WriteAsync("Stage", "Staging…", cancellationToken => Repository.StageAsync([.. files.Select(file => file.Path)], cancellationToken), UndoScope.None);
     }
 
     public Task<string?> UnstageAsync(IReadOnlyList<ChangedFile> files)
@@ -563,7 +608,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         var paths = files.SelectMany(file => file.OldPath is { } old ? new[] { file.Path, old } : [file.Path]).Distinct().ToList();
         return paths.Count == 0
             ? Task.FromResult<string?>(null)
-            : WriteAsync("Unstage", "Unstaging…", cancellationToken => Repository.UnstageAsync(paths, cancellationToken));
+            : WriteAsync("Unstage", "Unstaging…", cancellationToken => Repository.UnstageAsync(paths, cancellationToken), UndoScope.None);
     }
 
     public async Task<string?> DiscardAsync(IReadOnlyList<ChangedFile> files)
@@ -611,18 +656,27 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             async cancellationToken =>
             {
                 var snapshot = await Repository.SaveSnapshotAsync(paths, cancellationToken);
+                UndoCapture.Snapshot(snapshot);
                 await Repository.DiscardAsync(paths, untracked, cancellationToken);
                 await RememberDiscardAsync(snapshot, cancellationToken);
 
                 // The snapshot is a backup (design 9, D139): the clean-up follows, keeping it as
                 // the restore bar's (the review's finding 22).
                 await Operations.CleanUpBackupsAsync();
-            });
+            },
+            UndoScope.Discard(paths));
     }
 
     public async Task<string?> RestoreAsync()
     {
         if (_disposed || _lastSnapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        // While the discard is the entry before the undo history's cursor, Restore is its Undo
+        // (docs/phase-5-design.md 7.9), which shows its own failure.
+        if (await Operations.TryRestoreAsUndoAsync(snapshot))
         {
             return null;
         }
@@ -642,35 +696,43 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             }
         }
 
+        // What is saved is decided inside the operation (docs/phase-5-design.md 15.9): a file
+        // edited while the question was open, or while the restore waited in the queue, is saved
+        // too, also one the question did not name.
+        var backupSaved = new StrongBox<bool>();
         return await WriteAsync(
             "Restore",
             "Restoring…",
             async cancellationToken =>
             {
-                if (changed.Count > 0)
+                var newer = await ChangedSinceDiscardAsync(cancellationToken);
+                if (newer.Count > 0)
                 {
-                    await Repository.SaveSnapshotAsync(changed, cancellationToken);
+                    // The newer changes' snapshot is a backup too (D139): the clean-up follows the
+                    // recording, whose entry keeps the snapshot restored from (7.8).
+                    await Repository.SaveSnapshotAsync(newer, cancellationToken);
+                    backupSaved.Value = true;
                 }
 
                 await Repository.RestoreSnapshotAsync(snapshot, cancellationToken);
+                UndoCapture.Snapshot(snapshot);
                 _lastSnapshot = null;
                 _afterDiscard = null;
                 Changes.HideRestore();
-                if (changed.Count > 0)
-                {
-                    // The newer changes' snapshot is a backup too (D139).
-                    await Operations.CleanUpBackupsAsync();
-                }
-            });
+            },
+            UndoScope.Restore(snapshot.Paths),
+            backupSaved: backupSaved);
     }
 
     public async Task<string?> CommitAsync(string message, bool amend)
     {
         string? commit = null;
+        var subject = message.Split('\n', 2)[0].TrimEnd('\r');
         var error = await WriteAsync(
             "Commit",
             "Committing…",
             async cancellationToken => commit = await Repository.CommitAsync(message, amend, cancellationToken),
+            UndoScope.Commit(subject, amend, Refs?.Head.BranchName),
             refsChange: true);
 
         // With nothing left to commit, the working-changes row is gone: the new commit is selected.
@@ -739,6 +801,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             {
                 // The whole file goes into a discard's snapshot, so Restore puts all of it back (D67).
                 var snapshot = action == LineAction.Discard ? await Repository.SaveSnapshotAsync([target.Path], cancellationToken) : null;
+                if (snapshot is not null)
+                {
+                    UndoCapture.Snapshot(snapshot);
+                }
+
                 if (snapshot is not null && target.IsUntracked && chosen.Count == diff.AddedCount)
                 {
                     // Every line of an untracked file: the file goes, with the folders it leaves empty.
@@ -759,7 +826,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     await RememberDiscardAsync(snapshot, cancellationToken);
                     await Operations.CleanUpBackupsAsync(); // As after a discard (D139).
                 }
-            });
+            },
+
+            // A discard of lines is recorded; staging and unstaging them are not (docs/phase-5-design.md 7.2).
+            action == LineAction.Discard ? UndoScope.DiscardLines(target.Path) : UndoScope.None);
     }
 
     partial void OnSelectedIndexChanged(int value)
@@ -1007,7 +1077,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>
     /// A hash of each working-tree file's bytes, null for a file that does not exist; a file that
-    /// cannot be read gets a value of its own, so that it counts as changed.
+    /// cannot be read gets a value of its own, so that it counts as changed, and so does a path
+    /// where a folder holding files or a file in a folder's place now stands (docs/phase-5-design.md
+    /// 15.9), which the restore then refuses rather than delete.
     /// </summary>
     private Task<Dictionary<string, string?>> FingerprintAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
@@ -1022,7 +1094,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     {
                         if (!File.Exists(full))
                         {
-                            return null;
+                            return WorkingTreeFiles.IsInTheWayOfFile(root, path) ? RecordedFile.InTheWay : null;
                         }
 
                         using var stream = File.OpenRead(full);
@@ -1044,9 +1116,13 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <paramref name="refsChange"/> the refs and history too (D71), whether or not it succeeded.
     /// Returns git's message when the write failed, and shows it in the stage panel, not in a
     /// dialog. A write asked for after the tab closed (a confirmation was still open) does
-    /// nothing. A write that has started runs to its end, also when the tab closes (1.8).
+    /// nothing. A write that has started runs to its end, also when the tab closes (1.8). The undo
+    /// history records it as <paramref name="undo"/> says, as every operation of
+    /// <see cref="RepositoryOperations.RunAsync"/> (docs/phase-5-design.md 7.7). When the write
+    /// sets <paramref name="backupSaved"/>, the backups' clean-up follows the recording, as it
+    /// follows that of an operation that saved a backup, so that it keeps what the entry needs.
     /// </summary>
-    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, bool refsChange = false)
+    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, UndoScope undo, bool refsChange = false, StrongBox<bool>? backupSaved = null)
     {
         var result = await _queue.RunAsync(new GitOperation(
             title,
@@ -1055,8 +1131,25 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             refsChange ? RefreshScope.Refs : RefreshScope.Status,
             async context =>
             {
-                await write(context.CancellationToken);
-                return OperationReport.Done(string.Empty);
+                var recording = await Operations.BeginRecordingAsync(undo, context, title);
+                OperationReport? report = null;
+                using (UndoCapture.Begin(out var capture))
+                {
+                    try
+                    {
+                        await write(context.CancellationToken);
+                        report = OperationReport.Done(string.Empty);
+                        return report;
+                    }
+                    finally
+                    {
+                        await Operations.EndRecordingAsync(recording, capture.Captured, report, title);
+                        if (backupSaved?.Value == true)
+                        {
+                            await Operations.CleanUpBackupsAsync();
+                        }
+                    }
+                }
             })
         {
             Errors = ErrorDisplay.StagePanel,
@@ -1085,15 +1178,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>
     /// Loads the history into <paramref name="lazyData"/>, which is made from <paramref name="refs"/>
-    /// once they are known. Git starts at once; no page arrives before the refs (the contract of
+    /// once they are known, with what <paramref name="filter"/> hides or solos (docs/phase-5-design.md
+    /// 8.2; null loads everything). Git starts at once; no page arrives before the refs (the contract of
     /// <see cref="IGitRepository.LoadCommitsAsync(Task{RepoRefs}, Action{IReadOnlyList{CommitInfo}}, CancellationToken)"/>).
     /// </summary>
-    private async Task LoadAsync(Task<RepoRefs> refs, Lazy<CommitGraphData> lazyData, CancellationToken cancellationToken)
+    private async Task LoadAsync(Task<RepoRefs> refs, Lazy<CommitGraphData> lazyData, GraphFilter? filter, CancellationToken cancellationToken)
     {
         var layout = new GraphLayout();
         var stopwatch = Stopwatch.StartNew();
         await Repository.LoadCommitsAsync(
             refs,
+            filter,
             page =>
             {
                 var data = lazyData.Value;
@@ -1152,6 +1247,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         LeftPanel.Update(refs);
         Refs = refs;
         InteractiveRebase?.ObserveRefs(refs);
+        Page?.OnRefsRead(refs);
     }
 
     private void SwapGraph(CommitGraphData data)

@@ -108,26 +108,15 @@ public sealed partial class Phase4ChecksB
     }
 
     /// <summary>
-    /// The right panel's multi-selection view (phase 3's 4h) of Four and Three: "2 commits
-    /// selected", the commits in row order (short SHA in the code font, secondary colour), the hint.
+    /// The right panel of Four and Three selected: phase 3's multi-selection view (4h) until phase 5,
+    /// their comparison now (docs/phase-5-design.md 6.1, D162): From the lower row (Three), To the
+    /// upper (Four), in place of "2 commits selected", waited for until it is read and shows their
+    /// changed files.
     /// </summary>
     private static async Task AssertMultiSelectionAsync(ShellDriver app)
     {
-        await app.WaitForAsync(() => Shown(app, "MultiSelectionView") is not null, "the multi-selection view");
-        var view = app.FindByAutomationId("MultiSelectionView");
-        Assert.Equal(MultiSelectionTitle, ((TextBlock)app.FindByAutomationId(view, "MultiSelectionTitle")).Text);
-        var rows = view.GetVisualDescendants().OfType<Control>()
-            .Where(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "MultiSelectionItem")
-            .OrderBy(control => app.BoundsOf(control).Y)
-            .ToList();
-        Assert.Equal(MultiSelectionItems, rows.Select(row => string.Join(' ', TextsIn(row))));
-        var palette = PaletteOf(app);
-        foreach (var row in rows)
-        {
-            var sha = row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "MultiSelectionSha");
-            Assert.Equal(palette.TextSecondary, (sha.Foreground as ISolidColorBrush)?.Color);
-        }
-
-        Assert.Equal(MultiSelectionHint, ((TextBlock)app.FindByAutomationId(view, "MultiSelectionHint")).Text);
+        await app.WaitForComparisonShownAsync();
+        Assert.Null(Shown(app, "MultiSelectionView"));
+        Assert.Equal(("From " + MultiSelectionItems[1], "To " + MultiSelectionItems[0]), (app.Compare()!.From, app.Compare()!.To));
     }
 }

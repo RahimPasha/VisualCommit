@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using AvaloniaEdit;
 using AvaloniaEdit.Editing;
+using AvaloniaEdit.Rendering;
 
 namespace VisualCommit.App.Controls.Diff;
 
@@ -24,6 +25,28 @@ public abstract class CodeTextEditor : TextEditor
     public Vector ScrollOffset => _scrollViewer?.Offset ?? default;
 
     protected override Type StyleKeyOverride => typeof(TextEditor);
+
+    /// <summary>
+    /// Where column <paramref name="column"/> of line <paramref name="line"/> (both from 1) starts,
+    /// halfway down the line, in this control's coordinates; null when the line is not laid out in
+    /// view. The blame's text and the resolver's result (and their tests' clicks) place by it.
+    /// </summary>
+    public Point? PointAt(int line, int column)
+    {
+        var textView = TextArea.TextView;
+        if (Document is not { } document || line < 1 || line > document.LineCount || !textView.VisualLinesValid || textView.GetVisualLine(line) is null)
+        {
+            return null;
+        }
+
+        var point = textView.GetVisualPosition(new TextViewPosition(line, column), VisualYPosition.LineMiddle) - textView.ScrollOffset;
+        if (point.X < 0 || point.Y < 0 || point.X > textView.Bounds.Width || point.Y > textView.Bounds.Height)
+        {
+            return null;
+        }
+
+        return textView.TranslatePoint(point, this);
+    }
 
     /// <summary>
     /// Scrolls to an offset, either part left as it is when null. Done on the template's scroll

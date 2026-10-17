@@ -229,6 +229,20 @@ public static partial class Scenarios
     public const string FakeMergeToolScript = "vc-fake-merge-tool.sh";
 
     /// <summary>
+    /// How long a test waits for <c>git mergetool</c> to start a tool, or to end a run of the fake
+    /// one: 120 s. The command is a shell script that, before it runs the tool, starts about 30
+    /// git processes and forks its shell (Git for Windows' MSYS <c>sh</c>) about a hundred times
+    /// for its command substitutions: 2.8 s alone on the development laptop (Git 2.36), where
+    /// <c>git status</c> takes 0.09 s. Under load every process start grows: with four of the
+    /// default run's test projects side by side the script took 32 to 64 s (11 to 23 times as
+    /// long) while <c>git status</c> took 0.9 to 2.6 s, and in the full default run (seven
+    /// projects) the start passed the 60 s that phase 4's checks and tests gave it, and the 30 s of
+    /// phase 5's A2. The limit is about twice the longest seen; a test that waits this long must
+    /// still end within the hang watchdog's 3 minutes.
+    /// </summary>
+    public static readonly TimeSpan MergeToolTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
     /// Sets up a fake external merge tool in <paramref name="repo"/>'s own configuration, for check
     /// C16 (docs/phase-4-design.md 11.9, 13.1): <c>merge.tool=fake</c>;
     /// <c>mergetool.fake.cmd</c>, which runs the script <see cref="FakeMergeToolScript"/> in the

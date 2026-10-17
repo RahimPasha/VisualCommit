@@ -1,0 +1,222 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Pages"
+             x:Class="VisualCommit.App.Views.Pages.ReflogView"
+             x:DataType="vm:ReflogViewModel"
+             AutomationProperties.AutomationId="Reflog"
+             AutomationProperties.Name="{Binding Title}">
+
+  <!-- The reflog page in place of the graph (docs/phase-5-design.md 5.1 to 5.3, D180): a header of
+       36 with the source selector 8 from the left and close 8 from the right (decision BD6), then
+       the list (rows of 26) and, when git skipped entries, a footer of 26 along the bottom (BD5).
+       A reflog row: 8, the selector 72 (code font, secondary), 8, the time 112, 8, the action (at
+       least 140), 8, the commit 160 (short SHA 56 in the code font, 6, the subject), 8, the lost
+       mark 20, 8; the time and then the selector go first as the page narrows (BD3). A backup
+       row: 8, the time 136, 8, the words (at least 112), 8, the commit 160, 8 (BD4). Colours are
+       tokens only. -->
+  <UserControl.Styles>
+    <Style Selector="ListBox.pageList">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Name}" x:DataType="vm:PageListRow" />
+      <Setter Property="AutomationProperties.AutomationId" Value="ReflogRow" />
+    </Style>
+    <Style Selector="ListBox.pageList.backups ListBoxItem">
+      <Setter Property="AutomationProperties.AutomationId" Value="BackupRow" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcRowHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox.pageList ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.sha">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector=":is(TextBlock).cell">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </UserControl.Styles>
+
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="vm:ReflogRowViewModel">
+      <DockPanel Margin="8,0" Background="Transparent">
+        <TextBlock DockPanel.Dock="Left"
+                   Name="ReflogSelector"
+                   Classes="sha secondary"
+                   Width="72"
+                   Margin="0,0,8,0"
+                   TextTrimming="CharacterEllipsis"
+                   Text="{Binding Selector}"
+                   IsVisible="{Binding $parent[ListBox].((vm:ReflogViewModel)DataContext).ShowsSelector, FallbackValue=False}" />
+        <TextBlock DockPanel.Dock="Left"
+                   Name="ReflogTime"
+                   Classes="cell"
+                   Width="112"
+                   Margin="0,0,8,0"
+                   Text="{Binding TimeText}"
+                   IsVisible="{Binding $parent[ListBox].((vm:ReflogViewModel)DataContext).ShowsTime, FallbackValue=False}" />
+        <Panel DockPanel.Dock="Right" Width="20" Margin="8,0,0,0">
+          <Border Name="ReflogLostMark"
+                  Background="Transparent"
+                  IsVisible="{Binding IsLost}"
+                  ToolTip.Tip="{x:Static vm:ReflogRowViewModel.LostToolTip}"
+                  AutomationProperties.AutomationId="ReflogLostMark"
+                  AutomationProperties.Name="Lost">
+            <c:Icon Data="{StaticResource IconAlert}"
+                    Width="12" Height="12"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Foreground="{DynamicResource VcWarningBrush}" />
+          </Border>
+        </Panel>
+        <DockPanel DockPanel.Dock="Right" Width="160" Margin="8,0,0,0">
+          <TextBlock DockPanel.Dock="Left"
+                     Name="ReflogCommitSha"
+                     Classes="sha"
+                     Width="56"
+                     Text="{Binding ShortSha}" />
+          <c:TrimmedTextBlock Name="ReflogCommitSubject"
+                              Classes="cell"
+                              Margin="6,0,0,0"
+                              Text="{Binding Subject}" />
+        </DockPanel>
+        <c:TrimmedTextBlock Name="ReflogAction"
+                            Classes="cell"
+                            Text="{Binding Action}" />
+      </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:BackupRowViewModel">
+      <DockPanel Margin="8,0" Background="Transparent">
+        <TextBlock DockPanel.Dock="Left"
+                   Name="BackupTime"
+                   Classes="cell"
+                   Width="136"
+                   Margin="0,0,8,0"
+                   Text="{Binding TimeText}" />
+        <DockPanel DockPanel.Dock="Right" Width="160" Margin="8,0,0,0">
+          <TextBlock DockPanel.Dock="Left"
+                     Name="BackupCommitSha"
+                     Classes="sha"
+                     Width="56"
+                     Text="{Binding ShortSha}" />
+          <c:TrimmedTextBlock Name="BackupCommitSubject"
+                              Classes="cell"
+                              Margin="6,0,0,0"
+                              Text="{Binding Subject}" />
+        </DockPanel>
+        <c:TrimmedTextBlock Name="BackupWords"
+                            Classes="cell"
+                            Text="{Binding Words}" />
+      </DockPanel>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <DockPanel Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- Header, 36: the source selector and close (BD6). -->
+    <Border Name="ReflogHeader"
+            DockPanel.Dock="Top"
+            Height="36"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1"
+            AutomationProperties.AutomationId="ReflogHeader">
+      <DockPanel Margin="8,0">
+        <Button DockPanel.Dock="Right"
+                Name="ReflogClose"
+                Theme="{StaticResource VcIconButton}"
+                Width="28" Height="28" Padding="7"
+                Command="{Binding CloseCommand}"
+                ToolTip.Tip="Close"
+                AutomationProperties.AutomationId="ReflogClose"
+                AutomationProperties.Name="Close">
+          <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+        </Button>
+        <Button Name="ReflogSource"
+                Theme="{StaticResource VcActionButton}"
+                Padding="10,3"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="ReflogSource"
+                AutomationProperties.Name="{Binding SourceLabel}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Name="ReflogSourceLabel" Text="{Binding SourceLabel}" VerticalAlignment="Center" />
+            <c:Icon Data="{StaticResource IconChevronDown}" Width="12" Height="12" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </DockPanel>
+    </Border>
+
+    <!-- The footer (BD5): only when git skipped entries. -->
+    <Border Name="ReflogFooter"
+            DockPanel.Dock="Bottom"
+            Height="26"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,1,0,0"
+            IsVisible="{Binding HasFooter}"
+            AutomationProperties.AutomationId="ReflogFooter"
+            AutomationProperties.Name="{Binding Footer}">
+      <c:TrimmedTextBlock Name="ReflogFooterText"
+                          Classes="secondary"
+                          Text="{Binding Footer}"
+                          Margin="8,0"
+                          TextTrimming="CharacterEllipsis"
+                          VerticalAlignment="Center" />
+    </Border>
+
+    <Panel>
+      <ListBox Name="ReflogList"
+               Focusable="True"
+               Classes="pageList"
+               Classes.backups="{Binding ShowsBackups}"
+               ItemsSource="{Binding Rows}"
+               SelectedItem="{Binding SelectedRow}"
+               SelectionMode="Single"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               AutomationProperties.AutomationId="ReflogList"
+               AutomationProperties.Name="{Binding Title}" />
+
+      <TextBlock Name="ReflogLoading"
+                 Classes="secondary"
+                 Text="Loading…"
+                 IsVisible="{Binding ShowsLoading}"
+                 Margin="12,10"
+                 HorizontalAlignment="Left" VerticalAlignment="Top" />
+      <StackPanel Margin="12,10" Spacing="6" IsVisible="{Binding HasMessage}" HorizontalAlignment="Left" VerticalAlignment="Top">
+        <TextBlock Name="ReflogMessage"
+                   Classes="secondary"
+                   Classes.error="{Binding IsError}"
+                   Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="ReflogMessage" />
+        <TextBlock Name="ReflogDetail"
+                   Classes="secondary"
+                   Text="{Binding Detail}"
+                   IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Panel>
+  </DockPanel>
+</UserControl>

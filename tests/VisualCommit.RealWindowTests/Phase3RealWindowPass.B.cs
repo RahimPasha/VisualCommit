@@ -142,9 +142,11 @@ public partial class Phase3RealWindowPass
     /// <summary>
     /// Check 11, steps 5, 8, 10 and 11, at 1400×900 on a fresh ops copy, with the real Ctrl and
     /// Shift keys held during real clicks: two commits selected with Ctrl (11d), a Shift
-    /// selection, the several-commits menu (11g) and the pick of two (11h). Steps 6, 7 and 9 are
-    /// the scripted run's alone; step 8 ends in the selection they leave, so 11g and 11h show the
-    /// scripted run's state.
+    /// selection, the several-commits menu (11g) and the pick of two (11h). Two selected commits
+    /// show their comparison in the right panel (phase 5's D162, its report's "Changes to expected
+    /// results"), From the lower row and To the upper, in place of phase 3's "2 commits selected".
+    /// Steps 6, 7 and 9 are the scripted run's alone; step 8 ends in the selection they leave, so
+    /// 11g and 11h show the scripted run's state.
     /// </summary>
     [Fact]
     public async Task Check_11_ctrl_and_shift_selection_and_the_pick_of_two()
@@ -154,32 +156,32 @@ public partial class Phase3RealWindowPass
         var alphaTwo = RowPoint(app, 4, G0.Lanes);
         var alphaOne = RowPoint(app, 5, G0.Lanes);
 
-        // Step 5: click "Alpha one", Ctrl+click "Alpha two".
+        // Step 5: click "Alpha one", Ctrl+click "Alpha two": their comparison.
         app.ClickAt(alphaOne.X, alphaOne.Y);
         app.ClickAt(alphaTwo.X, alphaTwo.Y, VirtualKeyShort.CONTROL);
-        WaitForMultiSelection(app, "2 commits selected");
+        WaitForComparisonOfTheTwo(app);
         Compare(app, "11d-two-selected");
 
         // Step 8: click "Alpha two", then Shift+click "Alpha one".
         app.ClickAt(alphaTwo.X, alphaTwo.Y);
         WaitForDetails(app, "Alpha two");
         app.ClickAt(alphaOne.X, alphaOne.Y, VirtualKeyShort.SHIFT);
-        WaitForMultiSelection(app, "2 commits selected");
+        WaitForComparisonOfTheTwo(app);
 
-        // Step 10: a right-click on a selected row keeps the selection and opens the
-        // several-commits menu, with phase 4's squash (disabled: neither commit is on main); the
-        // pointer stays where it opened it.
+        // Step 10: a right-click on a selected row keeps the selection, and with it the
+        // comparison, and opens the several-commits menu, with phase 4's squash (disabled: neither
+        // commit is on main); the pointer stays where it opened it.
         app.RightClickAt(alphaOne.X, alphaOne.Y);
         Assert.Equal(ItemLabels(TwoCommitsMenu), app.MenuItemNames());
         Assert.False(app.FindAll("ContextMenuItem").Single(item => item.Name == "Squash 2 commits…").IsEnabled, "\"Squash 2 commits…\" is enabled.");
-        Assert.Equal("2 commits selected", app.Find("MultiSelectionTitle").Name);
+        WaitForComparisonOfTheTwo(app);
         Compare(app, "11g-multi-menu", keepPointer: true);
 
-        // Step 11: the pick of two.
+        // Step 11: the pick of two; the two picked commits stay selected and compared.
         var pick = ExpectOperation(app, Ops, CherryPickTwoOperation);
         app.ClickMenuItem("Cherry-pick 2 commits onto main");
         pick.Wait(OperationOutcome.Succeeded);
-        WaitForMultiSelection(app, "2 commits selected");
+        WaitForComparisonOfTheTwo(app);
         Assert.Equal(StatusPickedTwo, app.OperationStatusText());
         Compare(app, "11h-two-picked");
 
@@ -190,7 +192,14 @@ public partial class Phase3RealWindowPass
         Assert.Equal(Sha.PickedAlphaTwo, await repo.HeadAsync());
     }
 
-    /// <summary>Waits until the right panel shows the multi-selection view with this title.</summary>
-    private static void WaitForMultiSelection(RealApp app, string title) =>
-        app.WaitFor(() => app.FindAll("MultiSelectionTitle").Any(text => text.Name == title), $"the multi-selection view's \"{title}\"", RealApp.DefaultWaitTimeout);
+    /// <summary>
+    /// Waits until the right panel shows the comparison of "Alpha one" (From, the lower row) and
+    /// "Alpha two" (To) and has read it (phase 5's design 6.1 and 6.4, D162), and asserts that
+    /// phase 3's multi-selection view does not show beside it.
+    /// </summary>
+    private static void WaitForComparisonOfTheTwo(RealApp app)
+    {
+        app.WaitForComparison("From dff8fbf Alpha one", "To ce5ea6a Alpha two", OperationTimeout);
+        Assert.Empty(app.ShownElements("MultiSelectionTitle"));
+    }
 }

@@ -57,8 +57,20 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- What the graph hides, or solo mode leaves out (docs/phase-5-design.md 8.3); HEAD's branch,
+         always shown, keeps the accent colour. -->
+    <Style Selector="TextBlock.refName.dimmed">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+    </Style>
     <Style Selector="TextBlock.refName.head">
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <!-- The toggles of a hidden or soloed row (8.3): 18 by 18. -->
+    <Style Selector="Button.refToggle">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Padding" Value="3" />
+      <Setter Property="Margin" Value="6,0,0,0" />
     </Style>
   </UserControl.Styles>
 
@@ -142,12 +154,40 @@
                     <TextBlock Name="BehindCount" Classes="secondary count" Text="{Binding BehindText}" />
                   </StackPanel>
                 </StackPanel>
+                <!-- At the row's right, before the ahead and behind counts (8.3): the eye of a hidden
+                     branch or remote shows it again, the solo button ends a solo. A press on them
+                     starts no drag and a double-click checks nothing out (RefDrag.IsExcluded); they
+                     are left out of the row's name. -->
+                <Button DockPanel.Dock="Right"
+                        Name="RefHiddenToggle"
+                        Classes="refToggle"
+                        Theme="{StaticResource VcIconButton}"
+                        IsVisible="{Binding ShowsHiddenToggle}"
+                        Command="{Binding ShowHiddenCommand}"
+                        ToolTip.Tip="Hidden in the graph. Click to show it"
+                        shell:RefDrag.IsExcluded="True"
+                        AutomationProperties.AutomationId="RefHiddenToggle">
+                  <c:Icon Data="{StaticResource IconEyeOff}" Width="12" Height="12" />
+                </Button>
+                <Button DockPanel.Dock="Right"
+                        Name="RefSoloToggle"
+                        Classes="refToggle"
+                        Theme="{StaticResource VcIconButton}"
+                        Foreground="{DynamicResource VcAccentBrush}"
+                        IsVisible="{Binding ShowsSoloToggle}"
+                        Command="{Binding StopSoloingCommand}"
+                        ToolTip.Tip="Soloed. Click to stop soloing it"
+                        shell:RefDrag.IsExcluded="True"
+                        AutomationProperties.AutomationId="RefSoloToggle">
+                  <c:Icon Data="{StaticResource IconSolo}" Width="12" Height="12" />
+                </Button>
                 <TextBlock Name="RefName"
                            Classes="refName"
+                           Classes.dimmed="{Binding IsDimmed}"
                            Classes.head="{Binding IsHead}"
                            Text="{Binding Text}"
                            TextTrimming="CharacterEllipsis"
-                           ToolTip.Tip="{Binding ToolTip}"
+                           ToolTip.Tip="{Binding NameToolTip}"
                            VerticalAlignment="Center" />
               </DockPanel>
             </Button>

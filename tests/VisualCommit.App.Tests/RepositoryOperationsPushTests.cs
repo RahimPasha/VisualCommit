@@ -434,6 +434,8 @@ public class RepositoryOperationsPushTests
 
         public int Waiting => 0;
 
+        public string? FirstWaitingTitle => null;
+
         public OperationResult? LastResult => null;
 
         public Task<OperationResult> RunAsync(GitOperation operation)

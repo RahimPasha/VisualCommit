@@ -49,9 +49,22 @@ public sealed partial class GitRepository
         var stashes = ParseStashes(await stashesTask.ConfigureAwait(false));
 
         var branchName = headRef is null ? null : headRef.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? headRef[HeadsPrefix.Length..] : headRef;
-        var head = new HeadState(branchName, await headShaTask.ConfigureAwait(false));
+        var head = new HeadState(branchName, HeadCommit(refs, await headShaTask.ConfigureAwait(false)));
         return new RepoRefs(head, refs, stashes, remotes);
     }
+
+    /// <summary>
+    /// HEAD's commit in a snapshot of the refs: that of the branch HEAD is on, as
+    /// <c>for-each-ref</c> listed it, so that HEAD and its branch come from one read. The reads
+    /// run side by side, and a commit made meanwhile (in a terminal) moves the branch between
+    /// them: <c>rev-parse HEAD</c> could see the new commit and <c>for-each-ref</c> the old one,
+    /// a snapshot of no moment. Its fingerprint differs from the last one, so the graph would
+    /// load again, with the new commit's row from git log and its branch's label still on the
+    /// row below (the phase 5 gate's f11f). <paramref name="revParsed"/> (<c>rev-parse HEAD</c>)
+    /// stands for a detached HEAD, an unborn branch, and a branch made after the list was read.
+    /// </summary>
+    private static string? HeadCommit(List<GitRef> refs, string? revParsed) =>
+        refs.Find(gitRef => gitRef.IsHead) is { } branch ? branch.TargetSha : revParsed;
 
     public async Task<HeadState> ReadHeadAsync(CancellationToken cancellationToken = default)
     {

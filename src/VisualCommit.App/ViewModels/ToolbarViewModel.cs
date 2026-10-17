@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using Avalonia;
+using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Menus;
@@ -37,6 +39,12 @@ public interface IToolbarActions
 
     /// <summary>Pop: pops the newest stash, <c>stash@{0}</c> (2.25).</summary>
     Task PopAsync();
+
+    /// <summary>Undo: the entry before the undo history's cursor, applied backwards as one operation (docs/phase-5-design.md 7.5).</summary>
+    Task UndoAsync();
+
+    /// <summary>Redo: the entry after the cursor, applied forwards as one operation.</summary>
+    Task RedoAsync();
 }
 
 /// <summary>
@@ -46,7 +54,18 @@ public interface IToolbarActions
 /// (<c>ToolTip.ShowOnDisabled</c>): the first reason that holds, in 4d's order. An enabled button
 /// has no tooltip. The states follow the repository's refs (<see cref="RepositoryViewModel.Refs"/>)
 /// and its working-tree status; until the refs have been read every button is disabled, without a
-/// reason. Undo, Redo and Search are placeholders until phase 5 and are not here.
+/// reason.
+/// <para>
+/// Phase 5's Undo, Redo and Search (docs/phase-5-design.md 1.1) have a tooltip while enabled too,
+/// which is also their automation help text: what Undo and Redo would act on is seen nowhere else,
+/// and Search's key is worth showing. Undo and Redo take their states from the repository's
+/// operations (<see cref="RepositoryOperations.ReadUndoAvailability"/>, 7.4), read with the others,
+/// again on <see cref="UpdateUndoStates"/> and on every change of the repository's queue, so that
+/// the state after an action shows as soon as the queue has finished it; while those give no
+/// tooltip they are disabled with <see cref="NothingToUndoText"/> and <see cref="NothingToRedoText"/>.
+/// Search is enabled whenever the tab has a repository and neither the interactive rebase's list
+/// nor the conflict resolver is open (11.2, 12.4).
+/// </para>
 /// </summary>
 public sealed partial class ToolbarViewModel : ObservableObject
 {
@@ -67,15 +86,33 @@ public sealed partial class ToolbarViewModel : ObservableObject
 
     public const string NoStashesText = "There are no stashes";
 
+    /// <summary>Undo with an empty undo history (docs/phase-5-design.md 7.4's reason 4).</summary>
+    public const string NothingToUndoText = OperationTexts.NothingToUndo;
+
+    /// <summary>Redo with nothing undone to redo (7.4's reason 4).</summary>
+    public const string NothingToRedoText = OperationTexts.NothingToRedo;
+
+    /// <summary>Search, and Undo and Redo, while the interactive rebase's list is open (11.2, 12.4; 7.4's reason 3).</summary>
+    public const string CloseInteractiveRebaseText = OperationTexts.CloseInteractiveRebaseFirst;
+
+    /// <summary>Search while the conflict resolver is open (11.2, 12.4).</summary>
+    public const string CloseConflictResolverText = "Close the conflict resolver first";
+
+    private readonly SynchronizationContext? _ui;
     private IToolbarActions? _actions;
 
     /// <param name="repository">The tab's repository, or null for a tab without one.</param>
     public ToolbarViewModel(RepositoryViewModel? repository)
     {
         Repository = repository;
+        _ui = SynchronizationContext.Current;
         if (repository is not null)
         {
             repository.PropertyChanged += OnRepositoryChanged;
+
+            // An operation that starts, waits or ends changes Undo's and Redo's states without a
+            // change of the refs or the status (7.4's reason 1, the entry an action just added).
+            repository.Queue.Changed += OnQueueChanged;
         }
 
         Update();
@@ -93,6 +130,15 @@ public sealed partial class ToolbarViewModel : ObservableObject
         get => _actions ?? (object?)Repository?.Operations as IToolbarActions;
         set => _actions = value;
     }
+
+    /// <summary>
+    /// Where Undo's and Redo's states come from (7.4). Unless set (tests), the repository's
+    /// <see cref="RepositoryOperations.ReadUndoAvailability"/>, read on <see cref="UpdateUndoStates"/>.
+    /// </summary>
+    public Func<UndoAvailability>? UndoStates { get; set; }
+
+    /// <summary>What Search does (3.1). Unless set (tests), the repository's <see cref="RepositoryViewModel.OpenSearch"/>.</summary>
+    public Action? SearchAction { get; set; }
 
     /// <summary>Why Fetch is disabled, or null while it is enabled (its tooltip).</summary>
     [ObservableProperty]
@@ -141,6 +187,33 @@ public sealed partial class ToolbarViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PopCommand))]
     public partial bool CanPop { get; private set; }
+
+    /// <summary>
+    /// Undo's tooltip (1.1): <c>Undo {text}</c> while it is enabled, otherwise its first reason
+    /// (7.4); null while its state is not given yet.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? UndoToolTip { get; private set; }
+
+    /// <summary>Redo's tooltip (1.1): <c>Redo {text}</c>, or its first reason; null while its state is not given yet.</summary>
+    [ObservableProperty]
+    public partial string? RedoToolTip { get; private set; }
+
+    /// <summary>Search's tooltip (1.1): <c>Search commits (Ctrl+F)</c>, or why it is disabled (11.2); null in a tab without a repository.</summary>
+    [ObservableProperty]
+    public partial string? SearchToolTip { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
+    public partial bool CanUndo { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RedoCommand))]
+    public partial bool CanRedo { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
+    public partial bool CanSearch { get; private set; }
 
     /// <summary>
     /// The name of what is in progress as the reason "Finish or abort the &lt;kind&gt; first"
@@ -194,6 +267,52 @@ public sealed partial class ToolbarViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanPop), AllowConcurrentExecutions = true)]
     private Task Pop() => RunAsync("Pop", actions => actions.PopAsync());
 
+    [RelayCommand(CanExecute = nameof(CanUndo), AllowConcurrentExecutions = true)]
+    private Task Undo() => RunAsync("Undo", actions => actions.UndoAsync());
+
+    [RelayCommand(CanExecute = nameof(CanRedo), AllowConcurrentExecutions = true)]
+    private Task Redo() => RunAsync("Redo", actions => actions.RedoAsync());
+
+    /// <summary>
+    /// What Search's tooltip says while it is enabled (1.1): <c>Search commits (Ctrl+F)</c>, with
+    /// the key the window takes for it (1.3).
+    /// </summary>
+    public static string SearchText => $"Search commits ({SearchGestureText})";
+
+    /// <summary>
+    /// The search's key in words: the platform's command modifier with F, <c>Ctrl+F</c>, or
+    /// <c>Cmd+F</c> where Avalonia's hotkey configuration gives Cmd (macOS), never from a test of
+    /// the operating system; Ctrl where it names none.
+    /// </summary>
+    public static string SearchGestureText =>
+        Application.Current?.PlatformSettings?.HotkeyConfiguration.CommandModifiers is { } modifiers && modifiers.HasFlag(KeyModifiers.Meta)
+            ? "Cmd+F"
+            : "Ctrl+F";
+
+    /// <summary>
+    /// Search, and its key (1.3), opens the search bar (3.1): not an operation, the repository's
+    /// graph area opens it at once. What fails in it is logged; the toolbar goes on.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSearch))]
+    private void Search()
+    {
+        try
+        {
+            if (SearchAction is { } search)
+            {
+                search();
+            }
+            else
+            {
+                Repository?.OpenSearch();
+            }
+        }
+        catch (Exception ex)
+        {
+            (Repository?.Operations.Log ?? NullAppLog.Instance).Error($"{Repository?.Name}: the toolbar's Search failed.", ex);
+        }
+    }
+
     private async Task RunAsync(string button, Func<IToolbarActions, Task> action)
     {
         var log = Repository?.Operations.Log ?? NullAppLog.Instance;
@@ -219,6 +338,24 @@ public sealed partial class ToolbarViewModel : ObservableObject
         if (e.PropertyName is nameof(RepositoryViewModel.Refs) or nameof(RepositoryViewModel.Status))
         {
             Update();
+        }
+        else if (e.PropertyName is nameof(RepositoryViewModel.IsInteractiveRebaseOpen) or nameof(RepositoryViewModel.IsResolverOpen))
+        {
+            UpdateSearchState();
+            UpdateUndoStates();
+        }
+    }
+
+    /// <summary>The queue changed, on whatever thread it acted: Undo's and Redo's states are read again on the toolbar's own.</summary>
+    private void OnQueueChanged(object? sender, EventArgs e)
+    {
+        if (_ui is null || SynchronizationContext.Current == _ui)
+        {
+            UpdateUndoStates();
+        }
+        else
+        {
+            _ui.Post(_ => UpdateUndoStates(), null);
         }
     }
 
@@ -265,8 +402,50 @@ public sealed partial class ToolbarViewModel : ObservableObject
     private static bool HasConflicts(WorkingTreeStatus status) =>
         status.Unstaged.Any(file => file.Kind == FileChangeKind.Conflicted) || status.Staged.Any(file => file.Kind == FileChangeKind.Conflicted);
 
+    /// <summary>
+    /// Reads Undo's and Redo's states again (7.4): when the undo history, the queue or the checks
+    /// made after a refresh changed them without a change of the refs or the status. With a
+    /// repository each has a tooltip, what it would do while enabled and its reason otherwise:
+    /// <see cref="NothingToUndoText"/> (<see cref="NothingToRedoText"/>) while the repository's
+    /// operations give none. In a tab without a repository both are disabled without a tooltip.
+    /// </summary>
+    public void UpdateUndoStates()
+    {
+        if (Repository is not { } repository)
+        {
+            (UndoToolTip, CanUndo) = (null, false);
+            (RedoToolTip, CanRedo) = (null, false);
+            return;
+        }
+
+        var undo = UndoStates?.Invoke()
+            ?? (repository.IsClosed ? UndoAvailability.Disabled : repository.Operations.ReadUndoAvailability());
+        (UndoToolTip, CanUndo) = (undo.UndoToolTip ?? NothingToUndoText, undo.CanUndo && undo.UndoToolTip is not null);
+        (RedoToolTip, CanRedo) = (undo.RedoToolTip ?? NothingToRedoText, undo.CanRedo && undo.RedoToolTip is not null);
+    }
+
+    /// <summary>
+    /// Search's state (1.1, 11.2): enabled with <see cref="SearchText"/> while the tab has a
+    /// repository and neither the conflict resolver nor the interactive rebase's list is open (they
+    /// hold work, and leaving them asks), otherwise disabled with the reason (12.4); in a tab
+    /// without a repository disabled without a tooltip.
+    /// </summary>
+    private void UpdateSearchState()
+    {
+        var reason = Repository switch
+        {
+            { IsResolverOpen: true } => CloseConflictResolverText,
+            { IsInteractiveRebaseOpen: true } => CloseInteractiveRebaseText,
+            _ => null,
+        };
+        CanSearch = Repository is not null && reason is null;
+        SearchToolTip = Repository is null ? null : reason ?? SearchText;
+    }
+
     private void Update()
     {
+        UpdateUndoStates();
+        UpdateSearchState();
         if (Repository?.Refs is not { } refs)
         {
             // No repository, or its refs are not read yet.
@@ -335,4 +514,18 @@ public sealed partial class ToolbarViewModel : ObservableObject
         (StashToolTip, CanStash) = (stash, enabled && stash is null);
         (PopToolTip, CanPop) = (pop, enabled && pop is null);
     }
+}
+
+/// <summary>
+/// The toolbar's Undo and Redo now (docs/phase-5-design.md 1.1, 7.4): each enabled or not, with
+/// its tooltip, <c>Undo {text}</c> while enabled or the first reason it is disabled.
+/// </summary>
+/// <param name="CanUndo">Undo is enabled.</param>
+/// <param name="UndoToolTip">Its tooltip; null while its state is not known.</param>
+/// <param name="CanRedo">Redo is enabled.</param>
+/// <param name="RedoToolTip">Its tooltip; null while its state is not known.</param>
+public sealed record UndoAvailability(bool CanUndo, string? UndoToolTip, bool CanRedo, string? RedoToolTip)
+{
+    /// <summary>Both disabled, without a tooltip: a tab without a repository, or a state not known yet.</summary>
+    public static UndoAvailability Disabled { get; } = new(false, null, false, null);
 }

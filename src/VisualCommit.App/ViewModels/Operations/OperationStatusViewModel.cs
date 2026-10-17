@@ -41,6 +41,12 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
 
     public const string AutoFetchFailedText = "Auto-fetch failed";
 
+    /// <summary>Cancel's tooltip while a network operation runs (1.9).</summary>
+    public const string StopGitText = "Stop git";
+
+    /// <summary>Cancel's tooltip while the merge tool runs (docs/phase-4-design.md 11.9): Cancel stops git, its shell and the tool.</summary>
+    public const string StopGitAndMergeToolText = "Stop git and the merge tool";
+
     private readonly IOperationQueue? _queue;
     private readonly PromptNotices? _notices;
     private readonly SynchronizationContext? _ui;
@@ -94,10 +100,18 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     /// <summary>The progress bar has no percentage to show.</summary>
     public bool IsIndeterminate => IsRunning && Percent is null;
 
-    /// <summary>Cancel is offered: a network operation before its cancel window ended.</summary>
+    /// <summary>Cancel is offered: a network operation before its cancel window ended, or the merge tool.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
     public partial bool CanCancel { get; private set; }
+
+    /// <summary>
+    /// Cancel's tooltip: <see cref="StopGitAndMergeToolText"/> while a local operation that can be
+    /// cancelled runs, which is the merge tool's alone (<see cref="GitOperation.CanBeCancelled"/>,
+    /// D149); otherwise <see cref="StopGitText"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial string CancelToolTip { get; private set; } = StopGitText;
 
     /// <summary>How many operations wait.</summary>
     [ObservableProperty]
@@ -202,6 +216,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
         var current = _queue.Current;
         Waiting = _queue.Waiting;
         CanCancel = current?.CanCancel ?? false;
+        CancelToolTip = current is { CanCancel: true, Kind: OperationKind.Local } ? StopGitAndMergeToolText : StopGitText;
         if (current is { IsBackground: false })
         {
             // The message of the last operation goes as soon as the next one starts.

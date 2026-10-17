@@ -1,5 +1,6 @@
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Undo;
 
 namespace VisualCommit.Testing;
 
@@ -10,6 +11,9 @@ namespace VisualCommit.Testing;
 /// Phase 3's reads give empty results (no remotes, no worktrees, nothing detached) and its
 /// writes throw <see cref="NotSupportedException"/>. So do phase 4's: its reads give an empty
 /// list or null (no merge tool, no operation message), the backups' clean-up removes nothing.
+/// Phase 5's reads find nothing (no history, blame, reflog, backups, differences, matches, ignored
+/// files or stash paths), the undo history's read sees HEAD alone, so that no action leaves an
+/// entry, and an undo step and C12's writes throw.
 /// </summary>
 public abstract class FakeRepositoryBase : IGitRepository
 {
@@ -76,6 +80,9 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<string?> ResolveAsync(string revision, CancellationToken cancellationToken = default) =>
         Task.FromResult<string?>(null);
 
+    public virtual Task<bool> CommitExistsAsync(string sha, CancellationToken cancellationToken = default) =>
+        Task.FromResult(true);
+
     public virtual Task<IReadOnlyList<WorktreeInfo>> ReadWorktreesAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<WorktreeInfo>>([]);
 
@@ -102,6 +109,18 @@ public abstract class FakeRepositoryBase : IGitRepository
 
     public virtual Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
+
+    public virtual Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<bool> PutBackUnclearedStashAsync(string stashCommit, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.Ordinal));
 
     public virtual Task CreateBranchAsync(string name, string startPoint, bool checkout, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
@@ -136,7 +155,7 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public virtual Task PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default) =>
+    public virtual Task<PushOutcome> PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public virtual Task SetUpstreamAsync(string branch, string remoteBranchRef, CancellationToken cancellationToken = default) =>
@@ -160,7 +179,7 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task RemoveRemoteAsync(string name, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public virtual Task PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default) =>
+    public virtual Task<PushOutcome> PushTagAsync(string remote, string tag, NetworkOptions options, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public virtual Task DeleteRemoteTagAsync(string remote, string tag, string expectedObject, NetworkOptions options, CancellationToken cancellationToken = default) =>
@@ -174,6 +193,9 @@ public abstract class FakeRepositoryBase : IGitRepository
 
     public virtual Task DropStashAsync(string stashCommit, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
+
+    public virtual Task<StashPaths> ReadStashPathsAsync(string stashCommit, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new StashPaths([], []));
 
     public virtual Task CreateTagAsync(string name, string target, string? message, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
@@ -262,4 +284,34 @@ public abstract class FakeRepositoryBase : IGitRepository
         NetworkOptions? options = null,
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<string>>([]);
+
+    public virtual Task ReadFileHistoryAsync(string startSha, string path, Action<FileHistoryRow> onRow, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    public virtual Task<BlameResult> ReadBlameAsync(string? sha, string path, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new BlameResult([]));
+
+    public virtual Task<IReadOnlyList<string>> ReadTreeFilesAsync(string sha, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
+    public virtual Task<ReflogResult> ReadReflogAsync(string fullRef, int limit, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ReflogResult.Empty);
+
+    public virtual Task<IReadOnlySet<string>> FindLostCommitsAsync(IReadOnlyCollection<string> shas, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.Ordinal));
+
+    public virtual Task<IReadOnlyList<BackupInfo>> ReadBackupsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<BackupInfo>>([]);
+
+    public virtual Task<CompareResult> CompareAsync(string from, string to, bool threeDot, bool countCommits, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new CompareResult(from, to, CompareBase.Trees, from, [], RenamesSkipped: false, Counts: null));
+
+    public virtual Task SearchAsync(SearchMode mode, string text, IReadOnlyList<string> shas, Action<string> onMatch, IProgress<int>? progress, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    public virtual async Task<UndoState> ReadRefStatesAsync(UndoScope scope, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        new() { Head = await ((IGitRepository)this).ReadHeadAsync(cancellationToken).ConfigureAwait(false) };
+
+    public virtual Task<UndoStepResult> RunUndoStepAsync(UndoStep step, NetworkOptions options, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
 }

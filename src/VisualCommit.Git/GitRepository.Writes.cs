@@ -137,7 +137,7 @@ public sealed partial class GitRepository
 
             // The backups' clock, as every backup's (docs/phase-4-design.md section 9): a test's fixed
             // clock then orders the snapshots with the other backups for the clean-up.
-            var name = SnapshotRefPrefix + BackupClock.GetUtcNow().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
+            var name = SnapshotRefPrefix + BackupClock.NextName().ToString(BackupTimeFormat, CultureInfo.InvariantCulture);
             var refName = name;
             for (var attempt = 2; ; attempt++)
             {
@@ -188,6 +188,18 @@ public sealed partial class GitRepository
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var present = snapshot.Paths.Where(snapshot.Present.Contains).ToList();
+
+        // git restore writes with force: a folder holding files where the snapshot has a file, or
+        // a file where it has a folder, would go without a word, and no backup holds it
+        // (docs/phase-5-design.md 15.9). Nothing is restored then.
+        var inTheWay = present.Where(path => WorkingTreeFiles.IsInTheWayOfFile(WorkingDirectory, path)).ToList();
+        if (inTheWay.Count > 0)
+        {
+            throw new IOException(inTheWay.Count == 1
+                ? $"Nothing was restored: '{inTheWay[0]}' is now a folder with files in it, or lies under a file, and restoring would delete them. Move them away first."
+                : string.Create(CultureInfo.InvariantCulture, $"Nothing was restored: {inTheWay.Count} paths, '{inTheWay[0]}' first, are now folders with files in them, or lie under a file, and restoring would delete them. Move them away first."));
+        }
+
         if (present.Count > 0)
         {
             // Through git, so that the working tree gets the file as git checks it out: line

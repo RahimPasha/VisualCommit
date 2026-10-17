@@ -129,7 +129,11 @@ public sealed partial class Phase3ChecksC
         ClickDialogButton(app, "CancelButton");
         await AssertNoDialogAsync(app);
         Assert.Equal(2, (await StashListAsync(repo)).Count);
-        Assert.Empty(await repo.BackupRefsAsync());
+
+        // Step 6's pop saved a backup of "Save my work" first (docs/phase-5-design.md 7.8, D171):
+        // the backup clock's first name of the session (2.3).
+        var popped = Assert.Single(await repo.BackupRefsAsync());
+        Assert.Equal(("refs/visualcommit/backup/stash-20260102T090001000Z", saveMyWork), (popped.Name, popped.Sha));
 
         await OpenStashMenuAsync(app, "On main: Experiment");
         app.ClickMenuItem("Drop stash…");
@@ -140,7 +144,11 @@ public sealed partial class Phase3ChecksC
         await WaitForOperationAsync(app, repo, "Drop stash@{1}", mark);
         shot = Shot(app, "15i-dropped");
         await AssertNoDialogAsync(app);
-        var backup = Assert.Single(await BackupsAsync(repo));
+        var backups = await BackupsAsync(repo);
+        Assert.Equal(2, backups.Count);
+        Assert.Equal(popped.Name, backups[0].Name);
+        var backup = backups[1];
+        Assert.Equal("refs/visualcommit/backup/stash-20260102T090002000Z", backup.Name);
         Assert.Equal("stash", backup.Ref.Kind);
         Assert.Null(backup.Ref.Name);
         Assert.False(backup.Ref.IsChanges);
@@ -185,7 +193,9 @@ public sealed partial class Phase3ChecksC
         AssertGraph(app, shot, PartC.Check15bBefore, lanes: 4, PartC.Working);
         await AssertBranchRowAsync(app, ["Local branches", "main"], head: true, ahead: 1);
 
-        // Step 2: Pop, refused.
+        // Step 2: Pop, refused by the app's own check before git (phase 5's C12, design 9.3): the
+        // stash changes README.md, which has a local change. No git stash pop runs (T5 is not shown).
+        var callsBefore = app.GitCalls().Count;
         var mark = app.LogMark();
         app.Click(ToolbarButton(app, "PopButton"));
         await WaitForOperationAsync(app, repo, "Pop stash@{0}", mark);
@@ -193,14 +203,13 @@ public sealed partial class Phase3ChecksC
         Shot(app, "15b2-pop-refused");
         await AssertErrorDialogAsync(app, new ExpectedErrorDialog(
             "Applying the stash failed",
-            "Your changes to these files would be overwritten by applying stash@{0}.",
+            PartC.PopRefusedSummary,
             OpsRepo,
-            "git stash pop stash@{0}",
-            ["Copy output", "Close"],
-            PartC.T5,
-            PartC.T5Key));
-        AssertErrorDialogParts(app, extra: null);
-        Assert.Equal(1, app.LastCall("git stash pop stash@{0}").ExitCode);
+            null,
+            ["Close"],
+            []));
+        AssertErrorDialogParts(app, extra: null, copy: false);
+        Assert.DoesNotContain(CallsSince(app, callsBefore), call => call.StartsWith("git stash pop", StringComparison.Ordinal));
         AssertStatus(app, "Pop stash@{0} failed", OperationStatusTone.Danger);
         Assert.Equal(["stash@{0}: On main: Experiment"], await StashListAsync(repo));
         Assert.Equal(["# Operations", string.Empty, "Local edit."], FileLines(repo, "README.md"));

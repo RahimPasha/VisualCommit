@@ -81,7 +81,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built; the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -263,10 +263,11 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
-| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`. To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
-| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3) and `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4) |
-| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 4 when left out) |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`; phase 5 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase5` (parts A, B, F and P) and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (part U, the undo checks). To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
+| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3), `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4), `dotnet test --project tests/VisualCommit.VisualTests.Phase5` and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (phase 5) |
+| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 5 when left out; for phase 5 it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
+| Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |
 | CI result without `gh`: the runs | `curl -s "https://api.github.com/repos/RahimPasha/VisualCommit/actions/runs?branch=<branch>&per_page=3"` shows each run's `id`, `head_sha`, `status` and `conclusion` |
@@ -280,15 +281,22 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 22 minutes on the Windows machine with nothing else running, up to 27
-  with other load (21 min 52 s at phase 4's gate on 2026-10-12, rested and alone, 2,411 tests). The
-  five test projects run side by side, and the run is bound by the processors,
+- The default tests take about 45 minutes on the Windows machine with nothing else running (43 min
+  22 s at phase 5's gate on 2026-10-16, alone, 3,233 tests; 21 min 52 s at phase 4's, 2,411 tests).
+  The seven test projects run side by side (phase 5 added its two walk-throughs and an undo history
+  whose reads every operation makes), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
-  it, and other load or a hot laptop lengthens it. In that run, side by side: phases 0 to 2's
-  walk-through 8 minutes, the phase 4 walk-through 16.5, `VisualCommit.Git.Tests` 18,
-  `VisualCommit.App.Tests` 21.5 and the phase 3 walk-through 22. CI takes about 15 minutes
-  (Windows), 15 (macOS) and 3 to 4 (Linux and the containers) per job, the Windows and macOS test
-  steps 13 to 14 of their 24-minute limit (D152). Phase 1's checks load and clone a 100k-commit repo,
+  it, and other load or a hot laptop lengthens it. In that run, side by side, the projects ended
+  after: phases 0 to 2's walk-through 12 min 8 s, the phase 4 walk-through 26 min 15 s, the phase
+  5 walk-through (`VisualCommit.VisualTests.Phase5`) 29 min 50 s, `VisualCommit.Git.Tests` 38 min
+  19 s, the phase 5 undo walk-through (`VisualCommit.VisualTests.Phase5Undo`) 41 min 43 s, the
+  phase 3 walk-through 41 min 46 s and `VisualCommit.App.Tests` 43 min 8 s. `dotnet build` at the
+  root takes about 2 minutes on the laptop. At phase 5's gate (run 38931127856) CI's jobs took
+  27 min 50 s on Windows (its Test step 25 min 15 s), 17 min 43 s on macOS (Test step 16 min
+  13 s), 4 min 48 s on Linux (Test step 3 min 26 s) and 5 min 38 s and 6 min 2 s in the
+  containers. The Test steps of Windows, macOS and Linux have a limit of 40 minutes and their jobs
+  50 (D184, amending D152); the containers' limits stay. The lead raises that limit when the
+  Windows or macOS Test step passes 32 minutes (D186). Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
@@ -298,11 +306,12 @@ What to know about them:
   `tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | sha256sum -c` shows which pictures of
   a later run are the same files (the `tr` removes the line endings a Windows checkout adds,
   which `sha256sum` would take as part of each name); with `--quiet` it prints only those that
-  differ, and a picture new since the list is not named at all. A gate writes its list, after
-  inspecting and before anything else runs, with
-  `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-N-pictures.sha256`.
+  differ, and a picture new since the list is not named at all. A gate writes its list right
+  after its two passes, before anything else runs, with
+  `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-N-pictures.sha256`,
+  and commits it once the inspection has passed.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 14 minutes (phases 0 to 4): tell the
+  app on the desktop and moves the real mouse for about 25 minutes (phases 0 to 5): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
   and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
@@ -344,3 +353,4 @@ lacks.
 | `docs/cloud-sessions.md` | For the owner: working on the project from a Claude Code cloud session |
 | `docs/phase-3-design.md` | Phase 3's design, kept as history; phase 3's decisions (D77 to D133), report and handoff cite its sections as "design N.N" |
 | `docs/phase-4-design.md` | Phase 4's design, kept as history; phase 4's decisions (D139 to D152), report, handoff, status and plan outcome cite its sections as "design N.N"; its sections 14.1 to 14.5 say what the build and the review settled |
+| `docs/phase-5-design.md` | Phase 5's design, kept as history; phase 5's decisions (D153 to D186), report, handoff, status and plan cite its sections as "design N.N"; its sections 15.8 and 15.9 say what the report, the build, the reviews and the gate settled |

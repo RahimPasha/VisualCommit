@@ -357,7 +357,7 @@ public static partial class Phase4Expectations
             "Copy SHA",
         ];
 
-        /// <summary>A1 step 4: the menu of the local branch main (with an upstream, not checked out), 458 high.</summary>
+        /// <summary>A1 step 4: the menu of the local branch main (with an upstream, not checked out), 571 high with phase 5's compare, reflog, hide and solo items.</summary>
         public static readonly string[] MainBranchMenu =
         [
             "main",
@@ -379,10 +379,15 @@ public static partial class Phase4Expectations
             "Change upstream…",
             "Stop tracking origin/main",
             "—",
+            "Compare main with feature/topic",
+            "Show reflog of main",
+            "Hide main",
+            "Solo main",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>A1 step 5: the menu of the remote branch origin/main, 293 high.</summary>
+        /// <summary>A1 step 5: the menu of the remote branch origin/main, 380 high with phase 5's compare, hide and solo items.</summary>
         public static readonly string[] OriginMainMenu =
         [
             "origin/main",
@@ -397,10 +402,14 @@ public static partial class Phase4Expectations
             "—",
             "Delete main on origin… (danger)",
             "—",
+            "Compare origin/main with feature/topic",
+            "Hide origin/main",
+            "Solo origin/main",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>A1 step 6: the menu of the remote branch origin/feature/topic, HEAD's upstream, 293 high.</summary>
+        /// <summary>A1 step 6: the menu of the remote branch origin/feature/topic, HEAD's upstream, 380 high with phase 5's compare, hide and solo items.</summary>
         public static readonly string[] OriginFeatureTopicMenu =
         [
             "origin/feature/topic",
@@ -415,13 +424,17 @@ public static partial class Phase4Expectations
             "—",
             "Delete feature/topic on origin… (danger)",
             "—",
+            "Compare origin/feature/topic with feature/topic",
+            "Hide origin/feature/topic",
+            "Solo origin/feature/topic",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>A1 step 7: the menu of the current branch feature/topic with its upstream, 354 high.</summary>
+        /// <summary>A1 step 7: the menu of the current branch feature/topic with its upstream, 441 high with phase 5's reflog, hide and solo items.</summary>
         public static readonly string[] FeatureTopicMenu = CurrentBranchMenu("feature/topic", "origin/feature/topic");
 
-        /// <summary>A4 step 2: the menu of the current branch main in "sync" (A1 step 7's for main), 354 high.</summary>
+        /// <summary>A4 step 2: the menu of the current branch main in "sync" (A1 step 7's for main), 441 high.</summary>
         public static readonly string[] SyncMainMenu = CurrentBranchMenu("main", "origin/main");
 
         /// <summary>A1 step 8: two commits that form a chain on HEAD's line ("Topic two", "Topic one"), 145 high.</summary>
@@ -477,7 +490,7 @@ public static partial class Phase4Expectations
         /// <summary>A1 step 2: the tooltip of the disabled rebase the pointer rests on.</summary>
         public const string AlreadyOnTopicReason = "This commit is already on feature/topic";
 
-        /// <summary>A3 step 1: the drop of the current branch feature/topic onto main, 145 high.</summary>
+        /// <summary>A3 step 1: the drop of the current branch feature/topic onto main, 180 high with phase 5's compare.</summary>
         public static readonly string[] TopicOntoMainDropMenu =
         [
             "feature/topic → main",
@@ -486,9 +499,11 @@ public static partial class Phase4Expectations
             "—",
             "Rebase feature/topic onto main",
             "Interactive rebase of feature/topic onto main…",
+            "—",
+            "Compare feature/topic with main",
         ];
 
-        /// <summary>A3 step 2: the drop of feature/topic onto the remote branch origin/main, 145 high.</summary>
+        /// <summary>A3 step 2: the drop of feature/topic onto the remote branch origin/main, 180 high with phase 5's compare.</summary>
         public static readonly string[] TopicOntoOriginMainDropMenu =
         [
             "feature/topic → origin/main",
@@ -497,18 +512,22 @@ public static partial class Phase4Expectations
             "—",
             "Rebase feature/topic onto origin/main",
             "Interactive rebase of feature/topic onto origin/main…",
+            "—",
+            "Compare feature/topic with origin/main",
         ];
 
-        /// <summary>A3 step 3: the drop of the remote branch origin/main onto the current branch: no rebase item, 110 high.</summary>
+        /// <summary>A3 step 3: the drop of the remote branch origin/main onto the current branch: no rebase item, 145 high.</summary>
         public static readonly string[] OriginMainOntoTopicDropMenu =
         [
             "origin/main → feature/topic",
             "Merge origin/main into feature/topic",
             "Merge origin/main into feature/topic (create a merge commit)",
             "Fast-forward feature/topic to origin/main (disabled: \"feature/topic has commits that origin/main does not have\")",
+            "—",
+            "Compare origin/main with feature/topic",
         ];
 
-        /// <summary>A3 step 4 (and A5 step 3): the drop of feature/other, not current, onto main, 145 high.</summary>
+        /// <summary>A3 step 4 (and A5 step 3): the drop of feature/other, not current, onto main, 180 high with phase 5's compare.</summary>
         public static readonly string[] OtherOntoMainDropMenu =
         [
             "feature/other → main",
@@ -517,9 +536,11 @@ public static partial class Phase4Expectations
             "—",
             "Check out feature/other and rebase it onto main",
             "Check out feature/other and rebase it onto main interactively…",
+            "—",
+            "Compare feature/other with main",
         ];
 
-        /// <summary>A4 step 5: the conflicted file's menu in the unstaged list, 284 high.</summary>
+        /// <summary>A4 step 5: the conflicted file's menu in the unstaged list, with phase 5's File history and Blame, 345 high.</summary>
         public static readonly string[] ConflictedFileMenu =
         [
             "published.txt",
@@ -531,6 +552,9 @@ public static partial class Phase4Expectations
             "Ignore published.txt (disabled: \"Only untracked files can be ignored\")",
             "Ignore all *.txt files (disabled: \"Only untracked files can be ignored\")",
             "—",
+            "File history",
+            "Blame",
+            "—",
             "Open file",
             "Show in folder",
             "Copy path",
@@ -541,17 +565,18 @@ public static partial class Phase4Expectations
 
         public const double SeveralCommitsMenuHeight = 145;
 
-        public const double LocalBranchWithUpstreamMenuHeight = 458;
+        // Phase 5's items add 113 to a local branch's menu (compare, reflog, hide, solo), 87 to the current branch's (reflog, hide, solo) and a remote branch's (compare, hide, solo), and 35 to a drop's (compare) (docs/phase-5-design.md 13.1, 14.1).
+        public const double LocalBranchWithUpstreamMenuHeight = 571;
 
-        public const double CurrentBranchWithUpstreamMenuHeight = 354;
+        public const double CurrentBranchWithUpstreamMenuHeight = 441;
 
-        public const double RemoteBranchMenuHeight = 293;
+        public const double RemoteBranchMenuHeight = 380;
 
-        public const double DropWithRebaseMenuHeight = 145;
+        public const double DropWithRebaseMenuHeight = 180;
 
-        public const double DropOfRemoteBranchMenuHeight = 110;
+        public const double DropOfRemoteBranchMenuHeight = 145;
 
-        public const double ConflictedFileMenuHeight = 284;
+        public const double ConflictedFileMenuHeight = 345;
 
         /// <summary>
         /// The drag of check A3 (and A5 step 3): 5 equal moves with the button held, the first more
@@ -771,7 +796,7 @@ public static partial class Phase4Expectations
         public static CommitRow Commit(string message, int lane, int colour, string shortSha, string date, params string[] labels) =>
             new(message, lane, colour, labels, ShortSha: shortSha, Date: date, Ends: []);
 
-        /// <summary>The menu of the current branch with an upstream (A1 step 7): "Pull from {up}", then "Pull from {up} (rebase)" and phase 3's other groups.</summary>
+        /// <summary>The menu of the current branch with an upstream (A1 step 7): "Pull from {up}", then "Pull from {up} (rebase)" and phase 3's other groups, and phase 5's reflog, Hide (disabled) and Solo (docs/phase-5-design.md 13.1).</summary>
         public static string[] CurrentBranchMenu(string branch, string upstream) =>
         [
             branch,
@@ -788,6 +813,10 @@ public static partial class Phase4Expectations
             "—",
             "Change upstream…",
             $"Stop tracking {upstream}",
+            "—",
+            $"Show reflog of {branch}",
+            $"Hide {branch} (disabled: \"The checked-out branch is always shown\")",
+            $"Solo {branch}",
             "—",
             "Copy branch name",
         ];

@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -33,6 +34,13 @@ public partial class CommitDetailsViewModel : ObservableObject
     private int _version;
     private readonly ChangedFileList _fileList = new();
 
+    /// <summary>
+    /// The latest <see cref="ShowAsync"/> that asked for a commit, guarded by <see cref="_gate"/>:
+    /// "All files" reads that commit again with its tree, also while its load has not ended (the
+    /// commit shown may then be an older one).
+    /// </summary>
+    private (string Sha, StashEntry? Stash, CancellationToken Token)? _requested;
+
     public CommitDetailsViewModel(IGitRepository? repository, ISettingsStore settings, DateDisplay dates, IAppLog? log = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -43,11 +51,12 @@ public partial class CommitDetailsViewModel : ObservableObject
         _log = log ?? NullAppLog.Instance;
         FileList = settings.Current.FileList;
         _fileList.SetMode(FileList);
+        ShowsAllFiles = settings.Current.ShowAllFiles;
     }
 
     /// <summary>A commit's details are shown; false shows the placeholder.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsPlaceholder))]
+    [NotifyPropertyChangedFor(nameof(ShowsPlaceholder), nameof(OffersAllFiles))]
     public partial bool HasCommit { get; private set; }
 
     /// <summary>Why the details of the selected commit could not be read, or null.</summary>
@@ -119,12 +128,23 @@ public partial class CommitDetailsViewModel : ObservableObject
 
     /// <summary>For a stash, its name (<c>stash@{0}</c>); otherwise empty.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsStash))]
+    [NotifyPropertyChangedFor(nameof(IsStash), nameof(OffersAllFiles))]
     public partial string StashName { get; private set; } = string.Empty;
 
     public bool IsStash => StashName.Length > 0;
 
-    /// <summary>"Changed files (N)".</summary>
+    /// <summary>
+    /// "All files" (docs/phase-5-design.md 4.5, D164): the list shows every file of the shown
+    /// commit's tree, the unchanged ones without a status letter. A setting
+    /// (<see cref="AppSettings.ShowAllFiles"/>), changed with <see cref="ToggleAllFilesCommand"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ShowsAllFiles { get; private set; }
+
+    /// <summary>The panel offers "All files": a commit is shown, and it is not a stash, whose details have none (4.5).</summary>
+    public bool OffersAllFiles => HasCommit && !IsStash;
+
+    /// <summary>"Changed files (N)", or "All files (N)" while the list shows the commit's whole tree.</summary>
     [ObservableProperty]
     public partial string ChangedFilesTitle { get; private set; } = string.Empty;
 
@@ -155,14 +175,86 @@ public partial class CommitDetailsViewModel : ObservableObject
     /// <summary>A file of the list was clicked: its diff should open (D63).</summary>
     public event EventHandler<ChangedFile>? FileActivated;
 
-    /// <summary>Opens the diff of a file row's file; does nothing for a folder.</summary>
+    /// <summary>
+    /// With "All files" on (docs/phase-5-design.md 4.5, D164), a file the shown commit did not
+    /// change was clicked: its blame at that commit should open, as a page. The repository opens
+    /// the page.
+    /// </summary>
+    public event EventHandler<BlameRequest>? BlameRequested;
+
+    /// <summary>Asks for the blame of <paramref name="path"/> at the shown commit (<see cref="BlameRequested"/>); nothing while no commit is shown.</summary>
+    private void RequestBlame(string path)
+    {
+        if (Details is { } commit)
+        {
+            BlameRequested?.Invoke(this, new BlameRequest(path, commit.Sha));
+        }
+    }
+
+    /// <summary>
+    /// Opens the diff of a file row's file (D63); a file the commit did not change, listed by
+    /// "All files", opens its blame at the commit instead, and its row takes the selection
+    /// background (4.5, BD14). Does nothing for a folder.
+    /// </summary>
     [RelayCommand]
     private void ActivateFile(ChangedFileRow? row)
     {
-        if (row?.File is { } file)
+        if (row?.File is not { } file)
         {
-            FileActivated?.Invoke(this, file);
+            return;
         }
+
+        if (row.IsUnchanged)
+        {
+            // After the request: opening the page closes a diff, which clears the selected row.
+            RequestBlame(file.Path);
+            SelectedFilePath = file.Path;
+            return;
+        }
+
+        FileActivated?.Invoke(this, file);
+    }
+
+    /// <summary>
+    /// "All files" on or off (4.5): the setting is saved, and the list changes at once. On, the
+    /// commit asked for last is read again with its tree (a load still running for it is replaced,
+    /// so that a newer selection is never undone); off, the shown commit's changed files show as
+    /// before, or the running load shows them when it ends. A stash has no "All files".
+    /// </summary>
+    [RelayCommand]
+    private void ToggleAllFiles()
+    {
+        var on = !ShowsAllFiles;
+        ShowsAllFiles = on;
+        _settings.Update(settings => settings with { ShowAllFiles = on });
+        (string Sha, StashEntry? Stash, CancellationToken Token)? requested;
+        bool loading;
+        lock (_gate)
+        {
+            requested = _requested;
+            loading = _loading is not null;
+        }
+
+        if (requested is not { Stash: null } latest)
+        {
+            return;
+        }
+
+        if (on)
+        {
+            _ = ShowAsync(latest.Sha, null, latest.Token);
+            return;
+        }
+
+        if (loading || Details is not { } shown || IsStash)
+        {
+            return;
+        }
+
+        var selected = _fileList.SelectedPath;
+        _fileList.Show(shown.Files);
+        _fileList.SelectedPath = shown.Files.Any(file => file.Path == selected) ? selected : null;
+        ChangedFilesTitle = ChangedFilesTitleOf(shown.Files.Count);
     }
 
     /// <summary>
@@ -189,6 +281,7 @@ public partial class CommitDetailsViewModel : ObservableObject
             }
 
             _loading = loading;
+            _requested = sha is null ? null : (sha, stash, cancellationToken);
         }
 
         // Outside the lock: cancelling can run the earlier load's continuation right here.
@@ -204,16 +297,21 @@ public partial class CommitDetailsViewModel : ObservableObject
             return;
         }
 
-        // Another tab may have switched between flat and tree since this one last showed a commit.
+        // Another tab may have switched between flat and tree, or "All files", since this one last showed a commit.
         FileList = _settings.Current.FileList;
         _fileList.SetMode(FileList);
+        ShowsAllFiles = _settings.Current.ShowAllFiles;
         IsLoading = true;
         try
         {
-            var details = await _repository.ReadCommitDetailsAsync(sha, loading.Token);
+            // "All files" reads the commit's tree beside its details (4.5); a stash has none.
+            var reading = _repository.ReadCommitDetailsAsync(sha, loading.Token);
+            var tree = ShowsAllFiles && stash is null ? ReadTreeOrNullAsync(sha, loading.Token) : null;
+            var details = await reading;
+            var treeFiles = tree is null ? null : await tree;
             if (IsCurrent(version))
             {
-                Apply(details, stash);
+                Apply(details, stash, treeFiles);
             }
         }
         catch (OperationCanceledException) when (loading.IsCancellationRequested)
@@ -282,7 +380,23 @@ public partial class CommitDetailsViewModel : ObservableObject
         }
     }
 
-    private void Apply(CommitDetails details, StashEntry? stash)
+    /// <summary>The commit's tree for "All files", or null when it could not be read: the list then shows the changed files, as with the switch off.</summary>
+    private async Task<IReadOnlyList<string>?> ReadTreeOrNullAsync(string sha, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _repository!.ReadTreeFilesAsync(sha, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.Warning($"The files of commit {sha} could not be read; its changed files are shown.", ex);
+            return null;
+        }
+    }
+
+    private static string ChangedFilesTitleOf(int count) => string.Create(CultureInfo.InvariantCulture, $"Changed files ({count})");
+
+    private void Apply(CommitDetails details, StashEntry? stash, IReadOnlyList<string>? tree)
     {
         Sha = details.Sha;
         Subject = details.Subject;
@@ -302,8 +416,17 @@ public partial class CommitDetailsViewModel : ObservableObject
 
         Details = details;
         _fileList.SelectedPath = null;
-        _fileList.Show(details.Files);
-        ChangedFilesTitle = string.Create(CultureInfo.InvariantCulture, $"Changed files ({details.Files.Count})");
+        if (tree is not null && ShowsAllFiles)
+        {
+            // The title counts what the list shows: the tree's files and the commit's deletions.
+            _fileList.ShowAll(details.Files, tree);
+            ChangedFilesTitle = string.Create(CultureInfo.InvariantCulture, $"All files ({_fileList.Files.Count})");
+        }
+        else
+        {
+            _fileList.Show(details.Files);
+            ChangedFilesTitle = ChangedFilesTitleOf(details.Files.Count);
+        }
 
         ErrorText = null;
         HasCommit = true;

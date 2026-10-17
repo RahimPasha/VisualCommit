@@ -138,6 +138,47 @@ public class ShellDriverTests
         Assert.Equal(new[] { (new Vector(0, 1), position), (new Vector(0, -3), position) }, events);
     }
 
+    /// <summary>
+    /// A double-click is one however long the app takes over its first click: the window's input
+    /// clock stands still for its presses (<c>HeadlessInputClock</c>). Under the full run's load
+    /// the work between the presses took more than Avalonia's double-tap time of 500 ms, and
+    /// check P25's double-click on a branch came as two single clicks that checked nothing out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_double_click_stays_one_when_its_first_click_takes_longer_than_the_double_tap_time()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var filter = app.Find<TextBox>("FilterBox");
+        app.Click(filter);
+        app.Type("feature login");
+        var area = app.BoundsOf(filter);
+        var clickCounts = new List<int>();
+        app.Window.AddHandler(InputElement.PointerPressedEvent, SlowFirstPress, RoutingStrategies.Tunnel, handledEventsToo: true);
+        try
+        {
+            app.DoubleClick(new Point(area.X + 24, area.Center.Y));
+        }
+        finally
+        {
+            app.Window.RemoveHandler(InputElement.PointerPressedEvent, SlowFirstPress);
+        }
+
+        Assert.Equal([1, 2], clickCounts);
+        Assert.Equal("feature", filter.SelectedText);
+
+        void SlowFirstPress(object? sender, PointerPressedEventArgs e)
+        {
+            clickCounts.Add(e.ClickCount);
+            if (e.ClickCount == 1)
+            {
+                // Longer than the double-tap time: the first press's handling, as under load.
+                Thread.Sleep(700);
+            }
+        }
+    }
+
     [AvaloniaFact]
     public async Task StartWithTabs_writes_a_session_file_with_those_tabs_before_the_app_starts()
     {

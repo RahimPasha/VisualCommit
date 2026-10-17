@@ -83,7 +83,7 @@ public static partial class Phase3Expectations
         /// <summary>The menu of the remote <c>origin</c> under Remotes (check 17 step 2, 31 step 1).</summary>
         public static readonly string[] OriginMenu =
         [
-            "origin", "Fetch origin", "—", "Change URL…", "Rename origin…", "Remove origin… (danger)", "—", "Copy URL", "Manage remotes…",
+            "origin", "Fetch origin", "—", "Change URL…", "Rename origin…", "Remove origin… (danger)", "—", "Hide every branch of origin", "—", "Copy URL", "Manage remotes…",
         ];
 
         public const string FetchingFromOrigin = "Fetching from origin…";
@@ -171,7 +171,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 18b -----------------------------------------------------------------------
 
-        /// <summary>The menu of <c>main</c> under Remotes › origin while HEAD is on main (check 18b step 1), with phase 4's rebase items; 293 high.</summary>
+        /// <summary>The menu of <c>main</c> under Remotes › origin while HEAD is on main (check 18b step 1), with phase 4's rebase items and phase 5's compare, hide and solo items; 380 high.</summary>
         public static readonly string[] RemoteMainMenu =
         [
             "origin/main",
@@ -186,10 +186,14 @@ public static partial class Phase3Expectations
             "—",
             "Delete main on origin… (danger)",
             "—",
+            "Compare origin/main with main",
+            "Hide origin/main",
+            "Solo origin/main",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>The menu of the current branch <c>main</c> under Local branches (check 18b step 1), with phase 4's pull with rebase; 354 high.</summary>
+        /// <summary>The menu of the current branch <c>main</c> under Local branches (check 18b step 1), with phase 4's pull with rebase and phase 5's reflog, hide and solo items; 441 high.</summary>
         public static readonly string[] CurrentMainMenu =
         [
             "main",
@@ -206,6 +210,10 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/main",
+            "—",
+            "Show reflog of main",
+            "Hide main (disabled: \"The checked-out branch is always shown\")",
+            "Solo main",
             "—",
             "Copy branch name",
         ];
@@ -312,7 +320,7 @@ public static partial class Phase3Expectations
             new("Initial commit", 0, 0, []),
         ];
 
-        /// <summary>The menu of <c>published</c> when it has diverged from its upstream (check 20 step 2), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>published</c> when it has diverged from its upstream (check 20 step 2), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 571 high.</summary>
         public static readonly string[] DivergedPublishedMenu =
         [
             "published",
@@ -333,6 +341,11 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/published",
+            "—",
+            "Compare published with main",
+            "Show reflog of published",
+            "Hide published",
+            "Solo published",
             "—",
             "Copy branch name",
         ];
@@ -456,7 +469,7 @@ public static partial class Phase3Expectations
 
         // ---- Check 22 ------------------------------------------------------------------------
 
-        public static readonly string[] RemotesHeaderMenu = ["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…"];
+        public static readonly string[] RemotesHeaderMenu = ["Remotes", "Add remote…", "Fetch all remotes", "Manage remotes…", "Show all hidden branches (disabled: \"No branch is hidden\")", "Stop soloing (disabled: \"No branch is soloed\")"];
 
         public const string ServerUrl = "http://127.0.0.1:47391/origin.git";
 
@@ -533,20 +546,24 @@ public static partial class Phase3Expectations
 
         public const string WorkingRowConflict = "Working changes · 1 conflict";
 
+        /// <summary>
+        /// Step 4's dialog, changed by phase 5's C12 (docs/phase-5-design.md 9.3, the phase 5
+        /// report's "Beyond design 14.1"): the app refuses the checkout before git while the merge
+        /// is in progress, with no output, command or "Copy output".
+        /// </summary>
         public static readonly ErrorTexts CheckoutDuringMergeDialog = new(
-            "Checkout failed",
-            "Git could not check out feature/alpha.",
+            "Checkout blocked",
+            "Finish or abort the merge first",
             "ops",
-            "git switch --no-guess feature/alpha",
-            ["Copy output", "Close"],
-            ["fatal: cannot switch branch while merging", "Consider \"git merge --quit\" or \"git worktree add\"."],
-            "fatal: cannot switch branch while merging");
+            null,
+            ["Close"],
+            []);
 
         public const string CheckoutAlphaFailed = "Check out feature/alpha failed";
 
         // ---- Check 28 ------------------------------------------------------------------------
 
-        /// <summary>The menu of <c>topic</c>, which has no upstream (check 28 step 1), with phase 4's rebase items; 380 high.</summary>
+        /// <summary>The menu of <c>topic</c>, which has no upstream (check 28 step 1), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 493 high.</summary>
         public static readonly string[] TopicMenu =
         [
             "topic",
@@ -565,10 +582,15 @@ public static partial class Phase3Expectations
             "—",
             "Set upstream…",
             "—",
+            "Compare topic with main",
+            "Show reflog of topic",
+            "Hide topic",
+            "Solo topic",
+            "—",
             "Copy branch name",
         ];
 
-        /// <summary>The menu of <c>topic</c> tracking origin/published (check 28 step 4), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>topic</c> tracking origin/published (check 28 step 4), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 571 high.</summary>
         public static readonly string[] TopicTrackingMenu =
         [
             "topic",
@@ -589,6 +611,11 @@ public static partial class Phase3Expectations
             "—",
             "Change upstream…",
             "Stop tracking origin/published",
+            "—",
+            "Compare topic with main",
+            "Show reflog of topic",
+            "Hide topic",
+            "Solo topic",
             "—",
             "Copy branch name",
         ];
@@ -614,7 +641,7 @@ public static partial class Phase3Expectations
         /// <summary>The menu of the tag <c>v1.0</c> (check 29 steps 3 and 5).</summary>
         public static readonly string[] TagMenu =
         [
-            "v1.0", "Check out v1.0", "Create branch here…", "—", "Push v1.0…", "Delete v1.0… (danger)", "Delete v1.0 on a remote… (danger)", "—", "Copy tag name",
+            "v1.0", "Check out v1.0", "Create branch here…", "—", "Push v1.0…", "Delete v1.0… (danger)", "Delete v1.0 on a remote… (danger)", "—", "Compare v1.0 with main", "—", "Copy tag name",
         ];
 
         public const string PushTagTitle = "Push v1.0 to…";
@@ -635,7 +662,7 @@ public static partial class Phase3Expectations
 
         public const string PushedPublished = "Pushed published to origin/published";
 
-        /// <summary>The menu of <c>published</c> behind its upstream (check 30 step 3), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>published</c> behind its upstream (check 30 step 3), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 571 high.</summary>
         public static readonly string[] BehindPublishedMenu =
         [
             "published",
@@ -657,6 +684,11 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/published",
             "—",
+            "Compare published with main",
+            "Show reflog of published",
+            "Hide published",
+            "Solo published",
+            "—",
             "Copy branch name",
         ];
 
@@ -673,7 +705,7 @@ public static partial class Phase3Expectations
             new("Initial commit", 0, 0, []),
         ];
 
-        /// <summary>The menu of <c>published</c> under Remotes › origin (check 30 step 4), with phase 4's rebase items; 293 high.</summary>
+        /// <summary>The menu of <c>published</c> under Remotes › origin (check 30 step 4), with phase 4's rebase items and phase 5's compare, hide and solo items; 380 high.</summary>
         public static readonly string[] RemotePublishedMenu =
         [
             "origin/published",
@@ -688,6 +720,10 @@ public static partial class Phase3Expectations
             "—",
             "Delete published on origin… (danger)",
             "—",
+            "Compare origin/published with main",
+            "Hide origin/published",
+            "Solo origin/published",
+            "—",
             "Copy branch name",
         ];
 
@@ -697,7 +733,7 @@ public static partial class Phase3Expectations
 
         public const string DeletedBranch = "Deleted published on origin";
 
-        /// <summary>The menu of <c>published</c> after its upstream was deleted (check 30 step 5), with phase 4's rebase items; 458 high.</summary>
+        /// <summary>The menu of <c>published</c> after its upstream was deleted (check 30 step 5), with phase 4's rebase items and phase 5's compare, reflog, hide and solo items; 571 high.</summary>
         public static readonly string[] GonePublishedMenu =
         [
             "published",
@@ -719,6 +755,11 @@ public static partial class Phase3Expectations
             "Change upstream…",
             "Stop tracking origin/published",
             "—",
+            "Compare published with main",
+            "Show reflog of published",
+            "Hide published",
+            "Solo published",
+            "—",
             "Copy branch name",
         ];
 
@@ -729,7 +770,7 @@ public static partial class Phase3Expectations
         /// <paramref name="worktree"/> (check 30 step 6), with phase 4's group "Check out main and
         /// rebase it": the rebase disabled because main already contains side, the interactive one
         /// the only enabled item (a detached HEAD does not disable the items that check a branch out
-        /// first, phase 4's design 14.3); 145 high.
+        /// first, phase 4's design 14.3), with phase 5's compare; 180 high.
         /// </summary>
         public static string[] WorktreeDropMenu(string worktree) =>
         [
@@ -739,6 +780,8 @@ public static partial class Phase3Expectations
             "—",
             "Check out main and rebase it onto side (disabled: \"main is up to date with side\")",
             "Check out main and rebase it onto side interactively…",
+            "—",
+            "Compare main with side",
         ];
 
         public static string WorktreeReason(string worktree) => $"side is checked out in another worktree ({worktree})";

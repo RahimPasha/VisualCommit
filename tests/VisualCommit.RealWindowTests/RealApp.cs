@@ -200,6 +200,11 @@ public sealed partial class RealApp : IDisposable
         // moment of the capture (docs/phase-4-design.md 11.3, D151).
         startInfo.Environment["VISUALCOMMIT_CARET_BLINK"] = "0";
 
+        // The activity log's times stand still and the backups are named by a fixed clock, as in
+        // the scripted walk-through (docs/phase-5-design.md 2.3).
+        startInfo.Environment[AppClocks.RecordClockVariable] = "frozen";
+        startInfo.Environment[AppClocks.BackupClockVariable] = "fixed";
+
         // What the check itself asks for comes last.
         foreach (var (variable, value) in environment ?? new Dictionary<string, string?>())
         {

@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Conflicts;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -44,11 +45,12 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsGraph))]
     [NotifyPropertyChangedFor(nameof(ShowsInteractiveRebase))]
+    [NotifyPropertyChangedFor(nameof(ShowsPage))]
     [NotifyPropertyChangedFor(nameof(ShowsDiff))]
     public partial bool IsResolverOpen { get; private set; }
 
-    /// <summary>The graph area shows the graph: no diff, list or resolver is open in its place.</summary>
-    public bool ShowsGraph => !IsDiffOpen && !IsInteractiveRebaseOpen && !IsResolverOpen;
+    /// <summary>The graph area shows the graph: no diff, list, resolver or page (docs/phase-5-design.md 11.1) is open in its place.</summary>
+    public bool ShowsGraph => !IsDiffOpen && !IsInteractiveRebaseOpen && !IsResolverOpen && Page is null;
 
     /// <summary>The graph area shows the list: it is open and no diff is open over it (2.2).</summary>
     public bool ShowsInteractiveRebase => IsInteractiveRebaseOpen && !IsDiffOpen && !IsResolverOpen;
@@ -130,20 +132,33 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     /// <summary>
     /// The full ref names the backups' clean-up keeps (section 9, D139): the restore bar's
-    /// snapshot while the bar offers it.
+    /// snapshot while the bar offers it, and the backups the undo histories of the repository's
+    /// worktrees need (docs/phase-5-design.md 7.8, D171).
     /// </summary>
-    public IReadOnlySet<string> BackupsToKeep =>
-        _lastSnapshot is { } snapshot ? new HashSet<string>(StringComparer.Ordinal) { snapshot.Ref } : new HashSet<string>(StringComparer.Ordinal);
+    public IReadOnlySet<string> BackupsToKeep
+    {
+        get
+        {
+            var keep = new HashSet<string>(Operations.UndoBackupsToKeep(), StringComparer.Ordinal);
+            if (_lastSnapshot is { } snapshot)
+            {
+                keep.Add(snapshot.Ref);
+            }
+
+            return keep;
+        }
+    }
 
     /// <summary>
     /// Closes what the graph area shows instead of the graph, without asking (after
-    /// <see cref="TryLeaveGraphAreaAsync"/>): the diff, the list and the resolver. The focus stays
-    /// where the caller puts it.
+    /// <see cref="TryLeaveGraphAreaAsync"/>): the diff, the list, a page (which holds no work) and
+    /// the resolver. The focus stays where the caller puts it.
     /// </summary>
     private void LeaveGraphArea()
     {
         CloseDiff(returnFocus: false);
         InteractiveRebase = null;
+        ClosePage();
         if (IsResolverOpen && _resolver is { } resolver)
         {
             _closingResolverQuietly = true;
@@ -171,6 +186,7 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             var resolver = Resolver;
             CloseDiff(returnFocus: false);
             InteractiveRebase = null;
+            ClosePage();
             resolver.Update(Status, CurrentName(), OntoNameOf(Status.InProgress));
             await resolver.OpenAsync(path);
             IsResolverOpen = resolver.IsOpen;
@@ -207,7 +223,7 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             MergeTool = _mergeTool,
             FileMenu = file => RepositoryMenus.ForUnstagedFile(
                 MenuContext,
-                new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: null),
+                new FileMenuTarget(file, IsUntracked: false, ExistsInWorkingTree: ExistsInWorkingTree(file.Path), CommitSha: null) { InConflictResolver = true },
                 MenuActions),
         };
         resolver.Closed += OnResolverClosed;
@@ -310,8 +326,8 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
             async _ =>
             {
                 // CleanUpBackupsAsync logs its own failure at Warning and never throws.
-                await Operations.CleanUpBackupsAsync();
-                return OperationReport.Done(string.Empty);
+                var removed = await Operations.CleanUpBackupsAsync();
+                return OperationReport.Done(CleanUpBackupsResult(removed.Count));
             })
         {
             IsBackground = true,
@@ -325,6 +341,13 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
 
     /// <summary>The background operation's title (10.1): never shown, only logged.</summary>
     public const string CleanUpBackupsTitle = "Clean up backups";
+
+    /// <summary>
+    /// The background operation's message (docs/phase-5-design.md 2.3): <c>Removed 1 backup</c>,
+    /// <c>Removed {N} backups</c>. The status bar never shows it (D139); the activity log does.
+    /// </summary>
+    public static string CleanUpBackupsResult(int removed) =>
+        removed == 1 ? "Removed 1 backup" : string.Create(CultureInfo.InvariantCulture, $"Removed {removed} backups");
 
     // The list's host (2.2, IInteractiveRebaseHost).
 

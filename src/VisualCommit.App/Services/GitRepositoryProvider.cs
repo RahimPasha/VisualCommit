@@ -4,29 +4,37 @@ using VisualCommit.Git;
 
 namespace VisualCommit.App.Services;
 
-/// <summary>Opens, initialises and clones repositories with real git, once git has been found (D45).</summary>
+/// <summary>
+/// Opens, initialises and clones repositories with real git, once git has been found (D45). Every
+/// repository it opens names its backups by the session's backup clock (docs/phase-5-design.md 2.3).
+/// </summary>
 public sealed class GitRepositoryProvider : IRepositoryProvider
 {
     private readonly GitAccess _git;
     private readonly IAppLog _log;
+    private readonly BackupClock _backupClock;
 
-    public GitRepositoryProvider(GitAccess git, IAppLog? log = null)
+    /// <param name="git">The way to the git runner.</param>
+    /// <param name="log">The app's log, which the repositories write to.</param>
+    /// <param name="backupClock">The clock every repository names its backups by, and its clean-up's "now"; the system clock by default.</param>
+    public GitRepositoryProvider(GitAccess git, IAppLog? log = null, BackupClock? backupClock = null)
     {
         ArgumentNullException.ThrowIfNull(git);
         _git = git;
         _log = log ?? NullAppLog.Instance;
+        _backupClock = backupClock ?? BackupClock.System;
     }
 
     public async Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
     {
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return await GitRepository.OpenAsync(runner, path, cancellationToken, _log).ConfigureAwait(false);
+        return WithClock(await GitRepository.OpenAsync(runner, path, cancellationToken, _log).ConfigureAwait(false));
     }
 
     public async Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default)
     {
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return await GitRepository.InitAsync(runner, path, cancellationToken, _log).ConfigureAwait(false);
+        return WithClock(await GitRepository.InitAsync(runner, path, cancellationToken, _log).ConfigureAwait(false));
     }
 
     /// <remarks>
@@ -43,6 +51,12 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
         // Nothing here needs the UI thread, so the app can wait for a clone to clean up while it
         // closes (MainWindowViewModel.CloseAll) without the clone waiting for the UI thread.
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return await GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log, environment).ConfigureAwait(false);
+        return WithClock(await GitRepository.CloneAsync(runner, url, destination, progress, cancellationToken, _log, environment).ConfigureAwait(false));
+    }
+
+    private GitRepository WithClock(GitRepository repository)
+    {
+        repository.BackupClock = _backupClock;
+        return repository;
     }
 }

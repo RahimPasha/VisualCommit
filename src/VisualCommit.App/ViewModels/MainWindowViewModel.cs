@@ -5,6 +5,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -89,6 +90,11 @@ public partial class MainWindowViewModel : ObservableObject
         _restoring = false;
         UpdateCanClose();
 
+        // The activity log reads the session's records from its start, whether its panel is open
+        // or not, and shows the active tab's worktree (docs/phase-5-design.md 2.1, D156).
+        ActivityLog = new ActivityLogViewModel(_tabServices.Operations, _tabServices.GitCalls, _session, _tabServices.Dates, _log);
+        ActivityLog.Follow(this);
+
         // Auto-fetch looks at the active tab's repository (docs/phase-3-design.md 6.1, D85).
         AutoFetch = new AutoFetchScheduler(
             () => ActiveTab.Repository,
@@ -116,6 +122,12 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
     public AutoFetchScheduler AutoFetch { get; }
+
+    /// <summary>
+    /// The activity log (docs/phase-5-design.md 2, D156): the panel under the graph area, opened by
+    /// the status bar's toggle, for the active tab's worktree. Its being open is the window's.
+    /// </summary>
+    public ActivityLogViewModel ActivityLog { get; }
 
     /// <summary>The theme the app is showing.</summary>
     [ObservableProperty]
@@ -244,6 +256,7 @@ public partial class MainWindowViewModel : ObservableObject
     public void CloseAll()
     {
         AutoFetch.Dispose();
+        ActivityLog.Dispose();
         var clones = Tabs.Select(tab => tab.Welcome.RunningClone).OfType<Task>().ToArray();
         foreach (var tab in Tabs)
         {

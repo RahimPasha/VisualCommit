@@ -264,7 +264,14 @@ public class RepositoryOperationsConflictsTests
 
             // The file menu's "Open in merge tool" with the resolver closed; then a click on the file.
             var tool = repository.Operations.OpenMergeToolAsync("notes.txt");
-            await app.WaitForAsync(() => File.Exists(started), "the merge tool to start", TimeSpan.FromSeconds(60));
+
+            // git mergetool's start takes 32 to 64 s under the default run's load (D185): it is no
+            // hang, and has a limit of its own.
+            using (HangWatchdogAttribute.WaitingForSlowProgram("git mergetool to start"))
+            {
+                await app.WaitForAsync(() => File.Exists(started), "the merge tool to start", Scenarios.MergeToolTimeout);
+            }
+
             repository.OpenResolver(notes);
             await app.WaitForResolverAsync("notes.txt");
             var resolver = repository.Resolver;

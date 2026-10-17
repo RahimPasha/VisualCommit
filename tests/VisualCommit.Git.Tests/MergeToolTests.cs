@@ -167,10 +167,11 @@ public class MergeToolTests
     private static string[] FilesIn(TempRepo repo) =>
         [.. Directory.EnumerateFiles(Path.Combine(repo.Path, "dir")).Select(Path.GetFileName).Order(StringComparer.Ordinal)!];
 
-    /// <summary>Waits until <paramref name="path"/> exists; fails when <paramref name="run"/> ends first or after a minute.</summary>
+    /// <summary>Waits until <paramref name="path"/> exists; fails when <paramref name="run"/> ends first or after <see cref="Scenarios.MergeToolTimeout"/>.</summary>
     private static async Task WaitForFileAsync(string path, Task run)
     {
-        var deadline = DateTime.UtcNow.AddMinutes(1);
+        using var slow = HangWatchdogAttribute.WaitingForSlowProgram("git mergetool to start");
+        var deadline = DateTime.UtcNow + Scenarios.MergeToolTimeout;
         while (!File.Exists(path))
         {
             if (run.IsCompleted)
@@ -179,7 +180,7 @@ public class MergeToolTests
                 Assert.Fail("The merge tool ended before it started.");
             }
 
-            Assert.True(DateTime.UtcNow < deadline, "The merge tool did not start within a minute.");
+            Assert.True(DateTime.UtcNow < deadline, $"The merge tool did not start within {Scenarios.MergeToolTimeout.TotalSeconds:F0} seconds.");
             await Task.Delay(50, TestCancelled);
         }
     }

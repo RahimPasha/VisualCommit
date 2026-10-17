@@ -157,7 +157,9 @@ public sealed partial class Phase3ChecksA
         menu = app.Menu();
         shot = Shot(app, "05b2-menu-left-of-pointer");
         AssertMenu(menu, PartA.CoreFileMenu);
-        AssertHighlighted(menu, "Open file");
+
+        // Phase 5's File history comes first now (docs/phase-5-design.md 4.4, 14.1).
+        AssertHighlighted(menu, "File history");
         AssertMenuLook(app, menu, shot);
         Assert.Equal(pointer.X - 2, menu.Bounds.Right, 2);
         Assert.True(menu.Bounds.Right <= app.Window.ClientSize.Width - WindowLayout.MenuEdgeInset + 0.5);

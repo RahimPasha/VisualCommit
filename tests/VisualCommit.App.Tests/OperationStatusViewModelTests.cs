@@ -59,6 +59,47 @@ public class OperationStatusViewModelTests
     });
 
     [Fact]
+    public Task Cancel_says_it_stops_the_merge_tool_too_while_the_merge_tool_runs() => WithoutContext(async () =>
+    {
+        // docs/phase-4-design.md 11.9: the merge tool's operation is a local one that can be
+        // cancelled (D149), and Cancel stops git, its shell and the tool.
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        Assert.Equal(OperationStatusViewModel.StopGitText, status.CancelToolTip);
+        var started = new TaskCompletionSource();
+        var tool = queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for fake to close…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Resolved notes.txt");
+        })
+        {
+            CanBeCancelled = true,
+        });
+        await started.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.CanCancel);
+
+        Assert.Equal("Stop git and the merge tool", status.CancelToolTip);
+        status.CancelCommand.Execute(null);
+        Assert.Equal(OperationOutcome.Cancelled, (await tool.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal((false, OperationStatusViewModel.StopGitText), (status.CanCancel, status.CancelToolTip));
+
+        // A network operation's Cancel stops git alone.
+        var fetching = new TaskCompletionSource();
+        var fetch = queue.RunAsync(new GitOperation("Fetch", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            fetching.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Fetched from origin");
+        }));
+        await fetching.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.CanCancel);
+        Assert.Equal("Stop git", status.CancelToolTip);
+        status.CancelCommand.Execute(null);
+        await fetch.WaitAsync(Patience, TestCancelled);
+    });
+
+    [Fact]
     public Task An_operation_of_several_steps_names_the_step_it_is_at() => WithoutContext(async () =>
     {
         // docs/phase-4-design.md 10.1: "Checking out {A}…", then "Rebasing {A} onto {B}…".
