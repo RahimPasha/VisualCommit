@@ -110,8 +110,8 @@ a word, what stood in its way (a folder holding files where the snapshot has a f
 where it has a folder), because `git restore --worktree` writes with force. All were fixed with
 tests (`b175509`, `4281f4c`); design 15.9 records every behaviour they changed.
 
-The commits after the gate's commit change only docs. The phase is "Awaiting acceptance": the
-owner has not yet said "Phase 5 accepted", and `phase/5-history` is not merged into `master`. Only
+The commits after the gate's commit change only docs. The owner accepted phase 5 on 2026-10-17,
+and `phase/5-history` is merged into `master` (merge commit `c299939`). Only
 the real window at 1920×1080 could not run, as the plan allows on this screen (B5's
 `Check_B5_side_by_side_light` and F10's `Check_F10_search_light_1920` are scripted only).
 
@@ -428,8 +428,8 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- Acceptance of phase 5: the gate passed on `1b2e734`; "Phase 5 accepted" merges
-  `phase/5-history` into `master`.
+- Acceptance of phase 5: given on 2026-10-17; `phase/5-history` is merged into `master` (merge
+  commit `c299939`).
 - When you have a Mac at hand: the thirteen-step checklist at the end of the
   [phase 5 test report](../test-reports/phase-5.md), and those of phases 0 to 4, still open. The
   owner will do them at the end of the project.
