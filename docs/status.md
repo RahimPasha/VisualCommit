@@ -247,6 +247,14 @@ every commit.
 
 ### Notes for whoever resumes
 
+- Phase 6's first CI run, [39094444954](https://github.com/RahimPasha/VisualCommit/actions/runs/39094444954)
+  on `43f52c4` (the leftovers of step 4): four jobs succeeded with 3,233 tests (`windows-latest`
+  27 min 2 s, its Test step 24 min 38 s; `ubuntu-latest`; both containers); `macos-latest` failed
+  1 of 3,233: phase 2's `Check_10_stage_one_hunk` waited 30 s for the staged diff of
+  `src/Calculator.cs` after a click on its staged row, 1.5 minutes into the run. The commit
+  touched nothing that check uses; the helper's comment says macOS CI saw the same once before.
+  Its root cause is being looked for (a click lost or undone by a late watcher refresh is the
+  suspect); it is fixed with a test, not with a longer wait.
 - Phase 6 started on 2026-10-18 from a clean `master` (`acdac12`): no worktree and no `wip/*` or
   `worktree-*` branch was left. Ten git fsmonitor daemons from phase 5's worktrees were still
   running and were stopped (phase 4's handoff gives the commands). Free space at the start: 15.7 GB
