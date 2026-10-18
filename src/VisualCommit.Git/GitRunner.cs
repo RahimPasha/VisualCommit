@@ -64,8 +64,9 @@ public sealed class GitRunner : IGitRunner
     /// <param name="environment">
     /// The app session's own git environment (docs/phase-6-design.md 8.12, 17.2, D220): the
     /// harnesses' <c>GIT_CONFIG_GLOBAL</c> and <c>XDG_CONFIG_HOME</c> in the session's data folder;
-    /// null for none, as the desktop app runs. Work package WP-S applies it to every call, after
-    /// <see cref="DefaultEnvironment"/> and before the command's own.
+    /// null for none, as the desktop app runs. Applied to every call, after
+    /// <see cref="DefaultEnvironment"/> and before the command's own; a null value removes the
+    /// variable, as in <see cref="GitCommand.Environment"/>.
     /// </param>
     public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null, TimeProvider? recordClock = null, IReadOnlyDictionary<string, string?>? environment = null)
     {
@@ -74,7 +75,9 @@ public sealed class GitRunner : IGitRunner
         _callLog = callLog;
         _log = log ?? NullAppLog.Instance;
         _recordClock = recordClock ?? TimeProvider.System;
-        SessionEnvironment = environment ?? new Dictionary<string, string?>();
+
+        // A copy: the session's environment cannot change under the runner's calls.
+        SessionEnvironment = new Dictionary<string, string?>(environment ?? new Dictionary<string, string?>());
     }
 
     public string ExecutablePath { get; }
@@ -112,6 +115,11 @@ public sealed class GitRunner : IGitRunner
         {
             Record(command, startedAt, stopwatch.Elapsed, GitCallOutcome.FailedToStart, null, string.Empty, ex.Message);
             throw new GitException(command.DisplayText, null, ex.Message, ex);
+        }
+
+        if (command.BelowNormalPriority && OperatingSystem.IsWindows())
+        {
+            LowerPriority(process, command);
         }
 
         using var job = OperatingSystem.IsWindows() ? WindowsJob.TryAttach(process) : null;
@@ -218,7 +226,9 @@ public sealed class GitRunner : IGitRunner
             startInfo.ArgumentList.Add(argument);
         }
 
-        foreach (var (name, value) in DefaultEnvironment.Concat(command.Environment))
+        // The runner's defaults, then the session's own variables (the harnesses' global git
+        // configuration, docs/phase-6-design.md 8.12, 17.2), then the command's.
+        foreach (var (name, value) in DefaultEnvironment.Concat(SessionEnvironment).Concat(command.Environment))
         {
             if (value is null)
             {
@@ -231,6 +241,25 @@ public sealed class GitRunner : IGitRunner
         }
 
         return startInfo;
+    }
+
+    /// <summary>
+    /// Puts a git process that has just started at below-normal priority
+    /// (<see cref="GitCommand.BelowNormalPriority"/>, docs/phase-6-design.md 8.10): the processes it
+    /// starts from then on get the same class from Windows. A process that has exited already, or
+    /// whose priority cannot be set, runs on as it is: the call does not fail for it.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private void LowerPriority(Process process, GitCommand command)
+    {
+        try
+        {
+            process.PriorityClass = ProcessPriorityClass.BelowNormal;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            _log.Debug($"{command.DisplayText} keeps its priority: {ex.Message}");
+        }
     }
 
     /// <summary>

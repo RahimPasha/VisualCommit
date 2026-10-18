@@ -188,6 +188,105 @@ public class ShellTests
         Assert.DoesNotContain("system\t", result.StandardOutput);
         Assert.DoesNotContain("global\t", result.StandardOutput);
         Assert.DoesNotContain("command\t", result.StandardOutput);
+
+        // Phase 6 (docs/phase-6-design.md 8.12, 17.2): the session's own global file, in its data
+        // folder, takes what the app writes there; the test process's safety net stays untouched.
+        var write = await runner.RunAsync(
+            new GitCommand("config", "--global", "user.name", "Session User") { WorkingDirectory = data.Path },
+            TestContext.Current.CancellationToken);
+        Assert.True(write.Succeeded, write.StandardError);
+        var origins = await runner.RunAsync(
+            new GitCommand("config", "--show-origin", "--show-scope", "--list") { WorkingDirectory = data.Path },
+            TestContext.Current.CancellationToken);
+        var global = ShellDriver.GlobalGitConfigPath(data.Path);
+        Assert.Equal(Path.Combine(data.Path, "harness", "global.gitconfig"), global);
+        var line = Assert.Single(origins.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        var fields = line.Split('\t');
+        Assert.Equal("global", fields[0]);
+        Assert.StartsWith("file:", fields[1], StringComparison.Ordinal);
+        Assert.Equal(Path.GetFullPath(global), Path.GetFullPath(UnquotedPath(fields[1]["file:".Length..])));
+        Assert.Equal("user.name=Session User", fields[2]);
+        Assert.Equal("[user]\n\tname = Session User\n", File.ReadAllText(global).ReplaceLineEndings("\n"));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(GitIsolation.NoGlobalConfigFile)));
+        Assert.Empty(GitIsolation.GlobalConfigurationWrittenOutsideASession());
+    }
+
+    [AvaloniaFact]
+    public async Task Two_sessions_in_one_process_do_not_see_each_others_global_configuration()
+    {
+        using var firstData = new TempDirectory("data");
+        using var secondData = new TempDirectory("data");
+        ShellDriver.SeedGlobalGitConfig(firstData.Path, "[pull]\n\tff = only\n");
+        using var first = ShellDriver.Start(firstData.Path);
+        await first.WaitUntilReadyAsync();
+        using var second = ShellDriver.Start(secondData.Path);
+        await second.WaitUntilReadyAsync();
+        var firstRunner = (VisualCommit.Git.GitRunner)first.Session.Shell.Git!.Runner!;
+        var secondRunner = (VisualCommit.Git.GitRunner)second.Session.Shell.Git!.Runner!;
+        Assert.Equal(ShellDriver.GlobalGitConfigPath(firstData.Path), firstRunner.SessionEnvironment["GIT_CONFIG_GLOBAL"]);
+        Assert.Equal(Path.Combine(firstData.Path, "harness", "xdg"), firstRunner.SessionEnvironment["XDG_CONFIG_HOME"]);
+        Assert.Equal(ShellDriver.GlobalGitConfigPath(secondData.Path), secondRunner.SessionEnvironment["GIT_CONFIG_GLOBAL"]);
+
+        var write = await secondRunner.RunAsync(
+            new GitCommand("config", "--global", "user.email", "second@example.com") { WorkingDirectory = secondData.Path },
+            TestContext.Current.CancellationToken);
+        Assert.True(write.Succeeded, write.StandardError);
+
+        Assert.Equal("pull.ff=only", (await ListGlobalAsync(firstRunner, firstData.Path)).Trim());
+        Assert.Equal("user.email=second@example.com", (await ListGlobalAsync(secondRunner, secondData.Path)).Trim());
+
+        // A restart on the first folder keeps what was there.
+        first.Dispose();
+        using var restarted = ShellDriver.Start(firstData.Path);
+        await restarted.WaitUntilReadyAsync();
+        Assert.Equal("pull.ff=only", (await ListGlobalAsync(restarted.Session.Shell.Git!.Runner!, firstData.Path)).Trim());
+    }
+
+    [AvaloniaFact]
+    public async Task A_session_gets_the_fixed_tool_catalogues_and_a_system_theme_of_its_own()
+    {
+        using var data = new TempDirectory("data");
+        using (var app = ShellDriver.Start(data.Path))
+        {
+            await app.WaitUntilReadyAsync();
+            Assert.Same(VisualCommit.Core.ToolCatalogues.Fixed, app.Session.Services.Tools);
+            Assert.True(app.SystemTheme.IsDark);
+            Assert.Null(app.ReadClock);
+            Assert.Same(app.Session.Services.Clock, app.Session.Services.ReadClock);
+        }
+
+        var clock = new ManualTimeProvider();
+        using var light = ShellDriver.Start(data.Path, systemDark: false, readClock: clock);
+        await light.WaitUntilReadyAsync();
+        Assert.False(light.SystemTheme.IsDark);
+        Assert.Same(clock, light.ReadClock);
+        Assert.Same(clock, light.Session.Services.ReadClock);
+
+        var changes = 0;
+        light.SystemTheme.Changed += (_, _) => changes++;
+        light.SystemTheme.Set(dark: false);
+        Assert.Equal(0, changes);
+        light.SystemTheme.Set(dark: true);
+        Assert.Equal(1, changes);
+        Assert.True(light.SystemTheme.IsDark);
+    }
+
+    /// <summary>
+    /// A path as <c>git config --show-origin</c> prints it: as it is, or, holding a backslash (a
+    /// Windows path), in C-style quotes with each backslash doubled.
+    /// </summary>
+    private static string UnquotedPath(string printed) =>
+        printed.Length >= 2 && printed[0] == '"' && printed[^1] == '"'
+            ? printed[1..^1].Replace("\\\\", "\\", StringComparison.Ordinal).Replace("\\\"", "\"", StringComparison.Ordinal)
+            : printed;
+
+    private static async Task<string> ListGlobalAsync(IGitRunner runner, string folder)
+    {
+        var result = await runner.RunAsync(
+            new GitCommand("config", "--global", "--list") { WorkingDirectory = folder },
+            TestContext.Current.CancellationToken);
+        Assert.True(result.Succeeded, result.StandardError);
+        return result.StandardOutput;
     }
 
     // The three tests below prove the kinds of input the scripted walk-throughs of later phases

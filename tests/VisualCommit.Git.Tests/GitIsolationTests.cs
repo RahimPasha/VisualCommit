@@ -180,6 +180,131 @@ public class GitIsolationTests
         Assert.Empty(server.Errors);
     }
 
+    [Fact]
+    public async Task The_machines_identity_reaches_no_test_while_the_app_commit_dates_stay()
+    {
+        Assert.Equal(["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"], GitIsolation.IdentityVariables);
+        Assert.All(GitIsolation.IdentityVariables, variable => Assert.Null(Environment.GetEnvironmentVariable(variable)));
+        Assert.Equal("2026-01-02T09:00:00+00:00", Environment.GetEnvironmentVariable("GIT_AUTHOR_DATE"));
+        Assert.Equal("2026-01-02T09:00:00+00:00", Environment.GetEnvironmentVariable("GIT_COMMITTER_DATE"));
+        Assert.Equal(".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC", Environment.GetEnvironmentVariable("PATHEXT"));
+
+        // What RealApp.Launch does to the app's environment: the machine's identity goes, the
+        // harness's dates stay, PATHEXT is Windows' default.
+        var startInfo = new ProcessStartInfo("unused");
+        startInfo.Environment["GIT_AUTHOR_NAME"] = "Machine Author";
+        startInfo.Environment["GIT_AUTHOR_EMAIL"] = "machine@example.com";
+        startInfo.Environment["GIT_COMMITTER_NAME"] = "Machine Committer";
+        startInfo.Environment["GIT_COMMITTER_EMAIL"] = "committer@example.com";
+        startInfo.Environment["EMAIL"] = "someone@example.com";
+        startInfo.Environment["GIT_AUTHOR_DATE"] = "2026-01-02T09:00:00+00:00";
+        startInfo.Environment["PATHEXT"] = ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW;.CPL";
+        GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+        var names = startInfo.Environment.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.All(GitIsolation.IdentityVariables, variable => Assert.DoesNotContain(variable, names));
+        Assert.Equal("2026-01-02T09:00:00+00:00", startInfo.Environment["GIT_AUTHOR_DATE"]);
+        Assert.Equal(".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC", startInfo.Environment["PATHEXT"]);
+
+        // A temp repo's calls lose the machine's identity and set their own after it, so its
+        // commits keep the scenarios' author.
+        using var repo = await TempRepo.CreateAsync();
+        Assert.Null(repo.Environment["EMAIL"]);
+        Assert.Equal(TempRepo.AuthorName, repo.Environment["GIT_AUTHOR_NAME"]);
+        Assert.Equal(TempRepo.AuthorEmail, repo.Environment["GIT_COMMITTER_EMAIL"]);
+        await repo.CommitFileAsync("f.txt", "f\n", "Initial commit");
+        Assert.Equal(
+            $"{TempRepo.AuthorName} <{TempRepo.AuthorEmail}> {TempRepo.AuthorName} <{TempRepo.AuthorEmail}>",
+            (await repo.GitAsync("log", "-1", "--format=%an <%ae> %cn <%ce>")).StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task The_test_process_reads_no_global_configuration_and_cannot_write_one()
+    {
+        // The safety net (docs/phase-6-design.md 17.2): a global file in a folder nobody makes and
+        // an empty XDG folder of the tests'.
+        Assert.Equal(GitIsolation.NoGlobalConfigFile, Environment.GetEnvironmentVariable("GIT_CONFIG_GLOBAL"));
+        Assert.Equal(Path.Combine(GitIsolation.CeilingDirectory, "isolation", "no-global", "gitconfig"), GitIsolation.NoGlobalConfigFile);
+        Assert.Equal(GitIsolation.ProcessXdgConfigHome, Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"));
+        Assert.Equal(Path.Combine(GitIsolation.CeilingDirectory, "isolation", "xdg"), GitIsolation.ProcessXdgConfigHome);
+        Assert.True(Directory.Exists(GitIsolation.ProcessXdgConfigHome));
+
+        // A git call that inherits the process's environment, as the app's calls in a test do.
+        using var folder = new TempDirectory("no-global");
+        var runner = new GitRunner(TempRepo.GitPath);
+        var list = await runner.RunAsync(new GitCommand("config", "--list", "--show-scope") { WorkingDirectory = folder.Path }, TestCancelled);
+        Assert.True(list.Succeeded, list.StandardError);
+        Assert.DoesNotContain("global\t", list.StandardOutput, StringComparison.Ordinal);
+
+        var read = await runner.RunAsync(new GitCommand("config", "--global", "user.name") { WorkingDirectory = folder.Path }, TestCancelled);
+        Assert.Equal(1, read.ExitCode);
+
+        // A write fails where it is made, and makes no folder for the next test to read.
+        var write = await runner.RunAsync(new GitCommand("config", "--global", "vc.tripwire", "written") { WorkingDirectory = folder.Path }, TestCancelled);
+        Assert.Equal(255, write.ExitCode);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(GitIsolation.NoGlobalConfigFile)));
+    }
+
+    [Fact]
+    public void Nothing_wrote_a_global_configuration_outside_a_session()
+    {
+        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
+        Assert.True(findings.Count == 0, string.Join('\n', findings));
+    }
+
+    [Fact]
+    public void The_tripwire_names_each_trace_of_a_global_configuration_written_outside_a_session()
+    {
+        // The rules over a folder of this test's, laid out as the tests' isolation folder: the
+        // one every test process shares is never touched.
+        using var isolation = new TempDirectory("tripwire");
+        Directory.CreateDirectory(isolation.Combine("xdg"));
+        File.WriteAllText(isolation.Combine("gitconfig"), string.Empty);
+        Assert.Empty(GitIsolation.GlobalConfigurationWrittenOutsideASession(isolation.Path));
+
+        Directory.CreateDirectory(isolation.Combine("no-global"));
+        var noGlobal = Assert.Single(GitIsolation.GlobalConfigurationWrittenOutsideASession(isolation.Path));
+        Assert.StartsWith(isolation.Combine("no-global") + " exists", noGlobal, StringComparison.Ordinal);
+
+        Directory.Delete(isolation.Combine("no-global"));
+        Directory.CreateDirectory(Path.Combine(isolation.Combine("xdg"), "git"));
+        var xdg = Assert.Single(GitIsolation.GlobalConfigurationWrittenOutsideASession(isolation.Path));
+        Assert.StartsWith(Path.Combine(isolation.Combine("xdg"), "git") + " exists", xdg, StringComparison.Ordinal);
+
+        Directory.Delete(Path.Combine(isolation.Combine("xdg"), "git"));
+        File.WriteAllText(isolation.Combine("gitconfig"), "[user]\n\tname = Stale\n");
+        var stale = Assert.Single(GitIsolation.GlobalConfigurationWrittenOutsideASession(isolation.Path));
+        Assert.StartsWith(isolation.Combine("gitconfig") + " is not empty", stale, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_sessions_git_environment_puts_its_global_configuration_in_its_data_folder()
+    {
+        using var data = new TempDirectory("data");
+        var environment = GitIsolation.SessionGitEnvironment(data.Path);
+
+        var global = Path.Combine(data.Path, "harness", "global.gitconfig");
+        var xdg = Path.Combine(data.Path, "harness", "xdg");
+        Assert.Equal(2, environment.Count);
+        Assert.Equal(global, environment["GIT_CONFIG_GLOBAL"]);
+        Assert.Equal(xdg, environment["XDG_CONFIG_HOME"]);
+        Assert.Equal(global, GitIsolation.SessionGlobalConfigFile(data.Path));
+        Assert.True(Directory.Exists(xdg));
+        Assert.False(File.Exists(global));
+
+        // The first write makes the file (0.10); the session's runner reads it back.
+        var runner = new GitRunner(TempRepo.GitPath, environment: environment);
+        var write = await runner.RunAsync(new GitCommand("config", "--global", "user.name", "Session User") { WorkingDirectory = data.Path }, TestCancelled);
+        Assert.True(write.Succeeded, write.StandardError);
+        Assert.True(File.Exists(global));
+        var read = await runner.RunAsync(new GitCommand("config", "--global", "user.name") { WorkingDirectory = data.Path }, TestCancelled);
+        Assert.Equal("Session User", read.StandardOutput.Trim());
+
+        // A runner without the session's environment sees none of it.
+        var outside = await new GitRunner(TempRepo.GitPath).RunAsync(new GitCommand("config", "--global", "user.name") { WorkingDirectory = data.Path }, TestCancelled);
+        Assert.Equal(1, outside.ExitCode);
+        Assert.Empty(GitIsolation.GlobalConfigurationWrittenOutsideASession());
+    }
+
     private static Task<GitResult> LsRemoteAsync(TempRepo repo, IReadOnlyDictionary<string, string?> environment) =>
         repo.Runner.RunAsync(
             new GitCommand("ls-remote", "origin", "refs/heads/main") { WorkingDirectory = repo.Path, Environment = environment },
