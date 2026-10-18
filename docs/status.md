@@ -51,7 +51,11 @@ Start:
   only its dashboard; workspaces in `workspaces.json`; git's settings global with a "This
   repository" section; the palette on Ctrl+Shift+P; a fixed set of keys; every checkout keeps
   ignored files by default, a setting turns it off; the theme can follow the system.)
-- [ ] 2. Baseline: the default run on `master` (`acdac12`) as inherited, before anything changes.
+- [x] 2. Baseline: the default run on `master` (`acdac12`) as inherited, before anything changes:
+  3,233 of 3,233 passed in 37 min 29 s (2026-10-18, the laptop otherwise idle; phase 5's gate:
+  43 min 22 s). The projects ended after: `VisualCommit.VisualTests` 10 min 14 s,
+  `.Phase5` 18 min 56 s, `.Phase4` 20 min 10 s, `VisualCommit.Git.Tests` 27 min 31 s,
+  `.Phase5Undo` 29 min 31 s, `.Phase3` 32 min 8 s, `VisualCommit.App.Tests` 37 min 26 s.
 - [ ] 3. Design in `docs/phase-6-design.md`: every git fact derived with Git 2.36 (and 2.55 where
   words or exit codes may differ), the texts, the layouts, the work packages, an estimate of what
   the phase adds to the default run (45 minutes) and to the real-window pass (25). Independent
