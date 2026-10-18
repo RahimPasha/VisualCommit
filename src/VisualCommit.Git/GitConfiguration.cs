@@ -47,6 +47,7 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     private ToolLookup? _toolLookup;
     private bool _disposed;
     private volatile string? _globalFile;
+    private volatile string? _xdgFile;
 
     /// <param name="runner">The session's git runner, waited for when a call needs it (the app's <c>GitAccess.GetRunnerAsync</c>).</param>
     /// <param name="dataDirectory">The app's data folder, where the calls that belong to no repository run.</param>
@@ -88,19 +89,21 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     /// <summary>
     /// The file <c>git config --global</c> writes (8.2), by <see cref="GitConfigLocations.GlobalFile"/>
     /// over the environment git gets, as a full path; empty when there is no home folder (git then
-    /// refuses a global write). Worked out at the first use and again after every outside read and
-    /// global save, which run off the UI thread, so the screen reads it without touching the disk.
+    /// refuses a global write). Worked out again by every outside read and global save, which run
+    /// off the UI thread, so the screen, which reads it after the outside read, touches no disk (a
+    /// home share that does not answer can hold a file check for minutes, 0.9); before the first
+    /// such read, the first use works it out.
     /// </summary>
     public string GlobalFile => _globalFile ??= WorkOutGlobalFile();
 
     /// <summary>
     /// The XDG file git reads before the global file when <c>GIT_CONFIG_GLOBAL</c> is unset
     /// (<see cref="GitConfigLocations.XdgConfigFile"/>), as a full path, for 8.2's naming
-    /// (<c>git/config under XDG_CONFIG_HOME</c>, <c>.config/git/config</c> in the home folder); null
-    /// without a home folder. Not part of <see cref="IGitConfiguration"/> yet.
+    /// (<c>git/config under XDG_CONFIG_HOME</c>, <c>.config/git/config</c> in the home folder); empty
+    /// without a home folder. Worked out as <see cref="GlobalFile"/> is. Not part of
+    /// <see cref="IGitConfiguration"/> yet.
     /// </summary>
-    public string? XdgFile =>
-        GitConfigLocations.XdgConfigFile(Variable, Directory.Exists, OperatingSystem.IsWindows()) is { } xdg ? FullPath(xdg) : null;
+    public string XdgFile => _xdgFile ??= WorkOutXdgFile();
 
     /// <summary>
     /// A variable of the environment git gets: the session's (8.12) over the process's; null when
@@ -155,6 +158,7 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         {
             values = [.. values.Where(value => value.Scope is not (GitConfigScope.Local or GitConfigScope.Worktree))];
             _globalFile = WorkOutGlobalFile();
+            _xdgFile = WorkOutXdgFile();
         }
 
         return new GitConfigRead(values, InRepository: !outside);
@@ -205,6 +209,7 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         finally
         {
             _globalFile = WorkOutGlobalFile();
+            _xdgFile = WorkOutXdgFile();
             _globalWrites.Release();
         }
     }
@@ -388,6 +393,11 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
 
     private string WorkOutGlobalFile() =>
         GitConfigLocations.GlobalFile(Variable, File.Exists, Directory.Exists, OperatingSystem.IsWindows()) is { } file
+            ? FullPath(file)
+            : string.Empty;
+
+    private string WorkOutXdgFile() =>
+        GitConfigLocations.XdgConfigFile(Variable, Directory.Exists, OperatingSystem.IsWindows()) is { } file
             ? FullPath(file)
             : string.Empty;
 
