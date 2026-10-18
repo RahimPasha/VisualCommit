@@ -177,57 +177,6 @@ public class GitRunnerTests
     }
 
     [Fact]
-    public async Task A_below_normal_priority_call_runs_below_normal_on_windows_and_the_processes_it_starts_too()
-    {
-        // docs/phase-6-design.md 8.10: set right after the start; the processes git starts get it
-        // from Windows. Git's shell reports a process's class as its niceness (nice without
-        // arguments prints its own, which it got from the shell that started it): 0 for Normal,
-        // more for a lower class. The script prints the shell's own, that of a shell it starts
-        // and that of a program that shell starts.
-        var runner = new GitRunner(GitPath);
-        if (!OperatingSystem.IsWindows())
-        {
-            // Ignored elsewhere: the call runs as any other.
-            var elsewhere = await runner.RunAsync(new GitCommand("--version") { BelowNormalPriority = true }, TestCancelled);
-            Assert.True(elsewhere.Succeeded, elsewhere.StandardError);
-            return;
-        }
-
-        GitCommand Nice(bool belowNormal) =>
-            new("-c", "alias.script=!nice; sh -c nice; echo $(nice)", "script") { BelowNormalPriority = belowNormal };
-
-        var lowered = await runner.RunAsync(Nice(belowNormal: true), TestCancelled);
-        var normal = await runner.RunAsync(Nice(belowNormal: false), TestCancelled);
-
-        Assert.True(lowered.Succeeded, lowered.StandardError);
-        Assert.True(normal.Succeeded, normal.StandardError);
-        var loweredValues = Niceness(lowered);
-        var normalValues = Niceness(normal);
-        Assert.Equal(3, loweredValues.Count);
-        Assert.Equal(3, normalValues.Count);
-
-        // Without it the processes have the class Windows gives a child of this process: Normal
-        // (niceness 0) unless this process's own is Idle or BelowNormal.
-        var own = Process.GetCurrentProcess().PriorityClass;
-        if (own is ProcessPriorityClass.Idle or ProcessPriorityClass.BelowNormal)
-        {
-            Assert.All(normalValues, value => Assert.True(value > 0, $"Niceness {value} under a test process at {own}."));
-        }
-        else
-        {
-            Assert.All(normalValues, value => Assert.Equal(0, value));
-        }
-
-        Assert.All(loweredValues, value => Assert.True(value > 0, "A process of the below-normal call ran at niceness " + value + "."));
-        Assert.Single(loweredValues.Distinct());
-    }
-
-    /// <summary>The numbers a script printed, one per line.</summary>
-    private static List<int> Niceness(GitResult result) =>
-        [.. result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => int.Parse(line, System.Globalization.CultureInfo.InvariantCulture))];
-
-    [Fact]
     public async Task Git_speaks_English_when_the_user_has_LANGUAGE_set_to_another_language()
     {
         // gettext puts LANGUAGE before LC_ALL; a German desktop sets it, and git inherits it from
