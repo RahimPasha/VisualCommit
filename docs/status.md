@@ -238,9 +238,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: the design in `docs/phase-6-design.md`, from the owner's answers (D187 to D194) and the
-open points of the [phase 5 handoff](handoffs/phase-5.md) ("For the next phase"). Step 2's
-baseline run on `acdac12` runs meanwhile; record its result when it ends.
+Step 3: the design's first version is committed (`docs/phase-6-design.md`, `9d6d2e3`); its six
+independent reviews (git safety, code fit, what the user sees, tests and gate, performance and
+threads, completeness), each finding checked by an adversarial verifier, run now. Then: revise the
+design from every confirmed finding, put the four questions of taste (the design's M1 to M4, and
+any the reviews raise) to the owner, record the design's decisions (from D195) in `decisions.md`.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
