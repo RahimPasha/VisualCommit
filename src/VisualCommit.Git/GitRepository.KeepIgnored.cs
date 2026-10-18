@@ -35,6 +35,12 @@ public sealed partial class GitRepository
     /// ordered by the ignored file, then the written path, so that a merge's check can keep or
     /// drop each by the path it writes (9.4) and the others take the distinct ignored files
     /// (<see cref="IgnoredFiles"/>).
+    /// <para>
+    /// The disk is asked once per call about each folder and path (a list of thousands of paths,
+    /// such as an unborn pull's whole tree, shares its folders), and nothing is asked under a
+    /// folder that does not exist at all, under which nothing can: the candidates are those that
+    /// asking about every folder of every path would find.
+    /// </para>
     /// </summary>
     internal async Task<IReadOnlyList<(string Written, string Ignored)>> FindIgnoredAtAsync(IReadOnlyCollection<string> written, CancellationToken cancellationToken)
     {
@@ -43,24 +49,42 @@ public sealed partial class GitRepository
         // Each written path with a candidate on disk; Ignored is the candidate until check-ignore says.
         var pairs = new List<(string Written, string Ignored)>();
         var candidates = new SortedSet<string>(StringComparer.Ordinal);
+        var onDisk = new Dictionary<string, OnDisk>(StringComparer.Ordinal);
         foreach (var path in written.Distinct(StringComparer.Ordinal))
         {
-            foreach (var parent in ParentFolders(path).Where(parent => IsFileOrLink(WorkingTreePath(parent))))
+            var reachable = true;
+            foreach (var parent in ParentFolders(path))
             {
-                Add(path, parent);
+                var kind = KindOf(parent);
+                if (kind == OnDisk.Missing)
+                {
+                    reachable = false;
+                    break;
+                }
+
+                if (kind == OnDisk.FileOrLink)
+                {
+                    Add(path, parent);
+                }
             }
 
-            var full = WorkingTreePath(path);
-            if (IsFileOrLink(full))
+            if (!reachable)
             {
-                Add(path, path);
+                continue;
             }
-            else if (Directory.Exists(full))
+
+            switch (KindOf(path))
             {
-                foreach (var file in FilesUnder(path))
-                {
-                    Add(path, file);
-                }
+                case OnDisk.FileOrLink:
+                    Add(path, path);
+                    break;
+                case OnDisk.Folder:
+                    foreach (var file in FilesUnder(path))
+                    {
+                        Add(path, file);
+                    }
+
+                    break;
             }
         }
 
@@ -81,6 +105,27 @@ public sealed partial class GitRepository
             pairs.Add((path, candidate));
             candidates.Add(candidate);
         }
+
+        // A file or a link first, as git takes it (a link to a folder too), then a real folder.
+        OnDisk KindOf(string path)
+        {
+            if (!onDisk.TryGetValue(path, out var kind))
+            {
+                var full = WorkingTreePath(path);
+                kind = IsFileOrLink(full) ? OnDisk.FileOrLink : Directory.Exists(full) ? OnDisk.Folder : OnDisk.Missing;
+                onDisk[path] = kind;
+            }
+
+            return kind;
+        }
+    }
+
+    /// <summary>What a working-tree path is on disk, for <see cref="FindIgnoredAtAsync"/>.</summary>
+    private enum OnDisk
+    {
+        Missing,
+        FileOrLink,
+        Folder,
     }
 
     /// <summary>The distinct ignored files of <see cref="FindIgnoredAtAsync"/>'s pairs, in byte order.</summary>

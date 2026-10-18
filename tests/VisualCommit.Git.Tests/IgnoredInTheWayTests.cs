@@ -524,6 +524,39 @@ public class IgnoredInTheWayTests
     // ---- Every read --------------------------------------------------------------------------------
 
     [Fact]
+    public async Task The_shared_helper_pairs_each_written_path_with_the_ignored_files_in_its_way_and_asks_nothing_under_a_missing_folder()
+    {
+        // The ignored file logs above logs/a.txt and logs/b/c.txt and at logs itself; the ignored
+        // folder build/ where build is written; secret.env at its own path; x.txt, tracked, which
+        // check-ignore leaves out; nothing under gone/, which does not exist.
+        var (repo, _) = await CopyAsync();
+        using var __ = repo;
+        repo.WriteFile("logs", "LOGS\n").WriteFile("build/out.bin", "OUT\n").WriteFile("build/sub/deep.bin", "DEEP\n").WriteFile("secret.env", Local);
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+
+        var (pairs, made) = await CountAsync(calls, () => repository.FindIgnoredAtAsync(
+            ["logs/b/c.txt", "gone/deeper/x.txt", "build", "logs/a.txt", "secret.env", "gone/y.txt", "x.txt", "logs", "logs/a.txt"],
+            TestCancelled));
+
+        Assert.Equal(
+            [
+                ("build", "build/out.bin"),
+                ("build", "build/sub/deep.bin"),
+                ("logs", "logs"),
+                ("logs/a.txt", "logs"),
+                ("logs/b/c.txt", "logs"),
+                ("secret.env", "secret.env"),
+            ],
+            pairs);
+        Assert.Equal(["check-ignore"], made.Select(call => Kind(call.CommandText)));
+
+        // Only paths under folders that do not exist: no candidate, so no process.
+        var (none, noCalls) = await CountAsync(calls, () => repository.FindIgnoredAtAsync(["gone/a.txt", "gone/deeper/b.txt", "none/c.txt"], TestCancelled));
+        Assert.Empty(none);
+        Assert.Empty(noCalls);
+    }
+
+    [Fact]
     public async Task No_read_changes_the_index_or_the_state()
     {
         var (repo, c) = await CopyAsync();
