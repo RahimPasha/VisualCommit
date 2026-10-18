@@ -56,6 +56,24 @@ public sealed record RunOptions
     /// work; <see cref="UndoScope.None"/> (the default) for an operation that is not recorded.
     /// </summary>
     public UndoScope Undo { get; init; } = UndoScope.None;
+
+    /// <summary>
+    /// Cancels this operation alone (docs/phase-6-design.md 4.5, D210): <see cref="RepositoryOperations.RunAsync"/>
+    /// registers it to call <see cref="IOperationQueue.Cancel"/> for its own operation until the
+    /// call returns, and a token already cancelled queues nothing and returns "{Title} cancelled".
+    /// A bulk run's Cancel all and the settings screen's Cancel use it; none by default.
+    /// </summary>
+    public CancellationToken Cancellation { get; init; }
+
+    /// <summary>The bulk run the operation belongs to (4.4): copied into <see cref="GitOperation.PromptGroup"/>, so that its prompts are answered as one group; null outside a run.</summary>
+    public PromptGroup? PromptGroup { get; init; }
+
+    /// <summary>
+    /// Where a result's dialog goes instead of opening at once (4.6, D195): a bulk run's row keeps
+    /// it for its Details…. Null (the default): dialogs open at once (D95). Work package WP-B makes
+    /// <see cref="RepositoryOperations"/> honour it; until then dialogs open at once.
+    /// </summary>
+    public Action<DeferredDialog>? Defer { get; init; }
 }
 
 /// <summary>
@@ -296,6 +314,13 @@ public sealed partial class RepositoryOperations
             return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
         }
 
+        // A bulk run cancelled before its row's turn queues nothing (docs/phase-6-design.md 4.5).
+        if (options.Cancellation.IsCancellationRequested)
+        {
+            Log.Info($"{Repository.Name}: {text.Title}: not started, cancelled.");
+            return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
+        }
+
         // The operation's id, for the git call a "<Title> cancelled" dialog of lock files names (1.8, 4f).
         string? operationId = null;
         var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, async context =>
@@ -337,11 +362,15 @@ public sealed partial class RepositoryOperations
             HasSeveralSteps = options.HasSeveralSteps,
             Prompts = options.Prompts,
             CanBeCancelled = options.CanBeCancelled,
+            PromptGroup = options.PromptGroup,
         };
         // A second call with the dedupe key of a waiting or running operation gets that
         // operation's task (1.2): only the first caller shows its result, so a failure opens one
         // error dialog, not one per click.
         var running = Queue.RunAsync(operation);
+
+        // Its own cancellation cancels this operation alone, until this call returns (4.5).
+        using var cancellation = options.Cancellation.Register(() => Queue.Cancel(operation));
         var first = _resultsShown.TryAdd(running, text);
         var result = await running;
         if (first)

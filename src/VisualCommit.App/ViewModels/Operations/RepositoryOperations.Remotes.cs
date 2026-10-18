@@ -188,7 +188,7 @@ public sealed partial class RepositoryOperations
                 integration,
                 oldTip => SaveRebaseBackupAsync(branch.Name, oldTip),
                 options,
-                CancellationToken.None);
+                cancellationToken: CancellationToken.None);
         }
         catch (GitException exception) when (exception.StandardError.TrimEnd().EndsWith(OperationTexts.SettingNotUnderstoodEnd, StringComparison.Ordinal))
         {

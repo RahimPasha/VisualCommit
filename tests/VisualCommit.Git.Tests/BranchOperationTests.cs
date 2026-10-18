@@ -114,12 +114,12 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
 
         // The tag feature/alpha (at Main work) and the branch feature/alpha (at Alpha work).
-        await repository.CheckoutBranchAsync("feature/alpha", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("feature/alpha", keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal("refs/heads/feature/alpha", await GitTextAsync(repo, "symbolic-ref", "HEAD"));
         Assert.Equal(await RevAsync(repo, "refs/heads/feature/alpha"), await repo.HeadAsync());
 
         // The local branch origin/main, beside the remote branch of the same short name.
-        await repository.CheckoutBranchAsync("origin/main", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("origin/main", keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal("refs/heads/origin/main", await GitTextAsync(repo, "symbolic-ref", "HEAD"));
         Assert.Equal(await RevAsync(repo, "refs/heads/origin/main"), await repo.HeadAsync());
     }
@@ -132,7 +132,7 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
 
         // --no-guess: git would otherwise create feature/alpha from origin/feature/alpha.
-        await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/alpha", cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/alpha", keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Null(await repo.RefTargetAsync("refs/heads/feature/alpha"));
     }
@@ -144,7 +144,7 @@ public class BranchOperationTests
         await repo.GitAsync("branch", "--delete", "--force", "feature/alpha");
         var repository = await OpenAsync(repo);
 
-        await repository.CheckoutTrackingBranchAsync("feature/alpha", "refs/remotes/origin/feature/alpha", cancellationToken: TestCancelled);
+        await repository.CheckoutTrackingBranchAsync("feature/alpha", "refs/remotes/origin/feature/alpha", keepIgnored: false, cancellationToken: TestCancelled);
 
         Assert.Equal("feature/alpha", await repo.CurrentBranchAsync());
         Assert.Equal(await RevAsync(repo, "refs/remotes/origin/feature/alpha"), await repo.HeadAsync());
@@ -155,7 +155,7 @@ public class BranchOperationTests
         // An existing branch of that name is not overwritten.
         await repo.CheckoutAsync("main");
         var error = await Assert.ThrowsAsync<GitException>(
-            () => repository.CheckoutTrackingBranchAsync("feature/alpha", "refs/remotes/origin/main", cancellationToken: TestCancelled));
+            () => repository.CheckoutTrackingBranchAsync("feature/alpha", "refs/remotes/origin/main", keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Contains("already exists", error.StandardError, StringComparison.Ordinal);
         Assert.Equal("main", await repo.CurrentBranchAsync());
     }
@@ -167,7 +167,7 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
         var addCore = await RevAsync(repo, "refs/heads/main~1");
 
-        await repository.CheckoutDetachedAsync(addCore, cancellationToken: TestCancelled);
+        await repository.CheckoutDetachedAsync(addCore, keepIgnored: false, cancellationToken: TestCancelled);
 
         Assert.Equal(addCore, await repo.HeadAsync());
         Assert.Equal(1, (await repo.GitAllowingFailureAsync("symbolic-ref", "-q", "HEAD")).ExitCode);
@@ -187,7 +187,7 @@ public class BranchOperationTests
         Assert.Equal(1, await repository.CountDetachedCommitsAsync(TestCancelled));
 
         var backup = await repository.SaveBackupRefsAsync(new BackupRequest("detached", [new BackupEntry(null, detachedWork)]), TestCancelled);
-        await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("main", keepIgnored: false, cancellationToken: TestCancelled);
 
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Equal(0, await repository.CountDetachedCommitsAsync(TestCancelled));
@@ -210,14 +210,14 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
 
         // Only the tracked change is in the way.
-        var tracked = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/other", cancellationToken: TestCancelled));
+        var tracked = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/other", keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Contains("Your local changes to the following files would be overwritten by checkout", tracked.StandardError, StringComparison.Ordinal);
         Assert.Contains("notes.txt", tracked.StandardError, StringComparison.Ordinal);
         Assert.DoesNotContain("untracked working tree files", tracked.StandardError, StringComparison.Ordinal);
         Assert.Equal("git switch --no-guess feature/other", tracked.CommandText);
 
         // Both: git prints both lists in one run (design 7.1: feature/addfile changes notes.txt too).
-        var both = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/addfile", cancellationToken: TestCancelled));
+        var both = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/addfile", keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Contains("Your local changes to the following files would be overwritten by checkout", both.StandardError, StringComparison.Ordinal);
         Assert.Contains("The following untracked working tree files would be overwritten by checkout", both.StandardError, StringComparison.Ordinal);
         Assert.Contains("newfile.txt", both.StandardError, StringComparison.Ordinal);
@@ -238,7 +238,7 @@ public class BranchOperationTests
         await repo.GitAsync("add", "extra.txt");
 
         // A staged new file and an untracked one that feature/other does not have.
-        await repository.CheckoutBranchAsync("feature/other", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("feature/other", keepIgnored: false, cancellationToken: TestCancelled);
 
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
         Assert.Equal(Scenarios.CheckoutBlockedFiles.NotesOther, ReadText(repo, "notes.txt"));
@@ -256,23 +256,23 @@ public class BranchOperationTests
         var addCore = await RevAsync(repo, "refs/tags/v1.0^{commit}");
 
         // A commit, without checkout.
-        await repository.CreateBranchAsync("hotfix", mainWork, checkout: false, cancellationToken: TestCancelled);
+        await repository.CreateBranchAsync("hotfix", mainWork, checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal(mainWork, await repo.RefTargetAsync("refs/heads/hotfix"));
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Empty(await GitLinesAsync(repo, "config", "--get-regexp", @"^branch\.hotfix\."));
 
         // A remote branch: git sets it as the upstream (branch.autoSetupMerge).
-        await repository.CreateBranchAsync("alpha-copy", "refs/remotes/origin/feature/alpha", checkout: false, cancellationToken: TestCancelled);
+        await repository.CreateBranchAsync("alpha-copy", "refs/remotes/origin/feature/alpha", checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal(await RevAsync(repo, "refs/remotes/origin/feature/alpha"), await repo.RefTargetAsync("refs/heads/alpha-copy"));
         Assert.Equal(["branch.alpha-copy.remote origin", "branch.alpha-copy.merge refs/heads/feature/alpha"], await GitLinesAsync(repo, "config", "--get-regexp", @"^branch\.alpha-copy\."));
 
         // A tag's commit: no upstream; the branch points at the commit, not the tag object.
-        await repository.CreateBranchAsync("release-1.0", "refs/tags/v1.0^{commit}", checkout: false, cancellationToken: TestCancelled);
+        await repository.CreateBranchAsync("release-1.0", "refs/tags/v1.0^{commit}", checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal(addCore, await repo.RefTargetAsync("refs/heads/release-1.0"));
         Assert.Empty(await GitLinesAsync(repo, "config", "--get-regexp", @"^branch\.release-1\.0\."));
 
         // A local branch, with checkout; a name with slashes.
-        await repository.CreateBranchAsync("release/2.0/hotfix", "refs/heads/feature/ff", checkout: true, cancellationToken: TestCancelled);
+        await repository.CreateBranchAsync("release/2.0/hotfix", "refs/heads/feature/ff", checkout: true, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal("release/2.0/hotfix", await repo.CurrentBranchAsync());
         Assert.Equal(await RevAsync(repo, "refs/heads/feature/ff"), await repo.HeadAsync());
     }
@@ -285,9 +285,9 @@ public class BranchOperationTests
         var mainWork = await RevAsync(repo, "refs/heads/main");
 
         // Git 2.36 says "cannot lock ref" for both folder clashes; the wording is git's to change.
-        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature", mainWork, checkout: false, cancellationToken: TestCancelled));
-        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature/alpha/x", mainWork, checkout: true, cancellationToken: TestCancelled));
-        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("main", mainWork, checkout: false, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature", mainWork, checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("feature/alpha/x", mainWork, checkout: true, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.CreateBranchAsync("main", mainWork, checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
 
         Assert.Null(await repo.RefTargetAsync("refs/heads/feature"));
         Assert.Null(await repo.RefTargetAsync("refs/heads/feature/alpha/x"));
@@ -435,7 +435,7 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
         var fastForwardMe = await RevAsync(repo, "refs/heads/feature/ff");
 
-        Assert.Equal(MergeResult.FastForward, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.Default, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.FastForward, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
 
         Assert.Equal(fastForwardMe, await repo.HeadAsync());
         Assert.Equal("main", await repo.CurrentBranchAsync());
@@ -453,7 +453,7 @@ public class BranchOperationTests
         var mainWork = await RevAsync(repo, "refs/heads/main");
         var fastForwardMe = await RevAsync(repo, "refs/heads/feature/ff");
 
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
 
         // What git writes for "git merge --no-ff feature/ff", made in the other copy.
         await reference.GitAsync("merge", "--no-edit", "--no-ff", "feature/ff");
@@ -475,7 +475,7 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
         var alphaTwo = await RevAsync(repo, "refs/remotes/origin/feature/alpha");
 
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/remotes/origin/feature/alpha", MergeMode.Default, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/remotes/origin/feature/alpha", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
         await reference.GitAsync("merge", "--no-edit", "origin/feature/alpha");
         Assert.Equal("Merge remote-tracking branch 'origin/feature/alpha'", await GitTextAsync(repo, "log", "-1", "--format=%B"));
         Assert.Equal(await GitTextAsync(reference, "log", "-1", "--format=%B"), await GitTextAsync(repo, "log", "-1", "--format=%B"));
@@ -483,14 +483,14 @@ public class BranchOperationTests
 
         // Already merged: nothing to do.
         var merge = await repo.HeadAsync();
-        Assert.Equal(MergeResult.UpToDate, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, cancellationToken: TestCancelled));
-        Assert.Equal(MergeResult.UpToDate, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.UpToDate, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.UpToDate, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Equal(merge, await repo.HeadAsync());
 
         // From another branch, git adds " into <branch>".
         await repo.CheckoutAsync("feature/ff");
         await reference.CheckoutAsync("feature/ff");
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
         await reference.GitAsync("merge", "--no-edit", "feature/alpha");
         Assert.Equal(await GitTextAsync(reference, "log", "-1", "--format=%B"), await GitTextAsync(repo, "log", "-1", "--format=%B"));
         Assert.Equal("Merge branch 'feature/alpha' into feature/ff", await GitTextAsync(repo, "log", "-1", "--format=%B"));
@@ -506,7 +506,7 @@ public class BranchOperationTests
         var mainWork = await RevAsync(repo, "refs/heads/main");
         Assert.Equal(mainWork, await RevAsync(repo, "refs/tags/feature/alpha")); // The tag is at main: merging it would do nothing.
 
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
 
         Assert.Equal("Merge branch 'feature/alpha'", await GitTextAsync(repo, "log", "-1", "--format=%B"));
         Assert.Equal($"{mainWork} {alphaWork}", await GitTextAsync(repo, "log", "-1", "--format=%P"));
@@ -520,17 +520,17 @@ public class BranchOperationTests
         var mainWork = await RevAsync(repo, "refs/heads/main");
 
         var refused = await Assert.ThrowsAsync<GitException>(
-            () => repository.MergeAsync("refs/heads/feature/conflict", MergeMode.FastForwardOnly, cancellationToken: TestCancelled));
+            () => repository.MergeAsync("refs/heads/feature/conflict", MergeMode.FastForwardOnly, keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Contains("Not possible to fast-forward", refused.StandardError, StringComparison.Ordinal);
         Assert.Equal(mainWork, await repo.HeadAsync());
 
         await repo.ConfigAsync("merge.ff", "false");
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.Default, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Equal("Merge branch 'feature/ff'", await GitTextAsync(repo, "log", "-1", "--format=%B"));
 
         await repo.GitAsync("reset", "--hard", "--quiet", mainWork);
         await repo.ConfigAsync("merge.ff", "true");
-        Assert.Equal(MergeResult.FastForward, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.FastForwardOnly, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.FastForward, await repository.MergeAsync("refs/heads/feature/ff", MergeMode.FastForwardOnly, keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Equal(await RevAsync(repo, "refs/heads/feature/ff"), await repo.HeadAsync());
     }
 
@@ -543,7 +543,7 @@ public class BranchOperationTests
         await reference.ConfigAsync("merge.log", "true");
         var repository = await OpenAsync(repo);
 
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
         await reference.GitAsync("merge", "--no-edit", "feature/alpha");
 
         var message = await GitTextAsync(repo, "log", "-1", "--format=%B");
@@ -560,7 +560,7 @@ public class BranchOperationTests
         var mainWork = await RevAsync(repo, "refs/heads/main");
         var conflicting = await RevAsync(repo, "refs/heads/feature/conflict");
 
-        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature/conflict", MergeMode.Default, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature/conflict", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
 
         Assert.Equal(mainWork, await repo.HeadAsync());
         Assert.Equal(["UU src/core.txt"], await GitLinesAsync(repo, "status", "--porcelain"));
@@ -583,7 +583,7 @@ public class BranchOperationTests
         var repository = await OpenAsync(repo);
 
         var error = await Assert.ThrowsAsync<GitException>(
-            () => repository.MergeAsync("refs/heads/feature/conflict", MergeMode.Default, cancellationToken: TestCancelled));
+            () => repository.MergeAsync("refs/heads/feature/conflict", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
 
         Assert.Contains("would be overwritten by merge", error.StandardError, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(repo.Path, ".git", "MERGE_HEAD")));

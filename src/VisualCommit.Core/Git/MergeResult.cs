@@ -80,6 +80,13 @@ public sealed record StashPaths(IReadOnlyList<string> Changed, IReadOnlyList<str
     /// (docs/phase-5-design.md 15.9).
     /// </summary>
     public IReadOnlyList<string> Added { get; init; } = [];
+
+    /// <summary>
+    /// Those of <see cref="Changed"/> with status <c>D</c> against its base, from the same
+    /// <c>--name-status</c> read: what an apply or a pop deletes, which Keep ignored files' check
+    /// leaves out of what the stash writes (docs/phase-6-design.md 9.8). Work package WP1 fills it.
+    /// </summary>
+    public IReadOnlyList<string> Deleted { get; init; } = [];
 }
 
 /// <summary>What a pull's integration step did (2.18, D84).</summary>
@@ -102,6 +109,13 @@ public enum PullOutcome
 
     /// <summary>The fetch found no upstream branch on the remote (deleted there): nothing was integrated.</summary>
     UpstreamGone,
+
+    /// <summary>
+    /// Ignored files are in the way of the integration: nothing was integrated (Keep ignored files,
+    /// docs/phase-6-design.md 9.10). <see cref="PullResult.IgnoredFiles"/> names them and
+    /// <see cref="PullResult.WouldRebase"/> says what the pull chose.
+    /// </summary>
+    IgnoredFilesInTheWay,
 }
 
 /// <summary>How a pull's integration ended (2.18).</summary>
@@ -126,6 +140,12 @@ public sealed record PullResult(PullOutcome Outcome, int CommitCount)
     /// (docs/phase-4-design.md 1.4, <see cref="RebaseResult.AutostashConflicted"/>).
     /// </summary>
     public bool AutostashConflicted { get; init; }
+
+    /// <summary>For <see cref="PullOutcome.IgnoredFilesInTheWay"/>: the ignored files in the way, distinct, in byte order (docs/phase-6-design.md 9.10); empty otherwise.</summary>
+    public IReadOnlyList<string> IgnoredFiles { get; init; } = [];
+
+    /// <summary>For <see cref="PullOutcome.IgnoredFilesInTheWay"/>: the pull chose its rebase, not a fast-forward or a merge (9.10), so the refusal names the rebase.</summary>
+    public bool WouldRebase { get; init; }
 }
 
 /// <summary>How a pull integrates its upstream (docs/phase-4-design.md section 6, D147).</summary>

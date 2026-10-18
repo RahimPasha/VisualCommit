@@ -44,8 +44,13 @@ public sealed record SessionState
 }
 
 /// <summary>One tab.</summary>
-/// <param name="RepositoryPath">The working tree of the repository open in it, or null for an empty tab.</param>
-public sealed record TabState(string? RepositoryPath);
+/// <param name="RepositoryPath">The working tree of the repository open in it, or null for an empty tab or a dashboard.</param>
+/// <param name="WorkspaceId">
+/// For a workspace's dashboard (docs/phase-6-design.md 1.11), its <c>Workspace.Id</c>, with a null
+/// <paramref name="RepositoryPath"/> (a path beside an id is ignored); null for every other tab.
+/// An older version ignores it and sees an empty tab.
+/// </param>
+public sealed record TabState(string? RepositoryPath, string? WorkspaceId = null);
 
 /// <summary>
 /// What one repository's graph hides or solos (docs/phase-5-design.md 8.1, 8.4), by full ref names,

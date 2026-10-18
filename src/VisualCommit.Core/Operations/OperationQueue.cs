@@ -263,6 +263,12 @@ public sealed class OperationQueue : IOperationQueue
     }
 
     /// <summary>
+    /// Cancels one operation (docs/phase-6-design.md 4.5). Does nothing yet: work package WP4
+    /// gives it 4.5's table, and no caller passes a cancellation before then.
+    /// </summary>
+    public void Cancel(GitOperation operation) => ArgumentNullException.ThrowIfNull(operation);
+
+    /// <summary>
     /// Closing the tab (1.8): the waiting operations end as cancelled without running; a running
     /// network operation that the user started is cancelled; a running local one goes on to its
     /// end, every step of it, without the refresh, also one that can be cancelled
@@ -519,7 +525,7 @@ public sealed class OperationQueue : IOperationQueue
         {
             if (mode != PromptMode.None && _prompts is not null)
             {
-                scope = _prompts.Begin(operation.Title, _repositoryName, mode, entry.Id);
+                scope = _prompts.Begin(operation.Title, _repositoryName, mode, entry.Id, operation.PromptGroup);
                 bool disposed;
                 lock (_gate)
                 {

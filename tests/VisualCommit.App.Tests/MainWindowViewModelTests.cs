@@ -19,7 +19,7 @@ public class MainWindowViewModelTests
         IAppLog? log = null) =>
         new(
             settings ?? new FakeSettings(),
-            themes ?? new FakeThemes { Current = theme },
+            themes ?? new FakeThemes { Setting = theme },
             _ => Task.FromResult(git ?? GitFound),
             log);
 
@@ -47,7 +47,7 @@ public class MainWindowViewModelTests
         viewModel.ToggleThemeCommand.Execute(null);
 
         Assert.Equal(AppTheme.Light, viewModel.Theme);
-        Assert.Equal(AppTheme.Light, themes.Current);
+        Assert.Equal(AppTheme.Light, themes.Setting);
         Assert.Equal(AppTheme.Light, settings.Current.Theme);
         Assert.Contains(nameof(MainWindowViewModel.Theme), changed);
         Assert.Contains(nameof(MainWindowViewModel.IsDarkTheme), changed);
@@ -56,7 +56,7 @@ public class MainWindowViewModelTests
         viewModel.ToggleThemeCommand.Execute(null);
 
         Assert.Equal(AppTheme.Dark, viewModel.Theme);
-        Assert.Equal(AppTheme.Dark, themes.Current);
+        Assert.Equal(AppTheme.Dark, themes.Setting);
         Assert.Equal(AppTheme.Dark, settings.Current.Theme);
         Assert.Equal([AppTheme.Light, AppTheme.Dark], themes.Applied);
     }
@@ -144,12 +144,17 @@ public class MainWindowViewModelTests
     {
         public List<AppTheme> Applied { get; } = [];
 
-        public AppTheme Current { get; set; } = AppTheme.Dark;
+        public AppTheme Setting { get; set; } = AppTheme.Dark;
+
+        public bool IsDark => Setting != AppTheme.Light;
+
+        public event EventHandler? Changed;
 
         public void Apply(AppTheme theme)
         {
             Applied.Add(theme);
-            Current = theme;
+            Setting = theme;
+            Changed?.Invoke(this, EventArgs.Empty);
         }
     }
 }

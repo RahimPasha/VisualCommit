@@ -314,7 +314,7 @@ public class UndoStepTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
         {
-            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(gate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (NetworkOptions?)args[3], (CancellationToken)args[4]!)),
+            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(gate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (bool)args[3]!, (bool)args[4]!, (NetworkOptions?)args[5], (CancellationToken)args[6]!)),
         }));
         var history = app.Repository.UndoHistory;
         app.Dialogs.Confirm();
@@ -383,7 +383,7 @@ public class UndoStepTests
         }), undoHistories: histories);
         using var b = await OperationsHarness.OpenAsync(repo, null, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
         {
-            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(branchGate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (NetworkOptions?)args[3], (CancellationToken)args[4]!)),
+            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(branchGate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (bool)args[3]!, (bool)args[4]!, (NetworkOptions?)args[5], (CancellationToken)args[6]!)),
         }), undoHistories: histories);
         var history = a.Repository.UndoHistory;
         Assert.Same(history, b.Repository.UndoHistory);

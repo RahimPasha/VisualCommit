@@ -238,7 +238,7 @@ public class PromptDialogsTests
     {
         public List<RecordedScope> Scopes { get; } = [];
 
-        public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null)
+        public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
         {
             var scope = new RecordedScope(operationId ?? $"prompt-{Scopes.Count + 1}", title, repositoryName, mode);
             Scopes.Add(scope);

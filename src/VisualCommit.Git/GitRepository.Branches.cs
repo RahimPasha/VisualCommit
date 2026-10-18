@@ -134,7 +134,9 @@ public sealed partial class GitRepository
 
     // ---- Checkouts (2.1 to 2.3) -----------------------------------------------------------------
 
-    public Task CheckoutBranchAsync(string branch, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    // keepIgnored: work package WP1 adds --no-overwrite-ignore for it (docs/phase-6-design.md
+    // 9.11); until then every caller but the automatic stash passes false.
+    public Task CheckoutBranchAsync(string branch, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
         if (branch == "-")
@@ -149,33 +151,27 @@ public sealed partial class GitRepository
         return RunWriteAsync(options, cancellationToken, ["switch", "--no-guess", .. Positional(branch)]);
     }
 
-    public Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    // keepIgnored: as CheckoutBranchAsync's, work package WP1's (9.11).
+    public Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
         RequirePrefix(remoteBranchRef, RemotesPrefix, nameof(remoteBranchRef));
         return RunWriteAsync(options, cancellationToken, "switch", "--create", branch, "--track", remoteBranchRef);
     }
 
-    public Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
-        return RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. Positional(commit)]);
-    }
-
-    // ---- C12: protected changes and the automatic stash (docs/phase-5-design.md 9, D179) ---------
-    // The automatic stash itself is StashAsync with untracked files, then the checkout below; the
-    // operation (RepositoryOperations.Branches.cs) runs the steps of 9.2 with these.
-
-    public Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    // C12: the automatic stash (docs/phase-5-design.md 9, D179) is StashAsync with untracked
+    // files, then this checkout with keepIgnored; the operation (RepositoryOperations.Protect.cs)
+    // runs the steps of 9.2 with these.
+    public Task CheckoutDetachedAsync(string commit, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
 
         // --no-overwrite-ignore (a switch option since Git 2.23) refuses where git would otherwise
         // overwrite an ignored file the commit tracks, or delete an ignored folder where it has a
         // file (0.7); the refusal is git's untracked-files block and changes nothing.
-        return noOverwriteIgnore
+        return keepIgnored
             ? RunWriteAsync(options, cancellationToken, ["switch", "--detach", "--no-overwrite-ignore", .. Positional(commit)])
-            : CheckoutDetachedAsync(commit, options, cancellationToken);
+            : RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. Positional(commit)]);
     }
 
     public async Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default)
@@ -339,7 +335,9 @@ public sealed partial class GitRepository
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
 
-    public Task CreateBranchAsync(string name, string startPoint, bool checkout, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    // noTrack and keepIgnored: work package WP1 adds --no-track and --no-overwrite-ignore for
+    // them (docs/phase-6-design.md 9.11, 10.4, D201); until then every caller passes false.
+    public Task CreateBranchAsync(string name, string startPoint, bool checkout, bool noTrack, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(startPoint);
@@ -379,7 +377,9 @@ public sealed partial class GitRepository
 
     // ---- Merge (2.8 to 2.10, D94) ----------------------------------------------------------------
 
-    public async Task<MergeResult> MergeAsync(string reference, MergeMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default)
+    // keepIgnored: work package WP1 adds --no-overwrite-ignore for it (docs/phase-6-design.md
+    // 9.4); until then every caller passes false.
+    public async Task<MergeResult> MergeAsync(string reference, MergeMode mode, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reference);
         // A name that is no commit gets no message; git's merge then refuses it in its own words.

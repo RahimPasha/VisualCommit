@@ -16,6 +16,18 @@ namespace VisualCommit.App.ViewModels.Operations;
 
 public sealed partial class RepositoryOperations
 {
+    /// <summary>
+    /// Keep ignored files (D193, D196, docs/phase-6-design.md 9.1): every checkout, merge, rebase,
+    /// cherry-pick, revert and stash apply or pop refuses to overwrite or delete an ignored file,
+    /// read inside each operation when it runs (as <c>StashIncludeUntracked</c> is read), so a
+    /// queued operation takes the value at its start (D124). Every app call of the checkouts,
+    /// <c>CreateBranchAsync</c> and <c>MergeAsync</c> passes it; the automatic stash's checkout
+    /// passes true whatever it says (D179). False until work package WP-IA gives it 9.1's body,
+    /// <c>Services?.Settings.Current.KeepIgnoredFiles ?? true</c>, which turns every checkout and
+    /// merge on at once.
+    /// </summary>
+    private bool KeepIgnored => false;
+
     // ---- 9.1: which checkouts stash first -----------------------------------------------------------
 
     /// <summary>
@@ -128,7 +140,7 @@ public sealed partial class RepositoryOperations
                 context.SetRunningText(text.RunningText);
                 try
                 {
-                    await Git.CheckoutDetachedAsync(target.Commit, noOverwriteIgnore: true, options);
+                    await Git.CheckoutDetachedAsync(target.Commit, keepIgnored: true, options);
                 }
                 catch (GitException refused)
                 {

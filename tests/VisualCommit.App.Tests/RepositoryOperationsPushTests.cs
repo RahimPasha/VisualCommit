@@ -456,6 +456,10 @@ public class RepositoryOperationsPushTests
         {
         }
 
+        public void Cancel(GitOperation operation)
+        {
+        }
+
         public void Dispose()
         {
         }

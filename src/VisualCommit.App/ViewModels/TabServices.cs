@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -8,6 +9,7 @@ using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Undo;
+using VisualCommit.Core.Workspaces;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -29,7 +31,11 @@ public sealed class TabServices
         IClipboardService? clipboard = null,
         IGitCallLog? gitCalls = null,
         TimeProvider? recordClock = null,
-        UndoHistories? undoHistories = null)
+        UndoHistories? undoHistories = null,
+        IWorkspaceStore? workspaces = null,
+        IGitConfiguration? gitSettings = null,
+        ToolCatalogues? tools = null,
+        TimeProvider? readClock = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -57,6 +63,15 @@ public sealed class TabServices
         // A filter of a repository whose folder is gone is dropped at start-up (docs/phase-5-design.md 8.4).
         GraphFilters = new GraphFilterStore(session, Clock);
         GraphFilters.DropMissingFolders();
+
+        // Phase 6 (docs/phase-6-design.md 1.3, 3.4, 4.3, 8.1, 12.9, 2.10).
+        Workspaces = workspaces ?? new InMemoryWorkspaceStore();
+        GitSettings = gitSettings;
+        Tools = tools;
+        ReadClock = readClock ?? Clock;
+        OpenRepositories = new OpenRepositories();
+        BulkSlots = new BulkSlots();
+        WorkspaceCommands = new WorkspaceCommands(this);
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -128,6 +143,67 @@ public sealed class TabServices
 
     /// <summary>What each repository's graph hides and solos, kept in <see cref="Session"/> (docs/phase-5-design.md 8.4, D159).</summary>
     public GraphFilterStore GraphFilters { get; }
+
+    /// <summary>The user's workspaces (D189, docs/phase-6-design.md 1.3): the session's store, or one in memory for view-model tests.</summary>
+    public IWorkspaceStore Workspaces { get; }
+
+    /// <summary>
+    /// The workspaces as every welcome page lists them (13.1), shared as <see cref="RecentRepositories.Items"/>
+    /// is. Work package WP-W keeps it: rebuilt on <see cref="IWorkspaceStore.Changed"/>, sorted by name, then id.
+    /// </summary>
+    public ObservableCollection<WorkspaceItem> WorkspaceItems { get; } = [];
+
+    /// <summary>Every workspace flow (1.5 to 1.10), one per session: the welcome page, the dashboard and the palette run the same code.</summary>
+    public WorkspaceCommands WorkspaceCommands { get; }
+
+    /// <summary>The window, through which a workspace opens (1.3, 2.2); set by the window when it is made, null without one.</summary>
+    public IWorkspaceHost? WorkspaceHost { get; set; }
+
+    /// <summary>The session's repository view models by worktree: the tabs' and the dashboards' summary-mode ones (3.4).</summary>
+    public OpenRepositories OpenRepositories { get; }
+
+    /// <summary>The window's slots for the rows of bulk runs (4.3).</summary>
+    public BulkSlots BulkSlots { get; }
+
+    /// <summary>Git's own settings, read and written by the settings screen (8.1); null where there is none (view-model tests, and the session until work package WP2).</summary>
+    public IGitConfiguration? GitSettings { get; }
+
+    /// <summary>
+    /// What the machine has installed, as the harnesses fix it (12.9): <see cref="ToolCatalogues.Fixed"/>
+    /// in the harnesses; null for the machine's own (the settings screen, Open file and the merge
+    /// tools' lookup then read the machine).
+    /// </summary>
+    public ToolCatalogues? Tools { get; }
+
+    /// <summary>
+    /// The clock of a dashboard's 10 s rule (2.10): <see cref="Clock"/> unless the harness gives one
+    /// (17.2), so that a check moves it without waiting while every other time of the session runs on.
+    /// </summary>
+    public TimeProvider ReadClock { get; }
+
+    /// <summary>
+    /// Opens the settings screen on a section (7.2): set by the window, for the editor failure's
+    /// "Open settings…" (12.7); null without a window.
+    /// </summary>
+    public Func<SettingsSection, Task>? OpenSettings { get; set; }
+
+    /// <summary>
+    /// Raised on the UI thread after a Save of the settings screen wrote any git key (8.11): every
+    /// repository view model reads <c>merge.tool</c> again while it shows conflicts.
+    /// </summary>
+    public event EventHandler? GitSettingsChanged;
+
+    /// <summary>Raises <see cref="GitSettingsChanged"/> (the settings screen's Save, 8.11).</summary>
+    public void RaiseGitSettingsChanged() => GitSettingsChanged?.Invoke(this, EventArgs.Empty);
+}
+
+/// <summary>The sections of the settings screen (docs/phase-6-design.md 7.1, 7.2): where it opens.</summary>
+public enum SettingsSection
+{
+    General,
+    Git,
+    Tools,
+    KeyboardShortcuts,
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

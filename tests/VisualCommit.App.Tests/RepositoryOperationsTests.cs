@@ -38,7 +38,7 @@ public class RepositoryOperationsTests
 
         var result = await app.Operations.RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
         {
-            await app.Operations.Git.CreateBranchAsync("topic", "refs/heads/main", checkout: false);
+            await app.Operations.Git.CreateBranchAsync("topic", "refs/heads/main", checkout: false, noTrack: false, keepIgnored: false);
             return OperationReport.Done(OperationTexts.CreatedBranch("topic", checkedOut: false));
         });
 
@@ -60,7 +60,7 @@ public class RepositoryOperationsTests
 
         var result = await app.Operations.RunAsync(text, OperationKind.Local, RefreshScope.Refs, async _ =>
         {
-            await app.Operations.Git.CheckoutBranchAsync("nowhere");
+            await app.Operations.Git.CheckoutBranchAsync("nowhere", keepIgnored: false);
             return OperationReport.Done(OperationTexts.CheckedOut("nowhere"));
         });
 
@@ -92,7 +92,7 @@ public class RepositoryOperationsTests
             RefreshScope.Refs,
             async _ =>
             {
-                await app.Operations.Git.CheckoutBranchAsync("feature/other");
+                await app.Operations.Git.CheckoutBranchAsync("feature/other", keepIgnored: false);
                 return OperationReport.Done(OperationTexts.CheckedOut("feature/other"));
             },
             new RunOptions
@@ -124,7 +124,7 @@ public class RepositoryOperationsTests
             RefreshScope.Refs,
             async _ =>
             {
-                await app.Operations.Git.CheckoutBranchAsync("feature/addfile");
+                await app.Operations.Git.CheckoutBranchAsync("feature/addfile", keepIgnored: false);
                 return OperationReport.Done(OperationTexts.CheckedOut("feature/addfile"));
             },
             new RunOptions { DescribeFailure = failure => app.Operations.CheckoutFailureDisplay(failure, "refs/heads/feature/addfile", offerStash: true) });
@@ -200,7 +200,7 @@ public class RepositoryOperationsTests
 
         var result = await app.Operations.RunAsync(OperationTexts.Merge("feature/conflict", "main"), OperationKind.Local, RefreshScope.Refs, async _ =>
         {
-            var merge = await app.Operations.Git.MergeAsync("refs/heads/feature/conflict", MergeMode.Default);
+            var merge = await app.Operations.Git.MergeAsync("refs/heads/feature/conflict", MergeMode.Default, keepIgnored: false);
             Assert.Equal(MergeResult.Conflicts, merge);
             return OperationReport.Conflicts(OperationTexts.MergeStopped(await app.Operations.CountConflictedFilesAsync()));
         });
@@ -390,7 +390,7 @@ public class RepositoryOperationsTests
         {
             // The tab closes while the local operation runs: it runs to its end (1.8).
             app.Repository.Dispose();
-            await app.Operations.Git.CheckoutBranchAsync("nowhere");
+            await app.Operations.Git.CheckoutBranchAsync("nowhere", keepIgnored: false);
             return OperationReport.Done("Checked out nowhere");
         });
 
@@ -687,6 +687,10 @@ public class RepositoryOperationsTests
         }
 
         public void DropWaiting()
+        {
+        }
+
+        public void Cancel(GitOperation operation)
         {
         }
 

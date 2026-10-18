@@ -17,7 +17,10 @@ namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// The view model of the main window: the repo tabs, the theme switch and what the status bar
-/// shows. The window's regions show the active tab.
+/// shows. The window's regions show the active tab. Phase 6's parts each live in a file of their
+/// own (docs/phase-6-design.md 18): the session's tabs (<c>.Session.cs</c>), the workspaces and
+/// their dashboards (<c>.Workspaces.cs</c>), the keys and the palette (<c>.Commands.cs</c>), the
+/// settings screen (<c>.Settings.cs</c>) and the theme (<c>.Theme.cs</c>).
 /// </summary>
 public partial class MainWindowViewModel : ObservableObject
 {
@@ -44,7 +47,8 @@ public partial class MainWindowViewModel : ObservableObject
         Func<CancellationToken, Task<GitDetection>> detectGit,
         IAppLog? log = null,
         TabServices? tabServices = null,
-        ISessionStore? session = null)
+        ISessionStore? session = null,
+        Func<string, string?>? readEnvironment = null)
     {
         _settings = settings;
         _themes = themes;
@@ -56,7 +60,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Every dialog of a repository's operations follows the window's one rule (4f).
         _tabServices.NamesRepositoryInDialogs = () => NamesRepositoryInDialogs;
-        Theme = themes.Current;
+
+        // A workspace opens through the window (docs/phase-6-design.md 1.3, 2.2).
+        _tabServices.WorkspaceHost = this;
+        Theme = themes.Setting;
 
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
         Menu = new MenuLayerViewModel(
@@ -66,28 +73,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         // The tabs of the last session are there from the first frame, under their folder names;
         // InitializeAsync opens them once git has been found.
-        var saved = _session.Current;
-        foreach (var tab in saved.Tabs)
-        {
-            AddTab();
-        }
-
-        if (Tabs.Count == 0)
-        {
-            AddTab();
-        }
-
-        for (var i = 0; i < saved.Tabs.Count; i++)
-        {
-            if (saved.Tabs[i].RepositoryPath is { } path && !string.IsNullOrWhiteSpace(path))
-            {
-                Tabs[i].ShowPending(path);
-            }
-        }
-
-        _restoring = true;
-        Activate(Tabs[saved.ActiveTab >= 0 && saved.ActiveTab < Tabs.Count ? saved.ActiveTab : 0]);
-        _restoring = false;
+        RestoreTabs(_session.Current);
         UpdateCanClose();
 
         // The activity log reads the session's records from its start, whether its panel is open
@@ -96,12 +82,16 @@ public partial class MainWindowViewModel : ObservableObject
         ActivityLog.Follow(this);
 
         // Auto-fetch looks at the active tab's repository (docs/phase-3-design.md 6.1, D85).
+        // Its interval's environment variable is read through the session's reader (docs/phase-6-design.md 7.3).
         AutoFetch = new AutoFetchScheduler(
             () => ActiveTab.Repository,
             () => Dialogs.IsOpen,
             settings,
             _tabServices.Clock,
-            _log);
+            _log)
+        {
+            ReadEnvironment = readEnvironment ?? Environment.GetEnvironmentVariable,
+        };
         AutoFetch.Start();
     }
 
@@ -118,7 +108,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// one tab has a repository. The error dialog names it always. Every tab's operations and the
     /// prompt dialogs read it when a dialog opens (<see cref="TabServices.NamesRepositoryInDialogs"/>).
     /// </summary>
-    public bool NamesRepositoryInDialogs => Tabs.Count(tab => tab.Repository is not null) > 1;
+    public bool NamesRepositoryInDialogs => AnyDashboardOpen || Tabs.Count(tab => tab.Repository is not null) > 1;
 
     /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
     public AutoFetchScheduler AutoFetch { get; }
@@ -128,16 +118,6 @@ public partial class MainWindowViewModel : ObservableObject
     /// the status bar's toggle, for the active tab's worktree. Its being open is the window's.
     /// </summary>
     public ActivityLogViewModel ActivityLog { get; }
-
-    /// <summary>The theme the app is showing.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDarkTheme))]
-    [NotifyPropertyChangedFor(nameof(ThemeSwitchToolTip))]
-    public partial AppTheme Theme { get; private set; }
-
-    public bool IsDarkTheme => Theme == AppTheme.Dark;
-
-    public string ThemeSwitchToolTip => IsDarkTheme ? "Switch to the light theme" : "Switch to the dark theme";
 
     /// <summary>What was found when the app looked for git. Null until the search has finished.</summary>
     [ObservableProperty]
@@ -186,16 +166,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         // A restored tab that could not be opened is a "New tab" now; a lone one has no close button.
         UpdateCanClose();
-    }
-
-    [RelayCommand]
-    private void ToggleTheme()
-    {
-        var next = IsDarkTheme ? AppTheme.Light : AppTheme.Dark;
-        _themes.Apply(next);
-        Theme = next;
-        _settings.Update(settings => settings with { Theme = next });
-        _log.Info($"Theme changed to {next}.");
     }
 
     /// <summary>Opens a new, empty tab after the last one and shows it.</summary>
@@ -409,6 +379,8 @@ public partial class MainWindowViewModel : ObservableObject
         ActiveTab = tab;
         if (!_restoring)
         {
+            // A dashboard reads its rows when it becomes the active tab (docs/phase-6-design.md 2.10).
+            tab.Dashboard?.OnBecameActive();
             SaveTabs();
         }
     }
@@ -429,7 +401,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void SaveTabs()
     {
-        var tabs = Tabs.Select(tab => new TabState(tab.SavedPath)).ToList();
+        var tabs = SavedTabStates();
         var active = Math.Max(0, Tabs.IndexOf(ActiveTab));
         _session.Update(state => state with { Tabs = tabs, ActiveTab = active });
     }

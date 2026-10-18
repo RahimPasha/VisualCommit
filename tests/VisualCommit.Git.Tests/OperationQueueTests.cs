@@ -858,7 +858,7 @@ public class OperationQueueTests
     {
         public List<Scope> Begun { get; } = [];
 
-        public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null)
+        public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
         {
             var scope = new Scope(operationId ?? "prompt", title, repositoryName, mode);
             lock (Begun)

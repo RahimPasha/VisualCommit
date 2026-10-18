@@ -430,7 +430,7 @@ public class RepositoryOperationsProtectTests
         using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => Intercepting.Wrap(inner, new()
         {
             [nameof(IGitRepository.ApplyStashAsync)] = _ => Task.FromException<ApplyResult>(new GitException("git stash pop --index stash@{0}", 1, "error: could not restore the stash\n")),
-            [nameof(IGitRepository.CheckoutDetachedAsync)] = args => args.Length == 4
+            [nameof(IGitRepository.CheckoutDetachedAsync)] = args => args is [_, true, ..]
                 ? Task.FromException(new GitException("git switch --detach --no-overwrite-ignore " + DescribeTheApp, 128, "fatal: Unable to create '.git/index.lock': File exists.\n"))
                 : null,
         }));

@@ -241,10 +241,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     // A failed checkout ends it with the checkout's dialog (2.33), without the stash
                     // button: the merge would then run on top of re-applied changes (4g).
-                    await Git.CheckoutBranchAsync(branch, options);
+                    await Git.CheckoutBranchAsync(branch, keepIgnored: KeepIgnored, options);
                     try
                     {
-                        return await MergeReportAsync(await Git.MergeAsync(sourceRef, MergeMode.Default, options), source, branch);
+                        return await MergeReportAsync(await Git.MergeAsync(sourceRef, MergeMode.Default, keepIgnored: KeepIgnored, options), source, branch);
                     }
                     catch (GitException mergeFailure)
                     {
@@ -381,7 +381,10 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return refusal;
                     }
 
-                    await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
+                    // A start point fetched from two refs or by two remotes gets no upstream
+                    // (D201); false while the refspecs are not read (docs/phase-6-design.md 9.11).
+                    var noTrack = Refs?.SourceOf(startPoint) is { Kind: RemoteSourceKind.AmbiguousRemotes or RemoteSourceKind.AmbiguousRefs };
+                    await Git.CreateBranchAsync(name, startPoint, checkout, noTrack, keepIgnored: KeepIgnored, NetworkOptions.From(operation));
                     FollowCreatedBranch(HeadsPrefix + name);
                     return OperationReport.Done(OperationTexts.CreatedBranch(name, checkout));
                 },
@@ -510,7 +513,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     return moved;
                 }
 
-                return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
+                return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, keepIgnored: KeepIgnored, NetworkOptions.From(context)), source, current);
             },
             new RunOptions
             {
@@ -931,7 +934,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 {
                     try
                     {
-                        await Git.CheckoutBranchAsync(branch, options);
+                        await Git.CheckoutBranchAsync(branch, keepIgnored: KeepIgnored, options);
                     }
                     catch (GitException checkoutFailure)
                     {
@@ -964,7 +967,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
         {
             return new CheckoutPlan(name, async options =>
             {
-                await Git.CheckoutBranchAsync(name, options);
+                await Git.CheckoutBranchAsync(name, keepIgnored: KeepIgnored, options);
                 return OperationTexts.CheckedOut(name);
             });
         }
@@ -977,7 +980,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
         // A tag or a commit: HEAD is detached (2.3); git peels a tag to its commit.
         return new CheckoutPlan(name, async options =>
         {
-            await Git.CheckoutDetachedAsync(target, options);
+            await Git.CheckoutDetachedAsync(target, keepIgnored: KeepIgnored, options);
             return OperationTexts.DetachedAt(await Git.ResolveAsync("HEAD") ?? target);
         });
     }
@@ -992,7 +995,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var local = LocalNameOfRemoteBranch(remoteRef);
         if (FindRef(HeadsPrefix + local) is { } existing)
         {
-            await Git.CheckoutBranchAsync(local, options);
+            await Git.CheckoutBranchAsync(local, keepIgnored: KeepIgnored, options);
             if (!string.Equals(existing.UpstreamRef, remoteRef, StringComparison.Ordinal))
             {
                 return OperationTexts.CheckedOutTracking(local, UpstreamText(existing));
@@ -1001,7 +1004,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
             return existing.Behind > 0 ? OperationTexts.CheckedOutBehind(local, existing.Behind, shown) : OperationTexts.CheckedOut(local);
         }
 
-        await Git.CheckoutTrackingBranchAsync(local, remoteRef, options);
+        await Git.CheckoutTrackingBranchAsync(local, remoteRef, keepIgnored: KeepIgnored, options);
         FollowCreatedBranch(HeadsPrefix + local);
         return OperationTexts.CreatedTrackingAndCheckedOut(local, shown);
     }

@@ -81,7 +81,8 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <summary>The session's secret. Never logged; only the scopes' variables carry it.</summary>
     private string TokenText { get; }
 
-    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null)
+    // group: work package WP4 puts it in every prompt of the scope (docs/phase-6-design.md 4.4).
+    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(repositoryName);

@@ -164,6 +164,46 @@ public sealed partial class ToolbarViewModel : ObservableObject
     [ObservableProperty]
     public partial string? PopToolTip { get; private set; }
 
+    /// <summary>
+    /// Why Fetch is disabled, or null while it is enabled or no reason is known (docs/phase-6-design.md
+    /// 6.8): what <see cref="ToolbarMenuState.Of"/> and the palette read as its reason, so that a
+    /// tooltip that speaks while enabled never becomes a menu item's reason.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? FetchDisabledReason { get; private set; }
+
+    /// <summary>Why Pull is disabled, or null (6.8).</summary>
+    [ObservableProperty]
+    public partial string? PullDisabledReason { get; private set; }
+
+    /// <summary>Why Push is disabled, or null (6.8).</summary>
+    [ObservableProperty]
+    public partial string? PushDisabledReason { get; private set; }
+
+    /// <summary>Why Branch is disabled, or null (6.8).</summary>
+    [ObservableProperty]
+    public partial string? BranchDisabledReason { get; private set; }
+
+    /// <summary>Why Stash is disabled, or null (6.8).</summary>
+    [ObservableProperty]
+    public partial string? StashDisabledReason { get; private set; }
+
+    /// <summary>Why Pop is disabled, or null (6.8).</summary>
+    [ObservableProperty]
+    public partial string? PopDisabledReason { get; private set; }
+
+    /// <summary>Why Undo is disabled (7.4's reasons), or null while it is enabled or its state is not given yet (6.8).</summary>
+    [ObservableProperty]
+    public partial string? UndoDisabledReason { get; private set; }
+
+    /// <summary>Why Redo is disabled, or null (6.8).</summary>
+    [ObservableProperty]
+    public partial string? RedoDisabledReason { get; private set; }
+
+    /// <summary>Why Search is disabled (11.2's reasons), or null while it is enabled or the tab has no repository (6.8).</summary>
+    [ObservableProperty]
+    public partial string? SearchDisabledReason { get; private set; }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
     public partial bool CanFetch { get; private set; }
@@ -413,8 +453,8 @@ public sealed partial class ToolbarViewModel : ObservableObject
     {
         if (Repository is not { } repository)
         {
-            (UndoToolTip, CanUndo) = (null, false);
-            (RedoToolTip, CanRedo) = (null, false);
+            (UndoToolTip, CanUndo, UndoDisabledReason) = (null, false, null);
+            (RedoToolTip, CanRedo, RedoDisabledReason) = (null, false, null);
             return;
         }
 
@@ -422,6 +462,8 @@ public sealed partial class ToolbarViewModel : ObservableObject
             ?? (repository.IsClosed ? UndoAvailability.Disabled : repository.Operations.ReadUndoAvailability());
         (UndoToolTip, CanUndo) = (undo.UndoToolTip ?? NothingToUndoText, undo.CanUndo && undo.UndoToolTip is not null);
         (RedoToolTip, CanRedo) = (undo.RedoToolTip ?? NothingToRedoText, undo.CanRedo && undo.RedoToolTip is not null);
+        UndoDisabledReason = CanUndo ? null : UndoToolTip;
+        RedoDisabledReason = CanRedo ? null : RedoToolTip;
     }
 
     /// <summary>
@@ -439,6 +481,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
             _ => null,
         };
         CanSearch = Repository is not null && reason is null;
+        SearchDisabledReason = Repository is null ? null : reason;
         SearchToolTip = Repository is null ? null : reason ?? SearchText;
     }
 
@@ -507,12 +550,12 @@ public sealed partial class ToolbarViewModel : ObservableObject
 
     private void SetStates(string? fetch, string? pull, string? push, string? branch, string? stash, string? pop, bool enabled)
     {
-        (FetchToolTip, CanFetch) = (fetch, enabled && fetch is null);
-        (PullToolTip, CanPull) = (pull, enabled && pull is null);
-        (PushToolTip, CanPush) = (push, enabled && push is null);
-        (BranchToolTip, CanBranch) = (branch, enabled && branch is null);
-        (StashToolTip, CanStash) = (stash, enabled && stash is null);
-        (PopToolTip, CanPop) = (pop, enabled && pop is null);
+        (FetchDisabledReason, FetchToolTip, CanFetch) = (fetch, fetch, enabled && fetch is null);
+        (PullDisabledReason, PullToolTip, CanPull) = (pull, pull, enabled && pull is null);
+        (PushDisabledReason, PushToolTip, CanPush) = (push, push, enabled && push is null);
+        (BranchDisabledReason, BranchToolTip, CanBranch) = (branch, branch, enabled && branch is null);
+        (StashDisabledReason, StashToolTip, CanStash) = (stash, stash, enabled && stash is null);
+        (PopDisabledReason, PopToolTip, CanPop) = (pop, pop, enabled && pop is null);
     }
 }
 

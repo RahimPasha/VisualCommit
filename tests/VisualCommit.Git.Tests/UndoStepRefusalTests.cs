@@ -24,7 +24,7 @@ public class UndoStepRefusalTests
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
-        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
 
         // The undo changes src/c.txt and removes f.txt: both edited since.
         repo.WriteFile("src/c.txt", "c-edited\n").WriteFile("f.txt", "f-edited\n");
@@ -57,7 +57,7 @@ public class UndoStepRefusalTests
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
-        var checkout = await RecordAsync(repository, UndoScope.Checkout("feature", "main"), () => repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled));
+        var checkout = await RecordAsync(repository, UndoScope.Checkout("feature", "main"), () => repository.CheckoutBranchAsync("feature", keepIgnored: false, cancellationToken: TestCancelled));
 
         // f.txt, which main lacks, taken out of the index: the switch back to main would remove it.
         await repo.GitAsync("rm", "--quiet", "--cached", "f.txt");
@@ -97,7 +97,7 @@ public class UndoStepRefusalTests
         File.WriteAllText(Path.Combine(repo.Path, ".git", "info", "exclude"), "g.txt\nf.txt\n");
 
         // The redo of an undone merge brings f.txt back where an ignored f.txt now is.
-        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         merge = await UndoAsync(repository, merge);
         repo.WriteFile("f.txt", "ignored, mine\n");
         var still = await StillAsync(repo);
@@ -149,8 +149,8 @@ public class UndoStepRefusalTests
         var (repository, _) = await OpenDatedAsync(repo);
         var entry = await RecordAsync(repository, UndoScope.CheckoutAndMerge("behind", "refs/heads/feature", "main"), async () =>
         {
-            await repository.CheckoutBranchAsync("behind", cancellationToken: TestCancelled);
-            await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("behind", keepIgnored: false, cancellationToken: TestCancelled);
+            await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled);
         });
         entry = await UndoAsync(repository, entry);
 
@@ -200,7 +200,7 @@ public class UndoStepRefusalTests
         {
             var made = await repository.StashAsync(message, includeUntracked: true, cancellationToken: TestCancelled);
             UndoCapture.Stash(made, includedUntracked: true, message);
-            await repository.CheckoutDetachedAsync(target, cancellationToken: TestCancelled);
+            await repository.CheckoutDetachedAsync(target, keepIgnored: false, cancellationToken: TestCancelled);
         });
 
         // main moved to feature's tip, whose b.txt differs from the one the stash was made on.
@@ -222,7 +222,7 @@ public class UndoStepRefusalTests
         var entry = await RecordAsync(repository, UndoScope.StashAndCheckout("behind", "main"), async () =>
         {
             var made = await repository.StashAsync("Stash before checking out behind", includeUntracked: false, cancellationToken: TestCancelled);
-            await repository.CheckoutBranchAsync("behind", cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("behind", keepIgnored: false, cancellationToken: TestCancelled);
             Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(made!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
         });
 
@@ -347,7 +347,7 @@ public class UndoStepRefusalTests
         {
             var made = await repository.StashAsync(message, includeUntracked: true, cancellationToken: TestCancelled);
             UndoCapture.Stash(made, includedUntracked: true, message);
-            await repository.CheckoutDetachedAsync(target, noOverwriteIgnore: true, cancellationToken: TestCancelled);
+            await repository.CheckoutDetachedAsync(target, keepIgnored: true, cancellationToken: TestCancelled);
         });
 
         // A build writes the ignored file again while HEAD is detached.
@@ -379,7 +379,7 @@ public class UndoStepRefusalTests
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
-        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         var merged = await PictureAsync(repo);
 
         // The undo deletes f.txt and rewrites src/c.txt, held open as an editor or a build holds a

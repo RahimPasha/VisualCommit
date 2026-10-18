@@ -1,10 +1,13 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Workspaces;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -39,7 +42,17 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     public partial string Title { get; private set; } = EmptyTitle;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CloseToolTip), nameof(CloseKeyText))]
     public partial bool IsActive { get; set; }
+
+    /// <summary>
+    /// The close button's tooltip and help text (docs/phase-6-design.md 6.8): with Mod+W's key on
+    /// the active tab, without it on the others, since Mod+W closes the active tab only (6.5).
+    /// </summary>
+    public string CloseToolTip => IsActive ? ShellToolTips.CloseTab : ShellToolTips.CloseOtherTab;
+
+    /// <summary>The close button's <c>AcceleratorKey</c>: Mod+W's text on the active tab, null on the others (6.8).</summary>
+    public string? CloseKeyText => IsActive ? KeyTexts.Current.Of(AppCommand.CloseTab) : null;
 
     /// <summary>The tab shows a close button: every tab but a lone empty one.</summary>
     [ObservableProperty]
@@ -55,8 +68,38 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// <summary>The toolbar's buttons (docs/phase-3-design.md 4d): the repository's, or a toolbar whose commands are all disabled.</summary>
     public ToolbarViewModel Toolbar => Repository?.Toolbar ?? _emptyToolbar;
 
-    /// <summary>What the status bar shows of the operations (4e): the repository's, or "Ready".</summary>
-    public OperationStatusViewModel OperationStatus => Repository?.OperationStatus ?? _emptyStatus;
+    /// <summary>
+    /// What the status bar shows of the operations (4e): a dashboard's bulk runs
+    /// (docs/phase-6-design.md 4.9), the repository's, or "Ready".
+    /// </summary>
+    public IStatusBarOperation OperationStatus => (IStatusBarOperation?)Dashboard?.Bulk ?? Repository?.OperationStatus ?? _emptyStatus;
+
+    /// <summary>
+    /// The workspace's dashboard this tab shows (D205, docs/phase-6-design.md 2.1), set once by
+    /// <see cref="ShowDashboard"/>; null for a repository's or an empty tab. Work package WP-D
+    /// makes the tab show it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDashboard), nameof(ShowsDashboard), nameof(ShowsLeftPanel), nameof(GraphColumn), nameof(TabAutomationId), nameof(OperationStatus))]
+    public partial DashboardViewModel? Dashboard { get; private set; }
+
+    /// <summary>The tab is a workspace's dashboard.</summary>
+    public bool IsDashboard => Dashboard is not null;
+
+    /// <summary>The graph area shows the dashboard (2.4).</summary>
+    public bool ShowsDashboard => IsDashboard;
+
+    /// <summary>The left panel and its splitter are shown: not on a dashboard (2.4).</summary>
+    public bool ShowsLeftPanel => !IsDashboard;
+
+    /// <summary>The main area's column the graph area starts in: 0 on a dashboard, which spans the three columns (2.4), else 1.</summary>
+    public int GraphColumn => IsDashboard ? 0 : 1;
+
+    /// <summary>The workspace id the session keeps for a dashboard (1.11), or null for every other tab.</summary>
+    public string? SavedWorkspaceId { get; private set; }
+
+    /// <summary>The tab button's automation id (13.4): <c>DashboardTab</c> on a dashboard, <c>RepoTab</c> otherwise.</summary>
+    public string TabAutomationId => IsDashboard ? "DashboardTab" : "RepoTab";
 
     public bool HasRepository => Repository is not null;
 
@@ -116,6 +159,20 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>Raised after a repository was opened, initialised or cloned in this tab.</summary>
     public event EventHandler? RepositoryOpened;
+
+    /// <summary>
+    /// Makes this tab <paramref name="workspace"/>'s dashboard (2.1): the restore of a dashboard
+    /// tab (1.11) and <c>IWorkspaceHost.ShowWorkspace</c> (2.2) call it. Sets <see cref="Dashboard"/>,
+    /// <see cref="IsDashboard"/>, <see cref="Title"/> and <see cref="SavedWorkspaceId"/>; work
+    /// package WP-D gives the dashboard its rows and the tab its toolbar.
+    /// </summary>
+    public void ShowDashboard(Workspace workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        SavedWorkspaceId = workspace.Id;
+        Title = workspace.Name;
+        Dashboard = new DashboardViewModel(workspace, _services);
+    }
 
     /// <summary>
     /// Shows a tab restored from the session under its folder's name, before git has been found
@@ -221,6 +278,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         _disposed = true;
         Welcome.Dispose();
         _emptyStatus.Dispose();
+        Dashboard?.Dispose();
         if (Repository is { } repository)
         {
             repository.PropertyChanged -= OnRepositoryPropertyChanged;

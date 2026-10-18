@@ -105,6 +105,119 @@ public sealed record RepoRefs(
     IReadOnlyList<StashEntry> Stashes,
     IReadOnlyList<string> Remotes)
 {
+    private const string RemotesPrefix = "refs/remotes/";
+    private const string HeadsPrefix = "refs/heads/";
+
+    /// <summary>
+    /// Every remote's fetch lines as the refs read read them (<c>remote.&lt;r&gt;.fetch</c>,
+    /// docs/phase-6-design.md 10.2); null when they were not read: the fakes, and every snapshot a
+    /// test builds by hand, which then keep phase 5's assumption (<see cref="SourceOf(string)"/>).
+    /// </summary>
+    public FetchRefspecs? Refspecs { get; init; }
+
+    /// <summary>
+    /// Where the remote-tracking ref <paramref name="trackingRef"/> (<c>refs/remotes/…</c>) is
+    /// fetched from (10.1): <see cref="FetchRefspecs.SourceOf"/> of <see cref="Refspecs"/>. While
+    /// <see cref="Refspecs"/> is null, exactly phase 5's assumption: Mapped to its remote, the
+    /// longest of <see cref="Remotes"/> its name starts with (else its first part), and
+    /// <c>refs/heads/&lt;the name less "&lt;remote&gt;/"&gt;</c>.
+    /// </summary>
+    public RemoteSource SourceOf(string trackingRef)
+    {
+        ArgumentNullException.ThrowIfNull(trackingRef);
+        if (Refspecs is { } refspecs)
+        {
+            return refspecs.SourceOf(trackingRef);
+        }
+
+        if (!trackingRef.StartsWith(RemotesPrefix, StringComparison.Ordinal) || trackingRef.Length == RemotesPrefix.Length)
+        {
+            return new RemoteSource(RemoteSourceKind.NotFetched, null, null, []);
+        }
+
+        var name = trackingRef[RemotesPrefix.Length..];
+        var remote = Remotes
+            .Where(candidate => name.Length > candidate.Length && name[candidate.Length] == '/' && name.StartsWith(candidate, StringComparison.Ordinal))
+            .OrderByDescending(candidate => candidate.Length)
+            .FirstOrDefault();
+        if (remote is null)
+        {
+            var slash = name.IndexOf('/', StringComparison.Ordinal);
+            remote = slash > 0 ? name[..slash] : name;
+        }
+
+        return AssumedSource(name, remote);
+    }
+
+    /// <summary>
+    /// Where the remote branch <paramref name="remoteBranch"/> is fetched from (10.1): as
+    /// <see cref="SourceOf(string)"/> of its full name, and while <see cref="Refspecs"/> is null
+    /// phase 5's assumption from its own <see cref="GitRef.RemoteName"/>. A ref that is not a
+    /// remote branch, or one without a remote, is <see cref="RemoteSourceKind.NotFetched"/>.
+    /// </summary>
+    public RemoteSource SourceOf(GitRef remoteBranch)
+    {
+        ArgumentNullException.ThrowIfNull(remoteBranch);
+        if (remoteBranch.Kind != RefKind.RemoteBranch)
+        {
+            return new RemoteSource(RemoteSourceKind.NotFetched, null, null, []);
+        }
+
+        if (Refspecs is { } refspecs)
+        {
+            return refspecs.SourceOf(remoteBranch.FullName);
+        }
+
+        return remoteBranch.RemoteName is { } remote
+            ? AssumedSource(remoteBranch.Name, remote)
+            : new RemoteSource(RemoteSourceKind.NotFetched, null, null, []);
+    }
+
+    /// <summary>
+    /// The local branch a remote branch checks out into (docs/phase-6-design.md 10.6, amending
+    /// D93): its branch name on the remote when it is mapped from one; otherwise, for a mapped ref
+    /// that is no branch and for one fetched from two refs of one remote, today's rule
+    /// (<see cref="GitRef.Name"/> less <c>&lt;RemoteName&gt;/</c>); null for one two remotes fetch,
+    /// one no line fetches, and a ref that is not a remote branch. With <see cref="Refspecs"/> null
+    /// it is phase 5's name.
+    /// </summary>
+    public string? LocalNameOf(GitRef remoteBranch)
+    {
+        ArgumentNullException.ThrowIfNull(remoteBranch);
+        if (remoteBranch.Kind != RefKind.RemoteBranch)
+        {
+            return null;
+        }
+
+        var source = SourceOf(remoteBranch);
+        return source switch
+        {
+            { IsBranch: true } => source.Branch,
+            { Kind: RemoteSourceKind.Mapped or RemoteSourceKind.AmbiguousRefs } => TodaysLocalName(remoteBranch),
+            _ => null,
+        };
+    }
+
+    /// <summary>Phase 5's local name: the part after <c>&lt;remote&gt;/</c>, or the whole name when it does not start so.</summary>
+    private static string TodaysLocalName(GitRef remoteBranch)
+    {
+        if (remoteBranch.RemoteName is not { } remote)
+        {
+            return remoteBranch.Name;
+        }
+
+        var prefix = remote + "/";
+        return remoteBranch.Name.StartsWith(prefix, StringComparison.Ordinal) ? remoteBranch.Name[prefix.Length..] : remoteBranch.Name;
+    }
+
+    /// <summary>Phase 5's assumption for a remote branch named <paramref name="name"/> of <paramref name="remote"/>: the default fetch line's mapping.</summary>
+    private static RemoteSource AssumedSource(string name, string remote)
+    {
+        var prefix = remote + "/";
+        var branch = name.StartsWith(prefix, StringComparison.Ordinal) ? name[prefix.Length..] : name;
+        return new RemoteSource(RemoteSourceKind.Mapped, remote, HeadsPrefix + branch, []);
+    }
+
     /// <summary>
     /// A text that changes whenever something the graph depends on changes: HEAD, any ref's
     /// target, or the stashes. Two snapshots with the same fingerprint draw the same graph, so a

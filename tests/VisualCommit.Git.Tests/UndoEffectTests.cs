@@ -630,7 +630,7 @@ public class UndoEffectTests
         using var repo = await UndoRepoAsync();
         var repository = await OpenAsync(repo);
         await repo.CommitFileAsync("src/c.txt", "c-main\n", "c4");
-        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         var conflicted = await repository.ReadRefStatesAsync(new UndoScope { Files = ["src/c.txt"] }, cancellationToken: TestCancelled);
         Assert.Equal(3, conflicted.IndexEntries.Count);
         await repo.GitAsync("add", "src/c.txt");
@@ -686,7 +686,7 @@ public class UndoEffectTests
         Assert.Equal(new UndoRefusal(UndoRefusalKind.CommitsGone), await RefuseAsync(repository, new MoveHead("main", c3, new string('1', 40), MoveMode.Soft)));
 
         await repo.CommitFileAsync("src/c.txt", "c-main\n", "c4");
-        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Equal(new UndoRefusal(UndoRefusalKind.InProgress), await RefuseAsync(repository, new SetRef("refs/heads/behind", await ShaAsync(repo, "behind"), c1)));
 
         // Conflicts left without an operation (a stash's apply): refused too.

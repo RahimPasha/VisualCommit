@@ -147,6 +147,24 @@ public static class RebaseTodo
     }
 
     /// <summary>
+    /// The commits git checks out instead of the plan's base before it writes anything
+    /// (docs/phase-6-design.md 9.7, Keep ignored files): the targets of the first groups
+    /// <see cref="Build"/> writes as a plain <c>pick</c> line, up to the first that is not one (a
+    /// <c>label</c>, or a group of drops only), a pick followed by drops included, oldest first.
+    /// Work package WP1 gives it its body.
+    /// </summary>
+    public static IReadOnlyList<string> LeadingPicks(RebasePlan plan) =>
+        throw new NotImplementedException("Work package WP1 builds RebaseTodo.LeadingPicks (docs/phase-6-design.md 9.7).");
+
+    /// <summary>
+    /// Every <c>pick</c> or <c>fixup</c> line's commit of the todo <see cref="Build"/> writes, in
+    /// todo order (docs/phase-6-design.md 9.7): the changes the rebase applies. Work package WP1
+    /// gives it its body.
+    /// </summary>
+    public static IReadOnlyList<string> AppliedCommits(RebasePlan plan) =>
+        throw new NotImplementedException("Work package WP1 builds RebaseTodo.AppliedCommits (docs/phase-6-design.md 9.7).");
+
+    /// <summary>
     /// The plan of "Squash {N} commits" (docs/phase-4-design.md section 3): <paramref name="list"/>
     /// is the "from here" list read from the oldest squashed commit's parent
     /// (<c>ReadRebaseListAsync(parent, branchRef, fromCommit: true)</c>); the oldest

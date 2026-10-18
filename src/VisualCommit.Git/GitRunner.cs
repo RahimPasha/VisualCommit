@@ -61,16 +61,30 @@ public sealed class GitRunner : IGitRunner
     /// its duration, docs/phase-5-design.md 2.3); the system clock by default. The record's own
     /// <see cref="GitCallRecord.StartedAt"/> and <see cref="GitCallRecord.Duration"/> stay the system's.
     /// </param>
-    public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null, TimeProvider? recordClock = null)
+    /// <param name="environment">
+    /// The app session's own git environment (docs/phase-6-design.md 8.12, 17.2, D220): the
+    /// harnesses' <c>GIT_CONFIG_GLOBAL</c> and <c>XDG_CONFIG_HOME</c> in the session's data folder;
+    /// null for none, as the desktop app runs. Work package WP-S applies it to every call, after
+    /// <see cref="DefaultEnvironment"/> and before the command's own.
+    /// </param>
+    public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null, TimeProvider? recordClock = null, IReadOnlyDictionary<string, string?>? environment = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ExecutablePath = executablePath;
         _callLog = callLog;
         _log = log ?? NullAppLog.Instance;
         _recordClock = recordClock ?? TimeProvider.System;
+        SessionEnvironment = environment ?? new Dictionary<string, string?>();
     }
 
     public string ExecutablePath { get; }
+
+    /// <summary>
+    /// The session's git environment given to the constructor (empty for none): what the settings
+    /// screen's global file and its identity notices read over the process's own variables
+    /// (docs/phase-6-design.md 8.2, 8.6, 8.12).
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> SessionEnvironment { get; }
 
     /// <remarks>
     /// The caller's thread only queues the call; all of it runs on the thread pool (D59). Run from

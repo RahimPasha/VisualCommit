@@ -22,17 +22,17 @@ public sealed record ToolbarMenuState(
     /// <summary>Every button disabled without a reason: a repository whose refs are not read yet.</summary>
     public static ToolbarMenuState Disabled { get; } = new(default, default, default, default, default, default);
 
-    /// <summary>The state of <paramref name="toolbar"/>'s buttons now.</summary>
+    /// <summary>The state of <paramref name="toolbar"/>'s buttons now, with their disabled reasons, never their tooltips (docs/phase-6-design.md 6.8).</summary>
     public static ToolbarMenuState Of(ToolbarViewModel toolbar)
     {
         ArgumentNullException.ThrowIfNull(toolbar);
         return new(
-            new(toolbar.CanFetch, toolbar.FetchToolTip),
-            new(toolbar.CanPull, toolbar.PullToolTip),
-            new(toolbar.CanPush, toolbar.PushToolTip),
-            new(toolbar.CanBranch, toolbar.BranchToolTip),
-            new(toolbar.CanStash, toolbar.StashToolTip),
-            new(toolbar.CanPop, toolbar.PopToolTip));
+            new(toolbar.CanFetch, toolbar.FetchDisabledReason),
+            new(toolbar.CanPull, toolbar.PullDisabledReason),
+            new(toolbar.CanPush, toolbar.PushDisabledReason),
+            new(toolbar.CanBranch, toolbar.BranchDisabledReason),
+            new(toolbar.CanStash, toolbar.StashDisabledReason),
+            new(toolbar.CanPop, toolbar.PopDisabledReason));
     }
 }
 

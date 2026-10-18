@@ -32,7 +32,7 @@ public enum OperationStatusTone
 /// the waiting count go on as before. It follows the queue's events on the synchronization
 /// context it was created on.
 /// </summary>
-public sealed partial class OperationStatusViewModel : ObservableObject, IDisposable
+public sealed partial class OperationStatusViewModel : ObservableObject, IStatusBarOperation, IDisposable
 {
     /// <summary>What an idle repository, or a tab without one, shows.</summary>
     public const string ReadyText = "Ready";
@@ -146,6 +146,8 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     /// <summary>Stops git: cancels the running network operation (1.9).</summary>
     [RelayCommand(CanExecute = nameof(CanCancel))]
     private void Cancel() => _queue?.CancelCurrent();
+
+    System.Windows.Input.ICommand IStatusBarOperation.CancelCommand => CancelCommand;
 
     private void OnQueueChanged(object? sender, EventArgs e) => OnUiThread(Update);
 

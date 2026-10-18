@@ -122,7 +122,7 @@ public sealed partial class RepositoryOperations
                     var previous = (await ReadHeadAtStartAsync()).BranchName;
                     try
                     {
-                        await Git.CheckoutBranchAsync(branch, options);
+                        await Git.CheckoutBranchAsync(branch, keepIgnored: KeepIgnored, options);
                     }
                     catch (GitException checkoutFailure)
                     {
@@ -267,7 +267,7 @@ public sealed partial class RepositoryOperations
                             previous = (await ReadHeadAtStartAsync()).BranchName;
                             try
                             {
-                                await Git.CheckoutBranchAsync(branch, options);
+                                await Git.CheckoutBranchAsync(branch, keepIgnored: KeepIgnored, options);
                             }
                             catch (GitException checkoutFailure)
                             {
