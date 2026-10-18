@@ -26,29 +26,10 @@ public sealed partial class GitRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
 
-        var fastForward = PullFastForwardSetting.Unset;
-        var fastForwardValue = await ReadPullSettingAsync(PullConfigKeys.FastForward, cancellationToken).ConfigureAwait(false);
-        if (fastForwardValue is not null)
+        var (fastForward, fastForwardValue, refused) = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
         {
-            if (await ReadPullBoolAsync(PullConfigKeys.FastForward, fastForwardValue, cancellationToken).ConfigureAwait(false) is { } flag)
-            {
-                fastForward = flag ? PullFastForwardSetting.Always : PullFastForwardSetting.Never;
-            }
-            else if (fastForwardValue == "only")
-            {
-                fastForward = PullFastForwardSetting.Only;
-            }
-            else
-            {
-                return new PullConfiguration(
-                    PullFastForwardSetting.Unset,
-                    PullRebaseSetting.None,
-                    PullConfigKeys.Rebase,
-                    null,
-                    fastForwardValue,
-                    RemoteArguments.NotUnderstood(PullConfigKeys.FastForward, fastForwardValue),
-                    PullConfigKeys.FastForward);
-            }
+            return refused;
         }
 
         var key = $"branch.{branch}.rebase";
@@ -83,6 +64,42 @@ public sealed partial class GitRepository
         }
 
         return new PullConfiguration(fastForward, rebase, key, value, fastForwardValue, null, null);
+    }
+
+    /// <summary>
+    /// <c>pull.ff</c> as <c>git pull</c> reads it first, whenever no <c>--ff</c> option is given, a
+    /// <c>git pull --rebase</c> included (8.9): a boolean (<see cref="ReadPullBoolAsync"/>) or
+    /// <c>only</c>, with its value as set (null: unset); for a value git would refuse, the
+    /// configuration Pull reports (<see cref="PullConfiguration.Problem"/>, the rebase setting not
+    /// read), else null.
+    /// </summary>
+    private async Task<(PullFastForwardSetting Setting, string? Value, PullConfiguration? Refused)> ReadPullFastForwardAsync(CancellationToken cancellationToken)
+    {
+        var value = await ReadPullSettingAsync(PullConfigKeys.FastForward, cancellationToken).ConfigureAwait(false);
+        if (value is null)
+        {
+            return (PullFastForwardSetting.Unset, null, null);
+        }
+
+        if (await ReadPullBoolAsync(PullConfigKeys.FastForward, value, cancellationToken).ConfigureAwait(false) is { } flag)
+        {
+            return (flag ? PullFastForwardSetting.Always : PullFastForwardSetting.Never, value, null);
+        }
+
+        if (value == "only")
+        {
+            return (PullFastForwardSetting.Only, value, null);
+        }
+
+        var refused = new PullConfiguration(
+            PullFastForwardSetting.Unset,
+            PullRebaseSetting.None,
+            PullConfigKeys.Rebase,
+            null,
+            value,
+            RemoteArguments.NotUnderstood(PullConfigKeys.FastForward, value),
+            PullConfigKeys.FastForward);
+        return (PullFastForwardSetting.Unset, value, refused);
     }
 
     /// <summary>A setting's value (<c>git config --get</c>, the last one wins), or null when it is not set.</summary>

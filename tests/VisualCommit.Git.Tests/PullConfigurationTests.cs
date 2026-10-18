@@ -380,8 +380,9 @@ public class PullConfigurationAgreementTests
 /// <summary>
 /// <see cref="PullConfigurationTests"/>: <see cref="GitRepository.IntegratePullAsync(GitRef, PullIntegration, Func{string, Task}?, NetworkOptions?, PullIntegrationOptions?, CancellationToken)"/>
 /// with a configuration read before the fetch (8.9) integrates as with its own read, decides by it
-/// without reading again, and throws its problem before anything changes. A class of its own, so
-/// that it runs beside the others.
+/// without reading again, and throws its problem before anything changes; the chosen rebase reads
+/// <c>pull.ff</c> alone and refuses a value git would refuse, as <c>git pull --rebase</c> does. A
+/// class of its own, so that it runs beside the others.
 /// </summary>
 public class PullConfigurationIntegrationTests
 {
@@ -453,6 +454,98 @@ public class PullConfigurationIntegrationTests
         Assert.Equal(read.NotUnderstood().Message, failure.Message);
         Assert.Equal(head, await repo.HeadAsync());
         Assert.Equal(string.Empty, (await repo.GitAsync("status", "--porcelain")).StandardOutput);
+    }
+
+    [Theory]
+    [InlineData("foo")]
+    [InlineData("ONLY")]
+    [InlineData("k")]
+    public async Task The_chosen_rebase_refuses_an_invalid_pull_ff_as_git_pull_rebase_does(string value)
+    {
+        var template = await PullParityTemplates.SyncAsync(PullState.Diverged);
+        using var appCopy = await template.CopyAsync();
+        using var gitCopy = await template.CopyAsync();
+        await appCopy.ConfigAsync("pull.ff", value);
+        await gitCopy.ConfigAsync("pull.ff", value);
+        var head = await appCopy.HeadAsync();
+        var upstream = (await gitCopy.GitAsync("rev-parse", "origin/main")).StandardOutput.Trim();
+
+        // git pull --rebase reads pull.ff (no --ff option given) and refuses before it fetches: foo
+        // and ONLY on every git, k on newer gits only (2.36 reads it as false, 0.3).
+        var pull = await PullParity.RunGitAsync(gitCopy, "pull", "--rebase");
+        var gitRefuses = pull.StandardError.Contains("invalid value for 'pull.ff'", StringComparison.Ordinal);
+        if (value != "k")
+        {
+            Assert.True(gitRefuses, pull.StandardError);
+        }
+
+        // The app: its fetch, then the chosen rebase with no configuration given.
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), appCopy.Path, TestCancelled);
+        var branch = (await repository.ReadRefsAsync(TestCancelled)).Refs.Single(gitRef => gitRef.IsHead);
+        await repository.FetchAsync(branch.UpstreamRemote, NetworkOptions.None, cancellationToken: TestCancelled);
+        var mark = calls.Snapshot()[^1].Sequence;
+        PullResult? result = null;
+        GitException? failure = null;
+        try
+        {
+            result = await repository.IntegratePullAsync(branch, PullIntegration.Rebase, null, cancellationToken: TestCancelled);
+        }
+        catch (GitException exception)
+        {
+            failure = exception;
+        }
+
+        Assert.Equal(gitRefuses, failure is not null);
+        if (failure is not null)
+        {
+            Assert.Equal(("git config --get pull.ff", (int?)0, $"pull.ff is set to {value}, which this app does not understand."), (failure.CommandText, failure.ExitCode, failure.StandardError));
+            Assert.Equal(head, await appCopy.HeadAsync());
+            Assert.Equal(string.Empty, (await appCopy.GitAsync("status", "--porcelain")).StandardOutput);
+            Assert.Equal(upstream, (await gitCopy.GitAsync("rev-parse", "origin/main")).StandardOutput.Trim());
+        }
+        else
+        {
+            // pull.ff = false gives way to the rebase.
+            Assert.Equal(PullOutcome.Rebased, result!.Outcome);
+            Assert.True(pull.Succeeded, pull.StandardError);
+        }
+
+        // pull.ff alone was read: no rebase setting, as git pull --rebase reads none.
+        Assert.DoesNotContain(
+            calls.Snapshot().Where(call => call.Sequence > mark),
+            call => call.CommandText.StartsWith("git config", StringComparison.Ordinal)
+                && (call.CommandText.Contains("pull.rebase", StringComparison.Ordinal) || call.CommandText.Contains("branch.", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task A_configuration_given_to_the_chosen_rebase_counts_only_for_pull_ff()
+    {
+        using var repo = await (await PullParityTemplates.SyncAsync(PullState.Diverged)).CopyAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var branch = (await repository.ReadRefsAsync(TestCancelled)).Refs.Single(gitRef => gitRef.IsHead);
+        await repository.FetchAsync(branch.UpstreamRemote, NetworkOptions.None, cancellationToken: TestCancelled);
+        var head = await repo.HeadAsync();
+        var mark = calls.Snapshot()[^1].Sequence;
+        var fastForwardProblem = new PullConfiguration(
+            PullFastForwardSetting.Unset, PullRebaseSetting.None, "pull.rebase", null, "foo", "pull.ff is set to foo, which this app does not understand.", "pull.ff");
+        var rebaseProblem = new PullConfiguration(
+            PullFastForwardSetting.Unset, PullRebaseSetting.None, "pull.rebase", "preserve", null, "pull.rebase is set to preserve, which this app does not understand.", "pull.rebase");
+
+        var failure = await Assert.ThrowsAsync<GitException>(() =>
+            repository.IntegratePullAsync(branch, PullIntegration.Rebase, null, pullOptions: new PullIntegrationOptions(fastForwardProblem), cancellationToken: TestCancelled));
+        Assert.Equal(fastForwardProblem.NotUnderstood().Message, failure.Message);
+        Assert.Equal(head, await repo.HeadAsync());
+
+        // A rebase setting git pull --rebase never reads: ignored, an invalid one included.
+        var result = await repository.IntegratePullAsync(branch, PullIntegration.Rebase, null, pullOptions: new PullIntegrationOptions(rebaseProblem), cancellationToken: TestCancelled);
+        Assert.Equal(PullOutcome.Rebased, result.Outcome);
+
+        // Given a configuration, nothing of pull's is read again.
+        Assert.DoesNotContain(
+            calls.Snapshot().Where(call => call.Sequence > mark),
+            call => call.CommandText.StartsWith("git config", StringComparison.Ordinal) && call.CommandText.Contains("pull.", StringComparison.Ordinal));
     }
 
     /// <summary>
