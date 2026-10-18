@@ -88,9 +88,11 @@ public class GitIsolationTests
         Assert.DoesNotContain("MSYSTEM", startInfo.Environment.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase));
 
         // A shell git starts for an alias still runs without it; on Windows git sets it again.
+        // The alias has a name of its own: git never lets an alias stand for a built-in command,
+        // and `git shell` is one where git-shell is installed (Linux, macOS).
         using var repo = await TempRepo.CreateAsync();
         Assert.Null(repo.Environment["MSYSTEM"]);
-        var command = new GitCommand("-c", "alias.shell=!echo \"shell ran: $MSYSTEM\"", "shell") { WorkingDirectory = repo.Path, Environment = repo.Environment };
+        var command = new GitCommand("-c", "alias.vc-shell-ran=!echo \"shell ran: $MSYSTEM\"", "vc-shell-ran") { WorkingDirectory = repo.Path, Environment = repo.Environment };
         var result = await repo.Runner.RunAsync(command, TestCancelled);
         Assert.True(result.Succeeded, result.StandardError);
         Assert.StartsWith("shell ran:", result.StandardOutput.Trim(), StringComparison.Ordinal);
