@@ -11,7 +11,8 @@
 #   bash scripts/time-scripted-check.sh "*Check_C10*" 4
 #   bash scripts/time-scripted-check.sh "*Phase3ChecksD*" 3
 # The second argument is the phase whose step times to print (5 when left out). It also picks the
-# walk-through project. For phase 5 (design 15.3): tests/VisualCommit.VisualTests.Phase5Undo
+# walk-through project. For phase 6 tests/VisualCommit.VisualTests.Phase6 (once phase 6's
+# walk-through exists). For phase 5 (design 15.3): tests/VisualCommit.VisualTests.Phase5Undo
 # when the filter names part U (its checks, Check_U<n>, or their class, Phase5ChecksU), and
 # tests/VisualCommit.VisualTests.Phase5 for parts A, B, F and P. For phase 4
 # tests/VisualCommit.VisualTests.Phase4, for phase 3 tests/VisualCommit.VisualTests.Phase3, and
@@ -29,7 +30,9 @@ phase="${2:-5}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-if [ "$phase" -ge 5 ]; then
+if [ "$phase" -ge 6 ]; then
+  project="tests/VisualCommit.VisualTests.Phase${phase}"
+elif [ "$phase" -eq 5 ]; then
   case "$filter" in
     *Check_U* | *ChecksU*) project="tests/VisualCommit.VisualTests.Phase5Undo" ;;
     *) project="tests/VisualCommit.VisualTests.Phase5" ;;

@@ -62,13 +62,16 @@ Start:
   reviews, each finding checked by an adversarial verifier; the design revised from every
   confirmed one; questions of taste the reviews raise go to the owner; the design's own decisions
   recorded.
-- [ ] 4. Leftovers named in phase 5's handoff: the real-window csproj's stale comment on the pass's
+- [x] 4. Leftovers named in phase 5's handoff: the real-window csproj's stale comment on the pass's
   length; `scripts/time-scripted-check.sh` for phase 6; plan risk 28 (seven fetch and pull tests
   that fail locally with Visual Studio's Git 2.55) understood before fetch and pull change for the
   dashboard. (Risk 28 explained on 2026-10-18: Visual Studio's Git has no `git http-backend`, which
   the test server `AuthRemoteServer` runs; 6 of 49 fetch, pull, push and remotes tests failed with
-  it, all against that server; plan risk 28. Still to do in the first code commit: the server says
-  so when it starts, the csproj comment, the timing script.)
+  it, all against that server; the seventh, the FakeSsh test, fails because that git crashes running
+  sh under an inherited `MSYSTEM=MINGW64` (the research, not run here); plan risk 28. The server
+  now fails at its start with a message naming the missing `http-backend`; the csproj comment says
+  25 minutes for phases 0 to 5; the timing script sends phase 6 and later to their own project.
+  Removing `MSYSTEM` in the tests' isolation goes with the design's isolation changes.)
 - [ ] 5. Harness: phase 6's scenario repositories (a workspace of ten repositories in mixed
   states: clean, ahead, behind, diverged, uncommitted changes, a conflict in progress, detached,
   no upstream, no remote, a folder that is gone; a fetch refspec that maps names differently),

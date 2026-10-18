@@ -166,6 +166,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     public static async Task<AuthRemoteServer> StartAsync(int port = 0, bool fallBackToFreePort = false, string? existingRepository = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(port);
+        await HttpBackendCheck.Value.ConfigureAwait(false);
         var root = new TempDirectory("auth-server");
         TcpListener? listener = null;
         try
@@ -212,6 +213,31 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// </summary>
     public static Task<AuthRemoteServer> StartForVisualChecksAsync(string? existingRepository = null, int port = VisualChecksPort) =>
         StartAsync(port, fallBackToFreePort: true, existingRepository);
+
+    /// <summary>
+    /// Fails once per process, with a message that says why, when the tests' git has no
+    /// <c>http-backend</c>, through which the server serves its repository. Visual Studio's Git
+    /// is such a trimmed distribution (docs/plan.md risk 28): without this, every test against
+    /// the server timed out or saw the server's errors. A full git answers a call without a
+    /// request with a "500" response and exit 0; a git without the program says "is not a git
+    /// command".
+    /// </summary>
+    private static readonly Lazy<Task> HttpBackendCheck = new(CheckHttpBackendAsync);
+
+    private static async Task CheckHttpBackendAsync()
+    {
+        var command = new GitCommand("http-backend")
+        {
+            Environment = new Dictionary<string, string?> { ["REQUEST_METHOD"] = null },
+        };
+        var result = await new GitRunner(TempRepo.GitPath).RunAsync(command).ConfigureAwait(false);
+        if (!result.Succeeded && result.StandardError.Contains("is not a git command", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The git at {TempRepo.GitPath} has no http-backend, which AuthRemoteServer serves its repository through. " +
+                "Visual Studio's Git is such a trimmed distribution (docs/plan.md risk 28): put a full Git first on PATH.");
+        }
+    }
 
     /// <summary>The folder that holds <paramref name="repository"/> and its name, once it is known to be a bare repository with a name that needs no escaping in a URL.</summary>
     private static async Task<(string ProjectRoot, string Name)?> ExistingRepositoryAsync(string repository, IReadOnlyDictionary<string, string?> environment)

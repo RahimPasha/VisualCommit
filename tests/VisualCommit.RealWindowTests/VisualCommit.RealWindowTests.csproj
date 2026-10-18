@@ -5,10 +5,9 @@
 
        Windows-only and opt-in: this project is NOT in VisualCommit.slnx, so "dotnet build" and
        "dotnet test" at the repo root never touch it. It is run on its own, with the real-window
-       command in the Commands section of CLAUDE.md. It takes over the mouse for about 14 minutes
-       with phases 0 to 4 (14 min 4 s at phase 4's gate), more as phases add checks (phase 5's 18
-       launches were estimated at 9 to 12 minutes more before its gate), and needs an unlocked
-       desktop. -->
+       command in the Commands section of CLAUDE.md. It takes over the mouse for about 25 minutes
+       with phases 0 to 5 (24 min 57 s at phase 5's gate, 59 tests), more as phases add checks,
+       and needs an unlocked desktop. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
