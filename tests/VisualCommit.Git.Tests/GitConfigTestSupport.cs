@@ -11,12 +11,16 @@ namespace VisualCommit.Git.Tests;
 /// </summary>
 internal static class GitConfigTestSupport
 {
-    private static readonly Lazy<Task<bool>> Is236 = new(async () =>
+    private static readonly Lazy<Task<GitVersion>> Version = new(async () =>
         GitVersion.TryParse((await NewRunner().RunAsync(new GitCommand("--version"), CancellationToken.None)).StandardOutput, out var version)
-        && version is { Major: 2, Minor: 36 });
+            ? version
+            : throw new InvalidOperationException("git --version printed no version."));
+
+    /// <summary>The version of the git the tests run.</summary>
+    public static Task<GitVersion> GitVersionAsync() => Version.Value;
 
     /// <summary>Whether the git the tests run is 2.36, the report's git, whose lines a test may assert word for word.</summary>
-    public static Task<bool> GitIs236Async() => Is236.Value;
+    public static async Task<bool> GitIs236Async() => await GitVersionAsync() is { Major: 2, Minor: 36 };
 
     /// <summary>Git's own path for a file or folder in a configuration file: forward slashes, as git writes and matches them.</summary>
     public static string GitPath(string path) => path.Replace('\\', '/');

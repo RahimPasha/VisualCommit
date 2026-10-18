@@ -211,13 +211,20 @@ public class PullModesTests
     {
         var read = await GitBooleanAsync(value);
 
-        if (await GitConfigTestSupport.GitIs236Async())
+        // Checked on 2.36 and 2.55 (0.3); which git between them began to refuse it was not, so a
+        // git between them may do either, but none reads it as true.
+        var version = await GitConfigTestSupport.GitVersionAsync();
+        if (version is { Major: 2, Minor: 36 })
         {
             Assert.False(read);
         }
-        else
+        else if (version >= new GitVersion(2, 55, 0))
         {
             Assert.Null(read);
+        }
+        else
+        {
+            Assert.NotEqual(true, read);
         }
     }
 

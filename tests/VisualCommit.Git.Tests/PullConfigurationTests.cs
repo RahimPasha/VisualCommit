@@ -8,11 +8,11 @@ namespace VisualCommit.Git.Tests;
 
 /// <summary>
 /// <see cref="GitRepository.ReadPullConfigurationAsync"/>, Pull's own reader (docs/phase-6-design.md
-/// 8.9), for every row of facts 0.3's pull settings; its agreement with <see cref="PullModes"/> and
-/// <see cref="GitBoolean"/> on the values <see cref="PullModesTests"/> names; and
-/// <see cref="GitRepository.IntegratePullAsync(GitRef, PullIntegration, Func{string, Task}?, NetworkOptions?, PullIntegrationOptions?, CancellationToken)"/>
-/// integrating by a configuration read before the fetch as it does by its own read.
-/// <see cref="PullParityTests"/> and <see cref="PullRebaseParityTests"/> stay unchanged.
+/// 8.9), for every row of facts 0.3's pull settings, <c>m</c> and the unit letters as each git
+/// reads them. <see cref="PullConfigurationAgreementTests"/> has its agreement with the settings
+/// screen's reading, <see cref="PullConfigurationIntegrationTests"/> the integration by a
+/// configuration read before the fetch. <see cref="PullParityTests"/> and
+/// <see cref="PullRebaseParityTests"/> stay unchanged.
 /// </summary>
 public class PullConfigurationTests
 {
@@ -145,15 +145,23 @@ public class PullConfigurationTests
 
         var read = await repository.ReadPullConfigurationAsync("main", TestCancelled);
 
-        // Git 2.36 reads them as false (git pull merges); newer gits refuse them.
+        // Git 2.36 reads them as false (git pull merges); newer gits refuse them (2.55 does, 0.3).
+        // Pull follows its git either way.
+        var gitBoolean = await GitReadsAsBooleanAsync(repo, value);
         if (await GitConfigTestSupport.GitIs236Async())
         {
-            Assert.Equal(new PullConfiguration(PullFastForwardSetting.Never, PullRebaseSetting.None, "pull.rebase", value, value, null, null), read);
+            Assert.False(gitBoolean);
         }
-        else
+
+        if (gitBoolean is null)
         {
             Assert.Equal("pull.ff", read.ProblemKey);
             Assert.Equal($"pull.ff is set to {value}, which this app does not understand.", read.Problem);
+        }
+        else
+        {
+            Assert.False(gitBoolean);
+            Assert.Equal(new PullConfiguration(PullFastForwardSetting.Never, PullRebaseSetting.None, "pull.rebase", value, value, null, null), read);
         }
     }
 
