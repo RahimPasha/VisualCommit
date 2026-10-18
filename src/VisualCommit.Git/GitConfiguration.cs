@@ -468,6 +468,9 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
             }
 
             var help = GitMergeTools.ParseToolHelp(result.StandardOutput);
+
+            // The kept list is read first: replacing the file while it is read would fail on Windows.
+            await kept.ConfigureAwait(false);
             WriteKept(git, help);
             return help;
         }

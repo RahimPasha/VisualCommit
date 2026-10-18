@@ -37,7 +37,8 @@ internal sealed class ConfigLab : IDisposable
     private readonly TempDirectory _folder = new("cfg");
 
     /// <param name="globalFile">The session's global file, in the lab's folder; null for <c>global.gitconfig</c>, created empty. A given one is not created.</param>
-    public ConfigLab(string? globalFile = null)
+    /// <param name="extraEnvironment">More of the session's variables (<c>GIT_CONFIG_COUNT</c> and its pairs).</param>
+    public ConfigLab(string? globalFile = null, IReadOnlyDictionary<string, string?>? extraEnvironment = null)
     {
         GlobalFile = _folder.Combine(globalFile ?? "global.gitconfig");
         if (globalFile is null)
@@ -59,6 +60,12 @@ internal sealed class ConfigLab : IDisposable
             ["GIT_COMMITTER_EMAIL"] = null,
             ["EMAIL"] = null,
         };
+
+        var environment = (Dictionary<string, string?>)Environment;
+        foreach (var (name, value) in extraEnvironment ?? new Dictionary<string, string?>())
+        {
+            environment[name] = value;
+        }
 
         Runner = new SessionRunner(NewRunner(Calls), Environment);
         Configuration = new GitConfiguration(Runner, DataDirectory, MergeToolsFile, Environment, Log);
@@ -138,5 +145,21 @@ internal sealed class SessionRunner(IGitRunner inner, IReadOnlyDictionary<string
             OnErrorLine = command.OnErrorLine,
         };
         return inner.RunAsync(copy, cancellationToken);
+    }
+}
+
+/// <summary>A runner that keeps every command it is given, then runs it through another.</summary>
+internal sealed class CapturingRunner(IGitRunner inner, List<GitCommand> commands) : IGitRunner
+{
+    public string ExecutablePath => inner.ExecutablePath;
+
+    public Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
+    {
+        lock (commands)
+        {
+            commands.Add(command);
+        }
+
+        return inner.RunAsync(command, cancellationToken);
     }
 }
