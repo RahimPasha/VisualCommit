@@ -36,10 +36,15 @@ internal sealed class ConfigLab : IDisposable
 {
     private readonly TempDirectory _folder = new("cfg");
 
-    public ConfigLab()
+    /// <param name="globalFile">The session's global file, in the lab's folder; null for <c>global.gitconfig</c>, created empty. A given one is not created.</param>
+    public ConfigLab(string? globalFile = null)
     {
-        GlobalFile = _folder.Combine("global.gitconfig");
-        File.WriteAllText(GlobalFile, string.Empty);
+        GlobalFile = _folder.Combine(globalFile ?? "global.gitconfig");
+        if (globalFile is null)
+        {
+            File.WriteAllText(GlobalFile, string.Empty);
+        }
+
         XdgHome = _folder.Combine("xdg");
         Directory.CreateDirectory(XdgHome);
         DataDirectory = _folder.Combine("data");
