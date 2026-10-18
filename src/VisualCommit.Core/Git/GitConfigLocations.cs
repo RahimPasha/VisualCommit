@@ -15,13 +15,17 @@ public static class GitConfigLocations
 
     /// <summary>
     /// The file <c>git config --global</c> writes, by git's rule (0.3): <c>GIT_CONFIG_GLOBAL</c> when
-    /// set and not empty; otherwise <c>&lt;home&gt;/.gitconfig</c> when it exists, else the XDG file
+    /// set; otherwise <c>&lt;home&gt;/.gitconfig</c> when it exists, else the XDG file
     /// (<c>$XDG_CONFIG_HOME/git/config</c>, or <c>&lt;home&gt;/.config/git/config</c> with the
     /// variable unset or empty) when it exists, else <c>&lt;home&gt;/.gitconfig</c>, which git then
     /// creates. The home folder is <c>HOME</c> when set; on Windows with <c>HOME</c> unset,
     /// <c>HOMEDRIVE</c>+<c>HOMEPATH</c> when both are set and that folder exists, else
     /// <c>USERPROFILE</c>, as Git for Windows sets <c>HOME</c> at its start. Null when there is no
-    /// home folder (git then refuses a global write: <c>$HOME not set</c>).
+    /// home folder (git then refuses a global write: <c>$HOME not set</c>), and when
+    /// <c>GIT_CONFIG_GLOBAL</c> is set but empty: git then reads no global file, not even
+    /// <c>~/.gitconfig</c>, and refuses a global write (<c>error: could not write config file :
+    /// Is a directory</c>, exit 4; an <c>--unset-all</c> exits 5 and changes nothing; Git 2.36 and
+    /// 2.55, 2026-10-18).
     /// </summary>
     /// <param name="environment">The value of a variable in the environment git gets, null when unset: the session's git environment over the process's (8.12).</param>
     /// <param name="fileExists">Whether a file exists.</param>
@@ -33,9 +37,9 @@ public static class GitConfigLocations
         ArgumentNullException.ThrowIfNull(fileExists);
         ArgumentNullException.ThrowIfNull(directoryExists);
 
-        if (environment(GlobalVariable) is { Length: > 0 } global)
+        if (environment(GlobalVariable) is { } global)
         {
-            return Native(global, isWindows);
+            return global.Length > 0 ? Native(global, isWindows) : null;
         }
 
         if (Home(environment, directoryExists, isWindows) is not { } home)

@@ -16,12 +16,22 @@ public class GitConfigLocationsTests
     private const string WindowsShare = @"H:\ann";
 
     [Fact]
-    public void GIT_CONFIG_GLOBAL_wins_when_set_and_not_empty()
+    public void GIT_CONFIG_GLOBAL_wins_when_set()
     {
         var environment = Variables(("GIT_CONFIG_GLOBAL", "/lab/session.gitconfig"), ("HOME", "/home/ann"));
 
         Assert.Equal("/lab/session.gitconfig", GitConfigLocations.GlobalFile(environment, Exists("/home/ann/.gitconfig"), NoFolder, isWindows: false));
-        Assert.Equal("/home/ann/.gitconfig", GitConfigLocations.GlobalFile(Variables(("GIT_CONFIG_GLOBAL", string.Empty), ("HOME", "/home/ann")), NoFile, NoFolder, isWindows: false));
+    }
+
+    [Fact]
+    public void A_set_but_empty_GIT_CONFIG_GLOBAL_leaves_no_global_file()
+    {
+        // Git reads no global file then, not even an existing ~/.gitconfig, and refuses a global
+        // write (exit 4); the parity test's "session file empty" case shows it.
+        var environment = Variables(("GIT_CONFIG_GLOBAL", string.Empty), ("HOME", "/home/ann"), ("XDG_CONFIG_HOME", "/xdg"));
+
+        Assert.Null(GitConfigLocations.GlobalFile(environment, Exists("/home/ann/.gitconfig", "/xdg/git/config"), _ => true, isWindows: false));
+        Assert.Null(GitConfigLocations.GlobalFile(environment, NoFile, _ => true, isWindows: true));
     }
 
     [Fact]
@@ -102,7 +112,7 @@ public class GitConfigLocationsTests
     /// <summary>Each case's variables for the git call; the cases that need Windows' home rule are Windows only.</summary>
     public static TheoryData<string> ParityCases()
     {
-        var cases = new TheoryData<string> { "session file", "session file in a new file", "home file only", "xdg file only", "both files", "neither file", "home's xdg file only" };
+        var cases = new TheoryData<string> { "session file", "session file in a new file", "session file empty", "home file only", "xdg file only", "both files", "neither file", "home's xdg file only" };
         if (OperatingSystem.IsWindows())
         {
             cases.Add("home share present");
@@ -152,6 +162,12 @@ public class GitConfigLocationsTests
             case "session file in a new file":
                 variables["GIT_CONFIG_GLOBAL"] = lab.Combine("new.gitconfig");
                 break;
+            case "session file empty":
+                // Set but empty: git uses neither the home file nor the XDG file, both present here.
+                variables["GIT_CONFIG_GLOBAL"] = string.Empty;
+                Touch(Path.Combine(home, ".gitconfig"));
+                Touch(Path.Combine(xdg, "git", "config"));
+                break;
             case "home file only":
                 Touch(Path.Combine(home, ".gitconfig"));
                 break;
@@ -189,7 +205,6 @@ public class GitConfigLocationsTests
             File.Exists,
             Directory.Exists,
             OperatingSystem.IsWindows());
-        Assert.NotNull(predicted);
         var marker = $"Parity {Guid.NewGuid():N}";
 
         var write = await NewRunner().RunAsync(
@@ -200,11 +215,23 @@ public class GitConfigLocationsTests
             },
             TestCancelled);
 
-        Assert.True(write.Succeeded, write.StandardError);
         var written = Directory.EnumerateFiles(lab.Path, "*", SearchOption.AllDirectories)
             .Where(file => File.ReadAllText(file).Contains(marker, StringComparison.Ordinal))
             .ToList();
-        Assert.Equal(new[] { Path.GetFullPath(predicted) }, written.Select(Path.GetFullPath).ToArray());
+        if (predicted is null)
+        {
+            // No global file: git refuses the write ("could not write config file", exit 4) and
+            // writes it nowhere.
+            Assert.Equal(4, write.ExitCode);
+            Assert.Contains("could not write config file", write.StandardError, StringComparison.Ordinal);
+            Assert.Empty(written);
+        }
+        else
+        {
+            Assert.True(write.Succeeded, write.StandardError);
+            Assert.Equal(new[] { Path.GetFullPath(predicted) }, written.Select(Path.GetFullPath).ToArray());
+        }
+
         Assert.Equal(processGlobalBefore, TextOf(processGlobal));
     }
 
