@@ -331,6 +331,50 @@ public class PullConfigurationAgreementTests
         }
     }
 
+    [Theory]
+    [InlineData("k")]
+    [InlineData("G")]
+    [InlineData("M")]
+    [InlineData("m")]
+    public async Task Under_pull_ff_only_pull_rebase_is_still_read_as_git_pull_reads_it(string value)
+    {
+        using var repo = await PullConfigurationTests.RepositoryWithAsync($"pull.ff=only pull.rebase={value}");
+        var repository = await OpenAsync(repo);
+        var read = await repository.ReadPullConfigurationAsync("main", TestCancelled);
+        var screen = PullModes.Read(value, rebaseIsBare: false, "only");
+
+        // git pull reads both keys before anything else; without a remote here nothing is fetched,
+        // and a value it accepts ends at "There is no tracking information".
+        var pull = await PullParity.RunGitAsync(repo, "pull");
+        var gitRefuses = pull.StandardError.Contains("invalid value for 'pull.rebase'", StringComparison.Ordinal);
+        Assert.False(pull.Succeeded);
+        Assert.Equal(gitRefuses, read.ProblemKey == "pull.rebase");
+        if (!gitRefuses)
+        {
+            Assert.Equal((PullFastForwardSetting.Only, (string?)null), (read.FastForward, read.Problem));
+        }
+
+        if (value == "m")
+        {
+            // Both gits accept m (2.36 as false, newer ones as merges): fast-forward only.
+            Assert.False(gitRefuses);
+            Assert.Equal(new PullModeReading(PullMode.FastForwardOnly, null, null), screen);
+            return;
+        }
+
+        // A unit letter alone: 2.36 fast-forwards only, 2.55 refuses every pull; the screen shows
+        // "Other" with the line that the gits differ, and Pull does what its git does.
+        Assert.Equal(new PullModeReading(null, $"Other: pull.rebase = {value}", PullModes.UnitLetterNote), screen);
+        var version = await GitConfigTestSupport.GitVersionAsync();
+        if (version is { Major: 2, Minor: 36 })
+        {
+            Assert.False(gitRefuses);
+        }
+        else if (version >= new GitVersion(2, 55, 0))
+        {
+            Assert.True(gitRefuses, pull.StandardError);
+        }
+    }
 }
 
 /// <summary>

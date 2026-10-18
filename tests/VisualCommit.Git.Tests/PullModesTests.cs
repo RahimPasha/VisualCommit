@@ -51,12 +51,19 @@ public class PullModesTests
         { "true", false, null, PullMode.Rebase, null, null },
         { null, false, "only", PullMode.FastForwardOnly, null, null },
 
-        // 2. pull.ff = only wins over every rebase setting, an unusual one included.
+        // 2. pull.ff = only wins over every rebase setting both gits accept, an unusual one included
+        // (m: false on 2.36, merges on newer gits; ff-only either way).
         { "true", false, "only", PullMode.FastForwardOnly, null, null },
         { "merges", false, "only", PullMode.FastForwardOnly, null, null },
         { "false", false, "only", PullMode.FastForwardOnly, null, null },
         { "interactive", false, "only", PullMode.FastForwardOnly, null, null },
-        { "k", false, "only", PullMode.FastForwardOnly, null, null },
+        { "m", false, "only", PullMode.FastForwardOnly, null, null },
+
+        // Before rule 2, a unit letter alone in pull.rebase: newer gits refuse it under pull.ff = only
+        // too, where 2.36 reads it as false and fast-forwards only.
+        { "k", false, "only", null, "Other: pull.rebase = k", PullModes.UnitLetterNote },
+        { "M", false, "only", null, "Other: pull.rebase = M", PullModes.UnitLetterNote },
+        { "G", false, "only", null, "Other: pull.rebase = G", PullModes.UnitLetterNote },
 
         // 4. A rebase ignores pull.ff = false.
         { "true", false, "false", PullMode.Rebase, null, null },

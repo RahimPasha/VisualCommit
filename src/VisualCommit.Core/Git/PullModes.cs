@@ -55,7 +55,8 @@ public static class PullModes
     /// <summary>
     /// How <paramref name="rebase"/> (<c>pull.rebase</c>'s value; null when unset;
     /// <paramref name="rebaseIsBare"/> for a key without a value) and <paramref name="fastForward"/>
-    /// (<c>pull.ff</c>'s) read, by 8.7's rules 1 to 8.
+    /// (<c>pull.ff</c>'s) read, by 8.7's rules 1 to 8, with <c>pull.rebase</c> a unit letter alone
+    /// ("Other") checked before rule 2: newer gits refuse it under <c>pull.ff = only</c> too.
     /// </summary>
     public static PullModeReading Read(string? rebase, bool rebaseIsBare, string? fastForward) =>
         Read(rebase, rebaseIsBare, fastForward, fastForwardIsBare: false);
@@ -71,6 +72,15 @@ public static class PullModes
 
         // 1. A value the app's Pull does not understand: refused.
         if (rebaseValue.Kind == ValueKind.Refused || ffValue.Kind == ValueKind.Refused)
+        {
+            return Other(rebase, rebaseValue, fastForward, ffValue);
+        }
+
+        // A unit letter alone in pull.rebase comes before rule 2: git reads pull.rebase even when
+        // pull.ff = only decides, so with pull.ff = only Git 2.36 fast-forwards only (the letter is
+        // false there) while newer gits refuse every pull ("fatal: invalid value for 'pull.rebase':
+        // 'k'", 2.55, 2026-10-18). m is merges on newer gits and false on 2.36: rule 2 holds on both.
+        if (rebaseValue.Kind == ValueKind.UnitLetter)
         {
             return Other(rebase, rebaseValue, fastForward, ffValue);
         }
