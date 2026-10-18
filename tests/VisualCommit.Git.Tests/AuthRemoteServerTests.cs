@@ -424,7 +424,6 @@ public class AuthRemoteServerTests
     {
         using var copy = await Scenarios.WorkspaceAsync();
         var remotes = Path.Combine(copy.Root, "remotes");
-        Directory.CreateDirectory(Path.Combine(remotes, "not-a-repository"));
         var docs = copy.Repo("docs");
         var configBefore = File.ReadAllText(Path.Combine(copy.RemoteOf("docs"), "config"));
         await using (var server = await AuthRemoteServer.StartForFolderAsync(remotes))
@@ -437,7 +436,6 @@ public class AuthRemoteServerTests
             Assert.Equal($"http://127.0.0.1:{server.Port}/docs.git", server.UrlOf("docs"));
             Assert.Equal(server.UrlOf("docs"), server.UrlOf("docs.git"));
             Assert.Throws<ArgumentException>(() => server.UrlOf("notes"));
-            Assert.Throws<ArgumentException>(() => server.UrlOf("not-a-repository"));
             Assert.Throws<InvalidOperationException>(() => server.Url);
             Assert.Throws<InvalidOperationException>(() => { _ = server.HoldNextFetchPack(); });
 
@@ -459,7 +457,36 @@ public class AuthRemoteServerTests
         // Served in place: nothing in the folder changed, and nothing of it was deleted.
         Assert.Equal(configBefore, File.ReadAllText(Path.Combine(copy.RemoteOf("docs"), "config")));
         Assert.True(Directory.Exists(copy.RemoteOf("mobile")));
-        Assert.True(Directory.Exists(Path.Combine(remotes, "not-a-repository")));
+    }
+
+    [Fact]
+    public async Task A_folder_with_a_folder_it_cannot_serve_is_refused()
+    {
+        // Every folder in it is checked as a repository served in place is (17.2): a scenario
+        // whose remote is broken or misnamed fails at the start, not later with a 404.
+        using var copy = await Scenarios.WorkspaceAsync();
+        var remotes = Path.Combine(copy.Root, "remotes");
+        var docs = copy.Repo("docs");
+
+        var plain = Path.Combine(remotes, "not-a-repository");
+        Directory.CreateDirectory(plain);
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() => AuthRemoteServer.StartForFolderAsync(remotes));
+        Assert.Contains("not-a-repository is not a bare repository", refused.Message, StringComparison.Ordinal);
+        Directory.Delete(plain);
+
+        await GitInAsync(docs, remotes, "init", "--quiet", "--bare", "two words.git");
+        refused = await Assert.ThrowsAsync<ArgumentException>(() => AuthRemoteServer.StartForFolderAsync(remotes));
+        Assert.Contains("'two words.git'", refused.Message, StringComparison.Ordinal);
+        Directory.Delete(Path.Combine(remotes, "two words.git"), recursive: true);
+
+        var empty = Path.Combine(copy.Root, "no-remotes");
+        Directory.CreateDirectory(empty);
+        await Assert.ThrowsAsync<ArgumentException>(() => AuthRemoteServer.StartForFolderAsync(empty));
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "missing")));
+
+        // With those gone, the eight remotes are served.
+        await using var server = await AuthRemoteServer.StartForFolderAsync(remotes);
+        Assert.Equal(8, server.ServedRepositories.Count);
     }
 
     [Fact]

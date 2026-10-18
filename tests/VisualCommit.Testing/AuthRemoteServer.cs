@@ -263,12 +263,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// in place (docs/phase-6-design.md 17.2): each at <see cref="UrlOf"/> its folder's name, each
     /// checked as a repository served in place is (a bare repository whose name needs no escaping
     /// in a URL, one <c>rev-parse --is-bare-repository</c> each), with <c>GIT_PROJECT_ROOT</c> the
-    /// folder. Nothing in the folder is changed or deleted; a folder that is no bare repository is
-    /// not served. On <paramref name="port"/>, or one the system picks when it is 0; with
-    /// <paramref name="fallBackToFreePort"/> a taken port gives way to a free one, as for
-    /// <see cref="StartAsync"/>.
+    /// folder. Nothing in the folder is changed or deleted. On <paramref name="port"/>, or one the
+    /// system picks when it is 0; with <paramref name="fallBackToFreePort"/> a taken port gives way
+    /// to a free one, as for <see cref="StartAsync"/>.
     /// </summary>
-    /// <exception cref="ArgumentException"><paramref name="folder"/> holds no bare repository.</exception>
+    /// <exception cref="ArgumentException"><paramref name="folder"/> holds no bare repository, or a
+    /// folder in it is no bare repository or has a name that needs escaping in a URL: a scenario
+    /// whose remote is broken or misnamed fails here, not later with a 404.</exception>
     public static async Task<AuthRemoteServer> StartForFolderAsync(string folder, int port = 0, bool fallBackToFreePort = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
@@ -288,10 +289,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             var served = new List<string>();
             foreach (var candidate in Directory.EnumerateDirectories(full).Order(StringComparer.Ordinal))
             {
-                if (await IsServableAsync(candidate, environment).ConfigureAwait(false))
-                {
-                    served.Add(Path.GetFileName(candidate));
-                }
+                var repository = await ExistingRepositoryAsync(candidate, environment).ConfigureAwait(false);
+                served.Add(repository!.Value.Name);
             }
 
             if (served.Count == 0)
@@ -322,24 +321,6 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             throw;
         }
     }
-
-    /// <summary>Whether a folder of a served folder is a bare repository whose name needs no escaping in a URL.</summary>
-    private static async Task<bool> IsServableAsync(string folder, IReadOnlyDictionary<string, string?> environment)
-    {
-        if (!IsUrlSafe(Path.GetFileName(folder)))
-        {
-            return false;
-        }
-
-        var bare = await new GitRunner(TempRepo.GitPath)
-            .RunAsync(new GitCommand("rev-parse", "--is-bare-repository") { WorkingDirectory = folder, Environment = environment })
-            .ConfigureAwait(false);
-        return bare.Succeeded && bare.StandardOutput.Trim() == "true";
-    }
-
-    /// <summary>Whether a folder name needs no escaping in a URL: letters, digits, '.', '-' and '_', and not "." or "..".</summary>
-    private static bool IsUrlSafe(string name) =>
-        name.Length > 0 && name is not "." and not ".." && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
 
     /// <summary>A served repository's name: its folder's name without a final <c>.git</c>.</summary>
     private static string NameOf(string folder) =>
