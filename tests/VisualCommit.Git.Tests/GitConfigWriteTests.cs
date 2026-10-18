@@ -244,6 +244,32 @@ public class GitConfigWriteTests
     }
 
     [Fact]
+    public async Task An_empty_global_save_returns_at_once_without_git_or_the_disk()
+    {
+        // A Save that changed only repository keys may call it on the UI thread: nothing may wait
+        // for git or touch a file there (a home share's check can take minutes, 0.9).
+        using var folder = new TempDirectory("empty-save");
+        var data = folder.Combine("data");
+        var asked = 0;
+        var gitNeverFound = new TaskCompletionSource<IGitRunner>();
+        using var configuration = new GitConfiguration(
+            _ =>
+            {
+                Interlocked.Increment(ref asked);
+                return gitNeverFound.Task;
+            },
+            data,
+            Path.Combine(data, "merge-tools.json"));
+
+        var save = configuration.WriteGlobalAsync([], TestCancelled);
+
+        Assert.True(save.IsCompletedSuccessfully);
+        await save;
+        Assert.Equal(0, asked);
+        Assert.False(Directory.Exists(data));
+    }
+
+    [Fact]
     public async Task A_local_write_in_a_linked_worktree_lands_in_the_common_config()
     {
         using var lab = new ConfigLab();

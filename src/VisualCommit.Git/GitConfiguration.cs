@@ -88,11 +88,13 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
 
     /// <summary>
     /// The file <c>git config --global</c> writes (8.2), by <see cref="GitConfigLocations.GlobalFile"/>
-    /// over the environment git gets, as a full path; empty when there is no home folder (git then
-    /// refuses a global write). Worked out again by every outside read and global save, which run
-    /// off the UI thread, so the screen, which reads it after the outside read, touches no disk (a
-    /// home share that does not answer can hold a file check for minutes, 0.9); before the first
-    /// such read, the first use works it out.
+    /// over the environment git gets, as a full path; empty when there is no home folder, or
+    /// <c>GIT_CONFIG_GLOBAL</c> is set but empty (git then reads no global file and refuses a global
+    /// write). Worked out again by every outside read, after its git call, off the UI thread, so the
+    /// screen, which reads it after the outside read, touches no disk (a home share that does not
+    /// answer can hold a file check for minutes, 0.9); before the first such read, the first use
+    /// works it out. A global save never changes it: git writes the very file the rule names (and
+    /// creates <c>~/.gitconfig</c> only when the rule already names it), or none.
     /// </summary>
     public string GlobalFile => _globalFile ??= WorkOutGlobalFile();
 
@@ -188,11 +190,18 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     /// folder under its ceiling, one save at a time across the session. The first failure stops the
     /// list and throws <see cref="GitException"/> with git's output (a held lock: <c>could not lock
     /// config file</c>, exit 255; 8.5). <paramref name="cancellationToken"/> stops the list before a
-    /// write, never during one, which would leave git's lock file behind.
+    /// write, never during one, which would leave git's lock file behind. An empty list returns at
+    /// once, without waiting for git or the other saves: nothing of it runs on the caller's thread,
+    /// the UI thread for the settings screen's Save.
     /// </summary>
     public async Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(writes);
+        if (writes.Count == 0)
+        {
+            return;
+        }
+
         var runner = await _runner(cancellationToken).ConfigureAwait(false);
         await _globalWrites.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -208,8 +217,8 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         }
         finally
         {
-            _globalFile = WorkOutGlobalFile();
-            _xdgFile = WorkOutXdgFile();
+            // No file checks here: a save cancelled before its first write would make them on the
+            // caller's thread, and a write never changes the files GlobalFile and XdgFile name.
             _globalWrites.Release();
         }
     }
