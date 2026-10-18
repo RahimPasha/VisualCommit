@@ -77,6 +77,26 @@ public class GitIsolationTests
     }
 
     [Fact]
+    public async Task The_shell_that_started_the_tests_does_not_reach_them_and_git_sets_its_own()
+    {
+        Assert.Equal(["MSYSTEM"], GitIsolation.ShellVariables);
+        Assert.Null(Environment.GetEnvironmentVariable("MSYSTEM"));
+
+        var startInfo = new ProcessStartInfo("unused");
+        startInfo.Environment["MSYSTEM"] = "MINGW64";
+        GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+        Assert.DoesNotContain("MSYSTEM", startInfo.Environment.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+        // A shell git starts for an alias still runs without it; on Windows git sets it again.
+        using var repo = await TempRepo.CreateAsync();
+        Assert.Null(repo.Environment["MSYSTEM"]);
+        var command = new GitCommand("-c", "alias.shell=!echo \"shell ran: $MSYSTEM\"", "shell") { WorkingDirectory = repo.Path, Environment = repo.Environment };
+        var result = await repo.Runner.RunAsync(command, TestCancelled);
+        Assert.True(result.Succeeded, result.StandardError);
+        Assert.StartsWith("shell ran:", result.StandardOutput.Trim(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_started_process_loses_the_machines_editors()
     {
         var startInfo = new ProcessStartInfo("unused");

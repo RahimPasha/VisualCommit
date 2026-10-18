@@ -73,8 +73,8 @@ Start:
   that fail locally with Visual Studio's Git 2.55) understood before fetch and pull change for the
   dashboard. (Risk 28 explained on 2026-10-18: Visual Studio's Git has no `git http-backend`, which
   the test server `AuthRemoteServer` runs; 6 of 49 fetch, pull, push and remotes tests failed with
-  it, all against that server; the seventh, the FakeSsh test, fails because that git crashes running
-  sh under an inherited `MSYSTEM=MINGW64` (the research, not run here); plan risk 28. The server
+  it, all against that server; the research named a seventh, a FakeSsh test, as crashing under an
+  inherited `MSYSTEM=MINGW64`, which a check on 2026-10-18 did not reproduce; plan risk 28. The server
   now fails at its start with a message naming the missing `http-backend`; the csproj comment says
   25 minutes for phases 0 to 5; the timing script sends phase 6 and later to their own project.
   Removing `MSYSTEM` in the tests' isolation goes with the design's isolation changes.)
@@ -244,11 +244,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5 begins with the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-L, the
-lead's commit that removes `MSYSTEM` in `GitIsolation.MachineIndependence` with its
-`GitIsolationTests` case; then WP0, the lead's contracts, stubs and call points in the main checkout
-(section 18, "WP0's contracts"), with no change of behaviour or pictures; then wave 1 (WP-S, WP1 and
-WP2 first, at most three built worktrees at once).
+Step 5, in the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-L is done (the
+commit that removes `MSYSTEM` in the tests' isolation). Next: WP0, the lead's contracts, stubs and
+call points in the main checkout (section 18, "WP0's contracts"), with no change of behaviour or
+pictures; then wave 1 (WP-S, WP1 and WP2 first, at most three built worktrees at once).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.

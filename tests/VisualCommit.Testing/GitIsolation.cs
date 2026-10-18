@@ -137,11 +137,26 @@ public static class GitIsolation
     ];
 
     /// <summary>
+    /// The variables that a shell hands every program it starts and that git's own shells set for
+    /// themselves: Git Bash's <c>MSYSTEM</c> (<c>MINGW64</c>). Git for Windows sets it again for the
+    /// shell it starts for a hook, an alias or <c>core.sshCommand</c> when it is missing, so removing
+    /// it changes nothing for git and keeps the tests from depending on the shell that started them:
+    /// a run started from Git Bash got it, one started from PowerShell did not. The phase 6 research
+    /// saw Visual Studio's trimmed Git 2.55 crash running a shell under it (docs/plan.md risk 28);
+    /// a check on 2026-10-18 (a hook, a shell <c>core.sshCommand</c>, <c>FakeSshTests</c>) did not
+    /// reproduce that.
+    /// </summary>
+    public static IReadOnlyList<string> ShellVariables { get; } =
+    [
+        "MSYSTEM",
+    ];
+
+    /// <summary>
     /// The variables beyond git's configuration that make the app's and git's behaviour depend
     /// on the machine, with what the tests give them instead (D112): <see cref="PromptVariables"/>,
-    /// <see cref="ProxyVariables"/> and <see cref="EditorVariables"/> removed (null), <c>no_proxy</c>
-    /// and <c>NO_PROXY</c> set to <see cref="NoProxyHosts"/>, and auto-fetch turned off
-    /// (<see cref="AutoFetchMinutesVariable"/> 0). Applied to the test process
+    /// <see cref="ProxyVariables"/>, <see cref="EditorVariables"/> and <see cref="ShellVariables"/>
+    /// removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set to <see cref="NoProxyHosts"/>, and
+    /// auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/> 0). Applied to the test process
     /// (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
     /// (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls, which then set
     /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c>.
@@ -151,6 +166,7 @@ public static class GitIsolation
         .. PromptVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. ProxyVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. EditorVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        .. ShellVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         new("no_proxy", NoProxyHosts),
         new("NO_PROXY", NoProxyHosts),
         new(AutoFetchMinutesVariable, "0"),
