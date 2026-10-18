@@ -44,12 +44,20 @@ public class DialogView : UserControl
     /// <summary>Whether the focused text box selects all it holds when the dialog opens (renaming).</summary>
     protected virtual bool SelectsAllOnOpening => false;
 
+    /// <summary>
+    /// Whether the dialog's first text box takes the focus when it opens (every dialog's, the
+    /// default); false gives it to <see cref="InitialFocus"/> instead: the settings screen's
+    /// section list (docs/phase-6-design.md 7.1).
+    /// </summary>
+    protected virtual bool FocusesTextBoxOnOpening => true;
+
     protected override AutomationPeer OnCreateAutomationPeer() => new DialogAutomationPeer(this);
 
     /// <summary>Moves the focus as the dialog does when it opens; also after its card changed (the Remotes dialog's form).</summary>
     protected void FocusOnOpening()
     {
-        var box = InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
+        var box = !FocusesTextBoxOnOpening ? null
+            : InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
             ? chosen
             : this.GetVisualDescendants().OfType<TextBox>()
                 .FirstOrDefault(candidate => candidate is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, IsReadOnly: false });

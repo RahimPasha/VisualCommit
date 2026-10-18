@@ -84,6 +84,6 @@ public static partial class RepositoryMenus
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(actions);
-        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, actions));
+        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, context, actions));
     }
 }

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -230,8 +231,8 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
     /// <summary>The status bar's toggle is enabled: the active tab has a repository (1.2).</summary>
     public bool CanToggle => Current is not null;
 
-    /// <summary>The toggle's tooltip and help text (1.2).</summary>
-    public string ToggleToolTip => IsShown ? HideText : ShowText;
+    /// <summary>The toggle's tooltip and help text (1.2), from <see cref="ShellToolTips"/> (docs/phase-6-design.md 6.8).</summary>
+    public string ToggleToolTip => IsShown ? ShellToolTips.HideActivityLog : ShellToolTips.ShowActivityLog;
 
     /// <summary>The name the header shows after "Activity log", in the secondary colour (2.2).</summary>
     public string RepositoryName => Current?.Source.Name ?? string.Empty;

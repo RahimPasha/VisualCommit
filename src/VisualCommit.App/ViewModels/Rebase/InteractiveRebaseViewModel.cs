@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.Core.Git;
@@ -361,11 +362,22 @@ public sealed partial class InteractiveRebaseViewModel : ObservableObject
         foreach (var action in MenuActions.Where(action => action != row.Action))
         {
             var (canApply, reason) = CanApply(row, action);
-            entries.Add(new MenuItem(MenuLabel(action), () => _ = SetActionAsync(row, action), canApply, canApply ? null : reason));
+            entries.Add(new MenuItem(MenuLabel(action), () => _ = SetActionAsync(row, action), canApply, canApply ? null : reason) { Command = LetterCommand(action) });
         }
 
         return new MenuModel(entries);
     }
+
+    /// <summary>The letter key of <paramref name="action"/> on the selected row (docs/phase-6-design.md 6.7), which the row's menu shows.</summary>
+    private static AppCommand? LetterCommand(RebaseAction action) => action switch
+    {
+        RebaseAction.Pick => AppCommand.RebasePick,
+        RebaseAction.Reword => AppCommand.RebaseReword,
+        RebaseAction.Squash => AppCommand.RebaseSquash,
+        RebaseAction.Fixup => AppCommand.RebaseFixup,
+        RebaseAction.Drop => AppCommand.RebaseDrop,
+        _ => null,
+    };
 
     /// <summary>
     /// Git's letters on the selected row (2.2): <c>p</c> Pick, <c>r</c> Reword (the dialog), <c>s</c>

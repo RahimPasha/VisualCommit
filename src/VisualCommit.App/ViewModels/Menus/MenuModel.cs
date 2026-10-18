@@ -1,3 +1,5 @@
+using VisualCommit.App.ViewModels.Commands;
+
 namespace VisualCommit.App.ViewModels.Menus;
 
 /// <summary>
@@ -26,7 +28,15 @@ public sealed record MenuItem(
     Action Invoke,
     bool IsEnabled = true,
     string? DisabledReason = null,
-    bool IsDestructive = false) : MenuEntry;
+    bool IsDestructive = false) : MenuEntry
+{
+    /// <summary>
+    /// The keyed command the item runs on the same object (docs/phase-6-design.md 6.7), whose key
+    /// the menu shows beside its label and the palette with its entry; null for every other item,
+    /// which shows no key.
+    /// </summary>
+    public AppCommand? Command { get; init; }
+}
 
 /// <summary>A whole menu: its entries in order, the header first.</summary>
 public sealed record MenuModel(IReadOnlyList<MenuEntry> Entries)

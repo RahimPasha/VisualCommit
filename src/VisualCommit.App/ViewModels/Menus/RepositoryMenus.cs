@@ -11,6 +11,7 @@
 // activity log's rows; WP5). The builders here call the hooks of the first two where 13.1 puts
 // the items; a hook that gives nothing leaves its menu as it was.
 
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
@@ -139,7 +140,7 @@ public static partial class RepositoryMenus
             Header(header),
             [
                 Item(actions, ApplyStash, () => actions.ApplyStashAsync(stashSha)),
-                Item(actions, PopStash, () => actions.PopStashAsync(stashSha)),
+                Item(actions, PopStash, () => actions.PopStashAsync(stashSha), command: IsNewestStash(context, stashSha) ? AppCommand.Pop : null),
                 Item(actions, DropStash, () => actions.DropStashAsync(stashSha), isDestructive: true),
             ],
             [
@@ -161,13 +162,13 @@ public static partial class RepositoryMenus
         return Build(
             Header(WorkingChangesHeader),
             [
-                Item(actions, StageAll, actions.StageAllAsync, hasUnstaged ? null : NothingToStage),
-                Item(actions, UnstageAll, actions.UnstageAllAsync, hasStaged ? null : NothingStaged),
+                Item(actions, StageAll, actions.StageAllAsync, hasUnstaged ? null : NothingToStage, command: AppCommand.StageAll),
+                Item(actions, UnstageAll, actions.UnstageAllAsync, hasStaged ? null : NothingStaged, command: AppCommand.UnstageAll),
                 Item(actions, DiscardAllChanges, actions.DiscardAllAsync, hasUnstaged ? null : NothingToDiscard, isDestructive: true),
             ],
             [
                 StashItem(context, actions),
-                Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(null), context.IsUnborn ? ToolbarViewModel.UnbornText : null),
+                Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(null), context.IsUnborn ? ToolbarViewModel.UnbornText : null, command: AppCommand.CreateBranch),
             ],
             [
                 .. ReflogItems(context, actions),
@@ -204,7 +205,7 @@ public static partial class RepositoryMenus
         MenuItem? pullRebase = null;
         if (hasUpstream && isCurrent)
         {
-            pullOrFastForward = AsToolbar(Item(actions, PullFrom(upstream!), actions.PullAsync), context.Toolbar.Pull);
+            pullOrFastForward = AsToolbar(Item(actions, PullFrom(upstream!), actions.PullAsync, command: AppCommand.Pull), context.Toolbar.Pull);
 
             // docs/phase-4-design.md section 6: enabled exactly as the toolbar's Pull (D90).
             pullRebase = AsToolbar(Item(actions, PullFromRebase(upstream!), actions.PullRebaseAsync), context.Toolbar.Pull);
@@ -225,7 +226,7 @@ public static partial class RepositoryMenus
         if (!branch.HasLocalUpstream)
         {
             var pushReason = context.HasRemotes ? null : ToolbarViewModel.AddRemoteText;
-            push = Item(actions, hasRemoteUpstream ? PushTo(name, upstream!) : PushWithDialog(name), () => actions.PushBranchAsync(branchRef), pushReason);
+            push = Item(actions, hasRemoteUpstream ? PushTo(name, upstream!) : PushWithDialog(name), () => actions.PushBranchAsync(branchRef), pushReason, command: isCurrent ? AppCommand.Push : null);
             if (hasRemoteUpstream)
             {
                 forcePush = Item(
@@ -409,7 +410,7 @@ public static partial class RepositoryMenus
             RefSection.LocalBranches => Build(
                 Header(LeftPanelViewModel.LocalBranchesTitle),
                 [
-                    Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), unborn),
+                    Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), unborn, command: AppCommand.CreateBranch),
                     .. ReflogItems(context, actions),
                     .. SectionFilterItems(context, actions),
                 ]),
@@ -417,7 +418,7 @@ public static partial class RepositoryMenus
                 Header(LeftPanelViewModel.RemotesTitle),
                 [
                     Item(actions, AddRemote, actions.ShowAddRemoteAsync),
-                    Item(actions, FetchAllRemotes, actions.FetchAllAsync, context.HasRemotes ? null : ToolbarViewModel.NoRemotesText),
+                    Item(actions, FetchAllRemotes, actions.FetchAllAsync, context.HasRemotes ? null : ToolbarViewModel.NoRemotesText, command: AppCommand.Fetch),
                     Item(actions, ManageRemotes, actions.ManageRemotesAsync),
                     .. SectionFilterItems(context, actions),
                 ]),
@@ -453,7 +454,7 @@ public static partial class RepositoryMenus
             ],
             IgnoreItems(file, actions),
             FileHistoryItems(context, file, DiffSide.Unstaged, actions),
-            FileItems(file, actions));
+            FileItems(file, context, actions));
     }
 
     /// <summary>
@@ -493,7 +494,7 @@ public static partial class RepositoryMenus
             Header(file.FileName),
             [Item(actions, Unstage, () => actions.UnstageFilesAsync([file.File]))],
             FileHistoryItems(context, file, DiffSide.Staged, actions),
-            FileItems(file, actions));
+            FileItems(file, context, actions));
     }
 
     /// <summary>A file in a commit's changed files (4b): header the file name; open file, show in folder, copy path.</summary>
@@ -502,7 +503,7 @@ public static partial class RepositoryMenus
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(actions);
-        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, actions));
+        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, context, actions));
     }
 
     /// <summary>
@@ -540,8 +541,8 @@ public static partial class RepositoryMenus
                         Item(actions, DiscardFile, () => actions.DiscardFilesAsync([file.File]), DiscardReason(file)),
                     ],
                     file.IsUntracked ? IgnoreItems(file, actions) : [],
-                    FileHistoryItems(context, file, diff.Side, actions),
-                    FileItems(file, actions));
+                    FileHistoryItems(context, file, diff.Side, actions, ofOpenDiff: true),
+                    FileItems(file, context, actions));
 
             case DiffSide.Staged:
                 return Build(
@@ -549,11 +550,11 @@ public static partial class RepositoryMenus
                     [selected ? Item(actions, UnstageSelectedLines, lines.UnstageLinesAsync) : null],
                     [hunk is { } unstageHunk ? Item(actions, UnstageHunk, () => lines.RunHunkActionAsync(unstageHunk, LineAction.Unstage)) : null],
                     [Item(actions, UnstageFile, () => actions.UnstageFilesAsync([file.File]))],
-                    FileHistoryItems(context, file, diff.Side, actions),
-                    FileItems(file, actions));
+                    FileHistoryItems(context, file, diff.Side, actions, ofOpenDiff: true),
+                    FileItems(file, context, actions));
 
             default:
-                return Build(header, FileHistoryItems(context, file, diff.Side, actions), FileItems(file, actions));
+                return Build(header, FileHistoryItems(context, file, diff.Side, actions, ofOpenDiff: true), FileItems(file, context, actions));
         }
     }
 
@@ -570,13 +571,13 @@ public static partial class RepositoryMenus
         return Build(
             Header(context.RepositoryName),
             [
-                AsToolbar(Item(actions, FetchAllRemotes, actions.FetchAllAsync), toolbar.Fetch),
-                AsToolbar(Item(actions, ToolbarPull, actions.PullAsync), toolbar.Pull),
-                AsToolbar(Item(actions, ToolbarPush, actions.PushCurrentBranchAsync), toolbar.Push),
+                AsToolbar(Item(actions, FetchAllRemotes, actions.FetchAllAsync, command: AppCommand.Fetch), toolbar.Fetch),
+                AsToolbar(Item(actions, ToolbarPull, actions.PullAsync, command: AppCommand.Pull), toolbar.Pull),
+                AsToolbar(Item(actions, ToolbarPush, actions.PushCurrentBranchAsync, command: AppCommand.Push), toolbar.Push),
             ],
             [
-                AsToolbar(Item(actions, CreateBranch, () => actions.CreateBranchAsync(null)), toolbar.Branch),
-                AsToolbar(Item(actions, StashChanges, actions.StashAsync), toolbar.Stash),
+                AsToolbar(Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), command: AppCommand.CreateBranch), toolbar.Branch),
+                AsToolbar(Item(actions, StashChanges, actions.StashAsync, command: AppCommand.Stash), toolbar.Stash),
             ],
             [
                 .. ReflogItems(context, actions),
@@ -824,13 +825,14 @@ public static partial class RepositoryMenus
     /// <paramref name="disabledReason"/> is null, otherwise disabled with that reason as its
     /// tooltip. The action's task is not awaited (the menu has closed); a failure that gets past
     /// the operation's own handling is logged to <see cref="IRepositoryActions.Log"/>.
+    /// <paramref name="command"/> is the keyed command it runs on the same object (6.7), or null.
     /// </summary>
-    public static MenuItem Item(IRepositoryActions actions, string label, Func<Task> action, string? disabledReason = null, bool isDestructive = false)
+    public static MenuItem Item(IRepositoryActions actions, string label, Func<Task> action, string? disabledReason = null, bool isDestructive = false, AppCommand? command = null)
     {
         ArgumentNullException.ThrowIfNull(actions);
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(action);
-        return new MenuItem(label, () => Start(actions, label, action), disabledReason is null, disabledReason, isDestructive);
+        return new MenuItem(label, () => Start(actions, label, action), disabledReason is null, disabledReason, isDestructive) { Command = command };
     }
 
     /// <summary>The empty graph area's "Pull" (4b): the toolbar's Pull.</summary>
@@ -866,9 +868,13 @@ public static partial class RepositoryMenus
     private static string? MergeReason(RepositoryMenuContext context) =>
         context.IsDetached ? CheckOutABranchToMergeInto : InProgressReason(context);
 
-    /// <summary>"Stash changes…", enabled as the toolbar's Stash (2.24, D119).</summary>
+    /// <summary>"Stash changes…", enabled as the toolbar's Stash (2.24, D119), with its key (6.7).</summary>
     private static MenuItem StashItem(RepositoryMenuContext context, IRepositoryActions actions) =>
-        Item(actions, StashChanges, actions.StashAsync, ToolbarViewModel.StashReason(context.Head, context.Status));
+        Item(actions, StashChanges, actions.StashAsync, ToolbarViewModel.StashReason(context.Head, context.Status), command: AppCommand.Stash);
+
+    /// <summary>Whether <paramref name="stashSha"/> is <c>stash@{0}</c>, whose Pop is the toolbar's (6.7).</summary>
+    private static bool IsNewestStash(RepositoryMenuContext context, string stashSha) =>
+        context.FindStash(stashSha) is { Index: 0 };
 
     /// <summary>An item enabled as a toolbar button is (4b's empty graph area): disabled with the button's reason, or without one before the refs are read.</summary>
     private static MenuItem AsToolbar(MenuItem item, ToolbarAvailability availability) =>
@@ -890,10 +896,14 @@ public static partial class RepositoryMenus
         ];
     }
 
-    /// <summary>Open file, show in folder, copy path (2.32).</summary>
-    private static MenuItem[] FileItems(FileMenuTarget file, IRepositoryActions actions) =>
+    /// <summary>
+    /// Open file, show in folder, copy path (2.32); with an editor chosen, Open in editor after
+    /// Open file (docs/phase-6-design.md 12.1, <see cref="RepositoryMenuContext.Editor"/>), never asking.
+    /// </summary>
+    private static MenuItem?[] FileItems(FileMenuTarget file, RepositoryMenuContext context, IRepositoryActions actions) =>
     [
         Item(actions, OpenFile, () => actions.OpenFileAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
+        context.Editor is null ? null : Item(actions, OpenInEditor, () => actions.OpenInEditorAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
         Item(actions, ShowInFolder, () => actions.ShowInFolderAsync(file.Path)),
         Item(actions, CopyPath, () => actions.CopyPathAsync(file.Path)),
     ];

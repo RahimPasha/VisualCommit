@@ -5,6 +5,7 @@
 // OperationTexts.Menus.Pages.cs; the order and separators of the pages' menus are decision BD8 of
 // docs/test-reports/phase-5.md.
 
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.Core.Diff;
@@ -175,9 +176,10 @@ public static partial class RepositoryMenus
     /// menus: of the stage lists' files (<paramref name="side"/> Unstaged or Staged), a commit's
     /// files and a diff's. Left out in the conflict resolver's header menu
     /// (<see cref="FileMenuTarget.InConflictResolver"/>) and for a nested repository; disabled for
-    /// a file in no commit yet and before the first commit.
+    /// a file in no commit yet and before the first commit. <paramref name="ofOpenDiff"/>: the open
+    /// diff's menu, whose two items run the keyed commands on its file (docs/phase-6-design.md 6.7).
     /// </summary>
-    private static IEnumerable<MenuItem?> FileHistoryItems(RepositoryMenuContext context, FileMenuTarget file, DiffSide side, IRepositoryActions actions)
+    private static IEnumerable<MenuItem?> FileHistoryItems(RepositoryMenuContext context, FileMenuTarget file, DiffSide side, IRepositoryActions actions, bool ofOpenDiff = false)
     {
         if (file.InConflictResolver || file.IsNestedRepository)
         {
@@ -192,8 +194,8 @@ public static partial class RepositoryMenus
 
         return
         [
-            Item(actions, FileHistory, () => history is null ? Task.CompletedTask : actions.ShowFileHistoryAsync(history), history is null ? reason : null),
-            Item(actions, Blame, () => blame is null ? Task.CompletedTask : actions.ShowBlameAsync(blame), blame is null ? reason : null),
+            Item(actions, FileHistory, () => history is null ? Task.CompletedTask : actions.ShowFileHistoryAsync(history), history is null ? reason : null, command: ofOpenDiff ? AppCommand.FileHistoryOfDiff : null),
+            Item(actions, Blame, () => blame is null ? Task.CompletedTask : actions.ShowBlameAsync(blame), blame is null ? reason : null, command: ofOpenDiff ? AppCommand.BlameOfDiff : null),
         ];
     }
 
@@ -253,7 +255,7 @@ public static partial class RepositoryMenus
     /// <summary>"Show reflog" and "Show backups" (5.1): in the working-changes row's, the empty graph area's and the Local branches section's menus, enabled in an unborn repository too (BD22).</summary>
     private static IEnumerable<MenuItem?> ReflogItems(RepositoryMenuContext context, IRepositoryActions actions) =>
     [
-        Item(actions, ShowReflog, () => actions.ShowReflogAsync(null)),
+        Item(actions, ShowReflog, () => actions.ShowReflogAsync(null), command: AppCommand.ShowReflog),
         Item(actions, ShowBackups, actions.ShowBackupsAsync),
     ];
 

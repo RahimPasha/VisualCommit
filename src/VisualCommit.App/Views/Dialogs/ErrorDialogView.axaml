@@ -27,6 +27,7 @@
         <TextBlock Name="ErrorRepository"
                    Classes="dialogRepository"
                    Text="{Binding RepositoryText}"
+                   IsVisible="{Binding ShowsRepository}"
                    Margin="0,6,0,0"
                    AutomationProperties.AutomationId="ErrorRepository" />
         <TextBox Name="ErrorOutput"

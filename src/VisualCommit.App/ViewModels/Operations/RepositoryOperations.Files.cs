@@ -77,6 +77,17 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
+    /// "Open in editor" (docs/phase-6-design.md 12.1): the working tree's file in the chosen editor,
+    /// never asking first. Does nothing yet: work package WP-SET gives it its body (12.4, 12.7), and
+    /// no menu offers it before an editor can be chosen.
+    /// </summary>
+    public Task OpenInEditorAsync(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// "Open file" (2.32): the working tree's version in the system's application for it. A file
     /// that the system would run rather than show (<see cref="CanRunPrograms(string, UnixFileMode?)"/>),
     /// as a cloned repository can hold, is opened only after the user said yes.
