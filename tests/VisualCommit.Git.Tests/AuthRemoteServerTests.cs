@@ -564,6 +564,40 @@ public class AuthRemoteServerTests
     }
 
     [Fact]
+    public async Task A_request_held_longer_than_the_request_timeout_still_reads_its_body()
+    {
+        // The time to send the rest of a held request starts again when its gate opens, however
+        // long it waited (17.2): a POST whose body came after the connection's own time had run
+        // out lost its connection without a word in Errors.
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var server = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        server.RequireAuth = false;
+        server.RequestTimeout = TimeSpan.FromSeconds(2);
+        var arrived = server.HoldNextRequest("docs");
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, server.Port, TestCancelled);
+        var stream = client.GetStream();
+        var body = "0000"u8.ToArray();
+        var head = "POST /docs.git/git-upload-pack HTTP/1.1\r\nHost: 127.0.0.1\r\n" +
+            $"Content-Type: application/x-git-upload-pack-request\r\nContent-Length: {body.Length}\r\n\r\n";
+        await stream.WriteAsync(Encoding.Latin1.GetBytes(head), TestCancelled);
+        await arrived.WaitAsync(StepTimeout, TestCancelled);
+
+        // Held past the timeout; the body comes while the request still waits, then it goes on.
+        await Task.Delay(TimeSpan.FromSeconds(3), TestCancelled);
+        await stream.WriteAsync(body, TestCancelled);
+        server.ReleaseRequest("docs");
+
+        using var response = new MemoryStream();
+        await stream.CopyToAsync(response, TestCancelled).WaitAsync(StepTimeout, TestCancelled);
+        Assert.StartsWith("HTTP/1.1 200 ", Encoding.Latin1.GetString(response.ToArray()), StringComparison.Ordinal);
+        var request = Assert.Single(server.Requests);
+        Assert.Equal(("POST", "/docs.git/git-upload-pack", 200), (request.Method, request.Path, request.Status));
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
     public async Task Disposing_a_folder_server_lets_a_held_request_go_and_ends_its_holds()
     {
         using var copy = await Scenarios.WorkspaceAsync();

@@ -64,8 +64,6 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>The most a request's line and headers may take.</summary>
     private const int MaxHeaderBytes = 64 * 1024;
 
-    /// <summary>How long a client may take to send its request.</summary>
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>How long disposing waits for connections to end once they were told to.</summary>
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(15);
@@ -118,6 +116,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>The port the server listens on, on 127.0.0.1.</summary>
     public int Port { get; }
+
+    /// <summary>
+    /// How long a client may take to send its request: 60 s from the connection's start, and for
+    /// a request held at a gate (<see cref="HoldNextRequest"/>), 60 s for the rest of it from the
+    /// gate's opening. A test may shorten it for the connections that start afterwards.
+    /// </summary>
+    internal TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Whether the port asked for was taken, so that the server took one the system picked.</summary>
     public bool PortWasTaken { get; }
@@ -686,7 +691,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                     return;
                 }
 
-                await HandleAsync(stream, reader, head, readTimeout).ConfigureAwait(false);
+                await HandleAsync(stream, reader, head, readTimeout.Token).ConfigureAwait(false);
                 client.Client.Shutdown(SocketShutdown.Send);
             }
             catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
@@ -700,22 +705,18 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 
-    private async Task HandleAsync(NetworkStream stream, RequestReader reader, RequestHead head, CancellationTokenSource readTimeout)
+    /// <param name="connectionRead">Cancelled when the connection's time to send its request (<see cref="RequestTimeout"/>) has run out.</param>
+    private async Task HandleAsync(NetworkStream stream, RequestReader reader, RequestHead head, CancellationToken connectionRead)
     {
         var stopping = _stopping.Token;
         var (path, query) = SplitTarget(head.Target);
 
         // A gate on this repository's next request (HoldNextRequest) holds it here, before
-        // anything is decided about it; the time to send the rest of the request starts again
-        // once it goes on.
-        if (TakeGate(path) is { } gate)
-        {
-            gate.Arrived.TrySetResult();
-            await gate.Opened.Task.WaitAsync(stopping).ConfigureAwait(false);
-            readTimeout.CancelAfter(RequestTimeout);
-        }
-
-        var readCancelled = readTimeout.Token;
+        // anything is decided about it. The time to send the rest of the request starts again
+        // once it goes on, on a timer of its own: the connection's may have run out meanwhile,
+        // and a cancelled timer cannot be started again.
+        using var afterGate = await PassGateAsync(path, stopping).ConfigureAwait(false);
+        var readCancelled = afterGate?.Token ?? connectionRead;
         var user = AuthenticatedUser(head);
         var authorized = user is not null || !RequireAuth;
 
@@ -839,6 +840,26 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
             return hold;
         }
+    }
+
+    /// <summary>
+    /// Waits at the gate on the next request of the repository <paramref name="path"/> lies in,
+    /// when there is one (<see cref="HoldNextRequest"/>), until it opens; then returns a new timer
+    /// for the rest of the request, cancelled <see cref="RequestTimeout"/> from now or when the
+    /// server stops. Null when no gate held the request.
+    /// </summary>
+    private async Task<CancellationTokenSource?> PassGateAsync(string path, CancellationToken stopping)
+    {
+        if (TakeGate(path) is not { } gate)
+        {
+            return null;
+        }
+
+        gate.Arrived.TrySetResult();
+        await gate.Opened.Task.WaitAsync(stopping).ConfigureAwait(false);
+        var timer = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+        timer.CancelAfter(RequestTimeout);
+        return timer;
     }
 
     /// <summary>The gate that waits for the next request of the repository <paramref name="path"/> lies in, now closed on that request; null when there is none.</summary>
