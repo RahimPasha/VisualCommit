@@ -64,7 +64,6 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>The most a request's line and headers may take.</summary>
     private const int MaxHeaderBytes = 64 * 1024;
 
-
     /// <summary>How long disposing waits for connections to end once they were told to.</summary>
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(15);
 
