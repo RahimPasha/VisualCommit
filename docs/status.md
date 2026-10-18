@@ -56,12 +56,18 @@ Start:
   43 min 22 s). The projects ended after: `VisualCommit.VisualTests` 10 min 14 s,
   `.Phase5` 18 min 56 s, `.Phase4` 20 min 10 s, `VisualCommit.Git.Tests` 27 min 31 s,
   `.Phase5Undo` 29 min 31 s, `.Phase3` 32 min 8 s, `VisualCommit.App.Tests` 37 min 26 s.
-- [ ] 3. Design in `docs/phase-6-design.md`: every git fact derived with Git 2.36 (and 2.55 where
+- [x] 3. Design in `docs/phase-6-design.md`: every git fact derived with Git 2.36 (and 2.55 where
   words or exit codes may differ), the texts, the layouts, the work packages, an estimate of what
   the phase adds to the default run (45 minutes) and to the real-window pass (25). Independent
   reviews, each finding checked by an adversarial verifier; the design revised from every
   confirmed one; questions of taste the reviews raise go to the owner; the design's own decisions
-  recorded.
+  recorded. (Ten research notes, eight section drafts settled by the lead's rulings, first version
+  `9d6d2e3`. Six reviews (git safety, code fit, what the user sees, tests and gate, performance and
+  threads, completeness) found 93 problems; adversarial verifiers confirmed 91 in full or in part
+  (1 blocker: the global identity edited from an in-repository read that `includeIf` changes; 10
+  major) and refuted 2; all 91 applied. The owner answered nine questions on 2026-10-18 (D195 to
+  D202, and D221's reading of D193). The design's decisions are D203 to D230. Its work packages
+  (section 18) map onto the steps below as its "Status steps" table says.)
 - [x] 4. Leftovers named in phase 5's handoff: the real-window csproj's stale comment on the pass's
   length; `scripts/time-scripted-check.sh` for phase 6; plan risk 28 (seven fetch and pull tests
   that fail locally with Visual Studio's Git 2.55) understood before fetch and pull change for the
@@ -238,13 +244,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: the design's first version is committed (`docs/phase-6-design.md`, `9d6d2e3`). Its six
-independent reviews (git safety, code fit, what the user sees, tests and gate, performance and
-threads, completeness) found 93 problems; each was checked by an adversarial verifier: 91 confirmed
-or partly (1 blocker, 10 major), 2 refuted. The owner answered eight questions of taste on
-2026-10-18 (D195 to D202, recorded). The design is being revised from every confirmed finding and
-the answers (the design's own decisions renumbered D203 to D230); then commit it, record D203 to
-D230 in `decisions.md` and tick step 3.
+Step 5 begins with the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-L, the
+lead's commit that removes `MSYSTEM` in `GitIsolation.MachineIndependence` with its
+`GitIsolationTests` case; then WP0, the lead's contracts, stubs and call points in the main checkout
+(section 18, "WP0's contracts"), with no change of behaviour or pictures; then wave 1 (WP-S, WP1 and
+WP2 first, at most three built worktrees at once).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
