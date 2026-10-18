@@ -14,7 +14,10 @@ namespace VisualCommit.Git.Tests;
 /// and what it would have done, runs no <c>git merge</c> or <c>git rebase</c> and never calls the
 /// rebase's callback; a merge it runs has <c>--no-overwrite-ignore</c>; without it git's default
 /// overwrites the file. A branch only ahead of its upstream is rebased as git does: up to date when
-/// linear (U2), and refused when it holds a merge, which git would replay deleting the file (U5).
+/// linear (U2), and refused when it holds a merge, which git would replay deleting the file (U5). A
+/// branch that merged a side branch is refused when the side branch's original branch point tracks
+/// the file (<c>--rebase-merges</c> resets to it), and a fast-forward-only pull of diverged branches
+/// is left to git, which refuses it without writing.
 /// </summary>
 public class IntegratePullTests
 {
