@@ -36,6 +36,15 @@ public class IntegratePullTests
     /// </summary>
     private static readonly Lazy<Task<TempRepo>> Ahead = new(BuildAheadAsync);
 
+    /// <summary>
+    /// The review's shape beside U5 on <c>main</c>: U0 tracks <c>secret.env</c> and is pushed;
+    /// <c>feat</c> from U0 adds <c>f.txt</c>; U1 stops tracking and ignores it and is pushed;
+    /// "Local work" adds <c>local.txt</c>, and <c>feat</c> is merged; another clone then pushes U2
+    /// (<c>u2.txt</c>). Neither the upstream nor the branch has <c>secret.env</c>, but feat's
+    /// original branch point does.
+    /// </summary>
+    private static readonly Lazy<Task<TempRepo>> MergedSide = new(BuildMergedSideAsync);
+
     private static async Task<TempRepo> BuildBehindAsync()
     {
         var repo = await TempRepo.CreateAsync("pull");
@@ -66,6 +75,26 @@ public class IntegratePullTests
         await repo.MergeAsync("main");
         await repo.GitAsync("switch", "--quiet", "main");
         await repo.GitAsync("merge", "--quiet", "--ff-only", "feat");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => repo.Dispose();
+        return repo;
+    }
+
+    private static async Task<TempRepo> BuildMergedSideAsync()
+    {
+        var repo = await TempRepo.CreateAsync("pull-side");
+        var u0 = await repo.WriteFile("README", "base\n").WriteFile("secret.env", "OLD\n").CommitAsync("U0");
+        await repo.AddBareRemoteAsync();
+        await repo.PushAsync("origin", setUpstream: true, "main");
+        await repo.GitAsync("switch", "--quiet", "--create", "feat", u0);
+        await repo.CommitFileAsync("f.txt", "f\n", "Add f");
+        await repo.GitAsync("switch", "--quiet", "main");
+        await repo.GitAsync("rm", "--quiet", "--cached", "secret.env");
+        repo.DeleteFile("secret.env").WriteFile(".gitignore", "secret.env\n");
+        await repo.CommitAsync("U1");
+        await repo.PushAsync("origin", setUpstream: false, "main");
+        await repo.CommitFileAsync("local.txt", "local\n", "Local work");
+        await repo.MergeAsync("feat");
+        await Scenarios.PushFromElsewhereAsync(repo, "main", "u2.txt", "u2\n", "U2");
         AppDomain.CurrentDomain.ProcessExit += (_, _) => repo.Dispose();
         return repo;
     }
@@ -271,6 +300,49 @@ public class IntegratePullTests
         Assert.Equal(1, plainBeforeRebase);
         Assert.NotEqual(PullOutcome.IgnoredFilesInTheWay, rebased.Outcome);
         Assert.False(File.Exists(Path.Combine(plain.Path, "secret.env")), "secret.env is still there.");
+    }
+
+    [Theory]
+    [InlineData("merges")]
+    [InlineData("true")]
+    public async Task A_branch_with_a_merged_side_branch_is_not_rebased_over_what_the_side_branchs_branch_point_tracks(string rebase)
+    {
+        // --rebase-merges starts feat with "reset <U0>", which writes secret.env over the ignored
+        // file, and the next "reset onto" deletes it (Git 2.36 and 2.55). The plain rebase replays
+        // feat's change only and keeps the file, but under rebase.rebaseMerges (Git 2.42 and
+        // later) the same git rebase keeps merges, so the check refuses both (9.6).
+        using var repo = await CopyAsync(MergedSide, "the pull template with a merged side branch");
+        await repo.ConfigAsync("pull.rebase", rebase);
+        repo.WriteFile("secret.env", Local);
+        using var plain = await repo.CopyAsync();
+        var (repository, calls, branch) = await FetchedAsync(repo);
+        var head = await repo.HeadAsync();
+
+        var (result, beforeRebase, made) = await PullAsync(repository, calls, branch, PullIntegration.AsConfigured, Keep);
+
+        AssertRefused(result, wouldRebase: true);
+        Assert.False(Ran(made, "rebase"), "git rebase ran.");
+        Assert.Equal(0, beforeRebase);
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(Local, Read(repo, "secret.env"));
+
+        // Without Keep ignored files git's rebase runs: with --rebase-merges the file is gone, the
+        // plain rebase keeps it.
+        var (plainRepository, plainCalls, plainBranch) = await FetchedAsync(plain);
+        var (rebased, plainBeforeRebase, plainMade) = await PullAsync(plainRepository, plainCalls, plainBranch, PullIntegration.AsConfigured, options: null);
+        Assert.Equal(PullOutcome.Rebased, rebased.Outcome);
+        Assert.Equal(1, plainBeforeRebase);
+        var rebaseCall = Assert.Single(plainMade, call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
+        if (rebase == "merges")
+        {
+            Assert.Contains("--rebase-merges", rebaseCall.CommandText, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(plain.Path, "secret.env")), "secret.env is still there.");
+        }
+        else
+        {
+            Assert.DoesNotContain("--rebase-merges", rebaseCall.CommandText, StringComparison.Ordinal);
+            Assert.Equal(Local, Read(plain, "secret.env"));
+        }
     }
 
     /// <summary>

@@ -277,8 +277,13 @@ public sealed partial class GitRepository
     /// <see cref="FindIgnoredAtAsync"/> of (2) and (3): with a merge in the range git checks out
     /// <paramref name="onto"/> and replays even a branch only ahead of it, plain or with
     /// <c>--rebase-merges</c>, and an ignored file a commit of the range stops tracking is deleted
-    /// (U5). A superset of what git writes (git leaves out commits whose patch is upstream, the
-    /// pull's fork point maybe more). Cost: four reads, then <c>check-ignore</c>.
+    /// (U5). With a merge in the range, also the branch points (<see cref="BranchPointsWriteAsync"/>):
+    /// <c>--rebase-merges</c> starts a side branch with <c>reset &lt;its original branch
+    /// point&gt;</c>, which writes that commit's tree, and from Git 2.42 <c>rebase.rebaseMerges</c>
+    /// makes the app's plain <c>git rebase</c> one too, so the read does not depend on the rebase's
+    /// options. A superset of what git writes (git leaves out commits whose patch is upstream, the
+    /// pull's fork point maybe more; a plain rebase writes no branch point). Cost: four reads,
+    /// then <c>check-ignore</c>; with a merge in the range two reads more before it.
     /// </summary>
     /// <param name="tip">What is rebased: <c>HEAD</c>, or for "Check out and rebase" the branch's full ref.</param>
     /// <param name="onto">The commit it is rebased onto: the menu's SHA, or the pull's upstream ref.</param>
@@ -293,13 +298,56 @@ public sealed partial class GitRepository
         var replayed = ReadOutputAsync(cancellationToken, "log", "--no-renames", "--name-only", "-z", "--root", "--no-merges", "--no-show-signature", "--format=%x1e%H", "--diff-filter=AMT", range, "--");
         var merge = ReadOutputAsync(cancellationToken, "rev-list", "--min-parents=2", "--max-count=1", range, "--");
         await Task.WhenAll(ancestor, checkout, replayed, merge).ConfigureAwait(false);
-        if (await ancestor.ConfigureAwait(false) && (await merge.ConfigureAwait(false)).Trim().Length == 0)
+        var hasMerge = (await merge.ConfigureAwait(false)).Trim().Length > 0;
+        if (await ancestor.ConfigureAwait(false) && !hasMerge)
         {
             return [];
         }
 
-        IReadOnlyList<string> written = [.. SplitNul(await checkout.ConfigureAwait(false)), .. LoggedPaths(await replayed.ConfigureAwait(false))];
+        List<string> written = [.. SplitNul(await checkout.ConfigureAwait(false)), .. LoggedPaths(await replayed.ConfigureAwait(false))];
+        if (hasMerge)
+        {
+            written.AddRange(await BranchPointsWriteAsync(range, cancellationToken).ConfigureAwait(false));
+        }
+
         return IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// 9.6 with a merge in <paramref name="range"/> (<c>&lt;onto&gt;..&lt;tip&gt;</c>): what the
+    /// commits <c>git rebase --rebase-merges</c> may <c>reset</c> to write. Without
+    /// <c>--rebase-cousins</c> git keeps a side branch's original branch point, a parent outside the
+    /// range, and its todo's <c>reset &lt;that commit&gt;</c> writes the commit's tree (a side
+    /// branch from a commit that tracks a file the upstream and the tip no longer track, merged
+    /// into the tip: Git 2.36 and 2.55 overwrite the ignored file at the reset and delete it at
+    /// the next <c>reset onto</c>, while the plain rebase keeps it). So (5) <c>git rev-list
+    /// --topo-order --boundary &lt;onto&gt;..&lt;tip&gt; --</c>: its lines <c>-&lt;sha&gt;</c> are
+    /// every parent outside the range, among them each such branch point (and the base that git
+    /// resets to as <c>onto</c>, which only adds to the set), and its first line is the tip, as no
+    /// commit comes before its children; then (6) one <c>git diff-tree --stdin --no-commit-id -r
+    /// -z --no-renames --name-only --diff-filter=A</c> fed <c>&lt;boundary&gt; &lt;tip&gt;</c> per
+    /// boundary commit (full SHAs, which <c>--stdin</c> needs): what each has and the tip lacks, as
+    /// (2) for <c>&lt;onto&gt;</c>, since a path the tip tracks is no ignored file once the tip is
+    /// checked out.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> BranchPointsWriteAsync(string range, CancellationToken cancellationToken)
+    {
+        var lines = SplitLines(await ReadOutputAsync(cancellationToken, "rev-list", "--topo-order", "--boundary", range, "--").ConfigureAwait(false));
+        var tip = lines.FirstOrDefault(line => !line.StartsWith('-'));
+        var boundary = lines.Where(line => line.StartsWith('-')).Select(line => line[1..]).ToList();
+        if (tip is null || boundary.Count == 0)
+        {
+            return [];
+        }
+
+        var command = new GitCommand("diff-tree", "--stdin", "--no-commit-id", "-r", "-z", "--no-renames", "--name-only", "--diff-filter=A")
+        {
+            WorkingDirectory = WorkingDirectory,
+            Environment = ReadEnvironment,
+            StandardInput = string.Concat(boundary.Select(commit => $"{commit} {tip}\n")),
+        };
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        return SplitNul(result.EnsureSuccess(command).StandardOutput);
     }
 
     /// <summary>

@@ -341,6 +341,42 @@ public class IgnoredInTheWayTests
     }
 
     [Fact]
+    public async Task A_range_with_a_merge_finds_what_a_side_branchs_original_branch_point_tracks()
+    {
+        // U0 tracks secret.env; feat from U0 adds f.txt; main stops tracking and ignores it (U1),
+        // adds local.txt and merges feat; onto, U2, follows U1 with u2.txt. Neither onto nor the
+        // tip has secret.env and no commit of the range writes it, but git rebase --rebase-merges
+        // (also the plain command under rebase.rebaseMerges, Git 2.42 and later) starts feat with
+        // "reset <U0>", which writes it over the ignored file, and the next "reset onto" deletes
+        // it (Git 2.36 and 2.55; the plain rebase replays F's change only and keeps it).
+        using var repo = await TempRepo.CreateAsync("branch-point");
+        var u0 = await repo.WriteFile("README", "base\n").WriteFile("secret.env", "OLD\n").CommitAsync("U0");
+        await repo.GitAsync("switch", "--quiet", "--create", "feat", u0);
+        await repo.CommitFileAsync("f.txt", "f\n", "F");
+        await repo.GitAsync("switch", "--quiet", "main");
+        await repo.GitAsync("rm", "--quiet", "--cached", "secret.env");
+        repo.DeleteFile("secret.env").WriteFile(".gitignore", "secret.env\n");
+        var u1 = await repo.CommitAsync("U1");
+        await repo.CommitFileAsync("local.txt", "local\n", "L");
+        await repo.MergeAsync("feat");
+        await repo.GitAsync("switch", "--quiet", "--create", "up", u1);
+        var u2 = await repo.CommitFileAsync("u2.txt", "u2\n", "U2");
+        await repo.GitAsync("switch", "--quiet", "main");
+        repo.WriteFile("secret.env", Local);
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+
+        var (found, made) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfRebaseAsync("HEAD", u2, TestCancelled));
+
+        Assert.Equal(["secret.env"], found);
+
+        // The four reads side by side; with the merge, the boundary and one diff-tree --stdin of
+        // the branch points; then check-ignore.
+        Assert.Equal(["diff-tree --diff-filter=A", "log", "merge-base --is-ancestor", "rev-list"], made.Take(4).Select(call => Kind(call.CommandText)).Order(StringComparer.Ordinal));
+        Assert.Equal($"git rev-list --topo-order --boundary {u2}..HEAD --", made[4].CommandText);
+        Assert.Equal(["diff-tree --stdin", "check-ignore"], made.Skip(5).Select(call => Kind(call.CommandText)));
+    }
+
+    [Fact]
     public void The_replayed_commits_paths_are_read_from_logs_layout()
     {
         // git log --name-only -z --format=%x1e%H as Git 2.36 and 2.55 write it: a line feed before
