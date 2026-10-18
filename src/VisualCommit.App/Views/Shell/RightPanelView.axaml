@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
@@ -6,7 +7,8 @@
              xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
              x:Class="VisualCommit.App.Views.Shell.RightPanelView"
              x:DataType="vm:CommitDetailsViewModel"
-             AutomationProperties.AutomationId="RightPanel">
+             AutomationProperties.AutomationId="RightPanel"
+             kr:KeyRegion.Role="Right">
 
   <!-- The right panel of the active tab: the details of the selected commit, as "Commit details"
        in docs/test-reports/phase-1.md describes them, or phase 0's placeholder when nothing is
@@ -242,6 +244,7 @@
         <!-- The changed files: rows 24 high, flat or as a tree. -->
         <ItemsControl Grid.Row="2"
                       Name="FileList"
+                      kr:KeyRegion.IsMain="True"
                       ItemsSource="{Binding Files}"
                       AutomationProperties.AutomationId="FileList"
                       AutomationProperties.Name="Changed files">

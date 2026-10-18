@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:vm="using:VisualCommit.App.ViewModels"
              x:Class="VisualCommit.App.Views.Shell.WelcomeView"
              x:DataType="vm:WelcomeViewModel">
@@ -21,8 +23,11 @@
       <StackPanel Name="WelcomeButtons" Spacing="8" Margin="0,8,0,0" IsVisible="{Binding ShowsButtons}">
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
           <Button Name="OpenRepoButton" Theme="{StaticResource VcActionButton}"
+                  kr:KeyRegion.IsMain="True"
                   Command="{Binding OpenCommand}"
-                  ToolTip.Tip="Open a repository on this computer"
+                  ToolTip.Tip="{x:Static cmd:ShellToolTips.OpenRepository}"
+                  AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.OpenRepository}"
+                  AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.OpenRepositoryKey}"
                   AutomationProperties.AutomationId="OpenRepoButton"
                   AutomationProperties.Name="Open">
             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -32,7 +37,9 @@
           </Button>
           <Button Name="CloneRepoButton" Theme="{StaticResource VcActionButton}"
                   Command="{Binding OpenCloneFormCommand}"
-                  ToolTip.Tip="Clone a repository from a URL"
+                  ToolTip.Tip="{x:Static cmd:ShellToolTips.CloneRepository}"
+                  AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.CloneRepository}"
+                  AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.CloneRepositoryKey}"
                   AutomationProperties.AutomationId="CloneRepoButton"
                   AutomationProperties.Name="Clone">
             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -42,7 +49,9 @@
           </Button>
           <Button Name="InitRepoButton" Theme="{StaticResource VcActionButton}"
                   Command="{Binding InitCommand}"
-                  ToolTip.Tip="Create a new repository in a folder"
+                  ToolTip.Tip="{x:Static cmd:ShellToolTips.InitRepository}"
+                  AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.InitRepository}"
+                  AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.InitRepositoryKey}"
                   AutomationProperties.AutomationId="InitRepoButton"
                   AutomationProperties.Name="Init">
             <StackPanel Orientation="Horizontal" Spacing="6">

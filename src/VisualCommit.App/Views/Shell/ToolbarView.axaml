@@ -10,7 +10,9 @@
        (docs/phase-3-design.md 4d, D90). A disabled one says why in its tooltip, which the button
        theme shows on a disabled button too; an enabled one has none. Undo, Redo and Search
        (docs/phase-5-design.md 1.1) have a tooltip while enabled too, which is also their
-       automation help text: what Undo and Redo would act on, Search's key. -->
+       automation help text: what Undo and Redo would act on, Search's key. Since phase 6 every
+       button's help text is its tooltip and its AcceleratorKey its key's text (docs/phase-6-design.md
+       6.8, 15.5), for UI Automation only. -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,0,0,1"
@@ -22,11 +24,13 @@
                          Command="{Binding ActiveTab.Toolbar.SearchCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.SearchToolTip}"
                          AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.SearchToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Search}"
                          AutomationProperties.AutomationId="SearchButton" />
         <c:ToolbarButton Name="ThemeSwitch" Label="Theme"
                          Classes.light="{Binding !IsDarkTheme}"
                          Command="{Binding ToggleThemeCommand}"
                          ToolTip.Tip="{Binding ThemeSwitchToolTip}"
+                         AutomationProperties.HelpText="{Binding ThemeSwitchToolTip}"
                          AutomationProperties.AutomationId="ThemeSwitch" />
       </StackPanel>
 
@@ -35,37 +39,51 @@
                          Command="{Binding ActiveTab.Toolbar.UndoCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.UndoToolTip}"
                          AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.UndoToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Undo}"
                          AutomationProperties.AutomationId="UndoButton" />
         <c:ToolbarButton Name="RedoButton" Label="Redo" IconData="{StaticResource IconRedo}"
                          Command="{Binding ActiveTab.Toolbar.RedoCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.RedoToolTip}"
                          AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.RedoToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Redo}"
                          AutomationProperties.AutomationId="RedoButton" />
         <Border Classes="toolbarSeparator" />
         <c:ToolbarButton Name="FetchButton" Label="Fetch" IconData="{StaticResource IconFetch}"
                          Command="{Binding ActiveTab.Toolbar.FetchCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.FetchToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.FetchToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Fetch}"
                          AutomationProperties.AutomationId="FetchButton" />
         <c:ToolbarButton Name="PullButton" Label="Pull" IconData="{StaticResource IconPull}"
                          Command="{Binding ActiveTab.Toolbar.PullCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.PullToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.PullToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Pull}"
                          AutomationProperties.AutomationId="PullButton" />
         <c:ToolbarButton Name="PushButton" Label="Push" IconData="{StaticResource IconPush}"
                          Command="{Binding ActiveTab.Toolbar.PushCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.PushToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.PushToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Push}"
                          AutomationProperties.AutomationId="PushButton" />
         <Border Classes="toolbarSeparator" />
         <c:ToolbarButton Name="BranchButton" Label="Branch" IconData="{StaticResource IconBranch}"
                          Command="{Binding ActiveTab.Toolbar.BranchCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.BranchToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.BranchToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Branch}"
                          AutomationProperties.AutomationId="BranchButton" />
         <c:ToolbarButton Name="StashButton" Label="Stash" IconData="{StaticResource IconStash}"
                          Command="{Binding ActiveTab.Toolbar.StashCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.StashToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.StashToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Stash}"
                          AutomationProperties.AutomationId="StashButton" />
         <c:ToolbarButton Name="PopButton" Label="Pop" IconData="{StaticResource IconPop}"
                          Command="{Binding ActiveTab.Toolbar.PopCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.PopToolTip}"
+                         AutomationProperties.HelpText="{Binding ActiveTab.Toolbar.PopToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Pop}"
                          AutomationProperties.AutomationId="PopButton" />
       </StackPanel>
 

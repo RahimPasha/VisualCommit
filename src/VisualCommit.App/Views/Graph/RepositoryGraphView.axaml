@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels"
@@ -48,6 +49,7 @@
     <!-- Data is bound before the scroll offset, so that a new tab's offset is clamped to that
          tab's history and not to the one shown before. -->
     <c:CommitGraphControl Name="GraphRows"
+                          kr:KeyRegion.IsMain="True"
                           Grid.Row="2"
                           Data="{Binding Graph}"
                           ShowsWorkingRow="{Binding HasWorkingChanges}"

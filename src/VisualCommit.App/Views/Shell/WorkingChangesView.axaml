@@ -1,10 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
              x:Class="VisualCommit.App.Views.Shell.WorkingChangesView"
              x:DataType="vm:WorkingChangesViewModel"
-             AutomationProperties.AutomationId="StagePanel">
+             AutomationProperties.AutomationId="StagePanel"
+             kr:KeyRegion.Role="Right">
 
   <!-- The stage panel (C4), in the right panel while the working-changes row is selected: as
        "The stage panel" in docs/test-reports/phase-2.md describes it. During a list of picks or
@@ -190,6 +192,7 @@
                    VerticalAlignment="Top"
                    IsVisible="{Binding !HasUnstaged}" />
         <ItemsControl Name="UnstagedFileList"
+                      kr:KeyRegion.IsMain="True"
                       ItemsSource="{Binding Unstaged.Rows}"
                       AutomationProperties.AutomationId="UnstagedFileList"
                       AutomationProperties.Name="Unstaged files">
@@ -299,6 +302,7 @@
                    VerticalAlignment="Top"
                    IsVisible="{Binding !HasStaged}" />
         <ItemsControl Name="StagedFileList"
+                      kr:KeyRegion.IsMain="True"
                       ItemsSource="{Binding Staged.Rows}"
                       AutomationProperties.AutomationId="StagedFileList"
                       AutomationProperties.Name="Staged files">
@@ -380,6 +384,7 @@
         <StackPanel Spacing="8">
           <Panel Height="32">
             <TextBox Name="CommitSummary"
+                     kr:KeyRegion.IsMain="True"
                      Text="{Binding Summary}"
                      PlaceholderText="Summary"
                      Height="32"

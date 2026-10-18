@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:vm="using:VisualCommit.App.ViewModels"
              x:Class="VisualCommit.App.Views.Shell.RepoTabsView"
              x:DataType="vm:MainWindowViewModel"
@@ -52,7 +53,9 @@
                         IsVisible="{Binding CanClose}"
                         Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
                         CommandParameter="{Binding}"
-                        ToolTip.Tip="Close this tab"
+                        ToolTip.Tip="{Binding CloseToolTip}"
+                        AutomationProperties.HelpText="{Binding CloseToolTip}"
+                        AutomationProperties.AcceleratorKey="{Binding CloseKeyText}"
                         AutomationProperties.AutomationId="CloseTabButton"
                         AutomationProperties.Name="Close tab">
                   <c:Icon Data="{StaticResource IconClose}" Width="12" Height="12" />
@@ -67,7 +70,9 @@
               Theme="{StaticResource VcFlatButton}"
               Width="34" Margin="2,3"
               Command="{Binding NewTabCommand}"
-              ToolTip.Tip="Open, clone or init a repository"
+              ToolTip.Tip="{x:Static cmd:ShellToolTips.NewTab}"
+              AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.NewTab}"
+              AutomationProperties.AcceleratorKey="{Binding Keys.NewTab}"
               AutomationProperties.AutomationId="AddRepoButton"
               AutomationProperties.Name="Add repository">
         <c:Icon Data="{StaticResource IconPlus}" />

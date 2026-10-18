@@ -32,6 +32,7 @@
                 CornerRadius="0"
                 ToolTip.Tip="{Binding ActivityLog.ToggleToolTip}"
                 AutomationProperties.HelpText="{Binding ActivityLog.ToggleToolTip}"
+                AutomationProperties.AcceleratorKey="{Binding Keys.ActivityLog}"
                 AutomationProperties.AutomationId="ActivityLogToggle">
           <StackPanel Orientation="Horizontal" Spacing="5">
             <c:Icon Data="{StaticResource IconActivityLog}" Width="13" Height="13" />

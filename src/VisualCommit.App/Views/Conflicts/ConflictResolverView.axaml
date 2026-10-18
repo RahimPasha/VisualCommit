@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:cc="using:VisualCommit.App.Controls.Conflicts"
@@ -225,6 +226,7 @@
                                    Grid.Row="1"
                                    IsReadOnly="{Binding IsBusy}"
                                    AutomationProperties.AutomationId="ConflictResult"
+                                   kr:KeyRegion.IsMain="True"
                                    AutomationProperties.Name="Result" />
         </Grid>
       </Grid>
