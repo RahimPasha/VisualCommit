@@ -273,6 +273,15 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- After WP0 (`8e79628`, full run 3,235 of 3,236 in 38 min 28 s): `ShellDriverTests.A_fresh_applications_wait_for_its_turn_on_the_ui_thread_does_not_count_against_the_test`
+  failed once under the full run's load (the shared headless UI thread did not take its work within
+  60 s) and passes alone; watch it. CI run 39153491762 on `8e79628`: Windows green; the other four
+  failed WP-L's isolation test, whose alias was named `shell`, a built-in git command where git-shell
+  is installed (fixed in `717bd8a`); macOS also failed `DiffTextViewTests.Building_and_drawing_a_diff_grows_in_step_with_its_lines`
+  once (369 ms against its 250), a timing test that WP0 did not touch: watch it.
+- Phase 5's `u23f-ignored-in-the-way` differs from `phase-5-pictures.sha256` (`f238e0d…` at the gate,
+  `0ce3ae4…` now) on `master` (`acdac12`) too, with the gate's code: the machine changed since
+  2026-10-16, not phase 6. The gate's references, made on `master`, take it as it is now.
 - Phase 6 started on 2026-10-18 from a clean `master` (`acdac12`): no worktree and no `wip/*` or
   `worktree-*` branch was left. Ten git fsmonitor daemons from phase 5's worktrees were still
   running and were stopped (phase 4's handoff gives the commands). Free space at the start: 15.7 GB
