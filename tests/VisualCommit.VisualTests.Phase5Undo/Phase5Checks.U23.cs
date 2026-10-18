@@ -39,7 +39,10 @@ public sealed partial class Phase5ChecksU
 
         // Step 2: "Terminal work" committed outside on main.
         Assert.Equal(PartU2.TerminalWork, await repo.CommitFileAsync("src/terminal.txt", PartU2.Terminal, "Terminal work"));
-        await app.WaitForAsync(() => U23.GraphShows(app, "Terminal work"), "the graph to show \"Terminal work\"", OutsideChangeTimeout);
+        // The terminal's commit writes the file, stages it and commits it: a status read between those
+        // steps shows a working-changes row that the watcher's next refresh takes away, so the check
+        // waits for the clean tree it asserts as well as for the commit (CI run 39158437982).
+        await app.WaitForAsync(() => U23.GraphShows(app, "Terminal work") && !Graph(app).ShowsWorkingRow, "the graph to show \"Terminal work\" without a working-changes row", OutsideChangeTimeout);
         await app.WaitForIdleAsync();
         AssertGraph(app, PartU2.G0Terminal, PartU2.G0Lanes);
         Assert.Equal(PartU2.TerminalWork, await Steps.RefAsync(repo, "refs/heads/main"));
@@ -62,7 +65,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 5: reset away outside: the state the entry left is back, and so is its Undo.
         await repo.GitAsync("reset", "--quiet", "--hard", PartU2.FastForwardMe);
-        await app.WaitForAsync(() => !U23.GraphShows(app, "Terminal work"), "\"Terminal work\" to leave the graph", OutsideChangeTimeout);
+        await app.WaitForAsync(() => !U23.GraphShows(app, "Terminal work") && !Graph(app).ShowsWorkingRow, "\"Terminal work\" to leave the graph, without a working-changes row", OutsideChangeTimeout);
         await app.WaitForIdleAsync();
         AssertGraph(app, PartU2.G1, PartU2.G0Lanes);
         Steps.AssertButtons(app, UndoRedoButtons.CanUndo(PartU2.MergeFfText));
