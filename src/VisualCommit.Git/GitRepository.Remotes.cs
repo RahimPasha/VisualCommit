@@ -120,8 +120,11 @@ public sealed partial class GitRepository
     /// and <see cref="PullOutcome.UpstreamGone"/> is returned: git pull fails there with "no such
     /// ref was fetched", and a merge of <c>FETCH_HEAD</c> would only say "Already up to date".
     /// <para>
-    /// <paramref name="pullOptions"/> (docs/phase-6-design.md 8.9, 9.10): work package WP2 makes a
-    /// given configuration decide instead of the reads here; Keep ignored files' check runs once
+    /// <paramref name="pullOptions"/> (docs/phase-6-design.md 8.9, 9.10): with
+    /// <see cref="PullIntegration.AsConfigured"/>, its <see cref="PullIntegrationOptions.Configuration"/>,
+    /// read before the fetch, decides instead of a read here (<see cref="ReadPullConfigurationAsync"/>,
+    /// whose <see cref="PullConfiguration.Problem"/> throws <see cref="PullConfiguration.NotUnderstood"/>
+    /// either way), so a terminal's change during the fetch is not seen, as with git pull; Keep ignored files' check runs once
     /// the integration is chosen, before anything is written (<see cref="KeepIgnoredInPullAsync"/>,
     /// work package WP1's).
     /// </para>
@@ -146,8 +149,16 @@ public sealed partial class GitRepository
         switch (integration)
         {
             case PullIntegration.AsConfigured:
-                ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
-                rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                // The settings Pull read before its fetch (8.9), or, given none, read here as phase 4's pull did.
+                var configuration = pullOptions?.Configuration
+                    ?? await ReadPullConfigurationAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                if (configuration.Problem is not null)
+                {
+                    throw configuration.NotUnderstood();
+                }
+
+                ff = configuration.FastForward;
+                rebase = configuration.Rebase;
                 break;
             case PullIntegration.Rebase:
                 // git pull --rebase reads neither pull.ff nor a rebase setting (an invalid one included).
@@ -805,8 +816,13 @@ public sealed partial class GitRepository
             }
         }
 
-        public static GitException NotUnderstood(string key, string value) =>
-            new($"git config --get {key}", 0, $"{key} is set to {value}, which this app does not understand.");
+        /// <summary>
+        /// Pull's sentence for a value of <paramref name="key"/> it does not understand, which
+        /// <see cref="PullConfiguration.Problem"/> holds; <see cref="PullConfiguration.NotUnderstood"/>
+        /// turns it into the failure (<c>git config --get &lt;key&gt;</c>, exit 0, the sentence).
+        /// </summary>
+        public static string NotUnderstood(string key, string value) =>
+            $"{key} is set to {value}, which this app does not understand.";
 
         public static string? TrimSuffix(string text, string suffix) =>
             text.EndsWith(suffix, StringComparison.Ordinal) ? text[..^suffix.Length] : null;
