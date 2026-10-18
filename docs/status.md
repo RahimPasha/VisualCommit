@@ -252,9 +252,14 @@ every commit.
   27 min 2 s, its Test step 24 min 38 s; `ubuntu-latest`; both containers); `macos-latest` failed
   1 of 3,233: phase 2's `Check_10_stage_one_hunk` waited 30 s for the staged diff of
   `src/Calculator.cs` after a click on its staged row, 1.5 minutes into the run. The commit
-  touched nothing that check uses; the helper's comment says macOS CI saw the same once before.
-  Its root cause is being looked for (a click lost or undone by a late watcher refresh is the
-  suspect); it is fixed with a test, not with a longer wait.
+  touched nothing that check uses; the helper's comment says macOS CI saw the same once before
+  (run 38122509278). The cause was the app's: every status read replaced every row of both stage
+  lists, so a read between a click's press and its release (on macOS the watcher's late refresh
+  after a write) lost the click. Fixed in `43751d0` (the lists keep the rows a read did not change,
+  `StageListRefreshTests`). Its run,
+  [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
+  jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
+  59 s, the containers' about 4 min 10 s).
 - Phase 6 started on 2026-10-18 from a clean `master` (`acdac12`): no worktree and no `wip/*` or
   `worktree-*` branch was left. Ten git fsmonitor daemons from phase 5's worktrees were still
   running and were stopped (phase 4's handoff gives the commands). Free space at the start: 15.7 GB
