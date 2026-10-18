@@ -45,9 +45,12 @@ says how its work packages map onto them.
 
 Start:
 
-- [ ] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers to
-  the open points of phase 5's handoff recorded (from D187) and carried into `plan.md` and
-  `requirements.md`.
+- [x] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers to
+  the open points of phase 5's handoff recorded (D187 to D194) and carried into `plan.md` and
+  `requirements.md`. (2026-10-18: the dashboard is a tab of its own; opening a workspace shows
+  only its dashboard; workspaces in `workspaces.json`; git's settings global with a "This
+  repository" section; the palette on Ctrl+Shift+P; a fixed set of keys; every checkout keeps
+  ignored files by default, a setting turns it off; the theme can follow the system.)
 - [ ] 2. Baseline: the default run on `master` (`acdac12`) as inherited, before anything changes.
 - [ ] 3. Design in `docs/phase-6-design.md`: every git fact derived with Git 2.36 (and 2.55 where
   words or exit codes may differ), the texts, the layouts, the work packages, an estimate of what
@@ -225,9 +228,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 1: the open points of the [phase 5 handoff](handoffs/phase-5.md) ("For the next phase")
-are put to the owner; record the answers as decisions from D187 and carry them into `plan.md` and
-`requirements.md`. Step 2's baseline run on `acdac12` runs meanwhile.
+Step 3: the design in `docs/phase-6-design.md`, from the owner's answers (D187 to D194) and the
+open points of the [phase 5 handoff](handoffs/phase-5.md) ("For the next phase"). Step 2's
+baseline run on `acdac12` runs meanwhile; record its result when it ends.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
