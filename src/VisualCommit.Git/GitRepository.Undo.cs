@@ -668,27 +668,13 @@ public sealed partial class GitRepository
 
         /// <summary>
         /// <see cref="IgnoredInTheWayAsync"/>'s question for <paramref name="added"/>, the paths a
-        /// move or a pop adds: the ignored files at them, under them, and at their parent folders.
+        /// move or a pop adds: the ignored files at them, under them, and at their parent folders
+        /// (<see cref="FindIgnoredAtAsync"/>, which Keep ignored files' checks share,
+        /// docs/phase-6-design.md 9.3), distinct, in byte order.
         /// </summary>
         private async Task<UndoRefusal?> IgnoredWhereAddedAsync(IReadOnlyList<string> added)
         {
-            var candidates = new SortedSet<string>(StringComparer.Ordinal);
-            foreach (var path in added)
-            {
-                candidates.UnionWith(ParentFolders(path).Where(parent => IsFileOrLink(_repository.WorkingTreePath(parent))));
-
-                var full = _repository.WorkingTreePath(path);
-                if (IsFileOrLink(full))
-                {
-                    candidates.Add(path);
-                }
-                else if (Directory.Exists(full))
-                {
-                    candidates.UnionWith(_repository.FilesUnder(path));
-                }
-            }
-
-            var ignored = await _repository.IgnoredAmongAsync(candidates, Token).ConfigureAwait(false);
+            var ignored = IgnoredFiles(await _repository.FindIgnoredAtAsync(added, Token).ConfigureAwait(false));
             return ignored.Count > 0 ? new UndoRefusal(UndoRefusalKind.IgnoredFilesInTheWay, Paths: ignored) : null;
         }
 
@@ -1257,15 +1243,6 @@ public sealed partial class GitRepository
             }
 
             return paths;
-        }
-
-        /// <summary>The folders a repository path lies in, outermost first: <c>a</c> and <c>a/b</c> for <c>a/b/c.txt</c>.</summary>
-        private static IEnumerable<string> ParentFolders(string path)
-        {
-            for (var slash = path.IndexOf('/', StringComparison.Ordinal); slash > 0; slash = path.IndexOf('/', slash + 1))
-            {
-                yield return path[..slash];
-            }
         }
 
         [GeneratedRegex(@"'(?<path>[^']+)'")]
