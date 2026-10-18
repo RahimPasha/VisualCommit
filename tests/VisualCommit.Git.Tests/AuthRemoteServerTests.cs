@@ -414,6 +414,183 @@ public class AuthRemoteServerTests
         Assert.NotEqual(first.Port, second.Port);
         Assert.Equal(47391, AuthRemoteServer.VisualChecksPort);
         Assert.Equal(47392, AuthRemoteServer.Phase1VisualChecksPort);
+        Assert.Equal(47393, AuthRemoteServer.Phase6VisualChecksPort);
+    }
+
+    // ---- A folder of repositories (docs/phase-6-design.md 17.2) ----------------------------------
+
+    [Fact]
+    public async Task A_folder_server_serves_each_repository_at_its_own_url()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        var remotes = Path.Combine(copy.Root, "remotes");
+        Directory.CreateDirectory(Path.Combine(remotes, "not-a-repository"));
+        var docs = copy.Repo("docs");
+        var configBefore = File.ReadAllText(Path.Combine(copy.RemoteOf("docs"), "config"));
+        await using (var server = await AuthRemoteServer.StartForFolderAsync(remotes))
+        {
+            server.RequireAuth = false;
+
+            Assert.True(server.ServesFolder);
+            Assert.True(server.ServesInPlace);
+            Assert.Equal(["api", "billing", "design-system", "docs", "infra", "mobile", "scratch", "web-app"], server.ServedRepositories);
+            Assert.Equal($"http://127.0.0.1:{server.Port}/docs.git", server.UrlOf("docs"));
+            Assert.Equal(server.UrlOf("docs"), server.UrlOf("docs.git"));
+            Assert.Throws<ArgumentException>(() => server.UrlOf("notes"));
+            Assert.Throws<ArgumentException>(() => server.UrlOf("not-a-repository"));
+            Assert.Throws<InvalidOperationException>(() => server.Url);
+            Assert.Throws<InvalidOperationException>(() => { _ = server.HoldNextFetchPack(); });
+
+            // Two repositories, each at its own URL, each listing its own refs.
+            foreach (var name in new[] { "docs", "mobile" })
+            {
+                var listing = await GitAsync(docs, ["ls-remote", server.UrlOf(name)]);
+                Assert.True(listing.Succeeded, listing.StandardError);
+                var refs = await GitInAsync(docs, copy.RemoteOf(name), "for-each-ref", "--format=%(objectname)%09%(refname)");
+                Assert.Equal(refs, listing.StandardOutput.Trim());
+            }
+
+            Assert.All(server.Requests, request => Assert.Equal(200, request.Status));
+            Assert.Contains(server.Requests, request => request.Path.StartsWith("/docs.git/", StringComparison.Ordinal));
+            Assert.Contains(server.Requests, request => request.Path.StartsWith("/mobile.git/", StringComparison.Ordinal));
+            Assert.Empty(server.Errors);
+        }
+
+        // Served in place: nothing in the folder changed, and nothing of it was deleted.
+        Assert.Equal(configBefore, File.ReadAllText(Path.Combine(copy.RemoteOf("docs"), "config")));
+        Assert.True(Directory.Exists(copy.RemoteOf("mobile")));
+        Assert.True(Directory.Exists(Path.Combine(remotes, "not-a-repository")));
+    }
+
+    [Fact]
+    public async Task Holds_of_two_repositories_are_independent()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var server = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        server.RequireAuth = false;
+        var docs = copy.Repo("docs");
+        var design = copy.Repo("design-system");
+        await docs.GitAsync("remote", "set-url", "origin", server.UrlOf("docs"));
+        await design.GitAsync("remote", "set-url", "origin", server.UrlOf("design-system"));
+        var docsProgress = new ProgressWatch();
+        var designProgress = new ProgressWatch();
+
+        // docs counts 4 objects, design-system 11 (0.10): held at 25 and 45, each shows exactly that.
+        var docsHeld = server.HoldNextFetchPack("docs", 25);
+        var designHeld = server.HoldNextFetchPack("design-system", 45);
+        var docsFetch = GitAsync(docs, ["fetch", "--progress", "origin"], onError: docsProgress.Add);
+        var designFetch = GitAsync(design, ["fetch", "--progress", "origin"], onError: designProgress.Add);
+        await Task.WhenAll(docsHeld, designHeld).WaitAsync(StepTimeout, TestCancelled);
+        await docsProgress.WaitForLineAsync("25% (", StepTimeout);
+        await designProgress.WaitForLineAsync("45% (", StepTimeout);
+        await Task.Delay(TimeSpan.FromMilliseconds(300), TestCancelled);
+        Assert.Equal("remote: Counting objects:  25% (1/4)", docsProgress.LastPercentage?.TrimEnd());
+        Assert.Equal("remote: Counting objects:  45% (5/11)", designProgress.LastPercentage?.TrimEnd());
+        Assert.False(docsFetch.IsCompleted, "docs' fetch ended while its pack was held.");
+        Assert.False(designFetch.IsCompleted, "design-system's fetch ended while its pack was held.");
+
+        // Released one at a time: docs ends, design-system stays held.
+        server.Release("docs");
+        var docsResult = await docsFetch.WaitAsync(StepTimeout, TestCancelled);
+        Assert.True(docsResult.Succeeded, docsResult.StandardError);
+        Assert.Equal(await GitInAsync(docs, copy.RemoteOf("docs"), "rev-parse", "refs/heads/main"), await docs.RefTargetAsync("refs/remotes/origin/main"));
+        await Task.Delay(TimeSpan.FromMilliseconds(300), TestCancelled);
+        Assert.False(designFetch.IsCompleted, "design-system's fetch ended when only docs was released.");
+        Assert.Equal("remote: Counting objects:  45% (5/11)", designProgress.LastPercentage?.TrimEnd());
+
+        server.Release("design-system");
+        var designResult = await designFetch.WaitAsync(StepTimeout, TestCancelled);
+        Assert.True(designResult.Succeeded, designResult.StandardError);
+        Assert.Equal(await GitInAsync(design, copy.RemoteOf("design-system"), "rev-parse", "refs/heads/main"), await design.RefTargetAsync("refs/remotes/origin/main"));
+        Assert.Equal(
+            ["/design-system.git/git-upload-pack", "/docs.git/git-upload-pack"],
+            server.Requests.Where(request => request.Held).Select(request => request.Path).Order(StringComparer.Ordinal));
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_path_outside_the_served_repositories_is_refused()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var server = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        server.RequireAuth = false;
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false });
+
+        foreach (var path in new[] { "/notes.git/info/refs", "/remotes/docs.git/info/refs", "/docs.git", "/missing.git/info/refs", "/" })
+        {
+            using var response = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}{path}?service=git-upload-pack"), TestCancelled);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        using var served = await client.GetAsync(new Uri(server.UrlOf("docs") + "/info/refs?service=git-upload-pack"), TestCancelled);
+        Assert.Equal(HttpStatusCode.OK, served.StatusCode);
+        Assert.Equal(5, server.Requests.Count(request => request.Status == 404));
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_held_request_gets_its_401_only_after_release()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var server = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        var repo = copy.Repo("docs");
+
+        var arrived = server.HoldNextRequest("mobile");
+        Assert.Same(arrived, server.HoldNextRequest("mobile.git"));
+        var mobile = GitAsync(repo, ["ls-remote", server.UrlOf("mobile")]);
+        await arrived.WaitAsync(StepTimeout, TestCancelled);
+
+        // The other repository is served meanwhile: its 401 is recorded, mobile's is not.
+        var docs = await GitAsync(repo, ["ls-remote", server.UrlOf("docs")]).WaitAsync(StepTimeout, TestCancelled);
+        Assert.False(docs.Succeeded);
+        Assert.Contains(server.Requests, request => request.Path == "/docs.git/info/refs" && request.Status == 401);
+        await Task.Delay(TimeSpan.FromMilliseconds(300), TestCancelled);
+        Assert.DoesNotContain(server.Requests, request => request.Path.StartsWith("/mobile.git/", StringComparison.Ordinal));
+        Assert.False(mobile.IsCompleted, "mobile's request was answered while it was held.");
+
+        server.ReleaseRequest("mobile");
+        var result = await mobile.WaitAsync(StepTimeout, TestCancelled);
+        Assert.False(result.Succeeded);
+        Assert.Contains(server.Requests, request => request.Path == "/mobile.git/info/refs" && request.Status == 401);
+
+        // The gate held that one request only; a release with no request waiting drops the gate.
+        var dropped = server.HoldNextRequest("mobile");
+        server.ReleaseRequest("mobile");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dropped.WaitAsync(StepTimeout, TestCancelled));
+        var again = await GitAsync(repo, ["ls-remote", server.UrlOf("mobile")]).WaitAsync(StepTimeout, TestCancelled);
+        Assert.False(again.Succeeded);
+        Assert.Equal(2, server.Requests.Count(request => request.Path == "/mobile.git/info/refs" && request.Status == 401));
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task Disposing_a_folder_server_lets_a_held_request_go_and_ends_its_holds()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        var server = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        try
+        {
+            server.RequireAuth = false;
+            var repo = copy.Repo("docs");
+            await repo.GitAsync("remote", "set-url", "origin", server.UrlOf("docs"));
+            var arrived = server.HoldNextRequest("mobile");
+            var mobile = GitAsync(repo, ["ls-remote", server.UrlOf("mobile")]);
+            await arrived.WaitAsync(StepTimeout, TestCancelled);
+            var held = server.HoldNextFetchPack("docs");
+            var fetch = GitAsync(repo, ["fetch", "--progress", "origin"]);
+            await held.WaitAsync(StepTimeout, TestCancelled);
+
+            await server.DisposeAsync().AsTask().WaitAsync(StepTimeout, TestCancelled);
+
+            Assert.False((await fetch.WaitAsync(StepTimeout, TestCancelled)).Succeeded);
+            await mobile.WaitAsync(StepTimeout, TestCancelled);
+            Assert.True(Directory.Exists(copy.RemoteOf("docs")));
+            Assert.Throws<ObjectDisposedException>(() => { _ = server.HoldNextRequest("docs"); });
+        }
+        finally
+        {
+            await server.DisposeAsync();
+        }
     }
 
     // ---- Helpers --------------------------------------------------------------------------------
