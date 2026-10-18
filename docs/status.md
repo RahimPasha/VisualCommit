@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-16
+Last updated: 2026-10-18
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -15,7 +15,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 3. Branch, remote, stash and tag operations | Done | `phase/3-operations` | [phase-3](handoffs/phase-3.md) | [phase-3](test-reports/phase-3.md) |
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
-| 6. Multi-repo and productivity | Not started | `phase/6-multi-repo` | | |
+| 6. Multi-repo and productivity | In progress | `phase/6-multi-repo` | | |
 | 7. Hosting | Not started | `phase/7-hosting` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
@@ -25,11 +25,13 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 5 was accepted by the owner on 2026-10-17 and merged into `master` (merge
+Phase 6, multi-repo and productivity: **In progress** since 2026-10-18, on `phase/6-multi-repo`,
+built on the Windows machine from `master` at `acdac12` (phase 5's merge `c299939` and the status
+commits after it). Phase 5 was accepted by the owner on 2026-10-17 and merged into `master` (merge
 commit `c299939`); its gate ran on `1b2e734`. Phase 4 was accepted on 2026-10-12 (merge commit
 `ce5f337`), phase 3 on 2026-10-11 (merge commit `8b33745`), phase 2 on 2026-10-10 (merge commit
 `e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit
-`b5f4723`). The next phase to start is phase 6.
+`b5f4723`).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
@@ -37,12 +39,92 @@ after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
-in the commit that completes it. Number the steps plainly; do not label them C1, C2 and so on,
-which are requirement numbers. Phase 5's checklist, with a note on each step, is in this file as
-of `c299939`'s second parent (`git show phase/5-history:docs/status.md`).
+Each item is ticked in the commit that completes it. The numbers are plain step numbers, not
+requirement numbers. The design (step 3) may split the Git-layer and App steps further; it then
+says how its work packages map onto them.
+
+Start:
+
+- [ ] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers to
+  the open points of phase 5's handoff recorded (from D187) and carried into `plan.md` and
+  `requirements.md`.
+- [ ] 2. Baseline: the default run on `master` (`acdac12`) as inherited, before anything changes.
+- [ ] 3. Design in `docs/phase-6-design.md`: every git fact derived with Git 2.36 (and 2.55 where
+  words or exit codes may differ), the texts, the layouts, the work packages, an estimate of what
+  the phase adds to the default run (45 minutes) and to the real-window pass (25). Independent
+  reviews, each finding checked by an adversarial verifier; the design revised from every
+  confirmed one; questions of taste the reviews raise go to the owner; the design's own decisions
+  recorded.
+- [ ] 4. Leftovers named in phase 5's handoff: the real-window csproj's stale comment on the pass's
+  length; `scripts/time-scripted-check.sh` for phase 6; plan risk 28 (seven fetch and pull tests
+  that fail locally with Visual Studio's Git 2.55) understood before fetch and pull change for the
+  dashboard.
+- [ ] 5. Harness: phase 6's scenario repositories (a workspace of ten repositories in mixed
+  states: clean, ahead, behind, diverged, uncommitted changes, a conflict in progress, detached,
+  no upstream, no remote, a folder that is gone; a fetch refspec that maps names differently),
+  pinned by tests; the project `VisualCommit.VisualTests.Phase6` in the solution; the timing
+  script and CLAUDE.md's Commands; the real-window project's link to `Phase6Expectations*.cs`; a
+  fixed port of its own for a test git server, if the bulk-fetch checks use one (amending D97 as
+  D150 did); the driver helpers the checks need.
+- [ ] 6. Phase 6's visual checks written into `docs/test-reports/phase-6.md`, each marked for the
+  real-window pass or not, reviewed independently, and committed before the UI they test.
+
+Git layer and Core:
+
+- [ ] 7. Workspaces (repository groups): the model, where they are kept, add, remove, rename,
+  and opening one. Tests.
+- [ ] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
+  changes, an operation in progress), read cheaply for ten repositories without opening them as
+  tabs. Tests.
+- [ ] 9. Bulk fetch and pull through each repository's `OperationQueue` (D81), with the
+  toolbar's titles, Cancel and error dialog; what is recorded for undo and where the activity
+  log shows it. Tests.
+- [ ] 10. The settings that are git's own, read and written through git's configuration: the
+  identity, the pull mode (`pull.rebase`, `pull.ff`, `branch.<name>.rebase`, D78, D84), the merge
+  tool (`merge.tool`, D149). Tests, the pull-parity tests unchanged.
+- [ ] 11. `remote.<r>.fetch` read: `DropFacts.RemoteMapsBranchesDifferently` set, and the push of
+  a drop onto a remote branch and "Delete <b> on <r>…" act on the branch's name on the remote.
+  Tests.
+- [ ] 12. Whether every checkout keeps ignored files (`--no-overwrite-ignore`, design 14.2 of
+  phase 5, D179), as the owner decides. Tests.
+
+App:
+
+- [ ] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
+  uncommitted changes; opening a repository from it.
+- [ ] 14. Bulk fetch and pull from the dashboard: progress per repository, Cancel, errors.
+- [ ] 15. The command palette: search and run the app's commands and the menus' actions, with
+  their keys shown.
+- [ ] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
+  redo, Ctrl+F, `EscapeOrder`).
+- [ ] 17. The settings screen: identity, pull mode, auto-fetch interval (`AutoFetchMinutes`,
+  D85), `StashIncludeUntracked`, the extensions "Open file" asks about (D130), external tools
+  ("Open in editor" beside "Open file"), the merge tool, and the checkout setting of step 12; each
+  change takes effect.
+- [ ] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
+  pictured in the dark theme only), and the welcome page's long folder that wraps at awkward
+  places (phase 1's follow-up).
+- [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
+  "Changes to expected results" in the phase 6 report.
+
+Visual checks:
+
+- [ ] 20. Scripted walk-through in `VisualCommit.VisualTests.Phase6`, screenshots under
+  `artifacts/visual/phase-6/scripted/`.
+- [ ] 21. Real-window pass for the checks marked for it (`Phase6RealWindowPass`).
+
+Closing:
+
+- [ ] 22. An independent review of the code before the gate; what it finds fixed, with tests.
+- [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed.
+- [ ] 24. CI run of the gate's commit read, every job.
+- [ ] 25. `architecture.md` describes what is built.
+- [ ] 26. `plan.md`: anything not delivered moved, risks updated.
+- [ ] 27. Handoff `docs/handoffs/phase-6.md`.
+- [ ] 28. Cold-read check by a fresh agent; gaps fixed.
+- [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [ ] 30. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
 
@@ -143,17 +225,19 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 6". Its first steps, and the open points to put to the
-owner before its design, are in the [phase 5 handoff](handoffs/phase-5.md) under "For the next
-phase".
+Step 1: the open points of the [phase 5 handoff](handoffs/phase-5.md) ("For the next phase")
+are put to the owner; record the answers as decisions from D187 and carry them into `plan.md` and
+`requirements.md`. Step 2's baseline run on `acdac12` runs meanwhile.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean, and no worktree,
-  `wip/*` or `worktree-*` branch was left, when phase 5 was merged (`c299939`). The gate's
+- Phase 6 started on 2026-10-18 from a clean `master` (`acdac12`): no worktree and no `wip/*` or
+  `worktree-*` branch was left. Ten git fsmonitor daemons from phase 5's worktrees were still
+  running and were stopped (phase 4's handoff gives the commands). Free space at the start: 15.7 GB
+  on C:, 20 GB on D: (plan risk 27: a built worktree takes about 5 GB). The phase 5 gate's
   reference pictures and inspection verdicts lie outside the repository in
   `D:/Projects/Personal/gate5-reference/` and `D:/Projects/Personal/gate5-inspection/`; phase 6's
   gate makes its own references on `master` (phase 5's handoff, "Running the visual gate").
