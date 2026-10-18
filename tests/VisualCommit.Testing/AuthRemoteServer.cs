@@ -23,9 +23,16 @@ namespace VisualCommit.Testing;
 /// byte; it runs to its end before the response is sent, which is therefore never streamed.
 /// </para>
 /// <para>
-/// <see cref="HoldNextFetchPack"/> holds back part of the next response that carries a pack, so
+/// <see cref="HoldNextFetchPack(int)"/> holds back part of the next response that carries a pack, so
 /// that a test sees a fetch in progress, with a percentage (one it chose, if it likes), for as
 /// long as it likes.
+/// </para>
+/// <para>
+/// Since phase 6 (docs/phase-6-design.md 17.2, amending D97 as D150 did) a server can serve a
+/// folder of bare repositories (<see cref="StartForFolderAsync"/>), each at its own URL
+/// (<see cref="UrlOf"/>), with a hold of its own per repository
+/// (<see cref="HoldNextFetchPack(string, int)"/>, <see cref="Release(string)"/>) and a gate on a
+/// repository's next request of any kind (<see cref="HoldNextRequest"/>).
 /// </para>
 /// </summary>
 public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
@@ -39,6 +46,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// at the same time as phase 3's.
     /// </summary>
     public const int Phase1VisualChecksPort = 47392;
+
+    /// <summary>
+    /// The port of phase 6's servers (docs/phase-6-design.md 17.2): the workspace's folder server
+    /// (<see cref="Scenarios.ServeWorkspaceAsync"/>) and L31's "auth" server, whose URLs the
+    /// pictures show. Not <see cref="VisualChecksPort"/> or <see cref="Phase1VisualChecksPort"/>:
+    /// phase 6's checks run in a process of their own beside phases 1 and 3's.
+    /// </summary>
+    public const int Phase6VisualChecksPort = 47393;
 
     /// <summary>The folder name of the served repository, and the last part of <see cref="Url"/>.</summary>
     public const string RepositoryName = "remote.git";
@@ -57,8 +72,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     private readonly TempDirectory _root;
 
-    /// <summary>The folder that holds the served repository: <c>GIT_PROJECT_ROOT</c> of <c>http-backend</c>. <see cref="_root"/> unless the server serves a repository in place.</summary>
+    /// <summary>The folder that holds the served repositories: <c>GIT_PROJECT_ROOT</c> of <c>http-backend</c>. <see cref="_root"/> unless the server serves a repository in place or a folder.</summary>
     private readonly string _projectRoot;
+
+    /// <summary>The served repositories' folder names (<c>remote.git</c>, <c>docs.git</c>), by their names without a final <c>.git</c> (<c>remote</c>, <c>docs</c>).</summary>
+    private readonly IReadOnlyDictionary<string, string> _served;
+
+    /// <summary>The folder name of the one repository a server of one repository serves; null for a folder server.</summary>
+    private readonly string? _single;
     private readonly TcpListener _listener;
     private readonly GitRunner _runner;
     private readonly IReadOnlyDictionary<string, string?> _environment;
@@ -68,13 +89,21 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private readonly List<string> _errors = [];
     private readonly List<Task> _connections = [];
     private readonly List<Hold> _activeHolds = [];
-    private Hold? _pendingHold;
+
+    /// <summary>The holds asked for and not begun yet, by the served folder name they wait for.</summary>
+    private readonly Dictionary<string, Hold> _pendingHolds = new(StringComparer.Ordinal);
+
+    /// <summary>The gates on a repository's next request (<see cref="HoldNextRequest"/>) that no request has reached yet, by folder name.</summary>
+    private readonly Dictionary<string, RequestGate> _pendingGates = new(StringComparer.Ordinal);
+
+    /// <summary>The gates a request waits at now.</summary>
+    private readonly List<RequestGate> _closedGates = [];
     private Task _acceptLoop = Task.CompletedTask;
     private NetworkCredential _credentials = new("alice", "s3cret");
     private volatile bool _requireAuth = true;
     private int _disposed;
 
-    private AuthRemoteServer(TempDirectory root, TcpListener listener, bool portWasTaken, string projectRoot, string repositoryFolderName)
+    private AuthRemoteServer(TempDirectory root, TcpListener listener, bool portWasTaken, string projectRoot, IReadOnlyList<string> servedFolders, bool folderServer)
     {
         _root = root;
         _listener = listener;
@@ -83,7 +112,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         _runner = new GitRunner(TempRepo.GitPath);
         _environment = TempRepo.IsolatedEnvironment(root.Combine("home"));
         _projectRoot = projectRoot;
-        RepositoryFolderName = repositoryFolderName;
+        _served = servedFolders.ToDictionary(NameOf, folder => folder, StringComparer.Ordinal);
+        _single = folderServer ? null : servedFolders.Single();
     }
 
     /// <summary>The port the server listens on, on 127.0.0.1.</summary>
@@ -92,21 +122,39 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>Whether the port asked for was taken, so that the server took one the system picked.</summary>
     public bool PortWasTaken { get; }
 
+    /// <summary>Whether the server serves a folder of repositories (<see cref="StartForFolderAsync"/>) rather than one.</summary>
+    public bool ServesFolder => _single is null;
+
+    /// <summary>The served repositories' names, in ordinal order: their folder names without a final <c>.git</c> (<c>docs</c> for <c>docs.git</c>).</summary>
+    public IReadOnlyList<string> ServedRepositories => [.. _served.Keys.Order(StringComparer.Ordinal)];
+
     /// <summary>
     /// The served repository's folder name, which is also the last part of <see cref="Url"/>:
     /// <see cref="RepositoryName"/> for the server's own repository, the existing folder's name
-    /// for one served in place (<c>origin.git</c>).
+    /// for one served in place (<c>origin.git</c>). A folder server has none (<see cref="UrlOf"/>).
     /// </summary>
-    public string RepositoryFolderName { get; }
+    /// <exception cref="InvalidOperationException">The server serves a folder.</exception>
+    public string RepositoryFolderName => _single ?? throw new InvalidOperationException("A folder server serves several repositories: name one (UrlOf).");
 
-    /// <summary>Whether the server serves an existing repository in place, which it neither made nor deletes.</summary>
+    /// <summary>Whether the server serves existing repositories in place (one, or a folder of them), which it neither made nor deletes.</summary>
     public bool ServesInPlace => !string.Equals(_projectRoot, _root.Path, StringComparison.Ordinal);
 
     /// <summary>The served repository's URL: <c>http://127.0.0.1:&lt;port&gt;/remote.git</c>, or <c>/origin.git</c> for <c>origin.git</c> served in place.</summary>
-    public string Url => string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{RepositoryFolderName}");
+    /// <exception cref="InvalidOperationException">The server serves a folder (<see cref="UrlOf"/>).</exception>
+    public string Url => UrlOf(RepositoryFolderName);
 
     /// <summary>The served bare repository's folder, for git calls that go around the server.</summary>
+    /// <exception cref="InvalidOperationException">The server serves a folder.</exception>
     public string RepositoryPath => Path.Combine(_projectRoot, RepositoryFolderName);
+
+    /// <summary>
+    /// The URL of the served repository <paramref name="repository"/>, named by its folder name
+    /// (<c>docs.git</c>) or without its final <c>.git</c> (<c>docs</c>):
+    /// <c>http://127.0.0.1:&lt;port&gt;/docs.git</c>, the folder name as the URL's path.
+    /// </summary>
+    /// <exception cref="ArgumentException">The server serves no such repository.</exception>
+    public string UrlOf(string repository) =>
+        string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{FolderOf(repository)}");
 
     /// <summary>Whether every request must carry <see cref="Credentials"/>. True at first.</summary>
     public bool RequireAuth
@@ -186,8 +234,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
 
             var server = served is null
-                ? new AuthRemoteServer(root, listener, portWasTaken, root.Path, RepositoryName)
-                : new AuthRemoteServer(root, listener, portWasTaken, served.Value.ProjectRoot, served.Value.Name);
+                ? new AuthRemoteServer(root, listener, portWasTaken, root.Path, [RepositoryName], folderServer: false)
+                : new AuthRemoteServer(root, listener, portWasTaken, served.Value.ProjectRoot, [served.Value.Name], folderServer: false);
             if (served is null)
             {
                 await server.CreateRepositoryAsync().ConfigureAwait(false);
@@ -203,6 +251,105 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             root.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Starts a server that serves every bare repository directly in <paramref name="folder"/>
+    /// in place (docs/phase-6-design.md 17.2): each at <see cref="UrlOf"/> its folder's name, each
+    /// checked as a repository served in place is (a bare repository whose name needs no escaping
+    /// in a URL, one <c>rev-parse --is-bare-repository</c> each), with <c>GIT_PROJECT_ROOT</c> the
+    /// folder. Nothing in the folder is changed or deleted; a folder that is no bare repository is
+    /// not served. On <paramref name="port"/>, or one the system picks when it is 0; with
+    /// <paramref name="fallBackToFreePort"/> a taken port gives way to a free one, as for
+    /// <see cref="StartAsync"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="folder"/> holds no bare repository.</exception>
+    public static async Task<AuthRemoteServer> StartForFolderAsync(string folder, int port = 0, bool fallBackToFreePort = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        ArgumentOutOfRangeException.ThrowIfNegative(port);
+        await HttpBackendCheck.Value.ConfigureAwait(false);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        if (!Directory.Exists(full))
+        {
+            throw new DirectoryNotFoundException($"No folder of repositories to serve at {full}.");
+        }
+
+        var root = new TempDirectory("auth-server");
+        TcpListener? listener = null;
+        try
+        {
+            var environment = TempRepo.IsolatedEnvironment(root.Combine("home"));
+            var served = new List<string>();
+            foreach (var candidate in Directory.EnumerateDirectories(full).Order(StringComparer.Ordinal))
+            {
+                if (await IsServableAsync(candidate, environment).ConfigureAwait(false))
+                {
+                    served.Add(Path.GetFileName(candidate));
+                }
+            }
+
+            if (served.Count == 0)
+            {
+                throw new ArgumentException($"{full} holds no bare repository to serve.", nameof(folder));
+            }
+
+            var portWasTaken = false;
+            try
+            {
+                listener = Listen(port);
+            }
+            catch (SocketException) when (fallBackToFreePort && port != 0)
+            {
+                portWasTaken = true;
+                listener = Listen(0);
+            }
+
+            var server = new AuthRemoteServer(root, listener, portWasTaken, full, served, folderServer: true);
+            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            return server;
+        }
+        catch
+        {
+            listener?.Stop();
+            listener?.Dispose();
+            root.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Whether a folder of a served folder is a bare repository whose name needs no escaping in a URL.</summary>
+    private static async Task<bool> IsServableAsync(string folder, IReadOnlyDictionary<string, string?> environment)
+    {
+        if (!IsUrlSafe(Path.GetFileName(folder)))
+        {
+            return false;
+        }
+
+        var bare = await new GitRunner(TempRepo.GitPath)
+            .RunAsync(new GitCommand("rev-parse", "--is-bare-repository") { WorkingDirectory = folder, Environment = environment })
+            .ConfigureAwait(false);
+        return bare.Succeeded && bare.StandardOutput.Trim() == "true";
+    }
+
+    /// <summary>Whether a folder name needs no escaping in a URL: letters, digits, '.', '-' and '_', and not "." or "..".</summary>
+    private static bool IsUrlSafe(string name) =>
+        name.Length > 0 && name is not "." and not ".." && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
+
+    /// <summary>A served repository's name: its folder's name without a final <c>.git</c>.</summary>
+    private static string NameOf(string folder) =>
+        folder.EndsWith(".git", StringComparison.Ordinal) && folder.Length > 4 ? folder[..^4] : folder;
+
+    /// <summary>The folder name of the served repository <paramref name="repository"/>, given by its name or its folder name.</summary>
+    private string FolderOf(string repository)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
+        if (_served.TryGetValue(repository, out var folder) || _served.TryGetValue(NameOf(repository), out folder) && folder == repository)
+        {
+            return folder;
+        }
+
+        throw new ArgumentException($"The server serves no repository {repository}; it serves {string.Join(", ", ServedRepositories)}.", nameof(repository));
     }
 
     /// <summary>
@@ -293,31 +440,56 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
     /// <returns>A task that completes when the response is held: its first part has been sent.
-    /// It is cancelled when <see cref="Release"/> comes first or the server is disposed.</returns>
-    public Task HoldNextFetchPack(int atPercent = 0)
+    /// It is cancelled when <see cref="Release()"/> comes first or the server is disposed.</returns>
+    /// <exception cref="InvalidOperationException">The server serves a folder: name the repository (<see cref="HoldNextFetchPack(string, int)"/>).</exception>
+    public Task HoldNextFetchPack(int atPercent = 0) => HoldNextFetchPack(RepositoryFolderName, atPercent);
+
+    /// <summary>
+    /// Holds back the next response that carries a pack of the served repository
+    /// <paramref name="repository"/> (its name or folder name), as <see cref="HoldNextFetchPack(int)"/>
+    /// does on a server of one repository, D150's split at <paramref name="atPercent"/> included
+    /// (docs/phase-6-design.md 17.2): each repository has a hold of its own, taken by its own next
+    /// pack response, so that a folder server holds several fetches at their own percentages and
+    /// releases them one at a time (<see cref="Release(string)"/>). Calling it again for the same
+    /// repository before a response was held changes nothing.
+    /// </summary>
+    /// <exception cref="ArgumentException">The server serves no such repository.</exception>
+    public Task HoldNextFetchPack(string repository, int atPercent = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(atPercent);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(atPercent, 100);
+        var folder = FolderOf(repository);
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed != 0, this);
-            _pendingHold ??= new Hold(atPercent);
-            return _pendingHold.Engaged.Task;
+            if (!_pendingHolds.TryGetValue(folder, out var hold))
+            {
+                hold = new Hold(folder, atPercent);
+                _pendingHolds.Add(folder, hold);
+            }
+
+            return hold.Engaged.Task;
         }
     }
 
-    /// <summary>Sends the rest of every held response, and drops a hold that has not begun.</summary>
-    public void Release()
+    /// <summary>Sends the rest of every held response, of every served repository, and drops every hold that has not begun.</summary>
+    public void Release() => ReleaseHolds(null);
+
+    /// <summary>Sends the rest of the held responses of <paramref name="repository"/> (its name or folder name) and drops its hold that has not begun; the other repositories' stay held.</summary>
+    /// <exception cref="ArgumentException">The server serves no such repository.</exception>
+    public void Release(string repository) => ReleaseHolds(FolderOf(repository));
+
+    private void ReleaseHolds(string? folder)
     {
         List<Hold> holds;
         lock (_gate)
         {
-            holds = [.. _activeHolds];
-            _activeHolds.Clear();
-            if (_pendingHold is not null)
+            holds = [.. _activeHolds.Where(hold => folder is null || hold.Folder == folder)];
+            _activeHolds.RemoveAll(holds.Contains);
+            foreach (var (key, pending) in _pendingHolds.Where(entry => folder is null || entry.Key == folder).ToList())
             {
-                holds.Add(_pendingHold);
-                _pendingHold = null;
+                holds.Add(pending);
+                _pendingHolds.Remove(key);
             }
         }
 
@@ -325,6 +497,58 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         {
             hold.Engaged.TrySetCanceled();
             hold.Released.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// Holds the next request of any kind to the served repository <paramref name="repository"/>
+    /// (its name or folder name) as it arrives, before the server decides whether it is signed in,
+    /// until <see cref="ReleaseRequest"/> or disposing opens it (docs/phase-6-design.md 17.2): a
+    /// check orders two repositories' sign-ins with it (W6, 4.4). Nothing about the request is
+    /// recorded (<see cref="Requests"/>) until it goes on; the other repositories are served
+    /// meanwhile. Calling it again before a request arrived changes nothing.
+    /// </summary>
+    /// <returns>A task that completes when the request has arrived and waits. It is cancelled when
+    /// <see cref="ReleaseRequest"/> comes first or the server is disposed.</returns>
+    /// <exception cref="ArgumentException">The server serves no such repository.</exception>
+    public Task HoldNextRequest(string repository)
+    {
+        var folder = FolderOf(repository);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed != 0, this);
+            if (!_pendingGates.TryGetValue(folder, out var gate))
+            {
+                gate = new RequestGate(folder);
+                _pendingGates.Add(folder, gate);
+            }
+
+            return gate.Arrived.Task;
+        }
+    }
+
+    /// <summary>Lets the request held for <paramref name="repository"/> go on (<see cref="HoldNextRequest"/>), or drops its gate when no request has arrived yet.</summary>
+    /// <exception cref="ArgumentException">The server serves no such repository.</exception>
+    public void ReleaseRequest(string repository) => OpenGates(FolderOf(repository));
+
+    private void OpenGates(string? folder)
+    {
+        List<RequestGate> gates;
+        lock (_gate)
+        {
+            gates = [.. _closedGates.Where(gate => folder is null || gate.Folder == folder)];
+            _closedGates.RemoveAll(gates.Contains);
+            foreach (var (key, pending) in _pendingGates.Where(entry => folder is null || entry.Key == folder).ToList())
+            {
+                gates.Add(pending);
+                _pendingGates.Remove(key);
+            }
+        }
+
+        foreach (var gate in gates)
+        {
+            gate.Arrived.TrySetCanceled();
+            gate.Opened.TrySetResult();
         }
     }
 
@@ -340,14 +564,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         Task[] connections;
         lock (_gate)
         {
-            holds = [.. _activeHolds];
-            if (_pendingHold is not null)
-            {
-                holds.Add(_pendingHold);
-            }
-
+            holds = [.. _activeHolds, .. _pendingHolds.Values];
             _activeHolds.Clear();
-            _pendingHold = null;
+            _pendingHolds.Clear();
         }
 
         await _stopping.CancelAsync().ConfigureAwait(false);
@@ -356,6 +575,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             hold.Engaged.TrySetCanceled();
             hold.Released.TrySetCanceled();
         }
+
+        // A held request goes on, into a server that is stopping.
+        OpenGates(null);
 
         _listener.Stop();
         try
@@ -464,7 +686,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                     return;
                 }
 
-                await HandleAsync(stream, reader, head, readTimeout.Token).ConfigureAwait(false);
+                await HandleAsync(stream, reader, head, readTimeout).ConfigureAwait(false);
                 client.Client.Shutdown(SocketShutdown.Send);
             }
             catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
@@ -478,10 +700,22 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 
-    private async Task HandleAsync(NetworkStream stream, RequestReader reader, RequestHead head, CancellationToken readCancelled)
+    private async Task HandleAsync(NetworkStream stream, RequestReader reader, RequestHead head, CancellationTokenSource readTimeout)
     {
         var stopping = _stopping.Token;
         var (path, query) = SplitTarget(head.Target);
+
+        // A gate on this repository's next request (HoldNextRequest) holds it here, before
+        // anything is decided about it; the time to send the rest of the request starts again
+        // once it goes on.
+        if (TakeGate(path) is { } gate)
+        {
+            gate.Arrived.TrySetResult();
+            await gate.Opened.Task.WaitAsync(stopping).ConfigureAwait(false);
+            readTimeout.CancelAfter(RequestTimeout);
+        }
+
+        var readCancelled = readTimeout.Token;
         var user = AuthenticatedUser(head);
         var authorized = user is not null || !RequireAuth;
 
@@ -540,7 +774,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             var (hasPack, progressEnd) = ScanPktLines(response.Body);
             if (hasPack)
             {
-                hold = TakePendingHold();
+                hold = TakePendingHold(path);
                 if (hold is { AtPercent: > 0 })
                 {
                     (sent, var lineEnd) = SplitAtProgress(response.Body, hold.AtPercent);
@@ -588,18 +822,41 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         await stream.WriteAsync(sent.AsMemory(holdAt), stopping).ConfigureAwait(false);
     }
 
-    private Hold? TakePendingHold()
+    /// <summary>The hold that waits for the next pack response of the repository <paramref name="path"/> lies in, made active; null when there is none.</summary>
+    private Hold? TakePendingHold(string path)
     {
+        if (RepositoryOf(path) is not { } folder)
+        {
+            return null;
+        }
+
         lock (_gate)
         {
-            var hold = _pendingHold;
-            if (hold is not null)
+            if (_pendingHolds.Remove(folder, out var hold))
             {
-                _pendingHold = null;
                 _activeHolds.Add(hold);
             }
 
             return hold;
+        }
+    }
+
+    /// <summary>The gate that waits for the next request of the repository <paramref name="path"/> lies in, now closed on that request; null when there is none.</summary>
+    private RequestGate? TakeGate(string path)
+    {
+        if (RepositoryOf(path) is not { } folder)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (_pendingGates.Remove(folder, out var gate))
+            {
+                _closedGates.Add(gate);
+            }
+
+            return gate;
         }
     }
 
@@ -676,8 +933,25 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             : null;
     }
 
-    private bool IsInRepository(string path) =>
-        path.StartsWith("/" + RepositoryFolderName + "/", StringComparison.Ordinal) && !path.Contains("..", StringComparison.Ordinal);
+    private bool IsInRepository(string path) => RepositoryOf(path) is not null;
+
+    /// <summary>The folder name of the served repository a request's path lies in (<c>/docs.git/info/refs</c>: <c>docs.git</c>); null for a path outside every one, or with <c>..</c> in it.</summary>
+    private string? RepositoryOf(string path)
+    {
+        if (path.Contains("..", StringComparison.Ordinal) || !path.StartsWith('/'))
+        {
+            return null;
+        }
+
+        var end = path.IndexOf('/', 1);
+        if (end < 0)
+        {
+            return null;
+        }
+
+        var folder = path[1..end];
+        return _served.Values.Contains(folder, StringComparer.Ordinal) ? folder : null;
+    }
 
     private static (string Path, string Query) SplitTarget(string target)
     {
@@ -985,15 +1259,28 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     private sealed record CgiResponse(int Status, string Reason, string Headers, byte[] Body);
 
-    /// <summary>One hold: begun when the first part of the response is sent, ended by <see cref="Release"/>.</summary>
-    private sealed class Hold(int atPercent)
+    /// <summary>One hold: begun when the first part of the response is sent, ended by <see cref="Release()"/> or <see cref="Release(string)"/>.</summary>
+    private sealed class Hold(string folder, int atPercent)
     {
-        /// <summary>0, or the percentage of the progress line the hold begins after (<see cref="HoldNextFetchPack"/>).</summary>
+        /// <summary>The folder name of the served repository whose pack response it holds.</summary>
+        public string Folder { get; } = folder;
+
+        /// <summary>0, or the percentage of the progress line the hold begins after (<see cref="HoldNextFetchPack(string, int)"/>).</summary>
         public int AtPercent { get; } = atPercent;
 
         public TaskCompletionSource Engaged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    /// <summary>A gate on a served repository's next request (<see cref="HoldNextRequest"/>): closed when the request arrives, opened by <see cref="ReleaseRequest"/> or disposing.</summary>
+    private sealed class RequestGate(string folder)
+    {
+        public string Folder { get; } = folder;
+
+        public TaskCompletionSource Arrived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Opened { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     /// <summary>A request's line and headers.</summary>

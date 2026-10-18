@@ -195,8 +195,11 @@ public sealed class TempRepo : IDisposable
     /// its <c>core</c> settings), and deleted when the process ends. A git folder holds no path of
     /// its own, so a copy of it is a repository of its own.
     /// </summary>
-    private static Task<string> BlankGitFolderAsync(string initialBranch) =>
+    internal static Task<string> BlankGitFolderAsync(string initialBranch) =>
         BlankGitFolders.GetOrAdd(initialBranch, key => new Lazy<Task<string>>(() => MakeBlankGitFolderAsync(key))).Value;
+
+    /// <summary>The blank bare repository's folder (<see cref="BlankGitFolderAsync"/> with <see cref="BareKey"/>), for builders that copy it themselves (the workspace's <c>LeanRepositories</c>).</summary>
+    internal static Task<string> BlankBareFolderAsync() => BlankGitFolderAsync(BareKey);
 
     private static async Task<string> MakeBlankGitFolderAsync(string initialBranch)
     {
@@ -422,12 +425,14 @@ public sealed class TempRepo : IDisposable
     /// (the workspace's <c>LeanRepositories</c>, docs/phase-6-design.md 17.1), with this class's
     /// isolation and a clock of its own that starts at <paramref name="clock"/>. It does not own
     /// the folder: disposing it deletes nothing; the folder goes with <paramref name="root"/>.
+    /// With <paramref name="ownsRoot"/> it does, as a repository <see cref="CreateAsync"/> made: a
+    /// lean scenario's template ("settings"), which <see cref="CopyAsync"/> then copies whole.
     /// </summary>
-    internal static TempRepo Over(TempDirectory root, string path, DateTimeOffset clock)
+    internal static TempRepo Over(TempDirectory root, string path, DateTimeOffset clock, bool ownsRoot = false)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return new TempRepo(root, path, ownsRoot: false) { _clock = new Clock(clock) };
+        return new TempRepo(root, path, ownsRoot) { _clock = new Clock(clock) };
     }
 
     /// <summary>Writes a file in the working tree, creating its folders. Line endings are written as given.</summary>
