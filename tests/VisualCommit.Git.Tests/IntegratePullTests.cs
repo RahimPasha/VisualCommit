@@ -1,4 +1,5 @@
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
@@ -202,6 +203,29 @@ public class IntegratePullTests
         Assert.Equal(mode == "merge" ? PullOutcome.Merged : PullOutcome.FastForward, result.Outcome);
         Assert.Contains(made, call => call.CommandText == command);
         Assert.Equal("UP\n", Read(repo, "secret.env"));
+    }
+
+    [Fact]
+    public async Task With_keep_ignored_a_fast_forward_only_pull_of_diverged_branches_is_left_to_git_which_refuses_it()
+    {
+        // pull.ff=only with a commit of its own: the upstream's secret.env is in the merge's way,
+        // but git refuses the --ff-only merge as not a fast-forward and writes nothing (4.8's E),
+        // which is the reason to give, not the ignored file.
+        using var repo = await CopyAsync(Behind, "the pull template behind");
+        await PrepareAsync(repo, "merge", "pull.ff=only");
+        var (repository, calls, branch) = await FetchedAsync(repo);
+        var head = await repo.HeadAsync();
+        var mark = calls.Snapshot().Count;
+
+        var failure = await Assert.ThrowsAsync<GitException>(() => PullAsync(repository, calls, branch, PullIntegration.AsConfigured, Keep));
+
+        Assert.Equal("git merge --ff-only --no-overwrite-ignore FETCH_HEAD", failure.CommandText);
+        Assert.Equal(GitFailureKind.NotFastForward, GitFailureClassifier.Classify(failure.StandardError, failure.StandardOutput, failure.ExitCode));
+        var made = calls.Snapshot().Skip(mark).Select(call => call.CommandText).ToList();
+        Assert.Contains("git check-ignore --stdin -z", made);
+        Assert.Contains($"git merge-base --is-ancestor {head} FETCH_HEAD", made);
+        Assert.Equal(head, await repo.HeadAsync());
+        Assert.Equal(Local, Read(repo, "secret.env"));
     }
 
     [Fact]

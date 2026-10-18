@@ -468,9 +468,13 @@ public sealed partial class GitRepository
     /// of <c>HEAD</c> and the upstream), and an unborn branch (<paramref name="before"/> null), whose
     /// fast-forward writes every file of <paramref name="head"/> without git's option taking effect
     /// (git reads the tree into an empty index, 0.4), the paths of <c>git ls-tree -r -z --name-only
-    /// &lt;head&gt;</c>. A read that fails is logged and the pull goes on to git, keeping the option.
-    /// Returns the arguments to run and the ignored files in the way (none: integrate). Without the
-    /// option, <paramref name="arguments"/> as they are and nothing in the way: git's default.
+    /// &lt;head&gt;</c>. A <c>--ff-only</c> merge that finds something asks <c>git merge-base
+    /// --is-ancestor &lt;before&gt; &lt;head&gt;</c> too: under <c>pull.ff=only</c> on diverged
+    /// branches (4.8's E, E4) git refuses it as not a fast-forward and writes nothing (Git 2.36 and
+    /// 2.55), so git runs and gives that reason, not the ignored file. A read that fails is logged
+    /// and the pull goes on to git, keeping the option. Returns the arguments to run and the
+    /// ignored files in the way (none: integrate). Without the option, <paramref name="arguments"/>
+    /// as they are and nothing in the way: git's default.
     /// </summary>
     private async Task<(string[] Arguments, IReadOnlyList<string> Ignored)> KeepIgnoredInPullAsync(
         GitRef branch,
@@ -508,6 +512,16 @@ public sealed partial class GitRepository
             else
             {
                 ignored = await FindIgnoredInTheWayOfMergeAsync("HEAD", head, cancellationToken).ConfigureAwait(false);
+
+                // pull.ff=only chooses --ff-only without knowing whether the branches have diverged;
+                // a rebase setting chose it after the same question (asked once more here, only when
+                // something is in the way).
+                if (ignored.Count > 0
+                    && arguments.Contains("--ff-only", StringComparer.Ordinal)
+                    && !await PullCanFastForwardAsync(before, head, cancellationToken).ConfigureAwait(false))
+                {
+                    ignored = [];
+                }
             }
 
             return (arguments, ignored);
