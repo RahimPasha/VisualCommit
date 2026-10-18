@@ -214,13 +214,38 @@ public sealed class TempRepo : IDisposable
                 await blank.ConfigAsync(key, value);
             }
 
+            var gitFolder = bare ? path : System.IO.Path.Combine(path, ".git");
+            RemoveHookSamples(gitFolder);
             AppDomain.CurrentDomain.ProcessExit += (_, _) => root.Dispose();
-            return bare ? path : System.IO.Path.Combine(path, ".git");
+            return gitFolder;
         }
         catch
         {
             root.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Deletes the hook samples <c>git init</c> copies into a new git folder (<c>hooks/*.sample</c>:
+    /// 13 on Git 2.36, 14 on 2.55 with <c>sendemail-validate.sample</c>), which no git call runs:
+    /// every copy of a blank folder, and of every scenario built from one, then has that many fewer
+    /// files to copy (docs/phase-6-design.md 17.1; the ten-repository workspace's copy 323 files in
+    /// place of 544). The folder itself stays, so that a test that installs a hook finds it as git
+    /// left it.
+    /// </summary>
+    private static void RemoveHookSamples(string gitFolder)
+    {
+        var hooks = System.IO.Path.Combine(gitFolder, "hooks");
+        if (!Directory.Exists(hooks))
+        {
+            return;
+        }
+
+        foreach (var sample in Directory.EnumerateFiles(hooks, "*.sample"))
+        {
+            File.SetAttributes(sample, FileAttributes.Normal);
+            File.Delete(sample);
         }
     }
 
