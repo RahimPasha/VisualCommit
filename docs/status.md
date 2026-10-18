@@ -278,7 +278,12 @@ every commit.
   60 s) and passes alone; watch it. CI run 39153491762 on `8e79628`: Windows green; the other four
   failed WP-L's isolation test, whose alias was named `shell`, a built-in git command where git-shell
   is installed (fixed in `717bd8a`); macOS also failed `DiffTextViewTests.Building_and_drawing_a_diff_grows_in_step_with_its_lines`
-  once (369 ms against its 250), a timing test that WP0 did not touch: watch it.
+  once (369 ms against its 250), a timing test that WP0 did not touch: watch it. CI run
+  39158437982 on `717bd8a`: its first attempt failed that test on macOS again (705 ms against 7 ms)
+  and phase 5's `Check_U23_terminal_commit` on Windows (a working-changes row a terminal commit's
+  half-done state left for one refresh; the check now waits for the clean tree it asserts,
+  `161e298`); its second attempt passed all five jobs with 3,236 tests. The timing test failed 2
+  of 3 macOS attempts: if it fails again, count its work instead of timing it.
 - Phase 5's `u23f-ignored-in-the-way` differs from `phase-5-pictures.sha256` (`f238e0d…` at the gate,
   `0ce3ae4…` now) on `master` (`acdac12`) too, with the gate's code: the machine changed since
   2026-10-16, not phase 6. The gate's references, made on `master`, take it as it is now.
