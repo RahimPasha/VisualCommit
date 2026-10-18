@@ -52,7 +52,10 @@ public sealed class ChangedFileList
             _closedFolders.Clear();
         }
 
-        Rebuild();
+        // The same list read again (the stage panel after every status read): a row that shows what
+        // it showed stays, with its container and button, so a read that changed nothing touches no
+        // row and a click on a row that a refresh reaches between its press and release still counts.
+        Rebuild(keepRows: keepFolders);
     }
 
     /// <summary>
@@ -111,7 +114,7 @@ public sealed class ChangedFileList
         }
     }
 
-    private void Rebuild()
+    private void Rebuild(bool keepRows = false)
     {
         List<ChangedFileRow> rows;
         if (Mode == FileListMode.Flat)
@@ -148,7 +151,14 @@ public sealed class ChangedFileList
             row.IsSelected = row.IsFile && row.Key == _selectedPath;
         }
 
-        Rows.ReplaceAll(rows);
+        if (keepRows)
+        {
+            Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
+        }
+        else
+        {
+            Rows.ReplaceAll(rows);
+        }
     }
 
     /// <summary>Adds a folder's content: its subfolders first, then its files, each sorted by name.</summary>

@@ -702,6 +702,12 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   (which fills empty boxes with HEAD's message), the commit button's label and state, git's
   message after a failed write (`ErrorText`, shown as `CommitError`), and the restore bar. It
   only shows what `Update(status)` gives it; every action goes to its `IWorkingChangesHost`.
+  Since phase 6 a status read keeps every row that shows what it showed (`ChangedFileList.Show`
+  with `keepFolders`, `ChangedFileRow.ShowsSameAs`, as the left panel does), so a read that changed
+  nothing touches no row: a click on a row that a read reaches between its press and its release
+  still counts. macOS's watcher delivers the index's change after a write's own refresh, and the
+  read it started used to replace every row, which lost a click of phase 2's check 10 on CI
+  (`StageListRefreshTests`).
 - `RepositoryViewModel` is that host, and the diff view's (`IDiffHost`). Every write runs through
   `WriteAsync`, which queues it as a local operation of the repository's queue (titles "Stage",
   "Unstage", "Discard", "Restore", "Commit", "Apply lines"; `ErrorDisplay.StagePanel`,
