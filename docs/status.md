@@ -85,6 +85,10 @@ Start:
   script and CLAUDE.md's Commands; the real-window project's link to `Phase6Expectations*.cs`; a
   fixed port of its own for a test git server, if the bulk-fetch checks use one (amending D97 as
   D150 did); the driver helpers the checks need.
+  (WP-L done in `8dca0d3`. WP0, the lead's contracts, stubs and call points of the design's
+  section 18, done in the main checkout on 2026-10-18 in five commits, the last `8e79628`: no
+  change of behaviour or pictures; the default run 3,235 of 3,236 in 39 min 4 s, the one failure
+  a load-sensitive `ShellDriverTests` case that passes alone.)
 - [ ] 6. Phase 6's visual checks written into `docs/test-reports/phase-6.md`, each marked for the
   real-window pass or not, reviewed independently, and committed before the UI they test.
 
@@ -244,10 +248,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5, in the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-L is done (the
-commit that removes `MSYSTEM` in the tests' isolation). Next: WP0, the lead's contracts, stubs and
-call points in the main checkout (section 18, "WP0's contracts"), with no change of behaviour or
-pictures; then wave 1 (WP-S, WP1 and WP2 first, at most three built worktrees at once).
+Step 5, in the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-L and WP0 are
+done (WP0's last commit `8e79628`). Next: wave 1, WP-S, WP1 and WP2 first (at most three built
+worktrees at once), then WP3 and WP4 as worktrees free. Before them the lead renames the alias
+of WP-L's test `GitIsolationTests.The_shell_that_started_the_tests_does_not_reach_them_and_git_sets_its_own`,
+which fails on CI's Linux and macOS jobs since `8dca0d3`: there `git shell` is git's own
+`git-shell`, so an alias named `shell` never runs.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
