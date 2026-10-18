@@ -238,11 +238,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: the design's first version is committed (`docs/phase-6-design.md`, `9d6d2e3`); its six
+Step 3: the design's first version is committed (`docs/phase-6-design.md`, `9d6d2e3`). Its six
 independent reviews (git safety, code fit, what the user sees, tests and gate, performance and
-threads, completeness), each finding checked by an adversarial verifier, run now. Then: revise the
-design from every confirmed finding, put the four questions of taste (the design's M1 to M4, and
-any the reviews raise) to the owner, record the design's decisions (from D195) in `decisions.md`.
+threads, completeness) found 93 problems; each was checked by an adversarial verifier: 91 confirmed
+or partly (1 blocker, 10 major), 2 refuted. The owner answered eight questions of taste on
+2026-10-18 (D195 to D202, recorded). The design is being revised from every confirmed finding and
+the answers (the design's own decisions renumbered D203 to D230); then commit it, record D203 to
+D230 in `decisions.md` and tick step 3.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
