@@ -118,8 +118,11 @@ public class GitConfigLocationsTests
     public async Task Git_writes_global_where_the_rule_predicts(string name)
     {
         using var lab = new TempDirectory("where");
-        var isolationFile = Path.Combine(GitIsolation.CeilingDirectory, "isolation", "gitconfig");
-        var isolationBefore = File.ReadAllText(isolationFile);
+
+        // The test process's own global file, whatever the isolation names (a file in a folder nobody
+        // makes, 17.2), must stay as it was: missing, or with its text.
+        var processGlobal = Environment.GetEnvironmentVariable(GitConfigLocations.GlobalVariable);
+        var processGlobalBefore = TextOf(processGlobal);
         var home = lab.Combine("home");
         var xdg = lab.Combine("xdg");
         var share = lab.Combine("share");
@@ -202,8 +205,11 @@ public class GitConfigLocationsTests
             .Where(file => File.ReadAllText(file).Contains(marker, StringComparison.Ordinal))
             .ToList();
         Assert.Equal(new[] { Path.GetFullPath(predicted) }, written.Select(Path.GetFullPath).ToArray());
-        Assert.Equal(isolationBefore, File.ReadAllText(isolationFile));
+        Assert.Equal(processGlobalBefore, TextOf(processGlobal));
     }
+
+    /// <summary>A file's text, or null when there is no such file (or no name).</summary>
+    private static string? TextOf(string? file) => file is { Length: > 0 } && File.Exists(file) ? File.ReadAllText(file) : null;
 
     private static string Touch(string file)
     {
