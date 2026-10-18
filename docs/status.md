@@ -65,7 +65,10 @@ Start:
 - [ ] 4. Leftovers named in phase 5's handoff: the real-window csproj's stale comment on the pass's
   length; `scripts/time-scripted-check.sh` for phase 6; plan risk 28 (seven fetch and pull tests
   that fail locally with Visual Studio's Git 2.55) understood before fetch and pull change for the
-  dashboard.
+  dashboard. (Risk 28 explained on 2026-10-18: Visual Studio's Git has no `git http-backend`, which
+  the test server `AuthRemoteServer` runs; 6 of 49 fetch, pull, push and remotes tests failed with
+  it, all against that server; plan risk 28. Still to do in the first code commit: the server says
+  so when it starts, the csproj comment, the timing script.)
 - [ ] 5. Harness: phase 6's scenario repositories (a workspace of ten repositories in mixed
   states: clean, ahead, behind, diverged, uncommitted changes, a conflict in progress, detached,
   no upstream, no remote, a folder that is gone; a fetch refspec that maps names differently),
