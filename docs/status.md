@@ -105,21 +105,32 @@ Start:
 Git layer and Core:
 
 - [ ] 7. Workspaces (repository groups): the model, where they are kept, add, remove, rename,
-  and opening one. Tests.
+  and opening one. Tests. (WP4's part merged in `1d99be3`: `WorkspacePaths`, `WorkspaceEdits`,
+  `RepositoryScanner`, `JsonWorkspaceStore`, `TabState.WorkspaceId`; the session keeps them in
+  `workspaces.json`, `fef0569`. WP-W's commands and screens: wave 2.)
 - [ ] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
   changes, an operation in progress), read cheaply for ten repositories without opening them as
-  tabs. Tests.
+  tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode: wave 2.)
 - [ ] 9. Bulk fetch and pull through each repository's `OperationQueue` (D81), with the
   toolbar's titles, Cancel and error dialog; what is recorded for undo and where the activity
-  log shows it. Tests.
-- [ ] 10. The settings that are git's own, read and written through git's configuration: the
+  log shows it. Tests. (WP4's `OperationQueue.Cancel`, prompt groups and `MaxConnections` 16
+  merged; WP-B: wave 2.)
+- [x] 10. The settings that are git's own, read and written through git's configuration: the
   identity, the pull mode (`pull.rebase`, `pull.ff`, `branch.<name>.rebase`, D78, D84), the merge
-  tool (`merge.tool`, D149). Tests, the pull-parity tests unchanged.
+  tool (`merge.tool`, D149). Tests, the pull-parity tests unchanged. (WP2, built, reviewed and
+  fixed, merged in `5b8b7a8`: the two reads that keep conditional includes out of the global
+  fields, the writes, read-back and locks, the pull modes, Pull reading its configuration before
+  the fetch (D219) and the chosen rebase's `pull.ff` (D231), the merge-tool list kept in the data
+  folder (D202); the parity tests pass unchanged.)
 - [ ] 11. `remote.<r>.fetch` read: `DropFacts.RemoteMapsBranchesDifferently` set, and the push of
   a drop onto a remote branch and "Delete <b> on <r>…" act on the branch's name on the remote.
-  Tests.
+  Tests. (WP3's mapping merged in `3146d8d`: `FetchRefspecs`, the refs read's one `git config`
+  call, `RemoteName` from the mapping, parity tests against git; WP-RA's menus: wave 2.)
 - [ ] 12. Whether every checkout keeps ignored files (`--no-overwrite-ignore`, design 14.2 of
-  phase 5, D179), as the owner decides. Tests.
+  phase 5, D179), as the owner decides. Tests. (Decided: D193, D196, D221. WP1's git half merged
+  in `31f525b`: the option on checkouts and merges, the app's check before every covered merge,
+  rebase, pick, revert and stash apply, including the `--rebase-merges` branch points; WP-IA:
+  wave 2.)
 
 App:
 
@@ -258,12 +269,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 1 in the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-S, WP1 and WP2
-are merged (`80fc877`, `31f525b`, `5b8b7a8`), their worktrees removed; WP3 and WP4 are being built,
-reviewed and fixed in worktrees of their own. Next: step 6, the report's checks written into
-`docs/test-reports/phase-6.md` from the design's 17.4 (WP-S's scenarios are merged, so its writers
-can start), reviewed independently, committed before any UI they test; then merge WP3 and WP4 and
-start wave 2.
+Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, `3146d8d`,
+`1d99be3`), their worktrees removed. The default run after it found two test problems, fixed in
+`80689ef` (a slow program's wait with a limit of its own; an undo test that took WP3's config read
+for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Next: step
+6, the report's checks, being written by a workflow (scenario facts, parts W, K, S, G and L each
+reviewed and revised, then assembled); commit it as `docs/test-reports/phase-6.md` before any UI it
+tests is merged; then wave 2 (WP-W, WP-D and WP-T first, at most three built worktrees at once).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
