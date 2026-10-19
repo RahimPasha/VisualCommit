@@ -78,7 +78,7 @@ Start:
   now fails at its start with a message naming the missing `http-backend`; the csproj comment says
   25 minutes for phases 0 to 5; the timing script sends phase 6 and later to their own project.
   Removing `MSYSTEM` in the tests' isolation goes with the design's isolation changes.)
-- [ ] 5. Harness: phase 6's scenario repositories (a workspace of ten repositories in mixed
+- [x] 5. Harness: phase 6's scenario repositories (a workspace of ten repositories in mixed
   states: clean, ahead, behind, diverged, uncommitted changes, a conflict in progress, detached,
   no upstream, no remote, a folder that is gone; a fetch refspec that maps names differently),
   pinned by tests; the project `VisualCommit.VisualTests.Phase6` in the solution; the timing
@@ -88,7 +88,17 @@ Start:
   (WP-L done in `8dca0d3`. WP0, the lead's contracts, stubs and call points of the design's
   section 18, done in the main checkout on 2026-10-18 in five commits, the last `8e79628`: no
   change of behaviour or pictures; the default run 3,235 of 3,236 in 39 min 4 s, the one failure
-  a load-sensitive `ShellDriverTests` case that passes alone.)
+  a load-sensitive `ShellDriverTests` case that passes alone. WP-S merged in `80fc877` (built,
+  reviewed and fixed in its own worktree): the scenarios pinned by `Phase6ScenarioTests`, the
+  folder server on port 47393, `FetchHold`, the per-session git environment and its tripwire,
+  `FakeSystemTheme`, the fixed tool catalogues, below-normal priority for the merge-tool lookup, the
+  project `VisualCommit.VisualTests.Phase6`, the timing script's default of 6, the hook samples
+  left out of `TempRepo`'s blank git folders (200 copies 7.8 to 8.4 s with them, 3.8 to 4.5 s
+  without); its default run, rested: 3,299 of 3,299 in 43 min 33 s (43 min 49 s for 3,236 before
+  it). 17.3's measurement: `VisualCommit.App.Tests` alone 21 min 16 s, its 449 headless tests 8 min
+  26 s (40 %), so phase 6's view tests go into it by subject, no project of their own. Left to the
+  lead: `Phase6Checks.Support.cs`' dashboard and theme helpers, once WP-D, WP-W and WP-T are
+  merged and before WP-V's parts W, S and L.)
 - [ ] 6. Phase 6's visual checks written into `docs/test-reports/phase-6.md`, each marked for the
   real-window pass or not, reviewed independently, and committed before the UI they test.
 
@@ -248,12 +258,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 5, in the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-L and WP0 are
-done (WP0's last commit `8e79628`). Next: wave 1, WP-S, WP1 and WP2 first (at most three built
-worktrees at once), then WP3 and WP4 as worktrees free. Before them the lead renames the alias
-of WP-L's test `GitIsolationTests.The_shell_that_started_the_tests_does_not_reach_them_and_git_sets_its_own`,
-which fails on CI's Linux and macOS jobs since `8dca0d3`: there `git shell` is git's own
-`git-shell`, so an alias named `shell` never runs.
+Wave 1 in the design's order (`docs/phase-6-design.md` section 18, "Order"): WP-S, WP1 and WP2
+are merged (`80fc877`, `31f525b`, `5b8b7a8`), their worktrees removed; WP3 and WP4 are being built,
+reviewed and fixed in worktrees of their own. Next: step 6, the report's checks written into
+`docs/test-reports/phase-6.md` from the design's 17.4 (WP-S's scenarios are merged, so its writers
+can start), reviewed independently, committed before any UI they test; then merge WP3 and WP4 and
+start wave 2.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.

@@ -263,9 +263,9 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
-| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`; phase 5 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase5` (parts A, B, F and P) and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (part U, the undo checks). To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
-| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3), `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4), `dotnet test --project tests/VisualCommit.VisualTests.Phase5` and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (phase 5) |
-| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 5 when left out; for phase 5 it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`; phase 5 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase5` (parts A, B, F and P) and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (part U, the undo checks); phase 6 has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase6` (one part of it: `--filter-class "*Phase6ChecksW"`, parts W, K, S, G and L). To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
+| Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3), `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4), `dotnet test --project tests/VisualCommit.VisualTests.Phase5` and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (phase 5), `dotnet test --project tests/VisualCommit.VisualTests.Phase6` (phase 6) |
+| Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 6 when left out, which runs `VisualCommit.VisualTests.Phase6`; for phase 5, given as `5`, it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
@@ -283,8 +283,9 @@ What to know about them:
   while the Windows machine and most CI jobs use newer ones.
 - The default tests take about 45 minutes on the Windows machine with nothing else running (43 min
   22 s at phase 5's gate on 2026-10-16, alone, 3,233 tests; 21 min 52 s at phase 4's, 2,411 tests).
-  The seven test projects run side by side (phase 5 added its two walk-throughs and an undo history
-  whose reads every operation makes), and the run is bound by the processors,
+  Eight test projects run side by side since phase 6 added its walk-through (phase 5 added two and
+  an undo history whose reads every operation makes; after phase 6's harness, rested, 43 min 33 s
+  for 3,299 tests on 2026-10-19), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it. In that run, side by side, the projects ended
   after: phases 0 to 2's walk-through 12 min 8 s, the phase 4 walk-through 26 min 15 s, the phase
@@ -312,8 +313,8 @@ What to know about them:
   and commits it once the inspection has passed.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
   app on the desktop and moves the real mouse for about 25 minutes (phases 0 to 5): tell the
-  owner before starting it, and run it only as part of the gate. It needs an unlocked desktop
-  and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
+  owner before starting it, and run it only as part of the gate. It needs an unlocked desktop,
+  Windows' high contrast off and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
   `dotnet build` at the root does not rebuild it, and a stale build of the pass would run. Its
   screenshots, the pictures of the differences and `run.txt` (scaling, sizes, how much each

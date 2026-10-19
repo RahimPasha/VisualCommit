@@ -102,15 +102,13 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     /// The XDG file git reads before the global file when <c>GIT_CONFIG_GLOBAL</c> is unset
     /// (<see cref="GitConfigLocations.XdgConfigFile"/>), as a full path, for 8.2's naming
     /// (<c>git/config under XDG_CONFIG_HOME</c>, <c>.config/git/config</c> in the home folder); empty
-    /// without a home folder. Worked out as <see cref="GlobalFile"/> is. Not part of
-    /// <see cref="IGitConfiguration"/> yet.
+    /// without a home folder. Worked out as <see cref="GlobalFile"/> is.
     /// </summary>
     public string XdgFile => _xdgFile ??= WorkOutXdgFile();
 
     /// <summary>
     /// A variable of the environment git gets: the session's (8.12) over the process's; null when
-    /// unset or removed. What 8.6's notices read (<c>GIT_AUTHOR_NAME</c>, <c>EMAIL</c>). Not part of
-    /// <see cref="IGitConfiguration"/> yet.
+    /// unset or removed. What 8.6's notices read (<c>GIT_AUTHOR_NAME</c>, <c>EMAIL</c>).
     /// </summary>
     public string? Variable(string name)
     {

@@ -6,7 +6,7 @@ namespace VisualCommit.Core.Git;
 /// in the app's files. Built in the Git project over the session's runner; one instance per
 /// session (<c>TabServices.GitSettings</c>). Work package WP2 builds it.
 /// </summary>
-public interface IGitConfiguration
+public interface IGitConfiguration : IDisposable
 {
     /// <summary>
     /// Every value git reads, with its scope and file: one <c>git config --show-scope
@@ -20,6 +20,18 @@ public interface IGitConfiguration
 
     /// <summary>The file <c>git config --global</c> writes (8.2), worked out by the app, never asked of git.</summary>
     string GlobalFile { get; }
+
+    /// <summary>
+    /// The XDG file git reads before the global file when <c>GIT_CONFIG_GLOBAL</c> is unset, as a
+    /// full path, for 8.2's naming of files; empty without a home folder.
+    /// </summary>
+    string XdgFile { get; }
+
+    /// <summary>
+    /// A variable of the environment git gets, the session's (8.12) over the process's; null when
+    /// unset or removed. What 8.6's notices read (<c>GIT_AUTHOR_NAME</c>, <c>EMAIL</c>).
+    /// </summary>
+    string? Variable(string name);
 
     /// <summary>The global writes, in order, one git call each, one save at a time across the app (8.3); the first failure stops them and throws <see cref="GitException"/>.</summary>
     Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default);

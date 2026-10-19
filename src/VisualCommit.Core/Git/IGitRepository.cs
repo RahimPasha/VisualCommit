@@ -337,6 +337,9 @@ public interface IGitRepository
     /// The ignored files in the way of rebasing <paramref name="tip"/> (<c>HEAD</c>, or a branch's
     /// full ref before "Check out and rebase"'s checkout) onto <paramref name="onto"/> (9.6): what
     /// git's first checkout of <paramref name="onto"/> and the commits it may replay write.
+    /// When the range holds a merge, also what the commits a <c>--rebase-merges</c> rebase resets
+    /// to (the side branches' original branch points) track: git may keep merges by
+    /// <c>rebase.rebaseMerges</c> (Git 2.42 and later) even in a plain <c>git rebase</c>.
     /// </summary>
     Task<IReadOnlyList<string>> FindIgnoredInTheWayOfRebaseAsync(string tip, string onto, CancellationToken cancellationToken = default);
 
@@ -597,7 +600,9 @@ public interface IGitRepository
     /// <see cref="IntegratePullAsync(GitRef, NetworkOptions?, CancellationToken)"/>;
     /// <see cref="PullIntegration.Rebase"/> is <c>git merge --ff-only &lt;head&gt;</c> when the
     /// branch has nothing of its own, otherwise <c>git rebase</c> without arguments (from the
-    /// upstream's fork point, as <c>git pull --rebase</c>), git's pull settings not read. Before
+    /// upstream's fork point, as <c>git pull --rebase</c>): of git's pull settings it reads
+    /// <c>pull.ff</c> alone and refuses a value <c>git pull --rebase</c> refuses (D231), and no rebase
+    /// setting. Before
     /// either rebases, <paramref name="beforeRebase"/> is called with the branch's old tip (the
     /// app saves 1.2's backup there). Both pulls classify a rebase with 1.4's rules: every stop is
     /// <see cref="PullOutcome.Conflicts"/>. <paramref name="pullOptions"/> (docs/phase-6-design.md
