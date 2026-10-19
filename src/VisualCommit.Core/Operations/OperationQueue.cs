@@ -157,6 +157,8 @@ public sealed class OperationQueue : IOperationQueue
 
             if (operation.DedupeKey is { } key && FindByKey(key) is { } same)
             {
+                // Kept, so that Cancel of this operation cancels the one it shares (docs/phase-6-design.md 4.5).
+                same.Merged.Add(operation);
                 return same.Completion.Task;
             }
 
@@ -263,10 +265,69 @@ public sealed class OperationQueue : IOperationQueue
     }
 
     /// <summary>
-    /// Cancels one operation (docs/phase-6-design.md 4.5). Does nothing yet: work package WP4
-    /// gives it 4.5's table, and no caller passes a cancellation before then.
+    /// Cancels one operation (docs/phase-6-design.md 4.5), whatever else the queue holds: a waiting
+    /// one is removed and completes as cancelled without running, as <see cref="DropWaiting"/> does;
+    /// a running one is cancelled as <see cref="CancelCurrent"/> does while it can be
+    /// (<see cref="CanCancel"/>: its token, then the scan for stale lock files), and otherwise runs to
+    /// its end (D81). An operation that D123's dedupe merged into an entry (<see cref="RunAsync"/>)
+    /// stands for that entry, so both callers get the cancelled result. A background operation, and
+    /// one the queue no longer holds, are left alone.
     /// </summary>
-    public void Cancel(GitOperation operation) => ArgumentNullException.ThrowIfNull(operation);
+    public void Cancel(GitOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        Entry? dropped = null;
+        CancellationTokenSource? cancellation;
+        List<TaskCompletionSource>? idle = null;
+        lock (_gate)
+        {
+            if (_disposed || operation.IsBackground)
+            {
+                return;
+            }
+
+            for (var node = _waiting.First; node is not null; node = node.Next)
+            {
+                if (node.Value.Holds(operation))
+                {
+                    dropped = node.Value;
+                    _waiting.Remove(node);
+                    break;
+                }
+            }
+
+            if (dropped is not null)
+            {
+                cancellation = null;
+                if (_running is null && _waiting.Count == 0)
+                {
+                    idle = TakeIdleWaiters();
+                }
+            }
+            else if (_running is { } running && running.Holds(operation) && !running.Operation.IsBackground && CanCancel(running))
+            {
+                running.CancelRequested = true;
+                cancellation = running.Cancellation;
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        if (dropped is not null)
+        {
+            _log.Info($"{_repositoryName}: {dropped.Operation.Title}: cancelled before it started.");
+            dropped.Completion.TrySetResult(CancelledResult(dropped.Operation));
+            RaiseChanged();
+            idle?.ForEach(waiter => waiter.TrySetResult());
+            return;
+        }
+
+        _log.Info($"{_repositoryName}: cancelling {operation.Title}.");
+        cancellation?.Cancel();
+        RaiseChanged();
+    }
 
     /// <summary>
     /// Closing the tab (1.8): the waiting operations end as cancelled without running; a running
@@ -806,6 +867,12 @@ public sealed class OperationQueue : IOperationQueue
     {
         public GitOperation Operation { get; } = operation;
 
+        /// <summary>
+        /// The operations merged into this one by their dedupe key while it waited (D123), changed
+        /// under the gate: <see cref="Cancel"/> of any of them cancels this one (docs/phase-6-design.md 4.5).
+        /// </summary>
+        public List<GitOperation> Merged { get; } = [];
+
         /// <summary>Where the operation runs: the synchronization context of the call that queued it.</summary>
         public SynchronizationContext? Context { get; } = context;
 
@@ -845,5 +912,13 @@ public sealed class OperationQueue : IOperationQueue
         public DateTimeOffset DisplayedStart { get; set; }
 
         public long DisplayedTimestamp { get; set; }
+
+        /// <summary>
+        /// Whether <paramref name="operation"/> is this entry's operation or one merged into it,
+        /// compared as objects (a <see cref="GitOperation"/> is a record, whose equality compares
+        /// values). Call it under the gate.
+        /// </summary>
+        public bool Holds(GitOperation operation) =>
+            ReferenceEquals(Operation, operation) || Merged.Exists(merged => ReferenceEquals(merged, operation));
     }
 }

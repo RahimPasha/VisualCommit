@@ -308,7 +308,7 @@ public class AskPassTests
     [Fact]
     public async Task Several_prompts_at_once_in_different_scopes_are_all_answered()
     {
-        // More helpers than the pipe has instances (four): the others wait for a free one.
+        // More helpers than the pipe has instances (16): the others wait for a free one.
         using var repo = await TempRepo.CreateAsync();
         var handler = new AnswerByScopeHandler();
         using var broker = new AskPassBroker(handler);
@@ -331,6 +331,60 @@ public class AskPassTests
         {
             scopes.ForEach(scope => scope.Dispose());
         }
+    }
+
+    [Fact]
+    public async Task Six_prompts_held_at_once_all_reach_the_handler()
+    {
+        // docs/phase-6-design.md 4.4, D210: a bulk run's four git processes wait for their prompt
+        // group's turn, each holding its connection, with a tab's own prompts beside them. The
+        // handler answers no user name until all six have arrived, so all six are connected at
+        // once; with four connections the fifth and sixth helpers gave up after 5 s and their git
+        // failed as refused.
+        using var repo = await TempRepo.CreateAsync();
+        var handler = new AnswerWhenAllHaveArrivedHandler(6);
+        using var broker = new AskPassBroker(handler);
+        var scopes = Enumerable.Range(1, 6)
+            .Select(n => broker.Begin("Fetch", "repo", PromptMode.Ask, $"op-held-{n}"))
+            .ToList();
+        try
+        {
+            var results = await Task.WhenAll(scopes.Select(scope =>
+                GitAsync(repo, scope.Environment, ["credential", "fill"], CredentialRequest("https", "example.com"))));
+
+            for (var i = 0; i < scopes.Count; i++)
+            {
+                Assert.True(results[i].Succeeded, results[i].StandardError);
+                Assert.Equal($"user-op-held-{i + 1}", CredentialValue(results[i].StandardOutput, "username"));
+                Assert.Equal($"secret-op-held-{i + 1}", CredentialValue(results[i].StandardOutput, "password"));
+            }
+
+            Assert.Equal(6, handler.MostWaitingAtOnce);
+        }
+        finally
+        {
+            scopes.ForEach(scope => scope.Dispose());
+        }
+    }
+
+    [Fact]
+    public async Task A_scope_with_a_prompt_group_puts_it_in_each_of_its_prompts()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        using var group = new PromptGroup();
+        var handler = new RecordingPromptHandler(PromptAnswer.Of("alice"), PromptAnswer.Of("s3cret"), PromptAnswer.Of("bob"), PromptAnswer.Of("pw"));
+        using var broker = new AskPassBroker(handler);
+        using var grouped = broker.Begin("Fetch", "api", PromptMode.Ask, "op-grouped", group);
+        using var alone = broker.Begin("Fetch", "web", PromptMode.Ask, "op-alone");
+
+        var first = await GitAsync(repo, grouped.Environment, ["credential", "fill"], CredentialRequest("https", "example.com"));
+        var second = await GitAsync(repo, alone.Environment, ["credential", "fill"], CredentialRequest("https", "example.com"));
+
+        Assert.True(first.Succeeded, first.StandardError);
+        Assert.True(second.Succeeded, second.StandardError);
+        Assert.Equal<(string, PromptGroup?)>(
+            [("op-grouped", group), ("op-grouped", group), ("op-alone", null), ("op-alone", null)],
+            handler.Prompts.Select(prompt => (prompt.ScopeId, prompt.Group)));
     }
 
     [Fact]
@@ -479,5 +533,53 @@ public class AskPassTests
         public Task<PromptAnswer> AnswerAsync(GitPrompt prompt, CancellationToken cancellationToken) =>
             Task.FromResult(PromptAnswer.Of(
                 prompt.Kind == GitPromptKind.Username ? "user-" + prompt.ScopeId : "secret-" + prompt.ScopeId));
+    }
+
+    /// <summary>
+    /// Holds every user name prompt until <paramref name="count"/> of them wait at once, then
+    /// answers them all as <see cref="AnswerByScopeHandler"/> does; a password at once. A prompt
+    /// still held after <see cref="PromptTestSupport.StepTimeout"/> is refused, so that the test
+    /// fails instead of hanging.
+    /// </summary>
+    private sealed class AnswerWhenAllHaveArrivedHandler(int count) : IGitPromptHandler
+    {
+        private readonly TaskCompletionSource _allArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _waiting;
+        private int _most;
+
+        public int MostWaitingAtOnce => Volatile.Read(ref _most);
+
+        public async Task<PromptAnswer> AnswerAsync(GitPrompt prompt, CancellationToken cancellationToken)
+        {
+            if (prompt.Kind != GitPromptKind.Username)
+            {
+                return PromptAnswer.Of("secret-" + prompt.ScopeId);
+            }
+
+            var now = Interlocked.Increment(ref _waiting);
+            int most;
+            while ((most = Volatile.Read(ref _most)) < now && Interlocked.CompareExchange(ref _most, now, most) != most)
+            {
+            }
+
+            if (now == count)
+            {
+                _allArrived.TrySetResult();
+            }
+
+            try
+            {
+                await _allArrived.Task.WaitAsync(StepTimeout, cancellationToken);
+                return PromptAnswer.Of("user-" + prompt.ScopeId);
+            }
+            catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+            {
+                return PromptAnswer.Refused;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _waiting);
+            }
+        }
     }
 }
