@@ -53,8 +53,8 @@ public interface IWorkspaceStore
 
 /// <summary>
 /// Workspaces kept in memory only, never saved: <c>TabServices</c>' store when it is given none
-/// (view-model tests), and the session's until the file store (work package WP4,
-/// docs/phase-6-design.md 1.3) takes its place. Never read-only, never a notice, never a failed save.
+/// (view-model tests); the session keeps them in <c>workspaces.json</c> (<c>JsonWorkspaceStore</c>,
+/// docs/phase-6-design.md 1.3). Never read-only, never a notice, never a failed save.
 /// </summary>
 public sealed class InMemoryWorkspaceStore(WorkspaceList? initial = null) : IWorkspaceStore
 {

@@ -72,8 +72,8 @@ public sealed class AppSession : IDisposable
     public ISessionStore SessionState { get; }
 
     /// <summary>
-    /// The user's workspaces (D189, docs/phase-6-design.md 1.3): kept in memory until work package
-    /// WP4's <c>JsonWorkspaceStore</c> keeps them in <c>workspaces.json</c>.
+    /// The user's workspaces (D189, docs/phase-6-design.md 1.3), kept in <c>workspaces.json</c> by
+    /// <c>JsonWorkspaceStore</c>.
     /// </summary>
     public IWorkspaceStore Workspaces { get; }
 
@@ -165,8 +165,8 @@ public sealed class AppSession : IDisposable
 
         var session = new JsonSessionStore(paths.SessionFile, log);
 
-        // The workspaces (1.3), after the session; in memory until work package WP4's file store.
-        var workspaces = new InMemoryWorkspaceStore();
+        // The workspaces (1.3, D189), after the session: workspaces.json beside it.
+        var workspaces = new JsonWorkspaceStore(paths.WorkspacesFile, log);
 
         // An operation's git calls are kept as long as its record (docs/phase-5-design.md 2.3).
         var operations = new OperationLog();
