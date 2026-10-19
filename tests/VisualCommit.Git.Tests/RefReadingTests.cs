@@ -188,6 +188,215 @@ public class RefReadingTests
         Assert.Equal(new HeadState("main", main.TargetSha), refs.Head);
     }
 
+    [Fact]
+    public async Task Reads_every_remotes_fetch_lines_with_the_refs_in_gits_reading_order()
+    {
+        // Design 10.2: a remote name with dots keeps its case, a second section of one remote
+        // comes later in the order, and the remotes are sorted as before.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.ConfigAsync("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+        await repo.ConfigAsync("remote.Team.Dot.x.url", Sibling(repo, "team.git"));
+        await repo.ConfigAsync("remote.Team.Dot.x.fetch", "+refs/heads/*:refs/remotes/Team.Dot.x/*");
+        File.AppendAllText(
+            Path.Combine(repo.Path, ".git", "config"),
+            "[remote \"origin\"]\n\tfetch = refs/heads/main:refs/remotes/origin/trunk\n\tfetch = ^refs/heads/secret\n");
+        await repo.GitAsync("update-ref", "refs/remotes/Team.Dot.x/main", "HEAD");
+
+        var refs = await (await OpenAsync(repo)).ReadRefsAsync(TestCancelled);
+
+        Assert.Equal(["Team.Dot.x", "origin"], refs.Remotes);
+        Assert.NotNull(refs.Refspecs);
+        Assert.Equal(
+            [
+                new FetchRefspec("origin", "refs/heads/*", "refs/remotes/origin/*", false, true),
+                new FetchRefspec("Team.Dot.x", "refs/heads/*", "refs/remotes/Team.Dot.x/*", false, true),
+                new FetchRefspec("origin", "refs/heads/main", "refs/remotes/origin/trunk", false, false),
+                new FetchRefspec("origin", "refs/heads/secret", null, true, false),
+            ],
+            refs.Refspecs.Lines);
+        Assert.Equal(RemoteSourceKind.AmbiguousRefs, refs.SourceOf("refs/remotes/origin/trunk").Kind);
+        Assert.Equal(RemoteSourceKind.NotFetched, refs.SourceOf("refs/remotes/origin/secret").Kind);
+        var dotted = Assert.Single(refs.Refs, gitRef => gitRef.Kind == RefKind.RemoteBranch);
+        Assert.Equal(new GitRef("refs/remotes/Team.Dot.x/main", "Team.Dot.x/main", RefKind.RemoteBranch, await repo.HeadAsync(), RemoteName: "Team.Dot.x"), dotted);
+        Assert.Equal((RemoteSourceKind.Mapped, "Team.Dot.x", "refs/heads/main"), Source(refs.SourceOf(dotted)));
+    }
+
+    [Fact]
+    public async Task Reads_global_fetch_lines_before_the_repositorys_own_as_git_fetches_with_both()
+    {
+        // Not --local (10.2): git fetches with a global line too, and prints it first.
+        using var lab = new ConfigLab();
+        lab.WriteGlobal("[remote \"origin\"]\n\tfetch = +refs/pull/*/head:refs/remotes/origin/pr/*\n[remote \"everywhere\"]\n\turl = x\n");
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.ConfigAsync("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+
+        var refs = await (await lab.OpenAsync(repo)).ReadRefsAsync(TestCancelled);
+        var gitRemote = await lab.Runner.RunAsync(new GitCommand("remote") { WorkingDirectory = repo.Path }, TestCancelled);
+
+        Assert.Equal(
+            [
+                new FetchRefspec("origin", "refs/pull/*/head", "refs/remotes/origin/pr/*", false, true),
+                new FetchRefspec("origin", "refs/heads/*", "refs/remotes/origin/*", false, true),
+            ],
+            refs.Refspecs!.Lines);
+        Assert.Equal(["everywhere", "origin"], refs.Remotes);
+        Assert.Equal(GitRemoteNames(gitRemote), refs.Remotes);
+        Assert.Equal(RemoteSourceKind.AmbiguousRefs, refs.SourceOf("refs/remotes/origin/pr/1").Kind);
+    }
+
+    [Fact]
+    public async Task No_fetch_line_gives_empty_refspecs_not_null()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        var repository = await OpenAsync(repo);
+
+        var none = await repository.ReadRefsAsync(TestCancelled);
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.GitAsync("update-ref", "refs/remotes/origin/main", "HEAD");
+        var urlOnly = await repository.ReadRefsAsync(TestCancelled);
+
+        Assert.Empty(none.Remotes);
+        Assert.NotNull(none.Refspecs);
+        Assert.Empty(none.Refspecs.Lines);
+
+        // G: a remote without a fetch line fetches no tracking ref; its remote is today's guess.
+        Assert.Equal(["origin"], urlOnly.Remotes);
+        Assert.NotNull(urlOnly.Refspecs);
+        Assert.Empty(urlOnly.Refspecs.Lines);
+        var tracking = Assert.Single(urlOnly.Refs, gitRef => gitRef.Kind == RefKind.RemoteBranch);
+        Assert.Equal("origin", tracking.RemoteName);
+        Assert.Equal(RemoteSourceKind.NotFetched, urlOnly.SourceOf(tracking).Kind);
+        Assert.Null(urlOnly.LocalNameOf(tracking));
+    }
+
+    [Fact]
+    public async Task A_remote_branch_takes_the_remote_whose_line_fills_it_and_the_longest_name_when_two_or_none_do()
+    {
+        // 10.3: B2's namespace without the remote's name gets the remote that fetches it; a ref no
+        // line fills, or one two remotes fill (T, as in the first test), keeps the longest
+        // configured name, else its first part.
+        using var repo = await TempRepo.CreateAsync();
+        var head = await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.ConfigAsync("remote.origin.fetch", "+refs/heads/*:refs/remotes/mirror/*");
+        await repo.ConfigAsync("remote.team.url", Sibling(repo, "team.git"));
+        await repo.ConfigAsync("remote.team.fetch", "+refs/heads/*:refs/remotes/team/*");
+        await repo.ConfigAsync("remote.team/fork.url", Sibling(repo, "fork.git"));
+        await repo.ConfigAsync("remote.team/fork.fetch", "+refs/heads/*:refs/remotes/team/fork/*");
+        await repo.ConfigAsync("remote.pulls.url", Sibling(repo, "pulls.git"));
+        await repo.ConfigAsync("remote.pulls.fetch", "+refs/heads/*:refs/remotes/pulls/*");
+        await repo.GitAsync("config", "--add", "remote.pulls.fetch", "+refs/pull/*/head:refs/remotes/pulls/pr/*");
+        foreach (var name in new[] { "mirror/main", "origin/stray", "team/fork/main", "team/main", "pulls/pr/1", "gone/topic" })
+        {
+            await repo.GitAsync("update-ref", "refs/remotes/" + name, head);
+        }
+
+        var refs = await (await OpenAsync(repo)).ReadRefsAsync(TestCancelled);
+
+        Assert.Equal(["origin", "pulls", "team", "team/fork"], refs.Remotes);
+        Assert.Equal(
+            [
+                ("refs/remotes/gone/topic", "gone"),
+                ("refs/remotes/mirror/main", "origin"),
+                ("refs/remotes/origin/stray", "origin"),
+                ("refs/remotes/pulls/pr/1", "pulls"),
+                ("refs/remotes/team/fork/main", "team/fork"),
+                ("refs/remotes/team/main", "team"),
+            ],
+            refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch).Select(gitRef => (gitRef.FullName, gitRef.RemoteName)));
+        Assert.Equal("main", refs.LocalNameOf(refs.Refs.Single(gitRef => gitRef.FullName == "refs/remotes/mirror/main")));
+        Assert.Equal("pr/1", refs.LocalNameOf(refs.Refs.Single(gitRef => gitRef.FullName == "refs/remotes/pulls/pr/1")));
+        Assert.Null(refs.LocalNameOf(refs.Refs.Single(gitRef => gitRef.FullName == "refs/remotes/team/fork/main")));
+    }
+
+    [Fact]
+    public async Task The_remotes_are_those_git_remote_lists()
+    {
+        // 0.5's "names and lines in one read": a dotted name whole, a remote with only prune, a
+        // remote.pushDefault and a legacy .git/remotes or .git/branches file, which both leave out.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.Team.Dot.x.url", Sibling(repo, "team.git"));
+        await repo.ConfigAsync("remote.Team.Dot.x.fetch", "+refs/heads/*:refs/remotes/Team.Dot.x/*");
+        await repo.ConfigAsync("remote.onlyprune.prune", "true");
+        await repo.ConfigAsync("remote.onlypushurl.pushurl", Sibling(repo, "push.git"));
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.ConfigAsync("remote.pushDefault", "origin");
+        Directory.CreateDirectory(Path.Combine(repo.Path, ".git", "remotes"));
+        File.WriteAllText(Path.Combine(repo.Path, ".git", "remotes", "legacyfile"), "URL: " + Sibling(repo, "legacy.git") + "\nPull: +refs/heads/*:refs/remotes/legacyfile/*\n");
+        Directory.CreateDirectory(Path.Combine(repo.Path, ".git", "branches"));
+        File.WriteAllText(Path.Combine(repo.Path, ".git", "branches", "legacybranch"), Sibling(repo, "legacy.git") + "\n");
+
+        var refs = await (await OpenAsync(repo)).ReadRefsAsync(TestCancelled);
+
+        Assert.Equal(["Team.Dot.x", "onlyprune", "onlypushurl", "origin"], refs.Remotes);
+        Assert.Equal(GitRemoteNames(await repo.GitAsync("remote")), refs.Remotes);
+        Assert.Equal([new FetchRefspec("Team.Dot.x", "refs/heads/*", "refs/remotes/Team.Dot.x/*", false, true)], refs.Refspecs!.Lines);
+    }
+
+    [Fact]
+    public async Task A_refs_read_is_five_processes_and_git_remote_is_not_among_them()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.ConfigAsync("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+        var calls = new System.Collections.Concurrent.ConcurrentQueue<string[]>();
+        var armed = false;
+        var runner = new OrderingRunner(
+            NewRunner(),
+            before: command =>
+            {
+                if (armed)
+                {
+                    calls.Enqueue([.. command.Arguments]);
+                }
+
+                return Task.CompletedTask;
+            },
+            after: _ => { });
+        var repository = await GitRepository.OpenAsync(runner, repo.Path, TestCancelled);
+        armed = true;
+
+        var refs = await repository.ReadRefsAsync(TestCancelled);
+
+        Assert.Equal(5, calls.Count);
+        Assert.DoesNotContain(calls, arguments => arguments.SequenceEqual(["remote"]));
+        Assert.Single(calls, arguments => arguments.SequenceEqual(["config", "--null", "--get-regexp", @"^remote\."]));
+        Assert.Equal(["origin"], refs.Remotes);
+    }
+
+    [Fact]
+    public async Task A_fetch_line_that_names_no_source_is_left_out_and_logged_once()
+    {
+        // Git takes ":refs/remotes/origin/x" (an empty source, its HEAD); its tracking setup gives
+        // a branch with an empty name, so the mapping leaves the line out (10.1). A line git
+        // refuses makes every refs read fail with git's "invalid refspec", as "git remote" did.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.origin.url", Sibling(repo, "origin.git"));
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", ":refs/remotes/origin/x");
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+        var log = new ListLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(), repo.Path, TestCancelled, log);
+
+        var refs = await repository.ReadRefsAsync(TestCancelled);
+        await repository.ReadRefsAsync(TestCancelled);
+
+        Assert.Equal([new FetchRefspec("origin", "refs/heads/*", "refs/remotes/origin/*", false, true)], refs.Refspecs!.Lines);
+        var warning = Assert.Single(log.Entries, entry => entry.Level == Core.Logging.LogLevel.Warning);
+        Assert.Contains(":refs/remotes/origin/x", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("origin", warning.Message, StringComparison.Ordinal);
+
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "refs/heads/*:refs/remotes/origin/x");
+        await Assert.ThrowsAsync<GitException>(() => repository.ReadRefsAsync(TestCancelled));
+    }
+
     [Theory]
     [InlineData("", 0, 0, false)]
     [InlineData("[ahead 3]", 3, 0, false)]
@@ -196,6 +405,18 @@ public class RefReadingTests
     [InlineData("[gone]", 0, 0, true)]
     public void Reads_the_upstream_track_text(string track, int ahead, int behind, bool gone) =>
         Assert.Equal((ahead, behind, gone), GitRepository.ParseTrack(track));
+
+    /// <summary>The names <c>git remote</c> printed, sorted as the refs read sorts them.</summary>
+    private static List<string> GitRemoteNames(GitResult result)
+    {
+        Assert.True(result.Succeeded, result.StandardError);
+        var names = result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        names.Sort(StringComparer.Ordinal);
+        return names;
+    }
+
+    private static (RemoteSourceKind Kind, string? Remote, string? RemoteRef) Source(RemoteSource source) =>
+        (source.Kind, source.Remote, source.RemoteRef);
 
     /// <summary>A runner that runs <paramref name="before"/> ahead of each call and <paramref name="after"/> once it has ended: the order of calls that run side by side, made certain.</summary>
     private sealed class OrderingRunner(IGitRunner real, Func<GitCommand, Task> before, Action<GitCommand> after) : IGitRunner
