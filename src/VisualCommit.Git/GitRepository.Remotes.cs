@@ -94,10 +94,12 @@ public sealed partial class GitRepository
     /// <item>Otherwise <c>git merge --no-edit [--ff | --no-ff] &lt;head&gt;</c>, also when nothing is
     /// set (D78), where Git 2.33.1 and later would refuse diverged branches.</item>
     /// </list>
-    /// <see cref="PullIntegration.Rebase"/> ("Pull from {up} (rebase)") reads none of these
-    /// settings, as <c>git pull --rebase</c> ignores them (an invalid value included): the
-    /// fast-forward when the branch has nothing of its own, otherwise <c>git rebase</c> without
-    /// arguments.
+    /// <see cref="PullIntegration.Rebase"/> ("Pull from {up} (rebase)") follows none of these
+    /// settings, as <c>git pull --rebase</c> ignores them (a rebase setting is not even read, an
+    /// invalid one included; <c>pull.ff = only</c> gives way): the fast-forward when the branch has
+    /// nothing of its own, otherwise <c>git rebase</c> without arguments. It reads <c>pull.ff</c>
+    /// all the same and refuses a value git would refuse, as <c>git pull --rebase</c> does before it
+    /// fetches.
     /// <para>
     /// Before either pull rebases, <paramref name="beforeRebase"/> is called with the branch's old
     /// tip (the app saves the rebase's backup there, 1.2); not before a fast-forward or a merge.
@@ -113,15 +115,22 @@ public sealed partial class GitRepository
     /// A value of <c>pull.ff</c> or of a rebase setting that git would refuse (<c>preserve</c>,
     /// removed in Git 2.34, or a typo) throws <see cref="GitException"/> with the sentence
     /// "&lt;key&gt; is set to &lt;value&gt;, which this app does not understand." as its standard
-    /// error, before anything changes. A merge's conflicts are returned, not thrown: git failed
+    /// error, before anything changes; for <see cref="PullIntegration.Rebase"/> only a value of
+    /// <c>pull.ff</c> does, as <c>git pull --rebase</c> reads <c>pull.ff</c> and no rebase setting. A
+    /// merge's conflicts are returned, not thrown: git failed
     /// and the index then has conflicted files (it had none before). When the fetch marked nothing for
     /// merge, because the upstream was deleted on its remote (<c>FETCH_HEAD</c> has only
     /// <c>not-for-merge</c> lines, while the remote branch stays without a prune, D99), nothing runs
     /// and <see cref="PullOutcome.UpstreamGone"/> is returned: git pull fails there with "no such
     /// ref was fetched", and a merge of <c>FETCH_HEAD</c> would only say "Already up to date".
     /// <para>
-    /// <paramref name="pullOptions"/> (docs/phase-6-design.md 8.9, 9.10): work package WP2 makes a
-    /// given configuration decide instead of the reads here; Keep ignored files' check runs once
+    /// <paramref name="pullOptions"/> (docs/phase-6-design.md 8.9, 9.10): with
+    /// <see cref="PullIntegration.AsConfigured"/>, its <see cref="PullIntegrationOptions.Configuration"/>,
+    /// read before the fetch, decides instead of a read here (<see cref="ReadPullConfigurationAsync"/>,
+    /// whose <see cref="PullConfiguration.Problem"/> throws <see cref="PullConfiguration.NotUnderstood"/>
+    /// either way), so a terminal's change during the fetch is not seen, as with git pull; with
+    /// <see cref="PullIntegration.Rebase"/> only its problem with <c>pull.ff</c> counts (thrown), and
+    /// nothing is read here. Keep ignored files' check runs once
     /// the integration is chosen, before anything is written (<see cref="KeepIgnoredInPullAsync"/>,
     /// work package WP1's).
     /// </para>
@@ -146,11 +155,35 @@ public sealed partial class GitRepository
         switch (integration)
         {
             case PullIntegration.AsConfigured:
-                ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
-                rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                // The settings Pull read before its fetch (8.9), or, given none, read here as phase 4's pull did.
+                var configuration = pullOptions?.Configuration
+                    ?? await ReadPullConfigurationAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                if (configuration.Problem is not null)
+                {
+                    throw configuration.NotUnderstood();
+                }
+
+                ff = configuration.FastForward;
+                rebase = configuration.Rebase;
                 break;
             case PullIntegration.Rebase:
-                // git pull --rebase reads neither pull.ff nor a rebase setting (an invalid one included).
+                // git pull --rebase reads no rebase setting (an invalid one included), but pull.ff,
+                // which it reads whenever no --ff option is given, and refuses an invalid value before
+                // it fetches (fatal: invalid value for 'pull.ff', 2.36 and 2.55); pull.ff = only and
+                // false give way to the rebase. So the configuration given counts only for a pull.ff
+                // problem, and without one only pull.ff is read.
+                if (pullOptions?.Configuration is { } given)
+                {
+                    if (given.ProblemKey == PullConfigKeys.FastForward)
+                    {
+                        throw given.NotUnderstood();
+                    }
+                }
+                else if ((await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false)).Refused is { } refused)
+                {
+                    throw refused.NotUnderstood();
+                }
+
                 ff = PullFastForwardSetting.Unset;
                 rebase = PullRebaseSetting.Rebase;
                 break;
@@ -805,8 +838,13 @@ public sealed partial class GitRepository
             }
         }
 
-        public static GitException NotUnderstood(string key, string value) =>
-            new($"git config --get {key}", 0, $"{key} is set to {value}, which this app does not understand.");
+        /// <summary>
+        /// Pull's sentence for a value of <paramref name="key"/> it does not understand, which
+        /// <see cref="PullConfiguration.Problem"/> holds; <see cref="PullConfiguration.NotUnderstood"/>
+        /// turns it into the failure (<c>git config --get &lt;key&gt;</c>, exit 0, the sentence).
+        /// </summary>
+        public static string NotUnderstood(string key, string value) =>
+            $"{key} is set to {value}, which this app does not understand.";
 
         public static string? TrimSuffix(string text, string suffix) =>
             text.EndsWith(suffix, StringComparison.Ordinal) ? text[..^suffix.Length] : null;
