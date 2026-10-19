@@ -272,8 +272,10 @@ public class FetchRefspecsParityTests
     /// <summary>
     /// A repository with one commit and the branches <c>feature/x</c>, <c>secret</c> and
     /// <c>team/a</c> beside <c>main</c>; a bare remote <c>origin</c> holding them and
-    /// <c>refs/pull/1/head</c>, pushed by its path so that no tracking ref is written; and origin's
-    /// fetch lines replaced by <paramref name="originLines"/>.
+    /// <c>refs/pull/1/head</c>; no ref under <c>refs/remotes/</c>; and origin's fetch lines replaced
+    /// by <paramref name="originLines"/>. The push names the server by its path, and the tracking
+    /// refs are deleted after it all the same: Git 2.56 (CI's Windows and macOS, run 39207577529)
+    /// updated origin's tracking refs on that push, which 2.36, 2.43 and 2.55 leave alone.
     /// </summary>
     private static async Task<TempRepo> RepoWithServerAsync(string[] originLines)
     {
@@ -286,6 +288,15 @@ public class FetchRefspecsParityTests
             await repo.CreateBranchAsync("team/a");
             var server = await repo.AddBareRemoteAsync();
             await repo.GitAsync("push", "--quiet", server, "refs/heads/feature/x", "refs/heads/main", "refs/heads/secret", "refs/heads/team/a", "HEAD:refs/pull/1/head");
+            var tracking = (await repo.GitAsync("for-each-ref", "--format=%(refname)", "refs/remotes")).StandardOutput
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.TrimEnd('\r'));
+            var deletions = string.Concat(tracking.Select(name => "delete " + name + "\n"));
+            if (deletions.Length > 0)
+            {
+                await repo.GitWithInputAsync(deletions, "update-ref", "--no-deref", "--stdin");
+            }
+
             await SetOriginLinesAsync(repo, originLines);
             return repo;
         }
