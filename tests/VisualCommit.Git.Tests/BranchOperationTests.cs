@@ -209,12 +209,13 @@ public class BranchOperationTests
         using var repo = await Scenarios.CheckoutBlockedAsync();
         var repository = await OpenAsync(repo);
 
-        // Only the tracked change is in the way.
-        var tracked = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/other", keepIgnored: false, cancellationToken: TestCancelled));
+        // Only the tracked change is in the way. Keep ignored files' option (the app's default,
+        // docs/phase-6-design.md 9.11) changes nothing for a tracked change.
+        var tracked = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/other", keepIgnored: true, cancellationToken: TestCancelled));
         Assert.Contains("Your local changes to the following files would be overwritten by checkout", tracked.StandardError, StringComparison.Ordinal);
         Assert.Contains("notes.txt", tracked.StandardError, StringComparison.Ordinal);
         Assert.DoesNotContain("untracked working tree files", tracked.StandardError, StringComparison.Ordinal);
-        Assert.Equal("git switch --no-guess feature/other", tracked.CommandText);
+        Assert.Equal("git switch --no-guess --no-overwrite-ignore feature/other", tracked.CommandText);
 
         // Both: git prints both lists in one run (design 7.1: feature/addfile changes notes.txt too).
         var both = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutBranchAsync("feature/addfile", keepIgnored: false, cancellationToken: TestCancelled));

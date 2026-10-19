@@ -134,8 +134,13 @@ public sealed partial class GitRepository
 
     // ---- Checkouts (2.1 to 2.3) -----------------------------------------------------------------
 
-    // keepIgnored: work package WP1 adds --no-overwrite-ignore for it (docs/phase-6-design.md
-    // 9.11); until then every caller but the automatic stash passes false.
+    // Keep ignored files (D193, docs/phase-6-design.md 9.11): with keepIgnored every checkout has
+    // --no-overwrite-ignore just before its positional arguments (a switch option since Git
+    // 2.23). Git then refuses where it would otherwise overwrite an ignored file the target
+    // tracks, delete an ignored folder where the target has a file, or an ignored file where it
+    // has a folder; the refusal is git's untracked-files block (or its folder block) and changes
+    // nothing, no branch made by --create included (0.4).
+
     public Task CheckoutBranchAsync(string branch, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
@@ -148,31 +153,31 @@ public sealed partial class GitRepository
 
         // switch takes only branches, so a tag of the same name cannot be checked out instead,
         // and --no-guess keeps it from creating a branch out of a remote one of that name.
-        return RunWriteAsync(options, cancellationToken, ["switch", "--no-guess", .. Positional(branch)]);
+        return RunWriteAsync(options, cancellationToken, ["switch", "--no-guess", .. NoOverwriteIgnore(keepIgnored), .. Positional(branch)]);
     }
 
-    // keepIgnored: as CheckoutBranchAsync's, work package WP1's (9.11).
     public Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
         RequirePrefix(remoteBranchRef, RemotesPrefix, nameof(remoteBranchRef));
-        return RunWriteAsync(options, cancellationToken, "switch", "--create", branch, "--track", remoteBranchRef);
+        return RunWriteAsync(options, cancellationToken, ["switch", "--create", branch, "--track", .. NoOverwriteIgnore(keepIgnored), remoteBranchRef]);
     }
 
     // C12: the automatic stash (docs/phase-5-design.md 9, D179) is StashAsync with untracked
-    // files, then this checkout with keepIgnored; the operation (RepositoryOperations.Protect.cs)
-    // runs the steps of 9.2 with these.
+    // files, then this checkout with keepIgnored, whatever the setting; the operation
+    // (RepositoryOperations.Protect.cs) runs the steps of 9.2 with these.
     public Task CheckoutDetachedAsync(string commit, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(commit);
-
-        // --no-overwrite-ignore (a switch option since Git 2.23) refuses where git would otherwise
-        // overwrite an ignored file the commit tracks, or delete an ignored folder where it has a
-        // file (0.7); the refusal is git's untracked-files block and changes nothing.
-        return keepIgnored
-            ? RunWriteAsync(options, cancellationToken, ["switch", "--detach", "--no-overwrite-ignore", .. Positional(commit)])
-            : RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. Positional(commit)]);
+        return RunWriteAsync(options, cancellationToken, ["switch", "--detach", .. NoOverwriteIgnore(keepIgnored), .. Positional(commit)]);
     }
+
+    /// <summary>
+    /// <c>--no-overwrite-ignore</c> when <paramref name="keepIgnored"/> (Keep ignored files,
+    /// docs/phase-6-design.md 9.4, 9.11), nothing otherwise: git's own default, which overwrites
+    /// ignored files. For the checkouts and the merges, just before their positional arguments.
+    /// </summary>
+    private static string[] NoOverwriteIgnore(bool keepIgnored) => keepIgnored ? ["--no-overwrite-ignore"] : [];
 
     public async Task RestoreWorkingTreeFilesAsync(string source, IReadOnlyList<string> paths, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -263,7 +268,7 @@ public sealed partial class GitRepository
     /// <summary>
     /// <see cref="ReadStashPathsAsync"/>'s reads, side by side: what the stash's working-tree commit
     /// changes against its base, with each path's status (<c>--name-status</c>: the paths it adds,
-    /// <see cref="StashPaths.Added"/>), and what its index commit changes (both sides of a rename,
+    /// <see cref="StashPaths.Added"/>, and deletes, <see cref="StashPaths.Deleted"/>), and what its index commit changes (both sides of a rename,
     /// <c>--no-renames</c>), and, when it has a third parent, its untracked files (a stash made
     /// without them has two parents: <c>^3</c> names nothing, the report's PD15).
     /// </summary>
@@ -281,6 +286,7 @@ public sealed partial class GitRepository
         var statuses = SplitPaths(await changed.ConfigureAwait(false));
         var paths = new List<string>(statuses.Length / 2);
         var added = new List<string>();
+        var deleted = new List<string>();
         for (var i = 0; i + 1 < statuses.Length; i += 2)
         {
             paths.Add(statuses[i + 1]);
@@ -288,12 +294,17 @@ public sealed partial class GitRepository
             {
                 added.Add(statuses[i + 1]);
             }
+            else if (statuses[i] == "D")
+            {
+                deleted.Add(statuses[i + 1]);
+            }
         }
 
         return new StashPaths(paths, SplitPaths(untracked))
         {
             Staged = SplitPaths(await staged.ConfigureAwait(false)),
             Added = added,
+            Deleted = deleted,
         };
 
         static string[] SplitPaths(string output) => output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
@@ -335,16 +346,22 @@ public sealed partial class GitRepository
 
     // ---- Create, rename, delete (2.4 to 2.6) -----------------------------------------------------
 
-    // noTrack and keepIgnored: work package WP1 adds --no-track and --no-overwrite-ignore for
-    // them (docs/phase-6-design.md 9.11, 10.4, D201); until then every caller passes false.
     public Task CreateBranchAsync(string name, string startPoint, bool checkout, bool noTrack, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(startPoint);
+
+        // --no-track (docs/phase-6-design.md 9.11, 10.4, D201) for a start point fetched
+        // ambiguously: without it git gives the branch an upstream of the remote's first candidate
+        // (one remote fetching it from two refs), or fails with "not tracking: ambiguous
+        // information" and leaves the branch behind (two remotes fetching it) (0.5). keepIgnored
+        // is the checkout's (9.11); a branch made without a checkout writes no file.
+        string[] track = noTrack ? ["--no-track"] : [];
+
         // --create takes the name as its value, whatever it starts with.
         return checkout
-            ? RunWriteAsync(options, cancellationToken, ["switch", "--create", name, .. Positional(startPoint)])
-            : RunWriteAsync(options, cancellationToken, ["branch", .. Positional(name, startPoint)]);
+            ? RunWriteAsync(options, cancellationToken, ["switch", "--create", name, .. track, .. NoOverwriteIgnore(keepIgnored), .. Positional(startPoint)])
+            : RunWriteAsync(options, cancellationToken, ["branch", .. track, .. Positional(name, startPoint)]);
     }
 
     public Task RenameBranchAsync(string branch, string newName, CancellationToken cancellationToken = default)
@@ -377,8 +394,10 @@ public sealed partial class GitRepository
 
     // ---- Merge (2.8 to 2.10, D94) ----------------------------------------------------------------
 
-    // keepIgnored: work package WP1 adds --no-overwrite-ignore for it (docs/phase-6-design.md
-    // 9.4); until then every caller passes false.
+    // keepIgnored: --no-overwrite-ignore just before the positional argument (docs/phase-6-design.md
+    // 9.4). Git's option is exact for a fast-forward (it refuses, nothing changes) and does nothing
+    // for a real merge, which overwrites an ignored file all the same (0.4): the app's own check
+    // (FindIgnoredInTheWayOfMergeAsync) runs before every merge for that.
     public async Task<MergeResult> MergeAsync(string reference, MergeMode mode, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reference);
@@ -409,6 +428,7 @@ public sealed partial class GitRepository
             }
         }
 
+        arguments.AddRange(NoOverwriteIgnore(keepIgnored));
         arguments.AddRange(Positional(reference));
         var command = WriteCommand(options, [.. arguments]);
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);

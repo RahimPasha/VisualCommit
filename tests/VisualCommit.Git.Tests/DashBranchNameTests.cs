@@ -73,8 +73,9 @@ public class DashBranchNameTests
         var calls = new GitCallLog();
         var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
 
-        await repository.CheckoutBranchAsync("feature/alpha", keepIgnored: false, cancellationToken: TestCancelled);
+        // Keep ignored files' option (the app's default, docs/phase-6-design.md 9.11) just before the name.
+        await repository.CheckoutBranchAsync("feature/alpha", keepIgnored: true, cancellationToken: TestCancelled);
 
-        Assert.Contains(calls.Snapshot(), call => call.CommandText == "git switch --no-guess feature/alpha");
+        Assert.Contains(calls.Snapshot(), call => call.CommandText == "git switch --no-guess --no-overwrite-ignore feature/alpha");
     }
 }
