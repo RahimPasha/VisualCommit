@@ -7,6 +7,7 @@ are. The last section lists the owner's answers after the reviews and the decisi
 makes; they are recorded in `decisions.md` from D195 on. Where this file and merged code differ later, the code's doc comments say what is
 built; tell the lead. Amended on 2026-10-19 with what wave 1 (WP-S, WP1, WP2) found while building,
 each checked with real git or measured (D231).
+Amended again on 2026-10-19 with WP3's and WP4's findings (merged in `3146d8d` and `1d99be3`), checked with real git (2.36, replayed on 2.55): 0.5, 1.1 to 1.4, 1.12, 4.5, 4.13, 8.10, 8.13, 10.1 to 10.4, 10.8, 10.9, 14.14, 16.2, 18.
 
 Sources: `plan.md` "Phase 6", the phase 5 handoff's "For the next phase", decisions D45, D46, D69,
 D78, D81, D84, D85, D93, D95, D97, D104, D112, D130, D149, D163, D179, the owner's answers D187 to
@@ -289,8 +290,9 @@ symbolic links, sparse checkouts, submodules, CI's 2.56 and 2.43.
 
 Research note r05 (a bare server with `feature/x`, `main`, `secret`, `team/a`, `team/b`, `trunk`, `up`
 and `refs/pull/1/head`; each case a fresh repository whose `origin` has the fetch lines named;
-`LC_ALL=C`), this design's probe (no server, tracking refs made with `update-ref`) and the reviews' lab
-(the rows that say 2.36), isolated as in 0.4; the same on both gits unless said. `--track X` stands for `git switch --create <b> --track X`.
+`LC_ALL=C`), this design's probe (no server, tracking refs made with `update-ref`), the reviews' lab
+(the rows that say 2.36) and WP3's builders and reviewers (what says WP3: 2.36, replayed on 2.55),
+isolated as in 0.4; the same on both gits unless said. `--track X` stands for `git switch --create <b> --track X`.
 
 | Case | Configuration | What git does |
 |---|---|---|
@@ -302,21 +304,22 @@ and `refs/pull/1/head`; each case a fresh repository whose `origin` has the fetc
 | B3, today's drop push | `+refs/heads/*:refs/remotes/origin/u/*`; `git push --progress origin refs/heads/topic:refs/heads/u/main` | ` * [new branch]      topic -> u/main`, 0: **a new branch `u/main` on the server**, and a local `refs/remotes/origin/u/u/main` |
 | B2 another namespace | `+refs/heads/*:refs/remotes/mirror/*` on `origin` | `git remote` lists `origin` only; today's split deletes on `mirror`: `fatal: 'mirror' does not appear to be a git repository`, 128; `--track refs/remotes/mirror/main` tracks `origin/main`; `git remote remove origin` deletes `refs/remotes/mirror/*` and keeps a stray `refs/remotes/origin/stray` |
 | C1 one ref | `refs/heads/main:refs/remotes/origin/trunk` | `--track refs/remotes/origin/trunk` → tracks `origin/main`, merge `refs/heads/main` |
-| C2 two lines, one remote | the default and `refs/heads/main:refs/remotes/origin/trunk` | with the server's `trunk`: `fatal: Cannot fetch both refs/heads/trunk and refs/heads/main to refs/remotes/origin/trunk`, 128; without it, `--track refs/remotes/origin/trunk`: the first line in configuration order wins (`refs/heads/trunk`; swapped, `refs/heads/main`) |
+| C2 two lines, one remote | the default and `refs/heads/main:refs/remotes/origin/trunk` | with the server's `trunk`: `fatal: Cannot fetch both refs/heads/trunk and refs/heads/main to refs/remotes/origin/trunk`, 128; without it, `--track refs/remotes/origin/trunk`: the first line in configuration order wins (`refs/heads/trunk`; swapped, `refs/heads/main`); `git fetch` fills both `origin/main` and `origin/trunk` from `main`, while `git push origin main` updates only the first line's tracking ref, `origin/main` (git's `remote_find_tracking`; WP3) |
 | P GitHub's pull requests | the default, then `+refs/pull/*/head:refs/remotes/origin/pr/*` | `--track refs/remotes/origin/pr/1` → merge `refs/heads/pr/1` (the first line); `git pull` → `… no such ref was fetched`, 1. `git push --progress origin refs/heads/pr/1:refs/heads/pr/1` (today's drop) → ` * [new branch]      pr/1 -> pr/1`, and from then on **every fetch of origin fails**: `fatal: Cannot fetch both refs/heads/pr/1 and refs/pull/1/head to refs/remotes/origin/pr/1`, 128 |
 | P3 no upstream (2.36) | P's lines: `git switch --create pr/1 --no-track --no-overwrite-ignore refs/remotes/origin/pr/1` | exit 0, `pr/1` at the pull request's commit, no `branch.pr/1.*` key |
 | An implicit upstream (2.36) | `branch.autoSetupMerge` unset; under P `git switch --create review1 refs/remotes/origin/pr/1` and `git branch review2 refs/remotes/origin/pr/1`; under H the same from `refs/remotes/origin/main` | P: exit 0, each with `remote = origin`, `merge = refs/heads/pr/1` (the first line), as `--track` gives; then `git push --progress origin refs/heads/review1:refs/heads/pr/1` creates `pr/1` on the server and the next fetch fails as in P. H: `fatal: not tracking: ambiguous information …`, 128, the branch left behind, for both |
 | P2 not a branch | the pull-request line only | `--track refs/remotes/origin/pr/1` → `branch 'pr/1' set up to track 'origin/refs/pull/1/head'.`, merge `refs/pull/1/head`; `git pull --ff-only` works |
 | D a prefix | `+refs/heads/team/*:refs/remotes/origin/*` | `team/a -> origin/a`; `--track refs/remotes/origin/a` → merge `refs/heads/team/a`; `git checkout team/a` creates `team/a` tracking `origin/a` |
 | E negative | the default, then `^refs/heads/secret` | `origin/secret` stays where it was; `--track refs/remotes/origin/secret` → `fatal: cannot set up tracking information; starting point 'refs/remotes/origin/secret' is not a branch`, 128; a push naming `refs/heads/secret` re-creates the excluded tracking ref |
+| X an excluded exact line (WP3) | `refs/heads/secret:refs/remotes/origin/s`, then `^refs/heads/secret` | the fetch never writes `origin/s`; `git branch --track probe refs/remotes/origin/s` still tracks `refs/heads/secret`: git's tracking setup does not apply a negative line to an exact line's source, while its fetch does |
 | N an excluded candidate | the default, `refs/heads/main:refs/remotes/origin/trunk`, `^refs/heads/trunk` | the fetch stores `main -> origin/trunk`, but `--track refs/remotes/origin/trunk` → `… is not a branch`, 128, in either line order: a ref with any excluded candidate maps to nothing |
-| Line forms | each alone, or beside the default | `^refs/heads/team/*` excludes `team/a` and `team/b`; `^secret` excludes nothing (full names only); `^refs/heads/secret:refs/remotes/origin/secret` and `+^refs/heads/secret` → `fatal: invalid refspec '…'`, 128; `^+refs/heads/secret` is accepted and excludes nothing; `refs/heads/*:refs/remotes/origin/x`, `refs/heads/x:refs/remotes/origin/*`, `refs/heads/*/*:refs/remotes/origin/*/*` are invalid; `refs/heads/*/x:refs/remotes/origin/*/y` maps `feature/x` to `origin/feature/y`; `refs/heads/f*:refs/remotes/origin/g*` maps it to `origin/geature/x` (`*` matches any text, slashes included, inside a component too); `refs/heads/main` (no destination) and an empty value fetch into `FETCH_HEAD` only. **An invalid line on any remote breaks every remote**: `fatal: invalid refspec '…'`, 128, for `--track` and `git push origin …` alike |
+| Line forms | each alone, or beside the default | `^refs/heads/team/*` excludes `team/a` and `team/b`; `^secret` excludes nothing (full names only); `^refs/heads/secret:refs/remotes/origin/secret` and `+^refs/heads/secret` → `fatal: invalid refspec '…'`, 128; `^+refs/heads/secret` is accepted and excludes nothing; `refs/heads/*:refs/remotes/origin/x`, `refs/heads/x:refs/remotes/origin/*`, `refs/heads/*/*:refs/remotes/origin/*/*` are invalid; `refs/heads/*/x:refs/remotes/origin/*/y` maps `feature/x` to `origin/feature/y`; `refs/heads/f*:refs/remotes/origin/g*` maps it to `origin/geature/x` (`*` matches any text, slashes included, inside a component too) and `f` to `origin/g` (the text may be empty; WP3); `refs/heads/main` (no destination) and an empty value fetch into `FETCH_HEAD` only, while a pattern line with no destination (`refs/heads/*`) or an empty one (`refs/heads/*:`) is invalid; `@` alone as a source means `HEAD`; a negative line naming a 40-character commit id is invalid (WP3). **An invalid line on any remote breaks every remote**: `fatal: invalid refspec '…'`, 128, for `--track` and `git push origin …` alike, and for `git for-each-ref`, which reads the upstreams, so the app's refs read fails with it (WP3, 10.1) |
 | O2 a short source | `main:refs/remotes/origin/m` | `--track refs/remotes/origin/m` → `branch.mm.merge = main` (not a full name), `%(upstream:remoteref)` `main` |
 | An empty source | `:refs/remotes/origin/x` | `git branch --track probe refs/remotes/origin/x` → 0, `branch 'probe' set up to track 'origin/'.`, `branch.probe.merge` empty |
 | G no line | none (`git config --get-all remote.origin.fetch` 1); a tracking ref made by hand | `git fetch origin` → `* branch HEAD -> FETCH_HEAD`; `--track refs/remotes/origin/main` and `--set-upstream-to` → `… is not a branch`, 128, no branch left; a branch with `remote = origin`, `merge = refs/heads/main` shows all four upstream atoms empty |
 | H two remotes | `origin` and `backup` both `+refs/heads/*:refs/remotes/origin/*` | `--track refs/remotes/origin/main` → `fatal: not tracking: ambiguous information for ref 'refs/remotes/origin/main'`, hints naming both, 128, **the new branch left behind**; `git checkout main` → `fatal: 'main' matched multiple (2) remote tracking branches` |
 | T nested names | remotes `origin`, `team`, `team/fork`, default lines (`RefReadingTests`' shape) | `--track refs/remotes/team/fork/main` → the same fatal (`team` maps it to `refs/heads/fork/main`, `team/fork` to `refs/heads/main`), 128, branch left behind |
-| F mirrors | `git remote add --mirror=fetch` writes `fetch = +refs/*:refs/*`; `--mirror=push` writes `mirror = true` | the fetch writes `refs/heads/*` directly, nothing under `refs/remotes/`; with `mirror = true` **every push that names a refspec fails**: `fatal: --mirror can't be combined with refspecs`, 128 (Push, deletions, tags, undo's `RemoteRef`) |
+| F mirrors | `git remote add --mirror=fetch` writes `fetch = +refs/*:refs/*`; `--mirror=push` writes `mirror = true` | the fetch writes `refs/heads/*` directly, nothing under `refs/remotes/`; with `mirror = true` **every push that names a refspec fails**: `fatal: --mirror can't be combined with refspecs`, 128 (Push, deletions, tags, undo's `RemoteRef`). The fetch line beside origin's default (WP3): on another remote, `--track refs/remotes/origin/main` → `fatal: not tracking: ambiguous information …`, 128, as H (that remote's line also maps every `refs/remotes/origin/*`, from the ref of the same name on it); on origin itself the first line in configuration order wins, as C2; alone, `refs/remotes/origin/main` maps to itself, which is not a branch |
 | L legacy | `.git/remotes/legacy` with `Pull: +refs/heads/*:refs/remotes/legacy/*` | `git remote` lists nothing, no config line, `git fetch legacy` works (2.55 warns it is deprecated), `--track refs/remotes/legacy/main` → `… is not a branch` |
 | Plumbing | `for-each-ref --format='%(upstream)\|%(upstream:remoteref)\|%(push)' refs/remotes/origin/up/main`; `rev-parse --symbolic-full-name refs/remotes/origin/up/main@{upstream}`; `git remote show -n origin` | empty atoms; `fatal: no such branch`, 128; a translated human list that does not pair a tracking ref with its name. **Git has no read of the reverse mapping**; `--track` and `--set-upstream-to` compute it but write configuration |
 | The parity probe | `git branch --track probe <T>` for B1, H, C2 (wildcard line first), N, P2, G, T | B1: 0, `remote=origin merge=refs/heads/main`; H and T: 128, `not tracking: ambiguous information`, `probe` left behind; C2: 0, `merge=refs/heads/trunk`; N and G: 128, `is not a branch`, nothing left; P2: 0, `merge=refs/pull/1/head`. As r05's `switch --create … --track` on both gits |
@@ -457,7 +460,7 @@ app's own data: creating, changing or deleting one changes nothing on disk but `
 (D189). Each has one dashboard tab (section 2). Section 13 has the welcome page's Workspaces section
 and the tab strip.
 
-### 1.1 The model (`src/VisualCommit.Core/Workspaces/Workspace.cs`, pure)
+### 1.1 The model (`src/VisualCommit.Core/Workspaces/Workspace.cs`, pure but for `WorkspacePaths.Same`'s short-name expansion, 1.2)
 
 Sealed records: `WorkspaceList` (`Version`, default `CurrentVersion` = 1; `Workspaces`;
 `Find(string id)`, ordinal), `Workspace(string Id, string Name, IReadOnlyList<WorkspaceRepository>
@@ -475,11 +478,15 @@ repository of its own: one row, as it is one tab.
 
 ### 1.2 What "the same repository" means
 
-`WorkspacePaths` (Core, pure): `Normalise(path)` is `Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))`
+`WorkspacePaths` (Core, pure but for `WorkspacePaths.Same`'s short-name expansion): `Normalise(path)` is `Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))`
 for a fully qualified path, and returns any other path (only a hand-edited file has one) as it is;
 `Same(a, b)` compares the normalised paths with `WorktreeKey.Comparer` (ignoring case on Windows and
 macOS, exactly elsewhere), as the recent list and the graph filters do. Every match of a folder uses
 `Same`: the workspace code, the dashboard's rows and pending tabs (2.3), the palette (5.10).
+On Windows `Path.GetFullPath` also expands 8.3 short names, and for a path with a `~` it asks the file
+system for the long names (`GetLongPathName`), so a share that does not answer holds the caller until
+the file system gives up. Accepted (WP4): such paths are rare, since what the folder dialog and git
+give are long names; a path without a `~`, and any path elsewhere, is worked out from its text alone.
 
 The app writes only paths git reported; other spellings come from a hand-edited or copied file and
 from the harnesses' `TempRepo.Path` (through `C:\Users\RUNNER~1` on CI's Windows and `/var` on macOS,
@@ -488,7 +495,9 @@ such row "Not a repository". A read never rewrites the saved text. Two rules:
 
 1. **Is the saved folder the working tree's top?** `IGitRepository.OpenedAtTopAsync(CancellationToken)`,
    for `OpenedFolder`: true with no git call when `WorktreeKey.Comparer` finds it equal to
-   `WorkingDirectory`; otherwise one `git rev-parse --show-prefix` in it with the read environment
+   `WorkingDirectory` (so an 8.3 short name makes no call, since the opening's `Path.GetFullPath` has
+   expanded it, and neither do capitals on Windows and macOS, which the comparer finds equal; WP4);
+   otherwise one `git rev-parse --show-prefix` in it with the read environment
    (D47): an empty line (exit 0) is the top spelled another way (0.8), anything else (`inner2/`) a
    folder inside; a failure throws `GitException`. The interface's default answers true (the fakes
    need no change). The opening call stays as it is (`GitRepository.cs:87`, pinned by phase 5).
@@ -543,7 +552,8 @@ are advisory on Linux and macOS, so a test that locks the file would need a bran
   keeps every earlier change); then the load's notice, if any, comes back. Two instances on one data
   folder: the last save wins, as for `settings.json` and `session.json`.
 
-`AppSession.Start` makes the store after the session (`AppSession.Workspaces`) and passes it to
+`AppSession.Start` makes the store after the session, a `JsonWorkspaceStore` on `AppPaths.WorkspacesFile`
+(`AppSession.Workspaces`; `AppSessionTests`, `fef0569`), and passes it to
 `TabServices` (a new optional `IWorkspaceStore? workspaces`, in memory when null, for view-model
 tests), which gains `Workspaces`; `WorkspaceItems`, an `ObservableCollection<WorkspaceItem(string Id,
 string Name, string CountText, string ToolTipText)>` shared by every welcome page as
@@ -554,7 +564,7 @@ RepoTabViewModel? from)`, the one way a workspace opens (placed by 2.2), called 
 `WorkspaceCommands` and the palette (`from` the active tab), never through an event; and
 `OpenRepositoryFolders()`, the working trees of the tabs with a repository open, in tab order.
 
-### 1.4 The edits (`src/VisualCommit.Core/Workspaces/WorkspaceEdits.cs`, pure)
+### 1.4 The edits (`src/VisualCommit.Core/Workspaces/WorkspaceEdits.cs`, pure but for `WorkspacePaths.Same`'s short-name expansion, 1.2)
 
 Each returns the same object when it changes nothing, so the store neither saves nor raises
 `Changed`: `Create(list, id, name)` appends `Workspace(id, name, [])`; `Rename(list, id, name)`;
@@ -750,16 +760,19 @@ target is found once; a Hidden folder on Windows) and on a fake `IScanFileSystem
 folder, 12,000 folders stopping at 10,000, the token, progress counts).
 
 Git (`GitRepositoryOpenTests`' additions): `OpenedAtTopAsync` from `WorkingDirectory` with **no git
-call**; from the top spelled another way (the 8.3 name `cmd /c dir /x` reports, capitals, a junction,
-a symbolic link) with exactly one `git rev-parse --show-prefix`; false from a subfolder and from 0.8's
-two folders inside another repository.
+call**, and with none either from an 8.3 short name (the one `cmd /c dir /x` reports, which the
+opening's `Path.GetFullPath` expands) or, on Windows and macOS, from capitals (the comparer finds them
+equal); through a junction or a symbolic link with exactly one `git rev-parse --show-prefix`; elsewhere
+capitals name another folder, and the opening throws `NotARepositoryException` there; false from a
+subfolder and from 0.8's two folders inside another repository (WP4).
 
 App: `JsonWorkspaceStoreTests` (each case of 1.3; a newer version leaves the file's bytes alone; `Changed`
 once per effective update; through a fake `IWorkspaceFiles`, not the operating system's locks: a read
 and a set-aside that both fail give `Unreadable` with its notice and leave the file's bytes unchanged
 after `Update`; a read that throws `IOException` twice and then succeeds reads the file; a failed save
 sets `SaveFailed` and its notice, and the next save that succeeds clears both and brings back the
-load's notice; a second set-aside keeps the first copy and names `workspaces.unreadable-2.json`); `JsonSessionStoreTests`' additions (a dashboard's round trip, an older
+load's notice; a second set-aside keeps the first copy and names `workspaces.unreadable-2.json`); the lead's `AppSessionTests`
+(`AppSession.Start`'s store is a `JsonWorkspaceStore` on `AppPaths.WorkspacesFile`, `fef0569`); `JsonSessionStoreTests`' additions (a dashboard's round trip, an older
 file, blank ids); `DashboardSessionTests` (new; the restore partition and every session case of 1.11,
 to which 2.11 refers: the restore of [repository, dashboard W1, empty, dashboard W2] gives [W1, W2,
 repository, empty] with the active tab followed; 1.11's drops; `SaveTabs`' ids);
@@ -1684,6 +1697,7 @@ cancels one operation, whatever else the queue holds:
 | `operation` is | Effect |
 |---|---|
 | waiting | removed and completed as `OperationOutcome.Cancelled` ("{Title} cancelled") without running, as `DropWaiting` does (`OperationQueue.cs:237-263`); `Changed` raised; the others stay |
+| next in line, its start posted but not run yet | the same, as `Dispose` treats it; the one after it is next in line instead (WP4) |
 | running, `CanCancel` (a network operation before `EndCancelWindow`) | cancelled as `CancelCurrent` does (`:218-235`): the token, then the stale-lock scan (D126) |
 | running past its cancel window (a pull past its fetch, `RepositoryOperations.Remotes.cs:175`), or local | nothing: it runs to its end (D81) |
 | merged into a waiting operation by its dedupe key (`RunAsync`, `:158-161`) | that operation, by the rows above: the queue records each operation merged into an entry and `Cancel` matches either |
@@ -1952,7 +1966,9 @@ started, counting the rest as cancelled, and a later Fetch all works. A dashboar
 Git layer (`tests/VisualCommit.Git.Tests`):
 
 - `OperationQueueTests`: `Cancel` of a waiting operation completes it cancelled without running and
-  leaves the other waiting one and the running one; of the running network operation before its cancel
+  leaves the other waiting one and the running one; of the one next in line whose start is posted but
+  has not run: the same, with no start record, prompt scope or lock scan, and the one after it next in
+  line instead (WP4); of the running network operation before its cancel
   window ends: cancelled, stale locks scanned; after it: it ends succeeded; of an operation merged into
   a waiting one: the shared one is cancelled and both tasks get the cancelled result; of a background
   operation, and of one that has ended: nothing. `GitOperation.PromptGroup` reaches
@@ -3549,7 +3565,12 @@ looked up ahead and kept (D202):
   first opening starts it if nothing has yet. On Windows the git process runs at below-normal priority
   (`GitCommand.BelowNormalPriority`, new, which `GitRunner` applies right after the start to git and to
   what git has started by then, found by Toolhelp snapshots, at most 5; the shells git starts later
-  inherit it), so it does not slow the first repository's reads (Q1, risk 12).
+  inherit it), so it does not slow the first repository's reads (Q1, risk 12). `GitConfiguration`
+  sets the flag from `ToolHelpBelowNormal` (internal, true for the app); the live test of `git
+  mergetool --tool-help` sets it false and runs git at normal priority, because below normal, on a
+  machine whose other test projects keep every processor busy, the lookup was starved past the hang
+  watchdog's limit (three runs). The priority itself is proven by `GitRunnerPriorityTests` and the
+  command's flag by the held runner's test (8.13, `2252a01`).
 - **The kept list**: each run that ends without failing writes `merge-tools.json` in the data folder
   (`AppPaths.MergeToolsFile`, given to `GitConfiguration` by `AppSession.Start`), `{ "git": <git's
   path>, "version": <git --version's text>, "found": [...], "notFound": [...] }` with each tool's name
@@ -3660,7 +3681,9 @@ adds:
   refusing an invalid `pull.ff` as `git pull --rebase` does while counting only a `pull.ff` problem of
   a given configuration (`PullConfigurationIntegrationTests`, D231).
   `MergeToolHelpTests`: the parse of recorded 2.36 and 2.55 outputs (with a `user-defined:` block);
-  the live run's exit code; the kept list (a matching `merge-tools.json` answered at once while a held
+  the live run's exit code, at normal priority (`ToolHelpBelowNormal` false, 8.10); the command's
+  `BelowNormalPriority` flag through the held runner; `GitRunnerPriorityTests`: the priority applied
+  to git on Windows (`2252a01`); the kept list (a matching `merge-tools.json` answered at once while a held
   run goes on, then replaced by its result; another git's path or version, and an unreadable file,
   counted as none; a failed run leaving the file as it was). **`PullParityTests`, `PullRebaseParityTests` and `PullFailureParityTests`
   unchanged.**
@@ -4147,22 +4170,37 @@ public sealed class FetchRefspecs
 }
 ```
 
+`RemoteSource`'s record equality compares `Remotes` by reference, so two equal answers are not always
+`==`: a caller (WP-RA) compares `Kind`, `Remote` and `RemoteRef`, or the lists by sequence (WP3).
+
 **Parsing a line** (0.5's line forms): an empty value is no line; a leading `+` is force, and `^` may
 not follow it (`+^…` is invalid); otherwise a leading `^` makes the line negative: no `:`, a full name,
-at most one `*`. The rest is split at its last `:`; no destination, or an empty one, gives no tracking
-ref (the line fetches into `FETCH_HEAD` only and maps nothing); each side has at most one `*`, and both
-sides or neither. An invalid line is skipped and logged as a warning (git then refuses the whole
-configuration, so its own commands fail anyway). An empty source (`:refs/remotes/origin/x`) is skipped
-too: git's tracking setup takes it with an empty name, which names no branch.
+at most one `*`, and not a 40-character commit id. The rest is split at its last `:`; for an exact line
+no destination, or an empty one, gives no tracking ref (the line fetches into `FETCH_HEAD` only and maps
+nothing), while a pattern line with no destination (`refs/heads/*`) or an empty one (`refs/heads/*:`)
+is invalid, so "no destination maps nothing" holds for exact lines only; each side has at most one
+`*`, and both sides or neither; `@` alone as a source means `HEAD`. These rules are copied from git
+(WP3). `Parse` skips an invalid line, but no snapshot is made with one: git refuses the whole
+configuration, and `git for-each-ref`, which reads the upstreams, fails with `fatal: invalid refspec
+'…'`, so the whole refs read fails, as it did with `git remote` (0.5's line forms). An empty source
+(`:refs/remotes/origin/x`) is skipped too: git accepts it, and its tracking setup takes it with an
+empty name, which names no branch. So the read's warning `Skipped a fetch line of the remote {name}
+that git refuses or that names no source: {value}` (14.14) fires only for a line git accepts that the
+mapping leaves out (an empty source), once per repository object, not at every refs read.
 
 **`SourceOf(T)`**, for a tracking ref `T` (`refs/remotes/…`), per remote that has lines:
 
 1. Candidates, in configuration order, from each positive line with a destination: a pattern line whose
    destination's part before `*` starts `T` and part after `*` ends it (`T` at least as long as both)
-   gives its source with `*` replaced by the text between (any text, slashes included); an exact line
+   gives its source with `*` replaced by the text between (any text, slashes included, and also none:
+   `refs/heads/f*:refs/remotes/origin/g*` maps `origin/g` to `refs/heads/f`); an exact line
    whose destination is `T` gives its source. The same source twice is one candidate.
 2. When any candidate matches a negative line of that remote (its exact name, or its one-`*` pattern
-   over the full name), the remote maps nothing (git's rule, N).
+   over the full name), the remote maps nothing (git's rule, N). This holds for an exact line's source
+   too, which is stricter than git's tracking setup and matches its fetch (0.5's X): with
+   `refs/heads/secret:refs/remotes/origin/s` and `^refs/heads/secret`, `git branch --track` tracks
+   `refs/heads/secret`, but the fetch never writes `origin/s`, and the mapping says NotFetched (a
+   deliberate difference, 10.9).
 3. Otherwise one candidate maps `T`; **two or more different candidates make `T` AmbiguousRefs**,
    stricter than git, which takes the first in configuration order (C2): beside the default line, git's
    first candidate for GitHub's `origin/pr/1` is the wrong `refs/heads/pr/1`, and git's fetch cannot
@@ -4173,8 +4211,14 @@ ambiguous information") whatever each remote's own result, one gives its result.
 default line is Mapped and the identity; B1 (`origin/up/main` ← `main`), B2 (`mirror/main` ← `main` of
 origin), C1 and D (`origin/a` ← `team/a`) are Mapped renamed branches; P2 (`origin/pr/1` ←
 `refs/pull/1/head`) and O2's short `main` (taken as it is) are Mapped, not a branch; H and T are
-AmbiguousRemotes; C2 (`origin/trunk`) and P (`origin/pr/1`) are AmbiguousRefs; G, E, N, a namespace no
-line fetches any more and a legacy `.git/remotes` file are NotFetched.
+AmbiguousRemotes; C2 (`origin/trunk`) and P (`origin/pr/1`) are AmbiguousRefs; G, E, N, X (the
+excluded exact line), a namespace no line fetches any more and a legacy `.git/remotes` file are
+NotFetched. F's mirror line `+refs/*:refs/*` (WP3): on a remote beside origin's default line, git and
+the mapping agree that origin's tracking refs are AmbiguousRemotes (R1; git says "ambiguous
+information"), so their checkout and the items that need a mapped branch are disabled for all of them
+(10.8 #7); on origin itself, beside its default line, it is a deliberate difference of C2's kind (the
+mapping says AmbiguousRefs, git takes the first line); alone, `refs/remotes/origin/main` maps to
+itself, Mapped and not a branch.
 
 **`DestinationsOf(r, ref)`**, for a ref on the remote (`refs/heads/…`): git's forward mapping, which the
 fetch uses. Each positive line of `r` with a destination whose source is `ref` (exact) or matches it
@@ -4182,7 +4226,11 @@ fetch uses. Each positive line of `r` with a destination whose source is `ref` (
 same destination once; none when a negative line of `r` matches `ref`. By 0.5's cases: the default
 maps `refs/heads/main` to `refs/remotes/origin/main`; P maps `refs/heads/pr/1` to
 `refs/remotes/origin/pr/1` only; C2 maps `refs/heads/main` to `refs/remotes/origin/main` and
-`refs/remotes/origin/trunk`; E maps `refs/heads/secret` to nothing.
+`refs/remotes/origin/trunk`; E maps `refs/heads/secret` to nothing. It follows the fetch, not the
+push (WP3): under C2 `git fetch` fills both `origin/main` and `origin/trunk`, while `git push origin
+main` updates only the first line's tracking ref (git's `remote_find_tracking`, 0.5's C2); 10.4's guard
+asks what the fetch will do, so it rightly follows the fetch. Under F's `+refs/*:refs/*` the list for
+`refs/heads/<y>` includes `refs/heads/<y>` itself, which is no tracking ref (10.4's guard leaves it out).
 
 ### 10.2 The read: `ReadRefsAsync` and `RepoRefs.Refspecs`
 
@@ -4191,8 +4239,9 @@ remote`** in its `Task.WhenAll`: `git config --null --get-regexp ^remote\.` (a r
 exit 1 is no remote and no line; any other failure throws as the other four do). Each `<key>\n<value>\0`
 entry is split as `ReadRemotesAsync` splits its own: a key with a subsection (`remote.<name>.<var>`, the
 name the text between `remote.` and the last `.`, its case and dots kept) names a remote, each name
-once, sorted ordinally as today; a key without one (`remote.pushdefault`) and a name starting with `/`
-(which git skips with a warning; not run) are skipped; the `.fetch` values (remote
+once, sorted ordinally as today; a key without one (`remote.pushdefault`), a key with an empty remote
+name (`remote..url`, WP3) and a name starting with `/` (which git skips with a warning; not run) are
+skipped; the `.fetch` values (remote
 `RemoteArguments.TrimSuffix(key["remote.".Length..], ".fetch")`) go to `FetchRefspecs.Parse`. The names
 are exactly `git remote`'s (0.5: a remote with only `prune` counts, a dotted name stays whole, a legacy
 `.git/remotes` file counts in neither). Not `--local`: git fetches with global lines too, and prints
@@ -4223,7 +4272,8 @@ the first part) for AmbiguousRemotes and NotFetched: `RefReadingTests`' `team/fo
 compare whole records). So the left panel groups B2's branches under `origin` with the leaf
 `mirror/main` and has no `mirror` row whose Fetch, Rename and Remove would fail; hiding a remote
 (`GraphFilterChanges.BranchesOf`), "Remove {r}…"'s count (`RemoteBranchesOf`) and its "remote" backup
-take the refs the remote fetches, which `git remote remove` deletes (0.5, B2).
+take the refs the remote fetches, which `git remote remove` deletes (0.5, B2). WP3 built this: every
+snapshot the app reads now has `Refspecs` and a `RemoteName` from the mapping, before WP-RA starts.
 
 ### 10.4 Every place, and what each does
 
@@ -4255,7 +4305,8 @@ from git's output or the deletion's capture; the left panel's remotes, hiding a 
 (`UndoScope.RemoveRemote`), known issue 1 (10.8). Merge, rebase, compare, "Create branch here…",
 "Create tag here…", hide, solo and "Copy branch name" stay enabled in every case (they act on the
 tracking ref's commit); "Create branch here…" from an R1 or R2 ref passes `--no-track` (9.11's
-`noTrack`; D201 for R2), since git's `branch.autoSetupMerge` would otherwise give the branch R2's first
+`noTrack`; D201 for R2; WP0 wired it in the create-branch operation, and it takes effect now that
+WP3 fills `Refspecs`, so WP-RA only tests it), since git's `branch.autoSetupMerge` would otherwise give the branch R2's first
 candidate as its upstream (P's `refs/heads/pr/1`, whose push breaks every fetch) or, for R1, fail with
 `not tracking: ambiguous information` and leave the branch behind (0.5's implicit upstream). Push, Pull
 and Force push of a local branch use D101's upstream values, with the guard below. The operations use
@@ -4274,7 +4325,10 @@ refuse a push of `refs/heads/<A>` to `<r>`'s `refs/heads/<y>` when `Refs.Refspec
 "refs/heads/<y>")` holds a tracking ref whose `SourceOf` is AmbiguousRefs and none whose `SourceOf` is
 Mapped and that the snapshot holds (which would show that `<y>` already exists on `<r>`): the push would
 create `<y>` beside the ref that fills that tracking ref, and every later fetch of `<r>` would fail
-(0.5's P; C2's `trunk`). The refusal is `Refused(text, summary)` with the push's error title ("Push failed",
+(0.5's P; C2's `trunk`). Only destinations under `refs/remotes/` count: under F's `+refs/*:refs/*` the
+list also holds `refs/heads/<y>` itself, which is no tracking ref (10.1; looking each destination up
+with `RepoRefs.SourceOf(GitRef)` does as well, since it gives NotFetched for a local branch). The
+guard follows the fetch, not the push, rightly (10.1's `DestinationsOf`, WP3). The refusal is `Refused(text, summary)` with the push's error title ("Push failed",
 "Force push failed") and 10.5's `PushWouldStopFetch`, no git output, nothing written. By 0.5's cases:
 P's push of `pr/1` is refused; C2's push of `main` runs (`origin/main` is Mapped and fetched), a new
 `trunk` is refused; the default line's pushes and a renamed branch's (row 8) run.
@@ -4359,21 +4413,33 @@ Recorded in the handoff; 1 also goes to the backlog and 2 to plan.md's risks (16
    wrong name on the remote. The backups list offers it until the clean-up removes it: after 30 days,
    or sooner once more than 50 backups push it out (D139), longer only while an undo entry still needs
    it (D171).
+7. A mirror fetch line `+refs/*:refs/*` (F, `git remote add --mirror=fetch`) on a remote beside
+   origin's default line also maps every `refs/remotes/origin/*`, so git and the mapping agree that
+   origin's tracking refs are fetched by two remotes (R1; git says `not tracking: ambiguous
+   information`): their checkout, the drop's pushes and the deletion are disabled with R1 and "Set
+   upstream…" leaves them out, for every one of them (10.1, WP3).
 
 ### 10.9 Tests
 
 - **`FetchRefspecsTests`** (Git.Tests beside `RefNameRulesTests`, no git): `Parse` for every form of
   0.5 (valid, invalid, negative, no destination, empty value, empty source, `+^`, `^…:…`, two `*`, `*`
-  inside a component and in the middle); `SourceOf` for the default with and without `+`, B1, B2, C1, C2
-  and N in both orders, D, E, P, P2, G, H, T, O2, `f*`/`g*`, `*/x`→`*/y`; `DestinationsOf` for the
-  default, B1, C2 (`main` to both), D, E (nothing) and P; `IsIdentity`; `Default` against phase 5's split
+  inside a component and in the middle; WP3's `@` as `HEAD`, a negative commit id, a pattern with no or
+  an empty destination); `SourceOf` for the default with and without `+`, B1, B2, C1, C2
+  and N in both orders, D, E, X, P, P2, G, H, T, O2, `f*`/`g*` (a `*` matching nothing too), `*/x`→`*/y`,
+  F beside the default on another remote (either order) and on the same one, and alone; `DestinationsOf` for the
+  default, B1, C2 (`main` to both), D, E (nothing), P and F (`refs/heads/main` among them); `IsIdentity`; `Default` against phase 5's split
   for remote names with slashes; `RepoRefs.SourceOf` with `Refspecs` null equal to phase 5's assumption;
   `RepoRefs.LocalNameOf` for each kind (R2 today's name, R1 and R3 null).
 - **`FetchRefspecsParityTests`** (Git.Tests, real git; D96's model): each case's lines (`git config
   --add`, tracking refs by `update-ref`, no fetch), then `git branch --track probe <T>`: exit 0 with
   `branch.probe.remote` and `.merge` equal to the Mapped result, 128 with `not tracking: ambiguous
-  information` for AmbiguousRemotes, with `is not a branch` for NotFetched; C2, P and the empty source
-  asserted as deliberate differences; `git branch -D probe` after each, its failure ignored.
+  information` for AmbiguousRemotes, with `is not a branch` for NotFetched; five deliberate differences
+  asserted as such: C2, P, the empty source, the excluded exact line (X, where the test also shows the
+  fetch leaving `origin/s` alone) and F on the same remote as the default; `git branch -D probe` after
+  each, its failure ignored. It also checks the fetch against `DestinationsOf` (16 cases, a real fetch
+  from a bare server: the tracking refs written are exactly those `DestinationsOf` gives) and C2's push
+  (only the first line's tracking ref moves, 10.1). Symbolic refs are left out of the comparison: Git
+  2.48 and later create `refs/remotes/origin/HEAD` from the server's HEAD, which no line maps (WP3).
 - **`RefReadingTests`**: `Refspecs` read; a remote name with dots keeping its case; two sections of one
   remote in order; the test's global line before a local one; no line gives an empty `FetchRefspecs`, not
   null; `RemoteName` `origin` for B2, `team/fork` for T; `RepoRefs.Remotes` equal to `git remote`'s
@@ -5570,6 +5636,7 @@ while a run runs (2.5, 4.9). Rows have no bar (2.6).
 | `Theme changed to {theme}.` (`Theme changed to System.`), written by `UseTheme` | Info | 11.6 |
 | `The system's theme changed to {light\|dark}; the app follows it.` / `The system's theme changed to {light\|dark}; the app keeps the {dark\|light} theme.` | Info | 11.4 |
 | `Open in editor: {command}`; `{Name} moved to {program}; the editor setting follows it.` | Info | 12.1, 12.3 |
+| `Skipped a fetch line of the remote {name} that git refuses or that names no source: {value}`, only for a line git accepts that the mapping leaves out (an empty source), once per repository object | Warning | 10.1 |
 | Real-window `run.txt`: `S15 (System at start): failed. High contrast is on, and Avalonia follows its scheme: turn it off and run the pass again.` (the method then fails) | — | 11.8 |
 
 ---
@@ -5873,7 +5940,8 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
 - 26 (CI's gits): phase 6's facts were taken on 2.36 and 2.55 only (0.3 to 0.5); CI's 2.43 and 2.56 run
   WP1's, WP2's and WP3's real-git tests for the first time, so every job of their first CI runs is
   read; tests that depend on the git version are written by parity with the git that runs (`m` read
-  with `--type=bool`, `GlobalFile`, `FetchRefspecsParityTests`) or from recorded outputs
+  with `--type=bool`, `GlobalFile`, `FetchRefspecsParityTests`, which leaves out the symbolic
+  `refs/remotes/origin/HEAD` that Git 2.48 and later create from the server's HEAD, 10.9) or from recorded outputs
   (`--tool-help`, 2.36's `name consists only of disallowed characters`, 8.13).
 - 27 (disk): at most 3 built worktrees at once (18).
 - 28 (Visual Studio's Git): `MSYSTEM` is removed by the tests' isolation (8.12, 17.2); that git also lacks
@@ -5882,7 +5950,7 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
 
 **Handoff only** (not risks): fsmonitor daemons started per dashboard repository under the owner's
 `core.fsmonitor=true`, accepted (Q5, 0.1); a phase 5 build sets aside a `settings.json` with `"theme":
-"System"` (7.10, 11.2); 10.8's known issues 3 to 6; the prompt group reusing an answer by prompt text
+"System"` (7.10, 11.2); 10.8's known issues 3 to 7; the prompt group reusing an answer by prompt text
 across one run's repositories (4.4); 9.6's fork-point gaps and 9.14's limits; 17.3's measured times and
 the project chosen; on a Mac keyboard F6, Shift+F6 and Shift+F10 need Fn unless "Use F1, F2, etc. keys
 as standard function keys" is on, and Home, End, PageUp and PageDown are Fn with the arrows (6.1), and
@@ -6497,7 +6565,7 @@ changing only the lines its change moves.
 | WP-SET (the settings screen, git's settings on screen, the editor, Open file) | `Dialogs/SettingsDialogViewModel.cs`, `ViewModels/Settings/` (`GeneralSettingsViewModel`, `GitSettingsViewModel`, `ToolSettingsViewModel`), `Views/Dialogs/SettingsDialogView.axaml(.cs)`; `PickDialogViewModel.cs`, `PickDialogView.axaml`; `Theme/Dialogs.axaml` (then WP-K); `Views/Shell/ToolbarView.axaml` (`SettingsButton`); `MainWindowViewModel.Settings.cs` (`OpenSettingsCommand`; it sets WP0's `TabServices.OpenSettings`); `RepositoryViewModel.Settings.cs` (it only fills the menu context's editor name, 12.1, with no subscription); `RepositoryOperations.Settings.cs`, `RepositoryOperations.Files.cs` (`OpenInEditorAsync`'s body behind WP0's declaration, 12.7's dialog through `TabServices.OpenSettings`); `OperationTexts.Settings.cs`; `Services/KnownEditors.cs`, `EditorCatalog.cs`, `EditorCommands.cs`, `FolderPicker.cs` (`PickFileAsync`), `IFileLauncher.cs`, `FileLauncher.cs`; `Headless/FakeFileLauncher.cs`, `FakeFolderPicker.cs`, `HeldMergeTools.cs`, `ShellDriver.Phase6.Settings.cs`; the expectations of 16.1's Settings-button row | `SettingsDialogViewModelTests`, `SettingsDialogViewTests`, `PickDialogViewModelTests`, `SettingsEntryTests` (the button, `OpenSettingsCommand`), `GitSettingsViewModelTests`, `RepositoryOperationsSettingsTests`, `KnownEditorsTests`, `EditorCatalogTests`, `EditorCommandsTests`, `FileMenuEditorTests` (12.10's file menus) (all new); `JsonSettingsStoreTests`, `FileLauncherTests`, `RepositoryOperationsFilesTests` |
 | WP-T (the theme) | `Services/SystemTheme.cs`, `Services/ThemeService.cs` (behind WP0's signature); `MainWindowViewModel.Theme.cs` (after WP0's move: `Theme` from the service, `UseTheme`'s body, the service's `Changed`); `Theme/Tokens.axaml`, `Theme/Controls.axaml` (`VcDangerButton`); `Views/Shell/DragLayer.cs`; `ShellDriver.Phase6.Theme.cs`, `VisualCommit.Testing/Contrast.cs`; the earlier expectations of 16.1's colour rows | `SystemThemeTests`, `ThemeServiceTests`, `SystemThemeStartTests` (11.15's starts), `DragLayerTests`, `ThemeTokensTests`, `ToolTipStyleTests` (all new); `MainWindowViewModelTests`, `BlameViewTests`, `ConflictPanesTests`, `ConflictResultEditorTests`, `CommitGraphControlTests` |
 | WP-IA (keeping ignored files, the app half) | `RepositoryOperations.Branches.cs`, `.Protect.cs` (`CheckoutRefusalDisplayAsync`; `RepositoryOperations.KeepIgnored`'s body, 9.1, which turns every checkout and merge on at once), `.Rebase.cs` (then WP-B), `.StashTags.cs`; `OperationTexts.Protect.cs`; the earlier expectations of 16.1's `--no-overwrite-ignore` row but the pull's | `RepositoryOperationsKeepIgnoredTests` (new); `OperationTextsTests`, `DialogTests`, `RepositoryOperationsCheckoutTests`, `RepositoryOperationsProtectTests`, `RepositoryOperationsRebaseTests`, `ShellDriverCheckSupportTests`, `UndoRecordingTests`, `ActivityLogViewTests`, `UndoStepTests` |
-| WP-RA (fetch refspecs, the app half) | `RepositoryOperations.RemoteBranches.cs` (10.6's name, R2's checkout without an upstream, D201; every git call keeping `keepIgnored: KeepIgnored`, 9.11), `RepositoryOperations.Remotes.cs` (`SplitRemoteBranch`, `PushBranchToAsync`, `DeleteRemoteBranchAsync`, `SetUpstreamAsync`, `PushToAsync` and `ForcePushAsync` with 10.4's push guard), `.Undo.cs` (`PushForcePushBackAsync`), `.Conflicts.cs` (`MergedRemoteBranch`); `Menus/RepositoryMenuContext.cs` (`DropFacts`, `LocalNameOf` moved, `FindRef`'s index by full name, 5.5), `RepositoryMenus.cs` (`ForDrop`, `ForRemoteBranch`, the set-upstream item), `RepositoryMenus.Pages.cs` (`ForcePushRestore`); `RepositoryViewModel.Menus.cs` (`ReadDropFactsAsync`, `CheckOutByDoubleClick`); `OperationTexts.Menus.Refspecs.cs` (R1 to R4, `CreatedWithoutUpstream`, `PushWouldStopFetch`, 10.5), `OperationTexts.Menus.cs` (`MapsBranchesDifferently` removed) | `RepositoryMenusTests` (with 5.12's `FindRef` cases: duplicate names keep `FirstOrDefault`'s answer, a `with` copy that replaces `Refs` finds its own), `RepositoryOperationsRemotesTests`, `RepositoryOperationsPushTests`, `LeftPanelViewModelTests` |
+| WP-RA (fetch refspecs, the app half) | `RepositoryOperations.RemoteBranches.cs` (10.6's name, R2's checkout without an upstream, D201; every git call keeping `keepIgnored: KeepIgnored`, 9.11), `RepositoryOperations.Remotes.cs` (`SplitRemoteBranch`, `PushBranchToAsync`, `DeleteRemoteBranchAsync`, `SetUpstreamAsync`, `PushToAsync` and `ForcePushAsync` with 10.4's push guard, which counts only destinations under `refs/remotes/`), `.Undo.cs` (`PushForcePushBackAsync`), `.Conflicts.cs` (`MergedRemoteBranch`); `Menus/RepositoryMenuContext.cs` (`DropFacts`, `LocalNameOf` moved, `FindRef`'s index by full name, 5.5), `RepositoryMenus.cs` (`ForDrop`, `ForRemoteBranch`, the set-upstream item), `RepositoryMenus.Pages.cs` (`ForcePushRestore`); `RepositoryViewModel.Menus.cs` (`ReadDropFactsAsync`, `CheckOutByDoubleClick`); `OperationTexts.Menus.Refspecs.cs` (R1 to R4, `CreatedWithoutUpstream`, `PushWouldStopFetch`, 10.5), `OperationTexts.Menus.cs` (`MapsBranchesDifferently` removed). WP3's notes: `RemoteSource`'s equality compares `Remotes` by reference, so compare `Kind`, `Remote` and `RemoteRef`, or the lists by sequence (10.1); with `Refspecs` filled, WP0's `noTrack` in the create-branch operation already takes effect and `GitRef.RemoteName` already follows the mapping, a namespace such as `refs/remotes/mirror/*` that `origin` fetches belonging to `origin` (10.3, 10.4) | `RepositoryMenusTests` (with 5.12's `FindRef` cases: duplicate names keep `FirstOrDefault`'s answer, a `with` copy that replaces `Refs` finds its own), `RepositoryOperationsRemotesTests`, `RepositoryOperationsPushTests`, `LeftPanelViewModelTests` |
 | WP-V (the walk-through, by part) | `Phase6Checks.<part>*.cs`, `Phase6Expectations.<part>.cs`, `Phase6ExpectationTests.<part>.cs` for W, K, S, G and L, one agent per part (the report's checks in full) | `Phase6ExpectationTests.<part>` |
 | WP-R (the real-window pass, Windows) | `Phase6RealWindowPass.cs`, `.W.cs`, `.K.cs`, `.S.cs`, `.L.cs`; `RealApp.Phase6.cs` (`WriteWorkspaces`, 11.8's read-only reads), `.Dashboard.cs`, `.Palette.cs`, `.Settings.cs`; `NativeMethods.cs` (`SystemParametersInfo`); phases 0 to 5's real-window files that 16.1 changes. Written and built (status step 21), run only at the gate; any trial run stays in WP-R's worktree | — |
 | Lead | `MainWindowViewModel.cs` (tabs, `SaveTabs`, `UpdateCanClose`, `TryClose`, `FinishThenCloseAsync`, `CloseAll`, `CloseTab`, the calls into the packages' partial files, the menu layer's `repositoryName` callback, 8.10's start of the merge-tool lookup once the first tab's load ends, `readEnvironment` passed to `AutoFetchScheduler` (7.3), the scheduler's `CommonFolderBusy` (4.3, `:99`)), `MainWindow.axaml.cs`, `TabServices.cs` (`ReadClock`, `OpenSettings`), `AppSession.cs` (the store, the catalogues, 11.5's start-up order, `KeyTexts.Current`, 7.3's log line and `readEnvironment`, `readClock`, the kept list's path given to `GitConfiguration`, 8.10, and its disposal in `Dispose`, 8.1), `Theme/Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `IGitRepository.cs`, `FakeRepositoryBase.cs`, `AppSettings.cs`, the Core records WP0 declares, `Phase6Checks.Support.cs` and `Phase6Expectations.Common.cs` after WP-S (17.2's five dashboard and theme helpers once WP-D, WP-W and WP-T are merged, before WP-V's parts W, S and L), `VisualCommit.slnx` after WP-S, CI, the docs, CLAUDE.md; before the gate, 17.7's references and comparison | `AppSessionTests` (new); `Phase6SupportTests`' smoke tests of those helpers |
