@@ -58,11 +58,12 @@ public sealed record FetchRefspec(string Remote, string Source, string? Destinat
 
         var source = colon >= 0 ? text[..colon] : text;
         var destination = colon >= 0 ? text[(colon + 1)..] : null;
+
         // Both sides a pattern or neither; a positive pattern needs a destination (git refuses
         // "refs/heads/*" and "refs/heads/*:" as fetch lines).
         var destinationIsPattern = destination is not null && destination.Contains('*', StringComparison.Ordinal);
         var sidesAgree = source.Contains('*', StringComparison.Ordinal)
-            ? destination is null ? negative : destinationIsPattern
+            ? (destination is null ? negative : destinationIsPattern)
             : !destinationIsPattern;
         if (!sidesAgree)
         {
