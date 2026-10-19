@@ -5,7 +5,8 @@ builders implement from this file; its final facts are folded into `architecture
 the phase, after which this file is kept as history, as `phase-3-design.md` to `phase-5-design.md`
 are. The last section lists the owner's answers after the reviews and the decisions this design
 makes; they are recorded in `decisions.md` from D195 on. Where this file and merged code differ later, the code's doc comments say what is
-built; tell the lead.
+built; tell the lead. Amended on 2026-10-19 with what wave 1 (WP-S, WP1, WP2) found while building,
+each checked with real git or measured (D231).
 
 Sources: `plan.md` "Phase 6", the phase 5 handoff's "For the next phase", decisions D45, D46, D69,
 D78, D81, D84, D85, D93, D95, D97, D104, D112, D130, D149, D163, D179, the owner's answers D187 to
@@ -209,9 +210,9 @@ and `XDG_CONFIG_HOME` in the lab as well (`<LAB>`). Both gits alike unless a row
 | Includes | An included file's entries take the including file's scope, with the included file as origin (`global	file:<LAB>/inc.gitconfig	merge.tool=meld`); `.git/config`'s includes show as `local`. `includeIf "gitdir:…"` and `"onbranch:…"` apply only inside a matching repository; elsewhere their entries are absent. An MSYS-style include path (`/c/Users/…`) is not loaded on Git for Windows, which warns three times per call (`warning: encountered old-style '/c/Users/…' that should be '%(prefix)//c/Users/…'`) |
 | Outside a repository | System and global entries only, exit 0. A data folder inside a repository (a home folder kept in git) lists that repository's `local` entries, or fails with `fatal: detected dubious ownership` when another user owns it |
 | `--global --get`, `--global --list` | Read only the file `--global` writes, without includes: with both `~/.gitconfig` and `$XDG_CONFIG_HOME/git/config`, `--global --list` leaves the XDG file out; an included value is invisible (`--global --get merge.tool` exit 1 while `--get merge.tool` gives `meld`). Never used by the app (8.1) |
-| Which file `--global` writes | `GIT_CONFIG_GLOBAL` when set (created when missing, if its folder exists); otherwise `~/.gitconfig` if it exists, else `$XDG_CONFIG_HOME/git/config` (`~/.config/git/config` with the variable unset) if only that exists; with neither, `~/.gitconfig` is created. `~` is `HOME`; on Windows with `HOME` unset it is `HOMEDRIVE`+`HOMEPATH` when both are set and that folder exists, else `USERPROFILE`: with `HOME`, `XDG_CONFIG_HOME` and `GIT_CONFIG_GLOBAL` unset and the two set to different folders, reads and a `--global` write used `HOMEDRIVE`+`HOMEPATH`'s `.gitconfig` and left `USERPROFILE`'s alone; with `HOMEPATH` naming a missing folder, or unset, `USERPROFILE`'s (2026-10-18, 2.36's `mingw64\bin\git.exe` and `cmd\git.exe` and 2.55's alike). A plain read reads both, the XDG file first, so `~/.gitconfig` wins. With `GIT_CONFIG_GLOBAL` set neither is read, **but `$XDG_CONFIG_HOME/git/ignore` (or `$HOME/.config/git/ignore`) still is**: its `*.secret` hid `a.secret` from `git status` under an empty lab global file. `git var GIT_CONFIG_GLOBAL` names the global files on 2.55 (exit 0); on 2.36 it is a usage error (`usage: git var (-l \| <variable>)`, exit 129) |
+| Which file `--global` writes | `GIT_CONFIG_GLOBAL` when set (created when missing, if its folder exists; set but empty, no global file is read, `~/.gitconfig` included, and a write fails, exit 4, found while building WP2); otherwise `~/.gitconfig` if it exists, else `$XDG_CONFIG_HOME/git/config` (`~/.config/git/config` with the variable unset) if only that exists; with neither, `~/.gitconfig` is created. `~` is `HOME`; on Windows with `HOME` unset it is `HOMEDRIVE`+`HOMEPATH` when both are set and that folder exists, else `USERPROFILE`: with `HOME`, `XDG_CONFIG_HOME` and `GIT_CONFIG_GLOBAL` unset and the two set to different folders, reads and a `--global` write used `HOMEDRIVE`+`HOMEPATH`'s `.gitconfig` and left `USERPROFILE`'s alone; with `HOMEPATH` naming a missing folder, or unset, `USERPROFILE`'s (2026-10-18, 2.36's `mingw64\bin\git.exe` and `cmd\git.exe` and 2.55's alike). A plain read reads both, the XDG file first, so `~/.gitconfig` wins. With `GIT_CONFIG_GLOBAL` set neither is read, **but `$XDG_CONFIG_HOME/git/ignore` (or `$HOME/.config/git/ignore`) still is**: its `*.secret` hid `a.secret` from `git status` under an empty lab global file. `git var GIT_CONFIG_GLOBAL` names the global files on 2.55 (exit 0); on 2.36 it is a usage error (`usage: git var (-l \| <variable>)`, exit 129) |
 | Writing | `git config --global --replace-all <key> <value>` adds an absent key, replaces a single value and every value of a multi-valued key (exit 0); the plain form refuses a multi-valued key (`error: cannot overwrite multiple values with a single value`, exit 5). `--replace-all pull.rebase true` turns a bare key into `rebase = true` (both, 2026-10-18). `--unset-all` removes every value (exit 0; an emptied section goes too) and **exits 5 for an absent key**; `--unset` exits 5 on a multi-valued key. A value starting with `-` is a value (`--replace-all user.name "-n Bob"` stores `-n Bob`, exit 0). Round-trips: `Ann "The Dev" O'Neil`, `Zoë 日本`, `  padded  ` (stored quoted), a line break (stored `\n`), `a # not comment ; semi \ back`. `--local` in a linked worktree writes the common `.git/config`, with or without `extensions.worktreeConfig`; `--worktree` without the extension: `fatal: --worktree cannot be used with multiple working trees unless the config extension worktreeConfig is enabled.` (exit 128) |
-| Writes that fail | A held lock (`<file>.lock` present): `error: could not lock config file <file>: File exists`, **exit 255**, `--global` and `--local` alike. `GIT_CONFIG_GLOBAL` in a missing folder: `error: could not lock config file <LAB>/nofolder/gitconfig: No such file or directory` (255), the folder not created, reads empty (`--global --get` exit 1, `--list` exit 0; also 0.10) (both cases on both gits, 2026-10-18). A folder the user may not write: `… Permission denied`, 255. A read-only file is written anyway on Windows (exit 0). A broken file (`[user` unclosed) fails every git call, `git --version` included: `fatal: bad config line 1 in file <file>`, exit 128. Git's manual's exit 4 ("cannot write") never occurred |
+| Writes that fail | A held lock (`<file>.lock` present): `error: could not lock config file <file>: File exists`, **exit 255**, `--global` and `--local` alike. `GIT_CONFIG_GLOBAL` in a missing folder: `error: could not lock config file <LAB>/nofolder/gitconfig: No such file or directory` (255), the folder not created, reads empty (`--global --get` exit 1, `--list` exit 0; also 0.10) (both cases on both gits, 2026-10-18). A folder the user may not write: `… Permission denied`, 255. A read-only file is written anyway on Windows (exit 0). A broken file (`[user` unclosed) fails every git call, `git --version` included: `fatal: bad config line 1 in file <file>`, exit 128. Git's manual's exit 4 ("cannot write") occurred only with `GIT_CONFIG_GLOBAL` set but empty, found while building WP2 (both gits): `error: could not write config file : Is a directory`, exit 4; `--unset-all` there exits 5 (8.2) |
 | A value in an included file | The write goes into the main file and may not win: with `[user] email = e@x` above `[include] path = inc.gitconfig` (which sets `user.name = Inc`), `git config --global user.name New` writes into the existing `[user]` above the include, and `--get user.name` still gives `Inc` (`--global --get` gives `New`). `--global --unset merge.tool` of an included value exits 5 and changes nothing. A repository's own includes alike. Hence every write is read back (8.4) |
 | `includeIf` and a global write | With `[user] email = personal@example.com` and `[includeIf "gitdir:<LAB>/repo1/"] path = work.gitconfig` (setting `user.email = work@example.com`) in the global file, the read in `repo1` lists global `personal@example.com`, then global `work@example.com` from `work.gitconfig`, which wins; the read in the data folder under 8.1's ceiling lists only `personal@example.com`. A global write of `user.email` lands in `[user]` above the include and replaces the personal address: in `repo1` git still uses `work@example.com`, while every repository outside the include now commits with the new value (`git var GIT_AUTHOR_IDENT`; 2.36, 2026-10-18). Hence 8.2's global scope from the data folder's read |
 | Worktree scope | With `extensions.worktreeConfig=true` and `git config --worktree user.name "WT Name"` in a linked worktree, the read there lists `local … Local Name` then `worktree file:<LAB>/A/repo/.git/worktrees/wt/config.worktree WT Name`; the worktree value wins |
@@ -219,7 +220,7 @@ and `XDG_CONFIG_HOME` in the lab as well (`<LAB>`). Both gits alike unless a row
 | Pull: case and numbers | 2026-10-18, diverged branches: `pull.rebase` `TRUE`, `True`, `Yes`, `ON`, `2`, `0x10`, `-1`, `010` and `1K` rebase on 2.36 (`TRUE`, `Yes`, `0x10` and `1K` also on 2.55), `0x0` and `00` merge: the boolean words ignore case, and a number is an integer in decimal, `0x` hex or leading-`0` octal with an optional unit `k`, `m` or `g` in either case, which must fit in 32 bits (`99999999999` is a `bad boolean config value` on both). `merges`, `interactive`, `i` and `only` compare exactly: `pull.rebase` `MERGES`, `Interactive`, `I` and `pull.ff` `ONLY`, `Only` → `fatal: invalid value for '<key>': '<v>'` (128) on both. A unit letter alone: `k`, `G` and `M` merge on 2.36 (read as false); on 2.55 they are bad booleans (`pull.rebase=M`: `fatal: invalid value`, 128), while `m` is `merges` there (row above). Pull's reader (`GitRepository.Remotes.cs:611-625`) lower-cases and asks `git config --type=bool`, so it follows each git |
 | Pull: combinations | `pull.ff=only` beats every rebase setting (`pull.rebase=true`, `merges`, `branch.main.rebase=true`): refused. `branch.<b>.rebase` beats `pull.rebase` both ways, and an invalid `pull.rebase` is then never read (`branch.main.rebase=true pull.rebase=foo` rebases). `pull.ff=false` is ignored when rebasing. `pull.rebase=false merge.ff=only` refuses (`merge.ff` reaches pull's merge); `pull.rebase=false pull.ff=true merge.ff=false` fast-forwards (`pull.ff=true` beats `merge.ff`). Branch subsections are case-sensitive and may hold `/`, `.` and spaces (`branch.Feature/x.y.rebase`) |
 | Pull: precedence per key | Global `pull.ff=only` with local `pull.rebase=true`: refused; with local `pull.rebase=true pull.ff=true`: rebases. Global `pull.ff=only` with local `pull.rebase=false`: refused; with local `pull.rebase=false pull.ff=true`: merges. Git for Windows' installer writes its pull choice into the **system** file: here `C:\Program Files\Git\etc\gitconfig` holds `pull.rebase = false` |
-| Pull: when git reads its settings | `GIT_TRACE=1 git pull` with `pull.rebase=foo` stops at `fatal: invalid value for 'pull.rebase': 'foo'` **before fetching** (the remote-tracking branch unchanged). The app today fetches first, then fails with "pull.rebase is set to foo, which this app does not understand." (8.9) |
+| Pull: when git reads its settings | `GIT_TRACE=1 git pull` with `pull.rebase=foo` stops at `fatal: invalid value for 'pull.rebase': 'foo'` **before fetching** (the remote-tracking branch unchanged). The app today fetches first, then fails with "pull.rebase is set to foo, which this app does not understand." (8.9). `git pull --rebase` reads no rebase setting but does read `pull.ff`, refusing `foo`, `ONLY` (and `k` on 2.55) with `fatal: invalid value for 'pull.ff'` before fetching, while `only` and `false` give way to the rebase (2.36 and 2.55, found while building WP2; D231) |
 | `branch.autoSetupRebase` | `git -c branch.autoSetupRebase=always checkout -b x --track origin/main` writes `branch.x.rebase true` itself: a branch can carry a rebase setting nobody chose |
 | Identity | `git var GIT_AUTHOR_IDENT` prints `Name <email> <unix time> <zone>` (`Ann O'Neil <ann@example.com> 1792295653 -0700`), in or outside a repository; `GIT_COMMITTER_IDENT` alike; `-c committer.name=C` changes only the committer, `author.name` only the author; `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` beat all configuration. With no identity both print `Author identity unknown` / `*** Please tell me who you are.` / `Run` / `  git config --global user.email "you@example.com"` / `  git config --global user.name "Your Name"` / `to set your account's default identity.` / `Omit --global to set the identity only in this repository.` and last `fatal: unable to auto-detect email address (got '<user>@<COMPUTERNAME>.(none)')` (the machine's names); with `user.useConfigOnly=true` and nothing set `fatal: no email was given and auto-detection is disabled`; with an email only `fatal: no name was given and auto-detection is disabled`; with `user.name=` (empty) `fatal: empty ident name (for <ann@example.com>) not allowed` (all exit 128, both gits, 2026-10-18). An email only without `useConfigOnly`: the name comes from the Windows account (exit 0) |
 | How git cleans a name | `a<b>c` → `abc` (without a word); a line break dropped (`line oneline two`); outer spaces trimmed; `"quoted"` → `quoted`; a name of punctuation only (`.,:;`, `...`): 2.36 `fatal: name consists only of disallowed characters: .,:;` (128), 2.55 accepts it. An email `<e@x.org>` → `e@x.org`; `e @x.org` is accepted |
@@ -264,6 +265,7 @@ target force-adds.
 | A merge of an ancestor (U4) | the `--diff-filter=A` read to `<Add secret>`, the base read; `git merge --no-edit <Add secret>` | `secret.env\0`; the base is Add secret, base→source lists nothing; git `Already up to date.`, "LOCAL" kept |
 | A rebase onto an ancestor (U2) | `git rebase` on `main` whose upstream is Add secret (S1O, linear) | `Current branch main is up to date.`, exit 0, "LOCAL" kept; `git merge-base --is-ancestor up HEAD` exit 0 |
 | An ahead-only branch with a merge (U5) | U0 tracks `secret.env`, U1 follows it (the upstream); `feat` from U0 adds `f.txt`; `main` is U1 and "Stop tracking secret" (`git rm --cached`, `.gitignore`); `git switch feat`, `git merge main`, `git switch main`, `git merge --ff-only feat`; `secret.env` "LOCAL", `!! secret.env`. Then `git merge-base --is-ancestor @{u} HEAD`, 9.6's read (3) with `--diff-filter=AMT`, `git rev-list --min-parents=2 @{u}..HEAD`, `git rebase`, and on a fresh copy `git rebase --rebase-merges` | is-ancestor exit 0; (3) lists the two single-parent commits only: `--diff-filter` leaves out a merge, which has no path without `-m` (without the filter it is listed); rev-list prints the merge. `git rebase`: `Successfully rebased and updated refs/heads/<b>.`, the branch made linear, `secret.env` **gone**; `--rebase-merges`: HEAD the same commit as before, `secret.env` **gone** too: git checks out `<onto>` and replays whatever the result |
+| A side branch from a commit outside the range (found while building WP1) | U0 tracks `secret.env`; `feat` from U0 adds `f.txt`; `main` stops tracking and ignores it (U1), adds `local.txt` and merges `feat`; `<onto>` U2 follows U1 with `u2.txt`; `secret.env` "LOCAL". `git rebase --rebase-merges U2` on `main`; a plain `git rebase U2` | `--rebase-merges`: the todo `label onto` / `reset <U0>` / `pick F` / … / `merge -C …`: git resets to the side branch's original branch point, which writes `secret.env` over the ignored file, and the next `reset onto` deletes it: exit 0, `secret.env` **gone** (2.36 and 2.55). Neither `<onto>` nor the tip has the file and no commit of the range writes it, so 9.6's reads (1) to (4) do not see it. The plain rebase replays F's change only and keeps it. `rebase.rebaseMerges` (Git 2.42 and later) makes a plain `git rebase` keep merges too; 2.36 ignores the key |
 | `diff-tree --stdin` | `git diff-tree --stdin [--no-commit-id] [-R] [--root] -r -z --no-renames --name-only --diff-filter=…` | a line `<c>` diffs c against its first parent (a merge prints nothing without `-m`; a root commit nothing without `--root`, `README\0` with it); `<c> <p>` diffs p→c; `-R` reverses; without `--no-commit-id` each output starts `<c>\0`. **Names are not resolved**: `HEAD`, `main~3`, `zzz`, `<sha>^1 HEAD` come back unchanged, exit 0: full SHAs only |
 | A range's picks; parents | `git log --no-renames --name-only -z --root --no-merges --no-show-signature --format=%x1e%H --diff-filter=AMT <onto>..<tip> --`; `git rev-list --stdin --no-walk=unsorted --parents` fed `<X>` and `<Edit>` on standard input, one per line (the arguments form `git rev-list --no-walk=unsorted --parents <X> <Edit>` gives the same) | `\x1e<sha>\0\nx.txt\0\x1e<sha>\0\n.gitignore\0…` (a deletion filtered out); `<X> <its parent>` / `<Edit> <its parent>`, in the order given |
 | Long argument lists | `git rev-list --no-walk=unsorted --parents` with N SHAs as arguments, started by .NET's `Process.Start` (2.36, `C:\Program Files\Git\cmd\git.exe`, a lab repository of 1,001 commits); the same 999 SHAs in reverse order on standard input (`--stdin`) | 700 SHAs (28,772 characters) and 790 (32,462): exit 0; 800 (32,872) and 999 (41,031) do not start: `System.ComponentModel.Win32Exception: The filename or extension is too long` (Windows' 32,767-character command line), which `GitRunner` turns into a `GitException` (`GitRunner.cs:95-101`). On standard input: exit 0, 999 lines in the order given, on both gits |
@@ -444,7 +446,7 @@ isolated as the tests are, with `HOME` and `XDG_CONFIG_HOME` in the lab; the pro
 | Port 47393 | Not in Windows' excluded ranges (`netsh interface ipv4 show excludedportrange protocol=tcp`: only 50000-50059), nothing on 47390 to 47394 (`Get-NetTCPConnection`); on Linux in the ephemeral range, as 47391 (phase 3 design 7.3), so the fallback to a free port (`PortWasTaken`) stays |
 | The renaming refspecs (17.1) | `git branch --track probe refs/remotes/<T>`, then `branch.probe.remote` and `.merge`: `fork/up/main` → `branch 'probe' set up to track 'fork/main'.`, `fork`, `refs/heads/main`; `origin/pr/1` → `… track 'origin/pr/1'.`, `origin`, `refs/heads/pr/1` (git takes the first candidate; R2); `upstream/pr/7` → `… track 'upstream/refs/pull/7/head'.`, `upstream`, `refs/pull/7/head` (R4); `origin/feature/x` the identity. Exit 0, both gits |
 | The ignored files without the app's check (17.1) | After `git update-index -q --refresh`, each on a fresh copy: `git switch --no-guess --no-overwrite-ignore vendor` and `git switch --create vendor2 --track --no-overwrite-ignore refs/remotes/origin/vendor` → `error: The following untracked working tree files would be overwritten by checkout:` / `\tsecret.env` / `Please move or remove them before you switch branches.` / `Aborting`, exit 1, `secret.env` still `LOCAL`; `git switch --no-guess --no-overwrite-ignore tools` → `error: Updating the following directories would lose untracked files in them:` / `\tbuild` / (empty line) / `Aborting`, exit 1. Without the option `vendor` is checked out (0) and `secret.env` reads `vendor`. `git merge --no-edit --no-overwrite-ignore refs/heads/vendor` → `Merge made by the 'ort' strategy.`, 0, overwritten; `git rebase refs/heads/vendor`, `git cherry-pick refs/heads/vendor`, `git revert --no-edit HEAD~1` (re-adds `old`), `git stash apply stash@{0}` (`new file:   secret.env`, `stashed`): 0, each overwrites it. Identical on 2.55. With `vendor` pushed a second time as `vendor-remote` (`git push origin vendor:vendor-remote`, no `-u`: `refs/remotes/origin/vendor-remote` and no local branch; listed last in one `-u` push, it would make `vendor` track `origin/vendor-remote`): `git switch --create vendor-remote --track --no-overwrite-ignore refs/remotes/origin/vendor-remote` → the same block, exit 1, no `refs/heads/vendor-remote`, HEAD still `main`, `secret.env` `LOCAL`; beside the local `vendor`, `git switch --create vendor --track --no-overwrite-ignore refs/remotes/origin/vendor` → `fatal: a branch named 'vendor' already exists`, 128 (2.36) |
-| `VisualCommit.App.Tests` | 422 headless test methods (`[AvaloniaFact]`, `[AvaloniaTheory]`) in 58 files and 57 classes (`CommitGraphControlTests` is split over two), 754 plain ones (a `grep`, `72c790c`); 214 of the plain ones lie in those 57 classes: 166 in the 24 files that hold both kinds, 48 in `RepositoryMenusTests`' three partial files without a headless test (`RepositoryMenusTests.cs` 34, `.Pages.cs` 13, `.ActivityLog.cs` 1); many of them build real-git scenarios (`Scenarios.OperationsAsync`). Last to end in step 2's baseline (37 min 26 s of 37 min 29 s, `acdac12`, the laptop otherwise idle) and at phase 5's gate (43 min 8 s of 43 min 22 s). Avalonia.Headless.XUnit runs headless tests one at a time on the assembly's one UI thread; whether that thread or the processors set the length was not measured (17.3) |
+| `VisualCommit.App.Tests` | 422 headless test methods (`[AvaloniaFact]`, `[AvaloniaTheory]`) in 58 files and 57 classes (`CommitGraphControlTests` is split over two), 754 plain ones (a `grep`, `72c790c`); 214 of the plain ones lie in those 57 classes: 166 in the 24 files that hold both kinds, 48 in `RepositoryMenusTests`' three partial files without a headless test (`RepositoryMenusTests.cs` 34, `.Pages.cs` 13, `.ActivityLog.cs` 1); many of them build real-git scenarios (`Scenarios.OperationsAsync`). Last to end in step 2's baseline (37 min 26 s of 37 min 29 s, `acdac12`, the laptop otherwise idle) and at phase 5's gate (43 min 8 s of 43 min 22 s). Avalonia.Headless.XUnit runs headless tests one at a time on the assembly's one UI thread; whether that thread or the processors set the length was not measured then: WP-S measured the processors (17.3) |
 | Phase 5's walk-throughs (r10, `artifacts/visual/phase-5/timings/`) | `Phase5`: 34 methods, 143 pictures, 681 s summed from each method's start to its last picture (20.0 s per method, 4.8 s per picture); `Phase5Undo`: 55 methods, 121 pictures, 1,305 s. `Phase5` ended at 18 min 56 s idle and 29 min 50 s at the gate: wall time 1.67 to 2.6 times the UI thread's |
 | `GitCallLog` | Reads kept in a ring of 2,000 (`GitCallLog.DefaultReadCapacity`, `src/VisualCommit.Git/GitCallLog.cs:23`), so a count taken before an input shifts when reads drop out; `GitCallRecord.Sequence` (`src/VisualCommit.Core/Git/GitCallRecord.cs:51`) and `WorkingDirectory` (`:36`) mark and filter calls exactly |
 
@@ -1813,12 +1815,12 @@ status bar say the same.
 | D1, D2, D4 | failed, `MergeBlockedByLocalChanges` | "Pull failed" (danger) | "Pull failed" / "1 conflict prevents the merge. Commit, stash, or discard your changes first." ("{N} conflicts prevent the merge. …") |
 | D3 | failed, `MergeBlockedByStagedChanges` | "Pull failed" | "Pull failed" / "Your staged changes prevent the merge. Commit, stash, or unstage them first." |
 | F3; a rebase refused for untracked files | failed | "Pull failed" | "Pull failed" / "Git rebases only a clean working tree: commit or stash your changes first."; "Untracked files are in the way: move or remove them first." |
-| **E, E4** | failed, `NotFastForward` | "Pull failed" | "Pull failed" / **new**: "main and origin/main have diverged, and pull.ff is set to only: merge origin/main into main or rebase main onto origin/main."; git's output `fatal: Not possible to fast-forward, aborting.` (2.55: after its nine hints), command `git merge --ff-only --no-overwrite-ignore FETCH_HEAD` (`git merge --ff-only FETCH_HEAD` when Keep ignored files is off, 9.10) |
+| **E, E4** | failed, `NotFastForward` | "Pull failed" | "Pull failed" / **new**: "main and origin/main have diverged, and pull.ff is set to only: merge origin/main into main or rebase main onto origin/main."; git's output `fatal: Not possible to fast-forward, aborting.` (2.55: after its nine hints), command `git merge --ff-only --no-overwrite-ignore FETCH_HEAD` (`git merge --ff-only FETCH_HEAD` when Keep ignored files is off, 9.10); also with an ignored file where the fast-forward would write: on diverged branches nothing counts as in the way (9.10) |
 | E5, E6 (`merge.ff=only` or `branch.main.mergeOptions=--ff-only`, `pull.ff` unset) | failed, `NotFastForward` | "Pull failed" | "Pull failed" / today's "Git could not pull origin/main into main." with git's output (2.55: E's hints), command `git merge --no-edit --no-overwrite-ignore FETCH_HEAD`: `PullNotFastForward` would name the wrong key, and its "merge" advice would be refused by the same setting |
-| an ignored file in the way (9.10) | failed | "Pull failed" | "Pull failed" / 9.15's text ("1 ignored file is in the way of the merge: secret.env. Move it away first.") |
+| an ignored file in the way (9.10; under `--ff-only` only when the branch can fast-forward, else E, E4) | failed | "Pull failed" | "Pull failed" / 9.15's text ("1 ignored file is in the way of the merge: secret.env. Move it away first.") |
 | J; a refused or failed sign-in | failed | "Pull failed" | "Pull failed" / "Git could not pull origin/main into main." with git's output |
 | HEAD or the upstream moved while it waited (D124) | failed | "Pull failed" | "Pull failed" / "HEAD moved while this waited: it was on main and is on topic now. Nothing was pulled." / "main's upstream changed while this waited: it is origin/next now, not origin/main. Nothing was pulled." |
-| a pull setting git would refuse | failed | "Pull failed" | "Pull failed" / "pull.rebase is set to preserve, which this app does not understand." (before the fetch, 8.9) |
+| a pull setting git would refuse | failed | "Pull failed" | "Pull failed" / "pull.rebase is set to preserve, which this app does not understand." (before the fetch, 8.9); for "Pull from {up} (rebase)" only a refused `pull.ff` counts: "pull.ff is set to foo, which this app does not understand." (D231) |
 | cancelled during its fetch (Cancel all, the row's Cancel, a cancelled prompt) | cancelled | "Pull cancelled" | none, or "Pull cancelled" with the lock files git left (phase 3's design 1.8) |
 
 Fetch all's outcomes: "Fetched from all remotes" (secondary; also when nothing was new); "Fetch
@@ -1837,8 +1839,9 @@ OperationTexts.PullNotFastForward(branch, upstream))`, for the toolbar's and the
 3's check 18b changes, 16.1). The pull passes `--ff-only` under `pull.ff=only` (E, E4) and otherwise
 only for a fast-forward under a rebase setting (N), after `PullCanFastForwardAsync` found one possible;
 a plain `git merge --no-edit …` refused by `merge.ff=only` or `branch.<b>.mergeOptions` (E5, E6) goes
-on to `BlockedByChangesDisplay` and keeps the default text (0.2). Pull (rebase) never reads `pull.ff`
-(D147).
+on to `BlockedByChangesDisplay` and keeps the default text (0.2). Pull (rebase) reads `pull.ff` only to
+refuse, before its fetch, a value `git pull --rebase` refuses (8.9, D231): `only` and `false` give way
+to the rebase.
 
 ### 4.9 The results: the header and the status bar
 
@@ -1960,7 +1963,7 @@ Git layer (`tests/VisualCommit.Git.Tests`):
 - `FailureClassifierTests`: 0.2's texts: E and E5 on 2.36 and on 2.55 (with the hints) `NotFastForward`
   with no blocked paths; D2 and D3 on 2.55 (exit 2, "Merge with strategy ort failed.") as on 2.36.
 
-App (`tests/VisualCommit.App.Tests`, or the view-test project if 17.3's measurement makes one):
+App (`tests/VisualCommit.App.Tests`, where 17.3's measurement keeps the view tests):
 
 - `BulkSlotsTests` (no git): at most 4 granted; the fifth gets the first released slot; first come,
   first served; a request whose common folder holds a slot is passed over and served when it is free; a
@@ -1988,7 +1991,7 @@ App (`tests/VisualCommit.App.Tests`, or the view-test project if 17.3's measurem
   rows decided by `StatesFor` with 4.2's texts; "Waiting to fetch…" in line; never more
   than 4 running: six rows under the fetch hold, `WaitForHeldAsync(4)`, then four rows `Running` and two
   `InLine` ("Waiting to fetch…"), `Held` still 4 after a settle (no fifth git started), and after
-  `Release()`, well within the hold's 120 rounds of 0.5 s (about 60 to 70 s, 17.2), the two in line
+  `Release()`, well within the hold's 120 rounds of 0.5 s (89 s on the laptop, 17.2), the two in line
   start and all six end "Fetched from all remotes"; where one test runs two held runs in one data
   folder, `FetchHold.Arm()` before the second run's `WaitForHeldAsync`; a repository without a remote,
   next to held ones, left out with `This repository has no remotes` (its cell `No remote`) under the
@@ -2339,8 +2342,8 @@ Pure, in `VisualCommit.App.Tests`:
   name and for a duplicate one, and a `with` copy that replaces `Refs` finds its own refs, not the
   first context's.
 
-Headless, `CommandPaletteViewTests` (in `VisualCommit.App.Tests` or `VisualCommit.App.ViewTests`, as
-17.3's measurement decides): Mod+Shift+P opens it with the focus in its box; card and box where 5.3
+Headless, `CommandPaletteViewTests` (in `VisualCommit.App.Tests`, as 17.3's measurement decided):
+Mod+Shift+P opens it with the focus in its box; card and box where 5.3
 puts them at 1100×700 and 1920×1080; a second Mod+Shift+P selects the box's text; it declines while a
 menu or another dialog is open; typing filters; Up, Down, PageDown move the highlight into view; the
 row colours of an enabled, a destructive and a disabled entry in both themes; Enter on "Create branch…"
@@ -2792,7 +2795,7 @@ Pure, in `VisualCommit.App.Tests`:
   branch's `Pull from {up}` and `Push {b} to {up}`, not another branch's; only `stash@{0}`'s
   `Pop stash`; the diff's `File history` and `Blame`, not a file row's.
 
-Headless (in `VisualCommit.App.Tests` or `VisualCommit.App.ViewTests`, as 17.3 decides), with 17.2's
+Headless (in `VisualCommit.App.Tests`, as 17.3's measurement decided), with 17.2's
 `ShellDriver.Phase6.Keys.cs`:
 
 - `WindowKeysTests` unchanged: its six tests (`WindowKeysTests.cs:27-192`) pass, now through the router.
@@ -3160,7 +3163,7 @@ say. Pull keeps following git (D78, D84); the merge tool stays `merge.tool` (D14
 `TabServices.GitSettings`, created from `GitAccess`):
 
 ```csharp
-public interface IGitConfiguration
+public interface IGitConfiguration : IDisposable
 {
     /// <summary>Every value git reads, with its scope and file: one git config --show-scope --show-origin -z --list in the working tree, or for null the outside read (8.1).</summary>
     Task<GitConfigRead> ReadAsync(string? workingTree, CancellationToken cancellationToken = default);
@@ -3170,6 +3173,12 @@ public interface IGitConfiguration
 
     /// <summary>The file git config --global writes (8.2), worked out by the app, never asked of git.</summary>
     string GlobalFile { get; }
+
+    /// <summary>The XDG file git reads before the global file when GIT_CONFIG_GLOBAL is unset, as a full path, for 8.2's naming; empty without a home folder.</summary>
+    string XdgFile { get; }
+
+    /// <summary>A variable of the environment git gets, the session's (8.12) over the process's; null when unset or removed (8.6's notices).</summary>
+    string? Variable(string name);
 
     /// <summary>The global writes, in order, one git call each, one save at a time across the app (8.3).</summary>
     Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default);
@@ -3191,7 +3200,9 @@ public sealed record GitConfigWrite(string Key, string? Value);
 ```
 
 The names avoid undo's `ConfigScope` and `ConfigEntry` (`Core/Undo/UndoScope.cs:510`,
-`Core/Undo/UndoState.cs:63`).
+`Core/Undo/UndoState.cs:63`). `XdgFile`, `Variable` and `IDisposable` joined the interface after wave 1
+(the lead's, before WP-SET; the concrete class already had them): `AppSession.Dispose` disposes the
+instance, which stops 8.10's lookup.
 
 **The calls.** `git config --show-scope --show-origin -z --list`, a read (`GIT_OPTIONAL_LOCKS=0`),
 in up to two places:
@@ -3248,7 +3259,10 @@ line naming it:
 | Command scope | `the environment the app was started with` |
 
 `GlobalFile` follows git's rule (0.3) over the environment git gets (the session's, 8.12, over the
-process's): `GIT_CONFIG_GLOBAL` when set and not empty; otherwise, with `home` = `HOME` when set (on
+process's): `GIT_CONFIG_GLOBAL` when set, also when set but empty, in which case git reads no global
+file (`~/.gitconfig` included), so `GlobalFile` names none (empty; null from the pure rule below), a
+global write fails with `error: could not write config file : Is a directory` (exit 4, 8.5) and an
+`--unset-all` exits 5; otherwise, with `home` = `HOME` when set (on
 Windows with `HOME` unset: `HOMEDRIVE`+`HOMEPATH` when both are set and that folder exists, else
 `USERPROFILE`, as Git for Windows does, 0.3; elsewhere `HOME` alone) and `xdg` =
 `$XDG_CONFIG_HOME/git/config` (or `<home>/.config/git/config`): `<home>/.gitconfig` when it exists,
@@ -3322,7 +3336,8 @@ work.gitconfig (included), which git reads later.`
 | `error: could not lock config file <file>: File exists` (a held lock: another program, a terminal, a git killed while writing) | 255 | the error dialog with git's line; the screen stays open. No offer to remove a configuration lock (D126 is for locks the app's own cancelled operations leave) |
 | `error: could not lock config file <file>: No such file or directory` / `: Permission denied` | 255 | the same |
 | `fatal: bad config line <n> in file <file>` | 128 | reading: `GitReadError` (7.4); writing: the error dialog. Such a file stops every git call, `git --version` included, so the app usually says "Git is not working" first; git's own line there is phase 8's first-run work (16.2) |
-| `--unset-all` of an absent key | 5 | done |
+| `error: could not write config file : Is a directory` (`GIT_CONFIG_GLOBAL` set but empty, 8.2: no global file) | 4 | the error dialog with git's line |
+| `--unset-all` of an absent key (also with `GIT_CONFIG_GLOBAL` set but empty) | 5 | done |
 | exit 1 or 2 on a write (an invalid key) | 1, 2 | a bug: the error dialog with git's line, and a log line |
 
 ### 8.6 Identity
@@ -3391,7 +3406,8 @@ bool result)` (`src/VisualCommit.Core/Git/GitBoolean.cs`):
   result fitting in a 32-bit int; not zero is true, zero false (`2`, `0x10`, `-1`, `010`, `1K` true;
   `0x0`, `00` false; `99999999999` no boolean);
 - a unit letter alone (`k`, `m`, `g` in either case) is no boolean here: 2.36 reads it as false and
-  newer gits refuse it (0.3), which rule 3 shows.
+  newer gits refuse it (0.3), which rule 3 shows (in `pull.rebase` even before rule 2, as the exception
+  below the rules says).
 
 `merges`, `m`, `interactive`, `i` and `only` compare exactly, so `MERGES` and `ONLY` are refused
 values. Then, first that holds:
@@ -3399,13 +3415,18 @@ values. Then, first that holds:
 1. a value the app's Pull does not understand (`pull.rebase` other than a boolean, `merges`, `m`,
    `interactive`, `i`; `pull.ff` other than a boolean or `only`; a unit letter alone aside) →
    `PullOther`, refused;
-2. `pull.ff` = `only` → Fast-forward only (whatever `pull.rebase` says);
+2. `pull.ff` = `only` → Fast-forward only (whatever `pull.rebase` says, but for the exception below);
 3. `pull.rebase` = `interactive`, `i` or `m`, or either key a unit letter alone → `PullOther`;
 4. `pull.rebase` true → Rebase (`pull.ff=false` is ignored when rebasing);
 5. `pull.rebase` = `merges` → Rebase, keeping merge commits;
 6. `pull.ff` false → Merge, always with a merge commit;
 7. `pull.rebase` false or `pull.ff` true → Merge (fast-forward when possible);
 8. both unset → Not set / Same as global.
+
+One exception to the order: a unit letter alone in `pull.rebase` (`k`, `M`, `G` and the rest; `m`
+passes, being `merges` or false) reads as `PullOther` with the unit letter's second line
+(`PullModes.UnitLetterNote`) before rule 2, because with `pull.ff=only` 2.36 fast-forwards only while
+2.55 refuses every pull (`fatal: invalid value for 'pull.rebase'`, exit 128).
 
 Only those values, and those the two gits read differently (`m`, a unit letter alone), are unusual,
 so the single keys git's hint and Git for Windows' installer write (`pull.rebase false`, `pull.rebase
@@ -3467,7 +3488,9 @@ repository. So:
   a value it does not understand fills `Problem` with today's sentence (`pull.rebase is set to
   preserve, which this app does not understand.`); `PullConfiguration.NotUnderstood()` builds the
   `GitException("git config --get <key>", 0, <sentence>)` that `RemoteArguments.NotUnderstood`
-  (`:888`) builds today, which then calls it.
+  (`:888`) builds today, which then calls it. `ReadPullFastForwardAsync` stays, private, beside it: it
+  reads `pull.ff` first for `ReadPullConfigurationAsync` (a problem there stops the read, as `git pull`
+  stops) and alone for `PullIntegration.Rebase` (D231).
 - **`IntegratePullAsync`.** Phase 4's overload (`IGitRepository.cs:556`, `(GitRef branch,
   PullIntegration integration, Func<string, Task>? beforeRebase, NetworkOptions? options = null,
   CancellationToken cancellationToken = default)`) gains a last optional `PullIntegrationOptions?
@@ -3475,18 +3498,23 @@ repository. So:
   `FakeRepositoryBase`'s override alike): the record
   `PullIntegrationOptions(PullConfiguration? Configuration = null, bool KeepIgnored = false)`, which WP0
   declares (`KeepIgnored` is 9.10's). With a configuration, `AsConfigured` integrates by it (throwing
-  its `NotUnderstood()` for a problem); without, it reads it itself, as today. So **`PullParityTests`
-  and `PullRebaseParityTests` compile and stay unchanged** (they pass `beforeRebase:` and
+  its `NotUnderstood()` for a problem); without, it reads it itself, as today. `PullIntegration.Rebase`
+  counts only a `pull.ff` problem of a given configuration and, given none, reads `pull.ff` alone,
+  throwing for a value git refuses; `pull.ff=only` and `false` give way to the rebase (D231). So
+  **`PullParityTests` and `PullRebaseParityTests` compile and stay unchanged** (they pass `beforeRebase:` and
   `cancellationToken:` by name, no options, after their own fetch) and keep
   comparing the app's integration with `git pull` on every git CI runs.
 - **`PullStepsAsync`** (today `ViewModels/Operations/RepositoryOperations.Remotes.cs:159`, moved by WP0
   into `RepositoryOperations.FetchPull.cs`): after `RefuseIfPullTargetMovedAsync` and **before the
-  fetch**, for `PullIntegration.AsConfigured` only (a rebase chosen for one pull reads no setting, as
-  `git pull --rebase`, D147), `var configuration = await Git.ReadPullConfigurationAsync(branch.Name)`;
-  with a problem it returns `Failed(text, FailureOf(configuration.NotUnderstood(),
-  configuration.Problem))`, today's dialog ("Pull failed", the sentence, `git config --get
-  pull.rebase`), and nothing is fetched. Otherwise the fetch, the cancel window's end, D124's second
-  HEAD check, then `IntegratePullAsync(branch, integration, oldTip =>
+  fetch**, for `PullIntegration.AsConfigured`, `var configuration = await
+  Git.ReadPullConfigurationAsync(branch.Name)`; with a problem it returns `Failed(text,
+  FailureOf(configuration.NotUnderstood(), configuration.Problem))`, today's dialog ("Pull failed", the
+  sentence, `git config --get pull.rebase`), and nothing is fetched. For "Pull from {up} (rebase)", the
+  rebase chosen for one pull (`PullIntegration.Rebase`), it reads `pull.ff` alone and refuses the same
+  way a value `git pull --rebase` refuses (`foo`, `ONLY`; `k` on 2.55; the command `git config --get
+  pull.ff`), as git does (checked on 2.36 and 2.55); `pull.ff=only` and `false` still give way to the
+  rebase, and no rebase setting is read (D231, amending D147's "does not read git's pull settings").
+  Otherwise the fetch, the cancel window's end, D124's second HEAD check, then `IntegratePullAsync(branch, integration, oldTip =>
   SaveRebaseBackupAsync(branch.Name, oldTip), options, new PullIntegrationOptions(configuration,
   KeepIgnored), CancellationToken.None)`, `options` staying the `NetworkOptions` it passes today
   (`RepositoryOperations.Remotes.cs:186-191`) and the new argument going before the token. The `catch`
@@ -3519,8 +3547,9 @@ looked up ahead and kept (D202):
   drops the task when the first tab's load ends (the first graph shown, or the first repository's
   load failed), or at once when the session restores no repository's tab; the settings screen's
   first opening starts it if nothing has yet. On Windows the git process runs at below-normal priority
-  (`GitCommand.BelowNormalPriority`, new, which `GitRunner` applies right after the start; the shells
-  git starts inherit it), so it does not slow the first repository's reads (Q1, risk 12).
+  (`GitCommand.BelowNormalPriority`, new, which `GitRunner` applies right after the start to git and to
+  what git has started by then, found by Toolhelp snapshots, at most 5; the shells git starts later
+  inherit it), so it does not slow the first repository's reads (Q1, risk 12).
 - **The kept list**: each run that ends without failing writes `merge-tools.json` in the data folder
   (`AppPaths.MergeToolsFile`, given to `GitConfiguration` by `AppSession.Start`), `{ "git": <git's
   path>, "version": <git --version's text>, "found": [...], "notFound": [...] }` with each tool's name
@@ -3615,7 +3644,8 @@ adds:
   `includeIf` shape a global write of `user.email` read back in the outside read as written, while the
   work repository's winner stays the `includeIf`'s. `GitConfigLocationsTests`: the pure rule for each
   of 0.3's cases, Windows' home among them (`HOMEDRIVE`+`HOMEPATH` beating `USERPROFILE`, a missing
-  `HOMEPATH` folder and an unset `HOMEPATH` falling back to `USERPROFILE`, `HOME` beating both), and a
+  `HOMEPATH` folder and an unset `HOMEPATH` falling back to `USERPROFILE`, `HOME` beating both; an empty
+  `GIT_CONFIG_GLOBAL` naming no file, where git's write exits 4, 8.2), and a
   parity test that git writes where it predicts (each case with its own `HOME`, `XDG_CONFIG_HOME`,
   `GIT_CONFIG_GLOBAL`; on Windows two more cases that remove `HOME`, `GIT_CONFIG_GLOBAL` and
   `XDG_CONFIG_HOME` from the git call's environment and set `HOMEDRIVE`+`HOMEPATH` and `USERPROFILE` to
@@ -3626,7 +3656,9 @@ adds:
   `PullConfigurationTests`: `ReadPullConfigurationAsync` for every row of 0.3's pull facts, `Problem`
   for refused values, `m` as each git reads it; Pull's reader and `GitBoolean.TryParse` agreeing on
   each value `PullModesTests` names (for a unit letter alone: Pull following its git, the screen
-  showing `PullOther`); `IntegratePullAsync` with a configuration as without.
+  showing `PullOther`); `IntegratePullAsync` with a configuration as without, and the chosen rebase
+  refusing an invalid `pull.ff` as `git pull --rebase` does while counting only a `pull.ff` problem of
+  a given configuration (`PullConfigurationIntegrationTests`, D231).
   `MergeToolHelpTests`: the parse of recorded 2.36 and 2.55 outputs (with a `user-defined:` block);
   the live run's exit code; the kept list (a matching `merge-tools.json` answered at once while a held
   run goes on, then replaced by its result; another git's path or version, and an unreadable file,
@@ -3636,7 +3668,8 @@ adds:
   `pull.rebase=true pull.ff=only`, `true false`, a bare key, `1`, `10k`, `interactive`, `m`,
   `preserve`, `pull.ff=foo`); `GitBoolean.TryParse` and `Read` on `TRUE`, `Yes` and `ON` (true), `0x10`,
   `-1`, `010` and `1K` (true), `0x0` and `00` (false), `99999999999` (refused), `ONLY` and `MERGES`
-  (refused), `M` and `k` (`PullOther` with the line that each git reads it differently).
+  (refused), `M` and `k` (`PullOther` with the line that each git reads it differently), also beside
+  `pull.ff=only` (8.7's exception to the order), while `m` beside it is Fast-forward only.
 - **App.** `GitSettingsViewModelTests` (a fake `IGitConfiguration`): each scope's fields from its read
   (the global scope's from the outside read, the repository's from the repository read); a pair of
   reads with an `includeIf` value in the repository read only: the global field showing the global
@@ -3655,7 +3688,9 @@ adds:
   open. These two effects have no picture (17.5).
   `RepositoryOperationsPullTests.Pull_with_a_setting_the_app_does_not_understand_says_which_and_changes_nothing`
   (`tests/VisualCommit.App.Tests/RepositoryOperationsPullTests.cs:115`) gains: `origin/main` not
-  fetched and no `fetch` among the operation's git calls. A resolver open on a conflict enables "Merge
+  fetched and no `fetch` among the operation's git calls; WP-B's case beside it: "Pull from {up}
+  (rebase)" with `pull.ff = foo` fails the same way before its fetch (`git config --get pull.ff`),
+  while with `pull.ff = only` it rebases (D231). A resolver open on a conflict enables "Merge
   tool…" after a Save that set `merge.tool` (`GitSettingsChanged`). WP-D's (8.11, 3.9):
   `GitSettingsChangedTests` (new; a counting `FakeRepositoryBase`): a full view model with conflicts
   reads `merge.tool` once per event, none without conflicts, and after `Dispose` reads nothing and
@@ -3784,22 +3819,35 @@ side: (1) `git merge-base --is-ancestor <onto> <tip>`; (2) `git diff-tree -r -z 
 --no-renames --name-only -z --root --no-merges --no-show-signature --format=%x1e%H --diff-filter=AMT
 <onto>..<tip> --` (the commits git may replay, 0.4; it can list no merge, which has no path without
 `-m` and which `--diff-filter` leaves out anyway, U5); (4) `git rev-list --min-parents=2 --max-count=1
-<onto>..<tip> --` (a merge in the range, which (3) cannot show). An ancestor `<onto>` and no merge in
-`<onto>..<tip>` mean git writes nothing ("Current branch {b} is up to date.", U2): an empty result, as for
-the pull's rebase of a linear branch only ahead of its upstream (the menus never offer a rebase onto a
-commit the branch contains: `AlreadyOn`, `UpToDateWith`). Otherwise `FindIgnoredAtAsync` of (2) and (3):
-with a merge in the range git checks out `<onto>` and replays even a branch only ahead of it, plain or
-with `--rebase-merges`, and an ignored file a commit of the range stops tracking is deleted, also when
-`--rebase-merges` gives back the same commit (U5). Cost: four reads side by side, then `check-ignore`.
+<onto>..<tip> --` (a merge in the range, which (3) cannot show). Whenever (4) finds a merge, whatever the
+rebase's options, two more reads follow: (5) `git rev-list --topo-order --boundary <onto>..<tip> --`,
+whose `-<sha>` lines are every parent outside the range, each a commit git may reset to; and (6) one `git
+diff-tree --stdin --no-commit-id -r -z --no-renames --name-only --diff-filter=A` fed `<boundary> <tip>`
+per boundary (what each boundary has and the tip lacks, as (2) for `<onto>`). `--rebase-merges` starts
+each side branch with `reset` to its original branch point, which (1) to (4) do not see (0.4's side
+branch: `reset <U0>` writes the ignored file and the next `reset onto` deletes it); and
+`rebase.rebaseMerges` (Git 2.42 and later; 2.36 ignores the key) makes a plain `git rebase` keep merges,
+and reset so, too. An ancestor `<onto>` and no merge in `<onto>..<tip>` mean git writes nothing
+("Current branch {b} is up to date.", U2): an empty result, as for the pull's rebase of a linear branch
+only ahead of its upstream (the menus never offer a rebase onto a commit the branch contains:
+`AlreadyOn`, `UpToDateWith`). Otherwise `FindIgnoredAtAsync` of (2), (3) and, with a merge, (6): with a
+merge in the range git checks out `<onto>` and replays even a branch only ahead of it, plain or with
+`--rebase-merges`, and an ignored file a commit of the range stops tracking is deleted, also when
+`--rebase-merges` gives back the same commit (U5). Cost: four reads side by side, then `check-ignore`,
+5 calls; with a merge in the range (5) and (6) between them, 7. As (5) and (6) run whatever the
+options, a plain rebase whose range holds a merge is refused where git without that setting would keep
+the file, only when a boundary commit tracks a path that is an ignored file on disk.
 
 The set is a superset of what git writes (git leaves out commits whose patch is in `<onto>`, the pull's
 fork point maybe more, `CountLeftOutByForkPointAsync`): a refusal for a path only such a commit adds is
 rare and the safe side. `--rebase-merges` remakes merges with `merge -C`, whose paths are in the set.
 With a merge in the range git may check out a commit it skips rather than `<onto>`; (2), the first
-checkout of `<onto>`, keeps the set a superset. Known gap, recorded in the handoff: in fork-point mode
-git also rewrites a branch that contains its upstream when the upstream was moved back since (its
-reflog names a later commit the branch has); (1) and (4) then say up to date for a linear branch, and an
-ignored file the old upstream tracks can be overwritten, as git would.
+checkout of `<onto>`, keeps the set a superset, and (6) covers the branch points git resets to. Known
+gaps, recorded in the handoff: in fork-point mode git also rewrites a branch that contains its upstream
+when the upstream was moved back since (its reflog names a later commit the branch has); (1) and (4)
+then say up to date for a linear branch, and an ignored file the old upstream tracks can be
+overwritten, as git would. And in fork-point mode git uses its own range, so the commits it resets to
+can differ from (5)'s boundaries.
 
 ### 9.7 Interactive rebase and squash
 
@@ -3873,7 +3921,10 @@ it; `Configuration` is 8.9's); phase 3's overload passes none. False is git's de
 With it, after `FetchMarkedNothingForMerge` and the choice of `arguments`, before `beforeRebase` (which
 saves the rebase's backup) and the merge: a fast-forward or merge puts `--no-overwrite-ignore` before
 `head` and runs `FindIgnoredInTheWayOfMergeAsync("HEAD", head)` (`head` is `FETCH_HEAD`, whose first
-line the fetch marked for merge, or the local upstream); a rebase runs
+line the fetch marked for merge, or the local upstream); a `--ff-only` pull whose check finds an ignored
+file also runs `git merge-base --is-ancestor <before> <head>`: on diverged branches nothing counts as in
+the way, and git runs and refuses (4.8's E and E4, `NotFastForward`), so git's refusal wins over the
+ignored-files text, as it writes nothing; with nothing in the way the call log is unchanged. A rebase runs
 `FindIgnoredInTheWayOfRebaseAsync("HEAD", branch.UpstreamRef)`; an unborn branch (`before` null, a
 fast-forward that writes every file) gives the paths of `git ls-tree -r -z --name-only <head>` to
 `FindIgnoredAtAsync`.
@@ -4017,14 +4068,15 @@ other checkout … runs as before, with git's default for ignored files") and "T
 - **`IgnoredInTheWayTests`** (Git.Tests, real git): found for S1X's merge, m16, a fast-forward,
   unrelated histories; S1X's pick, T9, pick 1 adding and pick 2 deleting, 0.4's two reverts, T4, a merge
   reverted with `mergeParent`, a root commit; S1X's rebase, the add-then-delete one, S2, S3, U5 (a
-  branch only ahead of its upstream with a local merge) for `git rebase` and for `--rebase-merges`; T6,
+  branch only ahead of its upstream with a local merge) for `git rebase` and for `--rebase-merges`, 0.4's
+  side branch from a commit outside the range (found by (5) and (6) of 9.6); T6,
   T7, a squash whose base tracks the file, a 1,000-commit list whose newest commit, reworded, is S1O's
   "Ignore secret" (999 leading picks; the call log's `rev-list` line holds no SHA, so the arguments form
   fails the case on every platform, not only on Windows); ST1 and ST3 on both gits. Not found for m15 (after the base
   read), U4, U2, T5, a stash that only deletes the path, a tracked file matching a rule. Also a
   criss-cross, a path with a space and `é`, a file named `HEAD`, every read leaving the index and state
-  unchanged, the usual call count of each read (merge 1, pick, revert and a list 2, rebase 5,
-  interactive rebase 3 or 4, squash 3, the stash 1 after D179's count).
+  unchanged, the usual call count of each read (merge 1, pick, revert and a list 2, rebase 5, or 7 with
+  a merge in the range, interactive rebase 3 or 4, squash 3, the stash 1 after D179's count).
 - **`RebaseTodoTests`** (Core): `LeadingPicks` and `AppliedCommits` for plain picks, a reword first, a
   drop first, a pick with a drop after it, a squash group.
 - **`IntegratePullTests`** (Git.Tests, new): with `KeepIgnored` the fast-forward, merge and rebase return
@@ -4032,7 +4084,10 @@ other checkout … runs as before, with git's default for ignored files") and "T
   `beforeRebase`; without it git's default; U2's ahead-only linear rebase integrates; U5's ahead-only
   branch with a local merge, under `pull.rebase=true` and `merges`, returns `IgnoredFilesInTheWay`, runs
   no `git rebase`, never calls `beforeRebase` and keeps `secret.env`'s bytes, while without `KeepIgnored`
-  git's rebase deletes the file.
+  git's rebase deletes the file; a branch that merged a side branch whose original branch point tracks
+  the file is refused (9.6's (5) and (6)); a `--ff-only` pull of diverged branches with the file in the
+  way runs 9.10's `merge-base --is-ancestor` and is left to git, which refuses it (`NotFastForward`)
+  without writing.
 - **`RepositoryOperationsKeepIgnoredTests`** (App): each operation of 9.2 refused with 9.15's text and
   title, without a git write (`git merge`, `git rebase`, `git cherry-pick`, `git revert`, `git stash
   apply|pop`), backup ref or undo entry; the two "Check out and …" refused before their checkout; off,
@@ -5263,8 +5318,8 @@ upstream as the toolbar names it, `{path}` a saved folder, `{T}` a remote-tracki
 | A row's Fetch, and each row of Fetch all | the toolbar's Fetch of all remotes, unchanged | unchanged | `Fetch failed` | unchanged: D109's `Git could not fetch from origin and mirror.` (`Git could not fetch from broken.`), else `Git could not fetch from all remotes.` | 4.7, 4.8 |
 | A row's Pull, and each row of Pull all | the toolbar's Pull, unchanged | unchanged | `Pull failed` | unchanged but for the three rows below | 4.7, 4.8 |
 | Pull refused because the branches diverged under `pull.ff=only` (toolbar, menus, rows) | | | `Pull failed` | new `{b} and {up} have diverged, and pull.ff is set to only: merge {up} into {b} or rebase {b} onto {up}.` (`OperationTexts.PullNotFastForward`, `{up}` as the menus name it), git's output and `git merge --ff-only --no-overwrite-ignore FETCH_HEAD` below (`git merge --ff-only FETCH_HEAD` when Keep ignored files is off, 9.10); replaces `Git could not pull {up} into {b}.` only for a `git merge --ff-only …` refusal: a plain merge refused by `merge.ff=only` or `branch.<b>.mergeOptions` keeps `Git could not pull {up} into {b}.` (4.8) | 4.8 |
-| Pull with an ignored file in the way (inside `IntegratePullAsync`) | | | `Pull failed` | 14.4's text with `merge` or `rebase`, no git output | 9.10, 9.15 |
-| Pull with a pull setting the app does not understand | | | `Pull failed` | unchanged `pull.rebase is set to {value}, which this app does not understand.`, command `git config --get pull.rebase`, now before anything is fetched | 8.9 |
+| Pull with an ignored file in the way (inside `IntegratePullAsync`) | | | `Pull failed` | 14.4's text with `merge` or `rebase`, no git output; under `--ff-only` on diverged branches git's refusal (the row above) instead | 9.10, 9.15 |
+| Pull with a pull setting the app does not understand | | | `Pull failed` | unchanged `pull.rebase is set to {value}, which this app does not understand.`, command `git config --get pull.rebase`, now before anything is fetched; for "Pull from {up} (rebase)", which reads `pull.ff` alone, `pull.ff is set to {value}, which this app does not understand.`, command `git config --get pull.ff`, also before the fetch (D231) | 8.9 |
 | The drop's push onto a renamed remote branch | `Push {A} to {T}` (label unchanged) | `Pushing {A} to {T}…` | unchanged | unchanged | 10.4 #8, 10.5 |
 | `Delete {y} on {r}…` under a renaming refspec | `Delete {y} on {r}` | `Deleting {y} on {r}…` | unchanged | the lease's `{y} on {r} has changed since you last fetched. Fetch and look at it before deleting.` | 10.4 #9, 10.5 |
 | Merge (both kinds), Fast-forward, Rebase, Interactive rebase, Squash, Cherry-pick, Revert, Applying the stash, refused by the app's ignored-files check | existing | existing | existing: `Merge failed` ("Check out and merge" too), `Fast-forward failed`, `Rebase failed`, `Interactive rebase failed`, `Squash failed`, `Cherry-pick failed`, `Revert failed`, `Applying the stash failed` | 14.4, no git output | 9.9, 9.15 |
@@ -5670,9 +5725,9 @@ table names for a picture is a defect. A change in an earlier picture's tab-stri
 | "+"'s automation name `Open a new tab` (was `Add repository`); a dashboard tab's `ItemStatus` `Workspace` | no picture (UI Automation only) | none: no test reads "+"'s name | 2.1, 13.4 |
 | A tab opened on a worktree whose closed tab's or released summary's queue still runs waits for it (`Waiting for {title} to finish…`, then opens; 3.3) | no earlier picture: a tab reopened while its merge runs, which no earlier check covers | none pins today's behaviour; `RepoTabsTests` gains the case (3.9) | 3.3 |
 | Menus with keyed items get wider where a keyed item is their widest | phase 3: `03f-empty-area-menu`, `23i-unborn-empty-area-menu`, `04l-working-row-menu`, `04m-working-row-menu-all-staged`, `18b1-current-branch-menu` and every menu of the checked-out branch, `03b-stash-menu` (on `stash@{0}`), the sections' and the diff's menus (`04f`, `04g`, `04h`, `04k`, `26d`); phase 4: `c14b-result-menu`, `c14c-pane-menu`, the interactive list's row menus; phase 5: `b8a-section-menu`, `b5f-diff-menu` and the menus of parts B and F with keyed items; their RW twins | `RepositoryMenusTests.Window.AssertWholeLabels` (`:509-537`): a keyed item counts label + 24 + key; `Phase3Expectations.*`, `Phase4Expectations.*`, `Phase5Expectations.*` menu widths where asserted | 6.7 |
-| `--no-overwrite-ignore` on every checkout and merge; the ignored-files check's reads | phase 3: check 06 (`Phase3Checks.A.Pointer.cs:37`, `:111`; `:288` matches by prefix and stays), 13 (`Phase3Checks.C.cs:83`), 14 (`Phase3Checks.C.Checkout.cs:65`, `:88`, `:110`, `:140`, `:158`, `:160`; `14b-untracked-in-the-way` gains `git check-ignore --stdin -z` (exit 1) with its summary unchanged, `14c-checkout-blocked`, `14f-clash-blocked`, `14g-reapplied-with-conflicts` in `ErrorCommand`, RW `14c`; `14b1-checkout-failed`, refused before git, unchanged), 18 (`18c`'s `git merge --no-edit --no-overwrite-ignore FETCH_HEAD`, `18b3-pull-refused`'s `git merge --ff-only --no-overwrite-ignore FETCH_HEAD`), 23 (`Phase3Checks.A.Toolbar.cs:46`); phase 4: the rebases' call logs gain 9.6's and 9.7's reads; phase 5: P24 (`git switch --create topic --no-overwrite-ignore 19a90447…`, the refusals for the untracked file and the folder `notes` gain `check-ignore` with their summaries unchanged, every dialog picture's `ErrorCommand`; RW yes), P25 (the way back), P26 step 2 unchanged (a tracked block) and step 3, HEAD's own commit, `git switch --detach --no-overwrite-ignore 41f8398f…` with the same result, P27 (`git merge --no-edit --no-log -m "Merge branch 'other'" --no-overwrite-ignore refs/heads/other`, the `--diff-filter=A` read before each merge, `diff-tree --stdin` and `check-ignore` before each pick and, with `-R`, each revert; the stash step, summaries, titles and step 8's reflog entry kept), part A (`a2c-checkout-failed-opened`, A2's merge row and picture; RW `Phase5RealWindowPass.A.cs:144`, `:157`, `:259-277`), part U (the forward checkouts of U18 and U19, `MergeFfCall`, `MergeOtherCall`, `MergeFf`); every activity-log picture with "Show reads" that holds a covered operation. A longer command line can wrap in the error dialog and change its height | `Phase3Expectations.B.cs:772` (`CheckoutCommand`; the "not called" assertion at `Phase3Checks.B.cs:270` follows the new text), `Phase3Expectations.D.cs:170`, `:240`, `Phase3SupportTests.cs:75`; `Phase4Expectations.C.cs:823`, `:825`, `Phase4Expectations.A.cs:762`; `Phase5Expectations.P.cs:422`, `:424`, `:426`, `:429`, `:449`, `Phase5ExpectationTests.P.cs:201`, `:203`; `Phase5Expectations.A.cs:433`, `:460`; `Phase5Expectations.U.cs:567`, `:660`, `Phase5Expectations.U2.cs:399`, `Phase5ExpectationTests.U16-U19.cs:75`, `Phase5ExpectationTests.U2.cs:19`, `Phase5Checks.U18.cs:77`, `:230`, `:278`, `:381`, `:483`, `:493`, `Phase5Checks.U19.cs:311`; App tests `DialogTests` (347, 356, 685, 695, 865), `RepositoryOperationsCheckoutTests` (66, 167), `RepositoryOperationsProtectTests` (51, 86, 107, 243, 250, 392), `RepositoryOperationsRebaseTests` (251, 332, 362, 439), `ShellDriverCheckSupportTests` (242, 249), `UndoRecordingTests` (449), `ActivityLogViewTests` (114, 170), `RepositoryOperationsPullTests` (106), `UndoStepTests` (108); Git tests `BranchOperationTests.cs:217`, `DashBranchNameTests.cs:78`. Unchanged: the automatic stash's and undo's commands (`UndoSwitch`, `UndoDetach`), `FailureClassifierTests`, `Phase5ScenarioTests` | 9.11, 9.16 |
+| `--no-overwrite-ignore` on every checkout and merge; the ignored-files check's reads | phase 3: check 06 (`Phase3Checks.A.Pointer.cs:37`, `:111`; `:288` matches by prefix and stays), 13 (`Phase3Checks.C.cs:83`), 14 (`Phase3Checks.C.Checkout.cs:65`, `:88`, `:110`, `:140`, `:158`, `:160`; `14b-untracked-in-the-way` gains `git check-ignore --stdin -z` (exit 1) with its summary unchanged, `14c-checkout-blocked`, `14f-clash-blocked`, `14g-reapplied-with-conflicts` in `ErrorCommand`, RW `14c`; `14b1-checkout-failed`, refused before git, unchanged), 18 (`18c`'s `git merge --no-edit --no-overwrite-ignore FETCH_HEAD`, `18b3-pull-refused`'s `git merge --ff-only --no-overwrite-ignore FETCH_HEAD`), 23 (`Phase3Checks.A.Toolbar.cs:46`); phase 4: the rebases' call logs gain 9.6's and 9.7's reads (9.6's (5) and (6) too where the range holds a merge, whatever the rebase's options); phase 5: P24 (`git switch --create topic --no-overwrite-ignore 19a90447…`, the refusals for the untracked file and the folder `notes` gain `check-ignore` with their summaries unchanged, every dialog picture's `ErrorCommand`; RW yes), P25 (the way back), P26 step 2 unchanged (a tracked block) and step 3, HEAD's own commit, `git switch --detach --no-overwrite-ignore 41f8398f…` with the same result, P27 (`git merge --no-edit --no-log -m "Merge branch 'other'" --no-overwrite-ignore refs/heads/other`, the `--diff-filter=A` read before each merge, `diff-tree --stdin` and `check-ignore` before each pick and, with `-R`, each revert; the stash step, summaries, titles and step 8's reflog entry kept), part A (`a2c-checkout-failed-opened`, A2's merge row and picture; RW `Phase5RealWindowPass.A.cs:144`, `:157`, `:259-277`), part U (the forward checkouts of U18 and U19, `MergeFfCall`, `MergeOtherCall`, `MergeFf`); every activity-log picture with "Show reads" that holds a covered operation. A longer command line can wrap in the error dialog and change its height | `Phase3Expectations.B.cs:772` (`CheckoutCommand`; the "not called" assertion at `Phase3Checks.B.cs:270` follows the new text), `Phase3Expectations.D.cs:170`, `:240`, `Phase3SupportTests.cs:75`; `Phase4Expectations.C.cs:823`, `:825`, `Phase4Expectations.A.cs:762`; `Phase5Expectations.P.cs:422`, `:424`, `:426`, `:429`, `:449`, `Phase5ExpectationTests.P.cs:201`, `:203`; `Phase5Expectations.A.cs:433`, `:460`; `Phase5Expectations.U.cs:567`, `:660`, `Phase5Expectations.U2.cs:399`, `Phase5ExpectationTests.U16-U19.cs:75`, `Phase5ExpectationTests.U2.cs:19`, `Phase5Checks.U18.cs:77`, `:230`, `:278`, `:381`, `:483`, `:493`, `Phase5Checks.U19.cs:311`; App tests `DialogTests` (347, 356, 685, 695, 865), `RepositoryOperationsCheckoutTests` (66, 167), `RepositoryOperationsProtectTests` (51, 86, 107, 243, 250, 392), `RepositoryOperationsRebaseTests` (251, 332, 362, 439), `ShellDriverCheckSupportTests` (242, 249), `UndoRecordingTests` (449), `ActivityLogViewTests` (114, 170), `RepositoryOperationsPullTests` (106), `UndoStepTests` (108); Git tests `BranchOperationTests.cs:217`, `DashBranchNameTests.cs:78`. Unchanged: the automatic stash's and undo's commands (`UndoSwitch`, `UndoDetach`), `FailureClassifierTests`, `Phase5ScenarioTests` | 9.11, 9.16 |
 | Pull refused by `pull.ff=only` gets its own summary | phase 3 check 18b step 4's `ErrorSummary`, picture `18b3-pull-refused` (its summary's lines; not RW) | `Phase3Expectations.D.PullRefusedDialog` (`:236-243`); `RepositoryOperationsPullTests.Pull_refused_by_pull_ff_only_shows_gits_message_after_the_fetch_ran` (`:94-114`) | 4.8 |
-| Pull reads its configuration before the fetch | no picture | `RepositoryOperationsPullTests.Pull_with_a_setting_the_app_does_not_understand_says_which_and_changes_nothing` (`:115`) gains: `origin/main` not fetched, no `fetch` among the operation's calls; `PullParityTests`, `PullRebaseParityTests`, `PullFailureParityTests` compile and stay unchanged (`PullIntegrationOptions` is optional) | 8.9 |
+| Pull reads its configuration before the fetch; "Pull from {up} (rebase)" reads `pull.ff` there and refuses a value `git pull --rebase` refuses (D231) | no picture | `RepositoryOperationsPullTests.Pull_with_a_setting_the_app_does_not_understand_says_which_and_changes_nothing` (`:115`) gains: `origin/main` not fetched, no `fetch` among the operation's calls; the chosen rebase's call logs gain `git config --get pull.ff` before the fetch (phase 4's part A pull checks assert their calls by name); `PullParityTests`, `PullRebaseParityTests`, `PullFailureParityTests` compile and stay unchanged (`PullIntegrationOptions` is optional) | 8.9 |
 | Tooltips in the app's colours | the 56 pictures with a tooltip, only colours inside each tooltip's rectangle: phase 3 scripted `01c`, `02c`, `02e`, `03d`, `04m`, `09b`, `09c`, `09d`, `11a`, `11b2`, `11e`, `13l`, `23b`, `23h`, `23j`, `23k`, `23l`, `23m`, `26g`, `30f`, `30g`, RW `01c`, `09b`, `23b`; phase 4 scripted `a1a`, `a1b`, `a1h`, `b6f`, `b9b`, `b9e`, `c10b`, `c10c`, `c10d`, `c11b`, `c12c`, `c17b`, RW `a1a`, `b6f`, `c11b`; phase 5 scripted `a1c`, `a1d`, `a1f`, `b6b`, `b6f`, `b8c`, `b8d`, `b9b`, `b9d`, `b9p`, `f14b`, `f14e`, `u16a`, `u23a`, `u23c`, RW `b8d`, `u16a`. Phases 0 to 2 have none. `u16a` and `a1f` also grow by ` (Ctrl+Z)` (the keys row above) | none asserts Fluent's colours | 11.12 |
 | Light warning, success and danger darker; light lanes 1, 2, 4 and 7 (D198) | warning and success, wherever an "A" or "M" letter, a warning text, the banner's line and icon or a marker line shows in light: phase 1 `04a`, `04b`, `04c`; phase 2 `02a`, `02b`, `04a` to `04f`; phase 3 `27a` to `27d`; phase 4 `d18a` to `d18d`; phase 5 `b5k`, `f10h`. Danger: phase 1 `11a` (scripted and RW), phase 2 `04c`, `04d`, phase 3 `27b`, `27d`. Lanes: phase 1 `02-graph-light-1920x1080`, `04a` to `04c`; phase 2 `02a`, `02b`; phase 3 `27a` to `27d`; phase 5 `f10h`. Phase 0's light pictures do not change from the colours | `Phase1Expectations.cs:52`, `:64-66`; `Phase3Expectations.Common.cs:111-113`, `:121`; `Phase3Checks.D.Light.cs:106`; `Phase4Expectations.Common.cs:128-130`, `:145`; `Phase4Expectations.D.cs:188-190`; `Phase5Expectations.Common.cs:132-134`, `:150`; `ConflictResultEditorTests.cs:51`; `CommitGraphControlTests.cs:998` (lanes) | 11.10, 11.13 |
 | The theme service (`Setting`, `IsDark`, `Changed`, `Apply`); `UseTheme`; the Theme switch's help text | no picture; phase 0's checks 3 to 6 and RW steps A to C keep their meaning (they start Dark or with an explicit Light) | `MainWindowViewModelTests.cs:143-154` (`FakeThemes` gains `Setting`, `IsDark`, `Changed`, loses `Current`; the toggle test reads `themes.Setting`); `ShellTests.cs:86` stays true; `JsonSettingsStoreTests` (`"theme": "System"` loads) | 11.4, 11.6 |
@@ -5723,9 +5778,9 @@ history: section 10 replaces the flag, section 9 settles what the setting covers
 phase 4" item (line 384), "The settings screen's external tools are where the user chooses it",
 becomes "The settings screen's Git section is where the user chooses it" (7.4; Tools holds the editor
 only, 7.5). Phase 5's outcome sentence (lines 346-348) stays as history. "Visual test gate" step 3
-names `VisualCommit.VisualTests.Phase6` (and `VisualCommit.App.ViewTests` if 17.3's measurement makes
-it); its step 4's "It needs the desktop unlocked" becomes "It needs the desktop unlocked and Windows'
-high contrast off (the pass never changes it, D224)" (11.8). Phase 8's item "Performance pass and
+names `VisualCommit.VisualTests.Phase6` (17.3's measurement makes no view-test project); its step
+4's "It needs the desktop unlocked" becomes "It needs the desktop unlocked and Windows' high contrast
+off (the pass never changes it, D224)" (11.8). Phase 8's item "Performance pass and
 keyboard-accessibility pass." becomes "Performance pass and keyboard-accessibility pass; the dark
 theme's text below 4.5:1 on hovered and selected rows and the dark danger button's label (D198; phase
 6's design 11.10)."
@@ -5784,7 +5839,7 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
 |---|---|---|
 | 29 | Under `GIT_OPTIONAL_LOCKS=0` (D47) a stale index makes every status read re-hash the touched files: 3.1 s per read in a 20,000-file tree with `core.fscache=true` (6.1 s without) until something writes the index; the dashboard's reads and the tabs' pay it alike (0.1). Refreshing the index would be a write, the owner's call | When users report slow reads |
 | 30 | `remote.<r>.mirror = true` makes every push the app makes to that remote fail with `fatal: --mirror can't be combined with refspecs` (Push, the push dialog, tags, deletions, undo's `RemoteRef`); the error dialog shows git's words (10.8 #2) | A report |
-| 31 | The ignored-files check is the app's, not git's: a window of one process start between its `check-ignore` and git's write (9.12); nothing checked again on Continue, Skip or Abort (9.14); the fork-point gap of a rebase onto a moved-back upstream (9.6); Git 2.30 to 2.33's unpack-trees rules for ignored files untested (0.4) | Phase 8 (the git versions the release supports) |
+| 31 | The ignored-files check is the app's, not git's: a window of one process start between its `check-ignore` and git's write (9.12); nothing checked again on Continue, Skip or Abort (9.14); the fork-point gaps of a rebase onto a moved-back upstream and of git's own range (9.6); a plain rebase over a merge refused for a boundary commit's file, which git would keep (9.6); Git 2.30 to 2.33's unpack-trees rules for ignored files untested (0.4) | Phase 8 (the git versions the release supports) |
 | 32 | The gate inspects nearly every earlier picture again: the Settings button in every toolbar, the welcome page, tooltips' colours, keyed menus, the light colours (16.1). Phase 5's method (references before the gate, the comparison by region, 17.7) carries it, with more batches | Phase 6's gate |
 | 33 | Two fetches of one common git folder that overlap while the remote has something new lose one of them, with `cannot lock ref '<ref>': is at <new> but expected <old>` or a held `.lock` (0.2). 4.3 keeps the runs' rows apart, keeps a run off another queue's running network operation and keeps auto-fetch off both. A Fetch, Pull or Push the user starts in a tab, or a row's own (4.7), while another worktree of the repository (or a second tab on the same worktree, 3.5) fetches is not kept apart, as in phases 3 to 5. One ends "Fetch failed" (or "Pull failed", "Auto-fetch failed") with git's lines; nothing is left behind and the next fetch works. A cancelled fetch's stale-lock scan covers the common folder (`LockFiles.FindSince([GitDirectory, CommonDirectory], since)`, `RepositoryViewModel.cs:107`), so it can list another worktree's live lock; the stamps (4.6) and the "still exists" check keep its removal harmless. A window-wide fetch gate in every queue would close it | A report |
 
@@ -5796,8 +5851,9 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
   restored repo tabs' openings (2.10); watch the gate's Q1 numbers; section 10's fetch lines come in the
   call that replaces `git remote` (10.2), so a refs read stays at five processes and Q1's path does not
   change.
-- 12 (the run time): +5 to +10 minutes on the idle laptop (17.6); one more walk-through project, perhaps an
-  App view-test project.
+- 12 (the run time): +5 to +10 minutes over WP-S's 43 min 33 s rested, about 49 to 54 (17.6); one more
+  walk-through project; the view tests in App.Tests, where WP-S measured the processors, not the UI
+  thread, setting the length (17.3).
 - 18 (the real-window pass): +5 to +8 minutes (17.6).
 - 20 ("Open file"): `PATHEXT` (through `ToolCatalogues.PathExtensions`), the user's extensions and the
   fixed floor are read; the file associations and macOS bundles beyond `.app` are not (12.8).
@@ -5805,12 +5861,14 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
   `KeyboardNavigationHandler` taking Tab with any modifier, `TextBox` typing a line break for Enter with
   a modifier when `AcceptsReturn`, `MenuItemAutomationPeer`'s accelerator key; not checked on a Mac or a
   Linux desktop (IBus and Fcitx with Ctrl+Shift+E, the macOS application menu).
-- 23 (Pull's parity): Pull reads its configuration before the fetch (8.9); the parity tests compile and
-  compare unchanged, since `PullIntegrationOptions` is optional.
+- 23 (Pull's parity): Pull reads its configuration before the fetch (8.9), and the chosen rebase
+  `pull.ff` alone, as `git pull --rebase` does (D231); the parity tests compile and compare unchanged,
+  since `PullIntegrationOptions` is optional.
 - 25 (git calls per recorded operation): the ignored-files check (D196) adds reads before each covered
   merge, pick, revert, rebase and stash apply or pop, and none to a checkout or to the option on a
-  fast-forward: merge 1, pick, revert and a list 2, rebase 5, interactive rebase 3 or 4, squash 3, the
-  stash 1 after D179's count (9.4 to 9.8); pinned by the call counts in `IgnoredInTheWayTests` and
+  fast-forward: merge 1, pick, revert and a list 2, rebase 5, or 7 with a merge in the range,
+  interactive rebase 3 or 4, squash 3, the stash 1 after D179's count (9.4 to 9.8); a `--ff-only` pull
+  whose check finds a file adds `merge-base --is-ancestor` (9.10); pinned by the call counts in `IgnoredInTheWayTests` and
   `RepositoryOperationsKeepIgnoredTests` (9.17).
 - 26 (CI's gits): phase 6's facts were taken on 2.36 and 2.55 only (0.3 to 0.5); CI's 2.43 and 2.56 run
   WP1's, WP2's and WP3's real-git tests for the first time, so every job of their first CI runs is
@@ -5825,7 +5883,7 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
 **Handoff only** (not risks): fsmonitor daemons started per dashboard repository under the owner's
 `core.fsmonitor=true`, accepted (Q5, 0.1); a phase 5 build sets aside a `settings.json` with `"theme":
 "System"` (7.10, 11.2); 10.8's known issues 3 to 6; the prompt group reusing an answer by prompt text
-across one run's repositories (4.4); 9.6's fork-point gap and 9.14's limits; 17.3's measured times and
+across one run's repositories (4.4); 9.6's fork-point gaps and 9.14's limits; 17.3's measured times and
 the project chosen; on a Mac keyboard F6, Shift+F6 and Shift+F10 need Fn unless "Use F1, F2, etc. keys
 as standard function keys" is on, and Home, End, PageUp and PageDown are Fn with the arrows (6.1), and
 the dashboard list's Remove is Cmd+Backspace there (2.7); D221's reading of D193's "checkouts then
@@ -5852,7 +5910,9 @@ derived on 2.36 and replayed on 2.55 with the same output (0.10).
 
 **The workspace** (`Scenarios.WorkspaceAsync()`, "workspace") is a new `TempWorkspace`
 (`tests/VisualCommit.Testing/TempWorkspace.cs`): `Root`, a `TempDirectory("workspace")` with a working
-tree per repository and `remotes/<name>.git` for the eight with a remote; `Names` in the dashboard's
+tree per repository, `remotes/<name>.git` for the eight with a remote and `home/`, `TempRepo`'s
+isolation home for the builder's git calls, which is not a repository and which W1 and 1.8's folder
+scan expect (a folder searched, no candidate); `Names` in the dashboard's
 order (`api`, `web-app`, `docs`, `mobile`, `design-system`, `billing`, `infra`, `scratch`, `notes`,
 `old-site`); `PathOf(name)`, `RemoteOf(name)`; `Repo(name)`, a `TempRepo` that does not own the folder
 (a new `internal static TempRepo Over(TempDirectory root, string path, DateTimeOffset clock)` beside
@@ -5869,7 +5929,8 @@ to `remotes/<name>.git`; then (1) `.git/config` gains, as text, `[remote "origin
 --export-marks=<file>` in the working repository with the commits it knows and its refs (`reset <ref>` /
 `from :<mark>`), remote-tracking refs included; (3) `git fast-import --quiet` in the bare remote with
 the commits it holds and its `main`; (4) `HEAD` written as text where the table says, a detached SHA
-from the marks file; (5) `git reset --hard -q`; (6) the "Then" column.
+from the marks file; (5) `git reset --hard -q`; (6) the "Then" column. The builder makes 28 git calls
+for the ten, the table's "git" column (`TempWorkspace.Calls`).
 
 | # | Folder | Commits (time, message: files) | Working repository's refs | Remote's `main` | Then | git | `status --porcelain=v2 --branch` |
 |---|---|---|---|---|---|---|---|
@@ -5889,7 +5950,8 @@ The lab's SHAs, the same on both gits (`Phase6ScenarioTests` pins what the C# bu
 remote `245b729`; `mobile` `21b8aeb`, `origin/main` `f419c6e`, remote `67a2660`; `design-system`
 `98ba313`, remote `948f7d1`; `billing` `0e943ed`, `feature/tax` `8236f53`; `infra` HEAD and `v1.0`
 `09d320a`, `main` `229cea5`; `scratch` `experiment` `ba18976`, `main` `42a778b`; `notes` `937a43b`.
-Fast-import writes no reflogs. Pull all's outcomes (2.36): docs fast-forwards 4 commits; mobile under
+Fast-import writes reflogs on 2.36: a `fast-import` entry for every ref it sets, and one in HEAD's log,
+then step (5)'s reset adds its own entry. Pull all's outcomes (2.36): docs fast-forwards 4 commits; mobile under
 `pull.ff=only` `fatal: Not possible to fast-forward, aborting.`, 128; design-system `error: Your local
 changes to the following files would be overwritten by merge:` / `\tspacing.txt`, exit 1; api and
 web-app `Already up to date.`
@@ -5961,7 +6023,9 @@ in "settings"; no `*.sample` in any copy.
 `hooks/*.sample` after `git init` and keeps the folder (`RebaseTestSupport.InstallHook`,
 `SequenceTestSupport.WriteHook` and `RepositoryOperationsQueueTests`' `pre-receive` create it anyway):
 544 files become 323 in the workspace's copy (0.10), 13 or 14 fewer per git folder everywhere. Its own
-commit in WP-S, measured with the default run before and after.
+commit in WP-S, measured: 200 copies of a git folder took 7.8 to 8.4 s with the samples and 3.8 to 4.5 s
+without; the default run, rested, 43 min 49 s for 3,236 tests at `3f62463` before WP-S and 43 min 33 s
+for 3,299 at WP-S's head, this commit included (17.6).
 
 **`TempRepo.CopyAsync`** (`TempRepo.cs:518-548`) rewrites a URL whose `Path.GetFullPath(url)` lies in the
 old folder, leaving a relative one alone only by accident; it gains
@@ -6053,17 +6117,22 @@ keep `Clock`, so nothing else in that session stands still.
 47392 (phase 6's checks run beside phases 1 and 3's servers) in
 `AuthRemoteServerTests.A_taken_port_gives_way_to_a_free_one_only_when_asked` (`AuthRemoteServerTests.cs:404-416`); `StartForFolderAsync(string folder, int port = 0,
 bool fallBackToFreePort = false)`, as `StartAsync` (`AuthRemoteServer.cs:166`), so that a test gets a
-system port unless it asks for one, serving each bare repository directly in `folder` (each checked as
-`ExistingRepositoryAsync` does, `:243-275`, one `rev-parse --is-bare-repository` each) with
-`GIT_PROJECT_ROOT` = `folder`, changing and deleting nothing; `UrlOf(string
-repository)` = `http://127.0.0.1:<port>/<name>` (`Url` stays); `IsInRepository` for any served name,
-still without `..`; `HoldNextFetchPack(string repository, int atPercent = 0)`, a hold per repository
-taken by its next pack response (`TakePendingHold(repository)`, `:591-603`) with D150's split (the
-parameterless form keeps its meaning on one repository and throws on a folder server); `Release(string repository)` beside `Release()`;
-`HoldNextRequest(string repository)`, a gate on that repository's next request of any kind at the top of
-`HandleAsync` (`:481`), before `authorized` is decided (`:486`), whose task completes when the request
-arrives, opened by `ReleaseRequest(string repository)` and by disposing (W6 orders two sign-ins with it,
-4.4). `RequireAuth`, `Credentials` stay server-wide; the "no http-backend" message is in (`43f52c4`).
+system port unless it asks for one, serving each bare repository directly in `folder` (every folder in
+it checked as `ExistingRepositoryAsync` does, `:243-275`, one `rev-parse --is-bare-repository` each,
+and the start refused for one it cannot serve: no bare repository, or a name a URL would escape, so a
+broken scenario fails there and not later with a 404) with `GIT_PROJECT_ROOT` = `folder`, changing and
+deleting nothing; `UrlOf(string repository)` = `http://127.0.0.1:<port>/<name>.git`, the repository
+named `docs` or `docs.git`; `ServesFolder` and `ServedRepositories` (the names without `.git`, in
+ordinal order); on a folder server `Url`, `RepositoryPath`, `RepositoryFolderName` and the
+parameterless `HoldNextFetchPack()` throw, while a server of one repository keeps them;
+`IsInRepository` for any served name, still without `..`; `HoldNextFetchPack(string repository, int
+atPercent = 0)`, a hold per repository taken by its next pack response (`TakePendingHold(repository)`,
+`:591-603`) with D150's split; `Release(string repository)` beside `Release()`, which releases every
+repository; `HoldNextRequest(string repository)`, a gate on that repository's next request of any kind
+at the top of `HandleAsync` (`:481`), before `authorized` is decided (`:486`), whose task completes when
+the request arrives, opened by `ReleaseRequest(string repository)` and by disposing (W6 orders two
+sign-ins with it, 4.4); a request held at the gate gets a new read timer when the gate opens
+(`RequestTimeout`, 60 s for the rest of the request). `RequireAuth`, `Credentials` stay server-wide; the "no http-backend" message is in (`43f52c4`).
 Tests, the folder server's on a system port: `A_folder_server_serves_each_repository_at_its_own_url` (`ls-remote` of two);
 `Holds_of_two_repositories_are_independent` (docs at 25, design-system at 45, exactly `Counting objects:
 25% (1/4)` and `45% (5/11)`, released one at a time); `A_path_outside_the_served_repositories_is_refused`
@@ -6072,7 +6141,7 @@ Tests, the folder server's on a system port: `A_folder_server_serves_each_reposi
 `PATH` they fail with the server's message (risk 28). `Scenarios.ServeWorkspaceAsync(TempWorkspace
 copy, bool requireAuth, params string[] names)`, the walk-through's and the real window's only way to a
 folder server, serves the copy's `remotes/` on `Phase6VisualChecksPort` with the fallback and points each
-named `origin` at `<UrlOf(name).git>` (a process each). L31's "auth" step starts phase 3's server on the
+named `origin` at `UrlOf(name)` (a process each). L31's "auth" step starts phase 3's server on the
 same port, `StartForVisualChecksAsync(port: AuthRemoteServer.Phase6VisualChecksPort)`, not on 47391,
 which phase 3's part D holds in its own process meanwhile; W4, W6 and L31 never hold 47393 at once,
 because the project's headless tests take turns on one UI thread (`FreshApplication.cs:23-27`), as
@@ -6095,7 +6164,8 @@ included, which Fetch all would then fetch (0.10). Checks call it before `ShellD
 the git-folder watcher causes no extra read; for the workspace, `HoldIn(copy.PathOf(name)…)`. Every
 fetch of a held repository's file remote waits from its start, new commits or not (HTTP remotes ignore
 the key), shown running without a percentage. The script: with `release` there it runs `exec git
-upload-pack "$1"` at once and makes no marker; else it touches `held-<folder name>.$$`, waits at most
+upload-pack "$1"` at once and makes no marker; else it touches `held-<remote folder>.<pid>` (the
+remote repository's folder name and the shell's `$$`), waits at most
 120 rounds of `sleep 0.5` for `release`, removes its marker and runs `exec git upload-pack "$1"`. A
 marker so means a fetch waiting now, or one a cancel killed while it waited, whose marker stays.
 `Arm()` deletes `release` and takes the markers there as its baseline
@@ -6103,9 +6173,9 @@ marker so means a fetch waiting now, or one a cancel killed while it waited, who
 under one hold waits for its own; `Release()` writes `release`; `Dispose` releases (called in a
 `finally`, so a cancelled fetch's shell ends, as `Scenarios.ReleaseWaitingMergeTool`). A held fetch
 gives up after its 120 rounds and goes on, so a test that waits for `Held` releases well within about
-60 s, or the hold no longer holds anything. `sleep` is a
-process per round on Windows, about 36 ms of processor each (0.10): 120 rounds last about 60 to 70 s
-(estimated from 0.10's 600 rounds of 0.1 s in 60 to 111 s; WP-S measures it), below the hang
+60 s (the rounds' sleeps alone), or the hold no longer holds anything. `sleep` is a
+process per round on Windows, about 36 ms of processor each (0.10): 120 rounds took 89 s on the laptop
+(WP-S's measurement; 0.10's 600 rounds of 0.1 s had given an estimate of 60 to 70 s), below the hang
 watchdog's 3 minutes, then the fetch goes on; a fifth of 0.10's processes, for a release up to 0.5 s
 later, which every check's wait absorbs. Phase 5's waiting merge tool keeps `sleep 0.1`: its holds are
 few and short. Visual Studio's Git does not hold (0.10; risk 28). `FetchHoldTests`, on Windows from a
@@ -6113,7 +6183,8 @@ data folder under `%TEMP%`: the line reads back through `git config --get remote
 two fetches held at once, one with nothing new; both exit 0 after `Release`; a later fetch not held and
 no marker made; two runs under one hold, `Arm()` between them, the second `WaitForHeldAsync` not ended
 by the first run's markers; beside held repositories, one without a remote prints nothing for `git
-remote` and its `git fetch --progress` is not held.
+remote` and its `git fetch --progress` is not held (it exits 0 on 2.36, 0.2's M, so the test asserts
+only that it is not held).
 
 **Workspaces before the start** (D189): `ShellDriver.WriteWorkspaces(string dataDirectory, <the
 workspace list>)` uses section 1's `JsonWorkspaceStore.Write(paths.WorkspacesFile, list)` (as
@@ -6160,7 +6231,11 @@ waits for the first read); `OpenAsync` gains `AppTheme theme` and `bool systemDa
 `Shot(name + "-dark")`; `SetSystemThemeAsync(false)`, Light and one token pixel asserted;
 `Shot(name + "-light")`; `SetSystemThemeAsync(true)`, dark asserted, the screen still up), `keepPointer`
 leaving the pointer where a tooltip or menu step put it. `Shot` refuses a picture name it has already
-saved in the run, so two steps saving one name fail the run instead of overwriting (11.8).
+saved in the run, so two steps saving one name fail the run instead of overwriting (11.8). The five
+helpers `WaitForAllRowsIdleAsync`, `AssertRow`, `AssertDashboardHeader`, `OpenWorkspaceAsync` and
+`ShotInBothThemesAsync`, with their smoke tests in `Phase6SupportTests`, need WP-D's, WP-W's and WP-T's
+drivers, so the lead adds them once those three are merged, before WP-V's parts W, S and L start
+(section 18); WP-S's file has the rest.
 
 ### 17.3 The walk-through project `VisualCommit.VisualTests.Phase6`
 
@@ -6198,7 +6273,7 @@ One project, copied file by file from `tests/VisualCommit.VisualTests.Phase5`:
   header comment too, with the example `bash scripts/time-scripted-check.sh "*Check_W4*"`.
 - `CLAUDE.md`'s Commands: the two walk-through rows gain `dotnet test --project
   tests/VisualCommit.VisualTests.Phase6` (one part: `--filter-class "*Phase6ChecksW"`); the timing row
-  says 6 by default; "What to know" says eight test projects (nine with a view-test project) and gets
+  says 6 by default; "What to know" says eight test projects and gets
   the gate's times; the note on the real-window pass, "It needs an unlocked desktop and the scripted
   screenshots", becomes "It needs an unlocked desktop, Windows' high contrast off and the scripted
   screenshots" (11.8). `plan.md`'s "Visual test gate" step 3 names the project.
@@ -6211,23 +6286,22 @@ other project on the idle laptop.
 **Phase 6's headless App tests**: the sections' view tests (`DashboardViewTests`,
 `CommandPaletteViewTests`, `KeyRouterTests`, `TabKeysTests`, `RegionKeysTests`, `CommitKeyTests`,
 `MenuKeyColumnTests`, `ShellToolTipTests`, `SettingsDialogViewTests`, 11.15's theme tests,
-`RepoTabStripPanelTests`, the drivers' tests) go where WP-S measures, before any is written, on the idle
-laptop, each figure from a single run: `dotnet build`, then `dotnet test --project
-tests/VisualCommit.App.Tests --no-build --output Detailed --report-trx` alone (`W_all`, with `typeperf
-"\Processor(_Total)\% Processor Time" -si 5` beside it), and its headless tests alone (`W_ui`): one
+`RepoTabStripPanelTests`, the drivers' tests) go into `VisualCommit.App.Tests` by subject; there is no
+`VisualCommit.App.ViewTests` project. WP-S measured where they go before any was written (2026-10-19,
+the laptop idle, `typeperf "\Processor(_Total)\% Processor Time" -si 5` beside each run): `dotnet
+build`, then `dotnet test --project tests/VisualCommit.App.Tests --no-build
+--output Detailed --report-xunit-trx` alone, `W_all` **21 min 16 s** for 1,319 tests, the processors at
+94.3 % on average; and its headless tests alone, `W_ui` **8 min 26 s** for 449 tests, at 55.8 %: one
 `--filter-class` for each of the 57 classes with `[AvaloniaFact]` or `[AvaloniaTheory]` (58 files:
 `CommitGraphControlTests` is split over two) and one `--filter-not-method "*.<name>"` for each of the
 214 `[Fact]` and `[Theory]` methods those classes also hold (0.10), both lists made by a script from the
 attributes in every partial file of each class (`RepositoryMenusTests` has four, three without a
-headless test). The command is about 23,000 characters, within Windows' 32,767; past that its arguments
-go in a response file. Filtering by class alone would count those 214, many with real-git scenarios,
-as UI-thread time. `W_plain`, for information only (the rule does not use it), is summed from
-`W_all`'s per-test durations in its TRX report. If `W_ui` is at least
-80 % of `W_all` with the processor well below 90 %, the UI thread sets the length, and they go into
-`tests/VisualCommit.App.ViewTests` (its own `AssemblyInfo.cs` as App.Tests', in the solution);
-otherwise the processors bind (risk 12) and they go into App.Tests by subject. Pure tests stay in
-`VisualCommit.App.Tests` and `VisualCommit.Git.Tests`. The times and the choice go into `status.md` and
-the handoff.
+headless test), the filters in a response file. (`--report-trx` does not exist in this project;
+xunit's `--report-xunit-trx` does.) Filtering by class alone would have counted those 214, many with
+real-git scenarios, as UI-thread time. `W_ui` is 40 % of `W_all` with the processors near full, far
+from the rule's 80 % with the processor well below 90 % (D230): the processors set the length (risk
+12), not the UI thread. Pure tests stay in `VisualCommit.App.Tests` and `VisualCommit.Git.Tests`. The
+times and the choice go into `status.md` and the handoff.
 
 ### 17.4 Proposed visual checks (the report's writers write them in full, step 6)
 
@@ -6238,7 +6312,7 @@ desktop).
 
 | # | Check | RW |
 |---|---|---|
-| W1 | From the welcome page: its Workspaces section (`No workspaces`, `New workspace…`); a new "Web": the dashboard first and empty (`Web has no repositories yet.`, `Add repository…`, `Add open tabs`); `Add repository…` on `api` (added at once, selected), read with no F5 (`WaitForDashboardReadAsync`): `main`, `Up to date`, `Clean`; then on the copy's root: the checklist of nine, `api` `Already in this workspace`, the rest checked (no `remotes/*.git`, no `old-site`), its folder line `Found 9 repositories in {copy.Root}.` with the folder as the fake folder dialog answered it and every drawn line but the last ending at a separator (13.2), so the checklist's picture varies by nature (the temporary folder) and the check's Notes say so, as phase 5's report does; the button `Add 8 repositories`; the eight new rows reach their states with no F5; `Add open tabs` with two repo tabs (the two rows follow their tabs: no summary-mode view model and no git call for them in `CallsSince`); `Rename workspace…`; `Delete workspace…` (`Delete workspace?`, `Delete`; nothing on disk changes; the dashboard closes); `workspaces.json` after each | yes: `Add repository…` with the copy's root chosen in the native folder dialog (`ChooseFolderInDialog("Add a repository to Web", root)`), the checklist captured against its scripted twin (the temporary folder differs, within D33's 3 %), then the section |
+| W1 | From the welcome page: its Workspaces section (`No workspaces`, `New workspace…`); a new "Web": the dashboard first and empty (`Web has no repositories yet.`, `Add repository…`, `Add open tabs`); `Add repository…` on `api` (added at once, selected), read with no F5 (`WaitForDashboardReadAsync`): `main`, `Up to date`, `Clean`; then on the copy's root: the checklist of nine, `api` `Already in this workspace`, the rest checked (no `remotes/*.git`, no `home`, no `old-site`), its folder line `Found 9 repositories in {copy.Root}.` with the folder as the fake folder dialog answered it and every drawn line but the last ending at a separator (13.2), so the checklist's picture varies by nature (the temporary folder) and the check's Notes say so, as phase 5's report does; the button `Add 8 repositories`; the eight new rows reach their states with no F5; `Add open tabs` with two repo tabs (the two rows follow their tabs: no summary-mode view model and no git call for them in `CallsSince`); `Rename workspace…`; `Delete workspace…` (`Delete workspace?`, `Delete`; nothing on disk changes; the dashboard closes); `workspaces.json` after each | yes: `Add repository…` with the copy's root chosen in the native folder dialog (`ChooseFolderInDialog("Add a repository to Web", root)`), the checklist captured against its scripted twin (the temporary folder differs, within D33's 3 %), then the section |
 | W2 | The rows, read only: `Web`, `10 repositories`, no row selected; api `main`, `Up to date`, `Clean`; web-app 2 ahead; docs 3 behind; mobile 1 ahead, 2 behind; design-system `1 staged, 2 unstaged, 1 untracked`; billing `1 conflict` (danger), `Merge in progress`; infra `Detached at 09d320a`; scratch `experiment`, `No upstream`; notes `No remote`; old-site `Folder not found`; each `ExactStateAsync` unchanged, only reads called; web-app's row menu; old-site's `Locate…` (the fake folder dialog answers the folder's new place, a repository the check makes; `workspaces.json` holds the new path, and the row, read again, is `Ready`), then its `Remove from workspace` (no question); Alt+Up | yes: the rows, the row menu |
 | W3 | W2 at 1920×1080, light, with the Folder column (temporary folders: asserted structurally) | no (risk 3) |
 | W4 | Fetch all, the folder server (47393) holding docs, mobile and design-system at 25, 75 and 45; once held and the other five done: `Fetching from all remotes… 25%` (`75%`, `45%`) with Cancel; api, web-app, billing, infra, scratch `Fetched from all remotes`; notes `This repository has no remotes`; old-site its state; `Fetching 8 repositories… 5 done`, the bar at 62, `Cancel all`; the status bar the same, no waiting count; released: `Fetched 8 repositories; 2 skipped`, docs 4 behind, mobile 1 ahead and 3 behind | yes |
@@ -6302,7 +6376,7 @@ hold by `FetchHoldTests`, the isolation by `ShellTests` and `GitIsolationTests`,
 
 ### 17.6 Run time
 
-Estimates from 0.10; nothing of phase 6 has run.
+Estimates from 0.10 and WP-S's measurements (17.1, 17.3); none of phase 6's UI has run.
 
 - **The walk-through**: 38 methods, about 156 pictures. At phase 5's 4.8 s per picture, the
   dashboard's starts heavier (72 processes for the ten rows' first reads: 9 rows × (six refs reads, the
@@ -6311,24 +6385,27 @@ Estimates from 0.10; nothing of phase 6 has run.
   the sweep's flips lighter, about 700 to 900 s of UI-thread time; at phase 5's wall-to-UI ratios (1.67
   idle, 2.6 at the gate) it ends 20 to 39 minutes into the run, before `VisualCommit.App.Tests` (37 min
   26 s, 43 min 8 s) unless that grows.
-- **The default run** (37 min 29 s idle at step 2, 43 min 22 s at phase 5's gate) gains the
-  walk-through's processor load (about 1,250 git processes in part W: some 14 dashboard starts at 72,
-  four bulk runs, the reads after them), the Git-layer tests (configuration reader and writer,
-  ignored-files check, refspec parity, folder server, hold; the hold's polling, under a tenth of a core
-  per held fetch while it lasts, is under 1 % of the run's processor time) and the view tests:
-  **+5 to +10 minutes** (r10's +3 to +8 left out the sweep and the view tests), 43 to 48 idle, 48 to 53 on a gate day, the
-  lower half with a view-test project. Past 50 minutes idle, the lead looks again at sharing app starts
-  in the sweep before the gate. Phase 6 also adds reads to earlier checks and tests: section 9's reads
-  before every covered operation of phases 3 to 5 (merge 1, pick 2, rebase 5, 9.17) and 8.9's pull
-  configuration read before every pull's fetch. They are not counted here: once WP-IA and WP-B are
-  merged, the lead counts them from the call logs and runs the default tests on the commits before and
-  after, alternately (risk 10's method), to measure their cost. A refs read keeps its five processes
+- **The default run**: 37 min 29 s idle at step 2, 43 min 22 s at phase 5's gate; rested, 43 min 49 s
+  for 3,236 tests at `3f62463` before WP-S and 43 min 33 s for 3,299 at WP-S's head (17.1). So the
+  laptop's state moves nearly the same tests by some 6 minutes, and WP-S's own tests (scenarios, folder
+  server, hold, isolation) cost nothing measurable, the hook samples' removal included. The run gains
+  the walk-through's processor load (about 1,250 git processes in part W: some 14 dashboard starts at
+  72, four bulk runs, the reads after them; the hold's polling, under a tenth of a core per held fetch
+  while it lasts, is under 1 % of the run's processor time), the Git-layer tests after WP-S
+  (configuration reader and writer, ignored-files check, refspec parity) and the view tests, which go
+  into App.Tests (17.3): **+5 to +10 minutes** (r10's +3 to +8 left out the sweep and the view tests),
+  about 49 to 54 rested from WP-S's head. Past 50 minutes rested, which most of that range passes, the
+  lead looks again at sharing app starts in the sweep before the gate. Phase 6 also adds reads to
+  earlier checks and tests: section 9's reads before every covered operation of phases 3 to 5 (merge 1,
+  pick 2, rebase 5, or 7 with a merge in the range, 9.17) and 8.9's pull configuration read before
+  every pull's fetch, the chosen rebase's `pull.ff` read included (D231). They are not counted here:
+  once WP-IA and WP-B are merged, the lead counts them from the call logs and runs the default tests on
+  the commits before and after, alternately (risk 10's method), to measure their cost. A refs read keeps its five processes
   (10.2), so the dashboard's figures above stand.
 - **The view tests**, about 18 to 20 new or extended headless classes (17.3's list, from 2.12, 4.13,
   5.12, 6.12, 7.11, 11.15 and 13.5), counted by method and app start as they are written. With WP-S's
-  cost per headless method (`W_ui` / 422, 17.3), `n` methods add `n` × that cost × the load ratio: with
-  `VisualCommit.App.ViewTests`, that is the project's own length, which must end before App.Tests (37
-  min 26 s idle); kept in App.Tests, App.Tests' end grows by about that much, and the run with it.
+  cost per headless test (`W_ui` / 449, about 1.1 s alone, 17.3), `n` tests add `n` × that cost × the
+  load ratio to App.Tests' end, where they go (17.3), and the run grows with it.
   `KeyRouterTests`, `TabKeysTests` and `RegionKeysTests` press many keys per app start, as
   `WindowKeysTests` does: one "ops" start per condition (plain, a menu open, a dialog open, a drag), not
   one per key.
@@ -6408,14 +6485,14 @@ changing only the lines its change moves.
 |---|---|---|
 | WP-L (lead, first) | `MSYSTEM` removed by `GitIsolation.MachineIndependence`, a commit of its own in the main checkout before WP0 (the other leftovers are in `43f52c4`); `GitIsolation.cs` then passes to WP-S | `GitIsolationTests`' `MSYSTEM` case (the class then passes to WP-S) |
 | WP0 (lead, main checkout) | Contracts, stubs and call points every package builds against, with no change of behaviour or pictures (below) | the stubs' compile fixes in the fakes (`MainWindowViewModelTests`' `FakeThemes` among them: `Setting`, `IsDark`, `Changed` for `Current`) |
-| WP-S (harness) | 17.1's scenarios (`TempWorkspace.cs`, `LeanRepositories.cs`, `Scenarios.Phase6.cs`, `Scenarios.ServeWorkspaceAsync`); the hook samples left out (a commit of its own, measured before and after); `TempRepo.cs` (`CopyAsync`'s relative URLs, `AddBareRemoteAsync(…, relative)`, `Over`), `Scenarios.cs` (generic templates); `GitIsolation.cs` (`SessionGitEnvironment`, the safety net, the XDG folder, the identity variables, `PATHEXT`); `GitRunner.cs` (the session environment applied, `SessionEnvironment`; `GitCommand.BelowNormalPriority` applied on Windows right after the start, 8.10), `GitLocator.cs` (the session environment); `ShellDriver.cs` (`Start`'s environment, `systemDark`, `readClock`, `ToolCatalogues.Fixed`, `GlobalGitConfigPath`, `SeedGlobalGitConfig`) and `ShellDriver.Checks.cs` after WP0; `Headless/FakeSystemTheme.cs`; `RealApp.cs` (the per-launch environment; `ChooseFileInDialog(title, file, timeout)`, 17.2); `AuthRemoteServer.cs` (folder mode, holds per repository, 47393); `FetchHold.cs`; the project `VisualCommit.VisualTests.Phase6` (csproj, `AssemblyInfo.cs`, `Phase6Checks.cs`, `Phase6Checks.Support.cs`, `Phase6Expectations.Common.cs`, `Phase6SupportTests.cs`) in `VisualCommit.slnx`; the real-window csproj's link; `scripts/time-scripted-check.sh`'s default phase; 17.3's measurement of `VisualCommit.App.Tests` and, if it says so, `tests/VisualCommit.App.ViewTests` (csproj, `AssemblyInfo.cs`) in the solution; the commands handed to the lead for CLAUDE.md | `Phase6ScenarioTests`, `GitIsolationTests` (the tripwire), `ShellTests`, `AuthRemoteServerTests`, `FetchHoldTests`, `Phase6SupportTests` |
+| WP-S (harness) | 17.1's scenarios (`TempWorkspace.cs`, `LeanRepositories.cs`, `Scenarios.Phase6.cs`, `Scenarios.ServeWorkspaceAsync`); the hook samples left out (a commit of its own, measured before and after); `TempRepo.cs` (`CopyAsync`'s relative URLs, `AddBareRemoteAsync(…, relative)`, `Over`), `Scenarios.cs` (generic templates); `GitIsolation.cs` (`SessionGitEnvironment`, the safety net, the XDG folder, the identity variables, `PATHEXT`); `GitRunner.cs` (the session environment applied, `SessionEnvironment`; `GitCommand.BelowNormalPriority` applied on Windows right after the start to git and what it has started by then, 8.10), `GitLocator.cs` (the session environment); `ShellDriver.cs` (`Start`'s environment, `systemDark`, `readClock`, `ToolCatalogues.Fixed`, `GlobalGitConfigPath`, `SeedGlobalGitConfig`) and `ShellDriver.Checks.cs` after WP0; `Headless/FakeSystemTheme.cs`; `RealApp.cs` (the per-launch environment; `ChooseFileInDialog(title, file, timeout)`, 17.2); `AuthRemoteServer.cs` (folder mode, holds per repository, 47393); `FetchHold.cs`; the project `VisualCommit.VisualTests.Phase6` (csproj, `AssemblyInfo.cs`, `Phase6Checks.cs`, `Phase6Checks.Support.cs`, `Phase6Expectations.Common.cs`, `Phase6SupportTests.cs`) in `VisualCommit.slnx`; the real-window csproj's link; `scripts/time-scripted-check.sh`'s default phase; 17.3's measurement of `VisualCommit.App.Tests` (done: the view tests stay in App.Tests, no view-test project); the commands handed to the lead for CLAUDE.md | `Phase6ScenarioTests`, `GitIsolationTests` (the tripwire), `ShellTests`, `AuthRemoteServerTests`, `FetchHoldTests`, `Phase6SupportTests` |
 | WP1 (Git: keeping ignored files) | `GitRepository.KeepIgnored.cs` (`FindIgnoredAtAsync`, the five reads, `IntegratePullAsync`'s check), `GitRepository.Branches.cs` (the option on the checkouts and the merges, one `CheckoutDetachedAsync`, `CreateBranchAsync`'s `noTrack`, 9.11), `GitRepository.Undo.cs` (the helper lifted out), `StashPaths.Deleted`'s reading; Core `RebaseTodo.cs`'s `LeadingPicks` and `AppliedCommits` | `KeepIgnoredCheckoutTests`, `IgnoredInTheWayTests`, `RebaseTodoTests`, `IntegratePullTests` (new); the Git tests 16.1 names (`BranchOperationTests.cs:217`, `DashBranchNameTests.cs:78`) |
 | WP2 (Git: git's configuration and pull's settings) | `src/VisualCommit.Git/GitConfiguration.cs` (with 8.10's kept list, `merge-tools.json`), `GitMergeTools.cs`, `GitRepository.Config.cs` (`WriteConfigAsync`), `GitRepository.PullConfig.cs` (`ReadPullConfigurationAsync`), `GitRepository.Remotes.cs` (`IntegratePullAsync` by a given configuration, `RemoteArguments.NotUnderstood`); Core `PullModes.cs`, `GitBoolean.cs` (8.7), `GitConfigLocations` | `GitConfigReadTests`, `GitConfigWriteTests`, `GitConfigLocationsTests`, `GitIdentityTests`, `PullConfigurationTests`, `MergeToolHelpTests`, `PullModesTests` |
 | WP3 (Git: fetch refspecs) | Core `FetchRefspecs.cs` (with `DestinationsOf`) and `RepoRefs.cs`' mapping; `GitRepository.Refs.cs` (one `git config --null --get-regexp ^remote\.` in place of `git remote`, 10.2; `RemoteName` from the mapping) | `FetchRefspecsTests`, `FetchRefspecsParityTests`, `RefReadingTests` |
 | WP4 (queue, prompts, workspaces' data) | `OperationQueue.cs` (`Cancel`, the operations merged into an entry, the group passed to `Begin`), `AskPassBroker.cs` (`MaxConnections` 16, the scope's group), `Services/PromptDialogs.cs` (groups); Core `WorkspacePaths.cs`, `WorkspaceEdits.cs`, `RepositoryScanner.cs`; `Services/JsonWorkspaceStore.cs` (with `IWorkspaceFiles`, the set-aside names, `Unreadable` and `SaveFailed`, 1.3), `Services/JsonSessionStore.cs` (`WorkspaceId`); `GitRepository.cs` (`OpenedAtTopAsync`); `ShellDriver.Phase6.Workspaces.cs` with `WriteWorkspaces` and `StartWithTabs(…TabState…)` (the file passes to WP-W at WP4's merge) | `OperationQueueTests`, `AskPassTests`, `PromptDialogsTests`, `WorkspaceEditsTests`, `WorkspacePathsTests`, `RepositoryScannerTests`, `JsonWorkspaceStoreTests`, `JsonSessionStoreTests`, `GitRepositoryOpenTests` |
 | WP-W (workspaces on screen, the welcome page, the tab strip) | `ViewModels/Workspaces/WorkspaceItems.cs`, `WorkspaceCommands.cs` (WP0's stub filled), `IWorkspaceHost.cs`, `WorkspaceMembership.cs`, `WorkspaceFolderProbe.cs` (after WP0), `WorkspaceTexts.cs`; `Dialogs/WorkspaceNameDialogViewModel.cs`, `AddRepositoriesDialogViewModel.cs`, `Views/Dialogs/AddRepositoriesDialogView.axaml(.cs)`; `Dialogs/DialogText.cs` (`WorkspaceNameError`); `Menus/WorkspaceMenus.cs`; `WelcomeViewModel.cs`, `Views/Shell/WelcomeView.axaml(.cs)`; `Controls/PathTextBlock.cs`; `Views/Shell/RepoTabStripPanel.cs`, `RepoTabsView.axaml` (the panel, the dashboard's icon, padding, id and `ItemStatus`, "+"'s name `Open a new tab`, 13.4); `MainWindowViewModel.Session.cs` (1.11's restore partition, the saved states, `ActiveTabIndex`); `ShellDriver.Phase6.Workspaces.cs` (after WP4), `.TabStrip.cs`, `Headless/DrawnLines.cs`; the scripted expectations of 16.1's welcome-page and long-folder rows | `DashboardSessionTests`, `WorkspaceNameErrorTests`, `WorkspaceCommandsTests`, `AddRepositoriesDialogViewModelTests`, `WorkspaceFolderProbeTests`, `PathTextBlockTests`, `WelcomeWorkspacesTests`, `RepoTabStripPanelTests` (all new) |
 | WP-D (the dashboard, summary mode, the registry) | `ViewModels/Workspaces/DashboardViewModel.cs` (`ActivityLogReason`, 2.9), `DashboardRowViewModel.cs` (the read off the UI thread, the `directoryExists` seam, the row's token, 2.10), `DashboardTexts.cs`, `OpenRepositories.cs` (with `WhenIdleAsync` and `NetworkQueueOn`, 3.4, 4.3); `Menus/DashboardMenus.cs`; `Views/Workspaces/DashboardView.axaml(.cs)` (`DashboardNotice`; `KeyRegion.IsMain` on `DashboardList`, 6.6), `DashboardColumns.cs`, `DashboardRowPanel.cs`; `RepositoryViewModel.cs`, `.InProgress.cs`, `.GraphArea.cs` (summary mode, `Promote`, `FirstRead`, the deferred refresh, the read generation, `PauseWatcher()`, 8.11's `GitSettingsChanged` subscription in the constructor and `Dispose` and its handler in `.GraphArea.cs`); `RepoTabViewModel.cs` (2.1's members, `ShowDashboard` filled, the wait for a closed queue, adoption and registration); `MainWindowViewModel.Workspaces.cs` (`ShowWorkspace`, `OpenRequested`, 3.7's view models to wait for, 3.8's term); `OperationStatusViewModel.cs` (`CompactText`, `CompactTone`, `CompactToolTip`, `RunningTitle`, `RunningIsCancellable`); `Panels/ActivityLogViewModel.cs` (following a row); `Services/GitRepositoryProvider.cs` (the open on the thread pool, 2.10); `Views/MainWindow.axaml` (the left panel's and splitter's visibility, `Grid.Column`); `Views/Shell/CommitGraphView.axaml(.cs)` (the slot, the focus, `TabWaitingText` (3.3), `GraphAreaFocusTarget()`: `FocusGraphAreaContent`'s choice returned as an element for 6.6's navigation); `Views/Shell/StatusBarView.axaml` (`StatusWorkspaceIcon`); `ShellDriver.Phase6.Dashboard.cs` | `DashboardColumnsTests`, `DashboardTextsTests`, `DashboardMenusTests`, `DashboardTabTests`, `DashboardRefreshTests`, `DashboardActivityLogTests`, `DashboardViewTests`, `SummaryModeTests`, `PromotionTests`, `OpenRepositoriesTests`, `MainWindowCloseTests`, `GitSettingsChangedTests` (all new); `OperationStatusViewModelTests`, `RepoTabsTests` |
-| WP-B (bulk fetch and pull, Pull's app path) | `ViewModels/Workspaces/BulkRun.cs`, `BulkSlots.cs` (`IsHeldFor`, the common-folder checks, 4.3), `DashboardBulkViewModel.cs` (after WP0's stub); `ToolbarViewModel.Dashboard.cs` (4.10's `ToolbarViewModel.ForDashboard(IDashboardToolbar)`); `ViewModels/Operations/DeferredDialog.cs`; `ViewModels/Operations/AutoFetchScheduler.cs` (4.3's `CommonFolderBusy`, which the lead sets at `MainWindowViewModel.cs:99` at WP-B's merge); `RepositoryOperations.Run.cs` (`ShowResultAsync`'s deferring, `ShowDeferredAsync`, `GuardAsync`'s variant, the lock-file dialog split); `RepositoryOperations.FetchPull.cs` (`FetchAllAsync(BulkPart)`, `PullAsync(BulkPart)`, `PullRefusalDisplay`'s `PullNotFastForward`, 8.9's read before the fetch, 9.10's `IgnoredFilesInTheWay`, `PullIntegrationOptions` passed); the rebase stop's deferral in `RepositoryOperations.Rebase.cs` (after WP-IA's merge); `OperationTexts.Bulk.cs`, `OperationTexts.Remotes.cs` (`PullNotFastForward`); the bulk parts of `DashboardViewModel.cs`, `DashboardRowViewModel.cs` and `DashboardView.axaml` (handed over at WP-D's merge); `ShellDriver.Phase6.Bulk.cs`; `Phase3Expectations.D.cs` (`PullRefusedDialog`, `:170`, `:240`) | `BulkSlotsTests`, `BulkRunTests`, `DashboardBulkViewModelTests`, `DashboardToolbarTests` (new); `RepositoryOperationsFetchTests`, `RepositoryOperationsPullTests`, `AutoFetchSchedulerTests`, `FailureClassifierTests` |
+| WP-B (bulk fetch and pull, Pull's app path) | `ViewModels/Workspaces/BulkRun.cs`, `BulkSlots.cs` (`IsHeldFor`, the common-folder checks, 4.3), `DashboardBulkViewModel.cs` (after WP0's stub); `ToolbarViewModel.Dashboard.cs` (4.10's `ToolbarViewModel.ForDashboard(IDashboardToolbar)`); `ViewModels/Operations/DeferredDialog.cs`; `ViewModels/Operations/AutoFetchScheduler.cs` (4.3's `CommonFolderBusy`, which the lead sets at `MainWindowViewModel.cs:99` at WP-B's merge); `RepositoryOperations.Run.cs` (`ShowResultAsync`'s deferring, `ShowDeferredAsync`, `GuardAsync`'s variant, the lock-file dialog split); `RepositoryOperations.FetchPull.cs` (`FetchAllAsync(BulkPart)`, `PullAsync(BulkPart)`, `PullRefusalDisplay`'s `PullNotFastForward`, 8.9's read before the fetch, the chosen rebase's `pull.ff` included (D231), 9.10's `IgnoredFilesInTheWay`, `PullIntegrationOptions` passed); the rebase stop's deferral in `RepositoryOperations.Rebase.cs` (after WP-IA's merge); `OperationTexts.Bulk.cs`, `OperationTexts.Remotes.cs` (`PullNotFastForward`); the bulk parts of `DashboardViewModel.cs`, `DashboardRowViewModel.cs` and `DashboardView.axaml` (handed over at WP-D's merge); `ShellDriver.Phase6.Bulk.cs`; `Phase3Expectations.D.cs` (`PullRefusedDialog`, `:170`, `:240`) | `BulkSlotsTests`, `BulkRunTests`, `DashboardBulkViewModelTests`, `DashboardToolbarTests` (new); `RepositoryOperationsFetchTests`, `RepositoryOperationsPullTests`, `AutoFetchSchedulerTests`, `FailureClassifierTests` |
 | WP-K (keys and the palette) | `ViewModels/Commands/` beyond WP0's stubs (`AppCommands.cs`, `PaletteEntry.cs`, `PaletteMatcher.cs`, `CommandPaletteViewModel.cs`, the formatter's and catalogue's bodies, `ShellToolTips.cs`' texts with keys, its resolver, list and commit members with their `{name}Key` texts, 6.8); `RepositoryViewModel.Palette.cs`; `Views/Commands/CommandPaletteView.axaml(.cs)`; `Views/KeyRouter.cs`, `Views/ShortcutKeys.cs`, `Views/KeyRegions.cs`' navigation (no view file: the marks are WP0's and WP-D's), `MainWindow.Keys.cs`; `MainWindowViewModel.Commands.cs`; `ToolbarViewModel.cs` (tooltips with keys); `ViewModels/Panels/WorkingChangesViewModel.cs` (`CommitDisabledReason`, `CommitToolTip` with its key), `Views/Shell/WorkingChangesView.axaml` (`CommitButton`'s help text and `AcceleratorKey`), `Views/Conflicts/ConflictResolverView.axaml` (its five buttons' tooltips, help texts and `AcceleratorKey`s from `ShellToolTips`), `Views/Rebase/InteractiveRebaseView.axaml` (`RebaseCancelButton`'s `Cancel (Esc)`), `ViewModels/Graph/SearchViewModel.cs` and `Views/Graph/SearchBarView.axaml` (`Previous match (Shift+Enter, {key})`, `Next match (Enter, {key})` and their keys); `Views/Shell/MenuLayer.axaml.cs`, `Theme/Menus.axaml`; `Theme/Dialogs.axaml`'s palette classes (the file passes from WP-SET at its merge); `Views/Dialogs/DialogView.cs` (Mod+Enter); `Headless/MenuSnapshot.cs` (`KeyText`), `ShellDriver.Phase6.Palette.cs`, `.Keys.cs`; the earlier expectations of 16.1's tooltip and keyed-menu rows | `PaletteMatcherTests`, `CommandPaletteViewModelTests`, `PaletteEntriesTests`, `CommandPaletteViewTests`, `ShortcutTextTests`, `AppShortcutsTests`, `ToolbarToolTipTests`, `RepositoryMenusKeyTests`, `KeyRouterTests`, `TabKeysTests`, `RegionKeysTests`, `CommitKeyTests`, `MenuKeyColumnTests`, `ShellToolTipTests` (all new); `ToolbarTests`, `ActivityLogViewModelTests`, `StatusBarTests`, `WindowKeysTests`, `SearchBarTests`, `WorkingChangesInProgressTests` (the lines 16.1 names) |
 | WP-SET (the settings screen, git's settings on screen, the editor, Open file) | `Dialogs/SettingsDialogViewModel.cs`, `ViewModels/Settings/` (`GeneralSettingsViewModel`, `GitSettingsViewModel`, `ToolSettingsViewModel`), `Views/Dialogs/SettingsDialogView.axaml(.cs)`; `PickDialogViewModel.cs`, `PickDialogView.axaml`; `Theme/Dialogs.axaml` (then WP-K); `Views/Shell/ToolbarView.axaml` (`SettingsButton`); `MainWindowViewModel.Settings.cs` (`OpenSettingsCommand`; it sets WP0's `TabServices.OpenSettings`); `RepositoryViewModel.Settings.cs` (it only fills the menu context's editor name, 12.1, with no subscription); `RepositoryOperations.Settings.cs`, `RepositoryOperations.Files.cs` (`OpenInEditorAsync`'s body behind WP0's declaration, 12.7's dialog through `TabServices.OpenSettings`); `OperationTexts.Settings.cs`; `Services/KnownEditors.cs`, `EditorCatalog.cs`, `EditorCommands.cs`, `FolderPicker.cs` (`PickFileAsync`), `IFileLauncher.cs`, `FileLauncher.cs`; `Headless/FakeFileLauncher.cs`, `FakeFolderPicker.cs`, `HeldMergeTools.cs`, `ShellDriver.Phase6.Settings.cs`; the expectations of 16.1's Settings-button row | `SettingsDialogViewModelTests`, `SettingsDialogViewTests`, `PickDialogViewModelTests`, `SettingsEntryTests` (the button, `OpenSettingsCommand`), `GitSettingsViewModelTests`, `RepositoryOperationsSettingsTests`, `KnownEditorsTests`, `EditorCatalogTests`, `EditorCommandsTests`, `FileMenuEditorTests` (12.10's file menus) (all new); `JsonSettingsStoreTests`, `FileLauncherTests`, `RepositoryOperationsFilesTests` |
 | WP-T (the theme) | `Services/SystemTheme.cs`, `Services/ThemeService.cs` (behind WP0's signature); `MainWindowViewModel.Theme.cs` (after WP0's move: `Theme` from the service, `UseTheme`'s body, the service's `Changed`); `Theme/Tokens.axaml`, `Theme/Controls.axaml` (`VcDangerButton`); `Views/Shell/DragLayer.cs`; `ShellDriver.Phase6.Theme.cs`, `VisualCommit.Testing/Contrast.cs`; the earlier expectations of 16.1's colour rows | `SystemThemeTests`, `ThemeServiceTests`, `SystemThemeStartTests` (11.15's starts), `DragLayerTests`, `ThemeTokensTests`, `ToolTipStyleTests` (all new); `MainWindowViewModelTests`, `BlameViewTests`, `ConflictPanesTests`, `ConflictResultEditorTests`, `CommitGraphControlTests` |
@@ -6423,7 +6500,7 @@ changing only the lines its change moves.
 | WP-RA (fetch refspecs, the app half) | `RepositoryOperations.RemoteBranches.cs` (10.6's name, R2's checkout without an upstream, D201; every git call keeping `keepIgnored: KeepIgnored`, 9.11), `RepositoryOperations.Remotes.cs` (`SplitRemoteBranch`, `PushBranchToAsync`, `DeleteRemoteBranchAsync`, `SetUpstreamAsync`, `PushToAsync` and `ForcePushAsync` with 10.4's push guard), `.Undo.cs` (`PushForcePushBackAsync`), `.Conflicts.cs` (`MergedRemoteBranch`); `Menus/RepositoryMenuContext.cs` (`DropFacts`, `LocalNameOf` moved, `FindRef`'s index by full name, 5.5), `RepositoryMenus.cs` (`ForDrop`, `ForRemoteBranch`, the set-upstream item), `RepositoryMenus.Pages.cs` (`ForcePushRestore`); `RepositoryViewModel.Menus.cs` (`ReadDropFactsAsync`, `CheckOutByDoubleClick`); `OperationTexts.Menus.Refspecs.cs` (R1 to R4, `CreatedWithoutUpstream`, `PushWouldStopFetch`, 10.5), `OperationTexts.Menus.cs` (`MapsBranchesDifferently` removed) | `RepositoryMenusTests` (with 5.12's `FindRef` cases: duplicate names keep `FirstOrDefault`'s answer, a `with` copy that replaces `Refs` finds its own), `RepositoryOperationsRemotesTests`, `RepositoryOperationsPushTests`, `LeftPanelViewModelTests` |
 | WP-V (the walk-through, by part) | `Phase6Checks.<part>*.cs`, `Phase6Expectations.<part>.cs`, `Phase6ExpectationTests.<part>.cs` for W, K, S, G and L, one agent per part (the report's checks in full) | `Phase6ExpectationTests.<part>` |
 | WP-R (the real-window pass, Windows) | `Phase6RealWindowPass.cs`, `.W.cs`, `.K.cs`, `.S.cs`, `.L.cs`; `RealApp.Phase6.cs` (`WriteWorkspaces`, 11.8's read-only reads), `.Dashboard.cs`, `.Palette.cs`, `.Settings.cs`; `NativeMethods.cs` (`SystemParametersInfo`); phases 0 to 5's real-window files that 16.1 changes. Written and built (status step 21), run only at the gate; any trial run stays in WP-R's worktree | — |
-| Lead | `MainWindowViewModel.cs` (tabs, `SaveTabs`, `UpdateCanClose`, `TryClose`, `FinishThenCloseAsync`, `CloseAll`, `CloseTab`, the calls into the packages' partial files, the menu layer's `repositoryName` callback, 8.10's start of the merge-tool lookup once the first tab's load ends, `readEnvironment` passed to `AutoFetchScheduler` (7.3), the scheduler's `CommonFolderBusy` (4.3, `:99`)), `MainWindow.axaml.cs`, `TabServices.cs` (`ReadClock`, `OpenSettings`), `AppSession.cs` (the store, the catalogues, 11.5's start-up order, `KeyTexts.Current`, 7.3's log line and `readEnvironment`, `readClock`, the kept list's path given to `GitConfiguration`, 8.10), `Theme/Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `IGitRepository.cs`, `FakeRepositoryBase.cs`, `AppSettings.cs`, the Core records WP0 declares, `Phase6Checks.Support.cs` and `Phase6Expectations.Common.cs` after WP-S, `VisualCommit.slnx` after WP-S, CI, the docs, CLAUDE.md; before the gate, 17.7's references and comparison | `AppSessionTests` (new) |
+| Lead | `MainWindowViewModel.cs` (tabs, `SaveTabs`, `UpdateCanClose`, `TryClose`, `FinishThenCloseAsync`, `CloseAll`, `CloseTab`, the calls into the packages' partial files, the menu layer's `repositoryName` callback, 8.10's start of the merge-tool lookup once the first tab's load ends, `readEnvironment` passed to `AutoFetchScheduler` (7.3), the scheduler's `CommonFolderBusy` (4.3, `:99`)), `MainWindow.axaml.cs`, `TabServices.cs` (`ReadClock`, `OpenSettings`), `AppSession.cs` (the store, the catalogues, 11.5's start-up order, `KeyTexts.Current`, 7.3's log line and `readEnvironment`, `readClock`, the kept list's path given to `GitConfiguration`, 8.10, and its disposal in `Dispose`, 8.1), `Theme/Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `IGitRepository.cs`, `FakeRepositoryBase.cs`, `AppSettings.cs`, the Core records WP0 declares, `Phase6Checks.Support.cs` and `Phase6Expectations.Common.cs` after WP-S (17.2's five dashboard and theme helpers once WP-D, WP-W and WP-T are merged, before WP-V's parts W, S and L), `VisualCommit.slnx` after WP-S, CI, the docs, CLAUDE.md; before the gate, 17.7's references and comparison | `AppSessionTests` (new); `Phase6SupportTests`' smoke tests of those helpers |
 
 **WP0's contracts**, each with its owner afterwards:
 
@@ -6435,7 +6512,9 @@ changing only the lines its change moves.
   `GitOperation.PromptGroup`, `GitPrompt.Group`, `IGitPromptBroker.Begin`'s group, `NullGitPromptBroker`;
   `IOperationQueue.Cancel(GitOperation)` (nothing until WP4); `Git/FetchRefspecs.cs`' types (with
   `DestinationsOf`), `RepoRefs.Refspecs`, `SourceOf` and `LocalNameOf` giving phase 5's assumption (WP3);
-  `Git/GitConfiguration.cs` (`IGitConfiguration` and its records), `Git/PullConfiguration.cs`
+  `Git/GitConfiguration.cs` (`IGitConfiguration` and its records; its `XdgFile`, `Variable(name)` and
+  `IDisposable`, which `AppSession.Dispose` calls, the lead adds after wave 1, before WP-SET, 8.1),
+  `Git/PullConfiguration.cs`
   (`PullConfiguration`, `PullFastForwardSetting`, `PullRebaseSetting` moved from Git,
   `PullIntegrationOptions`), `PullModes` and `GitBoolean.TryParse` signatures (WP2);
   `GitCommand.BelowNormalPriority` (8.10; `GitRunner` applies it, WP-S); `AppPaths.MergeToolsFile`
@@ -6570,7 +6649,9 @@ packages editing one file at once (menus, texts, earlier expectations).
    WP-B, WP-SET and WP-T: the palette lists their commands and calls `UseTheme`, the tooltip texts change
    once, and `Dialogs.axaml` passes from WP-SET).
 5. Wave 3: WP-V's parts, at most three at once (W after WP-B, K after WP-K, S after WP-SET and WP-T, G
-   after WP-IA and WP-RA, L after WP-T, WP-W, WP-K and WP-SET); WP-R on the Windows machine.
+   after WP-IA and WP-RA, L after WP-T, WP-W, WP-K and WP-SET; W, S and L also after the lead's five
+   helpers in `Phase6Checks.Support.cs`, added once WP-D, WP-W and WP-T are merged, 17.2); WP-R on the
+   Windows machine.
 6. The review (status step 22); 17.7's references in two parts: the phase 0 to 5 walk-throughs on
    `master` in a worktree of their own (no package worktree beside it), and the 306 real-window files
    copied from the main checkout to `D:/Projects/Personal/gate6-reference/` and checked against
@@ -6648,3 +6729,4 @@ names it.
 | D228 | 2026-10-18 | The tab strip shrinks, then scrolls: tabs keep today's 120 to 220 while they and "+" fit, so nothing moves while the tabs fit at their natural widths (8 of 120 at 1000 wide, at least 4 of any title); then the widest shrink first, in whole pixels, down to 80; then they scroll with the active tab whole in view and "+" at the right end; a wheel notch scrolls 80; no arrow buttons (design 13.3). | A dashboard and ten more tabs (its repositories) are 1,320 px, more than the strip's 1,062 at 1100 wide, and today "+" leaves the view first; arrow buttons would take room from the tabs while the wheel, the tab keys and the palette reach every tab; no earlier picture has more than 3 tabs. |
 | D229 | 2026-10-18 | Phase 6's scenarios and test servers: the workspace "Web" of ten repositories in mixed states is built once per test process the lean way (`git fast-import` and configuration written as text, 28 processes) with relative remote URLs, so a copy is files only, pinned by `Phase6ScenarioTests`; `TempRepo`'s blank git folders leave out git's `hooks/*.sample`; `AuthRemoteServer` serves a folder of bare repositories, each at its own URL with its own hold at a chosen percentage, on port 47393 with the fallback to a free one for the walk-through and the real window, and on a system port in its own tests (amends D97, as D150 did); a file remote's fetch is held by an upload-pack wrapper written into each held repository's own `.git/config` (design 17.1, 17.2). | The TempRepo way costs 80 processes, 1 to 2 minutes under the default run's load (0.10); copying is file-count bound and the samples are 221 of the template's 544 files; the progress picture needs each row's percentage, and git counts boundary objects too, so the holds are at 25, 75 and 45 (0.10); in the session's global file the wrapper's `[remote "origin"]` would give every repository a remote `origin`, so a repository without one would be fetched (0.10). |
 | D230 | 2026-10-18 | Phase 6's walk-through and tests: one project, `VisualCommit.VisualTests.Phase6`, with parts W (workspaces and the dashboard), K (keys and the palette), S (settings and the theme's following), G (ignored files and refspecs) and L (every main screen in both themes, the long folder, the tab strip), one class per part, about 38 methods; part L moves to a project of its own past about 40 methods or when the project ends after the run's longest other project; phase 6's headless view tests go into `VisualCommit.App.ViewTests` when App.Tests' headless tests alone take at least 80% of its time with the processor well below 90%, else into App.Tests by subject; earlier phases' pictures are compared by region against references made on `master` (design 17.3, 17.7, 11.14). | The letters keep check names apart from the requirement prefixes; parts run side by side; `VisualCommit.App.Tests` already ends the default run and Avalonia's headless tests run one at a time on its one UI thread (0.10); the Settings button changes every earlier window picture in one toolbar box, so the sha256 list alone cannot tell intended changes from defects. |
+| D231 | 2026-10-19 | "Pull from {up} (rebase)", the rebase chosen for one pull, reads `pull.ff` alone before its fetch and refuses a value `git pull --rebase` refuses (`foo`, `ONLY`; `k` on 2.55) with Pull's text for a setting it does not understand ("pull.ff is set to foo, which this app does not understand.", command `git config --get pull.ff`), nothing fetched; `pull.ff=only` and `false` still give way to the rebase, and no rebase setting is read (`branch.<b>.rebase`, `pull.rebase`, an invalid one included). The git layer does it (`ReadPullFastForwardAsync`, used by `ReadPullConfigurationAsync` and by `PullIntegration.Rebase`); `PullStepsAsync` reads it before the fetch. Amends D147's "does not read git's pull settings, as `git pull --rebase`" (design 8.9, 4.8). | `git pull --rebase` reads `pull.ff` whenever no `--ff` option is given and refuses an invalid value before it fetches (`fatal: invalid value for 'pull.ff'`), checked on 2.36 and 2.55, while it ignores `pull.ff=only` and an invalid `pull.rebase` as D147 found: D147's premise holds for those but not for an invalid `pull.ff`. Refusing before the fetch spends no fetch, as D219 does for the configured pull. |
