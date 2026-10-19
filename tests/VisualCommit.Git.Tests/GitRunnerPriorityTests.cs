@@ -111,6 +111,22 @@ public class GitRunnerPriorityTests
                 await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
             }
 
+            // The tree is put at normal priority first, whatever the machine started it at: Windows
+            // gives a child its parent's class when the parent runs below normal, as CI's runner runs
+            // the test host (run 39190992859 found the whole tree below normal already).
+            foreach (var id in DescendantsOf(git.Id).Select(process => process.Id).Prepend(git.Id))
+            {
+                try
+                {
+                    using var process = Process.GetProcessById(id);
+                    process.PriorityClass = ProcessPriorityClass.Normal;
+                }
+                catch (ArgumentException)
+                {
+                    // Ended meanwhile: the comparison of the trees below tells.
+                }
+            }
+
             var before = DescendantsOf(git.Id);
             Assert.All(before, process => Assert.Equal(ProcessPriorityClass.Normal, process.Priority));
 
