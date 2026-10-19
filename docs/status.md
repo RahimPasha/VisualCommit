@@ -283,6 +283,14 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- After wave 1's merges (WP-S, WP1, WP2): CI run 39190992859 on `249a554` failed 1 of 3,749 on
+  Windows only, WP-S's `GitRunnerPriorityTests.A_tree_that_started_before_its_priority_was_set_is_lowered_whole`,
+  which assumed git's tree starts at normal priority while CI's runner runs the test host below
+  normal (Windows then gives the children its class); the test sets the tree to normal first
+  (`e2fb327`; run from `cmd`'s `start /belownormal` the old test fails as on CI and the new one
+  passes). Run [39194263924](https://github.com/RahimPasha/VisualCommit/actions/runs/39194263924)
+  on `e2fb327`: all five jobs green; Windows' Test step 25 min 52 s, macOS's 20 min 44 s, Ubuntu's
+  3 min 16 s, the containers' about 4 min 10 s (D186's threshold is 32 minutes).
 - After WP0 (`8e79628`, full run 3,235 of 3,236 in 38 min 28 s): `ShellDriverTests.A_fresh_applications_wait_for_its_turn_on_the_ui_thread_does_not_count_against_the_test`
   failed once under the full run's load (the shared headless UI thread did not take its work within
   60 s) and passes alone; watch it. CI run 39153491762 on `8e79628`: Windows green; the other four
