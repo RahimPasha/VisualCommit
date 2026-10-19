@@ -170,6 +170,18 @@ public class FetchRefspecsTests
         { "an empty destination", ["origin=refs/heads/main:"], "refs/remotes/origin/main", RemoteSourceKind.NotFetched, null, null },
         { "no destination", ["origin=refs/heads/main"], "refs/remotes/origin/main", RemoteSourceKind.NotFetched, null, null },
 
+        // F a fetch mirror (git remote add --mirror=fetch): beside another remote, that remote's
+        // tracking refs are ambiguous between the two, as git's tracking setup says; on one remote
+        // beside the default, two refs fill origin/main (git takes the first line's); alone, a
+        // tracking ref maps to itself on the remote, not a branch.
+        { "F, another remote", ["origin=" + Default, "m=+refs/*:refs/*"], "refs/remotes/origin/main", RemoteSourceKind.AmbiguousRemotes, "origin,m", null },
+        { "F, another remote first", ["m=+refs/*:refs/*", "origin=" + Default], "refs/remotes/origin/main", RemoteSourceKind.AmbiguousRemotes, "m,origin", null },
+        { "F, the mirror's own ref", ["origin=" + Default, "m=+refs/*:refs/*"], "refs/remotes/m/main", RemoteSourceKind.Mapped, "m", "refs/remotes/m/main" },
+        { "F on the same remote", ["origin=" + Default, "origin=+refs/*:refs/*"], "refs/remotes/origin/main", RemoteSourceKind.AmbiguousRefs, "origin", null },
+        { "F on the same remote swapped", ["origin=+refs/*:refs/*", "origin=" + Default], "refs/remotes/origin/main", RemoteSourceKind.AmbiguousRefs, "origin", null },
+        { "F on the same remote, another namespace", ["origin=" + Default, "origin=+refs/*:refs/*"], "refs/remotes/m/main", RemoteSourceKind.Mapped, "origin", "refs/remotes/m/main" },
+        { "F alone", ["origin=+refs/*:refs/*"], "refs/remotes/origin/main", RemoteSourceKind.Mapped, "origin", "refs/remotes/origin/main" },
+
         // A remote whose name keeps its case and dots.
         { "a dotted name", ["Team.Dot.x=+refs/heads/*:refs/remotes/Team.Dot.x/*"], "refs/remotes/Team.Dot.x/main", RemoteSourceKind.Mapped, "Team.Dot.x", "refs/heads/main" },
         { "another case", ["Team.Dot.x=+refs/heads/*:refs/remotes/Team.Dot.x/*"], "refs/remotes/team.dot.x/main", RemoteSourceKind.NotFetched, null, null },
@@ -250,6 +262,10 @@ public class FetchRefspecsTests
         { ["origin=" + Default, "origin=refs/heads/*:refs/remotes/origin/*"], "origin", "refs/heads/main", ["refs/remotes/origin/main"] },
         { ["origin=refs/heads/main"], "origin", "refs/heads/main", [] },
         { ["origin=refs/heads/*/x:refs/remotes/origin/*/y"], "origin", "refs/heads/feature/x", ["refs/remotes/origin/feature/y"] },
+
+        // F: the mirror line maps a branch onto the local branch of its name, beside the default's tracking ref.
+        { ["origin=+refs/*:refs/*"], "origin", "refs/heads/main", ["refs/heads/main"] },
+        { ["origin=" + Default, "origin=+refs/*:refs/*"], "origin", "refs/heads/main", ["refs/remotes/origin/main", "refs/heads/main"] },
     };
 
     [Theory]
