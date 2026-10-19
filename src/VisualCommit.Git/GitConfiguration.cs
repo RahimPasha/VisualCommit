@@ -54,6 +54,15 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     /// <param name="mergeToolsFile">The kept list of merge tools (<c>AppPaths.MergeToolsFile</c>, 8.10).</param>
     /// <param name="sessionEnvironment">The session's git environment (8.12), which the runner applies; null for none, as the desktop app runs.</param>
     /// <param name="log">The app's log.</param>
+    /// <summary>
+    /// Whether <c>git mergetool --tool-help</c> runs below normal priority (8.10): true for the app.
+    /// The live test of the lookup sets it false: it proves the parse and the kept list with real git,
+    /// and below normal priority on a machine whose other test projects keep every processor busy
+    /// starved the lookup past the hang watchdog's limit; the priority is proven by
+    /// <c>GitRunnerPriorityTests</c> and the command's flag by the held runner's test.
+    /// </summary>
+    internal bool ToolHelpBelowNormal { get; init; } = true;
+
     public GitConfiguration(
         Func<CancellationToken, Task<IGitRunner>> runner,
         string dataDirectory,
@@ -472,7 +481,7 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         {
             WorkingDirectory = _dataDirectory,
             Environment = _outsideReadEnvironment,
-            BelowNormalPriority = true,
+            BelowNormalPriority = ToolHelpBelowNormal,
         };
 
         try

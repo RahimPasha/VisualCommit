@@ -108,11 +108,14 @@ public class MergeToolHelpTests
     public async Task The_live_run_lists_the_tools_this_git_knows_and_keeps_them()
     {
         using var lab = new ConfigLab();
+        // At normal priority: below normal, under the default run's load, git's shell script was
+        // starved past the hang watchdog's limit; the flag is the held runner's test's.
+        using var configuration = new GitConfiguration(lab.Runner, lab.DataDirectory, lab.MergeToolsFile, lab.Environment, lab.Log) { ToolHelpBelowNormal = false };
 
         MergeToolHelp help;
         using (HangWatchdogAttribute.WaitingForSlowProgram("git mergetool --tool-help"))
         {
-            help = await lab.Configuration.ReadToolHelpAsync(TestCancelled);
+            help = await configuration.ReadToolHelpAsync(TestCancelled);
         }
 
         // Exit 0 on every git, and every git knows meld, found here or not.
@@ -122,7 +125,7 @@ public class MergeToolHelpTests
         Assert.Equal(lab.Runner.ExecutablePath, kept.GetProperty("git").GetString());
         Assert.StartsWith("git version ", kept.GetProperty("version").GetString(), StringComparison.Ordinal);
         Assert.Equal(help.NotFound.Count, kept.GetProperty("notFound").GetArrayLength());
-        AssertSameHelp(help, await lab.Configuration.ReadToolHelpAsync(TestCancelled));
+        AssertSameHelp(help, await configuration.ReadToolHelpAsync(TestCancelled));
     }
 
     [Fact]
