@@ -117,6 +117,180 @@ public class PromptDialogsTests
         Assert.Equal(GitPromptKind.Notice, Assert.Single(presenter.Shown).Kind);
     }
 
+    // Prompt groups (docs/phase-6-design.md 4.4, D210): a bulk run's prompts, one at a time, and
+    // what the run was told answers the same text in its other repositories.
+
+    [Fact]
+    public async Task Two_prompts_of_one_group_with_the_same_text_show_one_dialog_and_the_password_follows()
+    {
+        using var group = new PromptGroup();
+        var presenter = new ScriptedPresenter(new PromptDialogAnswer("alice", "s3cret"), new PromptDialogAnswer("never"));
+        var dialogs = new PromptDialogs(presenter);
+        var user = Prompt(GitPromptKind.Username, "Username for 'https://example.com': ", "op-1", url: "https://example.com") with { Group = group };
+        var password = Prompt(GitPromptKind.Password, "Password for 'https://alice@example.com': ", "op-1") with { Group = group };
+
+        Assert.Equal(PromptAnswer.Of("alice"), await dialogs.AnswerAsync(user, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("s3cret"), await dialogs.AnswerAsync(password, TestCancelled));
+
+        // Another repository of the run, another scope: the same texts, the same credential.
+        Assert.Equal(PromptAnswer.Of("alice"), await dialogs.AnswerAsync(user with { ScopeId = "op-2", RepositoryName = "web" }, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("s3cret"), await dialogs.AnswerAsync(password with { ScopeId = "op-2", RepositoryName = "web" }, TestCancelled));
+        Assert.Equal("op-1", Assert.Single(presenter.Shown).ScopeId);
+    }
+
+    [Fact]
+    public async Task A_groups_second_prompt_waits_for_the_first_ones_answer_and_a_different_text_asks_again()
+    {
+        using var group = new PromptGroup();
+        var presenter = new HeldPresenter();
+        var dialogs = new PromptDialogs(presenter);
+        var first = dialogs.AnswerAsync(Prompt(GitPromptKind.Username, "Username for 'https://example.com': ", "op-1", url: "https://example.com") with { Group = group }, TestCancelled);
+        var shownFirst = await presenter.NextAsync();
+
+        var second = dialogs.AnswerAsync(Prompt(GitPromptKind.Username, "Username for 'https://other.example': ", "op-2", url: "https://other.example") with { Group = group }, TestCancelled);
+        var alone = dialogs.AnswerAsync(Prompt(GitPromptKind.Username, "Username for 'https://other.example': ", "op-3", url: "https://other.example"), TestCancelled);
+        var shownAlone = await presenter.NextAsync();
+
+        // A prompt without a group is not held back by one; the group's second one is.
+        Assert.Equal("op-3", shownAlone.Prompt.ScopeId);
+        Assert.False(second.IsCompleted);
+        Assert.Equal(2, presenter.Shown.Count);
+
+        shownFirst.Answer(new PromptDialogAnswer("alice", "s3cret"));
+        Assert.Equal(PromptAnswer.Of("alice"), await first.WaitAsync(StepTimeout, TestCancelled));
+        var shownSecond = await presenter.NextAsync();
+        Assert.Equal("op-2", shownSecond.Prompt.ScopeId);
+        shownSecond.Answer(new PromptDialogAnswer("bob", "pw"));
+        shownAlone.Answer(new PromptDialogAnswer("carol", "pw2"));
+
+        Assert.Equal(PromptAnswer.Of("bob"), await second.WaitAsync(StepTimeout, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("carol"), await alone.WaitAsync(StepTimeout, TestCancelled));
+        Assert.Equal(3, presenter.Shown.Count);
+    }
+
+    [Fact]
+    public async Task A_Cancel_answers_the_same_text_of_the_group_with_Cancelled_and_another_text_still_asks()
+    {
+        using var group = new PromptGroup();
+        var presenter = new ScriptedPresenter(PromptDialogAnswer.CancelledByUser, new PromptDialogAnswer("123456"));
+        var dialogs = new PromptDialogs(presenter);
+        var user = Prompt(GitPromptKind.Username, "Username for 'https://example.com': ", "op-1", url: "https://example.com") with { Group = group };
+
+        Assert.Equal(PromptAnswer.Cancelled, await dialogs.AnswerAsync(user, TestCancelled));
+        Assert.Equal(PromptAnswer.Cancelled, await dialogs.AnswerAsync(user with { ScopeId = "op-2" }, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("123456"), await dialogs.AnswerAsync(Prompt(GitPromptKind.Other, "Verification code: ", "op-3") with { Group = group }, TestCancelled));
+        Assert.Equal(2, presenter.Shown.Count);
+    }
+
+    [Fact]
+    public async Task A_groups_answers_are_forgotten_after_two_minutes()
+    {
+        using var group = new PromptGroup();
+        var clock = new ManualClock();
+        var presenter = new ScriptedPresenter(new PromptDialogAnswer("first"), new PromptDialogAnswer("second"));
+        var dialogs = new PromptDialogs(presenter, clock: clock);
+        var prompt = Prompt(GitPromptKind.Passphrase, "Enter passphrase for key '/home/u/.ssh/id_ed25519': ", "op-1") with { Group = group };
+
+        Assert.Equal(PromptAnswer.Of("first"), await dialogs.AnswerAsync(prompt, TestCancelled));
+        clock.Advance(PromptDialogs.KeepAnswersFor - TimeSpan.FromSeconds(1));
+        Assert.Equal(PromptAnswer.Of("first"), await dialogs.AnswerAsync(prompt with { ScopeId = "op-2" }, TestCancelled));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(PromptAnswer.Of("second"), await dialogs.AnswerAsync(prompt with { ScopeId = "op-3" }, TestCancelled));
+        Assert.Equal(2, presenter.Shown.Count);
+    }
+
+    [Fact]
+    public async Task A_groups_answers_are_forgotten_when_it_ends_and_its_later_prompts_are_asked_alone()
+    {
+        var group = new PromptGroup();
+        var presenter = new ScriptedPresenter(new PromptDialogAnswer("first"), new PromptDialogAnswer("second"), new PromptDialogAnswer("third"));
+        var dialogs = new PromptDialogs(presenter);
+        var prompt = Prompt(GitPromptKind.Other, "Verification code: ", "op-1") with { Group = group };
+        Assert.Equal(PromptAnswer.Of("first"), await dialogs.AnswerAsync(prompt, TestCancelled));
+
+        group.Dispose();
+
+        // As a prompt without a group: a dialog, and its answer kept for its scope only.
+        Assert.Equal(PromptAnswer.Of("second"), await dialogs.AnswerAsync(prompt with { ScopeId = "op-2" }, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("second"), await dialogs.AnswerAsync(prompt with { ScopeId = "op-2" }, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("third"), await dialogs.AnswerAsync(prompt with { ScopeId = "op-3" }, TestCancelled));
+        Assert.Equal(3, presenter.Shown.Count);
+    }
+
+    [Fact]
+    public async Task A_prompt_waiting_for_its_groups_turn_is_refused_when_its_scope_ends_and_shows_nothing()
+    {
+        using var group = new PromptGroup();
+        var presenter = new HeldPresenter();
+        var dialogs = new PromptDialogs(presenter);
+        var first = dialogs.AnswerAsync(Prompt(GitPromptKind.Other, "Verification code: ", "op-1") with { Group = group }, TestCancelled);
+        var shownFirst = await presenter.NextAsync();
+        using var scope = new CancellationTokenSource();
+        var waiting = dialogs.AnswerAsync(Prompt(GitPromptKind.Other, "Another code: ", "op-2") with { Group = group }, scope.Token);
+
+        await scope.CancelAsync();
+
+        Assert.Equal(PromptAnswer.Refused, await waiting.WaitAsync(StepTimeout, TestCancelled));
+        shownFirst.Answer(new PromptDialogAnswer("1"));
+        Assert.Equal(PromptAnswer.Of("1"), await first.WaitAsync(StepTimeout, TestCancelled));
+        Assert.Single(presenter.Shown);
+    }
+
+    [Fact]
+    public async Task A_dialog_closed_because_its_scope_ended_keeps_nothing_for_the_group()
+    {
+        using var group = new PromptGroup();
+        var presenter = new HeldPresenter();
+        var dialogs = new PromptDialogs(presenter);
+        var prompt = Prompt(GitPromptKind.Other, "Verification code: ", "op-1") with { Group = group };
+        using var scope = new CancellationTokenSource();
+        var first = dialogs.AnswerAsync(prompt, scope.Token);
+        var shownFirst = await presenter.NextAsync();
+
+        // The presenter closes its dialog when the scope ends: no answer, never a Cancel of the user.
+        await scope.CancelAsync();
+        shownFirst.Answer(PromptDialogAnswer.None);
+        Assert.Equal(PromptAnswer.Refused, await first.WaitAsync(StepTimeout, TestCancelled));
+
+        var again = dialogs.AnswerAsync(prompt with { ScopeId = "op-2" }, TestCancelled);
+        var shownAgain = await presenter.NextAsync();
+        shownAgain.Answer(new PromptDialogAnswer("2"));
+        Assert.Equal(PromptAnswer.Of("2"), await again.WaitAsync(StepTimeout, TestCancelled));
+    }
+
+    [Fact]
+    public async Task A_groups_answer_never_answers_a_prompt_without_the_group_nor_the_other_way_round()
+    {
+        using var group = new PromptGroup();
+        var presenter = new ScriptedPresenter(new PromptDialogAnswer("grouped"), new PromptDialogAnswer("alone"));
+        var dialogs = new PromptDialogs(presenter);
+        var prompt = Prompt(GitPromptKind.Other, "Verification code: ", "op-1");
+
+        Assert.Equal(PromptAnswer.Of("grouped"), await dialogs.AnswerAsync(prompt with { Group = group }, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("alone"), await dialogs.AnswerAsync(prompt, TestCancelled));
+        Assert.Equal(PromptAnswer.Of("grouped"), await dialogs.AnswerAsync(prompt with { Group = group, ScopeId = "op-2" }, TestCancelled));
+        Assert.Equal(2, presenter.Shown.Count);
+    }
+
+    [Fact]
+    public async Task A_notice_of_a_group_shows_at_once_beside_a_groups_open_dialog()
+    {
+        using var group = new PromptGroup();
+        var presenter = new HeldPresenter();
+        var dialogs = new PromptDialogs(presenter);
+        var first = dialogs.AnswerAsync(Prompt(GitPromptKind.Other, "Verification code: ", "op-1") with { Group = group }, TestCancelled);
+        var shownFirst = await presenter.NextAsync();
+
+        var notice = dialogs.AnswerAsync(Prompt(GitPromptKind.Notice, "Confirm user presence for key ED25519-SK SHA256:x", "op-2") with { Group = group }, TestCancelled);
+        var shownNotice = await presenter.NextAsync();
+
+        Assert.Equal(GitPromptKind.Notice, shownNotice.Prompt.Kind);
+        shownNotice.Answer(PromptDialogAnswer.None);
+        Assert.Equal(PromptAnswer.Refused, await notice.WaitAsync(StepTimeout, TestCancelled));
+        shownFirst.Answer(new PromptDialogAnswer("1"));
+        Assert.Equal(PromptAnswer.Of("1"), await first.WaitAsync(StepTimeout, TestCancelled));
+    }
+
     [Fact]
     public async Task A_fetch_signs_in_with_one_dialog_and_a_second_contact_of_the_operation_asks_nothing()
     {
@@ -149,6 +323,7 @@ public class PromptDialogsTests
 
         var scope = Assert.Single(broker.Scopes);
         Assert.Equal((PromptMode.Ask, "Clone", "x"), (scope.Mode, scope.Title, scope.RepositoryName));
+        Assert.Null(scope.Group);
         Assert.Same(scope.Environment, provider.Environment);
         Assert.True(scope.IsDisposed);
         Assert.Equal("fatal: repository not found", welcome.ErrorText);
@@ -225,6 +400,35 @@ public class PromptDialogsTests
         }
     }
 
+    /// <summary>Holds every dialog open until the test answers it; <see cref="NextAsync"/> gives the dialogs in the order they were asked for.</summary>
+    private sealed class HeldPresenter : IPromptDialogPresenter
+    {
+        private readonly ConcurrentQueue<GitPrompt> _shown = new();
+        private readonly System.Threading.Channels.Channel<HeldDialog> _dialogs = System.Threading.Channels.Channel.CreateUnbounded<HeldDialog>();
+
+        public IReadOnlyList<GitPrompt> Shown => [.. _shown];
+
+        public Task<PromptDialogAnswer> ShowAsync(GitPrompt prompt, CancellationToken cancellationToken)
+        {
+            _shown.Enqueue(prompt);
+            var dialog = new HeldDialog(prompt);
+            _dialogs.Writer.TryWrite(dialog);
+            return dialog.Answered.Task;
+        }
+
+        /// <summary>The next dialog asked for, waiting for it.</summary>
+        public async Task<HeldDialog> NextAsync() => await _dialogs.Reader.ReadAsync(TestCancelled).AsTask().WaitAsync(StepTimeout, TestCancelled);
+    }
+
+    private sealed class HeldDialog(GitPrompt prompt)
+    {
+        public GitPrompt Prompt { get; } = prompt;
+
+        public TaskCompletionSource<PromptDialogAnswer> Answered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Answer(PromptDialogAnswer answer) => Answered.SetResult(answer);
+    }
+
     private sealed class ManualClock : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 1, 2, 9, 0, 0, TimeSpan.Zero);
@@ -240,7 +444,7 @@ public class PromptDialogsTests
 
         public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
         {
-            var scope = new RecordedScope(operationId ?? $"prompt-{Scopes.Count + 1}", title, repositoryName, mode);
+            var scope = new RecordedScope(operationId ?? $"prompt-{Scopes.Count + 1}", title, repositoryName, mode) { Group = group };
             Scopes.Add(scope);
             return scope;
         }
@@ -254,6 +458,9 @@ public class PromptDialogsTests
         public string RepositoryName { get; } = repositoryName;
 
         public PromptMode Mode { get; } = mode;
+
+        /// <summary>The prompt group the scope was opened with (docs/phase-6-design.md 4.4), or null.</summary>
+        public PromptGroup? Group { get; init; }
 
         public void CancelByUser() => UserCancelled = true;
     }
