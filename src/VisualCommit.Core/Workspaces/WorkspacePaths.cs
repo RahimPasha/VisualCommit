@@ -6,12 +6,18 @@ namespace VisualCommit.Core.Workspaces;
 /// What "the same repository folder" means (docs/phase-6-design.md 1.2): every match of a folder
 /// (the workspace code, the dashboard's rows and pending tabs, the palette) goes through
 /// <see cref="Same"/>, so that a hand-edited file, <c>C:\Users\RUNNER~1</c> and macOS's
-/// <c>/var</c> match what git reports. Pure.
+/// <c>/var</c> match what git reports.
 /// <para>
 /// It compares texts, after <see cref="Path.GetFullPath(string)"/>, which on Windows also expands
 /// the short (8.3) names of folders that exist: a junction or a symbolic link (macOS's
 /// <c>/var</c>) is another spelling of a folder that only git can see through, which
 /// <c>IGitRepository.OpenedAtTopAsync</c> and the open rows' working directories cover (1.2's two rules).
+/// </para>
+/// <para>
+/// So it is not pure on Windows: for a path with a <c>~</c> in it, <see cref="Path.GetFullPath(string)"/>
+/// asks the file system for the long names (<c>GetLongPathNameW</c>, walking up through the folders
+/// that do not exist), and a share that does not answer holds the caller until the file system
+/// gives up. A path without a <c>~</c>, and any path elsewhere, is worked out from its text alone.
 /// </para>
 /// </summary>
 public static class WorkspacePaths

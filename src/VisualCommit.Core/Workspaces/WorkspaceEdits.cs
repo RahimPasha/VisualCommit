@@ -1,11 +1,12 @@
 namespace VisualCommit.Core.Workspaces;
 
 /// <summary>
-/// The changes to the workspaces (docs/phase-6-design.md 1.4), pure. Each returns the same object
-/// when it changes nothing, so that the store neither saves nor raises <see cref="IWorkspaceStore.Changed"/>.
-/// Paths are matched by <see cref="WorkspacePaths.Same"/> and kept as given (the working tree's
-/// top as git reported it); a workspace's other fields and a repository's other fields are kept
-/// by every edit.
+/// The changes to the workspaces (docs/phase-6-design.md 1.4), pure but for
+/// <see cref="WorkspacePaths.Same"/>, which on Windows reads the file system for a path with a
+/// <c>~</c> in it. Each returns the same object when it changes nothing, so that the store neither
+/// saves nor raises <see cref="IWorkspaceStore.Changed"/>. Paths are matched by
+/// <see cref="WorkspacePaths.Same"/> and kept as given (the working tree's top as git reported
+/// it); a workspace's other fields and a repository's other fields are kept by every edit.
 /// </summary>
 public static class WorkspaceEdits
 {
