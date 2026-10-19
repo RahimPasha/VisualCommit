@@ -87,6 +87,63 @@ public class JsonSessionStoreTests
     }
 
     [Fact]
+    public void A_workspaces_dashboard_is_saved_by_its_id_and_read_back()
+    {
+        // docs/phase-6-design.md 1.11: a dashboard is TabState(null, workspaceId).
+        using var data = new TempDirectory("data");
+        var file = Path.Combine(data.Path, "session.json");
+
+        new JsonSessionStore(file).Update(state => state with
+        {
+            Tabs = [new TabState(null, "3f2c9a"), new TabState("/repos/api"), new TabState(null)],
+            ActiveTab = 0,
+        });
+
+        Assert.Equal(
+            [new TabState(null, "3f2c9a"), new TabState("/repos/api"), new TabState(null)],
+            new JsonSessionStore(file).Current.Tabs);
+        Assert.Contains("\"workspaceId\": \"3f2c9a\"", File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_older_file_without_workspace_ids_loads_with_none()
+    {
+        using var data = new TempDirectory("data");
+        var file = Path.Combine(data.Path, "session.json");
+        File.WriteAllText(file, """{ "tabs": [ { "repositoryPath": "/repos/x" }, { "repositoryPath": null } ], "activeTab": 1 }""");
+
+        var store = new JsonSessionStore(file);
+
+        Assert.Equal([new TabState("/repos/x"), new TabState(null)], store.Current.Tabs);
+        Assert.Equal(1, store.Current.ActiveTab);
+    }
+
+    [Fact]
+    public void A_blank_id_is_none_and_a_tab_is_empty_only_when_both_are_blank()
+    {
+        using var data = new TempDirectory("data");
+        var file = Path.Combine(data.Path, "session.json");
+        File.WriteAllText(
+            file,
+            """
+            { "tabs": [
+                { "repositoryPath": null, "workspaceId": "  " },
+                { "repositoryPath": "", "workspaceId": "w1" },
+                { "repositoryPath": "/repos/x", "workspaceId": "" },
+                { "workspaceId": "w2" },
+                { "repositoryPath": "/repos/y", "workspaceId": "w3" }
+            ] }
+            """);
+
+        var store = new JsonSessionStore(file);
+
+        // A folder beside an id is read as written; the restore ignores it (1.11).
+        Assert.Equal(
+            [new TabState(null), new TabState(null, "w1"), new TabState("/repos/x"), new TabState(null, "w2"), new TabState("/repos/y", "w3")],
+            store.Current.Tabs);
+    }
+
+    [Fact]
     public void Lists_left_out_of_a_hand_edited_file_are_read_as_empty()
     {
         using var data = new TempDirectory("data");

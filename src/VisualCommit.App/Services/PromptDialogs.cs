@@ -13,6 +13,12 @@ namespace VisualCommit.App.Services;
 /// remotes). Both are kept in memory for this scope only and for at most
 /// <see cref="KeepAnswersFor"/>, and are never logged.
 /// <para>
+/// The prompts of a bulk run form a group (<see cref="GitPrompt.Group"/>, docs/phase-6-design.md
+/// 4.4, D210): one of them is asked at a time, and what the group was told, a Cancel included,
+/// answers the same prompt text in any of the run's repositories until the run ends, so that ten
+/// repositories on one host ask once.
+/// </para>
+/// <para>
 /// The dialogs themselves are shown by an <see cref="IPromptDialogPresenter"/>: in the app the
 /// <see cref="PromptDialogPresenter"/>, which draws them in the window's dialog layer; in tests a
 /// script.
@@ -27,6 +33,7 @@ public sealed class PromptDialogs : IGitPromptHandler
     private readonly TimeProvider _clock;
     private readonly Lock _gate = new();
     private readonly Dictionary<(string ScopeId, string Text), Kept> _kept = [];
+    private readonly Dictionary<string, GroupState> _groups = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The app's prompt dialogs, shown in <paramref name="dialogs"/> by a <see cref="PromptDialogPresenter"/>
@@ -55,13 +62,120 @@ public sealed class PromptDialogs : IGitPromptHandler
     {
         ArgumentNullException.ThrowIfNull(prompt);
 
-        // A notice needs no answer: it shows until its scope ends or ssh stops the helper.
+        // A notice needs no answer: it shows until its scope ends or ssh stops the helper. One of a
+        // prompt group is never held back (docs/phase-6-design.md 4.4).
         if (prompt.Kind == GitPromptKind.Notice)
         {
             await _presenter.ShowAsync(prompt, cancellationToken).ConfigureAwait(false);
             return PromptAnswer.Refused;
         }
 
+        if (prompt.Group is { } group && await AnswerInGroupAsync(prompt, group, cancellationToken).ConfigureAwait(false) is { } answered)
+        {
+            return answered;
+        }
+
+        return await AnswerAloneAsync(prompt, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The app session's prompt broker, answering through <paramref name="handler"/>: the askpass
+    /// broker, whose helper is found next to <c>VisualCommit.Git</c>. Called once by
+    /// <c>AppSession.Start</c>, which disposes the broker at the end of the session.
+    /// </summary>
+    public static IGitPromptBroker CreateBroker(IGitPromptHandler handler, IAppLog log)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(log);
+        return new AskPassBroker(handler, log);
+    }
+
+    /// <summary>
+    /// A prompt of a bulk run (docs/phase-6-design.md 4.4, D210): it waits for its group's turn,
+    /// one prompt of a group at a time; then a text the group was answered before (git's text names
+    /// the URL and the user, so the same text is the same credential) answers at once, a Cancel
+    /// included; otherwise its dialog shows, and what it was told is kept under the group, the
+    /// password typed with a user name under the password prompt's text, until the group ends or
+    /// for <see cref="KeepAnswersFor"/>. A dialog closed because its scope ended keeps nothing.
+    /// Null when the group ended before the prompt's turn came (it was over already, or ended while
+    /// the prompt waited): the prompt is then answered as one without a group, since its git still
+    /// waits for it.
+    /// </summary>
+    private async Task<PromptAnswer?> AnswerInGroupAsync(GitPrompt prompt, PromptGroup group, CancellationToken cancellationToken)
+    {
+        if (GroupOf(group) is not { } state)
+        {
+            return null;
+        }
+
+        using (var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, group.Ended))
+        {
+            try
+            {
+                await state.Turn.WaitAsync(waiting.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The scope ended (git was stopped, the operation ended) while it waited.
+                return PromptAnswer.Refused;
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+        }
+
+        try
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return PromptAnswer.Refused;
+            }
+
+            if (Recall(state, prompt.Text) is { } kept)
+            {
+                Log.Debug($"{prompt.RepositoryName}: {prompt.Title}: a {prompt.Kind} prompt was answered with what its run was told before.");
+                return kept.Cancelled ? PromptAnswer.Cancelled : PromptAnswer.Of(kept.Text!);
+            }
+
+            PromptDialogAnswer answer;
+            try
+            {
+                answer = await _presenter.ShowAsync(prompt, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return PromptAnswer.Refused;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return PromptAnswer.Refused;
+            }
+
+            if (answer.Cancelled)
+            {
+                KeepInGroup(state, prompt, answer);
+                return PromptAnswer.Cancelled;
+            }
+
+            if (answer.Text is null)
+            {
+                return PromptAnswer.Refused;
+            }
+
+            KeepInGroup(state, prompt, answer);
+            return PromptAnswer.Of(answer.Text);
+        }
+        finally
+        {
+            state.Turn.Release();
+        }
+    }
+
+    /// <summary>A prompt without a group, or of a group that has ended: as phase 3 answered it (3.2).</summary>
+    private async Task<PromptAnswer> AnswerAloneAsync(GitPrompt prompt, CancellationToken cancellationToken)
+    {
         if (Recall(prompt) is { } kept)
         {
             Log.Debug($"{prompt.RepositoryName}: {prompt.Title}: a {prompt.Kind} prompt was answered with what this operation was told before.");
@@ -96,15 +210,77 @@ public sealed class PromptDialogs : IGitPromptHandler
     }
 
     /// <summary>
-    /// The app session's prompt broker, answering through <paramref name="handler"/>: the askpass
-    /// broker, whose helper is found next to <c>VisualCommit.Git</c>. Called once by
-    /// <c>AppSession.Start</c>, which disposes the broker at the end of the session.
+    /// The group's turn and kept answers, made at its first prompt and forgotten when it ends; null
+    /// when it has ended.
     /// </summary>
-    public static IGitPromptBroker CreateBroker(IGitPromptHandler handler, IAppLog log)
+    private GroupState? GroupOf(PromptGroup group)
     {
-        ArgumentNullException.ThrowIfNull(handler);
-        ArgumentNullException.ThrowIfNull(log);
-        return new AskPassBroker(handler, log);
+        GroupState state;
+        lock (_gate)
+        {
+            if (group.IsEnded)
+            {
+                return null;
+            }
+
+            if (_groups.TryGetValue(group.Id, out var known))
+            {
+                return known;
+            }
+
+            state = new GroupState();
+            _groups[group.Id] = state;
+        }
+
+        // Outside the gate: the callback runs at once when the group has just ended.
+        group.Ended.Register(() => ForgetGroup(group.Id, state));
+        return state;
+    }
+
+    private void ForgetGroup(string groupId, GroupState state)
+    {
+        lock (_gate)
+        {
+            if (_groups.TryGetValue(groupId, out var known) && ReferenceEquals(known, state))
+            {
+                _groups.Remove(groupId);
+            }
+
+            state.Kept.Clear();
+        }
+    }
+
+    private Kept? Recall(GroupState state, string text)
+    {
+        var now = _clock.GetUtcNow();
+        lock (_gate)
+        {
+            foreach (var key in state.Kept.Where(entry => entry.Value.Until <= now).Select(entry => entry.Key).ToList())
+            {
+                state.Kept.Remove(key);
+            }
+
+            return state.Kept.TryGetValue(text, out var kept) ? kept : null;
+        }
+    }
+
+    private void KeepInGroup(GroupState state, GitPrompt prompt, PromptDialogAnswer answer)
+    {
+        var until = _clock.GetUtcNow() + KeepAnswersFor;
+        lock (_gate)
+        {
+            if (answer.Cancelled)
+            {
+                state.Kept[prompt.Text] = new Kept(null, until, Cancelled: true);
+                return;
+            }
+
+            state.Kept[prompt.Text] = new Kept(answer.Text!, until);
+            if (prompt.Kind == GitPromptKind.Username && prompt.Url is { } url && answer.Password is { } password)
+            {
+                state.Kept[GitPromptClassifier.PasswordPromptAfter(url, answer.Text!)] = new Kept(password, until);
+            }
+        }
     }
 
     private string? Recall(GitPrompt prompt)
@@ -147,7 +323,16 @@ public sealed class PromptDialogs : IGitPromptHandler
         }
     }
 
-    private sealed record Kept(string Text, DateTimeOffset Until);
+    /// <summary>An answer kept for <see cref="KeepAnswersFor"/>: a text, or for a prompt group also the user's Cancel (null text).</summary>
+    private sealed record Kept(string? Text, DateTimeOffset Until, bool Cancelled = false);
+
+    /// <summary>A prompt group's turn (one prompt of a group at a time) and its kept answers by prompt text, under <see cref="_gate"/>.</summary>
+    private sealed class GroupState
+    {
+        public SemaphoreSlim Turn { get; } = new(1, 1);
+
+        public Dictionary<string, Kept> Kept { get; } = new(StringComparer.Ordinal);
+    }
 }
 
 /// <summary>What a prompt dialog returns.</summary>

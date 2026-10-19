@@ -22,8 +22,16 @@ namespace VisualCommit.Git.Prompts;
 /// </summary>
 public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 {
-    /// <summary>How many helpers can be connected at once; a fifth waits for a free instance.</summary>
-    public const int MaxConnections = 4;
+    /// <summary>
+    /// How many helpers can be connected at once, also the pipe's instance count; one more waits
+    /// for a free instance, and gives up after the helper's 5 seconds
+    /// (<see cref="AskPassProtocol.ConnectTimeout"/>), failing its git as if refused. A connection
+    /// holds its instance until its prompt is answered, so 16 (docs/phase-6-design.md 4.4, D210):
+    /// a bulk run's 4 git processes can each wait for their prompt group's turn, with room beside
+    /// them for every tab's own prompt and a clone's. With 4, a tab's prompt beside a run's four
+    /// failed within 5 seconds (0.2).
+    /// </summary>
+    public const int MaxConnections = 16;
 
     /// <summary>How long a connected helper has to send its request.</summary>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
@@ -81,14 +89,15 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <summary>The session's secret. Never logged; only the scopes' variables carry it.</summary>
     private string TokenText { get; }
 
-    // group: work package WP4 puts it in every prompt of the scope (docs/phase-6-design.md 4.4).
+    /// <inheritdoc/>
+    /// <remarks>Every prompt of the scope carries <paramref name="group"/> (<see cref="GitPrompt.Group"/>, docs/phase-6-design.md 4.4).</remarks>
     public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(repositoryName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         var id = operationId ?? "prompt-" + Interlocked.Increment(ref _lastScope).ToString(CultureInfo.InvariantCulture);
-        var scope = new Scope(this, id, title, repositoryName, mode, EnvironmentFor(id, mode));
+        var scope = new Scope(this, id, title, repositoryName, mode, EnvironmentFor(id, mode), group);
         if (mode == PromptMode.Ask && !_scopes.TryAdd(id, scope))
         {
             throw new InvalidOperationException($"A prompt scope with the id {id} is already open.");
@@ -279,13 +288,14 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         private readonly CancellationTokenSource _closed = new();
         private readonly List<CancellationTokenSource> _askings = [];
 
-        public Scope(AskPassBroker owner, string id, string title, string repositoryName, PromptMode mode, IReadOnlyDictionary<string, string?> environment)
+        public Scope(AskPassBroker owner, string id, string title, string repositoryName, PromptMode mode, IReadOnlyDictionary<string, string?> environment, PromptGroup? group)
             : base(id, environment)
         {
             _owner = owner;
             Title = title;
             RepositoryName = repositoryName;
             Mode = mode;
+            Group = group;
         }
 
         public string Title { get; }
@@ -293,6 +303,9 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         public string RepositoryName { get; }
 
         public PromptMode Mode { get; }
+
+        /// <summary>The bulk run whose prompts this scope's belong to, or null (docs/phase-6-design.md 4.4).</summary>
+        public PromptGroup? Group { get; }
 
         /// <summary>
         /// Hands the prompt to the handler. Its token is cancelled when the scope closes, the
@@ -309,7 +322,8 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
                 RepositoryName,
                 classification.Url,
                 classification.User,
-                classification.KeyPath);
+                classification.KeyPath,
+                Group);
 
             // The handler's token stays alive until the scope closes, so that a handler can hear
             // of the scope's end after it has answered (PromptDialogs forgets what it kept then).
