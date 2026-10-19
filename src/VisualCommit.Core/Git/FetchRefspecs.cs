@@ -282,7 +282,10 @@ public sealed class FetchRefspecs
     /// <summary>
     /// Git's forward mapping, which the fetch uses: the tracking refs <paramref name="remote"/>
     /// fetches <paramref name="remoteRef"/> (<c>refs/heads/…</c>) into, in configuration order,
-    /// each once; none when a negative line of the remote matches it (10.1, 10.4's pushes).
+    /// each once; none when a negative line of the remote matches it (10.1, 10.4's pushes). A
+    /// push updates only the first of them (git's <c>remote_find_tracking</c>: C2's push of
+    /// <c>main</c> leaves <c>origin/trunk</c> alone), and the next fetch fills the rest; a mirror
+    /// line (0.5's F) gives the local branch of the same name too, which is no tracking ref.
     /// </summary>
     public IReadOnlyList<string> DestinationsOf(string remote, string remoteRef)
     {
