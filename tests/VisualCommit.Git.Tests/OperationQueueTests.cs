@@ -956,11 +956,17 @@ public class OperationQueueTests
     [Fact]
     public async Task Cancel_of_a_running_operation_past_its_cancel_window_or_of_a_local_one_lets_it_run_to_its_end()
     {
+        // The delegates do not look at their token, so the result alone would not show a Cancel that
+        // cancelled it anyway: past its fetch that would stop git's merge midway (D81). So the
+        // token, the snapshot, Changed and the log are looked at too.
         using var queue = new TestQueue();
+        var changes = 0;
         var fetched = new TaskCompletionSource();
         var integrate = new TaskCompletionSource();
+        var pullToken = new CancellationToken(canceled: true);
         var pull = Network("Pull", async context =>
         {
+            pullToken = context.CancellationToken;
             context.EndCancelWindow();
             fetched.SetResult();
             await integrate.Task;
@@ -968,21 +974,39 @@ public class OperationQueueTests
         });
         var pulling = queue.Queue.RunAsync(pull);
         await fetched.Task.WaitAsync(Patience, TestCancelled);
+        Assert.False(queue.Queue.Current!.CanCancel);
+        queue.Queue.Changed += (_, _) => Interlocked.Increment(ref changes);
 
         queue.Queue.Cancel(pull);
+
+        Assert.True(pullToken.CanBeCanceled);
+        Assert.False(pullToken.IsCancellationRequested);
+        Assert.False(queue.Queue.Current!.CanCancel);
+        Assert.Equal(0, Volatile.Read(ref changes));
         integrate.SetResult();
         Assert.Equal(OperationOutcome.Succeeded, (await pulling.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.False(pullToken.IsCancellationRequested);
 
         var localGate = new TaskCompletionSource();
+        var localStarted = new TaskCompletionSource();
         var merge = Local("Merge", async _ =>
         {
+            localStarted.SetResult();
             await localGate.Task;
             return OperationReport.Done("Merged");
         });
         var merging = queue.Queue.RunAsync(merge);
+        await localStarted.Task.WaitAsync(Patience, TestCancelled);
+        Assert.False(queue.Queue.Current!.CanCancel);
+        var beforeCancel = Volatile.Read(ref changes);
+
         queue.Queue.Cancel(merge);
+
+        Assert.Equal(beforeCancel, Volatile.Read(ref changes));
         localGate.SetResult();
         Assert.Equal(OperationOutcome.Succeeded, (await merging.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.DoesNotContain(queue.Log.Entries, entry => entry.Message.Contains("cancelling", StringComparison.Ordinal)
+            || entry.Message.Contains("cancelled before it started", StringComparison.Ordinal));
     }
 
     [Fact]
