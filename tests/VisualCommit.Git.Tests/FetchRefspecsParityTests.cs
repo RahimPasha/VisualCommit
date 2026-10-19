@@ -12,12 +12,21 @@ namespace VisualCommit.Git.Tests;
 /// tracking ref. A mapped ref is what git tracks (<c>branch.probe.remote</c> and <c>.merge</c>);
 /// one two remotes fetch is git's "not tracking: ambiguous information"; one no line fetches is
 /// git's "is not a branch", with no branch left. Where the mapping is stricter on purpose (C2, P,
-/// an empty source, an exact line a negative line excludes) git's own answer is asserted beside
-/// it. Runs on Git 2.36 and on CI's git; git's whole sentence is asserted on 2.36 only.
+/// F beside the default on one remote, an empty source, an exact line a negative line excludes)
+/// git's own answer is asserted beside it. <see cref="FetchRefspecs.DestinationsOf"/> against
+/// git's fetch (a bare server, no tracking ref, then <c>git fetch origin</c>) and, where it
+/// differs on purpose, against git's push (C2). Runs on Git 2.36 and on CI's git; git's whole
+/// sentence is asserted on 2.36 only.
 /// </summary>
 public class FetchRefspecsParityTests
 {
     private const string Default = "+refs/heads/*:refs/remotes/origin/*";
+
+    /// <summary>C2's second line, beside <see cref="Default"/>.</summary>
+    private const string Trunk = "refs/heads/main:refs/remotes/origin/trunk";
+
+    /// <summary>0.5's F: what <c>git remote add --mirror=fetch</c> writes.</summary>
+    private const string Mirror = "+refs/*:refs/*";
 
     /// <summary>A case's name, its lines (<c>remote=value</c>; <c>remote=</c> configures a remote without a line), and the tracking refs probed.</summary>
     public static TheoryData<string, string[], string[]> Agreeing => new()
@@ -51,6 +60,13 @@ public class FetchRefspecsParityTests
         { "an empty destination", ["origin=refs/heads/main:"], ["refs/remotes/origin/main"] },
         { "no destination", ["origin=refs/heads/main"], ["refs/remotes/origin/main"] },
         { "a dotted name", ["Team.Dot.x=+refs/heads/*:refs/remotes/Team.Dot.x/*"], ["refs/remotes/Team.Dot.x/main"] },
+
+        // F: a fetch mirror beside another remote makes that remote's every tracking ref
+        // ambiguous between the two; its own tracking refs map to themselves on the mirror.
+        { "F, another remote", ["origin=" + Default, "m=" + Mirror], ["refs/remotes/origin/main", "refs/remotes/m/main"] },
+        { "F, another remote first", ["m=" + Mirror, "origin=" + Default], ["refs/remotes/origin/main", "refs/remotes/m/main"] },
+        { "F alone", ["origin=" + Mirror], ["refs/remotes/origin/main"] },
+        { "F's other ref on the same remote", ["origin=" + Default, "origin=" + Mirror], ["refs/remotes/m/main"] },
     };
 
     [Theory]
@@ -104,10 +120,13 @@ public class FetchRefspecsParityTests
     /// </summary>
     public static TheoryData<string, string[], string, RemoteSourceKind, string> Differing => new()
     {
-        // C2 and P: two refs of one remote fill the tracking ref; git takes the first line's.
-        { "C2", ["origin=" + Default, "origin=refs/heads/main:refs/remotes/origin/trunk"], "refs/remotes/origin/trunk", RemoteSourceKind.AmbiguousRefs, "refs/heads/trunk" },
-        { "C2 swapped", ["origin=refs/heads/main:refs/remotes/origin/trunk", "origin=" + Default], "refs/remotes/origin/trunk", RemoteSourceKind.AmbiguousRefs, "refs/heads/main" },
+        // C2, P and F beside the default on one remote: two refs of one remote fill the tracking
+        // ref; git takes the first line's.
+        { "C2", ["origin=" + Default, "origin=" + Trunk], "refs/remotes/origin/trunk", RemoteSourceKind.AmbiguousRefs, "refs/heads/trunk" },
+        { "C2 swapped", ["origin=" + Trunk, "origin=" + Default], "refs/remotes/origin/trunk", RemoteSourceKind.AmbiguousRefs, "refs/heads/main" },
         { "P", ["origin=" + Default, "origin=+refs/pull/*/head:refs/remotes/origin/pr/*"], "refs/remotes/origin/pr/1", RemoteSourceKind.AmbiguousRefs, "refs/heads/pr/1" },
+        { "F on the same remote", ["origin=" + Default, "origin=" + Mirror], "refs/remotes/origin/main", RemoteSourceKind.AmbiguousRefs, "refs/heads/main" },
+        { "F on the same remote swapped", ["origin=" + Mirror, "origin=" + Default], "refs/remotes/origin/main", RemoteSourceKind.AmbiguousRefs, "refs/remotes/origin/main" },
 
         // An empty source: git tracks a branch with an empty name.
         { "an empty source", ["origin=:refs/remotes/origin/x"], "refs/remotes/origin/x", RemoteSourceKind.NotFetched, "" },
@@ -166,6 +185,146 @@ public class FetchRefspecsParityTests
             RemoteSourceKind.NotFetched,
             Parse(["origin=refs/heads/secret:refs/remotes/origin/s", "origin=^refs/heads/secret", "origin=" + Default]).SourceOf("refs/remotes/origin/s").Kind);
     }
+
+    /// <summary>
+    /// The forward mapping's cases (10.1, 10.9): origin's lines, and the tracking refs git's fetch
+    /// writes from <see cref="RepoWithServerAsync"/>'s server (<c>feature/x</c>, <c>main</c>,
+    /// <c>secret</c>, <c>team/a</c> and <c>refs/pull/1/head</c>; no <c>trunk</c>, which C2's
+    /// fetch refuses), in byte order. Checked with Git 2.36 and 2.55.
+    /// </summary>
+    public static TheoryData<string, string[], string[]> Fetched => new()
+    {
+        { "default", [Default], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/secret", "refs/remotes/origin/team/a"] },
+        { "B1", ["+refs/heads/*:refs/remotes/origin/up/*"], ["refs/remotes/origin/up/feature/x", "refs/remotes/origin/up/main", "refs/remotes/origin/up/secret", "refs/remotes/origin/up/team/a"] },
+        { "C1", [Trunk], ["refs/remotes/origin/trunk"] },
+
+        // C2: main goes to both, in either order.
+        { "C2", [Default, Trunk], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/secret", "refs/remotes/origin/team/a", "refs/remotes/origin/trunk"] },
+        { "C2 swapped", [Trunk, Default], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/secret", "refs/remotes/origin/team/a", "refs/remotes/origin/trunk"] },
+        { "D", ["+refs/heads/team/*:refs/remotes/origin/*"], ["refs/remotes/origin/a"] },
+
+        // E and a negative pattern: what they name goes nowhere. N: main still goes to trunk.
+        { "E", [Default, "^refs/heads/secret"], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/team/a"] },
+        { "a negative pattern", [Default, "^refs/heads/team/*"], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/secret"] },
+        { "an exact line excluded", ["refs/heads/secret:refs/remotes/origin/s", "^refs/heads/secret", Default], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/team/a"] },
+        { "N", [Default, Trunk, "^refs/heads/trunk"], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/secret", "refs/remotes/origin/team/a", "refs/remotes/origin/trunk"] },
+
+        // P: pr/1 comes from refs/pull/1/head (the server has no branch pr/1); P2 alone.
+        { "P", [Default, "+refs/pull/*/head:refs/remotes/origin/pr/*"], ["refs/remotes/origin/feature/x", "refs/remotes/origin/main", "refs/remotes/origin/pr/1", "refs/remotes/origin/secret", "refs/remotes/origin/team/a"] },
+        { "P2", ["+refs/pull/*/head:refs/remotes/origin/pr/*"], ["refs/remotes/origin/pr/1"] },
+
+        // A star inside a component and in the middle; every ref of the server; no destination.
+        { "f* to g*", ["refs/heads/f*:refs/remotes/origin/g*"], ["refs/remotes/origin/geature/x"] },
+        { "*/x to */y", ["refs/heads/*/x:refs/remotes/origin/*/y"], ["refs/remotes/origin/feature/y"] },
+        { "every ref", ["+refs/*:refs/remotes/origin/*"], ["refs/remotes/origin/heads/feature/x", "refs/remotes/origin/heads/main", "refs/remotes/origin/heads/secret", "refs/remotes/origin/heads/team/a", "refs/remotes/origin/pull/1/head"] },
+        { "no destination", ["refs/heads/main"], [] },
+    };
+
+    [Theory]
+    [MemberData(nameof(Fetched))]
+    public async Task Gits_fetch_fills_exactly_the_tracking_refs_DestinationsOf_gives(string name, string[] originLines, string[] fetched)
+    {
+        // 10.1: DestinationsOf is "git's forward mapping, which the fetch uses". Over every ref
+        // the server holds, its union is what the fetch writes.
+        using var repo = await RepoWithServerAsync(originLines);
+        var refspecs = Parse([.. originLines.Select(line => "origin=" + line)]);
+        var serverRefs = await ServerRefsAsync(repo);
+        Assert.Empty(await TrackingRefsAsync(repo));
+
+        var result = await repo.GitAllowingFailureAsync("fetch", "--quiet", "origin");
+
+        Assert.True(result.Succeeded, $"{name}: git fetch exits {result.ExitCode} ({result.StandardError.Trim()})");
+        Assert.Equal(["refs/heads/feature/x", "refs/heads/main", "refs/heads/secret", "refs/heads/team/a", "refs/pull/1/head"], serverRefs);
+        Assert.Equal(fetched, await TrackingRefsAsync(repo));
+        Assert.Equal(
+            fetched,
+            serverRefs.SelectMany(remoteRef => refspecs.DestinationsOf("origin", remoteRef)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false, "refs/remotes/origin/main")]
+    [InlineData(true, "refs/remotes/origin/trunk")]
+    public async Task Gits_push_fills_only_the_first_tracking_ref_where_DestinationsOf_follows_the_fetch(bool swapped, string pushed)
+    {
+        // C2, a deliberate difference: a push of main updates the tracking ref of the first line
+        // that maps refs/heads/main (git's remote_find_tracking), while the fetch fills both, as
+        // DestinationsOf gives them. 10.4's push guard asks what the next fetch does.
+        string[] lines = swapped ? [Trunk, Default] : [Default, Trunk];
+        string[] destinations = swapped
+            ? ["refs/remotes/origin/trunk", "refs/remotes/origin/main"]
+            : ["refs/remotes/origin/main", "refs/remotes/origin/trunk"];
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.AddBareRemoteAsync();
+        await SetOriginLinesAsync(repo, lines);
+
+        await repo.PushAsync("origin", false, "refs/heads/main:refs/heads/main");
+
+        Assert.Equal([pushed], await TrackingRefsAsync(repo));
+        Assert.Equal(destinations, Parse([.. lines.Select(line => "origin=" + line)]).DestinationsOf("origin", "refs/heads/main"));
+
+        await repo.GitAsync("fetch", "--quiet", "origin");
+
+        Assert.Equal(["refs/remotes/origin/main", "refs/remotes/origin/trunk"], await TrackingRefsAsync(repo));
+        Assert.Equal(await repo.HeadAsync(), await repo.RefTargetAsync("refs/remotes/origin/trunk"));
+    }
+
+    /// <summary>
+    /// A repository with one commit and the branches <c>feature/x</c>, <c>secret</c> and
+    /// <c>team/a</c> beside <c>main</c>; a bare remote <c>origin</c> holding them and
+    /// <c>refs/pull/1/head</c>, pushed by its path so that no tracking ref is written; and origin's
+    /// fetch lines replaced by <paramref name="originLines"/>.
+    /// </summary>
+    private static async Task<TempRepo> RepoWithServerAsync(string[] originLines)
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            await repo.CommitFileAsync("a.txt", "a\n", "First");
+            await repo.CreateBranchAsync("feature/x");
+            await repo.CreateBranchAsync("secret");
+            await repo.CreateBranchAsync("team/a");
+            var server = await repo.AddBareRemoteAsync();
+            await repo.GitAsync("push", "--quiet", server, "refs/heads/feature/x", "refs/heads/main", "refs/heads/secret", "refs/heads/team/a", "HEAD:refs/pull/1/head");
+            await SetOriginLinesAsync(repo, originLines);
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Replaces <c>remote.origin.fetch</c> with <paramref name="lines"/>, in order.</summary>
+    private static async Task SetOriginLinesAsync(TempRepo repo, string[] lines)
+    {
+        await repo.GitAsync("config", "--unset-all", "remote.origin.fetch");
+        foreach (var line in lines)
+        {
+            await repo.GitAsync("config", "--add", "remote.origin.fetch", line);
+        }
+    }
+
+    /// <summary>The refs the server <c>origin</c> holds (<c>git ls-remote --refs</c>), in byte order.</summary>
+    private static async Task<string[]> ServerRefsAsync(TempRepo repo) =>
+        [.. (await repo.GitAsync("ls-remote", "--refs", "origin")).StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.TrimEnd('\r')[(line.IndexOf('\t', StringComparison.Ordinal) + 1)..])
+            .Order(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// The refs under <c>refs/remotes/</c> that are not symbolic, in byte order: what the fetch
+    /// lines have git write. (Git 2.48 and later also make <c>refs/remotes/origin/HEAD</c>, a
+    /// symbolic ref, from the server's HEAD, which no fetch line maps.)
+    /// </summary>
+    private static async Task<string[]> TrackingRefsAsync(TempRepo repo) =>
+        [.. (await repo.GitAsync("for-each-ref", "--format=%(refname)%09%(symref)", "refs/remotes")).StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.TrimEnd('\r').Split('\t'))
+            .Where(fields => fields[1].Length == 0)
+            .Select(fields => fields[0])
+            .Order(StringComparer.Ordinal)];
 
     /// <summary>A repository with one commit, each remote of <paramref name="lines"/> configured with a URL and its lines added in order, and each tracking ref at HEAD.</summary>
     private static async Task<TempRepo> RepoWithLinesAsync(string[] lines, string[] trackingRefs)
