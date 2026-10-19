@@ -16,13 +16,20 @@ namespace VisualCommit.Testing;
 /// can take a good part of the limit. A preparation is held to the limit itself, so a build that
 /// hangs is still caught.
 /// </para>
+/// <para>
+/// A wait may name a limit of its own in place of the run's (a program that under the default
+/// run's load is known to take longer than the run's limit, such as <c>git mergetool
+/// --tool-help</c>, docs/phase-6-design.md 8.13). It is held to that limit instead, and while it
+/// is within it the "nothing happens" rule waits for it: the wait itself is the run's progress,
+/// and its own limit still catches it if it hangs.
+/// </para>
 /// </summary>
 /// <param name="now">The clock: the time since some fixed start, which only moves forward.</param>
 public sealed class HangClock(Func<TimeSpan> now)
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<string, TestEntry> _tests = [];
-    private readonly Dictionary<long, (string What, TimeSpan StartedAt)> _preparations = [];
+    private readonly Dictionary<long, (string What, TimeSpan StartedAt, TimeSpan? Limit)> _preparations = [];
     private long _nextPreparation;
     private TimeSpan _lastEventAt = now();
     private string _lastEvent = "no test has started";
@@ -53,17 +60,19 @@ public sealed class HangClock(Func<TimeSpan> now)
     /// wait does not count against the test; the preparation counts against the limit on its
     /// own, unless <paramref name="heldToLimit"/> is false: a wait in a queue that moves as other
     /// tests finish (the headless UI thread), which the "nothing happens" rule watches already.
-    /// Waits of one test may overlap: only the time in which it waits for none counts.
+    /// With <paramref name="limit"/>, the wait is held to that limit instead of the run's, and the
+    /// "nothing happens" rule waits while it is within it. Waits of one test may overlap: only the
+    /// time in which it waits for none counts.
     /// </summary>
-    public IDisposable Preparing(string? test, string what, bool heldToLimit = true)
+    public IDisposable Preparing(string? test, string what, bool heldToLimit = true, TimeSpan? limit = null)
     {
         lock (_gate)
         {
             var id = _nextPreparation++;
             var at = now();
-            if (heldToLimit)
+            if (heldToLimit || limit is not null)
             {
-                _preparations[id] = (what, at);
+                _preparations[id] = (what, at, limit);
             }
 
             if (test is not null && _tests.TryGetValue(test, out var entry) && entry.Waits++ == 0)
@@ -99,8 +108,9 @@ public sealed class HangClock(Func<TimeSpan> now)
         {
             var at = now();
             var overdue = _tests.Values.Any(test => Counted(test, at) > limit);
-            var stuckPreparation = _preparations.Values.Any(preparation => at - preparation.StartedAt > limit);
-            var standingStill = at - _lastEventAt > limit;
+            var stuckPreparation = _preparations.Values.Any(preparation => at - preparation.StartedAt > (preparation.Limit ?? limit));
+            var waitingWithinOwnLimit = _preparations.Values.Any(preparation => preparation.Limit is { } own && at - preparation.StartedAt <= own);
+            var standingStill = at - _lastEventAt > limit && !waitingWithinOwnLimit;
             if (!overdue && !stuckPreparation && !standingStill)
             {
                 return null;

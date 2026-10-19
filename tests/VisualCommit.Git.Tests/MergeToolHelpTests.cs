@@ -14,6 +14,12 @@ namespace VisualCommit.Git.Tests;
 /// </summary>
 public class MergeToolHelpTests
 {
+    /// <summary>
+    /// The live lookup's own limit (HangClock): about 35 s alone, it took over 180 s at normal
+    /// priority under the default run's load (2026-10-19), past the run's limit.
+    /// </summary>
+    private static readonly TimeSpan ToolHelpLimit = TimeSpan.FromMinutes(10);
+
     /// <summary><c>git mergetool --tool-help</c> as Git 2.36 printed it with two tools of one's own (2026-10-18, outside a repository).</summary>
     private const string Recorded236 =
         "'git mergetool --tool=<tool>' may be set to one of the following:\n" +
@@ -113,7 +119,7 @@ public class MergeToolHelpTests
         using var configuration = new GitConfiguration(lab.Runner, lab.DataDirectory, lab.MergeToolsFile, lab.Environment, lab.Log) { ToolHelpBelowNormal = false };
 
         MergeToolHelp help;
-        using (HangWatchdogAttribute.WaitingForSlowProgram("git mergetool --tool-help"))
+        using (HangWatchdogAttribute.WaitingForSlowProgram("git mergetool --tool-help", ToolHelpLimit))
         {
             help = await configuration.ReadToolHelpAsync(TestCancelled);
         }

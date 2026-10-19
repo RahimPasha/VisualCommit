@@ -122,8 +122,10 @@ public class UndoRecordingTests
         var transaction = Assert.Single(app.Calls.Snapshot().Skip(calls), call => call.StandardInput is not null && call.CommandText.StartsWith("git update-ref", StringComparison.Ordinal));
         Assert.Equal("git update-ref -m \"VisualCommit: undo creation of hotfix\" --stdin", transaction.CommandText);
         Assert.Equal($"delete refs/heads/hotfix {MainWork}\n", transaction.StandardInput);
-        // The branch had no keys: the step reads the settings (7.5 step 2) and writes none.
-        Assert.DoesNotContain(app.Calls.Snapshot().Skip(calls), call => call.CommandText.StartsWith("git config", StringComparison.Ordinal) && !call.CommandText.Contains("--list", StringComparison.Ordinal));
+        // The branch had no keys: the step reads the settings (7.5 step 2) and writes none. Reads
+        // are left out: the step's --list, and since phase 6 the refs read's
+        // `git config --null --get-regexp ^remote\.` (docs/phase-6-design.md 10.2).
+        Assert.DoesNotContain(app.Calls.Snapshot().Skip(calls), call => call.CommandText.StartsWith("git config", StringComparison.Ordinal) && !call.CommandText.Contains("--list", StringComparison.Ordinal) && !call.CommandText.Contains("--get", StringComparison.Ordinal));
 
         await app.Operations.RedoAsync();
         Assert.Equal("Redid creation of hotfix", app.StatusText);

@@ -110,11 +110,18 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
     /// starts, which took 32 to 64 s there and about 3 s alone; D185). The wait does not count
     /// against the test, as a shared preparation does not, and it is held to the limit on its
     /// own; the test's own wait has a shorter limit of its own (<c>Scenarios.MergeToolTimeout</c>).
+    /// <para>
+    /// With <paramref name="limit"/>, for a program known to take longer than the run's limit under
+    /// that load (<c>git mergetool --tool-help</c>, which probes every merge tool git knows with a
+    /// process start each: over 180 s under the default run, about 35 s alone; docs/phase-6-design.md
+    /// 8.13), the wait is held to that limit instead, and the "nothing happens" rule waits while it
+    /// is within it (<see cref="HangClock.Preparing"/>).
+    /// </para>
     /// </summary>
-    public static IDisposable WaitingForSlowProgram(string what)
+    public static IDisposable WaitingForSlowProgram(string what, TimeSpan? limit = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(what);
-        return Clock.Preparing(TestContext.Current.Test?.UniqueID, what);
+        return Clock.Preparing(TestContext.Current.Test?.UniqueID, what, limit: limit);
     }
 
     /// <summary>
