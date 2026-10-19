@@ -161,16 +161,15 @@ public sealed partial class RealApp : IDisposable
         startInfo.Environment[AppPaths.DataDirectoryVariable] = dataDirectory;
 
         // The app's git calls must not depend on this machine's git configuration, as in the
-        // scripted walk-through (HeadlessTestApp.IsolateFromTheMachine).
-        var emptyGitConfig = Path.Combine(GitIsolation.CeilingDirectory, "isolation", "gitconfig");
-        Directory.CreateDirectory(Path.GetDirectoryName(emptyGitConfig)!);
-        if (!File.Exists(emptyGitConfig))
-        {
-            File.WriteAllText(emptyGitConfig, string.Empty);
-        }
-
+        // scripted walk-through (HeadlessTestApp.IsolateFromTheMachine). Since phase 6 each
+        // launch has a global configuration and an XDG folder of its own in its data folder, as
+        // a scripted session has (docs/phase-6-design.md 17.2, 8.12): what the app writes there
+        // stays with that data folder, and a relaunch on it keeps it.
         startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
-        startInfo.Environment["GIT_CONFIG_GLOBAL"] = emptyGitConfig;
+        foreach (var (variable, value) in GitIsolation.SessionGitEnvironment(dataDirectory))
+        {
+            startInfo.Environment[variable] = value;
+        }
 
         // Nor does git search for a repository above the tests' own folder.
         startInfo.Environment[GitIsolation.CeilingVariable] = GitIsolation.CeilingDirectory;
@@ -204,6 +203,10 @@ public sealed partial class RealApp : IDisposable
         // the scripted walk-through (docs/phase-5-design.md 2.3).
         startInfo.Environment[AppClocks.RecordClockVariable] = "frozen";
         startInfo.Environment[AppClocks.BackupClockVariable] = "fixed";
+
+        // No picture shows this machine's editors, merge tools or PATHEXT: the app uses the fixed
+        // catalogues, as the scripted walk-through's sessions do (docs/phase-6-design.md 12.9, 17.2).
+        startInfo.Environment[ToolCatalogues.Variable] = "fixed";
 
         // What the check itself asks for comes last.
         foreach (var (variable, value) in environment ?? new Dictionary<string, string?>())
@@ -368,6 +371,42 @@ public sealed partial class RealApp : IDisposable
             ?? throw new InvalidOperationException("The folder dialog has no confirm button (automation id 1).");
         confirm.Invoke();
         WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the folder dialog to close", timeout);
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Waits for Windows' Open dialog the app opened with <paramref name="title"/> (S14's
+    /// <c>Choose the editor's program</c>, docs/phase-6-design.md 12.10, 17.2), writes
+    /// <paramref name="file"/> into its file name box and confirms it, as a user does. The dialog
+    /// has the file name box with automation id 1148 and its Open button with automation id 1.
+    /// </summary>
+    public void ChooseFileInDialog(string title, string file, TimeSpan timeout)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        Window? dialog = null;
+        WaitFor(
+            () =>
+            {
+                dialog = Window.ModalWindows.FirstOrDefault(window => window.Title == title)
+                    ?? _automation.GetDesktop()
+                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                        .Select(element => element.AsWindow())
+                        .FirstOrDefault(window => window.Title == title);
+                return dialog is not null;
+            },
+            $"the file dialog \"{title}\"",
+            timeout);
+
+        // The box is an edit inside the file name combo box (1148), or the combo box itself.
+        var name = dialog!.FindFirstDescendant(condition => condition.ByAutomationId("1148"))
+            ?? throw new InvalidOperationException("The file dialog has no file name box (automation id 1148).");
+        var box = name.FindFirstDescendant(condition => condition.ByControlType(FlaUI.Core.Definitions.ControlType.Edit))?.AsTextBox()
+            ?? name.AsTextBox();
+        box.Text = file;
+        var confirm = dialog.FindFirstDescendant(condition => condition.ByAutomationId("1").And(condition.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton()
+            ?? throw new InvalidOperationException("The file dialog has no Open button (automation id 1).");
+        confirm.Invoke();
+        WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the file dialog to close", timeout);
         WaitUntilIdle();
     }
 

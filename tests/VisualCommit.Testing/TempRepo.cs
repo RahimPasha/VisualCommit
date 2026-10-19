@@ -195,8 +195,11 @@ public sealed class TempRepo : IDisposable
     /// its <c>core</c> settings), and deleted when the process ends. A git folder holds no path of
     /// its own, so a copy of it is a repository of its own.
     /// </summary>
-    private static Task<string> BlankGitFolderAsync(string initialBranch) =>
+    internal static Task<string> BlankGitFolderAsync(string initialBranch) =>
         BlankGitFolders.GetOrAdd(initialBranch, key => new Lazy<Task<string>>(() => MakeBlankGitFolderAsync(key))).Value;
+
+    /// <summary>The blank bare repository's folder (<see cref="BlankGitFolderAsync"/> with <see cref="BareKey"/>), for builders that copy it themselves (the workspace's <c>LeanRepositories</c>).</summary>
+    internal static Task<string> BlankBareFolderAsync() => BlankGitFolderAsync(BareKey);
 
     private static async Task<string> MakeBlankGitFolderAsync(string initialBranch)
     {
@@ -214,13 +217,38 @@ public sealed class TempRepo : IDisposable
                 await blank.ConfigAsync(key, value);
             }
 
+            var gitFolder = bare ? path : System.IO.Path.Combine(path, ".git");
+            RemoveHookSamples(gitFolder);
             AppDomain.CurrentDomain.ProcessExit += (_, _) => root.Dispose();
-            return bare ? path : System.IO.Path.Combine(path, ".git");
+            return gitFolder;
         }
         catch
         {
             root.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Deletes the hook samples <c>git init</c> copies into a new git folder (<c>hooks/*.sample</c>:
+    /// 13 on Git 2.36, 14 on 2.55 with <c>sendemail-validate.sample</c>), which no git call runs:
+    /// every copy of a blank folder, and of every scenario built from one, then has that many fewer
+    /// files to copy (docs/phase-6-design.md 17.1; the ten-repository workspace's copy 323 files in
+    /// place of 544). The folder itself stays, so that a test that installs a hook finds it as git
+    /// left it.
+    /// </summary>
+    private static void RemoveHookSamples(string gitFolder)
+    {
+        var hooks = System.IO.Path.Combine(gitFolder, "hooks");
+        if (!Directory.Exists(hooks))
+        {
+            return;
+        }
+
+        foreach (var sample in Directory.EnumerateFiles(hooks, "*.sample"))
+        {
+            File.SetAttributes(sample, FileAttributes.Normal);
+            File.Delete(sample);
         }
     }
 
@@ -392,6 +420,21 @@ public sealed class TempRepo : IDisposable
         return new TempRepo(_root, path, ownsRoot: false) { _clock = _clock };
     }
 
+    /// <summary>
+    /// A repository at <paramref name="path"/> inside <paramref name="root"/>, made by other means
+    /// (the workspace's <c>LeanRepositories</c>, docs/phase-6-design.md 17.1), with this class's
+    /// isolation and a clock of its own that starts at <paramref name="clock"/>. It does not own
+    /// the folder: disposing it deletes nothing; the folder goes with <paramref name="root"/>.
+    /// With <paramref name="ownsRoot"/> it does, as a repository <see cref="CreateAsync"/> made: a
+    /// lean scenario's template ("settings"), which <see cref="CopyAsync"/> then copies whole.
+    /// </summary>
+    internal static TempRepo Over(TempDirectory root, string path, DateTimeOffset clock, bool ownsRoot = false)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return new TempRepo(root, path, ownsRoot) { _clock = new Clock(clock) };
+    }
+
     /// <summary>Writes a file in the working tree, creating its folders. Line endings are written as given.</summary>
     public TempRepo WriteFile(string relativePath, string content)
     {
@@ -483,12 +526,15 @@ public sealed class TempRepo : IDisposable
     /// it as the remote <paramref name="name"/>. Returns the bare repository's folder. Push to it
     /// with <see cref="PushAsync"/>. The bare repository is a copy of one that <c>git init --bare</c>
     /// made once per test process, with <see cref="BareRemoteSettings"/> (<see cref="BlankGitFolderAsync"/>).
+    /// With <paramref name="relative"/> the remote's URL is <c>../&lt;name&gt;.git</c>, which git
+    /// resolves against the working tree's top (docs/phase-6-design.md 0.10), so that a copy fetches
+    /// from its own remote with no URL rewritten (<see cref="CopyAsync"/>).
     /// </summary>
-    public async Task<string> AddBareRemoteAsync(string name = "origin")
+    public async Task<string> AddBareRemoteAsync(string name = "origin", bool relative = false)
     {
         var barePath = _root.Combine(name + ".git");
         CopyDirectory(await BlankGitFolderAsync(BareKey), barePath);
-        await GitAsync("remote", "add", name, barePath);
+        await GitAsync("remote", "add", name, relative ? "../" + name + ".git" : barePath);
         return barePath;
     }
 
@@ -526,6 +572,15 @@ public sealed class TempRepo : IDisposable
             foreach (var (remote, url) in await copy.RemoteUrlsAsync())
             {
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !uri.IsFile)
+                {
+                    continue;
+                }
+
+                // A relative URL (../origin.git) is resolved by git against the working tree's
+                // top, so in the copy it already names the copy's own remote. Path.GetFullPath
+                // would resolve it against this process's current folder instead, and leave it
+                // alone only by accident (docs/phase-6-design.md 17.1).
+                if (!System.IO.Path.IsPathRooted(url))
                 {
                     continue;
                 }

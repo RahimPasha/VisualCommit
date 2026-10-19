@@ -14,22 +14,27 @@ public static class GitIsolation
     /// configuration needs Git 2.32 or newer to be left out), no search for a repository above
     /// <see cref="CeilingDirectory"/>, none of <see cref="InheritedVariables"/>, dates shown
     /// in UTC by the app under test (D43), and <see cref="MachineIndependence"/>: no askpass
-    /// program, editor or proxy of the machine, auto-fetch off (D112). For the git calls of code under
+    /// program, editor, proxy or identity of the machine, auto-fetch off (D112). For the git calls of code under
     /// test that does not take <see cref="TempRepo.Environment"/>, such as the app's own
     /// repository reading.
+    /// <para>
+    /// Phase 6 (docs/phase-6-design.md 8.12, 17.2): the user configuration is a file in a folder
+    /// nobody makes (<see cref="NoGlobalConfigFile"/>), so that reads see none and a write outside an
+    /// app session's own environment (<see cref="SessionGitEnvironment"/>) fails, with exit 255, in
+    /// the test that made it, where the shared empty file of phases 1 to 5 took it and handed it to
+    /// every later test; and <c>XDG_CONFIG_HOME</c> is an empty folder of the tests'
+    /// (<see cref="ProcessXdgConfigHome"/>), so that the user's <c>~/.config/git/ignore</c> and
+    /// <c>attributes</c> reach no git call, which <c>GIT_CONFIG_GLOBAL</c> alone does not stop
+    /// (0.10). <see cref="GlobalConfigurationWrittenOutsideASession"/> is the tripwire.
+    /// </para>
     /// </summary>
     public static void IsolateThisProcess()
     {
-        var folder = Path.Combine(CeilingDirectory, "isolation");
-        var emptyGitConfig = Path.Combine(folder, "gitconfig");
-        Directory.CreateDirectory(folder);
-        if (!File.Exists(emptyGitConfig))
-        {
-            File.WriteAllText(emptyGitConfig, string.Empty);
-        }
+        Directory.CreateDirectory(ProcessXdgConfigHome);
 
         Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
-        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", emptyGitConfig);
+        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", NoGlobalConfigFile);
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", ProcessXdgConfigHome);
         Environment.SetEnvironmentVariable(CeilingVariable, CeilingDirectory);
         Environment.SetEnvironmentVariable(Core.DateDisplay.TimeZoneVariable, "UTC");
         foreach (var (variable, value) in AppCommitDates)
@@ -46,6 +51,108 @@ public static class GitIsolation
         {
             Environment.SetEnvironmentVariable(variable, value);
         }
+    }
+
+    /// <summary>The folder of the test processes' own isolation files: <c>&lt;ceiling&gt;/isolation</c>.</summary>
+    public static string IsolationFolder => Path.Combine(CeilingDirectory, "isolation");
+
+    /// <summary>
+    /// The test processes' <c>GIT_CONFIG_GLOBAL</c> (docs/phase-6-design.md 17.2): a file in
+    /// <c>&lt;ceiling&gt;/isolation/no-global/</c>, a folder nothing makes. Git reads no global
+    /// configuration from it (a missing file counts as empty), and a <c>git config --global</c>
+    /// write fails with exit 255 and makes no folder (0.10), so a global write outside an app
+    /// session fails where it was made.
+    /// </summary>
+    public static string NoGlobalConfigFile => Path.Combine(IsolationFolder, "no-global", "gitconfig");
+
+    /// <summary>
+    /// The test processes' <c>XDG_CONFIG_HOME</c>: an empty <c>&lt;ceiling&gt;/isolation/xdg</c>,
+    /// so that no git call of a test reads the user's <c>~/.config/git/</c> files (its
+    /// <c>ignore</c> and <c>attributes</c>, which <c>GIT_CONFIG_GLOBAL</c> does not cover, 0.10).
+    /// On Linux and macOS .NET's <c>SpecialFolder.ApplicationData</c> follows it too (8.12).
+    /// </summary>
+    public static string ProcessXdgConfigHome => Path.Combine(IsolationFolder, "xdg");
+
+    /// <summary>
+    /// The shared empty global configuration that phases 1 to 5 gave every test process and the
+    /// real-window app: no build of this code uses it any more. A stale build would (the
+    /// real-window pass's project is not rebuilt by <c>dotnet build</c> at the root), so the tripwire
+    /// checks that it stayed empty.
+    /// </summary>
+    public static string OldSharedGlobalConfigFile => Path.Combine(IsolationFolder, "gitconfig");
+
+    /// <summary>The folder of an app session's own harness files in its data folder: <c>&lt;data&gt;/harness</c>.</summary>
+    public static string SessionHarnessFolder(string dataDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        return Path.Combine(dataDirectory, "harness");
+    }
+
+    /// <summary>
+    /// An app session's global git configuration (docs/phase-6-design.md 8.12, 17.2):
+    /// <c>&lt;data&gt;/harness/global.gitconfig</c>, which git makes at its first write. Whatever
+    /// the app (or a check, <c>ShellDriver.SeedGlobalGitConfig</c>) writes there is that data
+    /// folder's alone, and a restart on the same folder keeps it.
+    /// </summary>
+    public static string SessionGlobalConfigFile(string dataDirectory) =>
+        Path.Combine(SessionHarnessFolder(dataDirectory), "global.gitconfig");
+
+    /// <summary>
+    /// The git environment of an app session on <paramref name="dataDirectory"/>
+    /// (docs/phase-6-design.md 8.12, 17.2, amending D112): <c>GIT_CONFIG_GLOBAL</c> =
+    /// <see cref="SessionGlobalConfigFile"/> and <c>XDG_CONFIG_HOME</c> =
+    /// <c>&lt;data&gt;/harness/xdg</c>, both made here (the file by git's first write). Both
+    /// harnesses hand it to the app: <c>ShellDriver.Start</c> through <c>AppSession.Start</c>'s
+    /// <c>gitEnvironment</c>, which the session's one runner applies, and <c>RealApp.Launch</c>
+    /// through the app's environment. Only this and <c>FetchHold.Install</c> make the harness
+    /// folder, never a git call.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?> SessionGitEnvironment(string dataDirectory)
+    {
+        var xdg = Path.Combine(SessionHarnessFolder(dataDirectory), "xdg");
+        Directory.CreateDirectory(xdg);
+        return new Dictionary<string, string?>
+        {
+            ["GIT_CONFIG_GLOBAL"] = SessionGlobalConfigFile(dataDirectory),
+            ["XDG_CONFIG_HOME"] = xdg,
+        };
+    }
+
+    /// <summary>
+    /// The tripwire (docs/phase-6-design.md 17.2, 8.12): what shows that some git call wrote a
+    /// global configuration outside an app session's own environment. Empty when nothing did; else
+    /// one line per finding: <c>&lt;ceiling&gt;/isolation/no-global</c> exists (git never makes it,
+    /// so something else did and a write may have landed there), <see cref="ProcessXdgConfigHome"/>
+    /// holds a <c>git</c> folder (where git's <c>config</c>, <c>ignore</c> and <c>attributes</c> would
+    /// lie), or <see cref="OldSharedGlobalConfigFile"/>, which a stale build would use, is not empty.
+    /// </summary>
+    public static IReadOnlyList<string> GlobalConfigurationWrittenOutsideASession() =>
+        GlobalConfigurationWrittenOutsideASession(IsolationFolder);
+
+    /// <summary>The tripwire over another isolation folder laid out as <see cref="IsolationFolder"/>, so that its rules are tested without touching the one every test process shares.</summary>
+    internal static IReadOnlyList<string> GlobalConfigurationWrittenOutsideASession(string isolationFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(isolationFolder);
+        var findings = new List<string>();
+        var noGlobal = Path.Combine(isolationFolder, "no-global");
+        if (Directory.Exists(noGlobal))
+        {
+            findings.Add($"{noGlobal} exists: the test processes' global git configuration must lie in a folder nothing makes.");
+        }
+
+        var xdgGit = Path.Combine(isolationFolder, "xdg", "git");
+        if (Directory.Exists(xdgGit))
+        {
+            findings.Add($"{xdgGit} exists: git's user files there would reach every test's git calls.");
+        }
+
+        var oldShared = Path.Combine(isolationFolder, "gitconfig");
+        if (File.Exists(oldShared) && new FileInfo(oldShared).Length > 0)
+        {
+            findings.Add($"{oldShared} is not empty: a stale build wrote global git configuration into the file every test shared.");
+        }
+
+        return findings;
     }
 
     /// <summary>
@@ -152,14 +259,40 @@ public static class GitIsolation
     ];
 
     /// <summary>
+    /// The identity a machine may hand git through its environment, which beats every
+    /// configuration file (docs/phase-6-design.md 0.3, 0.10): a check of the settings screen's
+    /// identity (8.6) must see what the files say. Not the <c>*_DATE</c> variables: the harnesses
+    /// set those for the app's commits (<see cref="AppCommitDates"/>, D72). <see cref="TempRepo"/>
+    /// sets its own author after the isolation.
+    /// </summary>
+    public static IReadOnlyList<string> IdentityVariables { get; } =
+    [
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+        "EMAIL",
+    ];
+
+    /// <summary>
+    /// <c>PATHEXT</c> as the tests have it: Windows' default
+    /// (<see cref="Core.ToolCatalogues.DefaultWindowsPathExtensions"/>, the value the harnesses'
+    /// fixed catalogues give, docs/phase-6-design.md 12.9), not the machine's, to which installers
+    /// add (<c>.PY;.PYW</c> from Python's), for the tests that build pieces of the app without a
+    /// session. Set on every platform; only Windows reads it.
+    /// </summary>
+    public const string PathExtensionsVariable = "PATHEXT";
+
+    /// <summary>
     /// The variables beyond git's configuration that make the app's and git's behaviour depend
     /// on the machine, with what the tests give them instead (D112): <see cref="PromptVariables"/>,
-    /// <see cref="ProxyVariables"/>, <see cref="EditorVariables"/> and <see cref="ShellVariables"/>
-    /// removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set to <see cref="NoProxyHosts"/>, and
-    /// auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/> 0). Applied to the test process
-    /// (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
+    /// <see cref="ProxyVariables"/>, <see cref="EditorVariables"/>, <see cref="ShellVariables"/>
+    /// and <see cref="IdentityVariables"/> removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set
+    /// to <see cref="NoProxyHosts"/>, auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/>
+    /// 0) and <c>PATHEXT</c> fixed (<see cref="PathExtensionsVariable"/>). Applied to the test
+    /// process (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
     /// (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls, which then set
-    /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c>.
+    /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c> and their own author.
     /// </summary>
     public static IReadOnlyList<KeyValuePair<string, string?>> MachineIndependence { get; } =
     [
@@ -167,9 +300,11 @@ public static class GitIsolation
         .. ProxyVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. EditorVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. ShellVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        .. IdentityVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         new("no_proxy", NoProxyHosts),
         new("NO_PROXY", NoProxyHosts),
         new(AutoFetchMinutesVariable, "0"),
+        new(PathExtensionsVariable, Core.ToolCatalogues.DefaultWindowsPathExtensions),
     ];
 
     /// <summary>

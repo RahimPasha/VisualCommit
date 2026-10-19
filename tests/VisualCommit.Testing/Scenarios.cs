@@ -320,15 +320,21 @@ public static partial class Scenarios
     /// (<see cref="HangWatchdogAttribute.SharedPreparationAsync{T}"/>): under load a build can
     /// take a good part of the limit, and it is the process's cost, not that test's.
     /// </summary>
-    private static Task<TempRepo> TemplateAsync(string scenario, Lazy<Task<TempRepo>> template) =>
+    /// <remarks>
+    /// Generic since phase 6 (docs/phase-6-design.md 17.1): a template is a <see cref="TempRepo"/>,
+    /// or the ten-repository <see cref="TempWorkspace"/>.
+    /// </remarks>
+    private static Task<T> TemplateAsync<T>(string scenario, Lazy<Task<T>> template)
+        where T : IDisposable =>
         HangWatchdogAttribute.SharedPreparationAsync($"the {scenario} scenario's template", template.Value);
 
     /// <summary>Deletes a shared template when the test process ends.</summary>
-    private static async Task<TempRepo> KeepUntilExit(Task<TempRepo> building)
+    private static async Task<T> KeepUntilExit<T>(Task<T> building)
+        where T : IDisposable
     {
-        var repo = await building.ConfigureAwait(false);
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => repo.Dispose();
-        return repo;
+        var template = await building.ConfigureAwait(false);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => template.Dispose();
+        return template;
     }
 
     private static async Task<TempRepo> BuildGraphAsync()

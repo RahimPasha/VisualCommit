@@ -39,12 +39,20 @@ public sealed partial class ShellDriver : IDisposable
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
 
-    private ShellDriver(AppSession session, FakeFolderPicker folders, FakeFileLauncher launcher, FakeClipboard clipboard)
+    private ShellDriver(
+        AppSession session,
+        FakeFolderPicker folders,
+        FakeFileLauncher launcher,
+        FakeClipboard clipboard,
+        FakeSystemTheme systemTheme,
+        TimeProvider? readClock)
     {
         Session = session;
         Folders = folders;
         Launcher = launcher;
         Clipboard = clipboard;
+        SystemTheme = systemTheme;
+        ReadClock = readClock;
 
         // Check 31 waits for the window to close by itself (ShellDriver.Checks.cs).
         session.MainWindow.Closed += (_, _) => IsWindowClosed = true;
@@ -55,6 +63,19 @@ public sealed partial class ShellDriver : IDisposable
 
     /// <summary>The app's folder dialog: queue the folder the next Open, Init or Browse "chooses" (D42).</summary>
     public FakeFolderPicker Folders { get; }
+
+    /// <summary>
+    /// The operating system's mode as this session sees it (docs/phase-6-design.md 11.3, 17.2):
+    /// dark unless <see cref="Start"/> was told otherwise; <see cref="FakeSystemTheme.Set"/> flips it.
+    /// </summary>
+    public FakeSystemTheme SystemTheme { get; }
+
+    /// <summary>
+    /// The clock of a dashboard's 10 s rule that <see cref="Start"/> was given (docs/phase-6-design.md
+    /// 2.10, 17.2), such as a <see cref="ManualTimeProvider"/> the check moves; null when it was given
+    /// none and the session's own clock reads for it.
+    /// </summary>
+    public TimeProvider? ReadClock { get; }
 
     public MainWindow Window => Session.MainWindow;
 
@@ -68,8 +89,25 @@ public sealed partial class ShellDriver : IDisposable
     /// <paramref name="promptHandler"/> (a <see cref="ScriptedPromptHandler"/>) answers them instead.
     /// The record clock stands at <see cref="AppClocks.HarnessTime"/> and the backup clock is fixed
     /// there (docs/phase-5-design.md 2.3), as the real-window pass's are.
+    /// <para>
+    /// Phase 6 (docs/phase-6-design.md 17.2, 8.12, 12.9, 11.3, 2.10): the session's git calls get
+    /// a global configuration of their own in the data folder
+    /// (<see cref="GitIsolation.SessionGitEnvironment"/>; a restart on the same folder keeps what
+    /// the app wrote, and <see cref="SeedGlobalGitConfig"/> writes it before the start), the fixed
+    /// tool catalogues (<see cref="ToolCatalogues.Fixed"/>), so that no picture shows this
+    /// machine's editors, merge tools or <c>PATHEXT</c>, and a system theme of their own
+    /// (<see cref="SystemTheme"/>), dark unless <paramref name="systemDark"/> is false.
+    /// <paramref name="readClock"/> is the clock of a dashboard's 10 s rule (<see cref="ReadClock"/>);
+    /// without it the session's own clock.
+    /// </para>
     /// </summary>
-    public static ShellDriver Start(string dataDirectory, int? width = 1100, int? height = 700, IGitPromptHandler? promptHandler = null)
+    public static ShellDriver Start(
+        string dataDirectory,
+        int? width = 1100,
+        int? height = 700,
+        IGitPromptHandler? promptHandler = null,
+        bool systemDark = true,
+        TimeProvider? readClock = null)
     {
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
@@ -80,6 +118,7 @@ public sealed partial class ShellDriver : IDisposable
         var folders = new FakeFolderPicker();
         var launcher = new FakeFileLauncher();
         var clipboard = new FakeClipboard();
+        var systemTheme = new FakeSystemTheme(systemDark);
         // The activity log's times read 09:00:00 and its durations 0 ms, and the backups get the
         // same names in every run, still in order (docs/phase-5-design.md 2.3).
         var session = AppSession.Start(
@@ -90,7 +129,11 @@ public sealed partial class ShellDriver : IDisposable
             clipboard,
             promptHandler,
             recordClock: new FrozenClock(AppClocks.HarnessTime),
-            backupClock: BackupClock.Fixed(AppClocks.HarnessTime));
+            backupClock: BackupClock.Fixed(AppClocks.HarnessTime),
+            gitEnvironment: GitIsolation.SessionGitEnvironment(dataDirectory),
+            systemTheme: systemTheme,
+            tools: ToolCatalogues.Fixed,
+            readClock: readClock);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -103,7 +146,7 @@ public sealed partial class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session, folders, launcher, clipboard);
+        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock);
         driver.Settle();
         return driver;
     }
@@ -119,13 +162,15 @@ public sealed partial class ShellDriver : IDisposable
         int activeTab = 0,
         int? width = 1100,
         int? height = 700,
-        IGitPromptHandler? promptHandler = null)
+        IGitPromptHandler? promptHandler = null,
+        bool systemDark = true,
+        TimeProvider? readClock = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock);
     }
 
     /// <summary>
@@ -134,6 +179,28 @@ public sealed partial class ShellDriver : IDisposable
     /// </summary>
     public static void WriteSession(string dataDirectory, SessionState state) =>
         JsonSessionStore.Write(new AppPaths(dataDirectory).SessionFile, state);
+
+    /// <summary>
+    /// The global git configuration of the app sessions on <paramref name="dataDirectory"/>
+    /// (docs/phase-6-design.md 8.12, 17.2): <c>&lt;data&gt;/harness/global.gitconfig</c>, which
+    /// <see cref="Start"/> hands the session (<see cref="GitIsolation.SessionGitEnvironment"/>) and
+    /// git makes at its first write. The real-window pass's app gets the same file.
+    /// </summary>
+    public static string GlobalGitConfigPath(string dataDirectory) => GitIsolation.SessionGlobalConfigFile(dataDirectory);
+
+    /// <summary>
+    /// Writes <paramref name="text"/> as the whole global git configuration of the sessions on
+    /// <paramref name="dataDirectory"/> (<see cref="GlobalGitConfigPath"/>), before the app starts on
+    /// it: a check's seeded <c>pull.ff = only</c> or identity (docs/phase-6-design.md 17.1, 17.4).
+    /// Written as given, in UTF-8 without a byte order mark, its folder made.
+    /// </summary>
+    public static void SeedGlobalGitConfig(string dataDirectory, string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var path = GlobalGitConfigPath(dataDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, text, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
 
     /// <summary>Waits for the app's start-up work (finding git) and for the layout to settle.</summary>
     public async Task WaitUntilReadyAsync()

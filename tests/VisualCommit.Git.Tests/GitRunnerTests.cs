@@ -134,6 +134,49 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task The_sessions_environment_comes_after_the_runners_defaults_and_before_the_commands()
+    {
+        // docs/phase-6-design.md 8.12, 17.2: the defaults, then the session's, then the command's.
+        var session = new Dictionary<string, string?>
+        {
+            ["GIT_TERMINAL_PROMPT"] = "session",
+            ["VC_SESSION_ONLY"] = "session",
+            ["VC_BOTH"] = "session",
+            ["VC_REMOVED_BY_SESSION"] = null,
+        };
+        var runner = new GitRunner(GitPath, environment: session);
+        const string Echo = "echo ${GIT_TERMINAL_PROMPT-unset} ${VC_SESSION_ONLY-unset} ${VC_BOTH-unset} ${VC_REMOVED_BY_SESSION-unset} ${GIT_EDITOR-unset}";
+        var before = Environment.GetEnvironmentVariable("VC_REMOVED_BY_SESSION");
+        GitResult plain;
+        GitResult overridden;
+        try
+        {
+            // A variable of the process (and so of git's environment) that the session removes.
+            Environment.SetEnvironmentVariable("VC_REMOVED_BY_SESSION", "process");
+            plain = await runner.RunAsync(Script(Echo), TestCancelled);
+            overridden = await runner.RunAsync(
+                new GitCommand("-c", $"alias.script=!{Echo}", "script")
+                {
+                    Environment = new Dictionary<string, string?> { ["VC_BOTH"] = "command", ["VC_SESSION_ONLY"] = null },
+                },
+                TestCancelled);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("VC_REMOVED_BY_SESSION", before);
+        }
+
+        Assert.Equal("session session session unset :", plain.StandardOutput.Trim());
+        Assert.Equal("session unset command unset :", overridden.StandardOutput.Trim());
+        Assert.Equal("session", runner.SessionEnvironment["VC_SESSION_ONLY"]);
+        Assert.Empty(new GitRunner(GitPath).SessionEnvironment);
+
+        // The runner keeps its own copy: a change to the dictionary it was given reaches no call.
+        session["VC_SESSION_ONLY"] = "changed";
+        Assert.Equal("session", runner.SessionEnvironment["VC_SESSION_ONLY"]);
+    }
+
+    [Fact]
     public async Task Git_speaks_English_when_the_user_has_LANGUAGE_set_to_another_language()
     {
         // gettext puts LANGUAGE before LC_ALL; a German desktop sets it, and git inherits it from
