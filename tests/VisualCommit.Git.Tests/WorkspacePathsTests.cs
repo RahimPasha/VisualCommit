@@ -88,10 +88,33 @@ public class WorkspacePathsTests
     }
 
     [Fact]
-    public void Same_sees_no_further_than_the_text_a_short_name_or_a_link_is_another_folder_to_it()
+    public void Same_does_not_see_through_a_link_a_path_through_one_is_another_folder_to_it()
     {
-        // Git sees through them (1.2's rule 1, OpenedAtTopAsync); a comparison of texts cannot.
-        Assert.False(WorkspacePaths.Same(Root + "Users" + Separator + "RUNNER~1" + Separator + "repo", Root + "Users" + Separator + "runneradmin" + Separator + "repo"));
+        // Git sees through it (1.2's rule 1, OpenedAtTopAsync); a comparison of texts cannot:
+        // macOS's /var is a symbolic link to /private/var.
         Assert.False(WorkspacePaths.Same("/var/folders/x/repo", "/private/var/folders/x/repo"));
+        Assert.False(WorkspacePaths.Same(Root + "link-to-src" + Separator + "api", Root + "src" + Separator + "api"));
+    }
+
+    [Fact]
+    public void On_Windows_the_short_name_of_a_folder_that_exists_is_its_long_name_to_Same()
+    {
+        // Path.GetFullPath expands a path with a "~" in it on Windows, as far as its folders
+        // exist: CI's C:\Users\RUNNER~1\… matches what git reports. Elsewhere "~1" is part of a name.
+        using var folder = new VisualCommit.Testing.TempDirectory("paths");
+        var longName = Directory.CreateDirectory(folder.Combine("A Rather Long Folder Name")).FullName;
+        if (!OperatingSystem.IsWindows())
+        {
+            var named = folder.Combine("ARATHE~1");
+            Assert.Equal(named, WorkspacePaths.Normalise(named));
+            Assert.False(WorkspacePaths.Same(named, longName));
+            return;
+        }
+
+        var shortName = folder.Combine(GitRepositoryOpenTests.ShortNameOf(folder.Path, "A Rather Long Folder Name"));
+
+        Assert.Equal(longName, WorkspacePaths.Normalise(shortName), StringComparer.OrdinalIgnoreCase);
+        Assert.True(WorkspacePaths.Same(shortName, longName));
+        Assert.True(WorkspacePaths.Same(Path.Combine(shortName, "not-made-yet"), Path.Combine(longName, "not-made-yet")));
     }
 }

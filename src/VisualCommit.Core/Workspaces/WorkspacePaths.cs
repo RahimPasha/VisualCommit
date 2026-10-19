@@ -8,8 +8,9 @@ namespace VisualCommit.Core.Workspaces;
 /// <see cref="Same"/>, so that a hand-edited file, <c>C:\Users\RUNNER~1</c> and macOS's
 /// <c>/var</c> match what git reports. Pure.
 /// <para>
-/// It compares texts only: a short name, a junction or a symbolic link is another spelling of a
-/// folder that only git (or the file system) can see through, which
+/// It compares texts, after <see cref="Path.GetFullPath(string)"/>, which on Windows also expands
+/// the short (8.3) names of folders that exist: a junction or a symbolic link (macOS's
+/// <c>/var</c>) is another spelling of a folder that only git can see through, which
 /// <c>IGitRepository.OpenedAtTopAsync</c> and the open rows' working directories cover (1.2's two rules).
 /// </para>
 /// </summary>
