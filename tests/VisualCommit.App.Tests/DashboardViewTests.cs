@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.App.Views.Shell;
@@ -177,8 +178,28 @@ public class DashboardViewTests
             Assert.Equal(columns[DashboardColumn.Operation].X + 8, app.BoundsOf(Cell(row, "DashboardRowOperation")).X, 1);
         }
 
-        Assert.Empty(TrimmedIn(app.FindByAutomationId("DashboardList")));
+        // Every cell whole but the Folder cells, which hold the saved text and are cut exactly when
+        // it does not fit their column: whole on the development machine, cut on CI's macOS, whose
+        // temporary folder is longer (WD29).
+        Assert.Empty(TrimmedIn(app.FindByAutomationId("DashboardList"), except: "DashboardRowFolder"));
+        var room = columns[DashboardColumn.Folder].Width - (2 * DashboardColumns.TextInset);
+        foreach (var name in TempWorkspace.DashboardOrder)
+        {
+            var folder = (TrimmedTextBlock)Cell(app.DashboardRowControl(name), "DashboardRowFolder");
+            var cut = NaturalWidth(folder) > room;
+            Assert.True(cut == folder.IsTrimmed, $"{name}'s folder is {(folder.IsTrimmed ? "cut" : "whole")} at {NaturalWidth(folder)} of {room}");
+            Assert.Equal(cut ? folder.Text : null, ToolTip.GetTip(folder) as string);
+        }
+
         Assert.Equal(1912, app.BoundsOf(app.FindByAutomationId("DashboardMore")).Right, 1);
+
+        // The driver's git calls in one folder match git's spelling of it (on macOS /private/var/…).
+        var api = app.ActiveDashboard!.Rows.Single(row => row.Name == "api").Repository!.Repository.WorkingDirectory;
+        var calls = app.CallsSince(0, folder => WorkspacePaths.Same(folder, api));
+        Assert.Contains(calls, call => call.CommandText.StartsWith("git status", StringComparison.Ordinal));
+        Assert.All(calls, call => Assert.True(WorkspacePaths.Same(call.WorkingDirectory!, api)));
+        Assert.True(calls.Count < app.CallsSince(0).Count);
+        Assert.Empty(app.CallsSince(app.CallMark()));
     }
 
     [AvaloniaFact]
@@ -187,29 +208,128 @@ public class DashboardViewTests
         using var provider = new FakeProvider();
         using var host = await HostAsync(provider, "api", "docs");
         var dashboard = host.Dashboard;
-        var asked = new List<DashboardFocus>();
-        dashboard.FocusRequested += (_, target) => asked.Add(target);
         dashboard.SelectedRow = dashboard.Rows[0];
         host.Settle();
         host.FocusSelected();
 
-        // What Remove from workspace does to the workspace (1.10): the row goes.
-        host.Store.Update(list => WorkspaceEdits.Remove(list, "web", dashboard.Rows[0].Path));
+        // Remove from workspace (1.10), from the row's menu: the row goes, none is selected, the
+        // focus stays in the list.
+        dashboard.Remove(dashboard.Rows[0]);
         host.Settle();
 
-        Assert.Single(dashboard.Rows);
+        Assert.Equal(["docs"], dashboard.Rows.Select(row => row.Name));
         Assert.Null(dashboard.SelectedRow);
         Assert.True(FocusIsIn(host.Window, "DashboardList"));
-        Assert.Equal([DashboardFocus.List], asked);
 
-        // The last row goes: the empty state asks for the focus on its Add repository… (which
-        // WP-W's commands enable; the stub's disabled button cannot take it yet).
-        host.Store.Update(list => WorkspaceEdits.Remove(list, "web", dashboard.Rows[0].Path));
+        // The last row goes: the focus goes to the empty state's Add repository….
+        dashboard.Remove(dashboard.Rows[0]);
         host.Settle();
 
         Assert.Empty(dashboard.Rows);
         Assert.True(host.Find("DashboardEmpty").IsEffectivelyVisible);
-        Assert.Equal([DashboardFocus.List, DashboardFocus.EmptyAddRepository], asked);
+        Assert.True(host.Window.FocusManager?.GetFocusedElement() is Button { Name: "DashboardEmptyAddRepository" });
+    }
+
+    [AvaloniaFact]
+    public async Task Delete_removes_the_selected_row_and_a_second_Delete_changes_nothing()
+    {
+        using var provider = new FakeProvider();
+        using var host = await HostAsync(provider, "api", "docs", "notes");
+        var dashboard = host.Dashboard;
+        dashboard.SelectedRow = dashboard.Rows[1];
+        host.Settle();
+        host.FocusSelected();
+
+        host.PressKey(Key.Delete);
+
+        Assert.Equal(["api", "notes"], dashboard.Rows.Select(row => row.Name));
+        Assert.Equal(2, host.Store.Current.Find("web")!.Repositories.Count);
+        Assert.Null(dashboard.SelectedRow);
+        Assert.True(FocusIsIn(host.Window, "DashboardList"));
+
+        // No row is selected: a second Delete removes nothing.
+        host.PressKey(Key.Delete);
+        Assert.Equal(["api", "notes"], dashboard.Rows.Select(row => row.Name));
+        Assert.Equal(2, host.Store.Current.Find("web")!.Repositories.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task Delete_on_the_only_row_puts_the_focus_on_the_empty_states_Add_repository()
+    {
+        using var provider = new FakeProvider();
+        using var host = await HostAsync(provider, "api");
+        host.Dashboard.SelectedRow = host.Dashboard.Rows[0];
+        host.Settle();
+        host.FocusSelected();
+
+        host.PressKey(Key.Delete);
+
+        Assert.Empty(host.Dashboard.Rows);
+        Assert.True(host.Find("DashboardEmpty").IsEffectivelyVisible);
+        Assert.True(host.Window.FocusManager?.GetFocusedElement() is Button { Name: "DashboardEmptyAddRepository" });
+    }
+
+    [AvaloniaFact]
+    public async Task Cmd_Backspace_removes_the_selected_row_with_the_macOS_keys_only()
+    {
+        using var provider = new FakeProvider();
+        using var host = await HostAsync(provider, "api", "docs");
+        var dashboard = host.Dashboard;
+        dashboard.SelectedRow = dashboard.Rows[0];
+        host.Settle();
+        host.FocusSelected();
+
+        // With Windows' and Linux's keys, Cmd+Backspace is no gesture of the list.
+        host.PressKey(Key.Back, RawInputModifiers.Meta);
+        Assert.Equal(2, dashboard.Rows.Count);
+
+        // With macOS's keys it removes the row (2.7). The keys are set and put back with no await
+        // between, so that no other test on the UI thread sees them.
+        var keys = KeyTexts.Current;
+        KeyTexts.Current = new KeyTexts(CommandKey.Cmd);
+        try
+        {
+            host.PressKey(Key.Back, RawInputModifiers.Meta);
+        }
+        finally
+        {
+            KeyTexts.Current = keys;
+        }
+
+        Assert.Equal(["docs"], dashboard.Rows.Select(row => row.Name));
+        Assert.Null(dashboard.SelectedRow);
+    }
+
+    [AvaloniaFact]
+    public async Task Alt_Up_and_Alt_Down_move_the_selected_row_which_stays_selected_with_the_focus_in_the_list()
+    {
+        using var provider = new FakeProvider();
+        using var host = await HostAsync(provider, "api", "docs", "notes");
+        var dashboard = host.Dashboard;
+        var notes = dashboard.Rows[2];
+        dashboard.SelectedRow = notes;
+        host.Settle();
+        host.FocusSelected();
+
+        host.PressKey(Key.Up, RawInputModifiers.Alt);
+
+        Assert.Equal(["api", "notes", "docs"], dashboard.Rows.Select(row => row.Name));
+        Assert.Equal(["api", "notes", "docs"], host.Store.Current.Find("web")!.Repositories.Select(repository => Path.GetFileName(repository.Path)));
+        Assert.Same(notes, dashboard.SelectedRow);
+        Assert.True(FocusIsIn(host.Window, "DashboardList"));
+
+        host.PressKey(Key.Up, RawInputModifiers.Alt);
+        Assert.Equal(["notes", "api", "docs"], dashboard.Rows.Select(row => row.Name));
+
+        // The first row moves up no further (It is the first repository).
+        host.PressKey(Key.Up, RawInputModifiers.Alt);
+        Assert.Equal(["notes", "api", "docs"], dashboard.Rows.Select(row => row.Name));
+
+        host.PressKey(Key.Down, RawInputModifiers.Alt);
+        Assert.Equal(["api", "notes", "docs"], dashboard.Rows.Select(row => row.Name));
+        Assert.Same(notes, dashboard.SelectedRow);
+        Assert.True(FocusIsIn(host.Window, "DashboardList"));
+        Assert.True(host.Window.FocusManager?.GetFocusedElement() is ListBoxItem { DataContext: DashboardRowViewModel focused } && ReferenceEquals(focused, notes));
     }
 
     [AvaloniaFact]
@@ -308,7 +428,8 @@ public class DashboardViewTests
         using var host = Host.Show(provider, store, 1100);
 
         // A run as the header shows it (2.5, 4.9): its text, its bar and Cancel all. The bulk
-        // view model is WP-B's; its stub never runs, so the run's part is shown by hand.
+        // view model is WP-B's and its stub never runs, so until WP-B's run lands the run's part
+        // is shown by hand here; then this step runs a real Fetch all instead.
         var text = (TrimmedTextBlock)host.Find("DashboardBulkText");
         text.SetCurrentValue(TextBlock.TextProperty, "Fetching 10 repositories… 4 done");
         foreach (var part in new[] { text, host.Find("DashboardBulkProgress"), host.Find("DashboardCancelAll") })
@@ -372,8 +493,18 @@ public class DashboardViewTests
     private static void AssertBounds(ShellDriver app, string automationId, double x, double y, double width, double height) =>
         Assert.Equal(new Rect(x, y, width, height), app.BoundsOf(app.FindByAutomationId(automationId)));
 
-    private static List<string> TrimmedIn(Visual scope) =>
-        [.. scope.GetVisualDescendants().OfType<TrimmedTextBlock>().Where(text => text.IsEffectivelyVisible && text.IsTrimmed).Select(text => text.Text ?? string.Empty)];
+    private static List<string> TrimmedIn(Visual scope, string? except = null) =>
+        [.. scope.GetVisualDescendants().OfType<TrimmedTextBlock>()
+            .Where(text => text.IsEffectivelyVisible && text.IsTrimmed && (except is null || AutomationProperties.GetAutomationId(text) != except))
+            .Select(text => text.Text ?? string.Empty)];
+
+    /// <summary>The width of <paramref name="text"/>'s whole text on one line, in its font.</summary>
+    private static double NaturalWidth(TextBlock text) =>
+        new Avalonia.Media.TextFormatting.TextLayout(
+            text.Text,
+            new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch),
+            text.FontSize,
+            foreground: null).WidthIncludingTrailingWhitespace;
 
     private static bool FocusIsIn(TopLevel window, string name) =>
         window.FocusManager?.GetFocusedElement() is Visual focused && focused.GetSelfAndVisualAncestors().OfType<Control>().Any(control => control.Name == name);
@@ -437,6 +568,13 @@ public class DashboardViewTests
         {
             var list = Window.GetVisualDescendants().OfType<ListBox>().Single(box => box.Name == "DashboardList");
             (list.ContainerFromIndex(list.SelectedIndex) as InputElement ?? list).Focus(NavigationMethod.Tab);
+            Settle();
+        }
+
+        public void PressKey(Key key, RawInputModifiers modifiers = RawInputModifiers.None)
+        {
+            Window.KeyPress(key, modifiers, PhysicalKey.None, null);
+            Window.KeyRelease(key, modifiers, PhysicalKey.None, null);
             Settle();
         }
 
