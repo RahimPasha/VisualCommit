@@ -797,12 +797,190 @@ public partial class RepositoryMenusTests
     [Fact]
     public void A_remote_that_maps_its_branches_differently_offers_no_push_by_drop()
     {
+        // Rewritten on purpose (docs/phase-6-design.md 10.7, 16.1): the snapshot's fetch lines decide,
+        // not DropFacts. origin also fetches GitHub's pull requests into origin/*, so origin/main is
+        // fetched from refs/heads/main and from refs/pull/main/head (R2).
         var (actions, _) = RecordingActions.Create();
-        var context = Context(OpsLikeRefs()) with { Drop = new DropFacts(true, RemoteMapsBranchesDifferently: true) };
+        var refs = OpsLikeRefs() with
+        {
+            Refspecs = FetchRefspecs.Parse([("origin", "+refs/heads/*:refs/remotes/origin/*"), ("origin", "+refs/pull/*/head:refs/remotes/origin/*")]),
+        };
+        var context = Context(refs) with { Drop = new DropFacts(true) };
+
+        var reason = "origin/main is fetched from more than one ref of origin";
+        Assert.Equal(
+            ["main → origin/main", $"Push main to origin/main (disabled: \"{reason}\")", $"Push main to origin/main and track it (disabled: \"{reason}\")", "—", "Rebase main onto origin/main", "Interactive rebase of main onto origin/main…", "—", "Compare main with origin/main"],
+            Lines(RepositoryMenus.ForDrop(context, "refs/heads/main", "refs/remotes/origin/main", actions)));
+    }
+
+    // --- Fetch refspecs (docs/phase-6-design.md 10.4 to 10.7, D201, D222) ------------------------
+
+    [Fact]
+    public void A_drop_onto_a_remote_branch_pushes_when_one_ref_of_one_remote_a_branch_fills_it_and_says_why_not_otherwise()
+    {
+        var (actions, recorder) = RecordingActions.Create();
+        string[] Pushes(RepositoryMenuContext context, string target) =>
+        [
+            .. Lines(RepositoryMenus.ForDrop(context with { Drop = new DropFacts(true) }, "refs/heads/topic", target, actions))
+                .Where(line => line.StartsWith("Push ", StringComparison.Ordinal)),
+        ];
+        var context = Context(RefspecsRefs());
+
+        // The identity and a renamed branch (10.4 #5): labels as today, enabled.
+        Assert.Equal(["Push topic to origin/main", "Push topic to origin/main and track it"], Pushes(context, "refs/remotes/origin/main"));
+        Assert.Equal(["Push topic to fork/up/main", "Push topic to fork/up/main and track it"], Pushes(context, "refs/remotes/fork/up/main"));
+
+        // Not a branch (R4), fetched from two refs (R2), by no line (R3), by two remotes (R1).
+        static string[] Disabled(string target, string reason) =>
+            [$"Push topic to {target} (disabled: \"{reason}\")", $"Push topic to {target} and track it (disabled: \"{reason}\")"];
+        Assert.Equal(Disabled("upstream/pr/7", "upstream/pr/7 is refs/pull/7/head on upstream, not a branch"), Pushes(context, "refs/remotes/upstream/pr/7"));
+        Assert.Equal(Disabled("origin/pr/1", "origin/pr/1 is fetched from more than one ref of origin"), Pushes(context, "refs/remotes/origin/pr/1"));
+        Assert.Equal(Disabled("origin/secret", "origin/secret is not fetched from any remote"), Pushes(context, "refs/remotes/origin/secret"));
+        Assert.Equal(Disabled("origin/main", "origin/main is fetched from origin and backup"), Pushes(Context(TwoRemotesRefs()), "refs/remotes/origin/main"));
+        Assert.Equal(Disabled("origin/main", "origin/main is fetched from origin, backup and third"), Pushes(Context(TwoRemotesRefs("third")), "refs/remotes/origin/main"));
+
+        // The enabled ones push to the remote branch as the menu named it; the operation maps it (10.4 #8).
+        foreach (var item in RepositoryMenus.ForDrop(context with { Drop = new DropFacts(true) }, "refs/heads/topic", "refs/remotes/fork/up/main", actions).Items.Where(item => item.Label.StartsWith("Push ", StringComparison.Ordinal)))
+        {
+            item.Invoke();
+        }
+
+        Assert.Equal(["PushBranchToAsync(refs/heads/topic, refs/remotes/fork/up/main, False)", "PushBranchToAsync(refs/heads/topic, refs/remotes/fork/up/main, True)"], recorder.Calls.Select(call => call.ToString()));
+    }
+
+    [Fact]
+    public void A_remote_branch_checks_out_into_its_name_on_the_remote_and_is_deleted_by_it()
+    {
+        var (actions, _) = RecordingActions.Create();
+        var context = Context(RefspecsRefs());
+        (string CheckOut, string Delete) Items(RepositoryMenuContext of, string remoteBranchRef)
+        {
+            var lines = Lines(RepositoryMenus.ForRemoteBranch(of, remoteBranchRef, actions));
+            return (lines.Single(line => line.StartsWith("Check out ", StringComparison.Ordinal)), lines.Single(line => line.StartsWith("Delete ", StringComparison.Ordinal)));
+        }
+
+        // The identity: as today; HEAD is on main.
+        Assert.Equal(("Check out origin/main (disabled: \"main is already checked out\")", "Delete main on origin… (danger)"), Items(context, "refs/remotes/origin/main"));
+
+        // Renamed branches (10.4 #6, 10.6): their name on fork, whose main HEAD is on.
+        Assert.Equal(("Check out fork/up/main (disabled: \"main is already checked out\")", "Delete main on fork… (danger)"), Items(context, "refs/remotes/fork/up/main"));
+        Assert.Equal(("Check out fork/up/topic", "Delete topic on fork… (danger)"), Items(context, "refs/remotes/fork/up/topic"));
+        Assert.Equal(("Check out fork/up/topic (disabled: \"topic is already checked out\")", "Delete topic on fork… (danger)"), Items(Context(RefspecsRefs(head: "topic")), "refs/remotes/fork/up/topic"));
+
+        // Not a branch (R4): checked out as git tracks it; its deletion disabled, today's label.
+        Assert.Equal(("Check out upstream/pr/7", "Delete pr/7 on upstream… (disabled: \"upstream/pr/7 is refs/pull/7/head on upstream, not a branch\")"), Items(context, "refs/remotes/upstream/pr/7"));
+
+        // Fetched from two refs of one remote (R2): checked out without an upstream (D201).
+        Assert.Equal(("Check out origin/pr/1", "Delete pr/1 on origin… (disabled: \"origin/pr/1 is fetched from more than one ref of origin\")"), Items(context, "refs/remotes/origin/pr/1"));
+
+        // By no line (R3), by two remotes (R1): neither checked out nor deleted, today's labels.
+        const string NotFetched = "origin/secret is not fetched from any remote";
+        Assert.Equal(($"Check out origin/secret (disabled: \"{NotFetched}\")", $"Delete secret on origin… (disabled: \"{NotFetched}\")"), Items(context, "refs/remotes/origin/secret"));
+        const string TwoRemotes = "origin/main is fetched from origin and backup";
+        Assert.Equal(($"Check out origin/main (disabled: \"{TwoRemotes}\")", $"Delete main on origin… (disabled: \"{TwoRemotes}\")"), Items(Context(TwoRemotesRefs()), "refs/remotes/origin/main"));
+
+        // Merge, rebase, create, compare, hide, solo and copy act on the tracking ref's commit: enabled in every case (10.4).
+        foreach (var (of, remoteBranchRef) in new[] { (context, "refs/remotes/upstream/pr/7"), (context, "refs/remotes/origin/pr/1"), (context, "refs/remotes/origin/secret"), (Context(TwoRemotesRefs()), "refs/remotes/origin/main") })
+        {
+            Assert.All(
+                RepositoryMenus.ForRemoteBranch(of, remoteBranchRef, actions).Items.Where(item => !item.Label.StartsWith("Check out ", StringComparison.Ordinal) && !item.Label.StartsWith("Delete ", StringComparison.Ordinal)),
+                item => Assert.True(item.IsEnabled, item.Label));
+        }
+    }
+
+    [Fact]
+    public void Set_upstream_lists_only_branches_one_ref_of_one_remote_fills_and_is_disabled_without_one()
+    {
+        var (actions, _) = RecordingActions.Create();
+        var topic = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, AlphaTwo);
+        string SetUpstream(RepoRefs refs) =>
+            Lines(RepositoryMenus.ForLocalBranch(Context(refs), topic.FullName, actions)).Single(line => line.StartsWith("Set upstream", StringComparison.Ordinal));
+
+        Assert.Equal("Set upstream…", SetUpstream(RefspecsRefs()));
+
+        // Only refs that no branch of one ref fills: R2, R4, R3 and R1 (10.4 #11).
+        var main = Tracking("main", "main", isHead: true);
+        RepoRefs Only(FetchRefspecs refspecs, params GitRef[] remoteBranches) =>
+            new RepoRefs(new HeadState("main", MainWork), [main, topic, .. remoteBranches], [], ["backup", "origin", "upstream"]) { Refspecs = refspecs };
+        var lines = FetchRefspecs.Parse(
+        [
+            ("origin", "+refs/heads/*:refs/remotes/origin/*"), ("origin", "+refs/pull/*/head:refs/remotes/origin/pr/*"), ("origin", "^refs/heads/secret"),
+            ("upstream", "+refs/pull/*/head:refs/remotes/upstream/pr/*"),
+            ("backup", "+refs/heads/*:refs/remotes/origin/two/*"), ("origin", "+refs/heads/*:refs/remotes/origin/two/*"),
+        ]);
+        Assert.Equal(
+            "Set upstream… (disabled: \"No remote branches to track: fetch or push first\")",
+            SetUpstream(Only(lines, Remote("origin", "origin/pr/1", AlphaTwo), Remote("upstream", "upstream/pr/7", AlphaTwo), Remote("origin", "origin/secret", MainWork), Remote("origin", "origin/two/main", MainWork))));
+        Assert.Equal("Set upstream…", SetUpstream(Only(lines, Remote("origin", "origin/pr/1", AlphaTwo), Remote("origin", "origin/main", MainWork))));
+    }
+
+    [Fact]
+    public void FindRef_gives_the_first_ref_of_a_full_name_and_a_copy_with_other_refs_finds_its_own()
+    {
+        var first = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, AlphaTwo);
+        var duplicate = first with { TargetSha = MainWork };
+        var refs = OpsLikeRefs(first, duplicate, new GitRef("refs/tags/v1.0", "v1.0", RefKind.Tag, MainWork));
+        var context = Context(refs);
+
+        // FirstOrDefault's answer for every full name, a duplicate one included (5.5).
+        foreach (var gitRef in refs.Refs)
+        {
+            Assert.Same(refs.Refs.First(other => other.FullName == gitRef.FullName), context.FindRef(gitRef.FullName));
+        }
+
+        Assert.Same(first, context.FindRef("refs/heads/topic"));
+        Assert.Null(context.FindRef("refs/heads/none"));
+        Assert.Null(context.FindRef("topic"));
+
+        // A copy that replaces Refs (RepositoryViewModel.Menus.cs copies the context with "with") finds its own refs.
+        var other = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, new string('f', 40));
+        var copy = context with { Refs = OpsLikeRefs(other) };
+        Assert.Same(other, copy.FindRef("refs/heads/topic"));
+        Assert.Null(copy.FindRef("refs/tags/v1.0"));
+        Assert.Same(first, context.FindRef("refs/heads/topic"));
+
+        // A copy that keeps the refs list (another Head, another Drop) shares it, and its answers.
+        var kept = context with { Refs = refs with { Head = new HeadState("topic", AlphaTwo) }, Drop = new DropFacts(false) };
+        Assert.Same(first, kept.FindRef("refs/heads/topic"));
+        Assert.Equal(context.FindRef("refs/heads/main"), kept.FindRef("refs/heads/main"));
+    }
+
+    [Fact]
+    public async Task The_refspecs_scenarios_drop_and_remote_branch_menus_are_those_of_check_G25()
+    {
+        // docs/test-reports/phase-6.md, G25 steps 2, 3, 4, 8 and 11 (RS0, the menus only).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var layer = new MenuLayerViewModel();
+        var (actions, _) = RecordingActions.Create();
+        app.Repository.MenuActions = actions;
+
+        Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/topic", "refs/remotes/fork/up/main", default));
+        Assert.Equal(
+            ["topic → fork/up/main", "Push topic to fork/up/main", "Push topic to fork/up/main and track it", "—", "Check out topic and rebase it onto fork/up/main (disabled: \"topic is up to date with fork/up/main\")", "Check out topic and rebase it onto fork/up/main interactively…", "—", "Compare topic with fork/up/main"],
+            Lines(layer.Current!));
+        Assert.Equal(180, Height(layer.Current!));
+
+        const string TwoRefs = "origin/pr/1 is fetched from more than one ref of origin";
+        Assert.True(await app.Repository.OpenDropMenuAsync(layer, "refs/heads/topic", "refs/remotes/origin/pr/1", default));
+        Assert.Equal(
+            ["topic → origin/pr/1", $"Push topic to origin/pr/1 (disabled: \"{TwoRefs}\")", $"Push topic to origin/pr/1 and track it (disabled: \"{TwoRefs}\")", "—", "Check out topic and rebase it onto origin/pr/1 (disabled: \"topic is up to date with origin/pr/1\")", "Check out topic and rebase it onto origin/pr/1 interactively…", "—", "Compare topic with origin/pr/1"],
+            Lines(layer.Current!));
+
+        var context = app.Repository.MenuContext;
+        var ambiguous = RepositoryMenus.ForRemoteBranch(context, "refs/remotes/origin/pr/1", actions);
+        Assert.Equal(
+            ["origin/pr/1", "Check out origin/pr/1", "Merge origin/pr/1 into main", "Merge origin/pr/1 into main (create a merge commit)", "Rebase main onto origin/pr/1", "Interactive rebase of main onto origin/pr/1…", "—", "Create branch here…", "Create tag here…", "—", $"Delete pr/1 on origin… (disabled: \"{TwoRefs}\")", "—", "Compare origin/pr/1 with main", "Hide origin/pr/1", "Solo origin/pr/1", "—", "Copy branch name"],
+            Lines(ambiguous));
+        Assert.Equal(380, Height(ambiguous));
 
         Assert.Equal(
-            ["main → origin/main", "Push main to origin/main (disabled: \"origin maps its branches differently: use Push main…\")", "Push main to origin/main and track it (disabled: \"origin maps its branches differently: use Push main…\")", "—", "Rebase main onto origin/main", "Interactive rebase of main onto origin/main…", "—", "Compare main with origin/main"],
-            Lines(RepositoryMenus.ForDrop(context, "refs/heads/main", "refs/remotes/origin/main", actions)));
+            ["fork/up/main", "Check out fork/up/main (disabled: \"main is already checked out\")", "Merge fork/up/main into main", "Merge fork/up/main into main (create a merge commit)", "Rebase main onto fork/up/main (disabled: \"main is up to date with fork/up/main\")", "Interactive rebase of main onto fork/up/main…", "—", "Create branch here…", "Create tag here…", "—", "Delete main on fork… (danger)", "—", "Compare fork/up/main with main", "Hide fork/up/main", "Solo fork/up/main", "—", "Copy branch name"],
+            Lines(RepositoryMenus.ForRemoteBranch(context, "refs/remotes/fork/up/main", actions)));
+
+        Assert.Equal(
+            ["upstream/pr/7", "Check out upstream/pr/7", "Merge upstream/pr/7 into main", "Merge upstream/pr/7 into main (create a merge commit)", "Rebase main onto upstream/pr/7", "Interactive rebase of main onto upstream/pr/7…", "—", "Create branch here…", "Create tag here…", "—", "Delete pr/7 on upstream… (disabled: \"upstream/pr/7 is refs/pull/7/head on upstream, not a branch\")", "—", "Compare upstream/pr/7 with main", "Hide upstream/pr/7", "Solo upstream/pr/7", "—", "Copy branch name"],
+            Lines(RepositoryMenus.ForRemoteBranch(context, "refs/remotes/upstream/pr/7", actions)));
     }
 
     // --- Compare, hide and solo (docs/phase-5-design.md 6.2, 8.3, 13.1) --------------------------
@@ -1023,6 +1201,56 @@ public partial class RepositoryMenusTests
         [Tracking("main", "main", isHead: true), new GitRef("refs/remotes/origin/main", "origin/main", RefKind.RemoteBranch, MainWork, RemoteName: "origin"), .. more],
         [],
         ["origin"]);
+
+    private static GitRef Remote(string remote, string name, string sha) => new("refs/remotes/" + name, name, RefKind.RemoteBranch, sha, RemoteName: remote);
+
+    /// <summary>
+    /// "refspecs" (RS0, docs/test-reports/phase-6.md scenario facts 3) by hand: <c>main</c> tracking
+    /// <c>origin/main</c> and <c>topic</c>; origin fetches its branches and GitHub's pull requests
+    /// into <c>origin/pr/*</c> and excludes <c>secret</c>, fork its branches into <c>fork/up/*</c>,
+    /// upstream only pull requests into <c>upstream/pr/*</c>. So <c>origin/main</c> is the
+    /// identity, <c>fork/up/main</c> and <c>fork/up/topic</c> renamed branches, <c>origin/pr/1</c>
+    /// fetched from two refs (R2), <c>upstream/pr/7</c> no branch (R4) and <c>origin/secret</c> by
+    /// no line (R3). HEAD on <paramref name="head"/>.
+    /// </summary>
+    private static RepoRefs RefspecsRefs(string head = "main") => new(
+        new HeadState(head, head == "main" ? MainWork : AlphaTwo),
+        [
+            Tracking("main", "main", isHead: head == "main"),
+            new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, AlphaTwo, IsHead: head == "topic"),
+            Remote("fork", "fork/up/main", MainWork),
+            Remote("fork", "fork/up/topic", AlphaTwo),
+            Remote("origin", "origin/main", MainWork),
+            Remote("origin", "origin/pr/1", AlphaTwo),
+            Remote("origin", "origin/secret", MainWork),
+            Remote("upstream", "upstream/pr/7", AlphaTwo),
+        ],
+        [],
+        ["fork", "origin", "upstream"])
+    {
+        Refspecs = FetchRefspecs.Parse(
+        [
+            ("origin", "+refs/heads/*:refs/remotes/origin/*"),
+            ("origin", "+refs/pull/*/head:refs/remotes/origin/pr/*"),
+            ("origin", "^refs/heads/secret"),
+            ("fork", "+refs/heads/*:refs/remotes/fork/up/*"),
+            ("upstream", "+refs/pull/*/head:refs/remotes/upstream/pr/*"),
+        ]),
+    };
+
+    /// <summary>0.5's H: <c>origin</c>, <c>backup</c> and <paramref name="more"/> all fetch their branches into <c>origin/*</c> (R1), HEAD on <c>main</c>.</summary>
+    private static RepoRefs TwoRemotesRefs(params string[] more)
+    {
+        string[] remotes = ["origin", "backup", .. more];
+        return new RepoRefs(
+            new HeadState("main", MainWork),
+            [Tracking("main", "main", isHead: true), new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, AlphaTwo), Remote("origin", "origin/main", MainWork)],
+            [],
+            [.. remotes.Order(StringComparer.Ordinal)])
+        {
+            Refspecs = FetchRefspecs.Parse(remotes.Select(remote => (remote, "+refs/heads/*:refs/remotes/origin/*"))),
+        };
+    }
 
     private static RepositoryMenuContext Context(
         RepoRefs refs,

@@ -270,20 +270,34 @@ public sealed partial class ToolbarViewModel : ObservableObject
     };
 
     /// <summary>
-    /// How a branch's upstream is named in texts (design, "Upstreams"): <c>&lt;r&gt;/&lt;u&gt;</c>
-    /// from <see cref="GitRef.UpstreamRemote"/> and <see cref="GitRef.UpstreamRemoteRef"/>, or the
-    /// local branch's name alone for a local upstream (D114); null without an upstream.
+    /// How a branch's upstream is named in texts (design, "Upstreams"; docs/phase-6-design.md 10.4,
+    /// GD15): by the remote-tracking ref the remote's fetch lines map it to, without
+    /// <c>refs/remotes/</c>, as <c>git status</c> names it (<c>upstream/pr/7</c> for a branch that
+    /// tracks <c>refs/pull/7/head</c> on <c>upstream</c>); only when no line maps it to one,
+    /// <c>&lt;r&gt;/&lt;u&gt;</c> from <see cref="GitRef.UpstreamRemote"/> and
+    /// <see cref="GitRef.UpstreamRemoteRef"/>; the local branch's name alone for a local upstream
+    /// (D114); null without an upstream. The tracking ref is <see cref="GitRef.UpstreamRef"/>, git's
+    /// <c>%(upstream)</c>, which git maps forward by the remote's lines as the fetch does: the first
+    /// of <see cref="FetchRefspecs.DestinationsOf"/>, nothing when a negative line excludes the ref.
+    /// With the default lines every upstream reads <c>&lt;r&gt;/&lt;u&gt;</c>, as before. Display
+    /// only: what an operation acts on is still the three values (D101).
     /// </summary>
     public static string? UpstreamText(GitRef branch)
     {
         ArgumentNullException.ThrowIfNull(branch);
         const string Heads = "refs/heads/";
+        const string Remotes = "refs/remotes/";
         var remoteRef = branch.UpstreamRemoteRef is { } full && full.StartsWith(Heads, StringComparison.Ordinal)
             ? full[Heads.Length..]
             : branch.UpstreamRemoteRef;
         if (branch.HasLocalUpstream)
         {
             return remoteRef ?? branch.Upstream;
+        }
+
+        if (branch.UpstreamRef is { } tracking && tracking.Length > Remotes.Length && tracking.StartsWith(Remotes, StringComparison.Ordinal))
+        {
+            return tracking[Remotes.Length..];
         }
 
         return branch.UpstreamRemote is { } remote && remoteRef is not null ? $"{remote}/{remoteRef}" : branch.Upstream;

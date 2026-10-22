@@ -238,7 +238,9 @@ public static partial class RepositoryMenus
             }
         }
 
-        var hasRemoteBranches = context.RemoteBranches.Any();
+        // Only a branch one ref of one remote fills can be tracked (docs/phase-6-design.md 10.4 #11):
+        // git refuses R1 and R3, and R2 would get git's first candidate.
+        var hasRemoteBranches = context.RemoteBranches.Any(remoteBranch => context.Refs.SourceOf(remoteBranch).IsBranch);
         var onto = new RebaseTarget(branch.TargetSha, name);
         return Build(
             Header(name),
@@ -277,7 +279,11 @@ public static partial class RepositoryMenus
     /// <summary>
     /// A remote branch, its row or its label (4b): header <c>&lt;r&gt;/&lt;b&gt;</c>; check out,
     /// merge (both) — create branch here…, create tag here… — delete on the remote… — copy branch
-    /// name. <paramref name="remoteBranchRef"/> is <c>refs/remotes/&lt;r&gt;/&lt;b&gt;</c>.
+    /// name. <paramref name="remoteBranchRef"/> is <c>refs/remotes/&lt;r&gt;/&lt;b&gt;</c>. How its
+    /// remote fetches it (<see cref="RepoRefs.SourceOf(GitRef)"/>, docs/phase-6-design.md 10.4 #6):
+    /// its checkout goes into its local name (10.6), disabled while HEAD is on it, and with R1 or
+    /// R3 when it has none; its deletion names the branch on the remote, disabled with R1 to R4
+    /// unless it is a branch that one ref of one remote fills.
     /// </summary>
     public static MenuModel ForRemoteBranch(RepositoryMenuContext context, string remoteBranchRef, IRepositoryActions actions)
     {
@@ -291,17 +297,24 @@ public static partial class RepositoryMenus
         }
 
         var name = branch.Name;
-        var local = RepositoryMenuContext.LocalNameOf(branch) ?? name;
-        var remote = branch.RemoteName ?? string.Empty;
+        var source = context.Refs.SourceOf(branch);
+        var local = context.Refs.LocalNameOf(branch);
         var current = context.CurrentName;
         var mergeReason = MergeReason(context);
-        var onLocal = string.Equals(context.Head.BranchName, local, StringComparison.Ordinal);
+        var checkoutReason = local is null ? RemoteSourceReason(source, name, needsBranch: false)
+            : string.Equals(context.Head.BranchName, local, StringComparison.Ordinal) ? AlreadyCheckedOut(local)
+            : null;
         var onto = new RebaseTarget(branch.TargetSha, name);
+
+        // The deletion names the branch on its remote; any other ref keeps phase 5's label.
+        var (deleted, remote) = source is { IsBranch: true, Branch: { } onRemote, Remote: { } mapped }
+            ? (onRemote, mapped)
+            : (NameOnItsRemote(branch), branch.RemoteName ?? string.Empty);
 
         return Build(
             Header(name),
             [
-                Item(actions, CheckOutName(name), () => actions.CheckoutAsync(remoteBranchRef), onLocal ? AlreadyCheckedOut(local) : null),
+                Item(actions, CheckOutName(name), () => actions.CheckoutAsync(remoteBranchRef), checkoutReason),
                 Item(actions, MergeInto(name, current), () => actions.MergeAsync(remoteBranchRef, MergeMode.Default), mergeReason),
                 Item(actions, MergeIntoWithCommit(name, current), () => actions.MergeAsync(remoteBranchRef, MergeMode.NoFastForward), mergeReason),
                 RebaseOntoItem(context, onto, actions),
@@ -312,7 +325,7 @@ public static partial class RepositoryMenus
                 Item(actions, CreateTagHere, () => actions.CreateTagAsync(remoteBranchRef)),
             ],
             [
-                Item(actions, DeleteOnRemoteLabel(local, remote), () => actions.DeleteRemoteBranchAsync(remoteBranchRef), isDestructive: true),
+                Item(actions, DeleteOnRemoteLabel(deleted, remote), () => actions.DeleteRemoteBranchAsync(remoteBranchRef), RemoteSourceReason(source, name, needsBranch: true), isDestructive: true),
             ],
             [
                 CompareItem(context, branch, actions),
@@ -608,14 +621,15 @@ public static partial class RepositoryMenus
 
         if (targetRef.StartsWith("refs/remotes/", StringComparison.Ordinal))
         {
-            var mapped = context.Drop is { RemoteMapsBranchesDifferently: true }
-                ? MapsBranchesDifferently(targetBranch?.RemoteName ?? target, source)
-                : null;
+            // The pushes go to the branch on the remote that fills the target (docs/phase-6-design.md
+            // 10.4 #5): disabled with R1 to R4 unless one ref of one remote, a branch, fills it.
+            var fetched = targetBranch is not null ? context.Refs.SourceOf(targetBranch) : context.Refs.SourceOf(targetRef);
+            var reason = RemoteSourceReason(fetched, target, needsBranch: true);
             return Build(
                 header,
                 [
-                    Item(actions, PushTo(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: false), mapped),
-                    Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), mapped),
+                    Item(actions, PushTo(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: false), reason),
+                    Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), reason),
                 ],
                 rebaseItems,
                 [DropCompareItem(context, sourceRef, targetRef, actions)]);
@@ -855,6 +869,19 @@ public static partial class RepositoryMenus
         }
 
         return fullRef;
+    }
+
+    /// <summary>
+    /// A remote branch's name less <c>&lt;its remote&gt;/</c>, as phase 5 named the branch on the
+    /// remote (<c>origin/pr/1</c> → <c>pr/1</c>): the deletion's label for a ref that no branch of
+    /// one ref fills (docs/phase-6-design.md 10.4 #6).
+    /// </summary>
+    private static string NameOnItsRemote(GitRef remoteBranch)
+    {
+        var prefix = remoteBranch.RemoteName + "/";
+        return remoteBranch.RemoteName is not null && remoteBranch.Name.StartsWith(prefix, StringComparison.Ordinal)
+            ? remoteBranch.Name[prefix.Length..]
+            : remoteBranch.Name;
     }
 
     private static bool IsCurrent(RepositoryMenuContext context, GitRef branch) =>
