@@ -116,7 +116,8 @@ Git layer and Core:
 - [ ] 7. Workspaces (repository groups): the model, where they are kept, add, remove, rename,
   and opening one. Tests. (WP4's part merged in `1d99be3`: `WorkspacePaths`, `WorkspaceEdits`,
   `RepositoryScanner`, `JsonWorkspaceStore`, `TabState.WorkspaceId`; the session keeps them in
-  `workspaces.json`, `fef0569`. WP-W's commands and screens: wave 2.)
+  `workspaces.json`, `fef0569`. WP-W's commands, dialogs and the session's dashboards, built,
+  reviewed and fixed, merged in `0da0eec`.)
 - [ ] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
   changes, an operation in progress), read cheaply for ten repositories without opening them as
   tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode: wave 2.)
@@ -159,8 +160,8 @@ App:
   places (phase 1's follow-up). (WP-T, built, reviewed and fixed, merged in `e7144ec`: the theme
   follows the system while System is chosen, the light status colours and lanes 1, 2, 4 and 7 at
   4.5:1, `VcDangerTextBrush`, tooltips in the app's colours, the drag layer's redraw, `TextInk`;
-  the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock` and
-  part L's sweep: to come.)
+  the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock`
+  merged in `0da0eec`. Part L's sweep: WP-V.)
 - [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
   "Changes to expected results" in the phase 6 report.
 
@@ -288,8 +289,10 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T merged
-(`e7144ec`); WP-W built, under review; WP-D being built. Next: WP-W's fixes and merge, WP-D's
-review and merge, then the default run; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`e7144ec`), WP-W merged (`0da0eec`); WP-D being built. Next: WP-D's review, its fixes (with the
+WP-W review's finding for it: a row's Locate… re-reads the row whatever the command did, so a
+folder located onto itself after a drive comes back is read at once, 1.10) and merge, then the
+default run; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
@@ -311,6 +314,11 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- WP-W edited two real-window files that section 18 gives WP-R, as 16.1's welcome-page row asks:
+  `Phase0RealWindowPass.cs:124` (`AssertShell`'s list gains `Workspaces` and `No workspaces`) and
+  `Phase5RealWindowPass.A.cs:559-561` (`AssertEmptyTab` leaves out `New workspace…` and checks the
+  button's name `New workspace`); the lead accepted them, so WP-R starts from them. WP-W also added
+  `tests/VisualCommit.App.Tests/WorkspaceTestSupport.cs` (name it in the handoff).
 - `b6d1d01` (the diff view's growth test counting the UI thread's work): CI run
   [39820477316](https://github.com/RahimPasha/VisualCommit/actions/runs/39820477316), all five jobs
   green; Windows' Test step 25 min 46 s, macOS's 20 min 40 s, Ubuntu's 3 min 59 s, the containers'
