@@ -48,9 +48,9 @@ public class PathTextBlockTests
     [Fact]
     public void A_unc_path_and_a_rooted_unix_path_are_marked_and_and_or_is_not()
     {
-        // A break may come after every separator, the UNC prefix's first included (13.2's rule).
+        // A break may come after every separator but the first of a UNC path's two leading backslashes.
         Assert.Equal(
-            @"\" + BreakAfter + @"\" + BreakAfter + "s" + NoBreak + @"\" + BreakAfter + "d",
+            @"\" + NoBreak + @"\" + BreakAfter + "s" + NoBreak + @"\" + BreakAfter + "d",
             PathTextBlock.BreakOnlyAfterSeparators(@"\\s\d"));
         Assert.Equal("/" + BreakAfter + "t" + NoBreak + "/" + BreakAfter + "x", PathTextBlock.BreakOnlyAfterSeparators("/t/x"));
 

@@ -16,9 +16,10 @@ namespace VisualCommit.App.Controls;
 /// <para>
 /// Inside each rooted path it puts U+FEFF (ZERO WIDTH NO-BREAK SPACE, class WJ: no break before
 /// or after it) between every two characters, except after <c>\</c> or <c>/</c>, where it puts
-/// U+200B (ZERO WIDTH SPACE, class ZW: a break after it), and never inside a surrogate pair. A
-/// line then breaks before a path, after a separator or after the path; only a name longer than
-/// the line breaks where it must. Both marks have no advance in Inter (0.8).
+/// U+200B (ZERO WIDTH SPACE, class ZW: a break after it) but between a UNC path's two leading
+/// backslashes, and never inside a surrogate pair. A line then breaks before a path, after a
+/// separator or after the path; only a name longer than the line breaks where it must. Both marks
+/// have no advance in Inter (0.8).
 /// </para>
 /// </summary>
 public sealed partial class PathTextBlock : TextBlock
@@ -58,9 +59,12 @@ public sealed partial class PathTextBlock : TextBlock
             marked.Append(character);
 
             // Never between the two halves of a surrogate pair, and nothing after the last character.
+            // A UNC path's two leading backslashes stay together: a line ending in a lone "\" and
+            // the next starting "\server\…" would read as a rooted local path.
             if (i < path.Length - 1 && !char.IsHighSurrogate(character))
             {
-                marked.Append(character is '\\' or '/' ? BreakAfter : NoBreak);
+                var uncPrefix = i == 0 && path.StartsWith(@"\\", StringComparison.Ordinal);
+                marked.Append(character is '\\' or '/' && !uncPrefix ? BreakAfter : NoBreak);
             }
         }
 
