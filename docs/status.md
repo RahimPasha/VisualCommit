@@ -306,6 +306,11 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- The report's commit `c46eea2`: CI run
+  [39808018633](https://github.com/RahimPasha/VisualCommit/actions/runs/39808018633), all five jobs
+  green; Windows' Test step 18 min 32 s, macOS's 16 min 2 s, Ubuntu's 3 min 47 s, the containers' 4 min
+  21 s and 2 min 57 s. The 306 real-window reference pictures of 17.7 were copied on 2026-10-22 to
+  `D:/Projects/Personal/gate6-reference/` (33 MB) and match `phase-5-pictures.sha256`.
 - After WP3's and WP4's merges: CI run 39207577529 on `80689ef` failed 16 of about 4,040 on
   Windows and macOS (Git 2.56), all of them the cases of WP3's
   `FetchRefspecsParityTests.Gits_fetch_fills_exactly_the_tracking_refs_DestinationsOf_gives`, whose
@@ -332,7 +337,10 @@ every commit.
   and phase 5's `Check_U23_terminal_commit` on Windows (a working-changes row a terminal commit's
   half-done state left for one refresh; the check now waits for the clean tree it asserts,
   `161e298`); its second attempt passed all five jobs with 3,236 tests. The timing test failed 2
-  of 3 macOS attempts: if it fails again, count its work instead of timing it.
+  of 3 macOS attempts: if it fails again, count its work instead of timing it. It failed again on
+  2026-10-22 under wave 2's side-by-side builds (689 ms against 27 ms, a ratio of 25.5); it now compares
+  the UI thread's own work (`ThreadWork`: its cycles on Windows, its processor time elsewhere), 5.7 to
+  7.3 times as much for ten times the lines under the same load.
 - Phase 5's `u23f-ignored-in-the-way` differs from `phase-5-pictures.sha256` (`f238e0d…` at the gate,
   `0ce3ae4…` now) on `master` (`acdac12`) too, with the gate's code: the machine changed since
   2026-10-16, not phase 6. The gate's references, made on `master`, take it as it is now.
