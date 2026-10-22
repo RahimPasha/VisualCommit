@@ -100,22 +100,25 @@ public class UpstreamNameTests
     }
 
     [Fact]
-    public async Task A_mirror_line_before_the_default_names_the_upstream_by_the_line_under_refs_remotes()
+    public async Task Under_a_mirror_line_first_git_maps_the_upstream_to_a_local_branch_and_the_text_falls_back_to_its_remote_and_name()
     {
-        // 0.5's F on origin itself, the mirror line first: its destination for refs/heads/main is
-        // refs/heads/main, no tracking ref (10.1). Nothing is fetched: the upstream is configuration.
+        // 0.5's F on origin itself, the mirror line first and a renaming line after it: git's first
+        // matching line maps refs/heads/main to the local refs/heads/main, no tracking ref, so the
+        // text is origin/main; the design's first destination under refs/remotes/ would be
+        // origin/up/main, and git's status says main. Nothing is fetched: the upstream is configuration.
         using var repo = await Scenarios.RenamingRefspecAsync();
         await repo.GitAsync("config", "--unset-all", "remote.origin.fetch");
         await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/*:refs/*");
-        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/up/*");
 
         var refs = await ReadRefsAsync(repo);
         var main = refs.Refs.Single(gitRef => gitRef.FullName == "refs/heads/main");
 
-        Assert.Equal(["refs/heads/main", "refs/remotes/origin/main"], refs.Refspecs!.DestinationsOf("origin", "refs/heads/main"));
+        Assert.Equal(["refs/heads/main", "refs/remotes/origin/up/main"], refs.Refspecs!.DestinationsOf("origin", "refs/heads/main"));
         Assert.Equal(("origin", "refs/heads/main", "refs/heads/main"), (main.UpstreamRemote, main.UpstreamRemoteRef, main.UpstreamRef));
         Assert.Equal("origin/main", ToolbarViewModel.UpstreamText(main));
-        Assert.Equal("origin/main", FirstTrackingDestination(refs, main));
+        Assert.Equal("main", await StatusUpstreamAsync(repo));
+        Assert.Equal("origin/up/main", FirstTrackingDestination(refs, main));
     }
 
     [Fact]
