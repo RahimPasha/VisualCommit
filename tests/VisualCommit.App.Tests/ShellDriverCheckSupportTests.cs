@@ -239,14 +239,14 @@ public class ShellDriverCheckSupportTests
         var dialog = app.ErrorDialog();
 
         Assert.Equal(("Checkout blocked", "In blocked"), (dialog.Title, dialog.Repository));
-        Assert.Equal("git switch --no-guess feature/addfile", dialog.Command);
+        Assert.Equal("git switch --no-guess --no-overwrite-ignore feature/addfile", dialog.Command);
         Assert.Equal(["Copy output", "Close"], dialog.Buttons);
         var call = app.LastCall(dialog.Command!);
         Assert.False(call.Succeeded);
         Assert.Equal(ShellDriver.CleanedOutputOf(call), dialog.Output);
         Assert.Equal(dialog.Output!.Split('\n'), dialog.OutputLines);
         Assert.Contains(dialog.OutputLines, output => output.StartsWith("error: ", StringComparison.Ordinal));
-        Assert.Throws<InvalidOperationException>(() => app.LastCall("git switch --no-guess no-such-branch"));
+        Assert.Throws<InvalidOperationException>(() => app.LastCall("git switch --no-guess --no-overwrite-ignore no-such-branch"));
 
         // The neutral point is on the backdrop: no tooltip there either.
         Assert.Null(app.ToolTipOwnerAt(ShellDriver.NeutralPoint));

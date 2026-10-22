@@ -43,7 +43,7 @@ public sealed partial class Phase3ChecksA
         await WaitForStatusAsync(app, PartA.BranchCreatedMessage, calls, WriteTimeout);
         await app.WaitForIdleAsync();
         Shot(app, "23d-branch-created");
-        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create topic/new " + PartA.MainWorkSha);
+        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create topic/new --no-overwrite-ignore " + PartA.MainWorkSha);
         Assert.Equal("topic/new", await GitTextAsync(repo, "symbolic-ref", "--short", "HEAD"));
         Assert.Equal(PartA.MainWorkSha, await repo.HeadAsync());
         Assert.Equal("## topic/new", (await GitLinesAsync(repo, "status", "-sb"))[0]);

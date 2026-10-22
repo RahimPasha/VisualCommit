@@ -563,8 +563,8 @@ public static partial class Phase5Expectations
 
         public const string StatusRevertedMainWork = "Reverted 88d6b91";
 
-        /// <summary>Phase 3's merge, which fast-forwards here (the report's change after its first commit, U19 part A).</summary>
-        public static string MergeFfCall { get; } = Git("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/ff'", "refs/heads/feature/ff");
+        /// <summary>Phase 3's merge, which fast-forwards here (the report's change after its first commit, U19 part A), with phase 6's <c>--no-overwrite-ignore</c> (docs/phase-6-design.md 9.4, 16.1).</summary>
+        public static string MergeFfCall { get; } = Git("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/ff'", "--no-overwrite-ignore", "refs/heads/feature/ff");
 
         public static string PickTwoCall { get; } = Git("cherry-pick", AlphaOneSha, AlphaTwoSha);
 
@@ -656,8 +656,8 @@ public static partial class Phase5Expectations
 
         public const string StatusMergedOther = "Merged feature/other into main";
 
-        /// <summary>"Check out main and merge feature/other into it": the switch, then phase 3's merge.</summary>
-        public static string MergeOtherCall { get; } = Git("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/other'", "refs/heads/feature/other");
+        /// <summary>"Check out main and merge feature/other into it": the switch, then phase 3's merge, with phase 6's <c>--no-overwrite-ignore</c> (docs/phase-6-design.md 9.4, 16.1).</summary>
+        public static string MergeOtherCall { get; } = Git("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/other'", "--no-overwrite-ignore", "refs/heads/feature/other");
 
         /// <summary>R0, "rebase" as built (HEAD on feature/topic): 3 lanes.</summary>
         public static IReadOnlyList<CommitRow> R0 { get; } =

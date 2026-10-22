@@ -820,9 +820,11 @@ public static partial class Phase4Expectations
 
         public const string AutoStashCall = "git config --type=bool --get rebase.autoStash";
 
-        public const string SwitchToRebaseCall = "git switch --no-guess feature/rebase";
+        // Phase 6's Keep ignored files (docs/phase-6-design.md 9.11, 16.1): every checkout passes
+        // --no-overwrite-ignore just before its positional argument.
+        public const string SwitchToRebaseCall = "git switch --no-guess --no-overwrite-ignore feature/rebase";
 
-        public const string SwitchToMainCall = "git switch --no-guess main";
+        public const string SwitchToMainCall = "git switch --no-guess --no-overwrite-ignore main";
 
         /// <summary>Git 2.36's lines of the conflicts (asserted on 2.36 only).</summary>
         public const string AutoMergingNotes = "Auto-merging notes.txt";

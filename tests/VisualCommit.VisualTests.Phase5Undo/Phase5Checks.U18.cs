@@ -74,7 +74,7 @@ public sealed partial class Phase5ChecksU
 
         // Step 4: as step 1, the box left ticked.
         var calls = await CreateHotfixAsync(app, checkOut: true);
-        AssertCalled(app, calls, PartU.Git("switch", "--create", "hotfix", PartU.MainWorkSha));
+        AssertCalled(app, calls, PartU.Git("switch", "--create", "hotfix", "--no-overwrite-ignore", PartU.MainWorkSha));
         AssertStatus(app, PartU.StatusCreatedHotfixCheckedOut);
         Assert.Equal(["## hotfix"], await StatusAsync(repo));
         AssertBranch(app, "hotfix");
@@ -227,7 +227,7 @@ public sealed partial class Phase5ChecksU
         await OpenFolderAsync(app, "Local branches", "feature");
         var row = await app.RefRowAsync("Local branches", "feature", "ff");
         var calls = await ActAsync(app, () => app.DoubleClick(row));
-        AssertCalled(app, calls, PartU.Git("switch", "--no-guess", "feature/ff"));
+        AssertCalled(app, calls, PartU.Git("switch", "--no-guess", "--no-overwrite-ignore", "feature/ff"));
         Assert.True(((RefItemRow)app.RefRowModel("Local branches", "feature", "ff")).IsSelected, "ff is not selected in the left panel.");
         AssertRowSelected(app, 2, PartU.FastForwardMeSha);
         AssertStatus(app, PartU.StatusCheckedOutFf);
@@ -275,7 +275,7 @@ public sealed partial class Phase5ChecksU
         await OpenFolderAsync(app, "Remotes", "origin", "feature");
         var row = await app.RefRowAsync("Remotes", "origin", "feature", "alpha");
         var calls = await ActAsync(app, () => app.DoubleClick(row));
-        AssertCalled(app, calls, PartU.Git("switch", "--create", "feature/alpha", "--track", "refs/remotes/origin/feature/alpha"));
+        AssertCalled(app, calls, PartU.Git("switch", "--create", "feature/alpha", "--track", "--no-overwrite-ignore", "refs/remotes/origin/feature/alpha"));
         AssertStatus(app, PartU.StatusTrackingAlpha);
         Assert.Equal(["## feature/alpha...origin/feature/alpha"], await StatusAsync(repo));
         Assert.Equal(PartU.AlphaUpstreamKeys, await ConfigAsync(repo, @"^branch\.feature/alpha\."));
@@ -378,7 +378,7 @@ public sealed partial class Phase5ChecksU
         await app.WaitForDialogAsync<ConfirmationViewModel>();
         AssertQuestionTexts(app, PartU.LeaveTitle, PartU.LeaveQuestion, "Check out");
         var calls = await ActAsync(app, () => app.Click(app.FindByAutomationId(app.TopDialogView!, "ConfirmButton")));
-        AssertCalled(app, calls, PartU.Git("switch", "--no-guess", "main"));
+        AssertCalled(app, calls, PartU.Git("switch", "--no-guess", "--no-overwrite-ignore", "main"));
         AssertStatus(app, PartU.StatusCheckedOutMain);
         Assert.Equal([backup], await BackupLinesAsync(repo));
         Assert.Equal(["## main...remotes/origin/main"], await StatusAsync(repo));
@@ -480,7 +480,7 @@ public sealed partial class Phase5ChecksU
             PartU.CheckoutBlockedTitle,
             PartU.OneConflictPreventsCheckout,
             NameOf(repo),
-            PartU.Git("switch", "--no-guess", "feature/other"),
+            PartU.Git("switch", "--no-guess", "--no-overwrite-ignore", "feature/other"),
             ["Copy output", PartU.StashAndCheckOut, "Close"],
             PartU.T2,
             PartU.T2Key));
@@ -490,7 +490,7 @@ public sealed partial class Phase5ChecksU
             calls,
             ["git stash push", "git stash pop", "git switch"],
             PartU.Git("stash", "push", "--message", PartU.D91StashMessage),
-            PartU.Git("switch", "--no-guess", "feature/other"),
+            PartU.Git("switch", "--no-guess", "--no-overwrite-ignore", "feature/other"),
             PartU.Git("stash", "pop", "--index", "stash@{0}"));
         AssertStatus(app, PartU.StatusCheckedOutOtherWithChanges);
         await AssertTransientStashAsync(repo, PartU.ActionStashShort, PartU.ActionStashSubject, PartU.AddNotesSha);

@@ -72,7 +72,7 @@ public class Phase5ExpectationTestsU16ToU19
             $"git update-ref -m \"VisualCommit: undo pull into main\" refs/heads/main {PartU.LocalWorkSha} {PartU.LocalWorkRebasedSha}",
             PartU.KeepMoveRef(PartU.Undo.Message(PartU.PullText), "main", PartU.LocalWorkSha, PartU.LocalWorkRebasedSha));
         Assert.Equal($"git read-tree -m -u {PartU.FastForwardMeSha} {PartU.MainWorkSha}", PartU.ReadTree(PartU.FastForwardMeSha, PartU.MainWorkSha));
-        Assert.Equal("git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" refs/heads/feature/ff", PartU.MergeFfCall);
+        Assert.Equal("git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" --no-overwrite-ignore refs/heads/feature/ff", PartU.MergeFfCall);
         Assert.Equal($"update refs/heads/main {PartU.ReadWholeLinesSha} {PartU.U16CommitSha}", PartU.UpdateLine("refs/heads/main", PartU.ReadWholeLinesSha, PartU.U16CommitSha));
         Assert.Equal($"delete refs/heads/hotfix {PartU.MainWorkSha}", PartU.DeleteLine("refs/heads/hotfix", PartU.MainWorkSha));
         Assert.Equal($"create refs/heads/hotfix {PartU.MainWorkSha}", PartU.CreateLine("refs/heads/hotfix", PartU.MainWorkSha));

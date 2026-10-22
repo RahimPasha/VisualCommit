@@ -63,7 +63,7 @@ public class RepositoryOperationsCheckoutTests
         Assert.Equal(("Checkout blocked", "1 conflict prevents checkout. Commit, stash, or discard your changes first.", "Stash changes and check out"),
             (dialog.Title, dialog.Summary, dialog.ExtraAction));
         Assert.Equal("In blocked", dialog.RepositoryText);
-        Assert.Equal("git switch --no-guess feature/other", dialog.Command);
+        Assert.Equal("git switch --no-guess --no-overwrite-ignore feature/other", dialog.Command);
         Assert.StartsWith("error: Your local changes to the following files would be overwritten by checkout:", dialog.Output, StringComparison.Ordinal);
         Assert.DoesNotContain("untracked", dialog.Output, StringComparison.Ordinal);
 
@@ -164,7 +164,7 @@ public class RepositoryOperationsCheckoutTests
 
         var dialog = Assert.Single(app.Dialogs.Errors);
         Assert.Equal(("Checkout failed", "Git could not check out nowhere."), (dialog.Title, dialog.Summary));
-        Assert.Equal("git switch --no-guess nowhere", dialog.Command);
+        Assert.Equal("git switch --no-guess --no-overwrite-ignore nowhere", dialog.Command);
         Assert.Equal(("Check out nowhere with your changes failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Empty(await repo.StashListAsync());

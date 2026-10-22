@@ -344,7 +344,7 @@ public class DialogTests
             GitFailureKind.CheckoutBlockedByLocalChanges,
             "1 conflict prevents checkout. Commit, stash, or discard your changes first.",
             "error: Your local changes to the following files would be overwritten by checkout:\n\tnotes.txt\nAborting",
-            "git switch --no-guess feature/other",
+            "git switch --no-guess --no-overwrite-ignore feature/other",
             1);
         var dialog = ErrorDialogViewModel.ForFailure("Checkout blocked", failure, "blocked", "Stash changes and check out");
 
@@ -353,7 +353,7 @@ public class DialogTests
         Assert.Equal("In blocked", dialog.RepositoryText);
         Assert.Equal(failure.GitOutput, dialog.Output);
         Assert.True(dialog.HasOutput);
-        Assert.Equal("git switch --no-guess feature/other", dialog.Command);
+        Assert.Equal("git switch --no-guess --no-overwrite-ignore feature/other", dialog.Command);
         Assert.True(dialog.HasCommand);
         Assert.Equal("Stash changes and check out", dialog.ExtraAction);
         Assert.True(dialog.HasExtraAction);
@@ -682,7 +682,7 @@ public class DialogTests
         await app.WaitUntilReadyAsync();
         var dialogs = app.Session.Services.DialogHost;
         var output = "error: you need to resolve your current index first\nnotes.txt: needs merge";
-        var failing = dialogs.ShowAsync(new ErrorDialogViewModel("Checkout failed", "Git could not check out main.", "blocked", output, "git switch --no-guess main", null, app.Session.Services.Clipboard));
+        var failing = dialogs.ShowAsync(new ErrorDialogViewModel("Checkout failed", "Git could not check out main.", "blocked", output, "git switch --no-guess --no-overwrite-ignore main", null, app.Session.Services.Clipboard));
         app.Settle();
 
         var close = (Button)app.FindByAutomationId("ConfirmButton");
@@ -692,7 +692,7 @@ public class DialogTests
         Assert.True(outputBox.IsVisible);
         Assert.True(outputBox.IsReadOnly);
         Assert.Equal(output, outputBox.Text);
-        Assert.Equal("git switch --no-guess main", ((TextBlock)app.FindByAutomationId("ErrorCommand")).Text);
+        Assert.Equal("git switch --no-guess --no-overwrite-ignore main", ((TextBlock)app.FindByAutomationId("ErrorCommand")).Text);
         Assert.False(app.FindByAutomationId("ErrorExtraButton").IsVisible);
 
         app.Click(app.FindByAutomationId("ErrorCopyButton"));
@@ -862,7 +862,7 @@ public class DialogTests
                     "1 conflict prevents checkout. Commit, stash, or discard your changes first.",
                     "blocked",
                     "error: Your local changes to the following files would be overwritten by checkout:\n\tnotes.txt\nPlease commit your changes or stash them before you switch branches.\nAborting",
-                    "git switch --no-guess feature/other",
+                    "git switch --no-guess --no-overwrite-ignore feature/other",
                     "Stash changes and check out"),
                 $"error-checkout-blocked-{suffix}",
                 400);

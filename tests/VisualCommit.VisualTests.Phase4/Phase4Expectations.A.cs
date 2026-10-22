@@ -759,7 +759,8 @@ public static partial class Phase4Expectations
         /// <summary>A3, A5: the call that reads <c>rebase.autoStash</c> before "Check out {A} and rebase it" (1.3 step 1).</summary>
         public const string AutoStashCommand = "git config --type=bool --get rebase.autoStash";
 
-        public const string SwitchToOtherCommand = "git switch --no-guess feature/other";
+        /// <summary>A3's checkout, with phase 6's <c>--no-overwrite-ignore</c> (Keep ignored files, docs/phase-6-design.md 9.11, 16.1).</summary>
+        public const string SwitchToOtherCommand = "git switch --no-guess --no-overwrite-ignore feature/other";
 
         public const string FetchOriginCommand = "git fetch --progress origin";
 
