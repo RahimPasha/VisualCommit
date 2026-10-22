@@ -9,6 +9,7 @@ using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.Views.Pages;
 using VisualCommit.Core.Git;
+using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.App.Tests.PageFakes;
 
@@ -148,11 +149,12 @@ public class BlameViewTests
         DiffHost.Settle();
         Assert.Equal([BlameGutter.NotCommittedYetText], gutter.TextsOf(0).Select(part => part.Text));
 
-        foreach (var (variant, colors, warning) in new[]
+        // The light warning replaced #B7791F (11.10); the dark one is unchanged.
+        foreach (var (variant, colors, warning, replaced) in new[]
         {
-            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B")),
-            (ThemeVariant.Light, DiffColors.Light, Color.Parse("#895A17")),
-            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B")),
+            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B"), (Color?)null),
+            (ThemeVariant.Light, DiffColors.Light, Color.Parse("#895A17"), Color.Parse("#B7791F")),
+            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B"), null),
         })
         {
             host.Window.RequestedThemeVariant = variant;
@@ -166,34 +168,12 @@ public class BlameViewTests
             Assert.Equal(colors.Background, shot.PixelAt(new Point(textArea.Right - 30, textArea.Bottom - 30)));
 
             // The gutter: run 0 on the panel's background (right of its text, in the first line),
-            // its only text's ink in the warning colour.
+            // its only text's ink in the warning colour (TextInk's rule).
             var panel = name == "dark" ? Color.Parse("#1A1D24") : Color.Parse("#F5F6F8");
             var area = new Rect(host.ToWindow(gutter, default), gutter.Bounds.Size);
             Assert.Equal(panel, shot.PixelAt(new Point(area.Right - 4, area.Y + 4)));
-            Assert.Equal(warning, InkOf(shot, area.Deflate(1), dark: name == "dark"));
+            Assert.Empty(TextInk.Problems(shot, area.Deflate(1), warning, panel, replaced, $"Not committed yet, {name}"));
         }
-    }
-
-    /// <summary>
-    /// The ink of the text in <paramref name="area"/>, channel by channel: the most of each on a
-    /// dark background, the least on a light one. Antialiased text, subpixel or not, reaches its
-    /// colour in each channel somewhere, where nothing else in the area does.
-    /// </summary>
-    private static Color InkOf(Testing.Headless.Screenshot shot, Rect area, bool dark)
-    {
-        byte r = dark ? (byte)0 : (byte)255, g = r, b = r;
-        for (var y = (int)Math.Ceiling(area.Y); y < (int)Math.Floor(area.Bottom); y++)
-        {
-            for (var x = (int)Math.Ceiling(area.X); x < (int)Math.Floor(area.Right); x++)
-            {
-                var pixel = shot.PixelAt(x, y);
-                (r, g, b) = dark
-                    ? (Math.Max(r, pixel.R), Math.Max(g, pixel.G), Math.Max(b, pixel.B))
-                    : (Math.Min(r, pixel.R), Math.Min(g, pixel.G), Math.Min(b, pixel.B));
-            }
-        }
-
-        return Color.FromRgb(r, g, b);
     }
 
     /// <summary><paramref name="count"/> lines of C#.</summary>

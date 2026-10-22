@@ -53,7 +53,7 @@ public class ToolTipStyleTests
 
     /// <summary>
     /// The open tooltip's brushes and pixels in the theme that shows: the background 2 inside its
-    /// border, its text's ink reaching the foreground, the border's colour on its left edge, and none
+    /// border, its text's ink the foreground's (TextInk), the border's colour on its left edge, and none
     /// of Fluent's own colours of that theme inside it (report LD19). Returns its size.
     /// </summary>
     private static Size AssertToolTip(ShellDriver app, bool dark)
@@ -87,15 +87,10 @@ public class ToolTipStyleTests
             }
         }
 
-        // The 12-px text is drawn with subpixel antialiasing, which colours each channel of a pixel
-        // apart: hardly a pixel is the foreground exactly, but each channel's ink reaches it
-        // (dark text: the least of each channel; light text: the most), as nothing else inside
-        // the tooltip is darker (light) or lighter (dark) than the text.
-        var ink = Color.FromRgb(
-            Extreme(inside.Select(colour => colour.R), dark),
-            Extreme(inside.Select(colour => colour.G), dark),
-            Extreme(inside.Select(colour => colour.B), dark));
-        Assert.Equal(Color.Parse(foreground), ink);
+        // The 12-px text's ink (TextInk's rule: each channel's extreme toward the foreground, within
+        // 8 of it) is the token's colour, and not Fluent's text colour that it replaced.
+        var fluentText = Color.Parse(dark ? "#FFFFFF" : "#000000");
+        Assert.Empty(TextInk.Problems(shot, new Rect(left, top, right - left + 1, bottom - top + 1), Color.Parse(foreground), Color.Parse(background), fluentText, "the tooltip's text"));
         var fluent = dark ? new[] { "#2B2B2B", "#FFFFFF" } : new[] { "#F2F2F2", "#000000" };
         foreach (var old in fluent)
         {
@@ -104,7 +99,4 @@ public class ToolTipStyleTests
 
         return bounds.Size;
     }
-
-    /// <summary>The text's extreme of one channel: the most on a dark background, the least on a light one.</summary>
-    private static byte Extreme(IEnumerable<byte> channel, bool dark) => dark ? channel.Max() : channel.Min();
 }
