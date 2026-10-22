@@ -460,7 +460,8 @@ public class RepositoryOperationsKeepIgnoredTests
         Assert.Equal("Checked out tools", app.StatusText);
         Assert.Equal("tools", await repo.CurrentBranchAsync());
         Assert.False(File.Exists(Path.Combine(repo.Path, "secret.env")), "The merge overwrote secret.env and the checkout of tools removed it.");
-        Assert.False(Directory.Exists(Path.Combine(repo.Path, "build")) && File.Exists(Path.Combine(repo.Path, "build", "out.bin")), "git's default deletes the ignored folder.");
+        // git's default deletes the ignored folder build/ for tools' file build.
+        Assert.False(Directory.Exists(Path.Combine(repo.Path, "build")), "The ignored folder build/ is still there.");
         Assert.Equal("build\n", Read(repo, "build"));
     }
 
