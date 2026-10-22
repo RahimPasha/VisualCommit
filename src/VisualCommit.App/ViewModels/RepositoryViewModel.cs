@@ -9,6 +9,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
@@ -39,7 +40,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private readonly IAppLog _log;
     private readonly ISettingsStore _settings;
     private readonly IDialogService? _dialogs;
-    private readonly Stopwatch _sinceOpening;
+    private readonly TabServices? _services;
+    private readonly TaskCompletionSource _firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Lock _watcherGate = new();
+    private Stopwatch _sinceOpening;
     private readonly List<double> _frameTimes = [];
     private readonly List<double> _loadingFrameTimes = [];
     private IRepositoryWatcher? _watcher;
@@ -60,6 +64,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private bool _started;
     private bool _changedWhileStarting;
     private bool _disposed;
+
+    // Summary mode and promotion (docs/phase-6-design.md 3.1 to 3.3).
+    private bool _promoted;
+    private int _readGeneration;
+    private Task? _summaryStart;
+
+    // The watcher's pause belongs to the view model (3.3): the queue's operation pauses it once,
+    // also a watcher made while that operation runs.
+    private int _operationPauses;
+    private IDisposable? _watcherPause;
     private DiscardSnapshot? _lastSnapshot;
     private Dictionary<string, string?>? _afterDiscard;
 
@@ -89,15 +103,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Dates = dates;
         _settings = settings;
         _dialogs = dialogs;
+        _services = services;
         _log = log ?? NullAppLog.Instance;
         _sinceOpening = sinceOpening ?? Stopwatch.StartNew();
         _ui = SynchronizationContext.Current;
 
-        // Every write to the repository runs through its queue, one at a time (D76, D81).
+        // Every write to the repository runs through its queue, one at a time (D76, D81), with the
+        // watcher paused while it runs (D71; docs/phase-6-design.md 3.3: PauseWatcher).
         _queue = new OperationQueue(
             repository.Name,
             repository.GitDirectory,
-            () => _watcher?.Pause(),
+            PauseWatcher,
             scope => scope.HasFlag(RefreshScope.Refs) ? RefreshAsync()
                 : scope.HasFlag(RefreshScope.Status) ? RefreshStatusAsync()
                 : Task.CompletedTask,
@@ -125,6 +141,146 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Details.BlameRequested += (_, request) => _ = MenuActions.ShowBlameAsync(request);
 
         Changes = new WorkingChangesViewModel(this, settings);
+
+        // A save of git's settings tells every open view model (docs/phase-6-design.md 8.11); the
+        // subscription goes in Dispose, so that the session-long services keep no closed one alive.
+        if (services is not null)
+        {
+            services.GitSettingsChanged += OnGitSettingsChanged;
+        }
+    }
+
+    /// <summary>
+    /// A dashboard row's view model in summary mode (docs/phase-6-design.md 3.1, D209): the usual
+    /// view model with its queue, operations, toolbar, status and undo history, whose
+    /// <see cref="StartAsync"/> reads only the refs and the status, without a watcher, a history, the
+    /// session's graph filter, the clean-up at opening or Q1's lines, until a tab adopts it
+    /// (<see cref="Promote"/>).
+    /// </summary>
+    public static RepositoryViewModel ForSummary(IGitRepository repository, TabServices services)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(services);
+        return new RepositoryViewModel(repository, services.Settings, services.Dates, services.Log, null, services.Dialogs, services)
+        {
+            IsSummary = true,
+        };
+    }
+
+    /// <summary>The view model is in summary mode (3.1): true from <see cref="ForSummary"/> until <see cref="Promote"/>.</summary>
+    public bool IsSummary { get; private set; }
+
+    /// <summary>
+    /// Completes once <see cref="StartAsync"/> has applied both the refs and the status, or has
+    /// failed (<see cref="ErrorText"/> set; in full mode a failed status read sets
+    /// <see cref="StatusErrorText"/>), in either mode (3.2); also when the view model closes,
+    /// so that nothing waits for it for good. A summary read that a promotion discards does not
+    /// complete it: the full start does. A dashboard row that follows a tab counts as not read until
+    /// then, and a bulk run waits for it (2.10, 4.2).
+    /// </summary>
+    public Task FirstRead => _firstRead.Task;
+
+    /// <summary><see cref="FirstRead"/> has completed; raised in <c>PropertyChanged</c> when it does.</summary>
+    public bool HasFirstRead => _firstRead.Task.IsCompleted;
+
+    /// <summary>
+    /// A tab adopts this summary-mode view model (3.3): it leaves summary mode, a summary read still
+    /// running applies nothing when it ends (the read generation), and <paramref name="sinceOpening"/>,
+    /// the tab's stopwatch, becomes the opening's, so that Q1's lines and auto-fetch's first interval
+    /// count from the user's open. Then the tab calls <see cref="StartAsync"/>, which runs in full
+    /// mode and puts off a refresh asked for during its first load until its end. No I/O.
+    /// </summary>
+    public void Promote(Stopwatch sinceOpening)
+    {
+        ArgumentNullException.ThrowIfNull(sinceOpening);
+        Debug.Assert(!_started, "Summary mode never sets _started (3.1).");
+        IsSummary = false;
+        _promoted = true;
+        _sinceOpening = sinceOpening;
+        _readGeneration++;
+
+        // A summary refresh still running ends without applying anything; the next refresh, put
+        // off until the full start ends, starts a run of its own.
+        lock (_refreshGate)
+        {
+            _refreshing = null;
+            _refreshAgain = false;
+        }
+
+        lock (_statusGate)
+        {
+            _statusRefreshing = null;
+            _statusAgain = false;
+        }
+    }
+
+    /// <summary>
+    /// The queue's watcher pause (D71, 3.3): the first operation's pause takes the watcher's, under
+    /// a lock, and the handle gives it back when the count is at 0 again. A watcher the full start
+    /// makes while an adopted operation runs is paused from its creation until that run ends.
+    /// </summary>
+    private IDisposable PauseWatcher()
+    {
+        lock (_watcherGate)
+        {
+            _operationPauses++;
+            if (_operationPauses == 1)
+            {
+                _watcherPause = _watcher?.Pause();
+            }
+        }
+
+        return new WatcherPause(this);
+    }
+
+    private void ResumeWatcher()
+    {
+        IDisposable? pause = null;
+        lock (_watcherGate)
+        {
+            _operationPauses--;
+            if (_operationPauses == 0)
+            {
+                (pause, _watcherPause) = (_watcherPause, null);
+            }
+        }
+
+        pause?.Dispose();
+    }
+
+    /// <summary>Sets the watcher the full start made, paused at once while an operation's pause is out (3.3).</summary>
+    private void UseWatcher(IRepositoryWatcher watcher)
+    {
+        lock (_watcherGate)
+        {
+            _watcher = watcher;
+            if (_operationPauses > 0 && _watcherPause is null)
+            {
+                _watcherPause = watcher.Pause();
+            }
+        }
+    }
+
+    private void CompleteFirstRead()
+    {
+        if (_firstRead.TrySetResult())
+        {
+            OnPropertyChanged(nameof(HasFirstRead));
+        }
+    }
+
+    /// <summary>One operation's watcher pause; disposing it twice gives it back once.</summary>
+    private sealed class WatcherPause(RepositoryViewModel owner) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                owner.ResumeWatcher();
+            }
+        }
     }
 
     public IGitRepository Repository { get; }
@@ -213,6 +369,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     [ObservableProperty]
     public partial string? ErrorText { get; private set; }
 
+    /// <summary>
+    /// Why the full start's first status read failed, until a status read is applied (3.2): the
+    /// tab shows its graph as before, and nothing of it binds this; a dashboard row that follows the
+    /// tab shows <c>Git could not open it</c> with it, so that the row never shows a status that was
+    /// never read and a bulk run leaves it out. Null otherwise (summary mode fails in
+    /// <see cref="ErrorText"/>).
+    /// </summary>
+    [ObservableProperty]
+    public partial string? StatusErrorText { get; private set; }
+
     /// <summary>The staged, unstaged and untracked files, as last read.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasWorkingChanges))]
@@ -250,7 +416,19 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <see cref="Graph"/> and starts watching for outside changes. Completes when the whole
     /// history is loaded. Failures are shown in <see cref="ErrorText"/> and logged, not thrown.
     /// </summary>
-    public async Task StartAsync()
+    public Task StartAsync()
+    {
+        if (IsSummary)
+        {
+            // Summary mode (3.1): one read of the refs and the status, shared by every dashboard
+            // that holds the view model.
+            return _summaryStart ??= StartSummaryAsync();
+        }
+
+        return StartFullAsync();
+    }
+
+    private async Task StartFullAsync()
     {
         var cancellationToken = _lifetime.Token;
         try
@@ -259,7 +437,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             // terminal, an editor's save) is caught and shown once the load is done. It starts
             // off the UI thread: on Linux it walks every folder of the working tree.
             var watcher = Repository.CreateWatcher();
-            _watcher = watcher;
+            UseWatcher(watcher);
             watcher.Changed += (_, e) => OnUiThread(() => OnRepositoryChanged(e));
             var watching = Task.Run(watcher.Start, CancellationToken.None);
 
@@ -299,12 +477,14 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             ApplyRefs(refs);
             _loadedFilterKey = filter?.Key;
             Graph = data.Value;
-            var statusShown = ShowStatusAsync(status);
+            var statusShown = ShowStatusAsync(status, firstRead: true);
             await loading;
             await statusShown;
             await watching;
             OnPropertyChanged(nameof(HasNoCommits));
 
+            // A promoted view model put off the refreshes asked for during its first load (3.3).
+            _promoted = false;
             _started = true;
             OnFirstLoadCompleted();
             if (_changedWhileStarting)
@@ -321,6 +501,69 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             _log.Error($"{Name}: the repository could not be read.", ex);
             ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;
             OnPropertyChanged(nameof(HasNoCommits));
+            _promoted = false;
+            CompleteFirstRead();
+        }
+    }
+
+    /// <summary>
+    /// Summary mode's start (3.1): the refs and the status read side by side with the view model's
+    /// lifetime, applied as a tab applies them but for what nothing shows (the left panel, the
+    /// stage panel, the resolver), then <see cref="FirstRead"/>; a failure is shown in
+    /// <see cref="ErrorText"/>, as in full mode. A promotion meanwhile (the read generation) makes
+    /// it apply nothing and leave <see cref="FirstRead"/> to the full start.
+    /// </summary>
+    private async Task StartSummaryAsync()
+    {
+        var cancellationToken = _lifetime.Token;
+        var generation = _readGeneration;
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var reading = Repository.ReadRefsAsync(cancellationToken);
+            var status = Repository.ReadStatusAsync(cancellationToken);
+            RepoRefs refs;
+            try
+            {
+                refs = await reading;
+            }
+            catch
+            {
+                _ = status.ContinueWith(failed => _ = failed.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                throw;
+            }
+
+            if (generation != _readGeneration || _disposed)
+            {
+                _ = status.ContinueWith(failed => _ = failed.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                return;
+            }
+
+            ApplyRefs(refs);
+            var read = await status;
+            if (generation != _readGeneration || _disposed)
+            {
+                return;
+            }
+
+            ApplyStatus(read);
+            CompleteFirstRead();
+            _log.Debug(DashboardTexts.SummaryReadLine(Name, stopwatch.ElapsedMilliseconds));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Released, or the window closed.
+        }
+        catch (Exception ex)
+        {
+            if (generation != _readGeneration || _disposed)
+            {
+                return;
+            }
+
+            _log.Error($"{Name}: the repository could not be read.", ex);
+            ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;
+            CompleteFirstRead();
         }
     }
 
@@ -333,6 +576,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// </summary>
     public Task RefreshAsync()
     {
+        // A promoted view model puts off every refresh asked for during its first load (the
+        // adopted operation's end, a watcher's event) until that load's end, where a refresh here
+        // would load a second history beside the first (docs/phase-6-design.md 3.3).
+        if (_promoted)
+        {
+            _changedWhileStarting = true;
+            return Task.CompletedTask;
+        }
+
         lock (_refreshGate)
         {
             if (_disposed)
@@ -358,6 +610,14 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// </summary>
     public Task RefreshStatusAsync()
     {
+        // As RefreshAsync: put off during a promoted view model's first load, whose refresh at its
+        // end reads the status too (3.3).
+        if (_promoted)
+        {
+            _changedWhileStarting = true;
+            return Task.CompletedTask;
+        }
+
         lock (_statusGate)
         {
             if (_disposed)
@@ -378,6 +638,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     private async Task RunRefreshesAsync()
     {
+        if (IsSummary)
+        {
+            await RunSummaryRefreshesAsync();
+            return;
+        }
+
         var cancellationToken = _lifetime.Token;
         try
         {
@@ -425,6 +691,67 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
     }
 
+    /// <summary>
+    /// Summary mode's refresh (3.2): the refs and, side by side, the status, applied as
+    /// <see cref="StartSummaryAsync"/> applies them, never a history; calls during a run fold into
+    /// one more, as in full mode. A promotion meanwhile ends it without applying anything.
+    /// </summary>
+    private async Task RunSummaryRefreshesAsync()
+    {
+        var cancellationToken = _lifetime.Token;
+        var generation = _readGeneration;
+        try
+        {
+            do
+            {
+                lock (_refreshGate)
+                {
+                    _refreshAgain = false;
+                }
+
+                var stopwatch = Stopwatch.StartNew();
+                var reading = Repository.ReadRefsAsync(cancellationToken);
+                var status = Repository.ReadStatusAsync(cancellationToken);
+                RepoRefs refs;
+                WorkingTreeStatus read;
+                try
+                {
+                    refs = await reading;
+                }
+                catch
+                {
+                    _ = status.ContinueWith(failed => _ = failed.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                    throw;
+                }
+
+                read = await status;
+                if (generation != _readGeneration || _disposed)
+                {
+                    return;
+                }
+
+                ApplyRefs(refs);
+                ApplyStatus(read);
+                ErrorText = null;
+                _log.Debug(DashboardTexts.SummaryReadLine(Name, stopwatch.ElapsedMilliseconds));
+            }
+            while (generation == _readGeneration && RefreshRequestedAgain() && !cancellationToken.IsCancellationRequested);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (generation != _readGeneration || _disposed)
+            {
+                return;
+            }
+
+            _log.Error($"{Name}: the repository could not be read.", ex);
+            ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;
+        }
+    }
+
     private bool RefreshRequestedAgain()
     {
         lock (_refreshGate)
@@ -436,6 +763,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private async Task RunStatusRefreshesAsync()
     {
         var cancellationToken = _lifetime.Token;
+        var generation = _readGeneration;
         try
         {
             bool again;
@@ -447,6 +775,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                 }
 
                 var status = await Repository.ReadStatusAsync(cancellationToken);
+                if (generation != _readGeneration)
+                {
+                    // A summary's read that a promotion overtook (3.3): the full start reads again.
+                    return;
+                }
+
                 ApplyStatus(status);
                 await ReloadDiffAsync();
 
@@ -576,11 +910,21 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         _disposed = true;
 
+        // The session-long services keep no closed view model alive, and no handler reads the
+        // token of a disposed lifetime (docs/phase-6-design.md 8.11).
+        if (_services is not null)
+        {
+            _services.GitSettingsChanged -= OnGitSettingsChanged;
+        }
+
         // What waits is dropped and a network operation is stopped; a local one that has started
         // runs all its steps to the end, without the refresh (1.8).
         _queue.Dispose();
         OperationStatus.Dispose();
         _lifetime.Cancel();
+
+        // Nothing waits for a first read that will never come (a dashboard row, a bulk run).
+        CompleteFirstRead();
         _watcher?.Dispose();
         Diff?.Dispose();
         Page?.Dispose();
@@ -943,6 +1287,18 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// </summary>
     private void ApplyStatus(WorkingTreeStatus status)
     {
+        // A status read now: the first read's failure no longer holds (3.2).
+        StatusErrorText = null;
+        if (IsSummary)
+        {
+            // Summary mode (3.1): the status and what follows it that a row or an operation reads
+            // (the working-changes row's text, the operations' notes, the banner); nothing shows
+            // the stage panel, the resolver or the merge tool, and no Q1 line is logged.
+            Status = status;
+            OnStatusApplied(status);
+            return;
+        }
+
         // The offset as it was: once the row goes, the graph control clamps the offset to its
         // shorter extent at once, and moving the clamped offset would move the rows a row too far.
         var had = HasWorkingChanges;
@@ -967,7 +1323,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         FollowStatusInGraphArea(status);
     }
 
-    private async Task ShowStatusAsync(Task<WorkingTreeStatus> reading)
+    private async Task ShowStatusAsync(Task<WorkingTreeStatus> reading, bool firstRead = false)
     {
         try
         {
@@ -979,6 +1335,20 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         catch (Exception ex)
         {
             _log.Error($"{Name}: reading the working tree's status failed.", ex);
+            if (firstRead)
+            {
+                // The first read has failed (3.2): said where a row looks, not in the tab.
+                StatusErrorText = ex is GitException git && git.StandardError.Trim() is { Length: > 0 } output ? output : ex.Message;
+            }
+        }
+        finally
+        {
+            // The full start's first read (3.2): the refs were applied before the status, which was
+            // applied or failed (StatusErrorText) by now.
+            if (firstRead)
+            {
+                CompleteFirstRead();
+            }
         }
     }
 
@@ -1244,7 +1614,13 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             { Sha: { } sha } => $"Detached at {sha[..Math.Min(7, sha.Length)]}",
             _ => string.Empty,
         };
-        LeftPanel.Update(refs);
+
+        // Summary mode shows no left panel (3.1); the list and a page are null there.
+        if (!IsSummary)
+        {
+            LeftPanel.Update(refs);
+        }
+
         Refs = refs;
         InteractiveRebase?.ObserveRefs(refs);
         Page?.OnRefsRead(refs);

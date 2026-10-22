@@ -1,0 +1,183 @@
+using Avalonia.Headless.XUnit;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Workspaces;
+using VisualCommit.Core.Operations;
+using Xunit;
+
+namespace VisualCommit.App.Tests;
+
+/// <summary>
+/// Closing the window with dashboards (docs/phase-6-design.md 3.7, 4.12, D209) and the rule of
+/// naming the repository in dialogs (3.8): the window waits for a dashboard's running pull as for a
+/// tab's, closed dashboards' included; closing a dashboard cancels a row's fetch; CloseAll leaves
+/// no summary and makes no git call afterwards.
+/// </summary>
+public class MainWindowCloseTests
+{
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    [AvaloniaFact]
+    public async Task The_window_waits_for_a_summarys_running_pull_and_drops_what_waits()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var (window, dashboard) = await OpenAsync(provider, api.WorkingDirectory);
+        var summary = dashboard.Rows[0].Repository!;
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        var pull = summary.Queue.RunAsync(Local("Pull", running, finish));
+        await running.Task.WaitAsync(Patience);
+        var waiting = summary.Queue.RunAsync(new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Fetched from all remotes"))));
+        var closed = 0;
+
+        Assert.False(window.TryClose(() => closed++));
+
+        var finishing = Assert.IsType<FinishingDialogViewModel>(Assert.Single(window.Dialogs.Open));
+        Assert.Equal(["Pull — api"], finishing.Items.Select(item => item.Text));
+        Assert.Equal(OperationOutcome.Cancelled, (await waiting.WaitAsync(Patience)).Outcome);
+
+        finish.SetResult();
+        await pull.WaitAsync(Patience);
+        await DashboardTestSupport.WaitUntilAsync(() => closed == 1, "the window to close");
+    }
+
+    [AvaloniaFact]
+    public async Task The_window_waits_for_a_closed_dashboards_pull()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var (window, dashboard) = await OpenAsync(provider, api.WorkingDirectory);
+        window.NewTabCommand.Execute(null);
+        var summary = dashboard.Rows[0].Repository!;
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        var pull = summary.Queue.RunAsync(Local("Pull", running, finish));
+        await running.Task.WaitAsync(Patience);
+
+        // The dashboard closes during its pull past the fetch: the summary is released while running.
+        window.CloseTabCommand.Execute(window.Tabs[0]);
+        Assert.True(dashboard.IsClosed);
+        Assert.True(summary.IsClosed);
+        var closed = 0;
+
+        Assert.False(window.TryClose(() => closed++));
+        var finishing = Assert.IsType<FinishingDialogViewModel>(Assert.Single(window.Dialogs.Open));
+        Assert.Equal(["Pull — api"], finishing.Items.Select(item => item.Text));
+
+        finish.SetResult();
+        await pull.WaitAsync(Patience);
+        await DashboardTestSupport.WaitUntilAsync(() => closed == 1, "the window to close");
+    }
+
+    [AvaloniaFact]
+    public async Task A_dashboards_idle_rows_do_not_hold_the_window()
+    {
+        using var provider = new FakeProvider();
+        var (window, _) = await OpenAsync(provider, provider.Add("api").WorkingDirectory, provider.PathOf("old-site"));
+
+        Assert.True(window.TryClose(() => { }));
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_a_dashboard_tab_cancels_a_rows_fetch()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var (window, dashboard) = await OpenAsync(provider, api.WorkingDirectory);
+        var summary = dashboard.Rows[0].Repository!;
+        var started = new TaskCompletionSource();
+        var fetch = summary.Queue.RunAsync(new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.Refs, async context =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Fetched from all remotes");
+        }));
+        await started.Task.WaitAsync(Patience);
+
+        window.CloseTabCommand.Execute(window.ActiveTab);
+
+        var result = await fetch.WaitAsync(Patience);
+        Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (result.Outcome, result.Message));
+        Assert.True(summary.IsClosed);
+    }
+
+    [AvaloniaFact]
+    public async Task Close_all_disposes_the_summaries()
+    {
+        using var provider = new FakeProvider();
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(provider.Add("api").WorkingDirectory, provider.Add("docs").WorkingDirectory));
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var dashboard = window.ActiveTab.Dashboard!;
+        await DashboardTestSupport.WaitUntilAsync(() => dashboard.Rows.All(row => row.HasRepository), "the rows' reads");
+        var summaries = services.OpenRepositories.Summaries;
+        Assert.Equal(2, summaries.Count);
+
+        window.CloseAll();
+
+        Assert.All(summaries, summary => Assert.True(summary.IsClosed));
+        Assert.Empty(services.OpenRepositories.Summaries);
+        Assert.True(dashboard.IsClosed);
+    }
+
+    [AvaloniaFact]
+    public async Task Close_all_during_a_held_read_leaves_no_view_model_and_no_git_call()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        provider.Gate = new TaskCompletionSource();
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory));
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        await DashboardTestSupport.WaitUntilAsync(() => provider.Opens == 1, "the row's probe");
+
+        window.CloseAll();
+        provider.Gate.SetResult();
+        await DashboardTestSupport.SettleAsync();
+
+        Assert.Empty(services.OpenRepositories.Summaries);
+        Assert.Equal((0, 0), (api.RefsReads, api.StatusReads));
+    }
+
+    [AvaloniaFact]
+    public async Task Dialogs_name_their_repository_while_a_dashboard_is_open()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store());
+        var window = DashboardTestSupport.Window(services);
+
+        // Without a dashboard: as before, only with more than one tab with a repository.
+        Assert.True(await window.ActiveTab.OpenAsync(api.WorkingDirectory));
+        Assert.False(window.NamesRepositoryInDialogs);
+        window.NewTabCommand.Execute(null);
+        Assert.False(window.NamesRepositoryInDialogs);
+
+        // A dashboard beside one repository tab.
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        Assert.True(window.NamesRepositoryInDialogs);
+        Assert.True(services.NamesRepositoryInDialogs());
+
+        // A dashboard alone.
+        window.CloseTabCommand.Execute(window.Tabs[1]);
+        Assert.Single(window.Tabs);
+        Assert.True(window.NamesRepositoryInDialogs);
+    }
+
+    private static GitOperation Local(string title, TaskCompletionSource running, TaskCompletionSource finish) =>
+        new(title, "Pulling origin/main into main…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            running.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Pulled 1 commit into main (fast-forward)");
+        });
+
+    private static async Task<(MainWindowViewModel Window, DashboardViewModel Dashboard)> OpenAsync(FakeProvider provider, params string[] folders)
+    {
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(folders));
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var dashboard = window.ActiveTab.Dashboard!;
+        await DashboardTestSupport.WaitUntilAsync(() => !dashboard.IsPassRunning && dashboard.Rows.All(row => !row.IsReading && !row.IsNotReadYet), "the dashboard's first read");
+        return (window, dashboard);
+    }
+}

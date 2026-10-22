@@ -120,7 +120,8 @@ Git layer and Core:
   reviewed and fixed, merged in `0da0eec`.)
 - [ ] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
   changes, an operation in progress), read cheaply for ten repositories without opening them as
-  tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode: wave 2.)
+  tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode, the reads off the UI thread
+  four at a time, built, reviewed and fixed, merged in `125e792`.)
 - [ ] 9. Bulk fetch and pull through each repository's `OperationQueue` (D81), with the
   toolbar's titles, Cancel and error dialog; what is recorded for undo and where the activity
   log shows it. Tests. (WP4's `OperationQueue.Cancel`, prompt groups and `MaxConnections` 16
@@ -145,7 +146,8 @@ Git layer and Core:
 App:
 
 - [ ] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
-  uncommitted changes; opening a repository from it.
+  uncommitted changes; opening a repository from it. (WP-W merged in `0da0eec`, WP-D in `125e792`,
+  each built, reviewed and fixed; the bulk run's parts of the dashboard are WP-B's.)
 - [ ] 14. Bulk fetch and pull from the dashboard: progress per repository, Cancel, errors.
 - [ ] 15. The command palette: search and run the app's commands and the menus' actions, with
   their keys shown.
@@ -288,11 +290,10 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 `80689ef` (a slow program's wait with a limit of its own; an undo test that took WP3's config read
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
-fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T merged
-(`e7144ec`), WP-W merged (`0da0eec`); WP-D being built. Next: WP-D's review, its fixes (with the
-WP-W review's finding for it: a row's Locate… re-reads the row whatever the command did, so a
-folder located onto itself after a drive comes back is read at once, 1.10) and merge, then the
-default run; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
+(`e7144ec`), WP-W (`0da0eec`) and WP-D (`125e792`) merged; WP-IA built, under review; WP-RA being
+built. Next: the default run on `125e792` (running), WP-IA's fixes and merge, then WP-B (after
+WP-IA), WP-SET, and, last, WP-K, as section 18's order allows; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
@@ -314,6 +315,16 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- CI after the WP-W merge: run 39831538867 on `378260b` failed WP-W's `WorkspaceFolderProbeTests` on
+  Windows and macOS (Git 2.56 words an orphaned worktree's `.git` file "gitfile does not point to a
+  valid repository", which `OpenAsync` now takes as no repository; checked locally with MinGit
+  2.56.0.windows.2, kept in the session's scratch folder) and a `WorkspaceCommandsTests` case in one
+  container (the scan's dialog showed before its search started), fixed in `431fb42`; run 39837374552
+  on it failed phase 4's `ConflictResolverViewTests` double-click case on macOS (the wait for a layout
+  lay between the two presses, which Avalonia counts on the real clock), fixed in `855ef39`; run
+  [39843589646](https://github.com/RahimPasha/VisualCommit/actions/runs/39843589646) on `855ef39`:
+  all five jobs green; Windows' Test step 25 min 22 s, macOS's 22 min 4 s, Ubuntu's 4 min 9 s, the
+  containers' about 4 min 5 s.
 - WP-W edited two real-window files that section 18 gives WP-R, as 16.1's welcome-page row asks:
   `Phase0RealWindowPass.cs:124` (`AssertShell`'s list gains `Workspaces` and `No workspaces`) and
   `Phase5RealWindowPass.A.cs:559-561` (`AssertEmptyTab` leaves out `New workspace…` and checks the

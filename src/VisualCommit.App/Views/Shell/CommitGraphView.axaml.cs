@@ -190,6 +190,13 @@ public partial class CommitGraphView : UserControl
 
     private void FocusGraphAreaContent()
     {
+        // A dashboard's list (docs/phase-6-design.md 2.4).
+        if (_tab is { ShowsDashboard: true })
+        {
+            DashboardContent.FocusList();
+            return;
+        }
+
         switch (_repository)
         {
             case { ShowsPage: true, Page: { } page }:
@@ -211,6 +218,51 @@ public partial class CommitGraphView : UserControl
             ?? FirstFocusable(body);
         target?.Focus(NavigationMethod.Unspecified);
     }
+
+    /// <summary>
+    /// The element the graph area gives the focus to (docs/phase-6-design.md 6.6), as
+    /// <see cref="FocusGraphAreaContent"/> chooses it, for F6's navigation: the dashboard's list; the
+    /// page's, the interactive list's or the welcome page's main element (<see cref="KeyRegion.IsMainProperty"/>);
+    /// the graph; the resolver's result's text or its card's first button; otherwise the first part
+    /// that takes the focus. Null when nothing shown can take it.
+    /// </summary>
+    public InputElement? GraphAreaFocusTarget()
+    {
+        if (_tab is { ShowsDashboard: true })
+        {
+            var list = DashboardContent.FindControl<ListBox>("DashboardList");
+            return list is { IsEffectivelyVisible: true } ? list : FirstFocusable(DashboardSlot);
+        }
+
+        if (_tab is { ShowsWelcome: true })
+        {
+            return MainOf(this.GetVisualDescendants().OfType<WelcomeView>().FirstOrDefault()) ?? FirstFocusable(this.GetVisualDescendants().OfType<WelcomeView>().FirstOrDefault());
+        }
+
+        switch (_repository)
+        {
+            case { ShowsPage: true }:
+                return MainOf(PageSlot) ?? FirstFocusable(PageSlot);
+            case { ShowsInteractiveRebase: true }:
+                var rebase = GraphAreaBody.Children.FirstOrDefault(child => child.IsVisible);
+                return MainOf(rebase) ?? FirstFocusable(rebase);
+            case { ShowsGraph: true }:
+                return GraphAreaContent.GetVisualDescendants().OfType<CommitGraphControl>().FirstOrDefault();
+            case null:
+                return null;
+        }
+
+        var body = GraphAreaBody.Children.FirstOrDefault(child => child.IsVisible);
+        return body?.GetVisualDescendants().OfType<ConflictResultEditor>().FirstOrDefault(editor => editor.IsEffectivelyVisible)?.TextArea
+            ?? FirstFocusable(body?.GetVisualDescendants().OfType<ItemsControl>().FirstOrDefault(items => items.Name == "CardButtons"))
+            ?? FirstFocusable(body);
+    }
+
+    /// <summary>The first element marked <see cref="KeyRegion.IsMainProperty"/> that is shown and can take the focus inside <paramref name="within"/>.</summary>
+    private static InputElement? MainOf(Visual? within) =>
+        within?.GetVisualDescendants()
+            .OfType<InputElement>()
+            .FirstOrDefault(element => element is Control control && KeyRegion.GetIsMain(control) && element.Focusable && element.IsEffectivelyVisible && element.IsEffectivelyEnabled);
 
     private static InputElement? FirstFocusable(Visual? within) =>
         within?.GetVisualDescendants()

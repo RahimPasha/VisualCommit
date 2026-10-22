@@ -1,7 +1,9 @@
+using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using Xunit;
@@ -162,6 +164,79 @@ public class RepoTabsTests
         welcome.CloneName = "mine";
         welcome.CloneUrl = "https://example.com/second.git";
         Assert.Equal("mine", welcome.CloneName);
+    }
+
+    [AvaloniaFact]
+    public async Task A_tab_reopened_while_a_closed_tabs_merge_runs_waits_for_it_then_opens()
+    {
+        // docs/phase-6-design.md 3.3: no tab is made on a worktree while a closed tab's queue runs there.
+        using var provider = new FakeProvider();
+        var repository = provider.Add("api");
+        var services = DashboardTestSupport.Services(provider);
+        var viewModel = DashboardTestSupport.Window(services);
+        var first = viewModel.ActiveTab;
+        Assert.True(await first.OpenAsync(repository.WorkingDirectory));
+        var closed = first.Repository!;
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        var merge = closed.Queue.RunAsync(new GitOperation("Merge", "Merging feature into main…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            running.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Merged feature into main");
+        }));
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        viewModel.NewTabCommand.Execute(null);
+        viewModel.CloseTabCommand.Execute(first);
+
+        var reopened = viewModel.ActiveTab;
+        var opening = reopened.OpenAsync(repository.WorkingDirectory);
+        await DashboardTestSupport.WaitUntilAsync(() => reopened.WaitingText is not null, "the tab to wait");
+        Assert.Equal("Waiting for Merge to finish…", reopened.WaitingText);
+        Assert.True(reopened.IsOpening);
+        Assert.False(reopened.ShowsWelcome);
+        Assert.Null(reopened.Repository);
+
+        finish.SetResult();
+        await merge;
+        Assert.True(await opening.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Null(reopened.WaitingText);
+        Assert.NotNull(reopened.Repository);
+        Assert.NotSame(closed, reopened.Repository);
+    }
+
+    [AvaloniaFact]
+    public async Task A_tab_closed_while_it_waits_for_a_closed_queue_opens_nothing()
+    {
+        using var provider = new FakeProvider();
+        var repository = provider.Add("api");
+        var services = DashboardTestSupport.Services(provider);
+        var viewModel = DashboardTestSupport.Window(services);
+        var first = viewModel.ActiveTab;
+        Assert.True(await first.OpenAsync(repository.WorkingDirectory));
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        var merge = first.Repository!.Queue.RunAsync(new GitOperation("Merge", "Merging…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            running.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Merged");
+        }));
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        viewModel.NewTabCommand.Execute(null);
+        viewModel.CloseTabCommand.Execute(first);
+        var waiting = viewModel.ActiveTab;
+        var opening = waiting.OpenAsync(repository.WorkingDirectory);
+        await DashboardTestSupport.WaitUntilAsync(() => waiting.WaitingText is not null, "the tab to wait");
+        var refsReads = repository.RefsReads;
+
+        viewModel.CloseTabCommand.Execute(waiting);
+        finish.SetResult();
+        await merge;
+
+        Assert.False(await opening.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Null(waiting.Repository);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(refsReads, repository.RefsReads);
+        Assert.Empty(services.OpenRepositories.Tabs);
     }
 
     private static MainWindowViewModel Create(ISessionStore session)
