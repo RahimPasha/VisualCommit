@@ -141,7 +141,9 @@ public class WorkspaceCommandsTests
         Assert.Null(session.Services.DialogHost.Current);
         var path = Assert.Single(session.PathsOf("web"));
         Assert.Equal(path, added);
-        Assert.True(WorkspacePaths.Same(tree.Api.Path, path));
+
+        // The top as git reports it (on macOS /private/var/…, where the folder dialog answered /var/…).
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.Api.Path), path));
 
         // A second time: held already, so nothing is appended, and the held path is returned.
         session.Folders.Answer(tree.Api.Path + Path.DirectorySeparatorChar);
@@ -199,8 +201,8 @@ public class WorkspaceCommandsTests
 
         Assert.Null(await adding);
         Assert.Equal(2, session.PathsOf("web").Count);
-        Assert.True(WorkspacePaths.Same(tree.Api.Path, session.PathsOf("web")[0]));
-        Assert.True(WorkspacePaths.Same(tree.PathOf("web-app"), session.PathsOf("web")[1]));
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.Api.Path), session.PathsOf("web")[0]));
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.PathOf("web-app")), session.PathsOf("web")[1]));
     }
 
     [Fact]
@@ -224,7 +226,8 @@ public class WorkspaceCommandsTests
         await adding;
 
         Assert.Equal(2, session.PathsOf("web").Count);
-        Assert.True(WorkspacePaths.Same(tree.Api.Path, session.PathsOf("web")[0]));
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.Api.Path), session.PathsOf("web")[0]));
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.PathOf("api/src/nested")), session.PathsOf("web")[1]));
     }
 
     [Fact]
@@ -329,7 +332,7 @@ public class WorkspaceCommandsTests
 
         Assert.Equal(["Locate old-site"], session.Folders.Titles);
         Assert.Equal(other, session.PathsOf("web")[0]);
-        Assert.True(WorkspacePaths.Same(tree.Api.Path, session.PathsOf("web")[1]));
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.Api.Path), session.PathsOf("web")[1]));
         Assert.Null(session.Services.DialogHost.Current);
     }
 
@@ -339,7 +342,10 @@ public class WorkspaceCommandsTests
         using var tree = await TreeAsync();
         var plain = tree.Folder("plain");
         var gone = tree.PathOf("old-site");
-        var session = NewSession(new InMemoryWorkspaceStore(List(new Workspace("web", "Web", [new(tree.Api.Path), new(gone)]))));
+
+        // The workspace holds api as the app saves it: git's top (on macOS /private/var/…).
+        var top = await GitTopAsync(tree.Api.Path);
+        var session = NewSession(new InMemoryWorkspaceStore(List(new Workspace("web", "Web", [new(top), new(gone)]))));
 
         session.Folders.Answer(plain);
         var locating = session.Commands.LocateAsync("web", gone);
@@ -351,12 +357,11 @@ public class WorkspaceCommandsTests
         session.Folders.Answer(tree.Api.Path);
         locating = session.Commands.LocateAsync("web", gone);
         error = await session.DialogAsync<ErrorDialogViewModel>();
-        var top = (await session.Services.Repositories.OpenAsync(tree.Api.Path, Cancelled)).WorkingDirectory;
         Assert.Equal(("Locating the repository failed", $"{top} is already in Web."), (error.Title, error.Summary));
         error.Cancel();
         await locating;
 
-        Assert.Equal([tree.Api.Path, gone], session.PathsOf("web"));
+        Assert.Equal([top, gone], session.PathsOf("web"));
     }
 
     [Fact]

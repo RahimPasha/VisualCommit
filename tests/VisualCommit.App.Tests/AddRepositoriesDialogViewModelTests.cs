@@ -34,7 +34,7 @@ public class AddRepositoriesDialogViewModelTests
         await tree.InitAsync("a/b/c/d/too-deep");
         await tree.Api.GitAsync("init", "--quiet", "--bare", tree.PathOf("remotes/api.git"));
         var session = NewSession();
-        var held = (await session.Services.Repositories.OpenAsync(tree.Api.Path, TestContext.Current.CancellationToken)).WorkingDirectory;
+        var held = await GitTopAsync(tree.Api.Path);
 
         var dialog = new AddRepositoriesDialogViewModel("Web", tree.Root, session.Services.Repositories, path => WorkspacePaths.Same(path, held), log: session.Log);
         await dialog.Start();
@@ -53,7 +53,7 @@ public class AddRepositoriesDialogViewModelTests
         Assert.Equal(("Add 3 repositories", true), (dialog.ConfirmText, dialog.CanConfirm));
 
         // Each candidate git opened was logged as a tab's open is (1.8).
-        Assert.Equal(5, session.Log.Messages.Count(message => message.StartsWith("Opened the repository at ", StringComparison.Ordinal)));
+        Assert.Equal(4, session.Log.Messages.Count(message => message.StartsWith("Opened the repository at ", StringComparison.Ordinal)));
 
         dialog.Rows[1].IsChecked = false;
         Assert.Equal("Add 2 repositories", dialog.ConfirmText);
@@ -61,8 +61,9 @@ public class AddRepositoriesDialogViewModelTests
         var answer = await dialog.Result;
         Assert.NotNull(answer);
         Assert.Equal(2, answer.Count);
-        Assert.True(WorkspacePaths.Same(tree.PathOf("web-app"), answer[0]));
-        Assert.True(WorkspacePaths.Same(tree.PathOf("wt"), answer[1]));
+        // The working trees as git reports them (on macOS /private/var/…, where the scan saw /var/…).
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.PathOf("web-app")), answer[0]));
+        Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.PathOf("wt")), answer[1]));
     }
 
     [Fact]

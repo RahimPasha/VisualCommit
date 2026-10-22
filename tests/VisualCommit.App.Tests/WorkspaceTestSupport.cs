@@ -39,6 +39,16 @@ internal static class WorkspaceTestSupport
         return new Session(services, folders, host, calls, log);
     }
 
+    /// <summary>
+    /// The working tree's top of the repository at <paramref name="folder"/> as git reports it and
+    /// the app saves it (<c>IGitRepository.WorkingDirectory</c>), opened by a provider of its own so
+    /// that no session's call log or app log sees it. Compare a saved or answered path with this,
+    /// never with the folder's own text: on macOS the temporary folder's <c>/var/…</c> is git's
+    /// <c>/private/var/…</c>, which <c>WorkspacePaths.Same</c> tells apart (part W's conventions).
+    /// </summary>
+    public static async Task<string> GitTopAsync(string folder) =>
+        (await new RealRepositories(new GitCallLog(), NullAppLog.Instance).OpenAsync(folder)).WorkingDirectory;
+
     /// <summary>A plain folder with repositories in it, made with real git (<see cref="Tree"/>).</summary>
     public static async Task<Tree> TreeAsync()
     {
