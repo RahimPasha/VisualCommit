@@ -172,18 +172,33 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     // 1. The tracked changes only: the untracked files blocked nothing, and the
                     // checkout carries them along (D91).
+                    var keepIgnored = KeepIgnored;
                     var stash = await Git.StashAsync(OperationTexts.StashBeforeCheckout(name), includeUntracked: false, options);
                     UndoCapture.Stash(stash, includedUntracked: false, OperationTexts.StashBeforeCheckout(name));
                     if (stash is null)
                     {
-                        // Nothing is left to stash (the changes went meanwhile): a plain checkout.
-                        return OperationReport.Done(await plan.Run(options));
+                        // Nothing is left to stash (the changes went meanwhile): a plain checkout,
+                        // whose refusal is shown as every checkout's (docs/phase-6-design.md 9.11).
+                        try
+                        {
+                            return OperationReport.Done(await plan.Run(options));
+                        }
+                        catch (GitException refused)
+                        {
+                            var failure = FailureOf(refused, text.FailureSummary);
+                            if (await CheckoutRefusalDisplayAsync(failure, target, name, offerStash: false, keepIgnored) is not { } shown)
+                            {
+                                throw;
+                            }
+
+                            display = shown;
+                            return Failed(text, failure with { Summary = shown.Summary });
+                        }
                     }
 
                     // 2. The checkout; when it fails, the changes go back at once. Only ignored files
                     // can be in its way now (the untracked files blocked nothing): what was is read
                     // before the stash comes back (docs/phase-6-design.md 9.11).
-                    var keepIgnored = KeepIgnored;
                     try
                     {
                         await plan.Run(options);

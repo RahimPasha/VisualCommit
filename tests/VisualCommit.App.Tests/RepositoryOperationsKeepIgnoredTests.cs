@@ -224,6 +224,172 @@ public class RepositoryOperationsKeepIgnoredTests
         Assert.Empty(app.Repository.UndoHistory.Entries);
     }
 
+    [Fact]
+    public async Task Stash_changes_and_check_out_with_nothing_left_to_stash_says_so_in_D179s_words()
+    {
+        // 9.11 (14.4's every checkout path): on a clean tree "Stash changes and check out" stashes
+        // nothing and runs a plain checkout, whose refusal for the ignored secret.env is told as
+        // every checkout's.
+        using var repo = await Scenarios.IgnoredAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var before = await repo.ExactStateAsync();
+        var mark = app.Calls.Snapshot().Count;
+
+        await app.Operations.StashAndCheckoutAsync("refs/heads/vendor");
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Checkout blocked", "1 ignored file is in the way: vendor tracks a file of the same name. Move it away first."), (dialog.Title, dialog.Summary));
+        Assert.False(dialog.HasExtraAction);
+        AssertOutputOfFailedCall(app, dialog, "git switch --no-guess --no-overwrite-ignore vendor");
+        Assert.Equal("Check out vendor with your changes failed", app.StatusText);
+        var calls = OperationCalls(app, mark);
+        Assert.Contains(calls, call => call.CommandText.StartsWith("git stash push", StringComparison.Ordinal));
+        Assert.DoesNotContain(calls, call => call.CommandText.StartsWith("git stash pop", StringComparison.Ordinal));
+        Assert.Equal("secret.env\0", Assert.Single(calls, call => call.CommandText == CheckIgnore).StandardOutput);
+        Assert.Equal(before, await repo.ExactStateAsync());
+        Assert.Empty(app.Repository.UndoHistory.Entries);
+    }
+
+    [Fact]
+    public async Task Aborts_way_back_after_check_out_and_rebase_says_so_in_D179s_words()
+    {
+        // 9.11 (GD2): "Check out plain and rebase it onto main" from vendor stops with a conflict;
+        // an ignored secret.env made during the stop is in the way of vendor, which Abort checks out
+        // again after git's abort: only the way back failed.
+        using var repo = await Scenarios.IgnoredAsync();
+        await repo.CreateBranchAsync("plain", StopTracking);
+        await repo.CheckoutAsync("plain");
+        await repo.CommitFileAsync("app.txt", "app\nplain\n", "Plain work");
+        await repo.CheckoutAsync("vendor");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm();
+
+        await app.Operations.CheckoutAndRebaseAsync("refs/heads/plain", new RebaseTarget(MainWork, "main"));
+        Assert.Equal(("Rebase stopped: 1 file has conflicts", OperationStatusTone.Warning), (app.StatusText, app.StatusTone));
+        Assert.Equal("refs/heads/vendor", app.Operations.ReadReturnBranch());
+        Assert.False(File.Exists(Path.Combine(repo.Path, "secret.env")), "The checkout of plain removed vendor's secret.env.");
+        repo.WriteFile("secret.env", Ignored.SecretLocal);
+        var mark = app.Calls.Snapshot().Count;
+
+        await app.Operations.AbortAsync();
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Checkout blocked", "1 ignored file is in the way: vendor tracks a file of the same name. Move it away first."), (dialog.Title, dialog.Summary));
+        Assert.False(dialog.HasExtraAction);
+        AssertOutputOfFailedCall(app, dialog, "git switch --no-guess --no-overwrite-ignore vendor");
+        Assert.Equal("Abort the rebase failed", app.StatusText);
+        var calls = OperationCalls(app, mark);
+        Assert.Contains(calls, call => call.CommandText == "git rebase --abort");
+        Assert.Equal("secret.env\0", Assert.Single(calls, call => call.CommandText == CheckIgnore).StandardOutput);
+        Assert.Equal("plain", await repo.CurrentBranchAsync());
+        Assert.False(Directory.Exists(Path.Combine(repo.Path, ".git", "rebase-merge")), "The rebase was not aborted.");
+        Assert.Equal(Ignored.SecretLocal, Read(repo, "secret.env"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_kept_commits_and_a_tags_checkout_say_so_in_D179s_words()
+    {
+        // 9.2's first row (GD2, GD10): the backups list's and the reflog page's "Check out this
+        // commit" (CheckoutKeptCommitAsync), and a tag, each both ways: a commit main does not reach
+        // (D193's detached checkout) and one it reaches (the automatic stash's, D179).
+        using var repo = await Scenarios.IgnoredAsync();
+        await repo.GitAsync("tag", "v1", VendorSecret);
+        await repo.GitAsync("tag", "v0", TrackTheSecret);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var before = await repo.ExactStateAsync();
+        var marks = new List<int>();
+
+        foreach (var checkout in new Func<Task>[]
+        {
+            () => app.Operations.CheckoutKeptCommitAsync(VendorSecret),
+            () => app.Operations.CheckoutKeptCommitAsync(TrackTheSecret),
+            () => app.Operations.CheckoutAsync("refs/tags/v1"),
+            () => app.Operations.CheckoutAsync("refs/tags/v0"),
+        })
+        {
+            marks.Add(app.Calls.Snapshot().Count);
+            await checkout();
+        }
+
+        string[] names = ["133a796", "1ac759d", "v1", "v0"];
+        Assert.Equal(
+            names.Select(name => ("Checkout blocked", $"1 ignored file is in the way: {name} tracks a file of the same name. Move it away first.")),
+            app.Dialogs.Errors.Select(dialog => (dialog.Title, dialog.Summary)));
+        var all = app.Calls.Snapshot();
+        for (var i = 0; i < names.Length; i++)
+        {
+            var end = i + 1 < marks.Count ? marks[i + 1] : all.Count;
+            var calls = all.Skip(marks[i]).Take(end - marks[i]).Where(call => call.OperationId is not null).ToList();
+            var refused = Assert.Single(calls, call => call.CommandText.StartsWith("git switch --detach --no-overwrite-ignore ", StringComparison.Ordinal));
+            AssertOutputOfFailedCall(app, app.Dialogs.Errors[i], refused.CommandText);
+            Assert.Equal("secret.env\0", Assert.Single(calls, call => call.CommandText == CheckIgnore && call.OperationId == refused.OperationId).StandardOutput);
+            Assert.False(app.Dialogs.Errors[i].HasExtraAction);
+        }
+
+        Assert.Equal("Check out v0 failed", app.StatusText);
+        Assert.Equal(before, await repo.ExactStateAsync());
+        Assert.Empty(app.Repository.UndoHistory.Entries);
+    }
+
+    [Fact]
+    public async Task The_interactive_Start_that_checks_out_first_is_refused_by_its_own_check_before_the_checkout()
+    {
+        // 9.7, 9.9: "Check out plainwork and rebase it onto vendor interactively…": git would check
+        // out vendor's tip first, writing secret.env over LOCAL; refused before the checkout.
+        using var repo = await Scenarios.IgnoredAsync();
+        await repo.CreateBranchAsync("plainwork", StopTracking);
+        await repo.CheckoutAsync("plainwork");
+        var plainWork = await repo.CommitFileAsync("app.txt", "app\nplain\n", "Plain work");
+        await repo.CheckoutAsync("main");
+        repo.WriteFile("secret.env", Ignored.SecretLocal);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var before = await repo.ExactStateAsync();
+        var list = await app.Repository.Repository.ReadRebaseListAsync(VendorSecret, "refs/heads/plainwork", fromCommit: false, options: null, TestContext.Current.CancellationToken);
+        Assert.Equal((VendorSecret, plainWork), (list.Onto, list.BranchTip));
+        var request = new InteractiveRebaseRequest(new RebaseTarget(VendorSecret, "vendor"), "refs/heads/plainwork", FromHere: false, CheckoutFirst: true);
+        var plan = new RebasePlan(list.Onto, list.BranchTip, "refs/heads/plainwork", [new RebaseStep(plainWork, RebaseAction.Pick, null)]);
+        var mark = app.Calls.Snapshot().Count;
+
+        Assert.False(await app.Operations.RunInteractiveRebaseAsync(plan, request));
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Interactive rebase failed", "1 ignored file is in the way of the rebase: secret.env. Move it away first."), (dialog.Title, dialog.Summary));
+        Assert.False(dialog.HasOutput || dialog.HasCommand || dialog.HasExtraAction);
+        Assert.Equal("Interactive rebase of plainwork failed", app.StatusText);
+        var calls = OperationCalls(app, mark);
+        Assert.Equal(CheckIgnore, IgnoredReads(calls)[^1]);
+        AssertNoWrite(calls);
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+        Assert.Equal(before, await repo.ExactStateAsync());
+        Assert.Empty(await repo.BackupRefsAsync());
+    }
+
+    [Fact]
+    public async Task A_merge_commits_revert_is_checked_against_its_first_parent()
+    {
+        // 9.5: a merge reverted with -m 1 is read as "<sha> <first parent>" (its own line prints
+        // nothing). "Merge main into vendor" has vendor's tip as its first parent and main's tree:
+        // against that parent it deletes secret.env, so its revert writes secret.env over LOCAL.
+        using var repo = await Scenarios.IgnoredAsync();
+        var merge = (await repo.GitAsync("commit-tree", MainWork + "^{tree}", "-p", VendorSecret, "-p", MainWork, "-m", "Merge main into vendor")).StandardOutput.Trim();
+        await repo.CreateBranchAsync("merged", merge);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var before = await repo.ExactStateAsync();
+        var mark = app.Calls.Snapshot().Count;
+
+        await app.Operations.RevertAsync(merge);
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Revert failed", "1 ignored file is in the way of the revert: secret.env. Move it away first."), (dialog.Title, dialog.Summary));
+        Assert.Equal($"Revert {merge[..7]} failed", app.StatusText);
+        var calls = OperationCalls(app, mark);
+        var read = Assert.Single(calls, call => call.CommandText == "git diff-tree --stdin --no-commit-id --root -r -z --no-renames --name-only --diff-filter=AMT -R");
+        Assert.Contains("secret.env\0", read.StandardOutput, StringComparison.Ordinal);
+        AssertNoWrite(calls);
+        Assert.Equal(before, await repo.ExactStateAsync());
+    }
+
     // ---- 9.4 to 9.8: the app's own check before git -----------------------------------------------------
 
     public static TheoryData<string> RefusedOperations => ["merge", "fast-forward", "rebase", "cherry-pick", "revert", "apply", "pop"];
@@ -506,6 +672,96 @@ public class RepositoryOperationsKeepIgnoredTests
         {
             Assert.NotEqual(Ignored.SecretLocal, Read(repo, "secret.env"));
         }
+    }
+
+    public static TheoryData<string> MoreOperationsWithoutTheCheckWhenOff => ["fast-forward", "pick-list", "revert-list", "interactive", "check-out-and-merge", "check-out-and-rebase"];
+
+    [Theory]
+    [MemberData(nameof(MoreOperationsWithoutTheCheckWhenOff))]
+    public async Task Off_the_lists_the_fast_forward_the_interactive_Start_and_the_check_out_and_operations_run_as_phase_5_ran_them(string operation)
+    {
+        // D221 (GD10): no --no-overwrite-ignore, none of the reads; git overwrites the ignored
+        // secret.env (with vendor's, or the old tracked one) or deletes it after writing it.
+        using var repo = await Scenarios.IgnoredAsync();
+        var ahead = (await repo.GitAsync("commit-tree", VendorSecret + "^{tree}", "-p", MainWork, "-m", "Ahead")).StandardOutput.Trim();
+        await repo.CreateBranchAsync("ahead", ahead);
+        await repo.CreateBranchAsync("plain", StopTracking);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        TurnOff(app);
+        var mark = app.Calls.Snapshot().Count;
+
+        string write;
+        switch (operation)
+        {
+            case "fast-forward":
+                await app.Operations.MergeAsync("refs/heads/ahead", MergeMode.FastForwardOnly);
+                write = "git merge --ff-only refs/heads/ahead";
+                break;
+            case "pick-list":
+                await app.Operations.CherryPickSeveralAsync([BuildFile, VendorSecret]);
+                write = $"git cherry-pick {VendorSecret} {BuildFile}";
+                break;
+            case "revert-list":
+                await app.Operations.RevertSeveralAsync([TrackTheSecret, StopTracking]);
+                write = "git revert";
+                break;
+            case "interactive":
+                var list = await app.Repository.Repository.ReadRebaseListAsync(TrackTheSecret, "refs/heads/main", fromCommit: true, options: null, TestContext.Current.CancellationToken);
+                var request = new InteractiveRebaseRequest(new RebaseTarget(TrackTheSecret, "1ac759d"), "refs/heads/main", FromHere: true, CheckoutFirst: false);
+                var plan = new RebasePlan(list.Onto, list.BranchTip, "refs/heads/main", [new RebaseStep(MainWork, RebaseAction.Pick, null), new RebaseStep(StopTracking, RebaseAction.Pick, null)]);
+                Assert.True(await app.Operations.RunInteractiveRebaseAsync(plan, request));
+                write = "git rebase";
+                break;
+            case "check-out-and-merge":
+                await app.Operations.CheckoutAndMergeAsync("refs/heads/plain", "refs/heads/vendor");
+                // git's message for a merge into plain (fmt-merge-msg's words, not asserted here).
+                write = "git merge --no-edit --no-log -m \"Merge branch 'vendor'";
+                Assert.Contains(OperationCalls(app, mark), call => call.CommandText.StartsWith(write, StringComparison.Ordinal) && call.CommandText.EndsWith("\" refs/heads/vendor", StringComparison.Ordinal));
+                Assert.Contains("git switch --no-guess plain", OperationCalls(app, mark).Select(call => call.CommandText));
+                break;
+            default:
+                await app.Operations.CheckoutAndRebaseAsync("refs/heads/plain", new RebaseTarget(VendorSecret, "vendor"));
+                write = $"git rebase {VendorSecret}";
+                Assert.Contains("git switch --no-guess plain", OperationCalls(app, mark).Select(call => call.CommandText));
+                break;
+        }
+
+        var calls = OperationCalls(app, mark);
+        Assert.Contains(calls, call => call.CommandText.StartsWith(write, StringComparison.Ordinal));
+        Assert.Empty(IgnoredReads(calls));
+        Assert.DoesNotContain(calls, call => call.CommandText.Contains("--no-overwrite-ignore", StringComparison.Ordinal));
+        Assert.Empty(app.Dialogs.Errors);
+        var secret = Path.Combine(repo.Path, "secret.env");
+        Assert.True(!File.Exists(secret) || File.ReadAllText(secret) != Ignored.SecretLocal, "git kept the ignored secret.env.");
+    }
+
+    [Fact]
+    public async Task Off_undo_keeps_D169s_guard_and_refuses_an_ignored_file_in_its_way()
+    {
+        // D221 (G24's "undo's guards kept"): with the setting off, vendor -> main runs as git runs
+        // it; an ignored secret.env made afterwards is in the way of undo's switch back to vendor,
+        // whose own --no-overwrite-ignore and check refuse it.
+        using var repo = await Scenarios.IgnoredAsync();
+        await repo.CheckoutAsync("vendor");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        TurnOff(app);
+
+        await app.Operations.CheckoutAsync("refs/heads/main");
+        Assert.Equal("Checked out main", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git switch --no-guess main");
+        Assert.Equal("checkout of main", Assert.Single(app.Repository.UndoHistory.Entries).Text);
+        Assert.False(File.Exists(Path.Combine(repo.Path, "secret.env")), "The checkout of main removed vendor's secret.env.");
+        repo.WriteFile("secret.env", Ignored.SecretLocal);
+        await app.Repository.RefreshAsync();
+
+        await app.Operations.UndoAsync();
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Undo failed", "Can't undo checkout of main: 1 ignored file is in the way: secret.env. Move it away first."), (dialog.Title, dialog.Summary));
+        Assert.Equal("Undo checkout of main failed", app.StatusText);
+        Assert.Equal("main", await repo.CurrentBranchAsync());
+        Assert.Equal(Ignored.SecretLocal, Read(repo, "secret.env"));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText == "git switch --no-guess --no-overwrite-ignore vendor" && call.Succeeded);
     }
 
     [Fact]
