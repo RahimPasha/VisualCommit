@@ -86,8 +86,11 @@ public class RepositoryOperationsProtectTests
         AssertOutputOfFailedCall(app, dialog, "git switch --no-guess --no-overwrite-ignore other");
 
         // Keep ignored files (docs/phase-6-design.md 9.11, 16.1): git's untracked block is asked
-        // about after the refusal; nothing in it is ignored (exit 1), so phase 5's text stands.
-        Assert.Equal(1, app.Calls.Snapshot().Last(call => call.CommandText == "git check-ignore --stdin -z").ExitCode);
+        // about after the refusal, in the checkout's operation (the watcher's own check-ignore runs
+        // outside every operation); nothing in it is ignored (exit 1), so phase 5's text stands.
+        var refused = app.Calls.Snapshot().Last(call => call.CommandText == "git switch --no-guess --no-overwrite-ignore other");
+        Assert.NotNull(refused.OperationId);
+        Assert.Equal(1, app.Calls.Snapshot().Single(call => call.CommandText == "git check-ignore --stdin -z" && call.OperationId == refused.OperationId).ExitCode);
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Equal(content, Read(repo, path));
         app.AssertScriptFollowed();
