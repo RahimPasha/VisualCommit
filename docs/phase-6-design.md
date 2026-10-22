@@ -5256,28 +5256,30 @@ no workspace (it is where workspaces start), inside `WelcomeButtons`: the clone 
 that panel, hides it too and keeps its pictures. After `Open`, `Clone`, `Init` and the error line, in
 the stack's 8-px spacing:
 
-1. A heading row, 19 high, 16 above: left `Workspaces` (`WorkspacesHeading`, `TextBlock.heading`: 11,
-   SemiBold, secondary); right `NewWorkspaceButton` (`VcFlatButton`, padding 6,2: a 12×12 `IconPlus`,
-   4, `New workspace…`, secondary, primary on hover; about 135 × 19), tooltip `Create a workspace:
+1. A heading row, 20 high, 16 above: left `Workspaces` (`WorkspacesHeading`, `TextBlock.heading`: 11,
+   SemiBold, secondary, centred in the row); right `NewWorkspaceButton` (`VcFlatButton`, padding 6,2: a 12×12 `IconPlus`,
+   4, `New workspace…`, secondary, primary on hover; 133 × 20), tooltip `Create a workspace:
    repositories you check and update together`, or the read-only reason while disabled.
 2. `WorkspacesNotice` (secondary, wraps; `VcWarningBrush` while `SaveFailed`) while the store has a
    notice (1.3: a file set aside, one that could not be read, a newer version's, a failed save).
 3. `NoWorkspacesText` `No workspaces` (secondary), or `WorkspaceList` (an `ItemsControl` of
    `TabServices.WorkspaceItems`, by name: predictable, and workspaces need no order of their own):
-   per workspace a `WorkspaceItem` (`VcFlatButton`, padding 8,5, as a recent item), 25 high, full
+   per workspace a `WorkspaceItem` (`VcFlatButton`, padding 8,5, as a recent item), 26 high, full
    width: the name (primary, cut with "…") and, 12 apart at the right, `{N} repositories` / `1
    repository` / `No repositories` (secondary); automation name the workspace's name; tooltip its
    repositories' folder names in order, joined by `, `, at most 8, then `, …`, or `No repositories
    yet`.
 
-The section is 66 high with no workspace (8 + 16 + 19 + 8 + 15), 51 + 25 × N with N. In the page's
+The section is 68 high with no workspace (8 + 16 + 20 + 8 + 16), 52 + 26 × N with N (WP-W's build:
+a line of 12.5-px text is laid out 16 high, as every line of the page already was; the first
+estimate was 66 and 51 + 25 × N). In the page's
 room (the graph area: 440 × 586 at 1100×700, 1260 × 966 at 1920×1080) the stack (`MaxWidth` 440,
-margin 24) is 392 and 440 wide; 10 recent repositories and 3 workspaces take about 563, so a fourth
+margin 24) is 392 and 440 wide; 10 recent repositories and 3 workspaces take about 567, so a fourth
 workspace scrolls the page at 1100×700, as a long recent list does. The stack is centred vertically,
 so the page moves up by half the section's height: every earlier picture of an empty tab changes
-(16.1), each the same way (the section between `Init` and `Recent repositories`, the stack 33 px
+(16.1), each the same way (the section between `Init` and `Recent repositories`, the stack 34 px
 higher, less where the page scrolls). The alternatives change the same pictures or hide the feature:
-`New workspace…` beside `Recent repositories` adds a button in the same region and, about 135 × 19 in
+`New workspace…` beside `Recent repositories` adds a button in the same region and, about 133 × 20 in
 a heading row about 15 high, still moves the list; a section shown only once a workspace exists
 leaves the palette as the only place to create the first one (1.5).
 
@@ -5833,7 +5835,7 @@ table names for a picture is a defect. A change in an earlier picture's tab-stri
 | Change | Where it shows (phase, check, picture) | Tests and expectations that pin today's state | Section |
 |---|---|---|---|
 | The toolbar's `Settings` button left of Search | every window picture of phases 0 to 5, scripted and RW, in one box of about 56×52 in the toolbar region left of Search; Search and Theme keep their places | phase 0 `ShellExpectations.cs`: `ToolbarLabels` (`:31`) gains `Settings` before `Search`, the enabled list (`:96`) becomes `Settings`, `Theme`, the messages `:97-98`; `Phase0RealWindowPass.cs:134-141` stays (Theme within 20 of the right edge, `:141`); phase 5's `PartA.ToolbarButtons` and `EmptyTabToolbar` stay; `ShellTests.cs:99` stays (Settings is enabled) | 7.2 |
-| The welcome page's Workspaces section (the page moves up by half the section's 66 px) | phase 0: `01-shell-dark-1100x700`, `02-shell-dark-1920x1080`, `03-shell-light-1100x700`, `04-shell-light-1920x1080`, `05a` to `05c`, `06a` to `06d`, `07a` to `07c`; RW `A-first-start-dark`, `B-after-theme-click-light`, `C-restarted-light`. Phase 1: `10a-welcome-page`, `10b-second-tab`, `10c-second-tab-closed`, `11a-not-a-repository`, `11c-recent-in-new-tab`, `16a-before-closing`, `16b-restarted`, `17a-wide-panels`, `17b-narrow-window`, `17c-wide-again`; RW `11a` (by eye), `16b`. Phase 5: `a1a-empty-tab`, scripted and RW. Every other picture of an empty tab the comparison names. Not changed: phase 1's `13a`, `13b`, `14b` (the clone form hides the section); `14a` moves only through 13.2's line breaking, if at all | `ShellExpectations.WelcomeTexts` (`Phase0/ShellExpectations.cs:38-42`) gains `Workspaces`, `New workspace…`, `No workspaces` after `Init`; phase 1 check 10 (`Phase1Checks.Shell.cs:61`) `WelcomeTexts[..6]` → `[..9]`; check 11 (`:123`) `recent[6..8]` → `recent[9..11]`; `Phase5Expectations.A.WelcomeTexts` (`:210-214`) and A1 step 1 in the report; `Phase5RealWindowPass.A.AssertEmptyTab` (`:559`) leaves out `New workspace…`; perhaps `Phase0RealWindowPass.AssertShell` (`:119-125`) | 13.1 |
+| The welcome page's Workspaces section (the page moves up by half the section's 68 px) | phase 0: `01-shell-dark-1100x700`, `02-shell-dark-1920x1080`, `03-shell-light-1100x700`, `04-shell-light-1920x1080`, `05a` to `05c`, `06a` to `06d`, `07a` to `07c`; RW `A-first-start-dark`, `B-after-theme-click-light`, `C-restarted-light`. Phase 1: `10a-welcome-page`, `10b-second-tab`, `10c-second-tab-closed`, `11a-not-a-repository`, `11c-recent-in-new-tab`, `16a-before-closing`, `16b-restarted`, `17a-wide-panels`, `17b-narrow-window`, `17c-wide-again`; RW `11a` (by eye), `16b`. Phase 5: `a1a-empty-tab`, scripted and RW. Every other picture of an empty tab the comparison names. Not changed: phase 1's `13a`, `13b`, `14b` (the clone form hides the section); `14a` moves only through 13.2's line breaking, if at all | `ShellExpectations.WelcomeTexts` (`Phase0/ShellExpectations.cs:38-42`) gains `Workspaces`, `New workspace…`, `No workspaces` after `Init`; phase 1 check 10 (`Phase1Checks.Shell.cs:61`) `WelcomeTexts[..6]` → `[..9]`; check 11 (`:123`) `recent[6..8]` → `recent[9..11]`; `Phase5Expectations.A.WelcomeTexts` (`:210-214`) and A1 step 1 in the report; `Phase5RealWindowPass.A.AssertEmptyTab` (`:559`) leaves out `New workspace…`; perhaps `Phase0RealWindowPass.AssertShell` (`:119-125`) | 13.1 |
 | A long folder breaks only after a separator (`PathTextBlock`) | phase 1 `11a-not-a-repository` (its lines become `C:\Users\…\Temp\VisualCommit.Tests\` and `plain-<12 hex> is not a git repository.`), perhaps `14a-clone-failed`; the phase 1 report's note on check 11's wrap is resolved | phase 1 check 11 gains an assertion on the drawn lines (`DrawnLines.Of`, shared with `PathTextBlockTests`) | 13.2 |
 | Tooltips with keys; help texts on the shell's buttons | phase 3 part A's `AssertToolbar` (`Phase3Checks.A.Helpers.cs:293-323`): an enabled button's tooltip and help text are 6.8's (check 23's six methods and every caller); its disabled-tooltip pictures `23b`, `23h`, `23j`, `23k`, `23l`, `23m` stay. Phase 5: part A `OpenToolbar`, `CommittedToolbar` (Fetch to Stash), `UndoCommit` + ` (Ctrl+Z)`, `ShowActivityLog` / `HideActivityLog` + ` (Ctrl+J)` (`Phase5Expectations.A.cs:158-185`), check A1 scripted and RW (`Phase5RealWindowPass.cs:292-318`), A4's RW help texts of Undo and Redo; part U `UndoRedoButtons.CanUndo` / `CanRedo` (`ShellDriver.Phase5.Undo.cs:109-119`) + ` (Ctrl+Z)` / ` (Ctrl+Y)` in every U check; the longer tooltip in `u16a` (scripted and RW) and `a1f` (scripted; A1's tooltips are scripted only), while `u23a` and `u23c` keep their reasons (a disabled button keeps its reason, 6.8) and `u23b` shows no tooltip; `Phase5RealWindowPass.P.cs:125` | `ToolbarTests.cs:69` (`StashToolTip`) and `:231` (`PullToolTip`) become the enabled texts (the reasons at `:75`, `:135`, `:147`, `:157`, `:212`, `:222` stay); `ActivityLogViewModelTests.cs:377`, `:383`, `:387`; `StatusBarTests.cs:47`; `ToolbarViewModel.SearchGestureText` reads `KeyTexts` (`Search commits (Ctrl+F)` unchanged) | 6.8 |
 | Keys in the tooltips of the commit button, the resolver's buttons, the interactive list's Cancel and the search bar's match buttons (D199) | no picture: phase 4's `c12c-stage-panel` and every earlier picture of the commit button's tooltip shows a disabled button's reason, which is unchanged; no earlier picture shows the resolver's, the list's or the search bar's match tooltips (phase 5's `a1d-search-tooltip` is the toolbar's Search, unchanged) | the enabled commit button's tooltip, null today, becomes `{its text} (Ctrl+Enter)`: `WorkingChangesInProgressTests.cs:63` (`Commit merge (Ctrl+Enter)`), `:108` (`Continue cherry-pick (Ctrl+Enter)`) and `:86` where the button is enabled; phase 3 `Phase3Checks.C.Banners.cs:245` (`AssertTip(commit, null)` on an enabled `Continue cherry-pick`); phase 4 `C14To17.AssertCommitButton` (`Phase4Checks.C.EditingSupport.cs:259-265`), whose enabled callers gain the text: `Phase4Checks.C.Editing.cs:214`, `Phase4Checks.C.Kinds.cs:147`, `Phase4Checks.C.MergeTool.cs:122`. The search bar's `Next match (Enter)` becomes `Next match (Enter, F3)` and `Previous match (Shift+Enter)` `Previous match (Shift+Enter, Shift+F3)`: `SearchBarTests.cs:57-58`, `Phase5Expectations.A.cs:582`, `:584` (read at `Phase5Checks.A.Keys.cs:251` and as help text by `Phase5RealWindowPass.A.cs:657`) and `Phase5Expectations.F.cs:185-186` (`Phase5Checks.F.Helpers.cs:161`). The real-window passes read only the commit button's name (`Phase5RealWindowPass.U.cs:90`) and stay as they are | 6.8 |
@@ -6591,7 +6593,7 @@ regions 16.1 names for a picture nothing may change.
    region. For the welcome page, 16.1's list is the pictures of an empty tab, while phase 1's `13a`,
    `13b` and `14b` keep their layout (the clone form hides the Workspaces section) and `14a` moves
    only through 13.2's line breaking, if at all. Every listed empty-tab picture changes the same way:
-   the Workspaces section added between `Init` and `Recent repositories`, the stack 33 px higher (less
+   the Workspaces section added between `Init` and `Recent repositories`, the stack 34 px higher (less
    where the page scrolls); the inspectors check that one layout against 13.1 once for each window size
    and theme, and any other difference in the welcome region is a defect. Nothing moves in the tab strip of an earlier picture: by 13.3's rule nothing
    moves while the tabs fit at their natural widths (8 of 120 at 1000 wide, at least 4 of any title),
