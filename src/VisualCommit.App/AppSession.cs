@@ -162,6 +162,12 @@ public sealed class AppSession : IDisposable
         var ownedSystemTheme = systemTheme is null ? new PlatformSystemTheme(application.PlatformSettings) : null;
         var themes = new ThemeService(application, systemTheme ?? ownedSystemTheme!, log);
         themes.Apply(settings.Current.Theme);
+        log.Info(settings.Current.Theme switch
+        {
+            AppTheme.Light => "Theme: Light.",
+            AppTheme.System => $"Theme: System (the system's theme is {(themes.IsDark ? "dark" : "light")}).",
+            _ => "Theme: Dark.",
+        });
 
         var session = new JsonSessionStore(paths.SessionFile, log);
 
@@ -256,6 +262,9 @@ public sealed class AppSession : IDisposable
         // Stops every tab's work and logs each graph's frame times (D50).
         Shell.CloseAll();
         (Services.Prompts as IDisposable)?.Dispose();
+
+        // The theme service stops following the system before the system's theme it owns goes (11.5).
+        (Themes as IDisposable)?.Dispose();
         _ownedSystemTheme?.Dispose();
 
         Log.Info("VisualCommit closed.");

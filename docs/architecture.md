@@ -2393,11 +2393,23 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
 ### Theme
 
 - `IThemeService` / `ThemeService` (App, `Services/`) switches the theme by setting the
-  application's theme variant. The view model's `ToggleThemeCommand` applies the theme and saves
-  it; `AppSession.Start` applies the saved theme before the window is created.
+  application's theme variant. Since phase 6 (D194, phase 6 design 11) the setting is Dark, Light
+  or System: `Setting` is the choice, `IsDark` what shows, `Changed` is raised only when either
+  changes; while System is chosen the service follows the system's theme through `ISystemTheme`
+  (`Services/SystemTheme.cs`; `PlatformSystemTheme` reads Avalonia's platform settings and posts
+  their change to the UI thread; the harness passes `FakeSystemTheme`), and while Dark or Light is
+  chosen it ignores the system. `AppSession.Start` applies the saved theme and logs `Theme: …`
+  before the window is created, so the first frame has it, and its `Dispose` disposes the service
+  before the platform's theme. The view model's `Theme` and `IsDarkTheme` come from the service
+  (`MainWindowViewModel.Theme.cs`); the toolbar's switch, and `UseTheme`, choose Dark or Light and
+  save it (from System, the opposite of what shows).
 - All colours are tokens in `Theme/Tokens.axaml`, one set per theme. Views use them only as
   `{DynamicResource ...}`, never as fixed colours, so switching recolours everything at once. The
-  graph control looks them up for its theme variant and redraws when the variant changes.
+  graph control looks them up for its theme variant and redraws when the variant changes, as do
+  the drag layer's pill and outline (`DragLayer`, mid-drag) and the custom-drawn diff, blame and
+  conflict views. Phase 6 brought the light status colours to 4.5:1 against every background they
+  are drawn on (`VisualCommit.Testing/Contrast.cs`, `ThemeTokensTests`), gave the danger button's
+  text a token of its own and drew tooltips in the app's colours through Fluent's `ToolTip…` keys.
 - The Fluent theme is the base for standard controls, with its accent set to ours. Its text-box
   colours are replaced by `TextControl...` keys in `Tokens.axaml`.
 - The typeface is Inter, shipped with Avalonia, on every platform (D28). Code in the diff view
@@ -2426,9 +2438,10 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
 | `VcTextDisabledBrush` | `#5F6775` | `#A1A8B3` | Disabled buttons; since phase 5 a hidden branch's name in the left panel, and in solo mode the branches left out |
 | `VcAccentBrush` | `#7C8CFF` | `#4353D8` | The line on the active tab, focus borders, the branch HEAD is on in the left panel, renamed files, parent links; since phase 5 the solo button, the search's progress bar and the graph's reload bar |
 | `VcAccentTextBrush` | `#10121A` | `#FFFFFF` | Text on an accent background: the primary button's label, a check box's tick, the dot of a dialog's radio button |
-| `VcSuccessBrush` | `#3FB97F` | `#1E8E5A` | Added files |
-| `VcWarningBrush` | `#E0A23B` | `#B7791F` | Modified files |
-| `VcDangerBrush` | `#E5606B` | `#C93A46` | Errors, deleted files |
+| `VcSuccessBrush` | `#3FB97F` | `#187248` | Added files (the light value darkened in phase 6, 11.10) |
+| `VcWarningBrush` | `#E0A23B` | `#895A17` | Modified files (the light value darkened in phase 6) |
+| `VcDangerBrush` | `#E5606B` | `#B7323D` | Errors, deleted files; the danger button (the light value darkened in phase 6) |
+| `VcDangerTextBrush` | `#FFFFFF` | `#FFFFFF` | Text on the danger button (`VcDangerButton`, phase 6, 11.11) |
 | `VcSelectionBrush` | `#2A3150` | `#DDE1FA` | The selected graph row and left-panel item |
 | `VcRowHoverBrush` | `#1C1F27` | `#F3F4F7` | The graph row under the pointer |
 | `VcLabelTextBrush` | `#10121A` | `#FFFFFF` | Text on a filled branch label |
@@ -2448,7 +2461,8 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
 | `VcConflictMarkerBrush` | `#3A2E16` | `#FCEFD2` | The marker lines of an unresolved block in the result (their text in `VcWarningBrush`) |
 | `VcConflictUsedBrush` | `#1A2E24` | `#E6F6EC` | In the ours and theirs panes, a block's side once it is used in the result (`VcDiffAddedBrush`'s colours) |
 | `VcSearchMatchBrush` | `#F2C94C` | `#B98900` | The 3-px mark at the left edge of a search's matching row (phase 5) |
-| `VcLane0Brush` ... `VcLane7Brush` | `#7C8CFF` `#3FB97F` `#E0A23B` `#E5606B` `#4FB3D9` `#B07CE8` `#D97EB6` `#8FB84A` | `#4353D8` `#1E8E5A` `#B7791F` `#C93A46` `#1F86B0` `#8048C7` `#B54A8C` `#5F8A1E` | Lane colours 0 to 7 (D48) |
+| `VcLane0Brush` ... `VcLane7Brush` | `#7C8CFF` `#3FB97F` `#E0A23B` `#E5606B` `#4FB3D9` `#B07CE8` `#D97EB6` `#8FB84A` | `#4353D8` `#1C8655` `#A16A1B` `#C93A46` `#1D7EA6` `#8048C7` `#B54A8C` `#59811C` | Lane colours 0 to 7 (D48; light lanes 1, 2, 4 and 7 darkened in phase 6, D198) |
+| `ToolTipBackground`, `ToolTipForeground`, `ToolTipBorderBrush` (Fluent's keys) | `#1A1D24` `#E4E7EC` `#323845` | `#F5F6F8` `#1B1F27` `#D2D6DE` | Tooltips, in the panel's colours (phase 6, 11.12) |
 
 ### Conventions
 

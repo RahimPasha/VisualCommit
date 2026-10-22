@@ -63,7 +63,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         // A workspace opens through the window (docs/phase-6-design.md 1.3, 2.2).
         _tabServices.WorkspaceHost = this;
-        Theme = themes.Setting;
+
+        // The theme shown follows the service: the user's choice, or the system's mode (11.6).
+        FollowThemeService();
 
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
         // On a dashboard the log line names the workspace (docs/phase-6-design.md 2.7).

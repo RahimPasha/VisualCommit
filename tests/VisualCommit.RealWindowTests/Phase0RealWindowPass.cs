@@ -121,7 +121,7 @@ public class Phase0RealWindowPass
         [
             "No repository", "Local branches", "Remotes", "Pull requests", "Tags", "Stashes",
             "No repository open", "Open, clone or init a repository to see its history.",
-            "Recent repositories", "No recent repositories",
+            "Workspaces", "No workspaces", "Recent repositories", "No recent repositories",
             "Commit details", "Select a commit to see its details.", "Ready", "Activity log",
         ];
         Assert.All(expectedTexts, text => Assert.Contains(text, texts));

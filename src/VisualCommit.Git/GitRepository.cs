@@ -117,9 +117,13 @@ public sealed partial class GitRepository : IGitRepository
 
         if (!result.Succeeded)
         {
-            // The runner makes git's messages English, so this text can be relied on. Any other
-            // failure, such as "detected dubious ownership", is git's to explain.
-            if (result.StandardError.Contains("not a git repository", StringComparison.Ordinal))
+            // The runner makes git's messages English, so this text can be relied on. A .git file
+            // whose folder is gone (an orphaned worktree) is "not a git repository: <path>" up to
+            // Git 2.55 and "gitfile does not point to a valid repository: <path>" from 2.56. Any
+            // other failure, such as "detected dubious ownership" or "invalid gitfile format", is
+            // git's to explain.
+            if (result.StandardError.Contains("not a git repository", StringComparison.Ordinal)
+                || result.StandardError.Contains("gitfile does not point to a valid repository", StringComparison.Ordinal))
             {
                 throw new NotARepositoryException(path);
             }

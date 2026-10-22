@@ -556,7 +556,9 @@ public partial class Phase5RealWindowPass
     private static void AssertEmptyTab(RealApp app)
     {
         var texts = app.Texts();
-        Assert.All(PartA.WelcomeTexts.Where(text => text is not ("Open" or "Clone" or "Init")), text => Assert.Contains(text, texts));
+        // Texts inside buttons are not text elements to UI Automation: the buttons are named instead.
+        Assert.All(PartA.WelcomeTexts.Where(text => text is not ("Open" or "Clone" or "Init" or "New workspace…")), text => Assert.Contains(text, texts));
+        Assert.Equal("New workspace", app.Find("NewWorkspaceButton").Name);
         Assert.Equal(["Open", "Clone", "Init"], new[] { "OpenRepoButton", "CloneRepoButton", "InitRepoButton" }.Select(id => app.Find(id).Name));
         AssertToolbar(app, PartA.EmptyTabToolbar);
         AssertToggle(app, enabled: false, open: false);

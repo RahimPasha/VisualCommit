@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.Services;
 using VisualCommit.Core;
+using VisualCommit.Core.Settings;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -10,7 +11,8 @@ namespace VisualCommit.App.Tests;
 
 /// <summary>
 /// What <see cref="AppSession.Start"/> wires that no view model sees (docs/phase-6-design.md 18,
-/// the lead's): the workspaces kept in <c>workspaces.json</c> beside the session (D189, 1.3).
+/// the lead's): the workspaces kept in <c>workspaces.json</c> beside the session (D189, 1.3), and the
+/// theme's start-up line and its service's end (11.5).
 /// </summary>
 public class AppSessionTests
 {
@@ -33,5 +35,31 @@ public class AppSessionTests
 
         var saved = new JsonWorkspaceStore(new AppPaths(data.Path).WorkspacesFile).Current;
         Assert.Equal(["Web", "Tools"], saved.Workspaces.Select(workspace => workspace.Name));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(AppTheme.System, false, "Theme: System (the system's theme is light).")]
+    [InlineData(AppTheme.System, true, "Theme: System (the system's theme is dark).")]
+    [InlineData(AppTheme.Light, true, "Theme: Light.")]
+    [InlineData(AppTheme.Dark, false, "Theme: Dark.")]
+    public void A_start_logs_the_theme_it_applied_and_a_closed_session_no_longer_follows_the_system(AppTheme theme, bool systemDark, string line)
+    {
+        using var data = new TempDirectory("data");
+        new JsonSettingsStore(new AppPaths(data.Path).SettingsFile).Update(settings => settings with { Theme = theme });
+
+        var app = ShellDriver.Start(data.Path, systemDark: systemDark);
+        var themes = app.Session.Themes;
+        var changes = 0;
+        themes.Changed += (_, _) => changes++;
+        app.Dispose();
+        app.SystemTheme.Set(!systemDark);
+
+        // The line comes once, at the start; after the session the system's change reaches nothing.
+        var lines = AppLogFile.ReadLines(data.Path).ToList();
+        var themeLine = Assert.Single(lines, entry => entry.Contains("] Theme: ", StringComparison.Ordinal));
+        Assert.EndsWith("] " + line, themeLine, StringComparison.Ordinal);
+        Assert.True(lines.IndexOf(themeLine) < lines.FindIndex(entry => entry.EndsWith("] VisualCommit closed.", StringComparison.Ordinal)));
+        Assert.Equal(0, changes);
+        Assert.Equal(theme == AppTheme.Dark || theme == AppTheme.System && systemDark, themes.IsDark);
     }
 }

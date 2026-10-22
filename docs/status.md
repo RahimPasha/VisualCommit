@@ -116,7 +116,8 @@ Git layer and Core:
 - [ ] 7. Workspaces (repository groups): the model, where they are kept, add, remove, rename,
   and opening one. Tests. (WP4's part merged in `1d99be3`: `WorkspacePaths`, `WorkspaceEdits`,
   `RepositoryScanner`, `JsonWorkspaceStore`, `TabState.WorkspaceId`; the session keeps them in
-  `workspaces.json`, `fef0569`. WP-W's commands and screens: wave 2.)
+  `workspaces.json`, `fef0569`. WP-W's commands, dialogs and the session's dashboards, built,
+  reviewed and fixed, merged in `0da0eec`.)
 - [ ] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
   changes, an operation in progress), read cheaply for ten repositories without opening them as
   tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode: wave 2.)
@@ -156,7 +157,11 @@ App:
   change takes effect.
 - [ ] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
   pictured in the dark theme only), and the welcome page's long folder that wraps at awkward
-  places (phase 1's follow-up).
+  places (phase 1's follow-up). (WP-T, built, reviewed and fixed, merged in `e7144ec`: the theme
+  follows the system while System is chosen, the light status colours and lanes 1, 2, 4 and 7 at
+  4.5:1, `VcDangerTextBrush`, tooltips in the app's colours, the drag layer's redraw, `TextInk`;
+  the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock`
+  merged in `0da0eec`. Part L's sweep: WP-V.)
 - [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
   "Changes to expected results" in the phase 6 report.
 
@@ -282,10 +287,13 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 `1d99be3`), their worktrees removed. The default run after it found two test problems, fixed in
 `80689ef` (a slow program's wait with a limit of its own; an undo test that took WP3's config read
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
-report is committed. Next: wave 2 of design section 18, each package built, reviewed and fixed in
-its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-W, WP-D and WP-T
-first (at most three built worktrees at once); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
-section 18's order allows. Once WP-D, WP-W and WP-T are merged, the lead writes
+report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
+fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T merged
+(`e7144ec`), WP-W merged (`0da0eec`); WP-D being built. Next: WP-D's review, its fixes (with the
+WP-W review's finding for it: a row's Locate… re-reads the row whatever the command did, so a
+folder located onto itself after a drive comes back is read at once, 1.10) and merge, then the
+default run; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
@@ -306,6 +314,20 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- WP-W edited two real-window files that section 18 gives WP-R, as 16.1's welcome-page row asks:
+  `Phase0RealWindowPass.cs:124` (`AssertShell`'s list gains `Workspaces` and `No workspaces`) and
+  `Phase5RealWindowPass.A.cs:559-561` (`AssertEmptyTab` leaves out `New workspace…` and checks the
+  button's name `New workspace`); the lead accepted them, so WP-R starts from them. WP-W also added
+  `tests/VisualCommit.App.Tests/WorkspaceTestSupport.cs` (name it in the handoff).
+- `b6d1d01` (the diff view's growth test counting the UI thread's work): CI run
+  [39820477316](https://github.com/RahimPasha/VisualCommit/actions/runs/39820477316), all five jobs
+  green; Windows' Test step 25 min 46 s, macOS's 20 min 40 s, Ubuntu's 3 min 59 s, the containers'
+  3 min 14 s and 4 min 25 s.
+- The report's commit `c46eea2`: CI run
+  [39808018633](https://github.com/RahimPasha/VisualCommit/actions/runs/39808018633), all five jobs
+  green; Windows' Test step 18 min 32 s, macOS's 16 min 2 s, Ubuntu's 3 min 47 s, the containers' 4 min
+  21 s and 2 min 57 s. The 306 real-window reference pictures of 17.7 were copied on 2026-10-22 to
+  `D:/Projects/Personal/gate6-reference/` (33 MB) and match `phase-5-pictures.sha256`.
 - After WP3's and WP4's merges: CI run 39207577529 on `80689ef` failed 16 of about 4,040 on
   Windows and macOS (Git 2.56), all of them the cases of WP3's
   `FetchRefspecsParityTests.Gits_fetch_fills_exactly_the_tracking_refs_DestinationsOf_gives`, whose
@@ -332,7 +354,10 @@ every commit.
   and phase 5's `Check_U23_terminal_commit` on Windows (a working-changes row a terminal commit's
   half-done state left for one refresh; the check now waits for the clean tree it asserts,
   `161e298`); its second attempt passed all five jobs with 3,236 tests. The timing test failed 2
-  of 3 macOS attempts: if it fails again, count its work instead of timing it.
+  of 3 macOS attempts: if it fails again, count its work instead of timing it. It failed again on
+  2026-10-22 under wave 2's side-by-side builds (689 ms against 27 ms, a ratio of 25.5); it now compares
+  the UI thread's own work (`ThreadWork`: its cycles on Windows, its processor time elsewhere), 5.7 to
+  7.3 times as much for ten times the lines under the same load.
 - Phase 5's `u23f-ignored-in-the-way` differs from `phase-5-pictures.sha256` (`f238e0d…` at the gate,
   `0ce3ae4…` now) on `master` (`acdac12`) too, with the gate's code: the machine changed since
   2026-10-16, not phase 6. The gate's references, made on `master`, take it as it is now.

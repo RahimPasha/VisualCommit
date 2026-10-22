@@ -1,0 +1,112 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:c="using:VisualCommit.App.Controls"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  x:Class="VisualCommit.App.Views.Dialogs.AddRepositoriesDialogView"
+                  x:DataType="vm:AddRepositoriesDialogViewModel"
+                  AutomationProperties.AutomationId="AddRepositoriesDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The "Add repositories" checklist (docs/phase-6-design.md 1.9) on the wide card (460, 418
+       inside): the folder's line (a PathTextBlock: a long folder breaks only after a separator,
+       13.2), the search's progress while it runs (no progress bar: an indeterminate one would
+       differ between two captures), then a row per repository found, 28 high, eight in view, the
+       limit's line, the refusals' line, Cancel and the confirm button. Space toggles the focused
+       box; Tab goes round the boxes and the buttons. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="AddRepositoriesCard" Classes="dialogCard wide">
+      <StackPanel>
+        <TextBlock Name="AddRepositoriesTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="AddRepositoriesTitle" />
+        <c:PathTextBlock Name="ScanFolderText"
+                         Classes="dialogText"
+                         Text="{Binding FolderText}"
+                         AutomationProperties.AutomationId="ScanFolderText" />
+        <TextBlock Name="ScanProgressText"
+                   Classes="secondary"
+                   Margin="0,6,0,0"
+                   Text="{Binding ProgressText}"
+                   IsVisible="{Binding ShowsProgress}"
+                   AutomationProperties.AutomationId="ScanProgressText" />
+        <Border Margin="0,12,0,0"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="5"
+                Background="{DynamicResource VcWindowBackgroundBrush}"
+                IsVisible="{Binding ShowsList}">
+          <ScrollViewer MaxHeight="232" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl Name="FoundList"
+                          ItemsSource="{Binding Rows}"
+                          Padding="0,4"
+                          AutomationProperties.AutomationId="FoundList"
+                          AutomationProperties.Name="{Binding Title}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:FoundRepositoryRow">
+                  <local:DialogRow Height="28"
+                                   Padding="10,0"
+                                   AutomationProperties.AutomationId="FoundRepository"
+                                   AutomationProperties.Name="{Binding Name}">
+                    <DockPanel VerticalAlignment="Center">
+                      <CheckBox Name="FoundRepositoryCheck"
+                                DockPanel.Dock="Left"
+                                Theme="{StaticResource VcCheckBox}"
+                                IsChecked="{Binding IsChecked}"
+                                IsEnabled="{Binding IsEnabled}"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="FoundRepositoryCheck"
+                                AutomationProperties.Name="{Binding Name}" />
+                      <TextBlock Name="FoundRepositoryName"
+                                 DockPanel.Dock="Left"
+                                 Text="{Binding Name}"
+                                 Foreground="{DynamicResource VcTextPrimaryBrush}"
+                                 MaxWidth="200"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center"
+                                 ToolTip.Tip="{Binding Name}" />
+                      <TextBlock Name="FoundRepositoryDetail"
+                                 Classes="secondary"
+                                 Text="{Binding Detail}"
+                                 Margin="10,0,0,0"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center"
+                                 ToolTip.Tip="{Binding Detail}" />
+                    </DockPanel>
+                  </local:DialogRow>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+        <TextBlock Name="ScanStoppedText"
+                   Classes="dialogText"
+                   Text="{Binding StoppedText}"
+                   IsVisible="{Binding ShowsStopped}"
+                   AutomationProperties.AutomationId="ScanStoppedText" />
+        <TextBlock Name="ScanFailedText"
+                   Classes="dialogText secondary"
+                   Text="{Binding FailedText}"
+                   IsVisible="{Binding ShowsFailed}"
+                   ToolTip.Tip="{Binding FailedToolTip}"
+                   AutomationProperties.AutomationId="ScanFailedText"
+                   AutomationProperties.HelpText="{Binding FailedToolTip}" />
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="Cancel"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="Cancel" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</local:DialogView>
