@@ -745,6 +745,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             row.Dispose();
         }
 
+        var moved = false;
         for (var i = 0; i < next.Length; i++)
         {
             var row = next[i]!;
@@ -756,6 +757,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             else if (at != i)
             {
                 Rows.Move(at, i);
+                moved = true;
             }
         }
 
@@ -766,10 +768,12 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             SelectedRow = null;
             FocusRequested?.Invoke(this, HasRows ? DashboardFocus.List : DashboardFocus.EmptyAddRepository);
         }
-        else if (selected is not null && Rows.Contains(selected) && !ReferenceEquals(SelectedRow, selected))
+        else if (moved && selected is not null && Rows.Contains(selected))
         {
-            // A move keeps the moved row selected (WD8).
+            // A move keeps the moved row selected and the focus in the list, on it (WD8): the list
+            // made its row anew, and the focus went with the old one.
             SelectedRow = selected;
+            FocusRequested?.Invoke(this, DashboardFocus.List);
         }
 
         OnPropertyChanged(nameof(CountText));
