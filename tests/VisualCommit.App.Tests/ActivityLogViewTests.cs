@@ -111,7 +111,7 @@ public class ActivityLogViewTests
         AddOperation(app, key, "op-a1", "Clean up backups", OperationOutcome.Succeeded, "Removed 3 backups", notes: ["Removed backup reset-20251120T090001000Z (older than 30 days)"]);
         AddCall(app, repo.Path, "op-a1", "git update-ref --stdin", input: "delete refs/visualcommit/backup/reset-20251120T090001000Z da31c977\n");
         AddOperation(app, key, "op-a2", "Check out feature/kinds", OperationOutcome.Failed, "Check out feature/kinds failed", summary: "1 conflict prevents checkout. Commit, stash, or discard your changes first.");
-        AddCall(app, repo.Path, "op-a2", "git switch --no-guess feature/kinds", exitCode: 1, error: "error: Your local changes would be overwritten by checkout:\n\tother.txt\nAborting\n");
+        AddCall(app, repo.Path, "op-a2", "git switch --no-guess --no-overwrite-ignore feature/kinds", exitCode: 1, error: "error: Your local changes would be overwritten by checkout:\n\tother.txt\nAborting\n");
 
         var rows = app.ActivityLog().Rows;
         Assert.Equal(2, rows.Count);
@@ -167,7 +167,7 @@ public class ActivityLogViewTests
         rows = app.ActivityLog().Rows;
         var summary = rows.Single(row => row.Kind == ActivityLogRowKind.FailureSummary);
         Assert.Equal(("1 conflict prevents checkout. Commit, stash, or discard your changes first.", Brush(app, "VcDangerBrush")), (summary.Text, summary.TextColor));
-        var switchCall = rows.Single(row => row.Command == "git switch --no-guess feature/kinds");
+        var switchCall = rows.Single(row => row.Command == "git switch --no-guess --no-overwrite-ignore feature/kinds");
         Assert.Equal(("exit 1", Brush(app, "VcDangerBrush")), (switchCall.ExitText, switchCall.ExitColor));
         Assert.True(rows[^1].IsInView);
         app.PressKey(Key.Left);

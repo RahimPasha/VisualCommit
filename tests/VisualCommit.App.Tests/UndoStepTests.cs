@@ -105,7 +105,7 @@ public class UndoStepTests
 
         // "Merge feature/ff into main" is git's merge as configured, which fast-forwards here (phase 3's
         // 2.8): not --ff-only, which the drop's "Fast-forward main to feature/ff" runs (U19 step 1).
-        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" refs/heads/feature/ff");
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" --no-overwrite-ignore refs/heads/feature/ff");
         Assert.Equal("merge of feature/ff into main", Assert.Single(app.Repository.UndoHistory.Entries).Text);
         repo.WriteFile("docs/ff.txt", "mine\n");
         await app.Repository.RefreshAsync();

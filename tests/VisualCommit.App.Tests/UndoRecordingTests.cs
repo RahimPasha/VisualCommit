@@ -448,7 +448,7 @@ public class UndoRecordingTests
         using var app = await OperationsHarness.OpenAsync(repo);
 
         var checkout = await OperationCallsAsync(app, () => app.Operations.CheckoutAsync("refs/heads/feature/alpha"));
-        Assert.Contains("git switch --no-guess feature/alpha", checkout);
+        Assert.Contains("git switch --no-guess --no-overwrite-ignore feature/alpha", checkout);
         await app.Operations.CheckoutAsync("refs/heads/main");
         var merge = await OperationCallsAsync(app, () => app.Operations.MergeAsync("refs/heads/feature/alpha", MergeMode.Default));
         Assert.Equal("Merged feature/alpha into main", app.StatusText);
