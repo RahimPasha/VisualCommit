@@ -25,16 +25,22 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
         _backupClock = backupClock ?? BackupClock.System;
     }
 
+    /// <remarks>
+    /// The whole open runs on the thread pool (docs/phase-6-design.md 2.10, D59), so that
+    /// <c>GitRepository.OpenAsync</c>'s own folder check never holds the UI thread, also for a
+    /// folder on a share that does not answer: a dashboard row, a restored tab, the welcome page.
+    /// </remarks>
     public async Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
     {
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return WithClock(await GitRepository.OpenAsync(runner, path, cancellationToken, _log).ConfigureAwait(false));
+        return WithClock(await Task.Run(() => GitRepository.OpenAsync(runner, path, cancellationToken, _log), cancellationToken).ConfigureAwait(false));
     }
 
+    /// <remarks>On the thread pool too, as <see cref="OpenAsync"/>.</remarks>
     public async Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default)
     {
         var runner = await _git.GetRunnerAsync(cancellationToken).ConfigureAwait(false);
-        return WithClock(await GitRepository.InitAsync(runner, path, cancellationToken, _log).ConfigureAwait(false));
+        return WithClock(await Task.Run(() => GitRepository.InitAsync(runner, path, cancellationToken, _log), cancellationToken).ConfigureAwait(false));
     }
 
     /// <remarks>

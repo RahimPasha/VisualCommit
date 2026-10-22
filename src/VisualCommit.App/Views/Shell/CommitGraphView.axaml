@@ -8,6 +8,7 @@
              xmlns:rebase="using:VisualCommit.App.Views.Rebase"
              xmlns:conflicts="using:VisualCommit.App.Views.Conflicts"
              xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
+             xmlns:workspaces="using:VisualCommit.App.Views.Workspaces"
              x:Class="VisualCommit.App.Views.Shell.CommitGraphView"
              x:DataType="vm:RepoTabViewModel"
              AutomationProperties.AutomationId="CommitGraph">
@@ -22,6 +23,24 @@
     <Panel Grid.Row="0" IsVisible="{Binding ShowsWelcome}">
       <shell:WelcomeView DataContext="{Binding Welcome}" />
     </Panel>
+    <!-- A workspace's dashboard in place of the graph (docs/phase-6-design.md 2.4): the activity
+         log stays under it. -->
+    <Panel Name="DashboardSlot" Grid.Row="0" IsVisible="{Binding ShowsDashboard}">
+      <workspaces:DashboardView Name="DashboardContent" DataContext="{Binding Dashboard}" />
+    </Panel>
+    <!-- A tab that waits for a closed queue on its worktree before it opens (3.3): centred in the
+         graph area, as the welcome page's stack. -->
+    <TextBlock Name="TabWaitingText"
+               Grid.Row="0"
+               Classes="secondary"
+               Text="{Binding WaitingText}"
+               IsVisible="{Binding IsWaitingForClosedQueue}"
+               TextWrapping="Wrap"
+               TextAlignment="Center"
+               MaxWidth="392"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               AutomationProperties.AutomationId="TabWaitingText" />
     <DockPanel Name="GraphAreaContent" Grid.Row="0" IsVisible="{Binding HasRepository}">
       <!-- The conflict banner above the graph or the diff while an operation is in progress or
            files have conflicts (docs/phase-3-design.md section 5). -->

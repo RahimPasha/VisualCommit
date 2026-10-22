@@ -164,6 +164,7 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
     private readonly Lock _drainGate = new();
     private MainWindowViewModel? _shell;
     private RepoTabViewModel? _followedTab;
+    private Workspaces.DashboardViewModel? _followedDashboard;
     private int _drainPosted;
     private bool _touchedUnknown;
     private bool _disposed;
@@ -231,8 +232,14 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
     /// <summary>The status bar's toggle is enabled: the active tab has a repository (1.2).</summary>
     public bool CanToggle => Current is not null;
 
-    /// <summary>The toggle's tooltip and help text (1.2), from <see cref="ShellToolTips"/> (docs/phase-6-design.md 6.8).</summary>
-    public string ToggleToolTip => IsShown ? ShellToolTips.HideActivityLog : ShellToolTips.ShowActivityLog;
+    /// <summary>
+    /// The toggle's tooltip and help text (1.2), from <see cref="ShellToolTips"/> (docs/phase-6-design.md
+    /// 6.8); on a dashboard with nothing to follow, the dashboard's reason (2.9: no rows, none
+    /// selected, the row not read yet, its folder state).
+    /// </summary>
+    public string ToggleToolTip =>
+        Current is null && _followedTab?.Dashboard is { ActivityLogReason: { } reason } ? reason
+        : IsShown ? ShellToolTips.HideActivityLog : ShellToolTips.ShowActivityLog;
 
     /// <summary>The name the header shows after "Activity log", in the secondary colour (2.2).</summary>
     public string RepositoryName => Current?.Source.Name ?? string.Empty;
@@ -502,20 +509,75 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
             _followedTab.PropertyChanged -= OnTabChanged;
         }
 
+        FollowDashboard(null);
         _followedTab = tab;
         if (tab is not null)
         {
             tab.PropertyChanged += OnTabChanged;
         }
 
-        Show(tab?.Repository is { } repository ? ActivityLogSource.Of(repository) : null);
+        FollowDashboard(tab?.Dashboard);
+        ShowFollowed();
     }
 
     private void OnTabChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(RepoTabViewModel.Repository) && ReferenceEquals(sender, _followedTab))
+        if (!ReferenceEquals(sender, _followedTab))
         {
-            Show(_followedTab?.Repository is { } repository ? ActivityLogSource.Of(repository) : null);
+            return;
+        }
+
+        if (e.PropertyName == nameof(RepoTabViewModel.Dashboard))
+        {
+            FollowDashboard(_followedTab?.Dashboard);
+            ShowFollowed();
+        }
+        else if (e.PropertyName == nameof(RepoTabViewModel.Repository))
+        {
+            ShowFollowed();
+        }
+    }
+
+    /// <summary>
+    /// What the followed tab gives the panel (2.1; docs/phase-6-design.md 2.9): its repository's
+    /// worktree; on a dashboard the selected row's (its own view model or a tab's), or nothing.
+    /// </summary>
+    private void ShowFollowed()
+    {
+        var repository = _followedTab?.Dashboard is { } dashboard ? dashboard.SelectedRepository : _followedTab?.Repository;
+        Show(repository is { } shown ? ActivityLogSource.Of(shown) : null);
+        OnPropertyChanged(nameof(ToggleToolTip));
+    }
+
+    /// <summary>On a dashboard tab the panel follows the selected row's worktree (2.9).</summary>
+    private void FollowDashboard(Workspaces.DashboardViewModel? dashboard)
+    {
+        if (_followedDashboard is not null)
+        {
+            _followedDashboard.PropertyChanged -= OnDashboardChanged;
+        }
+
+        _followedDashboard = dashboard;
+        if (dashboard is not null)
+        {
+            dashboard.PropertyChanged += OnDashboardChanged;
+        }
+    }
+
+    private void OnDashboardChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _followedDashboard))
+        {
+            return;
+        }
+
+        if (e.PropertyName is nameof(Workspaces.DashboardViewModel.SelectedRepository) or nameof(Workspaces.DashboardViewModel.SelectedRow))
+        {
+            ShowFollowed();
+        }
+        else if (e.PropertyName == nameof(Workspaces.DashboardViewModel.ActivityLogReason))
+        {
+            OnPropertyChanged(nameof(ToggleToolTip));
         }
     }
 
