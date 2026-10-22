@@ -214,6 +214,207 @@ internal static class WorkspaceTestSupport
         }
     }
 
+    /// <summary>A repository that only knows its folder: opened at <paramref name="workingDirectory"/>, at its top unless told otherwise.</summary>
+    public sealed class FolderRepository(string workingDirectory, bool atTop = true) : FakeRepositoryBase
+    {
+        public override string WorkingDirectory => workingDirectory;
+
+        public override string GitDirectory => Path.Combine(workingDirectory, ".git");
+
+        public override string CommonDirectory => GitDirectory;
+
+        public override string Name => Path.GetFileName(workingDirectory);
+
+        public override Task<bool> OpenedAtTopAsync(CancellationToken cancellationToken = default) => Task.FromResult(atTop);
+
+        public override Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public override Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public override Task<CommitDetails> ReadCommitDetailsAsync(string sha, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public override IRepositoryWatcher CreateWatcher() => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Opens every folder as a <see cref="FolderRepository"/> but those in <see cref="Refused"/>,
+    /// each open held until <see cref="Release"/> when <see cref="Hold"/> is set; counts the opens
+    /// running at once.
+    /// </summary>
+    public sealed class GatedRepositories : IRepositoryProvider
+    {
+        private readonly Lock _gate = new();
+        private readonly List<TaskCompletionSource> _held = [];
+        private int _running;
+
+        /// <summary>Opens wait until released.</summary>
+        public bool Hold { get; init; }
+
+        /// <summary>Folders git "refuses": their opens throw <see cref="NotARepositoryException"/>.</summary>
+        public HashSet<string> Refused { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>The most opens that ran at once.</summary>
+        public int MostAtOnce { get; private set; }
+
+        /// <summary>The opens asked for.</summary>
+        public int Opens { get; private set; }
+
+        /// <summary>The opens waiting for <see cref="Release"/>.</summary>
+        public int Waiting
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _held.Count;
+                }
+            }
+        }
+
+        public async Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
+        {
+            TaskCompletionSource? held = null;
+            lock (_gate)
+            {
+                Opens++;
+                _running++;
+                MostAtOnce = Math.Max(MostAtOnce, _running);
+                if (Hold)
+                {
+                    held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _held.Add(held);
+                }
+            }
+
+            try
+            {
+                if (held is not null)
+                {
+                    await held.Task.WaitAsync(cancellationToken);
+                }
+
+                return Refused.Contains(path) ? throw new NotARepositoryException(path) : new FolderRepository(path);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    _running--;
+                }
+            }
+        }
+
+        /// <summary>Lets the waiting opens go on, the first <paramref name="count"/> of them, or all.</summary>
+        public void Release(int count = int.MaxValue)
+        {
+            List<TaskCompletionSource> released;
+            lock (_gate)
+            {
+                released = [.. _held.Take(count)];
+                _held.RemoveRange(0, released.Count);
+            }
+
+            released.ForEach(open => open.SetResult());
+        }
+
+        public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) =>
+            throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// A file system of folders the test lists: each folder's folders and the ones with a
+    /// <c>.git</c> entry. The check of one folder can wait until <see cref="Release"/>
+    /// (<see cref="HoldAt"/>), and the check of another can take at least the scan's progress
+    /// interval since the scan began (<see cref="SlowAt"/>), so that the scan reports its progress
+    /// then: time the fake makes pass for the scan's own throttle, not a wait of the test.
+    /// </summary>
+    public sealed class FakeScanFileSystem : IScanFileSystem
+    {
+        private readonly Dictionary<string, List<string>> _folders = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _repositories = new(StringComparer.Ordinal);
+        private readonly ManualResetEventSlim _release = new();
+        private readonly Stopwatch _sinceFirstListing = new();
+        private string? _holdAt;
+        private string? _slowAt;
+        private int _waiting;
+
+        /// <summary>The checks waiting for <see cref="Release"/> now.</summary>
+        public int Waiting => Volatile.Read(ref _waiting);
+
+        /// <summary>Adds <paramref name="relative"/> (its parents too) under <paramref name="root"/>, with a <c>.git</c> entry when <paramref name="repository"/>.</summary>
+        public string Add(string root, string relative, bool repository = false)
+        {
+            var path = root;
+            foreach (var name in relative.Split('/'))
+            {
+                if (!_folders.TryGetValue(path, out var children))
+                {
+                    _folders[path] = children = [];
+                }
+
+                if (!children.Contains(name))
+                {
+                    children.Add(name);
+                }
+
+                path = Path.Combine(path, name);
+            }
+
+            _folders.TryAdd(path, []);
+            if (repository)
+            {
+                _repositories.Add(path);
+            }
+
+            return path;
+        }
+
+        /// <summary>Makes the check of <paramref name="path"/>'s <c>.git</c> entry wait until <see cref="Release"/>.</summary>
+        public void HoldAt(string path) => _holdAt = path;
+
+        /// <summary>Makes the check of <paramref name="path"/> end no sooner than the scan's progress interval after its first listing.</summary>
+        public void SlowAt(string path) => _slowAt = path;
+
+        public void Release() => _release.Set();
+
+        public IReadOnlyList<ScanFolder> ListFolders(string path)
+        {
+            if (!_sinceFirstListing.IsRunning)
+            {
+                _sinceFirstListing.Start();
+            }
+
+            return _folders.TryGetValue(path, out var children) ? [.. children.Select(name => new ScanFolder(name, false, false))] : [];
+        }
+
+        public bool HasGitEntry(string path)
+        {
+            if (path == _slowAt)
+            {
+                while (_sinceFirstListing.Elapsed < RepositoryScanner.ProgressInterval)
+                {
+                    Thread.Sleep(5);
+                }
+            }
+
+            if (path == _holdAt)
+            {
+                Interlocked.Increment(ref _waiting);
+                _release.Wait(TimeSpan.FromMinutes(2));
+                Interlocked.Decrement(ref _waiting);
+            }
+
+            return _repositories.Contains(path);
+        }
+    }
+
     private sealed class MemorySession(SessionState? state = null) : ISessionStore
     {
         public SessionState Current { get; private set; } = state ?? new SessionState();
