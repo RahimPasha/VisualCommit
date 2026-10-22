@@ -427,6 +427,37 @@ public partial class CommitGraphControlTests
         Assert.False(bar.IsIndeterminate);
     }
 
+    /// <summary>
+    /// The theme switched while a search marks its matches (docs/phase-6-design.md 11.15, the live
+    /// switches r06 found untested): the mark (<c>VcSearchMatchBrush</c>), a match's node and a
+    /// dimmed one take the other theme's colours at once, light lane 1 phase 6's <c>#1C8655</c>
+    /// (11.13), and back.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Switching_the_theme_recolours_a_searchs_marks_and_dimmed_rows()
+    {
+        var data = await GraphScenarioAsync();
+        var control = new CommitGraphControl { Data = data, Dates = Utc };
+        using var host = Host.Show(control, AreaWidth, RowsHeight, ThemeVariant.Dark);
+        control.Search = new GraphSearchMarks([data.CommitAt(2).Sha], isActive: true);
+        host.Capture();
+
+        foreach (var (theme, match) in new[] { (Expected.Dark, DarkSearchMatch), (Expected.Light, LightSearchMatch), (Expected.Dark, DarkSearchMatch) })
+        {
+            host.Window.RequestedThemeVariant = theme.Variant;
+            var shot = host.Capture();
+            var name = theme == Expected.Dark ? "dark" : "light";
+            var bounds = control.RowBounds(2);
+            AssertColor(match, shot.PixelAt(1, (int)bounds.Center.Y), $"row 2's mark, {name}");
+            AssertColor(theme.Background, shot.PixelAt(3, (int)bounds.Center.Y), $"right of row 2's mark, {name}");
+            AssertColor(theme.Background, shot.PixelAt(1, (int)control.RowBounds(3).Center.Y), $"row 3, unmarked, {name}");
+            AssertColor(theme.Lanes[0], NodePixel(shot, control, 2, 3), $"row 2's node, {name}");
+            AssertColor(Faded(theme.Lanes[1], theme.Background), NodePixel(shot, control, 1, 3), $"row 1's dimmed node, {name}");
+        }
+
+        Assert.Equal(Color.Parse("#1C8655"), Expected.Light.Lanes[1]);
+    }
+
     /// <summary>Sets one of the view model's properties whose setter is private, for a view test that needs the state without the work that sets it.</summary>
     private static void SetViewModelProperty(RepositoryViewModel viewModel, string name, object value) =>
         typeof(RepositoryViewModel).GetProperty(name)!.SetValue(viewModel, value);

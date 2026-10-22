@@ -16,7 +16,7 @@ namespace VisualCommit.App.Views.Shell;
 /// the window's Esc chain, and draws what the service says: the pill with the branch's name in
 /// its label style at 85% opacity, 8 right of and 8 below the pointer, and a 2-pixel outline in
 /// <c>VcDragTargetBrush</c> around a valid target under the pointer (1 pixel away from a label,
-/// inside a row).
+/// inside a row). It redraws when its theme variant changes, also mid-drag (docs/phase-6-design.md 11.14).
 /// </summary>
 public class DragLayer : Canvas
 {
@@ -48,6 +48,11 @@ public class DragLayer : Canvas
         IsHitTestVisible = false;
         _visual = new DragVisual(this);
         Children.Add(_visual);
+
+        // The brushes are read at each draw, which a drag's moves ask for: a theme that changes
+        // mid-drag (the system's mode while System is chosen) redraws the pill and the outline
+        // in the new colours at once (docs/phase-6-design.md 11.14).
+        ActualThemeVariantChanged += (_, _) => _visual.InvalidateVisual();
     }
 
     /// <summary>The window's drag service, once the layer is in a window.</summary>

@@ -108,9 +108,9 @@ public static partial class Phase3Expectations
         TextSecondary: Color.Parse("#5C6572"),
         TextDisabled: Color.Parse("#A1A8B3"),
         Accent: Color.Parse("#4353D8"),
-        Success: Color.Parse("#1E8E5A"),
-        Warning: Color.Parse("#B7791F"),
-        Danger: Color.Parse("#C93A46"),
+        Success: Color.Parse("#187248"),
+        Warning: Color.Parse("#895A17"),
+        Danger: Color.Parse("#B7323D"),
         Selection: Color.Parse("#DDE1FA"),
         RowHover: Color.Parse("#F3F4F7"),
         LabelText: Color.Parse("#FFFFFF"),
@@ -118,7 +118,7 @@ public static partial class Phase3Expectations
         BannerBackground: Color.Parse("#FFF4DE"),
         DragTarget: Color.Parse("#4353D8"),
         MenuShadow: "0 6 16 0 #33000000",
-        Lanes: [.. new[] { "#4353D8", "#1E8E5A", "#B7791F", "#C93A46", "#1F86B0", "#8048C7", "#B54A8C", "#5F8A1E" }.Select(Color.Parse)]);
+        Lanes: [.. new[] { "#4353D8", "#1C8655", "#A16A1B", "#C93A46", "#1D7EA6", "#8048C7", "#B54A8C", "#59811C" }.Select(Color.Parse)]);
 
     /// <summary>
     /// The height of a menu that fits the window (4a): 8 + 24 + 26 × items + 9 × separators
