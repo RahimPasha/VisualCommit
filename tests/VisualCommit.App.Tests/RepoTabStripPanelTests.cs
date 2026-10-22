@@ -14,6 +14,7 @@ using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Workspaces;
+using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
 
@@ -329,6 +330,53 @@ public class RepoTabStripPanelTests
     {
         var button = Named<Button>(tab, "TabButton");
         return button.Bounds.Width - button.Padding.Left - button.Padding.Right;
+    }
+
+    [AvaloniaFact]
+    public async Task In_the_window_a_dashboard_and_ten_tabs_shrink_and_fourteen_scroll()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithWorkspace(data.Path, Web(), "web", [.. Enumerable.Repeat(new TabState(null), 10)]);
+        await app.WaitUntilReadyAsync();
+
+        var strip = app.TabStrip();
+        Assert.Equal(11, strip.Tabs.Count);
+        Assert.Equal([.. Enumerable.Repeat(97.0, 6), .. Enumerable.Repeat(96.0, 5)], strip.Tabs.Select(tab => Math.Round(tab.Bounds.Width)));
+        Assert.Equal(0, strip.Tabs[0].Bounds.X, 0.5);
+        Assert.Equal(582, strip.Tabs[6].Bounds.X, 0.5);
+        Assert.Equal((1064.0, 1098.0), (Math.Round(strip.AddButtonBounds.X), Math.Round(strip.AddButtonBounds.Right)));
+        Assert.Equal("Open a new tab", strip.AddButtonName);
+        Assert.Equal(0, strip.Offset);
+        Assert.False(strip.IsScrolling);
+
+        var web = strip.Tabs[0];
+        Assert.Equal(("Web", "Web", "DashboardTab", "Web", "Workspace"), (web.Title, web.DrawnTitle, web.AutomationId, web.ToolTip, web.ItemStatus));
+        Assert.True(web.IsDashboard && web.IsActive && web.ShowsCloseButton);
+        Assert.Equal(new Size(12, 12), web.IconBounds!.Value.Size);
+        Assert.Equal(14, web.IconBounds.Value.X - web.Bounds.X, 0.5);
+        Assert.All(strip.Tabs.Skip(1), tab =>
+        {
+            // A title gets its tab's width less 51 (45 or 46 here): "New tab" (49.7) is cut with "…".
+            Assert.Equal(("RepoTab", (string?)null, "New tab"), (tab.AutomationId, tab.ItemStatus, tab.ToolTip));
+            Assert.EndsWith("…", tab.DrawnTitle, StringComparison.Ordinal);
+            Assert.StartsWith(tab.DrawnTitle.TrimEnd('…'), "New tab", StringComparison.Ordinal);
+        });
+        TestPictures.Save(app, "strip-eleven-in-the-window");
+
+        for (var i = 0; i < 3; i++)
+        {
+            app.Click(app.Find<Button>("AddRepoButton"));
+        }
+
+        strip = app.TabStrip();
+        Assert.True(strip.IsScrolling);
+        Assert.Equal(58, strip.Offset, 0.5);
+        Assert.Equal(13, strip.ActiveIndex);
+        Assert.Equal((982.0, 1062.0), (Math.Round(strip.Tabs[13].Bounds.X), Math.Round(strip.Tabs[13].Bounds.Right)));
+        Assert.Equal(-58, strip.Tabs[0].Bounds.X, 0.5);
+        Assert.Equal("…", strip.Tabs[0].DrawnTitle);
+        Assert.Equal((1064.0, 1098.0), (Math.Round(strip.AddButtonBounds.X), Math.Round(strip.AddButtonBounds.Right)));
+        TestPictures.Save(app, "strip-fourteen-in-the-window");
     }
 
     private static List<double> Natural(int count) => [.. Enumerable.Repeat(120.0, count)];
