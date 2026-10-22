@@ -137,6 +137,7 @@ public class DashboardTabTests
         Assert.Same(window.ActiveTab.Repository, tools.Rows[0].Repository);
         Assert.False(window.ActiveTab.Repository!.IsSummary);
         Assert.True(tools.Rows[0].FollowsTab);
+        await DashboardTestSupport.WaitUntilAsync(() => api.HistoryLoads == 1, "api's history, loaded by the promoted view model");
 
         tools.OpenRow(tools.Rows[1]);
         await DashboardTestSupport.WaitUntilAsync(() => window.ActiveTab.Title == "web-app" && window.ActiveTab.Repository is not null, "web-app's tab");
@@ -155,6 +156,7 @@ public class DashboardTabTests
         window.CloseTabCommand.Execute(window.Tabs[1]);
         Assert.True(tools.IsClosed);
         Assert.Equal(["Web", "docs", "api", "web-app"], window.Tabs.Select(tab => tab.Title));
+        await DashboardTestSupport.SettleAsync();
         Assert.Equal(1, api.HistoryLoads);
     }
 

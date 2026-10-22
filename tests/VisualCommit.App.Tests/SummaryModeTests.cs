@@ -1,3 +1,4 @@
+using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Operations;
@@ -13,7 +14,8 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// A dashboard row's view model in summary mode (docs/phase-6-design.md 3.1, 3.2, D209): it reads
 /// the refs and the status as a tab reads them and nothing else, and its queue, operations,
-/// toolbar, status and undo history work as a tab's.
+/// toolbar, status and undo history work as a tab's. The view models live on the UI thread, as in
+/// the app.
 /// </summary>
 public class SummaryModeTests
 {
@@ -22,7 +24,7 @@ public class SummaryModeTests
 
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
-    [Fact]
+    [AvaloniaFact]
     public async Task A_summary_read_is_one_refs_read_and_one_status_read_and_nothing_else()
     {
         using var provider = new FakeProvider();
@@ -64,7 +66,7 @@ public class SummaryModeTests
         Assert.Equal((1, 1), (repository.RefsReads, repository.StatusReads));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task A_refresh_reads_the_refs_and_the_status_and_loads_no_history()
     {
         using var provider = new FakeProvider();
@@ -82,7 +84,7 @@ public class SummaryModeTests
         Assert.Equal(2, log.Messages.Count(message => message.StartsWith("docs: summary read in ", StringComparison.Ordinal)));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task First_read_completes_after_a_failed_read_with_the_error()
     {
         using var provider = new FakeProvider();
@@ -102,7 +104,7 @@ public class SummaryModeTests
         Assert.NotNull(summary.Refs);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task First_read_waits_for_both_the_refs_and_the_status()
     {
         using var provider = new FakeProvider();
@@ -119,7 +121,7 @@ public class SummaryModeTests
         Assert.True(summary.HasFirstRead);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task The_toolbars_states_and_reasons_are_a_full_view_models()
     {
         using var provider = new FakeProvider();
@@ -150,7 +152,7 @@ public class SummaryModeTests
             toolbar.CanBranch, toolbar.CanStash, toolbar.StashToolTip, toolbar.CanPop, toolbar.PopToolTip);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Disposing_cancels_a_running_fetch_and_lets_a_local_operation_finish()
     {
         using var provider = new FakeProvider();
@@ -184,7 +186,7 @@ public class SummaryModeTests
         Assert.Equal(OperationOutcome.Succeeded, (await commit.WaitAsync(TimeSpan.FromSeconds(30), Cancelled)).Outcome);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task A_fetch_runs_with_the_toolbars_title_and_result()
     {
         using var copy = await Scenarios.WorkspaceAsync();
@@ -207,7 +209,7 @@ public class SummaryModeTests
         }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task A_pull_is_recorded_in_the_worktrees_history_and_a_tab_opened_later_offers_its_undo()
     {
         using var copy = await Scenarios.WorkspaceAsync();
@@ -226,7 +228,7 @@ public class SummaryModeTests
         Assert.StartsWith("Undo pull into main", tab.Toolbar.UndoToolTip, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task A_pull_stopped_with_conflicts_leaves_its_pending_entry_and_the_banner()
     {
         using var repo = await TempRepo.CreateAsync("pulling");
