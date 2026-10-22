@@ -3749,6 +3749,31 @@ Region by region, within the comparison's rule above (design 16.1):
   first focus (`FocusesTextBoxOnOpening` is true for all of them, 7.1);
 - phase 0's checks 3 to 6 and real-window steps A to C as behaviour (11.6).
 
+### The earlier tests and expectations each work package changed, as merged
+
+The lines each package changed, as its builder reported them at its merge, for the gate to check
+against the subsections above (16.1's rows); a line beyond them is named with its reason.
+
+- **WP-T (the theme), merged in `e7144ec`.** Light lanes 1, 2, 4 and 7 become `#1C8655`, `#A16A1B`,
+  `#1D7EA6`, `#59811C`, and Success, Warning and Danger `#187248`, `#895A17`, `#B7323D` in
+  `Phase1Expectations.cs:52`, `:64-66`, `Phase3Expectations.Common.cs:111-113`, `:121`,
+  `Phase4Expectations.Common.cs:128-130`, `:145` and `Phase5Expectations.Common.cs:132-134`, `:150`;
+  `Phase3Checks.D.Light.cs:106` (`#B7791F` → `#895A17`); `Phase4Expectations.D.cs:188` (Warning) and
+  `:190` (Danger), `:189` (the banner) unchanged; `ConflictResultEditorTests.cs:51` (`LightWarning`);
+  `CommitGraphControlTests.cs:998` (the light lanes); `MainWindowViewModelTests`' `FakeThemes` (11.4's
+  members). Re-run on its branch: phase 1's checks 1 and 2, 4 and 11, phase 2's 02 and 04, phase 3's
+  27 and 23, phase 4's D18, phase 5's B5 light and F10 light. Its comparison of their light pictures with
+  the main checkout's placed every change on a light A, M or D letter, a warning, danger, banner, marker
+  or status text, light lanes 1, 2 and 4, or inside a tooltip; `11a` and `d18b` vary by nature.
+- **WP-W (workspaces on screen), merged in `0da0eec`.** `Phase0/ShellExpectations.WelcomeTexts` gains
+  `Workspaces`, `New workspace…`, `No workspaces` after `Init`; `Phase1Checks.Shell.cs` check 10
+  `[..6]` → `[..9]`, check 11 `recent[6..8]` → `recent[9..11]` and an assertion of `WelcomeError`'s drawn
+  lines (`DrawnLines.Of`); `Phase5Expectations.A.WelcomeTexts` gains the three texts; in the real-window
+  pass (WP-R's files, accepted by the lead as 16.1's row asks) `Phase5RealWindowPass.A.AssertEmptyTab`
+  leaves out `New workspace…` and checks the button's name `New workspace`, and
+  `Phase0RealWindowPass.AssertShell`'s list gains `Workspaces` and `No workspaces`. The welcome pictures
+  move up 34 px ("Changed in this report after its first commit").
+
 ### Changed in this report after its first commit
 
 A method split when the checks first run (the run-time rule of "Conventions of every part"), a mark for
