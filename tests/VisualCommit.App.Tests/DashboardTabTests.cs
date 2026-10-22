@@ -4,6 +4,7 @@ using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Workspaces;
+using VisualCommit.Testing;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
@@ -104,6 +105,27 @@ public class DashboardTabTests
         Assert.Same(failed, Assert.Single(window.Tabs));
         Assert.True(failed.IsDashboard);
         Assert.Null(failed.SavedPath);
+    }
+
+    [AvaloniaFact]
+    public async Task The_windows_start_reads_a_restored_active_dashboard_and_waits_for_its_pass()
+    {
+        using var provider = new FakeProvider();
+        var (api, gone) = (provider.Add("api"), provider.PathOf("old-site"));
+        var session = new DashboardTestSupport.MemorySession(new SessionState { Tabs = [new TabState(null, "web")], ActiveTab = 0 });
+        var log = new RecordingLog();
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory, gone), new ManualTimeProvider(), log, session);
+        var window = DashboardTestSupport.Window(services, session);
+        var dashboard = window.ActiveTab.Dashboard!;
+        Assert.All(dashboard.Rows, row => Assert.Equal(DashboardTexts.ReadingText, row.State.Text));
+
+        await window.InitializeAsync(TestContext.Current.CancellationToken);
+
+        // 2.10, "At start": the pass has ended when the start does.
+        Assert.False(dashboard.IsPassRunning);
+        Assert.Single(log.Messages, message => message.StartsWith("Web: read 2 repositories in ", StringComparison.Ordinal));
+        Assert.True(dashboard.Rows[0].HasRepository);
+        Assert.Equal("Folder not found", dashboard.Rows[1].State.Text);
     }
 
     [AvaloniaFact]
