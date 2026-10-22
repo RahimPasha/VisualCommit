@@ -91,6 +91,7 @@
           </Button>
           <TextBlock Name="WorkspacesHeading"
                      Classes="heading"
+                     VerticalAlignment="Center"
                      Text="{x:Static ws:WorkspaceTexts.Heading}"
                      AutomationProperties.AutomationId="WorkspacesHeading" />
         </DockPanel>

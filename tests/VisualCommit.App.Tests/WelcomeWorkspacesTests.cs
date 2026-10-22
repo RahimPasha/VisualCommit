@@ -72,6 +72,11 @@ public class WelcomeWorkspacesTests
         Assert.Equal(stackBounds.Left, section.HeadingBounds.Left, 0.5);
         Assert.Equal(stackBounds.Right, section.NewWorkspaceBounds.Right, 0.5);
         Assert.Equal(Line + 4, section.NewWorkspaceBounds.Height, 0.5);
+
+        // The heading's 11-px text and the button's 12.5-px text are centred on one line of the row.
+        var buttonText = app.BoundsOf(Named<Button>(view, "NewWorkspaceButton").GetVisualDescendants().OfType<TextBlock>().Single());
+        Assert.Equal(row.Center.Y, section.HeadingBounds.Center.Y, 1);
+        Assert.Equal(buttonText.Center.Y, section.HeadingBounds.Center.Y, 1);
         Assert.InRange(section.NewWorkspaceBounds.Width, 120, 150);
         Assert.Equal(buttons.Bottom + 24 + 8 + 16 + (Line + 4) + 8 + Line, recent.Top, 1);
         DiffColors.AssertBrush(Color.Parse("#9BA3B0"), section.HeadingForeground, "the heading");
