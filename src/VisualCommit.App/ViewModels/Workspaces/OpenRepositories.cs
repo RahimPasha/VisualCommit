@@ -116,7 +116,8 @@ public sealed class OpenRepositories
 
     /// <summary>
     /// The worktree's kept idle task (a closed tab's or a released summary's queue that still runs),
-    /// else a completed task: a tab's open (3.3) and <see cref="AcquireSummaryAsync"/> await it.
+    /// else a completed task: a tab's open (3.3), a row's read and <see cref="AcquireSummaryAsync"/>
+    /// wait for it. It may have completed just before its removal ran: callers loop while it has not.
     /// </summary>
     public Task WhenIdleAsync(string key)
     {
@@ -166,7 +167,10 @@ public sealed class OpenRepositories
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(holder);
         var key = WorktreeKey.Of(repository.GitDirectory);
-        while (!_disposed && !holderLifetime.IsCancellationRequested && _idle.TryGetValue(key, out var idle))
+
+        // A kept idle task that has completed holds nothing: its removal is posted to the UI thread
+        // and may not have run yet, and awaiting it again would never yield.
+        while (!_disposed && !holderLifetime.IsCancellationRequested && _idle.TryGetValue(key, out var idle) && !idle.IsCompleted)
         {
             try
             {
