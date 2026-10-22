@@ -137,11 +137,14 @@ Git layer and Core:
   a drop onto a remote branch and "Delete <b> on <r>…" act on the branch's name on the remote.
   Tests. (WP3's mapping merged in `3146d8d`: `FetchRefspecs`, the refs read's one `git config`
   call, `RemoteName` from the mapping, parity tests against git; WP-RA's menus: wave 2.)
-- [ ] 12. Whether every checkout keeps ignored files (`--no-overwrite-ignore`, design 14.2 of
+- [x] 12. Whether every checkout keeps ignored files (`--no-overwrite-ignore`, design 14.2 of
   phase 5, D179), as the owner decides. Tests. (Decided: D193, D196, D221. WP1's git half merged
   in `31f525b`: the option on checkouts and merges, the app's check before every covered merge,
-  rebase, pick, revert and stash apply, including the `--rebase-merges` branch points; WP-IA:
-  wave 2.)
+  rebase, pick, revert and stash apply, including the `--rebase-merges` branch points. WP-IA's app
+  half, built, reviewed and fixed, merged in `cc3aed3`: the setting read when each operation runs,
+  every checkout's refusal in D179's words, the app's check before every covered operation, Off
+  restoring phase 5 with the automatic stash's and undo's guards kept. The pull's app path is
+  WP-B's.)
 
 App:
 
@@ -291,9 +294,9 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
-(`e7144ec`), WP-W (`0da0eec`) and WP-D (`125e792`) merged; WP-IA built, under review; WP-RA being
-built. Next: the default run on `125e792` (running), WP-IA's fixes and merge, then WP-B (after
-WP-IA), WP-SET, and, last, WP-K, as section 18's order allows; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`) and WP-IA (`cc3aed3`) merged; WP-RA, WP-B and
+WP-SET being built (three worktrees). Next: their reviews, fixes and merges, then WP-K last, as
+section 18's order allows; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
@@ -315,6 +318,13 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- The default run on `125e792` (WP-D merged), with two builders beside it: 4,340 of 4,341 in 60 min
+  48 s; the one failure, `ShellDriverTests`' fresh-application case, gave its own work 60 s to start
+  on the headless UI thread, which the dashboard's tests' line exceeded; it now waits as a turn off
+  the watchdog (`8c7401b`). CI: run 39852863982 on `125e792` and
+  [39861559850](https://github.com/RahimPasha/VisualCommit/actions/runs/39861559850) on `8c7401b`,
+  all five jobs green both times (on `8c7401b` Windows' Test step 16 min 18 s, macOS's 16 min 14 s,
+  Ubuntu's 4 min 26 s, the containers' about 3 min 43 s).
 - CI after the WP-W merge: run 39831538867 on `378260b` failed WP-W's `WorkspaceFolderProbeTests` on
   Windows and macOS (Git 2.56 words an orphaned worktree's `.git` file "gitfile does not point to a
   valid repository", which `OpenAsync` now takes as no repository; checked locally with MinGit
