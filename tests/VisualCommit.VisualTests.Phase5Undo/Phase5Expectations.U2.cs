@@ -396,7 +396,7 @@ public static partial class Phase5Expectations
         public const string RefreshIndex = "git update-index -q --refresh";
 
         /// <summary>U23's "Merge feature/ff into main" (U19's step 1): phase 3's merge, which fast-forwards here.</summary>
-        public const string MergeFf = "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" refs/heads/feature/ff";
+        public const string MergeFf = "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" --no-overwrite-ignore refs/heads/feature/ff";
 
         /// <summary>HEAD's reflog's newest entry after that merge: a merge given -m that fast-forwards says it made no commit.</summary>
         public const string MergeFfReflog = "merge refs/heads/feature/ff: Fast-forward (no commit created; -m option ignored)";

@@ -362,6 +362,41 @@ public class OperationTextsTests
         Assert.Equal("Nothing was checked out.", OperationTexts.NothingCheckedOut);
     }
 
+    [Fact]
+    public void Keep_ignored_files_refusals_name_the_files_up_to_three_with_the_singular_for_one()
+    {
+        // docs/phase-6-design.md 9.15 (D113, D196): the app's own refusals, which have no git output.
+        Assert.Equal("1 ignored file is in the way of the merge: secret.env. Move it away first.", OperationTexts.IgnoredFilesInTheWayOf(["secret.env"], "merge"));
+        Assert.Equal(
+            "2 ignored files are in the way of the rebase: build/out.bin, secret.env. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["build/out.bin", "secret.env"], "rebase"));
+        Assert.Equal(
+            "3 ignored files are in the way of the squash: a.bin, b.bin, c.bin. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["a.bin", "b.bin", "c.bin"], "squash"));
+        Assert.Equal(
+            "4 ignored files are in the way of the cherry-pick: build/a.bin, build/b.bin, build/c.bin, …. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["build/a.bin", "build/b.bin", "build/c.bin", "build/d.bin"], "cherry-pick"));
+        Assert.Equal(
+            "5 ignored files are in the way of the cherry-pick: build/a.bin, build/b.bin, build/c.bin, …. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["build/a.bin", "build/b.bin", "build/c.bin", "build/d.bin", "build/e.bin"], "cherry-pick"));
+        Assert.Equal("1 ignored file is in the way of the revert: my file é.txt. Move it away first.", OperationTexts.IgnoredFilesInTheWayOf(["my file é.txt"], "revert"));
+
+        Assert.Equal("1 ignored file is in the way of applying the stash: secret.env. Move it away first.", OperationTexts.IgnoredFilesInTheWayOfStash(["secret.env"]));
+        Assert.Equal(
+            "2 ignored files are in the way of applying the stash: a.env, b.env. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOfStash(["a.env", "b.env"]));
+        Assert.Equal(
+            "3 ignored files are in the way of applying the stash: a.env, b.env, c.env. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOfStash(["a.env", "b.env", "c.env"]));
+        Assert.Equal(
+            "4 ignored files are in the way of applying the stash: a.env, b.env, c.env, …. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOfStash(["a.env", "b.env", "c.env", "d.env"]));
+
+        // The checkouts keep D179's text with git's count (9.15).
+        Assert.Equal("1 ignored file is in the way: feature/alpha tracks a file of the same name. Move it away first.", OperationTexts.IgnoredFilesInTheWay(1, "feature/alpha"));
+        Assert.Equal("2 ignored files are in the way: feature/alpha tracks files of the same names. Move them away first.", OperationTexts.IgnoredFilesInTheWay(2, "feature/alpha"));
+    }
+
     // The Abort question of 2.15 and section 5 is the banner's (ConflictBannerViewModel.AbortConfirmation,
     // ConflictBannerTests): the one text the banner and RepositoryOperations.AbortAsync ask.
 }

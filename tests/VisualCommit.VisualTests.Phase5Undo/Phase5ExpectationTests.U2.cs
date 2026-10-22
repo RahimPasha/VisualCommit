@@ -16,7 +16,7 @@ public sealed class PartU2ExpectationTests
             PartU2.Transaction(PartU2.UndoMessage(PartU2.CreateTagText)));
         Assert.Equal("VisualCommit: redo deletion of tag v1.0", PartU2.RedoMessage(PartU2.DeleteTagText));
         Assert.Equal(PartU2.StashStore, PartU2.Command("stash", "store", "-m", "On main: Experiment", PartU2.Experiment));
-        Assert.Equal(PartU2.MergeFf, PartU2.Command("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/ff'", "refs/heads/feature/ff"));
+        Assert.Equal(PartU2.MergeFf, PartU2.Command("merge", "--no-edit", "--no-log", "-m", "Merge branch 'feature/ff'", "--no-overwrite-ignore", "refs/heads/feature/ff"));
     }
 
     [Fact]

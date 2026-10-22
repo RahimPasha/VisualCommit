@@ -433,7 +433,8 @@ public static partial class Phase5Expectations
 
         public const string CheckoutFailed = "Check out feature/kinds failed";
 
-        public const string CheckoutCommand = "git switch --no-guess feature/kinds";
+        /// <summary>With phase 6's <c>--no-overwrite-ignore</c> (Keep ignored files, docs/phase-6-design.md 9.11, 16.1).</summary>
+        public const string CheckoutCommand = "git switch --no-guess --no-overwrite-ignore feature/kinds";
 
         public const string CheckoutBlocked = "Checkout blocked";
 
@@ -460,7 +461,8 @@ public static partial class Phase5Expectations
 
         public const string MergeStopped = "Merge stopped: 1 file has conflicts";
 
-        public const string MergeCommand = "git merge --no-edit --no-log -m \"Merge branch 'feature/theirs'\" refs/heads/feature/theirs";
+        /// <summary>With phase 6's <c>--no-overwrite-ignore</c> just before the positional argument (docs/phase-6-design.md 9.4, 16.1).</summary>
+        public const string MergeCommand = "git merge --no-edit --no-log -m \"Merge branch 'feature/theirs'\" --no-overwrite-ignore refs/heads/feature/theirs";
 
         /// <summary>Git's lines on standard output (2.36 and 2.55 alike); the second classifies the stop.</summary>
         public static IReadOnlyList<string> MergeOutput { get; } =

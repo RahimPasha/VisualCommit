@@ -48,7 +48,7 @@ public class RepositoryOperationsProtectTests
         // P24 step 2 (TP1).
         var dialog = app.Dialogs.Errors[0];
         Assert.Equal(("Checkout blocked", OneConflict, "Stash changes and check out"), (dialog.Title, dialog.Summary, dialog.ExtraAction));
-        AssertOutputOfFailedCall(app, dialog, "git switch --no-guess other");
+        AssertOutputOfFailedCall(app, dialog, "git switch --no-guess --no-overwrite-ignore other");
         Assert.Equal(("Check out other failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.DoesNotContain(CallsSince(app, calls), IsStashCall);
         Assert.Equal("main", await repo.CurrentBranchAsync());
@@ -83,7 +83,14 @@ public class RepositoryOperationsProtectTests
         var dialog = Assert.Single(app.Dialogs.Errors);
         Assert.Equal(("Checkout blocked", OneConflict), (dialog.Title, dialog.Summary));
         Assert.False(dialog.HasExtraAction);
-        AssertOutputOfFailedCall(app, dialog, "git switch --no-guess other");
+        AssertOutputOfFailedCall(app, dialog, "git switch --no-guess --no-overwrite-ignore other");
+
+        // Keep ignored files (docs/phase-6-design.md 9.11, 16.1): git's untracked block is asked
+        // about after the refusal, in the checkout's operation (the watcher's own check-ignore runs
+        // outside every operation); nothing in it is ignored (exit 1), so phase 5's text stands.
+        var refused = app.Calls.Snapshot().Last(call => call.CommandText == "git switch --no-guess --no-overwrite-ignore other");
+        Assert.NotNull(refused.OperationId);
+        Assert.Equal(1, app.Calls.Snapshot().Single(call => call.CommandText == "git check-ignore --stdin -z" && call.OperationId == refused.OperationId).ExitCode);
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Equal(content, Read(repo, path));
         app.AssertScriptFollowed();
@@ -104,7 +111,7 @@ public class RepositoryOperationsProtectTests
         var dialog = Assert.Single(app.Dialogs.Errors);
         Assert.Equal(("Checkout blocked", OneConflict), (dialog.Title, dialog.Summary));
         Assert.False(dialog.HasExtraAction);
-        AssertOutputOfFailedCall(app, dialog, "git switch --create topic " + otherFiles);
+        AssertOutputOfFailedCall(app, dialog, "git switch --create topic --no-overwrite-ignore " + otherFiles);
         Assert.Equal(("Create branch topic failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.Null(await repo.RefTargetAsync("refs/heads/topic"));
         Assert.Equal("main", await repo.CurrentBranchAsync());
@@ -240,14 +247,16 @@ public class RepositoryOperationsProtectTests
 
         var dialog = Assert.Single(app.Dialogs.Errors);
         Assert.Equal(("Checkout blocked", OneConflict, "Stash changes and check out"), (dialog.Title, dialog.Summary, dialog.ExtraAction));
-        AssertOutputOfFailedCall(app, dialog, "git switch --detach " + OtherEdits);
+        AssertOutputOfFailedCall(app, dialog, "git switch --detach --no-overwrite-ignore " + OtherEdits);
         Assert.Equal("Check out 4f5e821 failed", app.StatusText);
 
-        // P26 step 3: HEAD's own commit, as today (D179, PD7): no --no-overwrite-ignore, the change carried.
+        // P26 step 3: HEAD's own commit (D179, PD7): no automatic stash, the change carried; with
+        // --no-overwrite-ignore while Keep ignored files is on (D193, docs/phase-6-design.md 9.11),
+        // which changes nothing here (HEAD's own commit writes no file).
         await app.Operations.CheckoutAsync(MainWork);
 
         Assert.Equal("HEAD is now detached at 41f8398", app.StatusText);
-        Assert.Contains("git switch --detach " + MainWork, CallsSince(app, calls));
+        Assert.Contains("git switch --detach --no-overwrite-ignore " + MainWork, CallsSince(app, calls));
         Assert.DoesNotContain(CallsSince(app, calls), IsStashCall);
         Assert.Equal(MainWork, await repo.HeadAsync());
         Assert.Equal([" M src/app.txt"], await PorcelainAsync(repo));
@@ -389,7 +398,7 @@ public class RepositoryOperationsProtectTests
 
         Assert.Equal(OtherEdits, await repo.HeadAsync());
         Assert.Equal("HEAD is now detached at 4f5e821", app.StatusText);
-        Assert.Equal(["git switch --detach " + OtherEdits], CallsSince(app, calls).Where(call => call.StartsWith("git switch", StringComparison.Ordinal) || IsStashCall(call)));
+        Assert.Equal(["git switch --detach --no-overwrite-ignore " + OtherEdits], CallsSince(app, calls).Where(call => call.StartsWith("git switch", StringComparison.Ordinal) || IsStashCall(call)));
         Assert.Equal(2, app.Dialogs.Errors.Count);
         app.AssertScriptFollowed();
     }

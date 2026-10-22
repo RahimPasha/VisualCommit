@@ -6,6 +6,11 @@
 // No rebase asks a question (D135): each saves the backup rebase-<time>/<b> of the branch's old
 // tip inside its operation, before git runs, and the backups' clean-up follows (D139). Skip asks
 // (its question is RepositoryViewModel's, as Abort's) and saves skip-<time>.
+//
+// Phase 6's Keep ignored files (D196, docs/phase-6-design.md 9.6, 9.7, 9.9; work package WP-IA):
+// git has no option for a rebase, so every rebase the app starts (onto, "Check out and rebase",
+// the interactive list's Start and the squash) runs the app's own check before its backup and
+// before any checkout; Continue, Skip and Abort run none (9.14).
 
 using System.Text;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -63,6 +68,13 @@ public sealed partial class RepositoryOperations
                     }
 
                     var tip = (await ReadHeadAtStartAsync()).Sha ?? throw new InvalidOperationException("HEAD names no commit.");
+
+                    // Keep ignored files (docs/phase-6-design.md 9.6): git has no option for a rebase.
+                    if (KeepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "rebase", () => Git.FindIgnoredInTheWayOfRebaseAsync("HEAD", onto.Sha)) is { } ignored)
+                    {
+                        return ignored;
+                    }
+
                     selection.Follows = await SelectedCommitIsRebasedAsync(tip, onto.Sha);
                     await SaveRebaseBackupAsync(branch, tip);
                     var result = await Git.RebaseAsync(onto.Sha, NetworkOptions.From(context));
@@ -113,6 +125,15 @@ public sealed partial class RepositoryOperations
                         return refusal;
                     }
 
+                    // Keep ignored files (docs/phase-6-design.md 9.6, 9.9): the rebase of the branch
+                    // it checks out, before that checkout.
+                    var keepIgnored = KeepIgnored;
+                    if (keepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "rebase", () => Git.FindIgnoredInTheWayOfRebaseAsync(branchRef, onto.Sha)) is { } ignored)
+                    {
+                        display = new FailureDisplay(OperationTexts.RebaseFailedTitle, ignored.Failure!.Summary);
+                        return ignored;
+                    }
+
                     if (await GuardDetachedHeadAsync(text, backUpDetached) is { } detached)
                     {
                         return detached;
@@ -122,12 +143,12 @@ public sealed partial class RepositoryOperations
                     var previous = (await ReadHeadAtStartAsync()).BranchName;
                     try
                     {
-                        await Git.CheckoutBranchAsync(branch, keepIgnored: KeepIgnored, options);
+                        await Git.CheckoutBranchAsync(branch, keepIgnored: keepIgnored, options);
                     }
                     catch (GitException checkoutFailure)
                     {
                         var failure = FailureOf(checkoutFailure, OperationTexts.CheckOut(branch).FailureSummary);
-                        display = CheckoutFailureDisplay(failure, branchRef, offerStash: false)
+                        display = await CheckoutRefusalDisplayAsync(failure, branchRef, branch, offerStash: false, keepIgnored)
                             ?? new FailureDisplay(OperationTexts.CheckOut(branch).ErrorTitle, OperationTexts.CheckOut(branch).FailureSummary);
                         return Failed(text, failure with { Summary = display.Summary });
                     }
@@ -245,6 +266,9 @@ public sealed partial class RepositoryOperations
                             return refusal;
                         }
 
+                        // Keep ignored files (docs/phase-6-design.md 9.7, 9.9): from where git starts the
+                        // todo, before the checkout or the backup.
+                        var keepIgnored = KeepIgnored;
                         string? previous = null;
                         if (request.CheckoutFirst)
                         {
@@ -259,6 +283,11 @@ public sealed partial class RepositoryOperations
                                 return dirty;
                             }
 
+                            if (keepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "rebase", () => Git.FindIgnoredInTheWayOfRebaseAsync(plan)) is { } ignored)
+                            {
+                                return ignored;
+                            }
+
                             if (await GuardDetachedHeadAsync(text, backUpDetached) is { } detached)
                             {
                                 return detached;
@@ -267,12 +296,12 @@ public sealed partial class RepositoryOperations
                             previous = (await ReadHeadAtStartAsync()).BranchName;
                             try
                             {
-                                await Git.CheckoutBranchAsync(branch, keepIgnored: KeepIgnored, options);
+                                await Git.CheckoutBranchAsync(branch, keepIgnored: keepIgnored, options);
                             }
                             catch (GitException checkoutFailure)
                             {
                                 var failure = FailureOf(checkoutFailure, OperationTexts.CheckOut(branch).FailureSummary);
-                                display = CheckoutFailureDisplay(failure, request.BranchRef, offerStash: false)
+                                display = await CheckoutRefusalDisplayAsync(failure, request.BranchRef, branch, offerStash: false, keepIgnored)
                                     ?? new FailureDisplay(OperationTexts.CheckOut(branch).ErrorTitle, failure.Summary);
                                 return Failed(text, failure with { Summary = display.Summary });
                             }
@@ -283,6 +312,10 @@ public sealed partial class RepositoryOperations
                         else if (await RefuseIfListMovedAsync(text, plan, branch) is { } moved)
                         {
                             return moved;
+                        }
+                        else if (keepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "rebase", () => Git.FindIgnoredInTheWayOfRebaseAsync(plan)) is { } ignored)
+                        {
+                            return ignored;
                         }
 
                         selection.Follows = await SelectedCommitIsRebasedAsync(plan.ExpectedTip, plan.Onto);
@@ -381,6 +414,12 @@ public sealed partial class RepositoryOperations
                     if (await RefuseIfListMovedAsync(text, plan, branch, squash: true) is { } moved)
                     {
                         return moved;
+                    }
+
+                    // Keep ignored files (docs/phase-6-design.md 9.7): a squash is an interactive rebase.
+                    if (KeepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "squash", () => Git.FindIgnoredInTheWayOfRebaseAsync(plan)) is { } ignored)
+                    {
+                        return ignored;
                     }
 
                     await SaveRebaseBackupAsync(branch, plan.ExpectedTip);

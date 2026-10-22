@@ -308,7 +308,7 @@ public sealed partial class Phase5ChecksU
         // Step 19: the same drag; "Check out main and merge feature/other into it".
         DragOtherOntoMain(app);
         var calls = await ActAsync(app, () => app.ClickMenuItem("Check out main and merge feature/other into it"));
-        AssertCalledInOrder(app, calls, PartU.Git("switch", "--no-guess", "main"), PartU.MergeOtherCall);
+        AssertCalledInOrder(app, calls, PartU.Git("switch", "--no-guess", "--no-overwrite-ignore", "main"), PartU.MergeOtherCall);
         AssertStatus(app, PartU.StatusMergedOther);
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Equal(PartU.MergeOtherSha, await repo.HeadAsync());

@@ -80,7 +80,7 @@ public sealed partial class Phase3ChecksC : Phase3Checks
         await app.WaitForIdleAsync();
         shot = Shot(app, "13e-hotfix-created");
         await AssertNoDialogAsync(app);
-        AssertCalled(app, calls, "git switch --create hotfix " + PartC.MainWorkSha);
+        AssertCalled(app, calls, "git switch --create hotfix --no-overwrite-ignore " + PartC.MainWorkSha);
         Assert.Equal(["## hotfix"], await GitLinesAsync(repo, "status", "-sb"));
         Assert.Equal(["feature/alpha", "feature/conflict", "feature/ff", "* hotfix", "main"], await BranchesAsync(repo));
         AssertGraph(app, shot, PartC.Check13Hotfix, lanes: 3);

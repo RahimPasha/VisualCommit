@@ -769,7 +769,7 @@ public static partial class Phase3Expectations
         // C12 refuses it before git (docs/phase-5-design.md 9.3, the phase 5 report's "Beyond design
         // 14.1"): "Checkout blocked" with the menus' reason (FinishMergeFirst), no output, no command.
         public const string CheckoutBlockedTitle = "Checkout blocked";
-        public const string CheckoutCommand = "git switch --no-guess feature/alpha";
+        public const string CheckoutCommand = "git switch --no-guess --no-overwrite-ignore feature/alpha";
 
         // Check 12 step 11: the revert that changes nothing (D117), on Git 2.36.
         public const string RevertFailedTitle = "Revert failed";
