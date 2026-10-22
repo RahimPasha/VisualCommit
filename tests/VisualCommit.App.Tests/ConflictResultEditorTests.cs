@@ -217,6 +217,47 @@ public class ConflictResultEditorTests
         Assert.Equal(colors.TextPrimary, ForegroundOf(editor, 2));
     }
 
+    /// <summary>
+    /// The theme switched while an unresolved block shows (docs/phase-6-design.md 11.15, the live
+    /// switches r06 found untested): the sides' and the markers' tints and the marker lines'
+    /// warning text take the other theme's colours at once (light warning <c>#895A17</c>, 11.10),
+    /// and back.
+    /// </summary>
+    [AvaloniaFact]
+    public void Switching_the_theme_recolours_the_tints_and_the_marker_text()
+    {
+        var editor = Editor(OneBlock);
+        using var host = DiffHost.Show(editor, Width, Height, ThemeVariant.Dark);
+        host.Capture();
+
+        foreach (var (colors, ours, theirs, marker, warning) in new[]
+        {
+            (DiffColors.Dark, DarkOurs, DarkTheirs, DarkMarker, DarkWarning),
+            (DiffColors.Light, LightOurs, LightTheirs, LightMarker, LightWarning),
+            (DiffColors.Dark, DarkOurs, DarkTheirs, DarkMarker, DarkWarning),
+        })
+        {
+            host.Window.RequestedThemeVariant = colors.Variant;
+            var shot = host.Capture();
+            var name = colors == DiffColors.Dark ? "dark" : "light";
+            TestPictures.Save(host, $"conflict-result-switched-{name}");
+            foreach (var (line, color, what) in new[]
+            {
+                (1, colors.Background, "line 1"),
+                (2, marker, "the < line"),
+                (3, ours, "the ours line"),
+                (5, theirs, "the theirs line"),
+            })
+            {
+                var y = editor.PointAt(line, 1)!.Value.Y;
+                DiffColors.AssertColor(color, shot.PixelAt(host.ToWindow(editor, new Point(Width - 30, y))), $"{what}, right of the text, {name}");
+            }
+
+            Assert.Equal(warning, ForegroundOf(editor, 2));
+            Assert.Equal(colors.TextPrimary, ForegroundOf(editor, 3));
+        }
+    }
+
     [AvaloniaFact]
     public void A_diff3_base_section_is_tinted_and_a_marker_size_of_the_file_counts()
     {

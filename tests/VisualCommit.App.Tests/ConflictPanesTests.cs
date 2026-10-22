@@ -311,6 +311,40 @@ public class ConflictPanesTests
         Assert.Equal(ConflictTint.Ours, panes.RowsOf(ConflictPaneSide.Ours)[3].Tint);
     }
 
+    /// <summary>
+    /// The theme switched while the panes show a conflict (docs/phase-6-design.md 11.15, the live
+    /// switches r06 found untested): each side's tint, the bars, the fillers and the common rows
+    /// take the other theme's colours at once, and back.
+    /// </summary>
+    [AvaloniaFact]
+    public void Switching_the_theme_recolours_each_sides_tint()
+    {
+        var panes = new ConflictPanes { Parts = TwoBlocks(), FilePath = "src/Calculator.cs" };
+        using var host = DiffHost.Show(panes, Width, Height, ThemeVariant.Dark);
+        host.Capture();
+
+        foreach (var (colors, ours, theirs) in new[] { (DiffColors.Dark, DarkOurs, DarkTheirs), (DiffColors.Light, LightOurs, LightTheirs), (DiffColors.Dark, DarkOurs, DarkTheirs) })
+        {
+            host.Window.RequestedThemeVariant = colors.Variant;
+            var shot = host.Capture();
+            var name = colors == DiffColors.Dark ? "dark" : "light";
+            TestPictures.Save(host, $"conflict-panes-switched-{name}");
+            foreach (var (side, row, color, what) in new[]
+            {
+                (ConflictPaneSide.Ours, 0, colors.Background, "a common line"),
+                (ConflictPaneSide.Ours, 2, colors.Hunk, "the first bar"),
+                (ConflictPaneSide.Ours, 3, ours, "the first block's ours line"),
+                (ConflictPaneSide.Ours, 4, colors.Filler, "the first block's filler"),
+                (ConflictPaneSide.Theirs, 3, theirs, "the first block's theirs line"),
+            })
+            {
+                var bounds = panes.RowBounds(side, row)!.Value;
+                DiffColors.AssertColor(color, shot.PixelAt(host.ToWindow(panes, new Point(bounds.X + 2, bounds.Center.Y))), $"{what}, in the gutter, {name}");
+                DiffColors.AssertColor(color, shot.PixelAt(host.ToWindow(panes, new Point(bounds.Right - 20, bounds.Center.Y))), $"{what}, right of the text, {name}");
+            }
+        }
+    }
+
     [AvaloniaFact]
     public void RevealBlock_puts_a_block_s_bar_third_in_view_and_ScrollToOffset_keeps_a_place()
     {

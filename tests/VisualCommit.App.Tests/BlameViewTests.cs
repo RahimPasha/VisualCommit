@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -121,6 +123,77 @@ public class BlameViewTests
         editor.Show(large, "src/Large.cs", highlighting: false);
         Assert.False(editor.IsTokenizing);
         Assert.False(editor.IsHighlighted);
+    }
+
+    /// <summary>
+    /// The theme switched while the blame shows (docs/phase-6-design.md 11.15, the live switches
+    /// r06 found untested): the text and the gutter take the other theme's colours at once, the
+    /// gutter's <c>Not committed yet</c> in that theme's warning colour (light <c>#895A17</c>, 11.10).
+    /// A file not committed yet: every line is one run, so the gutter's only text is that one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Switching_the_theme_recolours_the_text_and_the_gutters_Not_committed_yet()
+    {
+        var uncommitted = new BlameCommit(Zero, "Not Committed Yet", "not.committed.yet", Minute(9), "Version of src/Notes.cs from src/Notes.cs", "src/Notes.cs", null, null, IsBoundary: false);
+        var repository = new PageFakeRepository
+        {
+            Blame = (_, _) => new BlameResult([new("namespace History;", uncommitted), new(string.Empty, uncommitted), new("public sealed class Notes", uncommitted)]),
+        };
+        using var page = new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Notes.cs", null));
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        var text = view.GetVisualDescendants().OfType<BlameTextEditor>().Single(control => control.Name == "BlameText");
+        var gutter = view.GetVisualDescendants().OfType<BlameGutter>().Single(control => control.Name == "BlameGutter");
+        await page.LoadAsync();
+        DiffHost.Settle();
+        Assert.Equal([BlameGutter.NotCommittedYetText], gutter.TextsOf(0).Select(part => part.Text));
+
+        foreach (var (variant, colors, warning) in new[]
+        {
+            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B")),
+            (ThemeVariant.Light, DiffColors.Light, Color.Parse("#895A17")),
+            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B")),
+        })
+        {
+            host.Window.RequestedThemeVariant = variant;
+            var shot = host.Capture();
+            TestPictures.Save(host, $"blame-switched-{(variant == ThemeVariant.Dark ? "dark" : "light")}");
+            var name = variant == ThemeVariant.Dark ? "dark" : "light";
+
+            DiffColors.AssertBrush(colors.TextPrimary, text.Foreground, $"the text's colour, {name}");
+            DiffColors.AssertBrush(colors.Background, text.Background, $"the text's background, {name}");
+            var textArea = new Rect(host.ToWindow(text, default), text.Bounds.Size);
+            Assert.Equal(colors.Background, shot.PixelAt(new Point(textArea.Right - 30, textArea.Bottom - 30)));
+
+            // The gutter: run 0 on the panel's background (right of its text, in the first line),
+            // its only text's ink in the warning colour.
+            var panel = name == "dark" ? Color.Parse("#1A1D24") : Color.Parse("#F5F6F8");
+            var area = new Rect(host.ToWindow(gutter, default), gutter.Bounds.Size);
+            Assert.Equal(panel, shot.PixelAt(new Point(area.Right - 4, area.Y + 4)));
+            Assert.Equal(warning, InkOf(shot, area.Deflate(1), dark: name == "dark"));
+        }
+    }
+
+    /// <summary>
+    /// The ink of the text in <paramref name="area"/>, channel by channel: the most of each on a
+    /// dark background, the least on a light one. Antialiased text, subpixel or not, reaches its
+    /// colour in each channel somewhere, where nothing else in the area does.
+    /// </summary>
+    private static Color InkOf(Testing.Headless.Screenshot shot, Rect area, bool dark)
+    {
+        byte r = dark ? (byte)0 : (byte)255, g = r, b = r;
+        for (var y = (int)Math.Ceiling(area.Y); y < (int)Math.Floor(area.Bottom); y++)
+        {
+            for (var x = (int)Math.Ceiling(area.X); x < (int)Math.Floor(area.Right); x++)
+            {
+                var pixel = shot.PixelAt(x, y);
+                (r, g, b) = dark
+                    ? (Math.Max(r, pixel.R), Math.Max(g, pixel.G), Math.Max(b, pixel.B))
+                    : (Math.Min(r, pixel.R), Math.Min(g, pixel.G), Math.Min(b, pixel.B));
+            }
+        }
+
+        return Color.FromRgb(r, g, b);
     }
 
     /// <summary><paramref name="count"/> lines of C#.</summary>
