@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-18
+Last updated: 2026-10-22
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -99,8 +99,17 @@ Start:
   26 s (40 %), so phase 6's view tests go into it by subject, no project of their own. Left to the
   lead: `Phase6Checks.Support.cs`' dashboard and theme helpers, once WP-D, WP-W and WP-T are
   merged and before WP-V's parts W, S and L.)
-- [ ] 6. Phase 6's visual checks written into `docs/test-reports/phase-6.md`, each marked for the
+- [x] 6. Phase 6's visual checks written into `docs/test-reports/phase-6.md`, each marked for the
   real-window pass or not, reviewed independently, and committed before the UI they test.
+  (2026-10-22, before any of wave 2's UI: 34 checks in five parts, W1 to W9, K10 to K13, S14 to
+  S21, G22 to G25 and L26 to L34, in 47 test methods saving 198 pictures, 26 real-window captures
+  in 8 methods; each part drafted from the scenario facts, reviewed independently and revised, then
+  assembled. The lead's rulings on its open points are at its end: part L goes whole into a
+  project of its own, `VisualCommit.VisualTests.Phase6Look` (design 17.3's 40-method rule), with
+  its own test server port 47394 (`AuthRemoteServer.Phase6LookVisualChecksPort`); an upstream is
+  named by its tracking ref (GD15, WP-RA's `UpstreamNameTests`); the drop's push onto a renamed
+  branch keeps GD24's title; a palette entry without a key shows no key column. The design took
+  the report's values and those rulings in the same commit.)
 
 Git layer and Core:
 
@@ -272,10 +281,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, `3146d8d`,
 `1d99be3`), their worktrees removed. The default run after it found two test problems, fixed in
 `80689ef` (a slow program's wait with a limit of its own; an undo test that took WP3's config read
-for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Next: step
-6, the report's checks, being written by a workflow (scenario facts, parts W, K, S, G and L each
-reviewed and revised, then assembled); commit it as `docs/test-reports/phase-6.md` before any UI it
-tests is merged; then wave 2 (WP-W, WP-D and WP-T first, at most three built worktrees at once).
+for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
+report is committed. Next: wave 2 of design section 18, each package built, reviewed and fixed in
+its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-W, WP-D and WP-T
+first (at most three built worktrees at once); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+section 18's order allows. Once WP-D, WP-W and WP-T are merged, the lead writes
+`Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -295,6 +306,14 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- After WP3's and WP4's merges: CI run 39207577529 on `80689ef` failed 16 of about 4,040 on
+  Windows and macOS (Git 2.56), all of them the cases of WP3's
+  `FetchRefspecsParityTests.Gits_fetch_fills_exactly_the_tracking_refs_DestinationsOf_gives`, whose
+  setup pushed to the server by its path and relied on that push writing no tracking refs, which
+  2.56 does; the setup now deletes them (`6c7f37c`). Run
+  [39211028657](https://github.com/RahimPasha/VisualCommit/actions/runs/39211028657) on `6c7f37c`:
+  all five jobs green; Windows' Test step 26 min 36 s, macOS's 20 min 25 s, Ubuntu's 3 min 56 s,
+  the containers' about 3 min 30 s.
 - After wave 1's merges (WP-S, WP1, WP2): CI run 39190992859 on `249a554` failed 1 of 3,749 on
   Windows only, WP-S's `GitRunnerPriorityTests.A_tree_that_started_before_its_priority_was_set_is_lowered_whole`,
   which assumed git's tree starts at normal priority while CI's runner runs the test host below

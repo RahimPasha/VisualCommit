@@ -415,6 +415,7 @@ public class AuthRemoteServerTests
         Assert.Equal(47391, AuthRemoteServer.VisualChecksPort);
         Assert.Equal(47392, AuthRemoteServer.Phase1VisualChecksPort);
         Assert.Equal(47393, AuthRemoteServer.Phase6VisualChecksPort);
+        Assert.Equal(47394, AuthRemoteServer.Phase6LookVisualChecksPort);
     }
 
     // ---- A folder of repositories (docs/phase-6-design.md 17.2) ----------------------------------

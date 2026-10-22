@@ -8,6 +8,7 @@ makes; they are recorded in `decisions.md` from D195 on. Where this file and mer
 built; tell the lead. Amended on 2026-10-19 with what wave 1 (WP-S, WP1, WP2) found while building,
 each checked with real git or measured (D231).
 Amended again on 2026-10-19 with WP3's and WP4's findings (merged in `3146d8d` and `1d99be3`), checked with real git (2.36, replayed on 2.55): 0.5, 1.1 to 1.4, 1.12, 4.5, 4.13, 8.10, 8.13, 10.1 to 10.4, 10.8, 10.9, 14.14, 16.2, 18.
+Amended on 2026-10-19 with the visual test report's rulings (`docs/test-reports/phase-6.md`, "The lead's rulings on this report's open points"; the ids in brackets, WD4, WD5, WD35, SD29, SD30 and GD15, are that report's decisions): part L in its own project `VisualCommit.VisualTests.Phase6Look` and the report's counts, the upstream named by its tracking ref, a palette row without a key, and the report's amendments: 2.6, 2.10, 2.12, 5.3, 7.8, 8.1, 8.4, 8.7, 10.4, 11.14, 14, 14.11, 16.2, 17.2 to 17.6, 18.
 
 Sources: `plan.md` "Phase 6", the phase 5 handoff's "For the next phase", decisions D45, D46, D69,
 D78, D81, D84, D85, D93, D95, D97, D104, D112, D130, D149, D163, D179, the owner's answers D187 to
@@ -998,12 +999,12 @@ of a SHA, `{path}` the saved folder:
 | Ahead / behind | ahead, behind or both | the left panel's marks (`LeftPanelView.axaml:143-154`): `IconArrowUp` and its count, 6, `IconArrowDown` and its count, each only above 0, secondary, 10×10, class `aheadBehind`; automation name `{a} ahead, {n} behind` / `{a} ahead` / `{n} behind` | `1 commit ahead of {up}` / `{a} commits ahead of {up}`; `1 commit behind {up}` / `{n} commits behind {up}`; `{a} commits ahead of and {n} behind {up}` (`1 commit ahead of and …`) |
 | | level | `Up to date` (secondary) | `{b} is level with {up}` |
 | | upstream gone | `{up} is gone` (`VcWarningBrush`) | `{up} no longer exists` (the toolbar's) |
+| | no remote (tested before "no upstream", WD4) | `No remote` (secondary) | `This repository has no remotes` (`ToolbarViewModel.NoRemotesText`) |
 | | no upstream | `No upstream` (secondary) | `{b} has no upstream` |
-| | no remote | `No remote` (secondary) | `This repository has no remotes` (`ToolbarViewModel.NoRemotesText`) |
 | | unborn | `No commits yet` (secondary) | |
 | | detached, a rebase | empty | |
 | Changes | nothing changed | `Clean` (secondary) | |
-| | changes | the counts above 0, joined by `, `: `1 conflict` / `{c} conflicts`, `{s} staged`, `{u} unstaged`, `{t} untracked`; `VcDangerBrush` while a file conflicts, else primary | the whole text |
+| | changes | the counts above 0, joined by `, `: `1 conflict` / `{c} conflicts`, `{s} staged`, `{u} unstaged` (without untracked and conflicted entries, WD5), `{t} untracked`; `VcDangerBrush` while a file conflicts, else primary | the whole text |
 | State | first read: the row's own (2.10, also while its first folder check has not returned), or, for a row that follows a tab, until that tab's view model has its first read (`FirstRead`, 3.2) | `Reading…` (secondary) | |
 | | in progress | `Merge in progress`, `Cherry-pick in progress`, `Revert in progress`, `Rebase in progress`, `Rebase in progress ({k} of {n})` when the rebase counts (`Done`, `Total`), `git am in progress` (`VcWarningBrush`) | the banner's (`ConflictBannerViewModel.ToolTipFor`) |
 | | folder gone | `Folder not found` (`VcWarningBrush`) | `{path} does not exist` |
@@ -1015,6 +1016,14 @@ of a SHA, `{path}` the saved folder:
 | | the last result | the status bar's, in its tone (`Fetched from all remotes`; `Pull stopped: 1 file has conflicts`, warning; `Fetch failed`, danger), until the next operation starts (D95) | the whole text |
 | | a bulk run holds it | in place of the above, 4.2's and 4.5's text in its tone (`Waiting to fetch…`, `Waiting to pull…`, the toolbar's reason for a row left out, `Fetch cancelled`) | the text |
 | | a failure's dialog kept (4.6, D195) | the result, then `Details…` | the whole text |
+
+The Ahead / behind cell tests "no remote" before "no upstream" (WD4): a repository without remotes
+shows `No remote` (`This repository has no remotes`), so notes (17.1) reads as W2 expects; Pull's
+reason keeps the toolbar's order (`main has no upstream: set one first`, 4.2), so the cell and the
+reason name different things there. The unstaged count leaves out the untracked and conflicted
+entries of `WorkingTreeStatus.Unstaged`, each counted by its own kind (WD5): design-system `1 staged,
+2 unstaged, 1 untracked`, billing `1 conflict`, scratch with one new file `1 untracked`.
+`DashboardTextsTests` pins both (2.12).
 
 `Reading…` and the three folder states leave every cell but Repository, Folder and State empty.
 `Cancel` (`DashboardRowCancel`, name `Cancel`, while `CanCancel`; its tooltip the status's
@@ -1210,7 +1219,12 @@ decided.
 A row keeps its repository's `WorkingDirectory`, which `DashboardViewModel.OpenedWorkingDirectoryOf(savedPath)`
 gives to 1.2's `WorkspaceMembership`. After a pass of triggers 1 to 3 or 6 the dashboard logs at Info
 `{workspace}: read 1 repository in {ms} ms` / `{workspace}: read {n} repositories in {ms} ms`; a
-summary read logs at Debug `{name}: summary read in {ms} ms`. `ShellDriver.Phase6.Dashboard.cs`
+summary read logs at Debug `{name}: summary read in {ms} ms`. A trigger that finds no row to read
+starts no pass and logs no line (WD35): a row to read is one without a tab that, for triggers 1 and
+2, was never read or was last read 10 s ago or more; a row that follows a tab is never read and never
+counted in a pass's `{n}`. So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
+before the read clock moves log no pass line, and `WaitForDashboardReadAsync` is ended only by a pass
+that read; `DashboardRefreshTests` pins it (2.12). `ShellDriver.Phase6.Dashboard.cs`
 (17.2) has `WaitForDashboardReadAsync()` (the pass's line, no row `Reading…`) and `ActivateWindow()`
 (raises `Activated`, or calls `OnWindowActivated()` if headless `Window.Activate()` does not: the
 builder checks which).
@@ -1233,7 +1247,9 @@ A dashboard's place in `session.json`, its restore and its saving are 1.11's (te
 `DashboardColumnsTests` (App.Tests, pure: 2.6's table at 1100 and 1920; Folder hidden at 1279, shown
 at 1280 with 300 and 168; 1440 with 380 and 248; Operation 188 at 1000; no gaps);
 `DashboardTextsTests` (pure: every row of 2.6's table, singular and plural, a local upstream, a file
-staged and changed again counted twice, `Rebase in progress (2 of 5)`, the header's three counts);
+staged and changed again counted twice, `Rebase in progress (2 of 5)`, the header's three counts;
+"no remote" before "no upstream" and the unstaged count without untracked and conflicted entries, WD4
+and WD5);
 `DashboardMenusTests` (pure: `ForRow` in every state of 2.7's table, read-only, at the top and the
 bottom; `Cancel {title}` enabled for a network operation in its cancel window, disabled with `{title}
 can no longer be cancelled` past it, enabled for the merge tool, left out for a checkout; `Remove from
@@ -1251,7 +1267,9 @@ view model, on a repo tab the repository's); `DashboardRefreshTests` (`ManualTim
 run's (trigger 5, which goes on there), and none for a row following a tab; a row following a tab
 `Reading…` until that tab's `FirstRead`; trigger 6: a row appended while the dashboard is active read
 at once with no other trigger and the pass line logged, one appended in the background not read, an
-Add open tabs row following its tab with no git call, a Locate replacement read; at most 4 reads at
+Add open tabs row following its tab with no git call, a Locate replacement read; a trigger that
+finds no row to read starting no pass and logging no line (trigger 1 within 10 s, trigger 6 whose
+rows all follow tabs, WD35); at most 4 reads at
 once, by a gate in the fake; a deleted git folder released and probed again; the probe's states,
 `Folder not found` without a process and no call on an outer repository; a `directoryExists` fake held
 on a gate: never called on the UI thread (`Dispatcher.UIThread.CheckAccess()` false inside it), the
@@ -2117,7 +2135,9 @@ A row `CommandPaletteItem` (a `ListBoxItem`, `Padding="10,0"`, corner radius 4) 
 12.5, `VcTextPrimaryBrush`, `VcDangerBrush` for an enabled destructive entry);
 `CommandPaletteItemDetail` (a `TrimmedTextBlock` 8 after it, cut first; 11.5, `VcTextSecondaryBrush`;
 a disabled entry's reason in its place, 5.7); `CommandPaletteItemKey` (a `TextBlock`, right-aligned, 16
-after, never cut; 11.5, `VcTextSecondaryBrush`). A disabled entry's parts are `VcTextDisabledBrush`.
+after, never cut; 11.5, `VcTextSecondaryBrush`). An entry without a key shows no key column: the
+key's `TextBlock` is hidden, its 16-px gap with it, and the detail runs to the row's padding (the
+visual test report's ruling on K10's `k10e`). A disabled entry's parts are `VcTextDisabledBrush`.
 The highlighted row lies on `VcSelectionBrush` (the graph's and the Pick dialog's selection) and the
 pointer moves the highlight (5.8), so there is no hover look. The light theme uses the same tokens.
 
@@ -3087,10 +3107,11 @@ questions are for work). Enter saves, also from a text box. Save, in order:
    the operation while it waits and does nothing once the write runs. The dialog closes; what steps 2
    to 4 saved stays. While a write runs, `SettingsSaving` reads `Saving…` and both buttons are disabled
    (well under a second).
-6. **Read back** (8.4): 8.1's outside read and, with a repository, its repository read and 8.6's
-   identity read, side by side; each scope's read becomes its fields' new baseline.
+6. **Read back** (8.4): 8.1's outside read and, with a repository, its repository read, 8.6's
+   identity read and, on a branch, Pull's reader (8.7, SD29), side by side; each scope's read becomes
+   its fields' new baseline.
 7. **Tell the tabs** (8.11) when any git key was written, also after a failure part-way.
-8. **Close**, answering true, unless a changed key is still decided by another file (8.4) or a write
+8. **Close**, answering true, unless a changed key is still decided by another file of its scope (8.4) or a write
    failed: then the dialog stays on the Git section with the notices, nothing pending (Cancel closes
    it).
 
@@ -3245,8 +3266,8 @@ ignoring case, the subsection (`branch.<b>`, `mergetool.<t>`) exactly. Every ent
 few hundred); `GitConfigRead.Of(key)` gives a key's entries in git's order, `Winner(key)` the last,
 which git uses for a single-valued key.
 
-Both run when the screen opens (in the background, side by side, beside 8.6's identity read and
-8.10's list) and after every Save (8.4). Nothing watches the global file: a terminal's change shows
+Both run when the screen opens (in the background, side by side, beside 8.6's identity read, 8.7's
+Pull reader and 8.10's list) and after every Save (8.4). Nothing watches the global file: a terminal's change shows
 at the next opening, and Pull reads its own settings at each pull (8.9).
 
 ### 8.2 The scopes the screen shows, and how it names files
@@ -3320,12 +3341,18 @@ nullable and null hides `ErrorRepository` (every caller today passes one).
 
 ### 8.4 Read back, and the notices
 
-After every Save the screen reads again (8.1) and compares, for each changed key, git's winner
-(`GitConfigRead.Winner`) in its scope's read with what was written: a global key's in the outside
-read, a repository key's in the repository read, so a correct global save made on a repository's tab
-whose `includeIf` overrides the key closes the dialog; when another file still decides it, the
-field's notice says so and the dialog stays open (7.8 step 8). The same comparison at opening gives the
-informational notices. Each is one secondary line under its field (`UserNameOrigin`,
+After every Save the screen reads again (8.1) and compares within the written scope (SD30): for each
+changed key, the last entry of the scope written, in that scope's read (local scope in the repository
+read, global scope in the outside read: 8.2's value of the scope), against what was written; a key
+unset is done when that scope holds no entry for it. So a correct global save made on a repository's
+tab whose `includeIf` overrides the key closes the dialog. `GitConfigRead.Winner`, the last entry over
+every scope of the read, is not the comparison: with it a repository key that `Same as global` unsets
+would stay decided by the global entry beneath it (S19 step 7: the global `pull.ff = only`), which is
+what `Same as global` asks for and must not hold the screen open. The two "Still" cases below are
+files of the written scope that the app does not write (an include read later, the XDG file): when
+one still decides the key, the field's notice says so and the dialog stays open (7.8 step 8); another
+scope's entry keeps its informational notice (the table) and holds nothing open. The same comparison
+at opening gives the informational notices. Each is one secondary line under its field (`UserNameOrigin`,
 `UserEmailOrigin`, `PullNotices`, `MergeToolNotices`), the file named as 8.2 says, the full path its
 tooltip; the "Still" notices in `VcWarningBrush`.
 
@@ -3473,6 +3500,14 @@ global configuration).`); nothing set: `Pull into {b}: Merge (fast-forward when 
 set, so the app merges; git in a terminal stops when the branches have diverged.`; a value Pull
 refuses: `Pull into {b} fails: {problem}` (8.9's sentence). Detached HEAD or an unborn branch: no
 line.
+
+Pull's reader runs with the screen's other reads (SD29): on a repository's tab whose HEAD is on a
+branch, `IGitRepository.ReadPullConfigurationAsync(<b>)` starts when the screen opens, beside 8.1's
+two reads and 8.6's identity read, whatever section the screen opens on, and again in every read back
+(7.8 step 6, beside the reads it names), so that `PullInEffect` always speaks of the reads it sits
+beside, also when a Save leaves the screen open (7.8 step 8); a scope switch, a section change or a
+radio's click reads nothing. Its calls are Pull's, in its order (8.9): three to five in the working
+tree.
 
 ### 8.8 `branch.<b>.rebase`
 
@@ -4317,6 +4352,18 @@ by row 7's null.
 git call of the row in every column, the existing local branch's `git switch --no-guess <b>` included;
 WP-RA's rewrite of `CheckoutRemoteBranchAsync` keeps `keepIgnored: KeepIgnored` on each (section 18).
 
+**How an upstream is named** (GD15). An upstream is named by its remote-tracking ref when the fetch
+lines map it to one (the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under
+`refs/remotes/`, shown without `refs/remotes/`), as `git status` names it; only when no line maps it,
+`{remote}/{remote ref}`, as today. So `pr/7`, checked out from `upstream/pr/7` (row 10's "not a
+branch": git tracks `refs/pull/7/head` on `upstream`), shows `upstream/pr/7` in Pull's tooltip, the
+push dialog and a dashboard row, not `upstream/refs/pull/7/head`; with the default lines every
+upstream reads as today. D101 still holds (the three values are read; the text is only display).
+WP-RA builds it in the place that makes `UpstreamText` (`ToolbarViewModel.UpstreamText`, which
+`RepositoryOperations.UpstreamText` and `RepositoryMenuContext.UpstreamText` call), so every text
+that names an upstream (14's `{up}`) follows; `UpstreamNameTests` (new, WP-RA's) proves the rule
+with and without a mapping line, and G25 asserts it in Pull's tooltip (17.4).
+
 **A push that would stop the fetch.** A local branch can still push into P's trap: one made by phase
 5's checkout or by `--track` in a terminal tracks `refs/heads/pr/1` on `origin` (0.5's P), and the push
 dialog offers the branch's own name. So `PushToAsync` (Push to the upstream, the push dialog, the
@@ -4802,7 +4849,7 @@ palette, their own tokens.
 ### 11.14 The sweep: every main screen in both themes
 
 The methods, the scenario each uses, their numbers and the picture names 17.4 gives are 17.4's (S15
-in part S, L26 to L31 in part L of `VisualCommit.VisualTests.Phase6`, L31 two methods; L34 is the real
+in part S, L26 to L31 in part L, in `VisualCommit.VisualTests.Phase6Look` (17.3), L31 two methods; L34 is the real
 window's alone, 11.8); this subsection decides what each method pictures and what stays unpictured,
 and names the pictures 17.4 leaves unnamed. A sweep method starts with `"theme": "System"` and the
 fake dark (17.2's `ShellDriver.Start(…, bool systemDark = true)`) and takes each screen through 17.2's
@@ -4822,7 +4869,7 @@ any drag while the system changes, `DragLayer`'s constructor gains
 | L28 Changes, pages and the graph's views (the "history" scenario) | `l28a-diff` (`src/Reader.cs`'s working change: its stage-panel "M" row and inline diff with C# syntax colours, Dark+ / Light+); `l28b-restore-bar` (after "Discard changes", then Restore); `l28c-blame` (its blame, "Not committed yet"); `l28d-compare` (two commits, Ctrl+click); `l28e-all-files`; `l28f-hidden` (`feature/compare` hidden and another branch soloed: the eye-off icon, the disabled name) |
 | L29 Reflog and backups (the "reflog" scenario) | `l29a-reflog` (HEAD's); `l29b-backups` |
 | L30 The dashboard (the workspace "Web", 17.1) | `l30a-dashboard` (every row's state), `l30b-row-menu`, `l30c-scan-checklist` ("Add repository…" on a folder holding repositories; its folder line shows the copy's temporary folder, so the pair varies by nature and its Notes say so, 17.4) |
-| L31 (two methods) Overlays and phase 6's screens | On the "ops" scenario: `l31a-activity-log` (open); `l31b-delete-question` ("Delete feature/alpha?", the danger label `VcDangerTextBrush` in both themes, 11.11); `l31c-palette` (open, no text); `l31d-settings-system` (General, the Theme radios, System checked); `l31e-settings-git` (Git on "All repositories (global)", as it opens, D200; the merge tool's Pick dialog stacked on it once 8.10's lookup has ended, D202); `l31f-enabled-tooltip` (Fetch's, with its key, 6.8); last, Light chosen and saved and the screen opened again, the single `l31d-settings-light` (the Light radio checked; L34's twin, 11.8). On the "auth" scenario (phase 3's server with sign-in, on 47393 through `StartForVisualChecksAsync(port: AuthRemoteServer.Phase6VisualChecksPort)`, not phase 3's 47391, 17.2; its texts that show the port through `Phase6Expectations.WithPort`): `l31g-credentials` (the sign-in prompt); `l31h-operation-held` (the status bar during a fetch the server holds at its percentage: progress, Cancel, `1 waiting`; then Cancel) |
+| L31 (two methods) Overlays and phase 6's screens | On the "ops" scenario: `l31a-activity-log` (open); `l31b-delete-question` ("Delete feature/alpha?", the danger label `VcDangerTextBrush` in both themes, 11.11); `l31c-palette` (open, no text); `l31d-settings-system` (General, the Theme radios, System checked); `l31e-settings-git` (Git on "All repositories (global)", as it opens, D200; the merge tool's Pick dialog stacked on it once 8.10's lookup has ended, D202); `l31f-enabled-tooltip` (Fetch's, with its key, 6.8); last, Light chosen and saved and the screen opened again, the single `l31d-settings-light` (the Light radio checked; L34's twin, 11.8). On the "auth" scenario (phase 3's server with sign-in, on 47394 through `StartForVisualChecksAsync(port: AuthRemoteServer.Phase6LookVisualChecksPort)`, not phase 3's 47391, 17.2; its texts that show the port through `Phase6Expectations.WithPort`): `l31g-credentials` (the sign-in prompt); `l31h-operation-held` (the status bar during a fetch the server holds at its percentage: progress, Cancel, `1 waiting`; then Cancel) |
 
 About 64 pictures: 29 pairs, the single `l31d-settings-light` and S15's five; the `-light` pictures
 of `l31a` to `l31c` and the single `l31d-settings-light` are L34's twins (11.8).
@@ -5372,8 +5419,9 @@ defines it; that section wins if the two ever differ. Counts take the singular f
 count is shown in one form the other follows the same pattern. House style (phases 3 to 5): disabled
 reasons, tooltips and status-bar results have no full stop; error summaries, notices and questions are
 sentences with one. `{workspace}` is the workspace's name, `{b}` the current branch, `{up}` its
-upstream as the toolbar names it, `{path}` a saved folder, `{T}` a remote-tracking ref's short name,
-`{r}` its remote, `{y}` the branch's name on that remote.
+upstream as the toolbar names it (by its remote-tracking ref when the fetch lines map it to one, as
+`git status` names it, else `{remote}/{remote ref}`: 10.4, GD15), `{path}` a saved folder, `{T}` a
+remote-tracking ref's short name, `{r}` its remote, `{y}` the branch's name on that remote.
 
 ### 14.1 Operations: title, running text, error title, summary
 
@@ -5579,7 +5627,7 @@ keeps its reason alone, and one without a reason has none; the help text is the 
 | Control | Enabled | Disabled | Section |
 |---|---|---|---|
 | `FetchButton` | `Fetch all remotes ({key})`; on a dashboard `Fetch every repository of {workspace} ({key})` | its reason (14.5) | 6.8, 4.10 |
-| `PullButton` | `Pull from {up} ({key})`; on a dashboard `Pull every repository of {workspace} ({key})` | its reason | 6.8, 4.10 |
+| `PullButton` | `Pull from {up} ({key})` (`Pull from upstream/pr/7 (Ctrl+Shift+L)` for a branch that tracks `refs/pull/7/head` on `upstream`, GD15); on a dashboard `Pull every repository of {workspace} ({key})` | its reason | 6.8, 4.10, 10.4 |
 | `PushButton` | `Push {b} to {up} ({key})`; without a remote upstream `Push {b} to a remote ({key})` | its reason | 6.8 |
 | `BranchButton`, `StashButton`, `PopButton` | `Create a branch at HEAD ({key})`, `Stash your changes ({key})`, `Pop the newest stash ({key})` | their reasons | 6.8 |
 | `UndoButton`, `RedoButton` | `Undo {text} ({key})`, `Redo {text} ({key})` | phase 5 design 7.4's reasons | 6.8 |
@@ -5845,8 +5893,9 @@ history: section 10 replaces the flag, section 9 settles what the setting covers
 phase 4" item (line 384), "The settings screen's external tools are where the user chooses it",
 becomes "The settings screen's Git section is where the user chooses it" (7.4; Tools holds the editor
 only, 7.5). Phase 5's outcome sentence (lines 346-348) stays as history. "Visual test gate" step 3
-names `VisualCommit.VisualTests.Phase6` (17.3's measurement makes no view-test project); its step
-4's "It needs the desktop unlocked" becomes "It needs the desktop unlocked and Windows' high contrast
+names `VisualCommit.VisualTests.Phase6` and part L's `VisualCommit.VisualTests.Phase6Look`, which
+the lead adds once that project exists (17.3; 17.3's measurement makes no view-test project); its
+step 4's "It needs the desktop unlocked" becomes "It needs the desktop unlocked and Windows' high contrast
 off (the pass never changes it, D224)" (11.8). Phase 8's item "Performance pass and
 keyboard-accessibility pass." becomes "Performance pass and keyboard-accessibility pass; the dark
 theme's text below 4.5:1 on hovered and selected rows and the dark danger button's label (D198; phase
@@ -5918,9 +5967,9 @@ index (risk 29, the owner's call); undo of a remote's removal under a namespace 
   restored repo tabs' openings (2.10); watch the gate's Q1 numbers; section 10's fetch lines come in the
   call that replaces `git remote` (10.2), so a refs read stays at five processes and Q1's path does not
   change.
-- 12 (the run time): +5 to +10 minutes over WP-S's 43 min 33 s rested, about 49 to 54 (17.6); one more
-  walk-through project; the view tests in App.Tests, where WP-S measured the processors, not the UI
-  thread, setting the length (17.3).
+- 12 (the run time): +5 to +10 minutes over WP-S's 43 min 33 s rested, about 49 to 54 (17.6); two more
+  walk-through projects (`Phase6` and `Phase6Look`, 17.3); the view tests in App.Tests, where WP-S
+  measured the processors, not the UI thread, setting the length (17.3).
 - 18 (the real-window pass): +5 to +8 minutes (17.6).
 - 20 ("Open file"): `PATHEXT` (through `ToolCatalogues.PathExtensions`), the user's extensions and the
   fixed floor are read; the file associations and macOS bundles beyond `.app` are not (12.8).
@@ -6181,8 +6230,9 @@ keep `Clock`, so nothing else in that session stands still.
 
 **`AuthRemoteServer` for a folder** (amends D97 as D150 did). It serves one repository
 (`IsInRepository`, `AuthRemoteServer.cs:679-680`) and holds one fetch (`_pendingHold`, `:297-306`;
-`Release()`, `:310-330`) today, and gains: `Phase6VisualChecksPort = 47393`, pinned beside 47391 and
-47392 (phase 6's checks run beside phases 1 and 3's servers) in
+`Release()`, `:310-330`) today, and gains: `Phase6VisualChecksPort = 47393` and, for part L's project
+in its own process, `Phase6LookVisualChecksPort = 47394` (the lead's ruling of 2026-10-22 on the
+report), pinned beside 47391 and 47392 (phase 6's checks run beside phases 1 and 3's servers) in
 `AuthRemoteServerTests.A_taken_port_gives_way_to_a_free_one_only_when_asked` (`AuthRemoteServerTests.cs:404-416`); `StartForFolderAsync(string folder, int port = 0,
 bool fallBackToFreePort = false)`, as `StartAsync` (`AuthRemoteServer.cs:166`), so that a test gets a
 system port unless it asks for one, serving each bare repository directly in `folder` (every folder in
@@ -6209,11 +6259,13 @@ Tests, the folder server's on a system port: `A_folder_server_serves_each_reposi
 `PATH` they fail with the server's message (risk 28). `Scenarios.ServeWorkspaceAsync(TempWorkspace
 copy, bool requireAuth, params string[] names)`, the walk-through's and the real window's only way to a
 folder server, serves the copy's `remotes/` on `Phase6VisualChecksPort` with the fallback and points each
-named `origin` at `UrlOf(name)` (a process each). L31's "auth" step starts phase 3's server on the
-same port, `StartForVisualChecksAsync(port: AuthRemoteServer.Phase6VisualChecksPort)`, not on 47391,
-which phase 3's part D holds in its own process meanwhile; W4, W6 and L31 never hold 47393 at once,
-because the project's headless tests take turns on one UI thread (`FreshApplication.cs:23-27`), as
-phase 3's part D's checks share 47391.
+named `origin` at `UrlOf(name)` (a process each). L31's "auth" step starts phase 3's server on its
+own port, `StartForVisualChecksAsync(port: AuthRemoteServer.Phase6LookVisualChecksPort)`, not on 47391,
+which phase 3's part D holds in its own process meanwhile; W4 and W6 never hold 47393 at once,
+because `VisualCommit.VisualTests.Phase6`'s headless tests take turns on one UI thread
+(`FreshApplication.cs:23-27`), as phase 3's part D's checks share 47391. L31 runs in
+`Phase6Look`'s own process beside them (17.3), hence its own 47394, so neither takes the fallback to a
+free port (`PortWasTaken`, noted in the report, D97) unless something else holds its port.
 `Phase6Expectations.WithPort(text, port)`, as `Phase3Expectations.Common.cs:130`, gives every expected
 text that shows the port (W6's sign-in dialog, `l31g`'s) the server's; a fallback (`PortWasTaken`) is
 noted in the report, as D97 says.
@@ -6305,9 +6357,11 @@ helpers `WaitForAllRowsIdleAsync`, `AssertRow`, `AssertDashboardHeader`, `OpenWo
 drivers, so the lead adds them once those three are merged, before WP-V's parts W, S and L start
 (section 18); WP-S's file has the rest.
 
-### 17.3 The walk-through project `VisualCommit.VisualTests.Phase6`
+### 17.3 The walk-through projects `VisualCommit.VisualTests.Phase6` and `.Phase6Look`
 
-One project, copied file by file from `tests/VisualCommit.VisualTests.Phase5`:
+Two projects: `VisualCommit.VisualTests.Phase6` for parts W, K, S and G, copied file by file from
+`tests/VisualCommit.VisualTests.Phase5`, and `VisualCommit.VisualTests.Phase6Look` for part L, beside
+it as `Phase5Undo` is beside `Phase5` ("Two projects", below):
 
 - `VisualCommit.VisualTests.Phase6.csproj`, phase 5's, its comment naming phase 6's parts and this section; `AssemblyInfo.cs` with
   `[AvaloniaTestApplication(typeof(HeadlessTestApp))]`, `[HangWatchdog]` and the module initializer
@@ -6315,7 +6369,7 @@ One project, copied file by file from `tests/VisualCommit.VisualTests.Phase5`:
 - `Phase6Checks.cs` (the map), `Phase6Checks.Support.cs` (`Phase = Phase6Expectations.Phase`, 17.2's
   additions, `PictureName()` matching `^[gklsw]?\d{1,2}[a-z0-9]{0,3}-[a-z0-9]+(-[a-z0-9]+)*$`); one
   class per part so xunit runs the parts side by side (`Phase6ChecksW`, `…K`, `…S`, `…G`, `…L`, in
-  `Phase6Checks.<part>[.<topic>].cs`).
+  `Phase6Checks.<part>[.<topic>].cs`; `…L` and its files in `Phase6Look`).
 - `Phase6Expectations.Common.cs` and `Phase6Expectations.<part>.cs` use only BCL, Avalonia, xunit,
   Core, Git and Testing (the real-window pass compiles them) and write key texts as literals
   (`"Ctrl+Shift+P"`, 6.12); their tests, `Phase6ExpectationTests.<part>.cs` and `Phase6SupportTests.cs`
@@ -6324,32 +6378,46 @@ One project, copied file by file from `tests/VisualCommit.VisualTests.Phase5`:
   **K** keys and the palette (K10 to K13), **S** settings and the theme's following (S14 to S21), **G**
   ignored files and refspecs (G22 to G25), **L** look: the sweep, the long folder, the tab strip (L26
   to L34); numbers run on across parts.
-- Pictures under `artifacts/visual/phase-6/scripted/` through `VisualRun` unchanged, timings under
+- Pictures of both projects under `artifacts/visual/phase-6/scripted/` through `VisualRun` unchanged
+  (one folder, as phase 5's two projects share theirs), timings under
   `artifacts/visual/phase-6/timings/`.
 - `VisualCommit.slnx` gains `<Project Path="tests/VisualCommit.VisualTests.Phase6/VisualCommit.VisualTests.Phase6.csproj" />`
-  in `/tests/`, so the default run and CI (`dotnet test --configuration Release --no-build`,
-  `.github/workflows/ci.yml:64`, `:139`) run it.
+  in `/tests/`, and `Phase6Look`'s line beside it once that project exists (the file is the lead's
+  after WP-S, 18), so the default run and CI (`dotnet test --configuration Release --no-build`,
+  `.github/workflows/ci.yml:64`, `:139`) run them.
 - The real-window csproj, after phase 5's block: the comment "Phase 6's expectations, likewise
   (docs/phase-6-design.md 17.3); their own tests, Phase6ExpectationTests.<part>.cs and
   Phase6SupportTests.cs, are left out by their names, which the pattern does not match" and `<Compile
   Include="..\VisualCommit.VisualTests.Phase6*\Phase6Expectations*.cs"
-  Link="Phase6\%(Filename)%(Extension)" />` (the `*` takes a second phase 6 project too); its comment on
+  Link="Phase6\%(Filename)%(Extension)" />` (the `*` takes `Phase6Look`'s `Phase6Expectations.L.cs` too); its comment on
   the pass's length is updated at the gate. The pass: `Phase6RealWindowPass.cs` (fixture `Phase6Run`,
   `RealWindowRun(phase: Phase6Expectations.Phase)`), `.W.cs`, `.K.cs`, `.S.cs`, `.L.cs`.
 - `scripts/time-scripted-check.sh` already sends phase 6 to `tests/VisualCommit.VisualTests.Phase${phase}`
   (`43f52c4`, `:33-34`); its default phase becomes 6 (`phase="${2:-6}"`, `:29`), the usage line and
-  header comment too, with the example `bash scripts/time-scripted-check.sh "*Check_W4*"`.
+  header comment too, with the example `bash scripts/time-scripted-check.sh "*Check_W4*"`. With part
+  L's project the script sends a filter that names part L (`*Check_L*`, `*Phase6ChecksL*`) to
+  `tests/VisualCommit.VisualTests.Phase6Look`, as it sends phase 5's part U to `Phase5Undo`.
 - `CLAUDE.md`'s Commands: the two walk-through rows gain `dotnet test --project
-  tests/VisualCommit.VisualTests.Phase6` (one part: `--filter-class "*Phase6ChecksW"`); the timing row
-  says 6 by default; "What to know" says eight test projects and gets
+  tests/VisualCommit.VisualTests.Phase6` (one part: `--filter-class "*Phase6ChecksW"`) and, once part
+  L's project exists, `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (part L); the
+  timing row says 6 by default; "What to know" says nine test projects and gets
   the gate's times; the note on the real-window pass, "It needs an unlocked desktop and the scripted
   screenshots", becomes "It needs an unlocked desktop, Windows' high contrast off and the scripted
-  screenshots" (11.8). `plan.md`'s "Visual test gate" step 3 names the project.
+  screenshots" (11.8). `plan.md`'s "Visual test gate" step 3 names both projects. The lead adds
+  `Phase6Look` to both files when it exists.
 
-**One project or two.** 38 test methods (one per app start, a restart two): W 10, K 6, S 9, G 4, L 9,
-below about 40. Part L moves to `VisualCommit.VisualTests.Phase6Look` (linking the base, support and
-common expectations as `Phase5Undo` does) if they pass 40 or the project ends after the run's longest
-other project on the idle laptop.
+**Two projects** (the visual test report's ruling on its project size). The report's checks have 47
+test methods (one per app start, a restart two; 49 app starts): W 11, K 8, S 13, G 6, L 9, where this
+section first counted 38 (W 10, K 6, S 9, G 4, L 9). Past 40, by this section's rule, part L moves
+whole to its own walk-through project `tests/VisualCommit.VisualTests.Phase6Look`, which links the
+base (`Phase6Checks.cs`), the support (`Phase6Checks.Support.cs`) and the common expectations
+(`Phase6Expectations.Common.cs`) of `VisualCommit.VisualTests.Phase6` as `Phase5Undo` links `Phase5`'s,
+and saves its pictures in phase 6's one folder; the real-window project's link pattern above covers
+both. `VisualCommit.VisualTests.Phase6` keeps parts W, K, S and G (38 methods), `Phase6Look` part L
+(9), each project a test process of its own with its own UI thread. WP-V's part L creates the project
+by WP-S's recipe (the csproj with its comment and the three links, `AssemblyInfo.cs` as above, the
+timing script's route); the lead adds it to `VisualCommit.slnx`, `CLAUDE.md`'s Commands and
+`plan.md`'s gate step 3 when it exists.
 
 **Phase 6's headless App tests**: the sections' view tests (`DashboardViewTests`,
 `CommandPaletteViewTests`, `KeyRouterTests`, `TabKeysTests`, `RegionKeysTests`, `CommitKeyTests`,
@@ -6404,13 +6472,13 @@ desktop).
 | G22 | "ignored": `Check out vendor` refused (`Checkout blocked`, `1 ignored file is in the way: vendor tracks a file of the same name. Move it away first.`, command `git switch --no-guess --no-overwrite-ignore vendor`); `origin/vendor`'s checkout goes into the local `vendor` (D93) and is refused with the same command, `origin/vendor` in the text (9.11's `plan.Name`); `origin/vendor-remote`'s tracking checkout refused (`Checkout blocked`, `1 ignored file is in the way: origin/vendor-remote tracks a file of the same name. Move it away first.`, command `git switch --create vendor-remote --track --no-overwrite-ignore refs/remotes/origin/vendor-remote`), no `refs/heads/vendor-remote` and no undo entry after it; `Create branch…` with checkout at `vendor` refused, no branch made; `tools` refused for `build/`; `secret.env` and `build/out.bin` intact | no |
 | G23 | "ignored": merge `vendor`, rebase `main` onto `vendor`, cherry-pick "Add the vendor secret", revert "Stop tracking the secret", apply and pop the stash: refused with `Merge failed`, `Rebase failed`, `Cherry-pick failed`, `Revert failed`, `Applying the stash failed` and 14.4's texts naming `secret.env`, no git output; `ExactStateAsync` unchanged; only reads before each | no |
 | G24 | Off in `settings.json`: the merge runs as git does (Q5), overwriting `secret.env`; the checkout takes git's default; no `--no-overwrite-ignore` | no |
-| G25 | "refspecs": `topic` dropped onto `fork/up/main` pushes `fork`'s `main` (no `up/main` on `fork.git`); onto `origin/pr/1` the push is disabled with R2 (`origin/pr/1 is fetched from more than one ref of origin`), its deletion too, while its checkout creates `pr/1` without an upstream (D201: `git switch --create pr/1 --no-track --no-overwrite-ignore refs/remotes/origin/pr/1`, no `branch.pr/1.*` key, the status bar `Created pr/1 at origin/pr/1 without an upstream: origin/pr/1 is fetched from more than one ref of origin`), and, with `main` checked out again, its double-click checks out that `pr/1`; Push of `pr/1` through the push dialog to `origin` is then refused (`Push failed`, `Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin.`, no git output, `origin.git` without `refs/heads/pr/1`); `upstream/pr/7`'s deletion disabled with R4 (`upstream/pr/7 is refs/pull/7/head on upstream, not a branch`), while its checkout stays enabled and creates `pr/7` tracking `refs/pull/7/head`, as git does; `fork/up/main`'s `Delete main on fork…` (10.4 #6 and #10 and its push guard, 10.5, 10.6) | no |
+| G25 | "refspecs": `topic` dropped onto `fork/up/main` pushes `fork`'s `main` (no `up/main` on `fork.git`); onto `origin/pr/1` the push is disabled with R2 (`origin/pr/1 is fetched from more than one ref of origin`), its deletion too, while its checkout creates `pr/1` without an upstream (D201: `git switch --create pr/1 --no-track --no-overwrite-ignore refs/remotes/origin/pr/1`, no `branch.pr/1.*` key, the status bar `Created pr/1 at origin/pr/1 without an upstream: origin/pr/1 is fetched from more than one ref of origin`), and, with `main` checked out again, its double-click checks out that `pr/1`; Push of `pr/1` through the push dialog to `origin` is then refused (`Push failed`, `Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin.`, no git output, `origin.git` without `refs/heads/pr/1`); `upstream/pr/7`'s deletion disabled with R4 (`upstream/pr/7 is refs/pull/7/head on upstream, not a branch`), while its checkout stays enabled and creates `pr/7` tracking `refs/pull/7/head`, as git does, Pull's tooltip then naming the upstream `upstream/pr/7` (`Pull from upstream/pr/7 (Ctrl+Shift+L)`, 10.4's upstream name, GD15); `fork/up/main`'s `Delete main on fork…` (10.4 #6 and #10 and its push guard, 10.5, 10.6) | no |
 | L26 | Sweep (11.14), the empty tab (a recent list, a workspace): the welcome page, the recent entries' folders cut with "…" as in phase 1's `10a` (the report lists `l26a` as varying by nature only if the Windows run shows the temporary folder's random part); the clone form | no |
 | L27 | Sweep, "ops": a branch drag's pill and outline (flipped mid-drag); three rows selected; `Delete feature/alpha…` under the pointer in a menu; a disabled toolbar button's and a disabled menu item's tooltips; Create branch…; the push dialog without upstream; Manage remotes… | no |
 | L28 | Sweep, "history": `src/Reader.cs`'s change (stage row `M`, inline diff in C#); the restore bar after a discard, then Restore; its blame (`Not committed yet`); two commits compared; `All files`; `feature/compare` hidden and another branch soloed (11.14) | no |
 | L29 | Sweep, "reflog": HEAD's reflog; the backups page | no |
 | L30 | Sweep, Web: the rows; a row's menu; the scan's checklist, its folder line asserted as W1's (`Found 9 repositories in {copy.Root}.`, 13.2's drawn lines), so `l30c-scan-checklist-dark` and `-light` vary by nature and their Notes say so | no (W2; the checklist W1's) |
-| L31 | Sweep, two methods. "ops": `l31a-activity-log`; `l31b-delete-question` (the danger button's `VcDangerTextBrush` asserted, 11.11); `l31c-palette`; `l31d-settings-system` (General, System checked); `l31e-settings-git` (on `All repositories (global)`, as it opens, D200; the merge tool's Pick stacked); `l31f-enabled-tooltip` (Fetch's, with its key); last, Light saved and the screen opened again, the single `l31d-settings-light` (11.8). "auth", its server on 47393 (17.2): the credentials dialog, its texts through `WithPort`; the fetch held at its percentage (progress, Cancel, a waiting operation), then Cancel | yes: L34 |
+| L31 | Sweep, two methods. "ops": `l31a-activity-log`; `l31b-delete-question` (the danger button's `VcDangerTextBrush` asserted, 11.11); `l31c-palette`; `l31d-settings-system` (General, System checked); `l31e-settings-git` (on `All repositories (global)`, as it opens, D200; the merge tool's Pick stacked); `l31f-enabled-tooltip` (Fetch's, with its key); last, Light saved and the screen opened again, the single `l31d-settings-light` (11.8). "auth", its server on 47394 (17.2): the credentials dialog, its texts through `WithPort`; the fetch held at its percentage (progress, Cancel, a waiting operation), then Cancel | yes: L34 |
 | L32 | The long folder (13.2): each drawn line of `WelcomeError` but the last ends with a separator or a space, none is `C:`, the text unchanged; both themes; the clone error likewise | no (phase 1's `11a`) |
 | L33 | The strip (13.3's numbers and rule: nothing moves while the tabs fit at their natural widths, 8 of 120 at 1000, at least 4 of any title): 8 tabs of 120 at 1000 in today's places; the Web dashboard, its nine repositories that can open (old-site cannot) and one tab from "+" at 1100: six of 97, five of 96, "+" at the end; a twelfth tab: 88 or 89 each, no scrolling; the strip scrolls from 14 tabs at 1100 (80 each), the active tab in view; Ctrl+Tab round to the first brings it into view. The twelfth tab and those up to 14 come from "+" too (`New tab`, natural width 120); every natural width is at least 120, more than each cap, so which tabs they are changes no width | no |
 | L34 | Real window only (11.8): `"theme": "Light"` on "ops": `l31a-activity-log-light`, `l31b-delete-question-light`, `l31c-palette-light` (real Ctrl+Shift+P), `l31d-settings-light` (the settings key), the first three against their pairs' `-light` pictures, `l31d-settings-light` against L31's single picture of that name (System's light draws Light's pixels, 11.15) | yes |
@@ -6418,8 +6486,13 @@ desktop).
 L26 to L31 picture each step in pairs by `ShotInBothThemesAsync`, but for the single
 `l31d-settings-light` (11.8); what 11.14 leaves unpictured (the
 clone in progress, the reload bar, the choice and finishing dialogs, the passphrase, host-key and
-prompt dialogs, the overflowing strip in both themes) stays so. Part L is 9 methods (L31 two); L34 has
-no scripted method. About 156 pictures: W about 32, K 14, S 28, G 14, L 66.
+prompt dialogs, the overflowing strip in both themes) stays so. Part L is 9 methods (L31 two), in
+`VisualCommit.VisualTests.Phase6Look` (17.3); L34 has no scripted method. As the visual test report
+writes the checks (its ruling on the project size): 47 methods, 49 app starts (W 11 with 12, K 8, S 13
+with 14, G 6, L 9) and 198 scripted pictures (W 45, K 17, S 42, G 26, L 68), where this section first
+estimated about 156 (W about 32, K 14, S 28, G 14, L 66); the real-window pass repeats 8 methods in 9
+launches (W1, W2, W4, W9 with its restart, K10, S14, S15, L34) and takes 26 captures (W 14, K 4, S 4,
+L 4).
 
 ### 17.5 Each "Delivers" item and what proves it
 
@@ -6438,7 +6511,7 @@ no scripted method. About 156 pictures: W about 32, K 14, S 28, G 14, L 66.
 | Done when: ten repositories checked and updated from one screen; every main action from the keyboard; the gate | W2, W4, W7; K12; 17.7. Read as plan.md's "ten repos in mixed states" asks: W2 reads all ten rows on one screen; one Fetch all (W4) and one Pull all (W7) each decide every one of the ten rows; every row that can be updated is (all eight with a remote are fetched, none failing), and the rows that cannot be updated give 4.2's reason. The handoff states this reading for the owner to confirm at acceptance |
 
 Harness items that are files are proven by the files and their tests (the handoff names them): the
-project in `VisualCommit.slnx`, the real-window link, the timing script, `CLAUDE.md`'s rows; the
+two projects in `VisualCommit.slnx`, the real-window link, the timing script, `CLAUDE.md`'s rows; the
 scenarios by `Phase6ScenarioTests`, port 47393 and the folder server by `AuthRemoteServerTests`, the
 hold by `FetchHoldTests`, the isolation by `ShellTests` and `GitIsolationTests`, the drivers by theirs.
 
@@ -6446,13 +6519,18 @@ hold by `FetchHoldTests`, the isolation by `ShellTests` and `GitIsolationTests`,
 
 Estimates from 0.10 and WP-S's measurements (17.1, 17.3); none of phase 6's UI has run.
 
-- **The walk-through**: 38 methods, about 156 pictures. At phase 5's 4.8 s per picture, the
-  dashboard's starts heavier (72 processes for the ten rows' first reads: 9 rows × (six refs reads, the
-  status read and `OpenAsync`'s), old-site none, billing's merge none, as `MERGE_HEAD` is read as a
-  file; 81 on CI's Windows and macOS, where `OpenedAtTopAsync` adds a `--show-prefix` per row, 1.2) and
-  the sweep's flips lighter, about 700 to 900 s of UI-thread time; at phase 5's wall-to-UI ratios (1.67
-  idle, 2.6 at the gate) it ends 20 to 39 minutes into the run, before `VisualCommit.App.Tests` (37 min
-  26 s, 43 min 8 s) unless that grows.
+- **The walk-through**: first estimated at 38 methods and about 156 pictures; as the visual test
+  report writes the checks, 47 methods (49 app starts) and 198 pictures in two projects (17.3: 38
+  methods and 130 pictures in `VisualCommit.VisualTests.Phase6`, 9 and 68 in `Phase6Look`). At phase
+  5's 4.8 s per picture, the dashboard's starts heavier (72 processes for the ten rows' first reads: 9
+  rows × (six refs reads, the status read and `OpenAsync`'s), old-site none, billing's merge none, as
+  `MERGE_HEAD` is read as a file; 81 on CI's Windows and macOS, where `OpenedAtTopAsync` adds a
+  `--show-prefix` per row, 1.2) and the sweep's flips lighter, the 156 pictures came to about 700 to
+  900 s of UI-thread time, and the report's 42 more add about 200 s, about 900 to 1,100 s in all, not
+  yet measured. At phase 5's wall-to-UI ratios (1.67 idle, 2.6 at the gate) one project of 156
+  pictures ended 20 to 39 minutes into the run; the two projects run side by side, each a test process
+  with its own UI thread and fewer pictures than that, so each should end sooner, before
+  `VisualCommit.App.Tests` (37 min 26 s, 43 min 8 s) unless that grows.
 - **The default run**: 37 min 29 s idle at step 2, 43 min 22 s at phase 5's gate; rested, 43 min 49 s
   for 3,236 tests at `3f62463` before WP-S and 43 min 33 s for 3,299 at WP-S's head (17.1). So the
   laptop's state moves nearly the same tests by some 6 minutes, and WP-S's own tests (scenarios, folder
@@ -6482,7 +6560,7 @@ Estimates from 0.10 and WP-S's measurements (17.1, 17.3); none of phase 6's UI h
   a fast runner and 28 to 31 on a slow one, near D186's 32: past 32 on Windows or macOS the lead raises
   the limit and records it. macOS: 16 to 18 minutes today, 19 to 22 then.
 - **The real-window pass** (24 min 57 s for phases 0 to 5): 8 methods (W1, W2, W4, W9, K10, S14, S15,
-  L34) in 9 launches, the workspace template (28 processes) and the folder server; at phase 5's 41 s
+  L34) in 9 launches and 26 captures, the workspace template (28 processes) and the folder server; at phase 5's 41 s
   per method and more for the dashboard: **+5 to +8 minutes**, 30 to 33 in all; W1's checklist capture
   and S14's Browse… step add some seconds within that.
 
@@ -6565,8 +6643,8 @@ changing only the lines its change moves.
 | WP-SET (the settings screen, git's settings on screen, the editor, Open file) | `Dialogs/SettingsDialogViewModel.cs`, `ViewModels/Settings/` (`GeneralSettingsViewModel`, `GitSettingsViewModel`, `ToolSettingsViewModel`), `Views/Dialogs/SettingsDialogView.axaml(.cs)`; `PickDialogViewModel.cs`, `PickDialogView.axaml`; `Theme/Dialogs.axaml` (then WP-K); `Views/Shell/ToolbarView.axaml` (`SettingsButton`); `MainWindowViewModel.Settings.cs` (`OpenSettingsCommand`; it sets WP0's `TabServices.OpenSettings`); `RepositoryViewModel.Settings.cs` (it only fills the menu context's editor name, 12.1, with no subscription); `RepositoryOperations.Settings.cs`, `RepositoryOperations.Files.cs` (`OpenInEditorAsync`'s body behind WP0's declaration, 12.7's dialog through `TabServices.OpenSettings`); `OperationTexts.Settings.cs`; `Services/KnownEditors.cs`, `EditorCatalog.cs`, `EditorCommands.cs`, `FolderPicker.cs` (`PickFileAsync`), `IFileLauncher.cs`, `FileLauncher.cs`; `Headless/FakeFileLauncher.cs`, `FakeFolderPicker.cs`, `HeldMergeTools.cs`, `ShellDriver.Phase6.Settings.cs`; the expectations of 16.1's Settings-button row | `SettingsDialogViewModelTests`, `SettingsDialogViewTests`, `PickDialogViewModelTests`, `SettingsEntryTests` (the button, `OpenSettingsCommand`), `GitSettingsViewModelTests`, `RepositoryOperationsSettingsTests`, `KnownEditorsTests`, `EditorCatalogTests`, `EditorCommandsTests`, `FileMenuEditorTests` (12.10's file menus) (all new); `JsonSettingsStoreTests`, `FileLauncherTests`, `RepositoryOperationsFilesTests` |
 | WP-T (the theme) | `Services/SystemTheme.cs`, `Services/ThemeService.cs` (behind WP0's signature); `MainWindowViewModel.Theme.cs` (after WP0's move: `Theme` from the service, `UseTheme`'s body, the service's `Changed`); `Theme/Tokens.axaml`, `Theme/Controls.axaml` (`VcDangerButton`); `Views/Shell/DragLayer.cs`; `ShellDriver.Phase6.Theme.cs`, `VisualCommit.Testing/Contrast.cs`; the earlier expectations of 16.1's colour rows | `SystemThemeTests`, `ThemeServiceTests`, `SystemThemeStartTests` (11.15's starts), `DragLayerTests`, `ThemeTokensTests`, `ToolTipStyleTests` (all new); `MainWindowViewModelTests`, `BlameViewTests`, `ConflictPanesTests`, `ConflictResultEditorTests`, `CommitGraphControlTests` |
 | WP-IA (keeping ignored files, the app half) | `RepositoryOperations.Branches.cs`, `.Protect.cs` (`CheckoutRefusalDisplayAsync`; `RepositoryOperations.KeepIgnored`'s body, 9.1, which turns every checkout and merge on at once), `.Rebase.cs` (then WP-B), `.StashTags.cs`; `OperationTexts.Protect.cs`; the earlier expectations of 16.1's `--no-overwrite-ignore` row but the pull's | `RepositoryOperationsKeepIgnoredTests` (new); `OperationTextsTests`, `DialogTests`, `RepositoryOperationsCheckoutTests`, `RepositoryOperationsProtectTests`, `RepositoryOperationsRebaseTests`, `ShellDriverCheckSupportTests`, `UndoRecordingTests`, `ActivityLogViewTests`, `UndoStepTests` |
-| WP-RA (fetch refspecs, the app half) | `RepositoryOperations.RemoteBranches.cs` (10.6's name, R2's checkout without an upstream, D201; every git call keeping `keepIgnored: KeepIgnored`, 9.11), `RepositoryOperations.Remotes.cs` (`SplitRemoteBranch`, `PushBranchToAsync`, `DeleteRemoteBranchAsync`, `SetUpstreamAsync`, `PushToAsync` and `ForcePushAsync` with 10.4's push guard, which counts only destinations under `refs/remotes/`), `.Undo.cs` (`PushForcePushBackAsync`), `.Conflicts.cs` (`MergedRemoteBranch`); `Menus/RepositoryMenuContext.cs` (`DropFacts`, `LocalNameOf` moved, `FindRef`'s index by full name, 5.5), `RepositoryMenus.cs` (`ForDrop`, `ForRemoteBranch`, the set-upstream item), `RepositoryMenus.Pages.cs` (`ForcePushRestore`); `RepositoryViewModel.Menus.cs` (`ReadDropFactsAsync`, `CheckOutByDoubleClick`); `OperationTexts.Menus.Refspecs.cs` (R1 to R4, `CreatedWithoutUpstream`, `PushWouldStopFetch`, 10.5), `OperationTexts.Menus.cs` (`MapsBranchesDifferently` removed). WP3's notes: `RemoteSource`'s equality compares `Remotes` by reference, so compare `Kind`, `Remote` and `RemoteRef`, or the lists by sequence (10.1); with `Refspecs` filled, WP0's `noTrack` in the create-branch operation already takes effect and `GitRef.RemoteName` already follows the mapping, a namespace such as `refs/remotes/mirror/*` that `origin` fetches belonging to `origin` (10.3, 10.4) | `RepositoryMenusTests` (with 5.12's `FindRef` cases: duplicate names keep `FirstOrDefault`'s answer, a `with` copy that replaces `Refs` finds its own), `RepositoryOperationsRemotesTests`, `RepositoryOperationsPushTests`, `LeftPanelViewModelTests` |
-| WP-V (the walk-through, by part) | `Phase6Checks.<part>*.cs`, `Phase6Expectations.<part>.cs`, `Phase6ExpectationTests.<part>.cs` for W, K, S, G and L, one agent per part (the report's checks in full) | `Phase6ExpectationTests.<part>` |
+| WP-RA (fetch refspecs, the app half) | `RepositoryOperations.RemoteBranches.cs` (10.6's name, R2's checkout without an upstream, D201; every git call keeping `keepIgnored: KeepIgnored`, 9.11), `RepositoryOperations.Remotes.cs` (`SplitRemoteBranch`, `PushBranchToAsync`, `DeleteRemoteBranchAsync`, `SetUpstreamAsync`, `PushToAsync` and `ForcePushAsync` with 10.4's push guard, which counts only destinations under `refs/remotes/`), `.Undo.cs` (`PushForcePushBackAsync`), `.Conflicts.cs` (`MergedRemoteBranch`); `Menus/RepositoryMenuContext.cs` (`DropFacts`, `LocalNameOf` moved, `FindRef`'s index by full name, 5.5), `RepositoryMenus.cs` (`ForDrop`, `ForRemoteBranch`, the set-upstream item), `RepositoryMenus.Pages.cs` (`ForcePushRestore`); `RepositoryViewModel.Menus.cs` (`ReadDropFactsAsync`, `CheckOutByDoubleClick`); `OperationTexts.Menus.Refspecs.cs` (R1 to R4, `CreatedWithoutUpstream`, `PushWouldStopFetch`, 10.5), `OperationTexts.Menus.cs` (`MapsBranchesDifferently` removed); 10.4's upstream name (GD15) in the place that makes `UpstreamText` (`ToolbarViewModel.UpstreamText`, `ViewModels/ToolbarViewModel.cs:277`, which every text of an upstream calls: that method alone of WP-K's file, before WP-K's merge). WP3's notes: `RemoteSource`'s equality compares `Remotes` by reference, so compare `Kind`, `Remote` and `RemoteRef`, or the lists by sequence (10.1); with `Refspecs` filled, WP0's `noTrack` in the create-branch operation already takes effect and `GitRef.RemoteName` already follows the mapping, a namespace such as `refs/remotes/mirror/*` that `origin` fetches belonging to `origin` (10.3, 10.4) | `RepositoryMenusTests` (with 5.12's `FindRef` cases: duplicate names keep `FirstOrDefault`'s answer, a `with` copy that replaces `Refs` finds its own), `RepositoryOperationsRemotesTests`, `RepositoryOperationsPushTests`, `LeftPanelViewModelTests`, `UpstreamNameTests` (new: 10.4's upstream named by its tracking ref, `upstream/pr/7`, and `{remote}/{remote ref}` when no line maps it; the lead's ruling of 2026-10-22) |
+| WP-V (the walk-through, by part) | `Phase6Checks.<part>*.cs`, `Phase6Expectations.<part>.cs`, `Phase6ExpectationTests.<part>.cs` for W, K, S, G and L, one agent per part (the report's checks in full); W, K, S and G in `VisualCommit.VisualTests.Phase6`, L in `tests/VisualCommit.VisualTests.Phase6Look`, which part L creates by WP-S's recipe (17.3: the csproj with its links to `Phase6`'s base, support and common expectations, `AssemblyInfo.cs`, the timing script's route for part L; its line in `VisualCommit.slnx` the lead's) | `Phase6ExpectationTests.<part>` |
 | WP-R (the real-window pass, Windows) | `Phase6RealWindowPass.cs`, `.W.cs`, `.K.cs`, `.S.cs`, `.L.cs`; `RealApp.Phase6.cs` (`WriteWorkspaces`, 11.8's read-only reads), `.Dashboard.cs`, `.Palette.cs`, `.Settings.cs`; `NativeMethods.cs` (`SystemParametersInfo`); phases 0 to 5's real-window files that 16.1 changes. Written and built (status step 21), run only at the gate; any trial run stays in WP-R's worktree | — |
 | Lead | `MainWindowViewModel.cs` (tabs, `SaveTabs`, `UpdateCanClose`, `TryClose`, `FinishThenCloseAsync`, `CloseAll`, `CloseTab`, the calls into the packages' partial files, the menu layer's `repositoryName` callback, 8.10's start of the merge-tool lookup once the first tab's load ends, `readEnvironment` passed to `AutoFetchScheduler` (7.3), the scheduler's `CommonFolderBusy` (4.3, `:99`)), `MainWindow.axaml.cs`, `TabServices.cs` (`ReadClock`, `OpenSettings`), `AppSession.cs` (the store, the catalogues, 11.5's start-up order, `KeyTexts.Current`, 7.3's log line and `readEnvironment`, `readClock`, the kept list's path given to `GitConfiguration`, 8.10, and its disposal in `Dispose`, 8.1), `Theme/Icons.axaml`, `THIRD-PARTY-NOTICES.md`, `IGitRepository.cs`, `FakeRepositoryBase.cs`, `AppSettings.cs`, the Core records WP0 declares, `Phase6Checks.Support.cs` and `Phase6Expectations.Common.cs` after WP-S (17.2's five dashboard and theme helpers once WP-D, WP-W and WP-T are merged, before WP-V's parts W, S and L), `VisualCommit.slnx` after WP-S, CI, the docs, CLAUDE.md; before the gate, 17.7's references and comparison | `AppSessionTests` (new); `Phase6SupportTests`' smoke tests of those helpers |
 
@@ -6687,7 +6765,7 @@ packages editing one file at once (menus, texts, earlier expectations).
 | `IGitRepository.cs`, `FakeRepositoryBase.cs`, `AppSettings.cs`, the Core records | WP0 declares every member once; no package edits them; a missing member goes through the lead |
 | `MainWindowViewModel.cs`, `MainWindow.axaml.cs`, `TabServices.cs`, `AppSession.cs` | the lead's; each package works in its partial file and the lead joins the calls at its merge |
 | `RepositoryViewModel` | `RepositoryViewModel.cs`, `.InProgress.cs`, `.GraphArea.cs` are WP-D's (summary mode); WP-SET, WP-K and WP-RA work in `.Settings.cs`, `.Palette.cs`, `.Menus.cs` |
-| `ToolbarViewModel` | `ToolbarViewModel.cs` WP-K's (tooltips with keys), `.Dashboard.cs` WP-B's (4.10) |
+| `ToolbarViewModel` | `ToolbarViewModel.cs` WP-K's (tooltips with keys) but for `UpstreamText`, which WP-RA changes first (10.4's upstream name, GD15; WP-RA merges before WP-K), `.Dashboard.cs` WP-B's (4.10) |
 | `RepositoryOperations.Remotes.cs` (bulk, settings, ignored files and refspecs all touch it today) | WP0 moves Fetch all and Pull into `.FetchPull.cs` (WP-B, which builds 4.6, 4.8, 8.9's and 9.10's app parts on WP1's and WP2's merged git halves) and the remote-branch checkout into `.RemoteBranches.cs`; `.Remotes.cs` (push, deletion, set upstream, remotes) is WP-RA's |
 | `RepositoryOperations.Rebase.cs` | WP-IA's, then WP-B's for the rebase stop's deferral |
 | `GitRepository.Remotes.cs` | WP0 moves the pull readers out and places the ignored-files check's call point; then WP2 alone |

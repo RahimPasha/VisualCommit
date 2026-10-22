@@ -48,12 +48,21 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     public const int Phase1VisualChecksPort = 47392;
 
     /// <summary>
-    /// The port of phase 6's servers (docs/phase-6-design.md 17.2): the workspace's folder server
-    /// (<see cref="Scenarios.ServeWorkspaceAsync"/>) and L31's "auth" server, whose URLs the
-    /// pictures show. Not <see cref="VisualChecksPort"/> or <see cref="Phase1VisualChecksPort"/>:
-    /// phase 6's checks run in a process of their own beside phases 1 and 3's.
+    /// The port of phase 6's servers in <c>VisualCommit.VisualTests.Phase6</c>
+    /// (docs/phase-6-design.md 17.2): the workspace's folder server
+    /// (<see cref="Scenarios.ServeWorkspaceAsync"/>), whose URLs the pictures show. Not
+    /// <see cref="VisualChecksPort"/> or <see cref="Phase1VisualChecksPort"/>: phase 6's checks run
+    /// in a process of their own beside phases 1 and 3's.
     /// </summary>
     public const int Phase6VisualChecksPort = 47393;
+
+    /// <summary>
+    /// The port of L31's "auth" server in <c>VisualCommit.VisualTests.Phase6Look</c>, part L's project
+    /// (docs/phase-6-design.md 17.2, 17.3): a process of its own beside
+    /// <c>VisualCommit.VisualTests.Phase6</c>'s, so a port of its own, as phase 1's clone checks
+    /// have <see cref="Phase1VisualChecksPort"/> (D150).
+    /// </summary>
+    public const int Phase6LookVisualChecksPort = 47394;
 
     /// <summary>The folder name of the served repository, and the last part of <see cref="Url"/>.</summary>
     public const string RepositoryName = "remote.git";
