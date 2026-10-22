@@ -915,6 +915,23 @@ public partial class RepositoryMenusTests
     }
 
     [Fact]
+    public void A_force_pushs_backup_that_no_branch_tracks_is_pushed_back_by_the_fetch_lines_or_not_at_all()
+    {
+        // docs/phase-6-design.md 10.4 #12: through RepoRefs.SourceOf when no local branch has the backup's ref as upstream.
+        var (actions, _) = RecordingActions.Create();
+        string Restore(string name) =>
+            Lines(RepositoryMenus.ForBackup(Context(RefspecsRefs()), Backup("force-push-20260101T120901000Z", "force-push", Ref($"force-push-20260101T120901000Z/{name}", AlphaTwo, name)), actions, hasForcePushLease: true))[1];
+
+        Assert.Equal("Push main back to fork…", Restore("fork/up/main"));
+        Assert.Equal("Push topic back to fork…", Restore("fork/up/topic"));
+        Assert.Equal("Push feature/x back to origin…", Restore("origin/feature/x"));
+        const string NotFound = "The remote this backup came from cannot be found";
+        Assert.Equal($"Push pr/7 back to upstream… (disabled: \"{NotFound}\")", Restore("upstream/pr/7"));
+        Assert.Equal($"Push pr/1 back to origin… (disabled: \"{NotFound}\")", Restore("origin/pr/1"));
+        Assert.Equal($"Push secret back to origin… (disabled: \"{NotFound}\")", Restore("origin/secret"));
+    }
+
+    [Fact]
     public void FindRef_gives_the_first_ref_of_a_full_name_and_a_copy_with_other_refs_finds_its_own()
     {
         var first = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, AlphaTwo);
