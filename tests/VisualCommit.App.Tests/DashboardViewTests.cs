@@ -420,24 +420,30 @@ public class DashboardViewTests
     }
 
     [AvaloniaFact]
-    public void A_long_name_during_a_run_gives_way_so_that_the_runs_text_keeps_120_on_one_line()
+    public async Task A_long_name_during_a_run_gives_way_so_that_the_runs_text_keeps_120_on_one_line()
     {
         using var provider = new FakeProvider();
         const string name = "Every web service, every library they share and every tool that deploys them";
-        var store = new FailingStore(new WorkspaceList { Workspaces = [new Workspace("web", name, [])] });
+        var folders = Enumerable.Range(0, 10).Select(i => provider.Add($"repo{i}").WorkingDirectory).ToList();
+        var store = new FailingStore(new WorkspaceList { Workspaces = [new Workspace("web", name, [.. folders.Select(folder => new WorkspaceRepository(folder))])] });
         using var host = Host.Show(provider, store, 1100);
+        host.Dashboard.OnBecameActive();
+        await DashboardTestSupport.WaitUntilAsync(() => host.Dashboard.Rows.All(row => row.HasRepository), "the rows' reads");
 
-        // A run as the header shows it (2.5, 4.9): its text, its bar and Cancel all. The bulk
-        // view model is WP-B's and its stub never runs, so until WP-B's run lands the run's part
-        // is shown by hand here; then this step runs a real Fetch all instead.
-        var text = (TrimmedTextBlock)host.Find("DashboardBulkText");
-        text.SetCurrentValue(TextBlock.TextProperty, "Fetching 10 repositories… 4 done");
-        foreach (var part in new[] { text, host.Find("DashboardBulkProgress"), host.Find("DashboardCancelAll") })
+        // A real Fetch all (2.5, 4.9): each row's queue busy with an operation of its own, so that
+        // the run's fetches wait behind them and the run runs while the header is measured.
+        var hold = new TaskCompletionSource();
+        var held = host.Dashboard.Rows.Select(row => row.Repository!.Queue.RunAsync(new GitOperation("Held", "Holding…", OperationKind.Local, RefreshScope.None, async _ =>
         {
-            part.SetCurrentValue(Visual.IsVisibleProperty, true);
-        }
-
+            await hold.Task;
+            return OperationReport.Done("Held");
+        }))).ToList();
+        var fetchAll = host.Dashboard.Bulk.FetchAllAsync();
+        await DashboardTestSupport.WaitUntilAsync(() => host.Dashboard.Bulk.Current!.RunningRows == BulkSlots.Count, "the run's four turns");
         host.Settle();
+        var text = (TrimmedTextBlock)host.Find("DashboardBulkText");
+        Assert.Equal("Fetching 10 repositories…", text.Text);
+        Assert.All(new[] { text, host.Find("DashboardBulkProgress"), host.Find("DashboardCancelAll") }, part => Assert.True(part.IsEffectivelyVisible));
 
         var header = host.BoundsOf(host.Find("DashboardHeader"));
         var title = (TrimmedTextBlock)host.Find("DashboardTitle");
@@ -462,6 +468,16 @@ public class DashboardViewTests
         Assert.True(count.Right <= run.X, $"the count ends at {count.Right}, the run starts at {run.X}");
         Assert.Equal(cancelAll.Right + 16, add.X, 1);
         Assert.Equal(1092, more.Right, 1);
+
+        // Cancel all ends the run: the rows in line at once, the four waiting fetches unrun.
+        host.Click(host.Find("DashboardCancelAll"));
+        await fetchAll.WaitAsync(Patience);
+        hold.SetResult();
+        await Task.WhenAll(held).WaitAsync(Patience);
+        host.Settle();
+        Assert.Equal("Fetched no repositories; 10 cancelled", text.Text);
+        Assert.False(host.Find("DashboardCancelAll").IsEffectivelyVisible);
+        Assert.False(host.Find("DashboardBulkProgress").IsEffectivelyVisible);
     }
 
     private static async Task<ShellDriver> StartAsync(TempWorkspace copy, TempDirectory data, int width, int height)
