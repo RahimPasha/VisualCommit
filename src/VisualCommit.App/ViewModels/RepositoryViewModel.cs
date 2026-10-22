@@ -172,7 +172,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>
     /// Completes once <see cref="StartAsync"/> has applied both the refs and the status, or has
-    /// failed (<see cref="ErrorText"/> set), in either mode (3.2); also when the view model closes,
+    /// failed (<see cref="ErrorText"/> set; in full mode a failed status read sets
+    /// <see cref="StatusErrorText"/>), in either mode (3.2); also when the view model closes,
     /// so that nothing waits for it for good. A summary read that a promotion discards does not
     /// complete it: the full start does. A dashboard row that follows a tab counts as not read until
     /// then, and a bulk run waits for it (2.10, 4.2).
@@ -367,6 +368,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>Why the repository could not be read, or null.</summary>
     [ObservableProperty]
     public partial string? ErrorText { get; private set; }
+
+    /// <summary>
+    /// Why the full start's first status read failed, until a status read is applied (3.2): the
+    /// tab shows its graph as before, and nothing of it binds this; a dashboard row that follows the
+    /// tab shows <c>Git could not open it</c> with it, so that the row never shows a status that was
+    /// never read and a bulk run leaves it out. Null otherwise (summary mode fails in
+    /// <see cref="ErrorText"/>).
+    /// </summary>
+    [ObservableProperty]
+    public partial string? StatusErrorText { get; private set; }
 
     /// <summary>The staged, unstaged and untracked files, as last read.</summary>
     [ObservableProperty]
@@ -1276,6 +1287,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// </summary>
     private void ApplyStatus(WorkingTreeStatus status)
     {
+        // A status read now: the first read's failure no longer holds (3.2).
+        StatusErrorText = null;
         if (IsSummary)
         {
             // Summary mode (3.1): the status and what follows it that a row or an operation reads
@@ -1322,10 +1335,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         catch (Exception ex)
         {
             _log.Error($"{Name}: reading the working tree's status failed.", ex);
+            if (firstRead)
+            {
+                // The first read has failed (3.2): said where a row looks, not in the tab.
+                StatusErrorText = ex is GitException git && git.StandardError.Trim() is { Length: > 0 } output ? output : ex.Message;
+            }
         }
         finally
         {
-            // The full start's first read (3.2): the refs were applied before the status.
+            // The full start's first read (3.2): the refs were applied before the status, which was
+            // applied or failed (StatusErrorText) by now.
             if (firstRead)
             {
                 CompleteFirstRead();

@@ -132,12 +132,16 @@ public sealed partial class ShellDriver
 
     /// <summary>
     /// The git calls recorded after <paramref name="sequence"/> (<see cref="GitCallRecord.Sequence"/>),
-    /// in <paramref name="worktree"/>'s folder when given (matched as a folder, <see cref="WorkspacePaths.Same"/>,
-    /// so git's spelling and the saved one both count). A call is recorded when it ends.
+    /// all of them, or those whose folder <paramref name="inFolder"/> accepts. A call's folder is
+    /// the one git ran in, as git spells it (<c>IGitRepository.WorkingDirectory</c>): on macOS
+    /// <c>/private/var/…</c> where the saved path says <c>/var/…</c>, which
+    /// <see cref="WorkspacePaths.Same"/> never equates. So match it with git's spelling: a view
+    /// model's <c>Repository.WorkingDirectory</c>, or part W's <c>SameFolder</c> (the saved path or
+    /// git's <c>--show-toplevel</c> of it). A call is recorded when it ends.
     /// </summary>
-    public IReadOnlyList<GitCallRecord> CallsSince(long sequence, string? worktree = null) =>
+    public IReadOnlyList<GitCallRecord> CallsSince(long sequence, Func<string, bool>? inFolder = null) =>
         [.. GitCalls().Where(call => call.Sequence > sequence
-            && (worktree is null || (call.WorkingDirectory is { } folder && WorkspacePaths.Same(folder, worktree))))];
+            && (inFolder is null || (call.WorkingDirectory is { } folder && inFolder(folder))))];
 
     private static DashboardSnapshot SnapshotOf(DashboardViewModel dashboard, Control? view)
     {

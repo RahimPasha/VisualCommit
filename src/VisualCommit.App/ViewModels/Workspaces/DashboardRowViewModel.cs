@@ -15,9 +15,9 @@ namespace VisualCommit.App.ViewModels.Workspaces;
 /// follows the view model's status and empties without one.
 /// <para>
 /// A read (<see cref="StartRead"/>, 2.10) runs on the UI thread between its awaits; its folder
-/// checks (the <c>directoryExists</c> seam) and its opening run on the thread pool, at most one
-/// outstanding, holding no read slot; only the summary read's git calls hold one of the
-/// dashboard's four. After each await it applies its result only while the row still holds the
+/// checks (the <c>directoryExists</c> seam) run on the thread pool and, like its wait for a closed
+/// queue on the worktree, hold no read slot; its git calls (the probe's opening, the summary read)
+/// hold one of the dashboard's four. After each await it applies its result only while the row still holds the
 /// token it started with (the row's <see cref="CancellationTokenSource"/>, linked to the
 /// dashboard's lifetime, cancelled when the row is removed, its path replaced or the dashboard
 /// closed), and otherwise releases what it acquired.
@@ -32,6 +32,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     private DashboardRowRead? _read;
     private bool _owns;
     private string? _key;
+    private string? _workingDirectory;
     private bool _disposed;
 
     /// <param name="path">The saved folder, as <c>workspaces.json</c> holds it.</param>
@@ -78,7 +79,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     [ObservableProperty]
     public partial WorkspaceFolderProbe? FolderState { get; private set; }
 
-    /// <summary>Why its view model could not read it (a failed summary read, a followed tab's failed first read: its <c>ErrorText</c>), or null.</summary>
+    /// <summary>Why its view model could not read it (a failed summary read, a followed tab's failed first read: its <c>ErrorText</c> or <c>StatusErrorText</c>), or null.</summary>
     [ObservableProperty]
     public partial string? ErrorText { get; private set; }
 
@@ -95,8 +96,13 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     /// <summary>The worktree's key, once the row knows it (from its view model).</summary>
     public string? Key => _key;
 
-    /// <summary>The working tree of the row's repository while it has a view model (1.2's <c>WorkspaceMembership</c>); null otherwise.</summary>
-    public string? WorkingDirectory => Repository?.Path;
+    /// <summary>
+    /// The working tree of the row's repository (1.2's <c>WorkspaceMembership</c>, 2.10): its view
+    /// model's, kept when the view model goes (the followed tab closed, 3.6), so that a saved path
+    /// that reaches the repository another way still matches; null before the row's repository was
+    /// opened, and again in a folder state or after Locate… replaced the folder.
+    /// </summary>
+    public string? WorkingDirectory => Repository?.Path ?? _workingDirectory;
 
     /// <summary>
     /// The row has not been read yet (2.6, 2.10): no values and no folder state or error, or it
@@ -296,6 +302,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         _read = null;
         IsReading = false;
         _key = null;
+        _workingDirectory = null;
         LastRead = null;
         (Refs, Status, FolderState, ErrorText) = (null, null, null, null);
         Path = path;
@@ -336,11 +343,17 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         _token.Dispose();
     }
 
+    /// <summary>
+    /// The read (2.10). It counts in its pass's <c>{n}</c> when it read the row: its own view model's
+    /// summary read, a folder state found, a failure; not when it ended by following a tab, which
+    /// the dashboard never reads (WD27, WD35), nor when it was cancelled.
+    /// </summary>
     private async Task RunReadAsync(DashboardRowRead read, CancellationToken token)
     {
         var path = Path;
         var registry = _dashboard.Registry;
         var exists = _dashboard.DirectoryExists;
+        var counted = false;
         try
         {
             // Step 2: a row with its own view model checks its folder and its git folder first, on
@@ -350,14 +363,16 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             {
                 var gitDirectory = own.Repository.GitDirectory;
                 var present = await read.CheckAsync(() => exists(path) && exists(gitDirectory), token);
-                if (token.IsCancellationRequested)
+                if (token.IsCancellationRequested || !OwnsSummary(own))
                 {
+                    // Removed or replaced; or a tab adopted the summary during the check, and the
+                    // row follows it now: a followed row is never read by the dashboard.
                     return;
                 }
 
                 if (present)
                 {
-                    await ReadOwnAsync(own, token);
+                    counted = await ReadOwnAsync(own, token);
                     return;
                 }
 
@@ -382,10 +397,14 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             if (!folderExists)
             {
                 ShowFolderState(WorkspaceFolderProbe.FolderNotFound(path));
+                counted = true;
                 return;
             }
 
+            // The probe's git calls (the open's rev-parse, the top's check) hold one of the
+            // dashboard's four slots, as every git call of a read does (2.10).
             WorkspaceFolderProbe probe;
+            await _dashboard.ReadSlots.WaitAsync(token);
             try
             {
                 probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, token, exists);
@@ -400,9 +419,14 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
                 if (!token.IsCancellationRequested)
                 {
                     ShowFolderState(WorkspaceFolderProbe.NotOpened(path, ex.Message));
+                    counted = true;
                 }
 
                 return;
+            }
+            finally
+            {
+                _dashboard.ReadSlots.Release();
             }
 
             if (token.IsCancellationRequested)
@@ -413,6 +437,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             if (probe.State != WorkspaceFolderState.Ready || probe.Repository is not { } repository)
             {
                 ShowFolderState(probe);
+                counted = true;
                 return;
             }
 
@@ -422,6 +447,17 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             {
                 Follow(registered);
                 return;
+            }
+
+            // A closed queue on the worktree (a closed tab's merge tool, 3.3): the read waits for
+            // it holding nothing, as in a folder check, and its pass ends without it (2.10).
+            while (registry.WhenIdleAsync(key) is { IsCompleted: false } idle)
+            {
+                await read.WaitAsync(idle, token);
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
             }
 
             var acquired = await registry.AcquireSummaryAsync(repository, _dashboard, token);
@@ -446,7 +482,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             }
 
             Own(acquired);
-            await ReadOwnAsync(acquired, token);
+            counted = await ReadOwnAsync(acquired, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -455,10 +491,12 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         catch (Exception ex)
         {
             _dashboard.Services.Log.Error($"{_dashboard.Name}: reading {path} failed.", ex);
+            counted = true;
         }
         finally
         {
-            if (!token.IsCancellationRequested && !_disposed)
+            var current = !token.IsCancellationRequested && !_disposed;
+            if (current)
             {
                 LastRead = _dashboard.ReadClock.GetUtcNow();
             }
@@ -468,19 +506,24 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
                 IsReading = false;
             }
 
-            read.Complete();
+            read.Complete(counted && current);
         }
     }
 
-    /// <summary>The summary read in one of the dashboard's slots: the first, or a refresh of one read before (another dashboard's included).</summary>
-    private async Task ReadOwnAsync(RepositoryViewModel own, CancellationToken token)
+    /// <summary>
+    /// The summary read in one of the dashboard's slots: the first, or a refresh of one read before
+    /// (another dashboard's included). Reads nothing, and returns false, when the row no longer owns
+    /// <paramref name="own"/> once it has its slot: a tab adopted it meanwhile, and a followed row is
+    /// never read by the dashboard (2.10).
+    /// </summary>
+    private async Task<bool> ReadOwnAsync(RepositoryViewModel own, CancellationToken token)
     {
         await _dashboard.ReadSlots.WaitAsync(token);
         try
         {
-            if (token.IsCancellationRequested || own.IsClosed)
+            if (token.IsCancellationRequested || own.IsClosed || !OwnsSummary(own))
             {
-                return;
+                return false;
             }
 
             await (own.HasFirstRead ? own.RefreshAsync() : own.StartAsync());
@@ -494,12 +537,18 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         {
             CopyFrom(own);
         }
+
+        return true;
     }
+
+    /// <summary>The row still holds <paramref name="own"/> as its own summary-mode view model.</summary>
+    private bool OwnsSummary(RepositoryViewModel own) => _owns && ReferenceEquals(Repository, own) && own.IsSummary;
 
     private void ShowFolderState(WorkspaceFolderProbe probe)
     {
         ReleaseOwn();
         Detach();
+        _workingDirectory = null;
         FolderState = probe;
         ErrorText = null;
         RaiseCells();
@@ -538,6 +587,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         Detach();
         _repository = repository;
         _key = WorktreeKey.Of(repository.Repository.GitDirectory);
+        _workingDirectory = repository.Path;
         repository.PropertyChanged += OnRepositoryChanged;
         _status = repository.OperationStatus;
         _status.PropertyChanged += OnStatusChanged;
@@ -590,7 +640,11 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             Status = repository.Status;
         }
 
-        ErrorText = repository.ErrorText is { Length: > 0 } error ? error : null;
+        // A followed tab's first status read that failed shows as the row's error (3.2): the row
+        // never shows a status that was not read.
+        ErrorText = repository.ErrorText is { Length: > 0 } error ? error
+            : repository.StatusErrorText is { Length: > 0 } status ? status
+            : null;
         if (repository.HasFirstRead)
         {
             FolderState = null;
@@ -612,6 +666,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             case nameof(RepositoryViewModel.Status):
             case nameof(RepositoryViewModel.BranchText):
             case nameof(RepositoryViewModel.ErrorText):
+            case nameof(RepositoryViewModel.StatusErrorText):
             case nameof(RepositoryViewModel.HasFirstRead):
                 CopyFrom(repository);
                 break;
@@ -657,62 +712,80 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 }
 
 /// <summary>
-/// One read of a row (2.10), as its pass sees it: whether it has ended, and whether it sits in a
-/// folder check (on the thread pool, or returned and waiting for the UI thread), which holds no
-/// slot; its pass ends without it once only such checks are left for the dashboard's
-/// <see cref="DashboardViewModel.CheckPatience"/>.
+/// One read of a row (2.10), as its pass sees it: whether it has ended and whether it counts in the
+/// pass's <c>{n}</c>, and whether it sits in a wait that holds nothing: a folder check (queued for
+/// the thread pool, running there, or returned and waiting for the UI thread) or the wait for a
+/// closed queue on its worktree. Its pass ends without it once only such waits have been left for
+/// the dashboard's <see cref="DashboardViewModel.CheckPatience"/>.
 /// </summary>
 internal sealed class DashboardRowRead
 {
-    private const int NoCheck = 0;
-    private const int CheckQueued = 1;
-    private const int CheckRunning = 2;
-    private const int CheckDone = 3;
-
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private int _check;
+    private int _waits;
 
-    /// <summary>The read sits in a folder check: queued for the thread pool, running there, or returned and waiting for the UI thread.</summary>
-    public bool IsInCheck => Volatile.Read(ref _check) != NoCheck;
+    /// <summary>The read sits in a folder check or waits for a closed queue: it holds nothing.</summary>
+    public bool IsWaiting => Volatile.Read(ref _waits) > 0;
 
     /// <summary>The read has ended.</summary>
     public bool IsCompleted => _completion.Task.IsCompleted;
 
+    /// <summary>The read has ended having read the row (WD27): not by following a tab, nor cancelled.</summary>
+    public bool Counted { get; private set; }
+
     /// <summary>Completes when the read has ended.</summary>
     public Task Completion => _completion.Task;
 
-    /// <summary>Raised on the UI thread when a folder check returned or the read ended: its pass looks again.</summary>
+    /// <summary>Raised on the UI thread when a wait starts or ends and when the read ends: its pass looks again.</summary>
     public event EventHandler? Progressed;
 
     /// <summary>
-    /// Runs <paramref name="check"/> on the thread pool, as a folder check of this read: while it
-    /// runs the read counts as sitting in it; its result comes back on the caller's context.
+    /// Runs <paramref name="check"/> on the thread pool, as a folder check of this read: from its
+    /// start until its result is back on the caller's context the read counts as waiting.
     /// </summary>
     public async Task<bool> CheckAsync(Func<bool> check, CancellationToken cancellationToken)
     {
-        Volatile.Write(ref _check, CheckQueued);
-        var result = await Task.Run(
-            () =>
-            {
-                Volatile.Write(ref _check, CheckRunning);
-                try
-                {
-                    return check();
-                }
-                finally
-                {
-                    Volatile.Write(ref _check, CheckDone);
-                }
-            },
-            CancellationToken.None).WaitAsync(cancellationToken);
-        Volatile.Write(ref _check, NoCheck);
-        Progressed?.Invoke(this, EventArgs.Empty);
-        return result;
+        BeginWait();
+        try
+        {
+            return await Task.Run(check, CancellationToken.None).WaitAsync(cancellationToken);
+        }
+        finally
+        {
+            EndWait();
+        }
     }
 
-    public void Complete()
+    /// <summary>Waits for <paramref name="task"/> (a closed queue's idle task, 3.3), counting as waiting meanwhile.</summary>
+    public async Task WaitAsync(Task task, CancellationToken cancellationToken)
     {
+        BeginWait();
+        try
+        {
+            await task.WaitAsync(cancellationToken);
+        }
+        finally
+        {
+            EndWait();
+        }
+    }
+
+    /// <summary>The read has ended; <paramref name="counted"/> when it read the row.</summary>
+    public void Complete(bool counted)
+    {
+        Counted = counted;
         _completion.TrySetResult();
+        Progressed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void BeginWait()
+    {
+        Interlocked.Increment(ref _waits);
+        Progressed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void EndWait()
+    {
+        Interlocked.Decrement(ref _waits);
         Progressed?.Invoke(this, EventArgs.Empty);
     }
 }

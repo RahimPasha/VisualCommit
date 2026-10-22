@@ -32,8 +32,10 @@ public enum DashboardFocus
 /// the workspace gains rows while it is active. A trigger that finds no row to read starts no pass
 /// and logs nothing (WD35); one that comes during a pass folds into one more pass after it. At most
 /// four reads run at once (<see cref="ReadSlots"/>), each holding its slot only around its git
-/// calls; a pass ends without a row whose folder check has not returned and logs
-/// <c>{workspace}: read {n} repositories in {ms} ms</c> with the rows that finished.
+/// calls; a pass ends without a row whose folder check has not returned (or that waits for a
+/// closed queue on its worktree) once <see cref="CheckPatience"/> has passed, and logs
+/// <c>{workspace}: read {n} repositories in {ms} ms</c> with the rows that finished having read
+/// their row, none that ended by following a tab (WD27; no line for none, WD35).
 /// </para>
 /// </summary>
 public sealed partial class DashboardViewModel : ObservableObject, IDisposable, IDashboardRowActions, IDashboardHeaderActions
@@ -45,9 +47,10 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     public const int MaxReads = 4;
 
     /// <summary>
-    /// How long a read pass waits, by the read clock, once only folder checks are left (2.10): a
-    /// check of a folder that answers returns in microseconds, one on a share that does not answer
-    /// can take minutes, and the pass ends without it.
+    /// How long a read pass waits, by the read clock, once only reads that hold nothing are left
+    /// (2.10): folder checks that have not returned and waits for a closed queue. A check of a
+    /// folder that answers returns in microseconds, one on a share that does not answer can take
+    /// minutes, and the pass ends without it.
     /// </summary>
     public static readonly TimeSpan CheckPatience = TimeSpan.FromSeconds(2);
 
@@ -242,7 +245,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary>
     /// The first read of a dashboard that is active at start (2.10, "At start"): the window's
     /// <c>InitializeAsync</c> awaits it after git is found. Completes when the pass has ended
-    /// (without a row whose folder check has not returned).
+    /// (without a row whose folder check has not returned within <see cref="CheckPatience"/>).
     /// </summary>
     public Task ReadAtStartAsync() => IsClosed ? Task.CompletedTask : Read(ReadTrigger.Stale);
 
@@ -400,7 +403,23 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         _services.WorkspaceCommands.MoveDown(WorkspaceId, row.Path);
     }
 
-    Task IDashboardRowActions.LocateAsync(DashboardRowViewModel row) => _services.WorkspaceCommands.LocateAsync(WorkspaceId, row.Path);
+    /// <summary>
+    /// <c>Locate…</c> (1.10): the workspace's command. A folder that replaced the row's is read at
+    /// once by the change it made (trigger 6); the same folder again changes nothing in the
+    /// workspace, so the row is read here: the user located it because it showed a state (a drive
+    /// mounted since, a <c>safe.directory</c> fixed), and "the located path is read at once".
+    /// </summary>
+    public async Task LocateAsync(DashboardRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        await _services.WorkspaceCommands.LocateAsync(WorkspaceId, row.Path);
+        if (!IsClosed && Rows.Contains(row) && !row.FollowsTab && !row.IsReading)
+        {
+            _ = Read(ReadTrigger.Rows, [row]);
+        }
+    }
+
+    Task IDashboardRowActions.LocateAsync(DashboardRowViewModel row) => LocateAsync(row);
 
     /// <summary><c>Remove from workspace</c> (1.10): at once, no question; no row is selected afterwards (2.7).</summary>
     public void Remove(DashboardRowViewModel row)
@@ -425,8 +444,12 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         }
     }
 
-    /// <summary>F5 and the header's Refresh (2.10's trigger 3): every row without a tab is read.</summary>
-    [RelayCommand]
+    /// <summary>
+    /// F5 and the header's Refresh (2.10's trigger 3): every row without a tab is read. Always
+    /// enabled (2.5): a call while a pass runs folds into one more pass after it, and its task
+    /// completes with that pass.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task Refresh() => IsClosed ? Task.CompletedTask : Read(ReadTrigger.All);
 
     /// <summary>
@@ -458,13 +481,9 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary><c>Open</c>'s reason (2.7): a row that follows a tab always opens it (its tab activates); otherwise a folder state's, an error's, or <c>Wait for {name} to be read</c>.</summary>
     private string? OpenReasonOf(DashboardRowViewModel row) => row.FollowsTab && row.ErrorText is null ? null : ReadReasonOf(row);
 
-    private string? MoveUpReasonOf(DashboardRowViewModel row) =>
-        _services.WorkspaceCommands.EditReason
-        ?? (Rows.IndexOf(row) == 0 ? DashboardTexts.FirstRepositoryText : _services.WorkspaceCommands.MoveUpReason(WorkspaceId, row.Path));
+    private string? MoveUpReasonOf(DashboardRowViewModel row) => _services.WorkspaceCommands.MoveUpReason(WorkspaceId, row.Path);
 
-    private string? MoveDownReasonOf(DashboardRowViewModel row) =>
-        _services.WorkspaceCommands.EditReason
-        ?? (Rows.IndexOf(row) == Rows.Count - 1 ? DashboardTexts.LastRepositoryText : _services.WorkspaceCommands.MoveDownReason(WorkspaceId, row.Path));
+    private string? MoveDownReasonOf(DashboardRowViewModel row) => _services.WorkspaceCommands.MoveDownReason(WorkspaceId, row.Path);
 
     private string? RemoveReasonOf(DashboardRowViewModel row) =>
         _services.WorkspaceCommands.EditReason ?? row.HeldByRunReason ?? _services.WorkspaceCommands.RemoveReason(WorkspaceId, row.Path);
@@ -531,9 +550,12 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     }
 
     /// <summary>
-    /// One pass (2.10): every row's read starts; the pass ends when each has ended or sits in a
-    /// folder check that has not returned, which holds nothing, and logs its line with the rows
-    /// that finished. A row whose read is outstanding starts none and is left out.
+    /// One pass (2.10): every row's read starts; the pass ends when each has ended or has sat for
+    /// <see cref="CheckPatience"/> in a wait that holds nothing (a folder check that has not
+    /// returned, a closed queue on its worktree), and logs its line with the rows that finished
+    /// having read their row (WD27): a read that ended by following a tab is not counted, and a
+    /// pass that read none logs nothing (WD35). A row whose read is outstanding starts none and is
+    /// left out.
     /// </summary>
     private async Task RunPassAsync(List<DashboardRowViewModel> rows)
     {
@@ -553,39 +575,57 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ui = SynchronizationContext.Current;
         ITimer? patience = null;
-        bool OnlyChecksLeft() => reads.All(read => read.IsCompleted || read.IsInCheck) && reads.Any(read => read.IsCompleted);
-        void Expire()
+        var patienceRound = 0;
+        bool OnlyWaitsLeft() => reads.All(read => read.IsCompleted || read.IsWaiting);
+        void Expire(int round)
         {
+            if (round != patienceRound)
+            {
+                // A timer that a change since its start replaced.
+                return;
+            }
+
             patience?.Dispose();
             patience = null;
-            if (OnlyChecksLeft())
+            if (OnlyWaitsLeft())
             {
                 ended.TrySetResult();
             }
         }
 
-        void Look(object? sender, EventArgs e)
+        void Look()
         {
-            // Looked at when a read ends or its check returns. With every read ended the pass
-            // ends. With only folder checks left, it waits for them CheckPatience by the read
-            // clock (a normal check returns in microseconds), then ends without them: a check that
-            // has not returned holds nothing (2.10).
+            // Looked at when the pass starts, and when a read's wait starts or ends or the read
+            // ends. With every read ended the pass ends. With only waits that hold nothing left, it
+            // waits for them CheckPatience by the read clock (a normal folder check returns in
+            // microseconds), then ends without them (2.10); anything else running restarts that time.
             if (reads.All(read => read.IsCompleted))
             {
                 ended.TrySetResult();
+                return;
             }
-            else if (patience is null && OnlyChecksLeft())
+
+            if (!OnlyWaitsLeft())
             {
+                patience?.Dispose();
+                patience = null;
+                patienceRound++;
+                return;
+            }
+
+            if (patience is null)
+            {
+                var round = ++patienceRound;
                 patience = ReadClock.CreateTimer(
                     _ =>
                     {
                         if (ui is null)
                         {
-                            Expire();
+                            Expire(round);
                         }
                         else
                         {
-                            ui.Post(_ => Expire(), null);
+                            ui.Post(_ => Expire(round), null);
                         }
                     },
                     null,
@@ -594,11 +634,14 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             }
         }
 
+        void OnProgressed(object? sender, EventArgs e) => Look();
         foreach (var read in reads)
         {
-            read.Progressed += Look;
+            read.Progressed += OnProgressed;
         }
 
+        // The reads started above may have ended, or reached a wait, before the pass listened.
+        Look();
         try
         {
             await ended.Task;
@@ -607,16 +650,17 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         {
             foreach (var read in reads)
             {
-                read.Progressed -= Look;
+                read.Progressed -= OnProgressed;
             }
 
             patience?.Dispose();
             IsPassRunning = false;
         }
 
-        if (!IsClosed)
+        var counted = reads.Count(read => read.IsCompleted && read.Counted);
+        if (!IsClosed && counted > 0)
         {
-            _services.Log.Info(DashboardTexts.ReadLine(Name, reads.Count(read => read.IsCompleted), stopwatch.ElapsedMilliseconds));
+            _services.Log.Info(DashboardTexts.ReadLine(Name, counted, stopwatch.ElapsedMilliseconds));
         }
     }
 

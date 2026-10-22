@@ -78,11 +78,13 @@ public static class DashboardTexts
 {
     // The header (2.5, 14.3).
 
+    // The workspace's own commands keep their words in WorkspaceTexts (1.5 to 1.10): one source each.
+
     /// <summary>The header's Add repository button and the empty state's.</summary>
-    public const string AddRepository = "Add repository…";
+    public const string AddRepository = WorkspaceTexts.AddRepository;
 
     /// <summary>The header menu's and the empty state's Add open tabs.</summary>
-    public const string AddOpenTabs = "Add open tabs";
+    public const string AddOpenTabs = WorkspaceTexts.AddOpenTabs;
 
     /// <summary>The header's Fetch all.</summary>
     public const string FetchAll = "Fetch all";
@@ -97,10 +99,10 @@ public static class DashboardTexts
     public const string More = "More";
 
     /// <summary>The header menu's rename.</summary>
-    public const string RenameWorkspace = "Rename workspace…";
+    public const string RenameWorkspace = WorkspaceTexts.RenameWorkspace;
 
     /// <summary>The header menu's deletion (destructive).</summary>
-    public const string DeleteWorkspace = "Delete workspace…";
+    public const string DeleteWorkspace = WorkspaceTexts.DeleteWorkspace;
 
     /// <summary><c>DashboardNotice</c> while the store's last save failed (1.3, 2.5).</summary>
     public const string SaveFailedNotice = "workspaces.json could not be saved, so changes to workspaces are lost when VisualCommit closes.";
@@ -363,7 +365,7 @@ public static class DashboardTexts
 
     // The row menu (2.7, 14.10) and its reasons (14.5).
 
-    public const string Open = "Open";
+    public const string Open = WorkspaceTexts.Open;
 
     public const string Fetch = "Fetch";
 
@@ -371,13 +373,13 @@ public static class DashboardTexts
 
     public const string ErrorDetails = "Error details…";
 
-    public const string MoveUp = "Move up";
+    public const string MoveUp = WorkspaceTexts.MoveUp;
 
-    public const string MoveDown = "Move down";
+    public const string MoveDown = WorkspaceTexts.MoveDown;
 
-    public const string Locate = "Locate…";
+    public const string Locate = WorkspaceTexts.Locate;
 
-    public const string RemoveFromWorkspace = "Remove from workspace";
+    public const string RemoveFromWorkspace = WorkspaceTexts.RemoveFromWorkspace;
 
     /// <summary>A row's <c>Cancel {title}</c> (2.7).</summary>
     public static string CancelTitle(string title) => $"Cancel {title}";
@@ -391,11 +393,11 @@ public static class DashboardTexts
     /// <summary>Why <c>Show in folder</c> is disabled: <c>{path} does not exist</c>.</summary>
     public static string DoesNotExist(string path) => $"{path} does not exist";
 
-    /// <summary>Why <c>Move up</c> is disabled on the first row.</summary>
-    public const string FirstRepositoryText = "It is the first repository";
+    /// <summary>Why <c>Move up</c> is disabled on the first row (<c>WorkspaceCommands.MoveUpReason</c>'s).</summary>
+    public const string FirstRepositoryText = WorkspaceTexts.FirstRepository;
 
-    /// <summary>Why <c>Move down</c> is disabled on the last row.</summary>
-    public const string LastRepositoryText = "It is the last repository";
+    /// <summary>Why <c>Move down</c> is disabled on the last row (<c>WorkspaceCommands.MoveDownReason</c>'s).</summary>
+    public const string LastRepositoryText = WorkspaceTexts.LastRepository;
 
     // The activity log on a dashboard (2.9, 14.5).
 

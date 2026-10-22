@@ -324,9 +324,12 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             ? Adopt(adopted, sinceOpening)
             : new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening, _services.Dialogs, _services);
         opened.PropertyChanged += OnRepositoryPropertyChanged;
-        registry.RegisterTab(opened);
+
+        // The tab shows its repository before the registry says so: what the registry's change
+        // updates (a dashboard's Add open tabs, its rows) sees this tab with it.
         Repository = opened;
         Title = opened.Name;
+        registry.RegisterTab(opened);
         if (previous is not null)
         {
             previous.PropertyChanged -= OnRepositoryPropertyChanged;
