@@ -1,5 +1,6 @@
 // File actions: docs/phase-3-design.md 2.30 (ignore), 2.32 (open, show in folder, copy SHA,
-// SHAs, path, branch or tag name, URL), 4b's file menus and the working-changes row's Stage all,
+// SHAs, path, branch or tag name, URL), docs/phase-6-design.md 12 (Open in editor, Open file's
+// question by the fixed list, the user's extensions and PATHEXT), 4b's file menus and the working-changes row's Stage all,
 // Unstage all and Discard all, which delegate to phase 2's code in RepositoryViewModel (stage,
 // unstage, discard with its confirmation and snapshot, open diff; D62, D67, D70, D76). The
 // launcher and the clipboard come from TabServices (Launcher, Clipboard); none of these but
@@ -7,11 +8,14 @@
 // tests/VisualCommit.App.Tests/RepositoryOperationsFilesTests.cs (through OperationsHarness,
 // whose FakeFileLauncher and FakeClipboard record what was asked).
 
+using System.ComponentModel;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Settings;
 using VisualCommit.Core.Undo;
 using VisualCommit.Git;
 
@@ -77,20 +81,95 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// "Open in editor" (docs/phase-6-design.md 12.1): the working tree's file in the chosen editor,
-    /// never asking first. Does nothing yet: work package WP-SET gives it its body (12.4, 12.7), and
-    /// no menu offers it before an editor can be chosen.
+    /// "Open in editor" (docs/phase-6-design.md 12.1, 12.4): the working tree's file in the chosen
+    /// editor, never asking first (an editor shows a file and runs nothing), at its top. No
+    /// operation and no undo entry, as Open file (D168); the log line <c>Open in editor: {command}</c>.
+    /// When the editor cannot start, the error dialog says why, with "Open settings…", which opens
+    /// the settings screen on Tools (12.7).
     /// </summary>
-    public Task OpenInEditorAsync(string path)
+    public async Task OpenInEditorAsync(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return Task.CompletedTask;
+        if (IsClosed)
+        {
+            return;
+        }
+
+        if (Services?.Settings.Current.Editor is not { } editor)
+        {
+            Log.Info($"{Repository.Name}: Open in editor: no editor is chosen.");
+            return;
+        }
+
+        var known = editor.Id == KnownEditors.CustomId ? null : KnownEditors.Find(editor.Id);
+        if (known is null && editor.Id != KnownEditors.CustomId)
+        {
+            // An id the catalogue no longer knows means none chosen (12.6): the menu has no item then.
+            Log.Info($"{Repository.Name}: Open in editor: the editor {editor.Id} is not known.");
+            return;
+        }
+
+        var fullPath = FullPathOf(path);
+        if (!File.Exists(fullPath))
+        {
+            // The menu disables the item then ("The file is not in the working tree"); it may have gone since.
+            Log.Warning($"{Repository.Name}: Open in editor: {path} is not in the working tree.");
+            return;
+        }
+
+        if (Services.Launcher is not { } launcher)
+        {
+            Log.Info($"{Repository.Name}: Open in editor: there is no launcher.");
+            return;
+        }
+
+        var name = EditorName(editor, known);
+        try
+        {
+            var command = EditorCommands.Build(editor, known, fullPath, line: null);
+            Log.Info($"Open in editor: {command.DisplayText}");
+            await launcher.OpenInEditorAsync(command);
+        }
+        catch (FileNotFoundException ex)
+        {
+            Log.Warning($"{Repository.Name}: Open in editor: {name} is not at {editor.Program}.", ex);
+            await ShowEditorFailureAsync(OperationTexts.EditorIsGone(name, editor.Program));
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            Log.Warning($"{Repository.Name}: Open in editor: {name} could not be started.", ex);
+            await ShowEditorFailureAsync(OperationTexts.EditorCouldNotStart(name, ex.Message));
+        }
+    }
+
+    /// <summary>How the editor failure's dialog names an editor (12.7): the catalogue's name, or Other's program's file name.</summary>
+    public static string EditorName(EditorSetting editor, KnownEditor? known)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        return known?.Name ?? Path.GetFileName(editor.Program.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    /// <summary>12.7's dialog, without git's output (D114), with "Open settings…", which opens the settings screen on Tools.</summary>
+    private async Task ShowEditorFailureAsync(string summary)
+    {
+        var dialog = new ErrorDialogViewModel(
+            OperationTexts.EditorFailedTitle,
+            summary,
+            Repository.Name,
+            extraAction: OperationTexts.OpenSettingsButton,
+            clipboard: Services?.Clipboard,
+            log: Log);
+        if (await ShowDialogAsync(dialog) && Services?.OpenSettings is { } openSettings)
+        {
+            await openSettings(SettingsSection.Tools);
+        }
     }
 
     /// <summary>
     /// "Open file" (2.32): the working tree's version in the system's application for it. A file
-    /// that the system would run rather than show (<see cref="CanRunPrograms(string, UnixFileMode?)"/>),
-    /// as a cloned repository can hold, is opened only after the user said yes.
+    /// that the system would run rather than show (<see cref="CanRunPrograms(string, UnixFileMode?, IReadOnlySet{string})"/>:
+    /// the fixed list, the user's extensions and, on Windows, <c>PATHEXT</c>'s, docs/phase-6-design.md
+    /// 12.8), as a cloned repository can hold, is opened only after the user said yes.
     /// </summary>
     public async Task OpenFileAsync(string path)
     {
@@ -103,7 +182,7 @@ public sealed partial class RepositoryOperations
             return;
         }
 
-        if (CanRunPrograms(fullPath, ReadUnixFileMode(fullPath)) && !await ConfirmAsync(OperationTexts.ConfirmOpenRunnable(FileNameOf(path))))
+        if (CanRunPrograms(fullPath, ReadUnixFileMode(fullPath), ExtraRunnableExtensions()) && !await ConfirmAsync(OperationTexts.ConfirmOpenRunnable(FileNameOf(path))))
         {
             return;
         }
@@ -117,19 +196,70 @@ public sealed partial class RepositoryOperations
     /// and Linux types alike), or, given its <paramref name="unixMode"/> (null on Windows), a file
     /// with an executable bit.
     /// </summary>
-    public static bool CanRunPrograms(string fileName, UnixFileMode? unixMode)
+    public static bool CanRunPrograms(string fileName, UnixFileMode? unixMode) => CanRunPrograms(fileName, unixMode, EmptyExtensions);
+
+    /// <summary>
+    /// <see cref="CanRunPrograms(string, UnixFileMode?)"/> with <paramref name="extraExtensions"/>
+    /// (with their dot) besides the fixed list (docs/phase-6-design.md 12.8): the user's own and, on
+    /// Windows, <c>PATHEXT</c>'s; case is ignored.
+    /// </summary>
+    public static bool CanRunPrograms(string fileName, UnixFileMode? unixMode, IReadOnlySet<string> extraExtensions)
     {
         ArgumentNullException.ThrowIfNull(fileName);
+        ArgumentNullException.ThrowIfNull(extraExtensions);
         const UnixFileMode Executable = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
-        return RunnableExtensions.Contains(Path.GetExtension(fileName)) || (unixMode is { } mode && (mode & Executable) != 0);
+        var extension = Path.GetExtension(fileName);
+        return RunnableExtensions.Contains(extension)
+            || (extension.Length > 0 && extraExtensions.Any(extra => string.Equals(extra, extension, StringComparison.OrdinalIgnoreCase)))
+            || (unixMode is { } mode && (mode & Executable) != 0);
     }
 
-    /// <summary>The extensions <see cref="CanRunPrograms"/> takes as runnable, with their dot.</summary>
-    private static readonly HashSet<string> RunnableExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
+    /// <summary>
+    /// The extensions Open file always asks about (D130, docs/phase-6-design.md 12.8), in the order
+    /// the settings screen lists them: a floor the user cannot remove.
+    /// </summary>
+    public static IReadOnlyList<string> FixedRunnableExtensions { get; } =
+    [
         ".exe", ".bat", ".cmd", ".com", ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".hta", ".msi", ".scr", ".pif", ".cpl",
         ".lnk", ".url", ".reg", ".jar", ".app", ".command", ".sh", ".desktop",
-    };
+    ];
+
+    /// <summary>
+    /// <c>PATHEXT</c>'s extensions in lower case, in its order, without duplicates (12.8): each entry
+    /// of <paramref name="pathExt"/> split at <c>;</c>, given its dot; empty for null.
+    /// </summary>
+    public static IReadOnlyList<string> PathExtExtensions(string? pathExt) =>
+        [.. (pathExt ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(entry => (entry.StartsWith('.') ? entry : "." + entry).ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)];
+
+    /// <summary>The extensions <see cref="CanRunPrograms(string, UnixFileMode?)"/> takes as runnable, with their dot.</summary>
+    private static readonly HashSet<string> RunnableExtensions = new(FixedRunnableExtensions, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> EmptyExtensions = [];
+
+    /// <summary>
+    /// What Open file asks about beyond its fixed list, read at each call (12.8): the user's
+    /// extensions (<c>AppSettings.ExtraRunnableExtensions</c>) and, on Windows, <c>PATHEXT</c>'s, from
+    /// the session's catalogues (<see cref="TabServices.Tools"/>) or else the process's.
+    /// </summary>
+    private HashSet<string> ExtraRunnableExtensions()
+    {
+        var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var extension in (Services?.Settings.Current.ExtraRunnableExtensions ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            extensions.Add(extension);
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var pathExt = Services?.Tools is { } tools ? tools.PathExtensions() : Environment.GetEnvironmentVariable("PATHEXT");
+            extensions.UnionWith(PathExtExtensions(pathExt));
+        }
+
+        return extensions;
+    }
 
     /// <summary>A file's Unix permissions, or null on Windows or when they cannot be read.</summary>
     private static UnixFileMode? ReadUnixFileMode(string fullPath)
