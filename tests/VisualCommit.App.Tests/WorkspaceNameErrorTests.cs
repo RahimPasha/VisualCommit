@@ -38,6 +38,8 @@ public class WorkspaceNameErrorTests
     [InlineData("Web\tteam")]
     [InlineData("Web\u0007")]
     [InlineData("Web\r\nteam")]
+    [InlineData("Web\u2028team")]
+    [InlineData("Web\u2029team")]
     public void A_line_break_or_another_control_character_is_refused(string name)
     {
         Assert.Equal(

@@ -99,8 +99,8 @@ public static class DialogText
     /// What the name box of a workspace says about <paramref name="name"/> (docs/phase-6-design.md
     /// 1.6), or null when it is a valid name. The trimmed name is checked in this order: empty
     /// "Enter a name."; longer than <see cref="Workspace.MaxNameLength"/> characters (as a reader
-    /// counts them: text elements, so an emoji is one); a control character (a line break, a tab);
-    /// another workspace has it, ignoring case on every platform (a name is no path):
+    /// counts them: text elements, so an emoji is one); a control character (a line break, a tab)
+    /// or a Unicode line or paragraph separator (U+2028, U+2029); another workspace has it, ignoring case on every platform (a name is no path):
     /// "A workspace named &lt;existing&gt; exists.", in the other's spelling.
     /// </summary>
     /// <param name="name">The name as typed.</param>
@@ -120,7 +120,7 @@ public static class DialogText
             return WorkspaceNameTooLong;
         }
 
-        if (trimmed.Any(char.IsControl))
+        if (trimmed.Any(IsLineBreakOrControl))
         {
             return WorkspaceNameHasControlCharacter;
         }
@@ -129,6 +129,11 @@ public static class DialogText
             ? $"A workspace named {clash} exists."
             : null;
     }
+
+    /// <summary>A control character (Cc: line feed, tab, …) or a Unicode line or paragraph separator (U+2028, U+2029), which also break a line.</summary>
+    private static bool IsLineBreakOrControl(char character) =>
+        char.IsControl(character)
+        || char.GetUnicodeCategory(character) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
 
     private static string? NameError(string kind, string name, Func<string, string?> problemOf, IEnumerable<string> existing, bool ignoreCase)
     {
