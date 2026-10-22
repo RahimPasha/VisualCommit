@@ -108,28 +108,19 @@ public class RepoTabStripPanelTests
 
         var tabs = Tabs(host);
         Assert.Equal(4, tabs.Count);
-        // Phase 1's horizontal StackPanel measured each tab with an infinite width and placed it
-        // at that width, at least 120 (the tab's old MinWidth), one after another: a short title
-        // gives clamp(51 + its width, 120, 220) (0.8), a long one is cut with "…" inside 220.
-        var bounds = tabs.Select(tab => BoundsIn(host, tab)).ToList();
-        var x = 0.0;
-        for (var i = 0; i < tabs.Count; i++)
-        {
-            tabs[i].Measure(Size.Infinity);
-            var old = Math.Max(120, tabs[i].DesiredSize.Width);
-            Assert.Equal(x, bounds[i].X, 0.5);
-            Assert.Equal(old, bounds[i].Width, 0.5);
-            x += old;
-        }
+        // Where phase 1's strip (c46eea2's RepoTabsView: tabs of MinWidth 120 and MaxWidth 220 in a
+        // horizontal StackPanel, "+" after them) placed these four tabs at 1100×700 with the
+        // window's 12.5-px Inter, laid out once and read: a title shorter than 69 px gives 120;
+        // design-system (87.9 px) gives 51 + 88 = 139; the long folder name is cut with "…" inside
+        // 220, at 217 (51 + the cut title's 166); "+" 2 after the last tab.
+        (double X, double Width)[] phase1 = [(0, 120), (120, 139), (259, 217), (476, 120)];
+        const double Phase1AddX = 598;
 
-        Assert.Equal(120, bounds[0].Width, 0.5);
-        Assert.Equal(51 + TextWidth(Named<TextBlock>(tabs[1], "TabTitle")), bounds[1].Width, 1.0);
-        Assert.InRange(bounds[1].Width, 121, 219);
-        Assert.InRange(bounds[2].Width, 200, 220);
+        var bounds = tabs.Select(tab => BoundsIn(host, tab)).ToList();
+        Assert.Equal(phase1, bounds.Select(bound => (Math.Round(bound.X, 1), Math.Round(bound.Width, 1))));
         Assert.EndsWith("…", DrawnLines.Of(Named<TextBlock>(tabs[2], "TabTitle"))[0], StringComparison.Ordinal);
-        Assert.Equal(120, bounds[3].Width, 0.5);
         var add = AddButton(host);
-        Assert.Equal(x + 2, BoundsIn(host, add).X, 0.5);
+        Assert.Equal(Phase1AddX, BoundsIn(host, add).X, 0.5);
         Assert.Equal(0, Panel(host).Offset);
         Assert.Equal("Open a new tab", AutomationProperties.GetName(add));
         TestPictures.Save(host, "tabs-three");
@@ -410,14 +401,6 @@ public class RepoTabStripPanelTests
     private static T Named<T>(Visual scope, string name)
         where T : Control =>
         scope.GetVisualDescendants().OfType<T>().First(control => control.Name == name);
-
-    /// <summary>The width <paramref name="title"/>'s whole text takes in its own font.</summary>
-    private static double TextWidth(TextBlock title)
-    {
-        var block = new TextBlock { Text = title.Text, FontSize = title.FontSize, FontFamily = title.FontFamily, FontWeight = title.FontWeight };
-        block.Measure(Size.Infinity);
-        return block.DesiredSize.Width;
-    }
 
     private sealed class MemorySession(SessionState? state = null) : ISessionStore
     {
