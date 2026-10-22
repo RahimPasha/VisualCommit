@@ -69,7 +69,7 @@ public sealed class TabServices
         GitSettings = gitSettings;
         Tools = tools;
         ReadClock = readClock ?? Clock;
-        OpenRepositories = new OpenRepositories();
+        OpenRepositories = new OpenRepositories(this);
         BulkSlots = new BulkSlots();
         WorkspaceCommands = new WorkspaceCommands(this);
     }
