@@ -12,6 +12,14 @@ public interface IFolderPicker
 {
     /// <summary>Shows the dialog with <paramref name="title"/> and returns the chosen folder, or null when the user cancelled.</summary>
     Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Shows the platform's file dialog with <paramref name="title"/> ("Choose the editor's program",
+    /// docs/phase-6-design.md 12.5) and returns the chosen file's full path, or null when the user
+    /// cancelled. The default answers as a cancelled dialog, so that a picker for folders only needs
+    /// nothing more.
+    /// </summary>
+    Task<string?> PickFileAsync(string title, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
 }
 
 /// <summary>The platform's folder dialog, opened over the app's main window.</summary>
@@ -40,5 +48,22 @@ public sealed class StorageFolderPicker : IFolderPicker
         });
 
         return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> PickFileAsync(string title, CancellationToken cancellationToken = default)
+    {
+        var owner = _owner();
+        if (owner is null || !owner.StorageProvider.CanOpen)
+        {
+            return null;
+        }
+
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+        });
+
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
 }
