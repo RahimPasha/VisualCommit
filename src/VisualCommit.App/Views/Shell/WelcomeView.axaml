@@ -4,11 +4,14 @@
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:vm="using:VisualCommit.App.ViewModels"
+             xmlns:ws="using:VisualCommit.App.ViewModels.Workspaces"
              x:Class="VisualCommit.App.Views.Shell.WelcomeView"
              x:DataType="vm:WelcomeViewModel">
 
   <!-- The welcome page of a tab without a repository (D42): under phase 0's "No repository open",
-       Open, Clone and Init with the recent repositories, or the clone form with its progress. -->
+       Open, Clone and Init with the workspaces (docs/phase-6-design.md 13.1, D188) and the recent
+       repositories, or the clone form with its progress. A long folder in an error breaks only
+       after a separator (PathTextBlock, 13.2). -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="24" MaxWidth="440" VerticalAlignment="Center" Spacing="8">
       <TextBlock Text="No repository open"
@@ -61,12 +64,81 @@
           </Button>
         </StackPanel>
 
-        <TextBlock Name="WelcomeError"
-                   Classes="error"
-                   Text="{Binding ErrorText}"
-                   IsVisible="{Binding HasError}"
-                   TextWrapping="Wrap" TextAlignment="Center"
-                   AutomationProperties.AutomationId="WelcomeError" />
+        <c:PathTextBlock Name="WelcomeError"
+                         Classes="error"
+                         Text="{Binding ErrorText}"
+                         IsVisible="{Binding HasError}"
+                         TextWrapping="Wrap" TextAlignment="Center"
+                         AutomationProperties.AutomationId="WelcomeError" />
+
+        <!-- Workspaces (13.1): always shown, also with none, since it is where workspaces start.
+             A heading row 19 high, 16 above it: the heading at the left, "New workspace…" at the
+             right; the store's notice; then "No workspaces" or a row per workspace, by name. -->
+        <DockPanel Name="WorkspacesHeadingRow" Margin="0,16,0,0">
+          <Button Name="NewWorkspaceButton"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcFlatButton}"
+                  Padding="6,2"
+                  Command="{Binding NewWorkspaceCommand}"
+                  ToolTip.Tip="{Binding NewWorkspaceToolTip}"
+                  AutomationProperties.HelpText="{Binding NewWorkspaceToolTip}"
+                  AutomationProperties.AutomationId="NewWorkspaceButton"
+                  AutomationProperties.Name="{x:Static ws:WorkspaceTexts.NewWorkspaceName}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <c:Icon Data="{StaticResource IconPlus}" Width="12" Height="12" VerticalAlignment="Center" />
+              <TextBlock Text="{x:Static ws:WorkspaceTexts.NewWorkspace}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <TextBlock Name="WorkspacesHeading"
+                     Classes="heading"
+                     VerticalAlignment="Center"
+                     Text="{x:Static ws:WorkspaceTexts.Heading}"
+                     AutomationProperties.AutomationId="WorkspacesHeading" />
+        </DockPanel>
+        <TextBlock Name="WorkspacesNotice"
+                   Classes="secondary"
+                   Classes.warning="{Binding IsWorkspacesNoticeWarning}"
+                   Text="{Binding WorkspacesNotice}"
+                   IsVisible="{Binding HasWorkspacesNotice}"
+                   TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="WorkspacesNotice" />
+        <TextBlock Name="NoWorkspacesText"
+                   Classes="secondary"
+                   Text="{x:Static ws:WorkspaceTexts.NoWorkspaces}"
+                   IsVisible="{Binding !HasWorkspaces}"
+                   AutomationProperties.AutomationId="NoWorkspacesText" />
+        <ItemsControl Name="WorkspaceList"
+                      ItemsSource="{Binding Workspaces}"
+                      IsVisible="{Binding HasWorkspaces}"
+                      AutomationProperties.AutomationId="WorkspaceList"
+                      AutomationProperties.Name="{x:Static ws:WorkspaceTexts.Heading}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="ws:WorkspaceItem">
+              <Button Name="WorkspaceItem"
+                      Theme="{StaticResource VcFlatButton}"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                      Padding="8,5"
+                      Command="{Binding $parent[ItemsControl].((vm:WelcomeViewModel)DataContext).OpenWorkspaceCommand}"
+                      CommandParameter="{Binding}"
+                      ToolTip.Tip="{Binding ToolTipText}"
+                      AutomationProperties.AutomationId="WorkspaceItem"
+                      AutomationProperties.Name="{Binding Name}">
+                <DockPanel>
+                  <TextBlock Name="WorkspaceItemCount"
+                             DockPanel.Dock="Right"
+                             Classes="secondary"
+                             Text="{Binding CountText}"
+                             Margin="12,0,0,0" VerticalAlignment="Center" />
+                  <TextBlock Name="WorkspaceItemName"
+                             Text="{Binding Name}"
+                             Foreground="{DynamicResource VcTextPrimaryBrush}"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                </DockPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
 
         <TextBlock Classes="heading" Text="Recent repositories" Margin="0,16,0,0" />
         <TextBlock Classes="secondary"
@@ -147,12 +219,12 @@
                      AutomationProperties.AutomationId="CloneProgressText" />
         </StackPanel>
 
-        <TextBlock Name="CloneError"
-                   Classes="error"
-                   Text="{Binding ErrorText}"
-                   IsVisible="{Binding HasError}"
-                   TextWrapping="Wrap"
-                   AutomationProperties.AutomationId="CloneError" />
+        <c:PathTextBlock Name="CloneError"
+                         Classes="error"
+                         Text="{Binding ErrorText}"
+                         IsVisible="{Binding HasError}"
+                         TextWrapping="Wrap"
+                         AutomationProperties.AutomationId="CloneError" />
 
         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
           <Button Name="CloneStartButton"
@@ -183,4 +255,11 @@
 
     </StackPanel>
   </ScrollViewer>
+
+  <UserControl.Styles>
+    <!-- A failed save of workspaces.json is said in the warning tone (13.1). -->
+    <Style Selector="TextBlock#WorkspacesNotice.warning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+  </UserControl.Styles>
 </UserControl>

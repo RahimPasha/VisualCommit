@@ -2,22 +2,28 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
+             xmlns:shell="using:VisualCommit.App.Views.Shell"
              xmlns:vm="using:VisualCommit.App.ViewModels"
              x:Class="VisualCommit.App.Views.Shell.RepoTabsView"
              x:DataType="vm:MainWindowViewModel"
              AutomationProperties.AutomationId="RepoTabs">
 
-  <!-- One tab per open repository, or "New tab" for a tab without one (D42), then the add button.
-       The active tab has the accent line along its top and the graph area's background. -->
+  <!-- One tab per open repository, or "New tab" for a tab without one (D42), a workspace's
+       dashboard first with its icon (docs/phase-6-design.md 13.4), then the add button. The
+       active tab has the accent line along its top and the graph area's background. The tabs keep
+       phase 1's places while they fit, then shrink, then scroll (RepoTabStripPanel, 13.3); the
+       panel is measured with the strip's width, so "+" follows the last tab or sits at the end. -->
   <Border Background="{DynamicResource VcChromeBackgroundBrush}"
           BorderBrush="{DynamicResource VcBorderBrush}"
           BorderThickness="0,0,0,1">
-    <StackPanel Orientation="Horizontal">
+    <DockPanel LastChildFill="False">
 
-      <ItemsControl Name="TabList" ItemsSource="{Binding Tabs}">
+      <ItemsControl Name="TabList" DockPanel.Dock="Left" ItemsSource="{Binding Tabs}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" />
+            <shell:RepoTabStripPanel Reserve="38"
+                                     ActiveIndex="{Binding ActiveTabIndex}"
+                                     ClipToBounds="True" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
@@ -25,7 +31,7 @@
             <Border Name="RepoTab"
                     Classes="repoTab"
                     Classes.active="{Binding IsActive}"
-                    MinWidth="120" MaxWidth="220"
+                    MinWidth="80" MaxWidth="220"
                     BorderBrush="{DynamicResource VcBorderBrush}"
                     BorderThickness="0,0,1,0">
               <Grid RowDefinitions="2,*" ColumnDefinitions="*,Auto">
@@ -35,16 +41,28 @@
                 <Button Name="TabButton"
                         Grid.Row="1" Grid.Column="0"
                         Theme="{StaticResource VcTabButton}"
+                        Classes.dashboard="{Binding IsDashboard}"
                         Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ActivateTabCommand}"
                         CommandParameter="{Binding}"
                         ToolTip.Tip="{Binding Title}"
-                        AutomationProperties.AutomationId="RepoTab"
+                        AutomationProperties.AutomationId="{Binding TabAutomationId}"
                         AutomationProperties.Name="{Binding Title}">
                   <TextBlock Name="TabTitle"
                              Text="{Binding Title}"
                              TextTrimming="CharacterEllipsis"
                              VerticalAlignment="Center" />
                 </Button>
+                <!-- A dashboard's workspace icon, 14 from the tab's left, the title 6 after it
+                     (13.4); drawn over the button, which takes the pointer. -->
+                <c:Icon Name="TabIcon"
+                        Grid.Row="1" Grid.Column="0"
+                        Data="{StaticResource IconWorkspace}"
+                        Width="12" Height="12"
+                        Margin="14,0,0,0"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        IsHitTestVisible="False"
+                        IsVisible="{Binding IsDashboard}"
+                        AutomationProperties.AutomationId="TabIcon" />
                 <Button Name="CloseTabButton"
                         Grid.Row="1" Grid.Column="1"
                         Theme="{StaticResource VcFlatButton}"
@@ -66,7 +84,10 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
+      <!-- "+" opens a new empty tab; named "Open a new tab", since the dashboard header's
+           "Add repository…" adds to a workspace (2.1, 13.4). -->
       <Button Name="AddRepoButton"
+              DockPanel.Dock="Left"
               Theme="{StaticResource VcFlatButton}"
               Width="34" Margin="2,3"
               Command="{Binding NewTabCommand}"
@@ -74,11 +95,11 @@
               AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.NewTab}"
               AutomationProperties.AcceleratorKey="{Binding Keys.NewTab}"
               AutomationProperties.AutomationId="AddRepoButton"
-              AutomationProperties.Name="Add repository">
+              AutomationProperties.Name="Open a new tab">
         <c:Icon Data="{StaticResource IconPlus}" />
       </Button>
 
-    </StackPanel>
+    </DockPanel>
   </Border>
 
   <UserControl.Styles>
@@ -89,6 +110,19 @@
       <Setter Property="Background" Value="{DynamicResource VcWindowBackgroundBrush}" />
     </Style>
     <Style Selector="Border.repoTab:not(.active) TextBlock#TabTitle">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <!-- A dashboard's tab: room for the icon before its title, the icon in the title's colour,
+         and "Workspace" as its item status, so a screen reader tells it from a repository of the
+         same name (13.4). Every other tab draws exactly as before. -->
+    <Style Selector="Button#TabButton.dashboard">
+      <Setter Property="Padding" Value="32,0,8,0" />
+      <Setter Property="AutomationProperties.ItemStatus" Value="Workspace" />
+    </Style>
+    <Style Selector="c|Icon#TabIcon">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Border.repoTab:not(.active) c|Icon#TabIcon">
       <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
     </Style>
   </UserControl.Styles>

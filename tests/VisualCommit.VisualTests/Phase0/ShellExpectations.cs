@@ -34,11 +34,14 @@ public static class ShellExpectations
     public static readonly string[] LeftPanelSections =
         ["Local branches", "Remotes", "Pull requests", "Tags", "Stashes"];
 
-    /// <summary>The welcome page of a tab without a repository, in reading order (phase 1, D42).</summary>
+    /// <summary>
+    /// The welcome page of a tab without a repository, in reading order (phase 1, D42), with phase
+    /// 6's Workspaces section between Init and the recent list (docs/phase-6-design.md 13.1, 16.1).
+    /// </summary>
     public static readonly string[] WelcomeTexts =
     [
         "No repository open", "Open, clone or init a repository to see its history.",
-        "Open", "Clone", "Init", "Recent repositories", "No recent repositories",
+        "Open", "Clone", "Init", "Workspaces", "New workspace…", "No workspaces", "Recent repositories", "No recent repositories",
     ];
 
     /// <summary>The colours of one theme, from the report's colour table.</summary>
