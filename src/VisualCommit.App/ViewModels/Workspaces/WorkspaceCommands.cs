@@ -230,9 +230,10 @@ public sealed class WorkspaceCommands
                 workingDirectory => Find(workspaceId) is { } current && WorkspaceMembership.Contains(current, workingDirectory, OpenedOf(workspaceId)),
                 enclosing,
                 _services.Log);
-            var showing = _services.DialogHost.ShowAsync(dialog);
+            // The search starts before the dialog shows, so that whoever sees the dialog sees its
+            // search (Search) under way, never the completed task of one not yet started.
             _ = dialog.Start();
-            var answer = await showing;
+            var answer = await _services.DialogHost.ShowAsync(dialog);
             if (answer is { Count: > 0 } && AddRepositoryReason(workspaceId) is null)
             {
                 Store.Update(list => WorkspaceEdits.Append(list, workspaceId, answer));
