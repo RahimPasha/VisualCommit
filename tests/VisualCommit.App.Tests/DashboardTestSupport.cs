@@ -67,13 +67,13 @@ internal static class DashboardTestSupport
             [],
             remote ? ["origin"] : []);
 
-    /// <summary>The session's services around <paramref name="provider"/>, a store holding <paramref name="workspaces"/> and the read clock <paramref name="readClock"/>.</summary>
-    public static TabServices Services(IRepositoryProvider provider, IWorkspaceStore? store = null, TimeProvider? readClock = null, RecordingLog? log = null, ISessionStore? session = null)
+    /// <summary>The session's services around <paramref name="provider"/>, a store holding <paramref name="workspaces"/>, the read clock <paramref name="readClock"/> and the folder dialog <paramref name="folders"/> (none chosen when null).</summary>
+    public static TabServices Services(IRepositoryProvider provider, IWorkspaceStore? store = null, TimeProvider? readClock = null, RecordingLog? log = null, ISessionStore? session = null, IFolderPicker? folders = null)
     {
         var settings = new MainWindowViewModelTests.FakeSettings();
         return new TabServices(
             provider,
-            new NoFolders(),
+            folders ?? new NoFolders(),
             settings,
             session ?? new MemorySession(),
             new DateDisplay(TimeZoneInfo.Utc),
@@ -130,6 +130,9 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
     /// <summary>Holds every open until it completes.</summary>
     public TaskCompletionSource? Gate { get; set; }
 
+    /// <summary>A meter the opens share with the fakes' refs reads: git calls at once, held by its gate too.</summary>
+    public ReadMeter? Meter { get; set; }
+
     /// <summary>A fake repository at <c>{Root}/{name}</c>, its folder and git folder made on disk.</summary>
     public CountingRepository Add(string name, RepoRefs? refs = null, WorkingTreeStatus? status = null)
     {
@@ -175,18 +178,32 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
     public async Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _opens);
-        if (Gate is { } gate)
+        var meter = Meter;
+        meter?.Enter();
+        try
         {
-            await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-        }
+            if (Gate is { } gate)
+            {
+                await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
 
-        if (_refusals.FirstOrDefault(refusal => WorkspacePaths.Same(refusal.Key, path)).Value is { } failure)
+            if (meter?.Gate is { } shared)
+            {
+                await shared.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (_refusals.FirstOrDefault(refusal => WorkspacePaths.Same(refusal.Key, path)).Value is { } failure)
+            {
+                throw failure;
+            }
+
+            return _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
+                ?? throw new NotARepositoryException(path);
+        }
+        finally
         {
-            throw failure;
+            meter?.Leave();
         }
-
-        return _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
-            ?? throw new NotARepositoryException(path);
     }
 
     public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -239,6 +256,9 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
 
     /// <summary>When set, a refs read fails with it.</summary>
     public Exception? RefsFailure { get; set; }
+
+    /// <summary>When set, a status read fails with it.</summary>
+    public Exception? StatusFailure { get; set; }
 
     public int RefsReads => _refsReads;
 
@@ -305,13 +325,14 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
     {
         Interlocked.Increment(ref _statusReads);
         var status = Status;
+        var failure = StatusFailure;
         if (StatusGate is { } gate)
         {
             await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         await Task.Yield();
-        return status;
+        return failure is not null ? throw failure : status;
     }
 
     public override async Task LoadCommitsAsync(RepoRefs refs, Action<IReadOnlyList<CommitInfo>> onPage, CancellationToken cancellationToken = default)
@@ -355,7 +376,7 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
     }
 }
 
-/// <summary>Refs reads at once across several fakes, and a gate that holds them all (2.10's four reads at once).</summary>
+/// <summary>Git calls at once (opens and refs reads) across several fakes, and a gate that holds them all (2.10's four reads at once).</summary>
 internal sealed class ReadMeter
 {
     private int _now;

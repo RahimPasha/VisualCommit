@@ -221,6 +221,46 @@ public class OpenRepositoriesTests
     }
 
     [AvaloniaFact]
+    public async Task An_acquisition_after_the_idle_task_completed_but_before_its_removal_ran_does_not_wait()
+    {
+        using var provider = new FakeProvider();
+        var services = DashboardTestSupport.Services(provider);
+        var registry = services.OpenRepositories;
+        var repository = provider.Add("api");
+        var closed = Full(services, repository);
+        registry.RegisterTab(closed);
+        var running = new TaskCompletionSource();
+        var finish = new TaskCompletionSource();
+        var merge = closed.Queue.RunAsync(new GitOperation("Merge", "Merging…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            running.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Merged");
+        }));
+        await running.Task.WaitAsync(Patience);
+        registry.UnregisterTab(closed);
+        closed.Dispose();
+        var key = OpenRepositories.KeyOf(closed);
+
+        // The operation ends here, on the UI thread: the kept idle task completes, and its removal
+        // is posted to the UI thread, which has not run it yet.
+        finish.SetResult();
+        Assert.True(registry.WhenIdleAsync(key).IsCompleted, "Setup: the idle task has completed.");
+        Assert.NotNull(registry.ClosedRunningOn(key));
+
+        // An acquisition in that window returns at once (it never awaits the completed task in a loop).
+        var acquiring = registry.AcquireSummaryAsync(repository, new object(), CancellationToken.None);
+        Assert.True(acquiring.IsCompleted);
+        var summary = await acquiring;
+        Assert.NotNull(summary);
+        Assert.Same(summary, Assert.Single(registry.Summaries));
+
+        await merge.WaitAsync(Patience);
+        await DashboardTestSupport.WaitUntilAsync(() => registry.ClosedRunningOn(key) is null, "the removal to run");
+        summary.Dispose();
+    }
+
+    [AvaloniaFact]
     public async Task A_holder_whose_token_is_cancelled_while_it_waits_gets_nothing()
     {
         using var provider = new FakeProvider();

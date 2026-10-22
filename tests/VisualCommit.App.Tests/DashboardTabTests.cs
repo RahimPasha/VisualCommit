@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Workspaces;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Workspaces;
 using Xunit;
@@ -103,6 +104,92 @@ public class DashboardTabTests
         Assert.Same(failed, Assert.Single(window.Tabs));
         Assert.True(failed.IsDashboard);
         Assert.Null(failed.SavedPath);
+    }
+
+    [AvaloniaFact]
+    public async Task Add_open_tabs_is_enabled_by_a_tab_that_opens_its_repository_in_the_background()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store());
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var dashboard = window.ActiveTab.Dashboard!;
+        window.NewTabCommand.Execute(null);
+        var background = window.ActiveTab;
+        window.ActivateTabCommand.Execute(window.Tabs[0]);
+        Assert.False(dashboard.CanAddOpenTabs);
+        Assert.Equal(WorkspaceTexts.NoTabHasARepositoryOpen, dashboard.AddOpenTabsToolTip);
+
+        // The other tab opens api while the empty dashboard is active (a restore, say).
+        Assert.True(await background.OpenAsync(api.WorkingDirectory));
+
+        Assert.Same(window.Tabs[0], window.ActiveTab);
+        Assert.True(dashboard.CanAddOpenTabs);
+        Assert.Null(dashboard.AddOpenTabsToolTip);
+    }
+
+    [AvaloniaFact]
+    public async Task A_followed_tabs_failed_first_status_read_shows_as_the_rows_error_until_a_status_is_read()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        api.StatusFailure = new GitException("git status", 128, "fatal: index file corrupt");
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory));
+        var dashboard = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
+        using var tab = new RepositoryViewModel(api, services.Settings, services.Dates, services.Log, dialogs: services.Dialogs, services: services);
+        services.OpenRepositories.RegisterTab(tab);
+        await tab.StartAsync();
+        var row = dashboard.Rows[0];
+
+        // The tab is as before: no error page, its first read complete.
+        Assert.True(row.FollowsTab);
+        Assert.True(tab.HasFirstRead);
+        Assert.Null(tab.ErrorText);
+        Assert.Equal("fatal: index file corrupt", tab.StatusErrorText);
+
+        // The row does not show the status that was never read, and nothing may act on it.
+        Assert.Equal(("Git could not open it", $"Git could not open {api.WorkingDirectory}: fatal: index file corrupt"), (row.State.Text, row.State.ToolTip));
+        Assert.Equal(string.Empty, row.Changes.Text);
+        Assert.False(row.HasRepository);
+        Assert.False(row.IsNotReadYet);
+
+        // A status read later clears it.
+        api.StatusFailure = null;
+        await tab.RefreshStatusAsync();
+        Assert.Null(tab.StatusErrorText);
+        Assert.Equal(("Clean", string.Empty), (row.Changes.Text, row.State.Text));
+        Assert.True(row.HasRepository);
+        dashboard.Dispose();
+    }
+
+    [AvaloniaFact]
+    public async Task A_row_keeps_its_repositorys_working_directory_when_the_followed_tab_closes()
+    {
+        using var provider = new FakeProvider();
+        var (api, gone) = (provider.Add("api"), provider.PathOf("gone"));
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory));
+        var dashboard = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
+        var tab = new RepositoryViewModel(api, services.Settings, services.Dates, services.Log, dialogs: services.Dialogs, services: services);
+        services.OpenRepositories.RegisterTab(tab);
+        await tab.StartAsync();
+        var row = dashboard.Rows[0];
+        Assert.Equal(api.WorkingDirectory, dashboard.OpenedWorkingDirectoryOf(api.WorkingDirectory));
+
+        // The tab closes (3.6): the row keeps its values and still knows its repository's folder.
+        services.OpenRepositories.UnregisterTab(tab);
+        tab.Dispose();
+        Assert.Null(row.Repository);
+        Assert.Equal(api.WorkingDirectory, row.WorkingDirectory);
+        Assert.Equal(api.WorkingDirectory, dashboard.OpenedWorkingDirectoryOf(api.WorkingDirectory));
+
+        // Locate… replaced the folder: not until the new one is read; nor in a folder state.
+        services.Workspaces.Update(list => WorkspaceEdits.Replace(list, "web", api.WorkingDirectory, gone));
+        Assert.Same(row, Assert.Single(dashboard.Rows));
+        Assert.Null(row.WorkingDirectory);
+        await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading && row.FolderState is not null, "the located folder's read");
+        Assert.Null(row.WorkingDirectory);
+        dashboard.Dispose();
     }
 
     [AvaloniaFact]

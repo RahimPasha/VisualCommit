@@ -3,17 +3,20 @@ using Avalonia.Threading;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Operations;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
 
 /// <summary>
-/// When a dashboard's rows are read (docs/phase-6-design.md 2.10, D207; WD35, WD37): each trigger
-/// with the 10 s rule by the read clock, rows that follow tabs never read, four reads at once, the
-/// folder checks off the UI thread that hold nothing, the probe's states, the row's token, and a
-/// closed dashboard that reacts to nothing.
+/// When a dashboard's rows are read (docs/phase-6-design.md 2.10, D207; WD27, WD35, WD37): each
+/// trigger with the 10 s rule by the read clock, rows that follow tabs never read nor counted, four
+/// git calls at once, the folder checks off the UI thread and the waits for a closed queue that
+/// hold nothing and a pass that ends without them, the probe's states, the row's token, Locate…
+/// and Refresh, and a closed dashboard that reacts to nothing.
 /// </summary>
 public class DashboardRefreshTests
 {
@@ -214,8 +217,10 @@ public class DashboardRefreshTests
     [AvaloniaFact]
     public async Task At_most_four_rows_are_read_at_once()
     {
+        // Every git call of a read holds a slot (2.10): the probe's open as the summary's refs read.
         using var provider = new FakeProvider();
         var meter = new ReadMeter { Gate = new TaskCompletionSource() };
+        provider.Meter = meter;
         var folders = new List<string>();
         for (var i = 0; i < 6; i++)
         {
@@ -227,15 +232,271 @@ public class DashboardRefreshTests
         var (dashboard, log, _) = Dashboard(provider, [.. folders]);
         dashboard.OnBecameActive();
 
-        await DashboardTestSupport.WaitUntilAsync(() => meter.Now == DashboardViewModel.MaxReads, "four reads held");
+        await DashboardTestSupport.WaitUntilAsync(() => meter.Now == DashboardViewModel.MaxReads, "four opens held");
         await DashboardTestSupport.SettleAsync();
-        Assert.Equal((4, 4), (meter.Entered, meter.Now));
+        Assert.Equal((4, 4, 4), (meter.Entered, meter.Now, provider.Opens));
         Assert.Equal(6, dashboard.Rows.Count(row => row.IsReading));
 
         meter.Gate.SetResult();
         await WaitForPassesAsync(log, 1);
         Assert.Equal(["Web: read 6 repositories in"], PassLines(log));
-        Assert.Equal((6, 4), (meter.Entered, meter.Max));
+
+        // Six opens and six refs reads, never more than four at once.
+        Assert.Equal((12, 4), (meter.Entered, meter.Max));
+    }
+
+    [AvaloniaFact]
+    public async Task A_pass_whose_reads_are_all_held_in_folder_checks_ends_after_the_patience_and_later_passes_read()
+    {
+        using var provider = new FakeProvider();
+        var docs = provider.Add("docs");
+        var held = provider.PathOf("share");
+        var gate = new ManualResetEventSlim();
+        var holding = true;
+        var heldCalls = 0;
+        bool Exists(string path)
+        {
+            if (WorkspacePaths.Same(path, held) && Volatile.Read(ref holding))
+            {
+                Interlocked.Increment(ref heldCalls);
+                gate.Wait(TimeSpan.FromMinutes(2));
+                return false;
+            }
+
+            return Directory.Exists(path);
+        }
+
+        // The share's row and docs, whose tab is open: the start reads the share's row alone.
+        var (dashboard, log, clock) = Dashboard(provider, [held, docs.WorkingDirectory], exists: Exists);
+        var services = ServicesOf(dashboard);
+        using var docsTab = Tab(services, docs);
+        await docsTab.StartAsync();
+        var row = dashboard.Rows[0];
+        try
+        {
+            var start = dashboard.ReadAtStartAsync();
+            await DashboardTestSupport.WaitUntilAsync(() => Volatile.Read(ref heldCalls) == 1, "the share's folder check");
+            await DashboardTestSupport.SettleAsync();
+            Assert.False(start.IsCompleted);
+            Assert.True(dashboard.IsPassRunning);
+
+            // No read finished: the pass ends after CheckPatience by the read clock, reading none, logging nothing.
+            clock.Advance(DashboardViewModel.CheckPatience);
+            await start.WaitAsync(Patience);
+            Assert.False(dashboard.IsPassRunning);
+            Assert.True(row.IsReading);
+            Assert.Empty(PassLines(log));
+
+            // The check returns: the row shows its state; F5, whose other row follows a tab, ends the same way.
+            gate.Set();
+            await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading, "the held check to return");
+            Assert.Equal("Folder not found", row.State.Text);
+            gate.Reset();
+            var refresh = dashboard.RefreshCommand.ExecuteAsync(null);
+            await DashboardTestSupport.WaitUntilAsync(() => Volatile.Read(ref heldCalls) == 2, "the share's second check");
+            await DashboardTestSupport.SettleAsync();
+            Assert.False(refresh.IsCompleted);
+            clock.Advance(DashboardViewModel.CheckPatience);
+            await refresh.WaitAsync(Patience);
+            Assert.Empty(PassLines(log));
+
+            // Nothing was left folded for good: once the share answers, F5 reads it and logs it.
+            Volatile.Write(ref holding, false);
+            gate.Set();
+            await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading, "the second check to return");
+            await dashboard.RefreshCommand.ExecuteAsync(null).WaitAsync(Patience);
+            Assert.Equal(["Web: read 1 repository in"], PassLines(log));
+            Assert.Equal(1, docs.RefsReads);
+        }
+        finally
+        {
+            gate.Set();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task A_folder_state_row_whose_folder_gained_a_tab_follows_it_on_F5_and_the_pass_ends()
+    {
+        using var provider = new FakeProvider();
+        var plain = provider.PathOf("plain");
+        Directory.CreateDirectory(plain);
+        var (dashboard, log, _) = Dashboard(provider, [plain]);
+        var services = ServicesOf(dashboard);
+        dashboard.OnBecameActive();
+        await WaitForPassesAsync(log, 1);
+        var row = dashboard.Rows[0];
+        Assert.Equal("Not a repository", row.State.Text);
+
+        // The folder became a repository and a tab opened it: the row keeps its state until a trigger.
+        var repository = provider.Add("plain");
+        using var tab = Tab(services, repository);
+        await tab.StartAsync();
+        Assert.False(row.FollowsTab);
+
+        // F5: the row's read follows the tab at once, so the pass ends at once, and reads nothing.
+        await dashboard.RefreshCommand.ExecuteAsync(null).WaitAsync(Patience);
+        Assert.True(row.FollowsTab);
+        Assert.False(dashboard.IsPassRunning);
+        Assert.Equal(("main", string.Empty), (row.BranchText, row.State.Text));
+        Assert.Single(PassLines(log));
+        Assert.Equal(1, repository.RefsReads);
+    }
+
+    [AvaloniaFact]
+    public async Task A_rows_wait_for_a_closed_queue_holds_nothing_and_its_pass_ends_without_it()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var meter = new ReadMeter { Gate = new TaskCompletionSource() };
+        var others = Enumerable.Range(1, DashboardViewModel.MaxReads).Select(i => provider.Add($"repo{i}")).ToList();
+        others.ForEach(other => other.Meter = meter);
+        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory, .. others.Select(other => other.WorkingDirectory)]);
+        var services = ServicesOf(dashboard);
+
+        // api's tab runs its merge tool, then closes: its queue still runs on the worktree (3.3).
+        var tab = Tab(services, api);
+        await tab.StartAsync();
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        var tool = tab.Queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for kdiff3 to close…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            running.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Resolved notes.txt");
+        }));
+        await running.Task.WaitAsync(Patience);
+        services.OpenRepositories.UnregisterTab(tab);
+        tab.Dispose();
+        var row = dashboard.Rows[0];
+        Assert.False(row.FollowsTab);
+        var reads = api.RefsReads;
+
+        // F5: api's read opens the folder, then waits for the closed queue holding no slot: the
+        // four other rows read in the four slots meanwhile.
+        var refresh = dashboard.RefreshCommand.ExecuteAsync(null);
+        await DashboardTestSupport.WaitUntilAsync(() => meter.Now == DashboardViewModel.MaxReads, "the four other reads held");
+        Assert.True(row.IsReading);
+        Assert.Equal(reads, api.RefsReads);
+
+        // Once they end, only api's wait is left: the pass ends after CheckPatience without it.
+        meter.Gate.SetResult();
+        await DashboardTestSupport.WaitUntilAsync(() => others.All(other => other.RefsReads == 1) && dashboard.Rows.Skip(1).All(other => !other.IsReading), "the four other reads");
+        await DashboardTestSupport.SettleAsync();
+        Assert.False(refresh.IsCompleted);
+        clock.Advance(DashboardViewModel.CheckPatience);
+        await refresh.WaitAsync(Patience);
+        Assert.Equal(["Web: read 4 repositories in"], PassLines(log));
+        Assert.True(row.IsReading);
+
+        // The tool closes: the row takes its summary and reads it.
+        finish.SetResult();
+        await tool.WaitAsync(Patience);
+        await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading && row.HasRepository, "the row's read after the tool");
+        Assert.Equal(reads + 1, api.RefsReads);
+        Assert.Contains(row.Repository!, services.OpenRepositories.Summaries);
+    }
+
+    [AvaloniaFact]
+    public async Task A_summary_a_tab_adopts_during_the_rows_check_is_not_read_by_the_dashboard()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var gate = new ManualResetEventSlim();
+        var holding = false;
+        var heldCalls = 0;
+        bool Exists(string path)
+        {
+            if (WorkspacePaths.Same(path, api.WorkingDirectory) && Volatile.Read(ref holding))
+            {
+                Interlocked.Increment(ref heldCalls);
+                gate.Wait(TimeSpan.FromMinutes(2));
+            }
+
+            return Directory.Exists(path);
+        }
+
+        var (dashboard, log, _) = Dashboard(provider, [api.WorkingDirectory], exists: Exists);
+        var services = ServicesOf(dashboard);
+        dashboard.OnBecameActive();
+        await WaitForPassesAsync(log, 1);
+        var row = dashboard.Rows[0];
+        var summary = row.Repository!;
+        Assert.False(row.FollowsTab);
+        try
+        {
+            // F5: the row's own view model is checked first; during the check a tab adopts it (3.3).
+            Volatile.Write(ref holding, true);
+            var refresh = dashboard.RefreshCommand.ExecuteAsync(null);
+            await DashboardTestSupport.WaitUntilAsync(() => Volatile.Read(ref heldCalls) == 1, "the row's check");
+            var key = OpenRepositories.KeyOf(summary);
+            Assert.Same(summary, services.OpenRepositories.TryAdopt(key));
+            summary.Promote(new System.Diagnostics.Stopwatch());
+            services.OpenRepositories.RegisterTab(summary);
+            Assert.True(row.FollowsTab);
+            var reads = (api.RefsReads, api.StatusReads);
+
+            gate.Set();
+            await refresh.WaitAsync(Patience);
+            await DashboardTestSupport.SettleAsync();
+
+            // The followed view model was not read by the dashboard, and the pass read nothing.
+            Assert.Equal(reads, (api.RefsReads, api.StatusReads));
+            Assert.Single(PassLines(log));
+            summary.Dispose();
+        }
+        finally
+        {
+            gate.Set();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Locate_onto_the_same_folder_reads_the_row_again()
+    {
+        using var provider = new FakeProvider();
+        var plain = provider.PathOf("api");
+        Directory.CreateDirectory(plain);
+        var log = new RecordingLog();
+        var folders = new FakeFolderPicker();
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(plain), new ManualTimeProvider(), log, folders: folders);
+        var dashboard = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
+        dashboard.OnBecameActive();
+        await WaitForPassesAsync(log, 1);
+        var row = dashboard.Rows[0];
+        Assert.Equal("Not a repository", row.State.Text);
+
+        // The folder is a repository now (say, safe.directory was fixed): Locate… on the same folder.
+        provider.Add("api");
+        folders.Answer(plain);
+        await dashboard.LocateAsync(row);
+        await WaitForPassesAsync(log, 2);
+
+        Assert.Equal(plain, Assert.Single(services.Workspaces.Current.Find("web")!.Repositories).Path);
+        Assert.Same(row, Assert.Single(dashboard.Rows));
+        Assert.True(row.HasRepository);
+        Assert.Equal(("main", string.Empty), (row.BranchText, row.State.Text));
+        Assert.Equal(["Web: read 1 repository in", "Web: read 1 repository in"], PassLines(log));
+        dashboard.Dispose();
+    }
+
+    [AvaloniaFact]
+    public async Task Refresh_stays_enabled_during_its_own_pass_and_folds_into_one_more()
+    {
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        api.RefsGate = new TaskCompletionSource();
+        var (dashboard, log, _) = Dashboard(provider, [api.WorkingDirectory]);
+
+        var first = dashboard.RefreshCommand.ExecuteAsync(null);
+        await DashboardTestSupport.WaitUntilAsync(() => api.RefsReads == 1, "the first read");
+        Assert.True(dashboard.IsPassRunning);
+        Assert.True(dashboard.RefreshCommand.CanExecute(null));
+        var second = dashboard.RefreshCommand.ExecuteAsync(null);
+        var third = dashboard.RefreshCommand.ExecuteAsync(null);
+
+        api.RefsGate.SetResult();
+        await Task.WhenAll(first, second, third).WaitAsync(Patience);
+        Assert.Equal(["Web: read 1 repository in", "Web: read 1 repository in"], PassLines(log));
+        Assert.Equal(2, api.RefsReads);
     }
 
     [AvaloniaFact]
