@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Workspaces;
@@ -112,7 +113,11 @@ public partial class MainWindowViewModel
         return Tabs.Select(tab => tab.Dashboard).FirstOrDefault(dashboard => dashboard is not null && string.Equals(dashboard.WorkspaceId, workspaceId, StringComparison.Ordinal));
     }
 
-    /// <summary><see cref="ActiveTabIndex"/> follows the tabs' order and count as well as the active tab.</summary>
+    /// <summary>
+    /// <see cref="ActiveTabIndex"/> follows the tabs' order and count as well as the active tab:
+    /// through the collection's and the window's own change events, so that no package's partial
+    /// hook of <see cref="ActiveTab"/> is taken.
+    /// </summary>
     private void WatchTabs()
     {
         if (_watchingTabs)
@@ -121,10 +126,17 @@ public partial class MainWindowViewModel
         }
 
         _watchingTabs = true;
-        Tabs.CollectionChanged += OnTabsChanged;
+        Tabs.CollectionChanged += OnTabsChangedForActiveIndex;
+        PropertyChanged += OnActiveTabChangedForActiveIndex;
     }
 
-    private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(ActiveTabIndex));
+    private void OnTabsChangedForActiveIndex(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(ActiveTabIndex));
 
-    partial void OnActiveTabChanged(RepoTabViewModel value) => OnPropertyChanged(nameof(ActiveTabIndex));
+    private void OnActiveTabChangedForActiveIndex(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ActiveTab))
+        {
+            OnPropertyChanged(nameof(ActiveTabIndex));
+        }
+    }
 }
