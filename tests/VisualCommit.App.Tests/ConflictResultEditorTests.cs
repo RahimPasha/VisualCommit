@@ -48,7 +48,7 @@ public class ConflictResultEditorTests
     private static readonly Color LightOurs = Color.Parse("#DCF1F5");
     private static readonly Color LightTheirs = Color.Parse("#F0E6FA");
     private static readonly Color LightMarker = Color.Parse("#FCEFD2");
-    private static readonly Color LightWarning = Color.Parse("#B7791F");
+    private static readonly Color LightWarning = Color.Parse("#895A17");
 
     public static TheoryData<string> Themes => ["Dark", "Light"];
 

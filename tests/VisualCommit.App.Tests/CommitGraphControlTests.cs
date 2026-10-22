@@ -995,7 +995,7 @@ public partial class CommitGraphControlTests
 
         public static readonly Expected Light = new(
             ThemeVariant.Light,
-            Parse("#4353D8", "#1E8E5A", "#B7791F", "#C93A46", "#1F86B0", "#8048C7", "#B54A8C", "#5F8A1E"),
+            Parse("#4353D8", "#1C8655", "#A16A1B", "#C93A46", "#1D7EA6", "#8048C7", "#B54A8C", "#59811C"),
             Color.Parse("#FFFFFF"),
             Color.Parse("#DDE1FA"),
             Color.Parse("#F3F4F7"),

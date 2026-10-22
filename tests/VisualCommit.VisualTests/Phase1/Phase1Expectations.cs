@@ -49,7 +49,7 @@ public static class Palettes
         Danger: Color.Parse("#E5606B"));
 
     public static Palette Light { get; } = new(
-        [.. new[] { "#4353D8", "#1E8E5A", "#B7791F", "#C93A46", "#1F86B0", "#8048C7", "#B54A8C", "#5F8A1E" }.Select(Color.Parse)],
+        [.. new[] { "#4353D8", "#1C8655", "#A16A1B", "#C93A46", "#1D7EA6", "#8048C7", "#B54A8C", "#59811C" }.Select(Color.Parse)],
         Window: Color.Parse("#FFFFFF"),
         Panel: Color.Parse("#F5F6F8"),
         Chrome: Color.Parse("#EBEDF1"),
@@ -61,9 +61,9 @@ public static class Palettes
         LabelText: Color.Parse("#FFFFFF"),
         Selection: Color.Parse("#DDE1FA"),
         RowHover: Color.Parse("#F3F4F7"),
-        Success: Color.Parse("#1E8E5A"),
-        Warning: Color.Parse("#B7791F"),
-        Danger: Color.Parse("#C93A46"));
+        Success: Color.Parse("#187248"),
+        Warning: Color.Parse("#895A17"),
+        Danger: Color.Parse("#B7323D"));
 }
 
 /// <summary>What the graph shows for the graph scenario: the table in docs/test-reports/phase-1.md.</summary>

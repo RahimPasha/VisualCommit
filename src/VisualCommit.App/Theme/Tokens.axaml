@@ -22,6 +22,9 @@
       <SolidColorBrush x:Key="VcSuccessBrush" Color="#3FB97F" />
       <SolidColorBrush x:Key="VcWarningBrush" Color="#E0A23B" />
       <SolidColorBrush x:Key="VcDangerBrush" Color="#E5606B" />
+      <!-- Phase 6: text on a danger background, the danger button's label (D198; a dark label is
+           phase 8's question, docs/phase-6-design.md 11.11). -->
+      <SolidColorBrush x:Key="VcDangerTextBrush" Color="#FFFFFF" />
       <!-- Commit graph: rows, labels and the lane palette (D48). -->
       <SolidColorBrush x:Key="VcSelectionBrush" Color="#2A3150" />
       <SolidColorBrush x:Key="VcRowHoverBrush" Color="#1C1F27" />
@@ -69,6 +72,10 @@
       <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#9BA3B0" />
       <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#9BA3B0" />
       <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#9BA3B0" />
+      <!-- Tooltips: these keys replace the Fluent theme's own colours for them. -->
+      <SolidColorBrush x:Key="ToolTipBackground" Color="#1A1D24" />
+      <SolidColorBrush x:Key="ToolTipForeground" Color="#E4E7EC" />
+      <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#323845" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -83,21 +90,28 @@
       <SolidColorBrush x:Key="VcTextDisabledBrush" Color="#A1A8B3" />
       <SolidColorBrush x:Key="VcAccentBrush" Color="#4353D8" />
       <SolidColorBrush x:Key="VcAccentTextBrush" Color="#FFFFFF" />
-      <SolidColorBrush x:Key="VcSuccessBrush" Color="#1E8E5A" />
-      <SolidColorBrush x:Key="VcWarningBrush" Color="#B7791F" />
-      <SolidColorBrush x:Key="VcDangerBrush" Color="#C93A46" />
+      <!-- Phase 6: success, warning and danger darker, so that their text reaches 4.5:1 on every
+           light background it lies on, hovered and selected rows included (docs/phase-6-design.md
+           11.10, D198). -->
+      <SolidColorBrush x:Key="VcSuccessBrush" Color="#187248" />
+      <SolidColorBrush x:Key="VcWarningBrush" Color="#895A17" />
+      <SolidColorBrush x:Key="VcDangerBrush" Color="#B7323D" />
+      <!-- Phase 6: text on a danger background, the danger button's label (D198). -->
+      <SolidColorBrush x:Key="VcDangerTextBrush" Color="#FFFFFF" />
       <!-- Commit graph: rows, labels and the lane palette (D48). -->
       <SolidColorBrush x:Key="VcSelectionBrush" Color="#DDE1FA" />
       <SolidColorBrush x:Key="VcRowHoverBrush" Color="#F3F4F7" />
       <SolidColorBrush x:Key="VcLabelTextBrush" Color="#FFFFFF" />
+      <!-- Phase 6: lanes 1, 2, 4 and 7 darker, so that a label's white text reaches 4.5:1 on each
+           (docs/phase-6-design.md 11.13, D198, amending D48's light palette). -->
       <SolidColorBrush x:Key="VcLane0Brush" Color="#4353D8" />
-      <SolidColorBrush x:Key="VcLane1Brush" Color="#1E8E5A" />
-      <SolidColorBrush x:Key="VcLane2Brush" Color="#B7791F" />
+      <SolidColorBrush x:Key="VcLane1Brush" Color="#1C8655" />
+      <SolidColorBrush x:Key="VcLane2Brush" Color="#A16A1B" />
       <SolidColorBrush x:Key="VcLane3Brush" Color="#C93A46" />
-      <SolidColorBrush x:Key="VcLane4Brush" Color="#1F86B0" />
+      <SolidColorBrush x:Key="VcLane4Brush" Color="#1D7EA6" />
       <SolidColorBrush x:Key="VcLane5Brush" Color="#8048C7" />
       <SolidColorBrush x:Key="VcLane6Brush" Color="#B54A8C" />
-      <SolidColorBrush x:Key="VcLane7Brush" Color="#5F8A1E" />
+      <SolidColorBrush x:Key="VcLane7Brush" Color="#59811C" />
       <!-- Diff view (phase 2): rows, changed words, hunk headers, fillers; the dialog's backdrop. -->
       <SolidColorBrush x:Key="VcDiffAddedBrush" Color="#E6F6EC" />
       <SolidColorBrush x:Key="VcDiffAddedWordBrush" Color="#B4E5C6" />
@@ -133,6 +147,10 @@
       <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#5C6572" />
       <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#5C6572" />
       <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#5C6572" />
+      <!-- Tooltips: these keys replace the Fluent theme's own colours for them. -->
+      <SolidColorBrush x:Key="ToolTipBackground" Color="#F5F6F8" />
+      <SolidColorBrush x:Key="ToolTipForeground" Color="#1B1F27" />
+      <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#D2D6DE" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>
