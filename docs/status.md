@@ -156,7 +156,11 @@ App:
   change takes effect.
 - [ ] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
   pictured in the dark theme only), and the welcome page's long folder that wraps at awkward
-  places (phase 1's follow-up).
+  places (phase 1's follow-up). (WP-T, built, reviewed and fixed, merged in `e7144ec`: the theme
+  follows the system while System is chosen, the light status colours and lanes 1, 2, 4 and 7 at
+  4.5:1, `VcDangerTextBrush`, tooltips in the app's colours, the drag layer's redraw, `TextInk`;
+  the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock` and
+  part L's sweep: to come.)
 - [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
   "Changes to expected results" in the phase 6 report.
 
@@ -282,10 +286,11 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 `1d99be3`), their worktrees removed. The default run after it found two test problems, fixed in
 `80689ef` (a slow program's wait with a limit of its own; an undo test that took WP3's config read
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
-report is committed. Next: wave 2 of design section 18, each package built, reviewed and fixed in
-its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-W, WP-D and WP-T
-first (at most three built worktrees at once); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
-section 18's order allows. Once WP-D, WP-W and WP-T are merged, the lead writes
+report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
+fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T merged
+(`e7144ec`); WP-W built, under review; WP-D being built. Next: WP-W's fixes and merge, WP-D's
+review and merge, then the default run; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
@@ -306,6 +311,10 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- `b6d1d01` (the diff view's growth test counting the UI thread's work): CI run
+  [39820477316](https://github.com/RahimPasha/VisualCommit/actions/runs/39820477316), all five jobs
+  green; Windows' Test step 25 min 46 s, macOS's 20 min 40 s, Ubuntu's 3 min 59 s, the containers'
+  3 min 14 s and 4 min 25 s.
 - The report's commit `c46eea2`: CI run
   [39808018633](https://github.com/RahimPasha/VisualCommit/actions/runs/39808018633), all five jobs
   green; Windows' Test step 18 min 32 s, macOS's 16 min 2 s, Ubuntu's 3 min 47 s, the containers' 4 min
