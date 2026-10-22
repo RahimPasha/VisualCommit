@@ -206,11 +206,14 @@ public static partial class Phase5Expectations
 
         // ---- The empty tab (phase 0's shell, phase 1's welcome page). ----
 
-        /// <summary>The welcome page of a tab without a repository, in reading order.</summary>
+        /// <summary>
+        /// The welcome page of a tab without a repository, in reading order, with phase 6's
+        /// Workspaces section between Init and the recent list (docs/phase-6-design.md 13.1, 16.1).
+        /// </summary>
         public static IReadOnlyList<string> WelcomeTexts { get; } =
         [
             "No repository open", "Open, clone or init a repository to see its history.",
-            "Open", "Clone", "Init", "Recent repositories", "No recent repositories",
+            "Open", "Clone", "Init", "Workspaces", "New workspace…", "No workspaces", "Recent repositories", "No recent repositories",
         ];
 
         /// <summary>The left panel's sections, each with the count 0 on an empty tab.</summary>

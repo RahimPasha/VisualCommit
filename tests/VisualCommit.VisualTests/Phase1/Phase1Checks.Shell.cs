@@ -58,7 +58,7 @@ public partial class Phase1Checks
         Assert.Equal(["New tab"], Tabs(app));
         Assert.False(app.Find<Button>("CloseTabButton").IsEffectivelyVisible);
         Assert.Equal(
-            [.. ShellExpectations.WelcomeTexts[..6], "graph", graph.Path, "linear", linear.Path],
+            [.. ShellExpectations.WelcomeTexts[..9], "graph", graph.Path, "linear", linear.Path],
             ShellExpectations.TextsIn(app.FindByAutomationId("CommitGraph")));
         Assert.Equal(
             ShellExpectations.LeftPanelSections.SelectMany(section => new[] { section, "0" }),
@@ -99,6 +99,16 @@ public partial class Phase1Checks
         var error = app.Capture();
         error.Save(Phase, "11a-not-a-repository");
         Assert.Equal($"{plain.Path} is not a git repository.", app.Find<TextBlock>("WelcomeError").Text);
+
+        // Phase 6 (docs/phase-6-design.md 13.2, 16.1): the folder breaks only after a separator,
+        // never after the drive alone nor inside a folder's name, and nothing is lost.
+        var lines = DrawnLines.Of(app.Find<TextBlock>("WelcomeError"));
+        Assert.All(
+            lines.Take(lines.Count - 1),
+            line => Assert.True(line.EndsWith(Path.DirectorySeparatorChar) || line.EndsWith('/') || line.EndsWith(' '), $"The line \"{line}\" ends inside a folder's name."));
+        Assert.All(lines, line => Assert.False(line.TrimEnd().EndsWith(':'), $"The line \"{line}\" ends after the drive."));
+        Assert.Contains(lines, line => line.Contains(Path.GetFileName(plain.Path), StringComparison.Ordinal));
+        Assert.Equal($"{plain.Path} is not a git repository.", string.Concat(lines));
         ShellExpectations.AssertColour(ShellExpectations.Light.Graph, error, ShellExpectations.GraphSamplePoint(ShellExpectations.LeftPanelWidth), "graph area");
         Assert.True(
             ContainsColour(error, app.BoundsOf(app.Find<TextBlock>("WelcomeError")), Palettes.Light.Danger),
@@ -120,7 +130,7 @@ public partial class Phase1Checks
         // to /private/var, and git names the real folder.
         var topLevel = await TopLevelAsync(linear.Path);
         var recent = ShellExpectations.TextsIn(app.FindByAutomationId("CommitGraph"));
-        Assert.Equal(["linear", topLevel], recent[6..8]);
+        Assert.Equal(["linear", topLevel], recent[9..11]);
 
         var session = new JsonSessionStore(Path.Combine(data.Path, "session.json")).Current;
         Assert.Equal([topLevel, null], session.Tabs.Select(saved => saved.RepositoryPath));
