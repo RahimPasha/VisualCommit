@@ -67,6 +67,9 @@ public partial class MainWindowViewModel : ObservableObject
         // The theme shown follows the service: the user's choice, or the system's mode (11.6).
         FollowThemeService();
 
+        // The editor failure's "Open settings…" opens the settings screen through the window (12.7).
+        WireSettings();
+
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
         // On a dashboard the log line names the workspace (docs/phase-6-design.md 2.7).
         Menu = new MenuLayerViewModel(

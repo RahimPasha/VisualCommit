@@ -19,7 +19,15 @@
           Padding="6,0">
     <DockPanel>
 
+      <!-- The right-hand group: Settings (docs/phase-6-design.md 7.2, D197), always enabled as
+           Theme is, then Search and Theme where they were. -->
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <c:ToolbarButton Name="SettingsButton" Label="Settings" IconData="{StaticResource IconSettings}"
+                         Command="{Binding OpenSettingsCommand}"
+                         ToolTip.Tip="{Binding SettingsToolTip}"
+                         AutomationProperties.HelpText="{Binding SettingsToolTip}"
+                         AutomationProperties.AcceleratorKey="{Binding Keys.Settings}"
+                         AutomationProperties.AutomationId="SettingsButton" />
         <c:ToolbarButton Name="SearchButton" Label="Search" IconData="{StaticResource IconSearch}"
                          Command="{Binding ActiveTab.Toolbar.SearchCommand}"
                          ToolTip.Tip="{Binding ActiveTab.Toolbar.SearchToolTip}"
