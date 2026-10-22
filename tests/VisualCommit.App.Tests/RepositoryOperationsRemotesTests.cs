@@ -441,6 +441,26 @@ public class RepositoryOperationsRemotesTests
     }
 
     [Fact]
+    public async Task With_Keep_ignored_files_on_every_git_call_of_a_remote_branchs_checkout_keeps_them()
+    {
+        // 9.11 and 10.4 #10's "[--no-overwrite-ignore]": G25's TG5, TG6 and TG8, the setting at its default.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.True(app.Settings.Current.KeepIgnoredFiles);
+
+        await app.Operations.CheckoutAsync("refs/remotes/origin/pr/1");
+        await app.Operations.CheckoutAsync("refs/heads/main");
+        await app.Operations.CheckoutAsync("refs/remotes/origin/pr/1");
+        await app.Operations.CheckoutAsync("refs/remotes/upstream/pr/7");
+
+        Assert.Equal(
+            ["git switch --create pr/1 --no-track --no-overwrite-ignore refs/remotes/origin/pr/1", "git switch --no-guess --no-overwrite-ignore main", "git switch --no-guess --no-overwrite-ignore pr/1", "git switch --create pr/7 --track --no-overwrite-ignore refs/remotes/upstream/pr/7"],
+            app.Calls.Snapshot().Where(call => call.CommandText.StartsWith("git switch", StringComparison.Ordinal)).Select(call => call.CommandText));
+        Assert.Equal("Created pr/7 tracking upstream/pr/7 and checked it out", app.StatusText);
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
+    [Fact]
     public async Task A_ref_two_remotes_fetch_is_not_checked_out_by_a_double_click_or_a_stale_menu_and_leaves_no_branch()
     {
         using var repo = await Scenarios.RenamingRefspecAsync();
