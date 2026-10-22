@@ -349,9 +349,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             if (_owns && Repository is { } own)
             {
                 var gitDirectory = own.Repository.GitDirectory;
-                read.IsCheckingFolder = true;
-                var present = await Task.Run(() => exists(path) && exists(gitDirectory), CancellationToken.None).WaitAsync(token);
-                read.CheckReturned();
+                var present = await read.CheckAsync(() => exists(path) && exists(gitDirectory), token);
                 if (token.IsCancellationRequested)
                 {
                     return;
@@ -375,9 +373,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
                 return;
             }
 
-            read.IsCheckingFolder = true;
-            var folderExists = await Task.Run(() => exists(path), CancellationToken.None).WaitAsync(token);
-            read.CheckReturned();
+            var folderExists = await read.CheckAsync(() => exists(path), token);
             if (token.IsCancellationRequested)
             {
                 return;
@@ -661,15 +657,23 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 }
 
 /// <summary>
-/// One read of a row (2.10), as its pass sees it: whether it has ended, and whether it is in a
-/// folder check that has not returned, which holds nothing (no slot, no pass).
+/// One read of a row (2.10), as its pass sees it: whether it has ended, and whether it sits in a
+/// folder check (on the thread pool, or returned and waiting for the UI thread), which holds no
+/// slot; its pass ends without it once only such checks are left for the dashboard's
+/// <see cref="DashboardViewModel.CheckPatience"/>.
 /// </summary>
 internal sealed class DashboardRowRead
 {
-    private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private const int NoCheck = 0;
+    private const int CheckQueued = 1;
+    private const int CheckRunning = 2;
+    private const int CheckDone = 3;
 
-    /// <summary>The read is in a folder check that has not returned.</summary>
-    public bool IsCheckingFolder { get; set; }
+    private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _check;
+
+    /// <summary>The read sits in a folder check: queued for the thread pool, running there, or returned and waiting for the UI thread.</summary>
+    public bool IsInCheck => Volatile.Read(ref _check) != NoCheck;
 
     /// <summary>The read has ended.</summary>
     public bool IsCompleted => _completion.Task.IsCompleted;
@@ -680,15 +684,34 @@ internal sealed class DashboardRowRead
     /// <summary>Raised on the UI thread when a folder check returned or the read ended: its pass looks again.</summary>
     public event EventHandler? Progressed;
 
-    public void CheckReturned()
+    /// <summary>
+    /// Runs <paramref name="check"/> on the thread pool, as a folder check of this read: while it
+    /// runs the read counts as sitting in it; its result comes back on the caller's context.
+    /// </summary>
+    public async Task<bool> CheckAsync(Func<bool> check, CancellationToken cancellationToken)
     {
-        IsCheckingFolder = false;
+        Volatile.Write(ref _check, CheckQueued);
+        var result = await Task.Run(
+            () =>
+            {
+                Volatile.Write(ref _check, CheckRunning);
+                try
+                {
+                    return check();
+                }
+                finally
+                {
+                    Volatile.Write(ref _check, CheckDone);
+                }
+            },
+            CancellationToken.None).WaitAsync(cancellationToken);
+        Volatile.Write(ref _check, NoCheck);
         Progressed?.Invoke(this, EventArgs.Empty);
+        return result;
     }
 
     public void Complete()
     {
-        IsCheckingFolder = false;
         _completion.TrySetResult();
         Progressed?.Invoke(this, EventArgs.Empty);
     }

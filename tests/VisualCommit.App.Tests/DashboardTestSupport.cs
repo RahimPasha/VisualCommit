@@ -144,6 +144,32 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
 
     public CountingRepository this[string name] => _repositories[PathOf(name)];
 
+    /// <summary>
+    /// The folder <paramref name="innerName"/> (made) lies inside <paramref name="outer"/>'s working
+    /// tree: an open of it gives the outer repository, opened below its top (1.2, 0.8), as a new fake
+    /// object whose reads are counted apart.
+    /// </summary>
+    public CountingRepository AddInside(string innerName, CountingRepository outer)
+    {
+        ArgumentNullException.ThrowIfNull(outer);
+        Directory.CreateDirectory(PathOf(innerName));
+        var around = new CountingRepository(outer.WorkingDirectory) { AtTop = false };
+        _repositories[PathOf(innerName)] = around;
+        return around;
+    }
+
+    /// <summary>The folder of <paramref name="name"/> is no repository any more: an open of it fails as git's would.</summary>
+    public void Forget(string name) => _repositories.TryRemove(PathOf(name), out _);
+
+    /// <summary>An open of <paramref name="name"/>'s folder fails with <paramref name="failure"/> (git refused it), its folder made.</summary>
+    public void Refuse(string name, Exception failure)
+    {
+        Directory.CreateDirectory(PathOf(name));
+        _refusals[PathOf(name)] = failure;
+    }
+
+    private readonly ConcurrentDictionary<string, Exception> _refusals = new(StringComparer.OrdinalIgnoreCase);
+
     public void Dispose() => _root.Dispose();
 
     public async Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
@@ -154,7 +180,12 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
             await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        return _repositories.Values.FirstOrDefault(repository => WorkspacePaths.Same(repository.WorkingDirectory, path))
+        if (_refusals.FirstOrDefault(refusal => WorkspacePaths.Same(refusal.Key, path)).Value is { } failure)
+        {
+            throw failure;
+        }
+
+        return _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
             ?? throw new NotARepositoryException(path);
     }
 
@@ -229,6 +260,14 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
     /// <summary>When set, a history load waits for it.</summary>
     public TaskCompletionSource? HistoryGate { get; set; }
 
+    /// <summary>What <see cref="OpenedAtTopAsync"/> answers: false for a folder inside another working tree (1.2).</summary>
+    public bool AtTop { get; set; } = true;
+
+    /// <summary>A meter several fakes share: their refs reads at once, across the repositories, and a gate for all of them.</summary>
+    public ReadMeter? Meter { get; set; }
+
+    public override Task<bool> OpenedAtTopAsync(CancellationToken cancellationToken = default) => Task.FromResult(AtTop);
+
     /// <summary>The refs a read returns are the ones set when it began.</summary>
     public override async Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default)
     {
@@ -237,6 +276,8 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
         InterlockedMax(ref _maxReadsAtOnce, now);
         var refs = Refs;
         var failure = RefsFailure;
+        var meter = Meter;
+        meter?.Enter();
         try
         {
             if (RefsGate is { } gate)
@@ -244,11 +285,17 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
                 await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            if (meter?.Gate is { } shared)
+            {
+                await shared.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await Task.Yield();
             return failure is not null ? throw failure : refs;
         }
         finally
         {
+            meter?.Leave();
             Interlocked.Decrement(ref _readsNow);
         }
     }
@@ -306,6 +353,36 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
         {
         }
     }
+}
+
+/// <summary>Refs reads at once across several fakes, and a gate that holds them all (2.10's four reads at once).</summary>
+internal sealed class ReadMeter
+{
+    private int _now;
+    private int _max;
+    private int _entered;
+
+    /// <summary>When set, every metered refs read waits for it.</summary>
+    public TaskCompletionSource? Gate { get; set; }
+
+    public int Now => Volatile.Read(ref _now);
+
+    public int Max => Volatile.Read(ref _max);
+
+    /// <summary>The metered reads begun so far.</summary>
+    public int Entered => Volatile.Read(ref _entered);
+
+    public void Enter()
+    {
+        Interlocked.Increment(ref _entered);
+        var now = Interlocked.Increment(ref _now);
+        int seen;
+        while ((seen = Volatile.Read(ref _max)) < now && Interlocked.CompareExchange(ref _max, now, seen) != seen)
+        {
+        }
+    }
+
+    public void Leave() => Interlocked.Decrement(ref _now);
 }
 
 /// <summary>A watcher that counts its starts and pauses and raises a change when the test asks.</summary>

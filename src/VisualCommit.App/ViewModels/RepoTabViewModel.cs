@@ -248,9 +248,10 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             PendingPath = null;
 
             // IsOpening stays true until ShowAsync shows the repository: it may first wait for a
-            // closed queue on the worktree (docs/phase-6-design.md 3.3).
+            // closed queue on the worktree, and opens nothing when the tab closes meanwhile
+            // (docs/phase-6-design.md 3.3).
             await ShowAsync(repository, sinceOpening, remember);
-            return true;
+            return Repository is not null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

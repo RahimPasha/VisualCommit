@@ -44,6 +44,13 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary>How many reads of a dashboard run at once (2.10).</summary>
     public const int MaxReads = 4;
 
+    /// <summary>
+    /// How long a read pass waits, by the read clock, once only folder checks are left (2.10): a
+    /// check of a folder that answers returns in microseconds, one on a share that does not answer
+    /// can take minutes, and the pass ends without it.
+    /// </summary>
+    public static readonly TimeSpan CheckPatience = TimeSpan.FromSeconds(2);
+
     private readonly TabServices _services;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Func<bool> _isActive;
@@ -544,13 +551,46 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
         IsPassRunning = true;
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Look(object? sender, EventArgs e)
+        var ui = SynchronizationContext.Current;
+        ITimer? patience = null;
+        bool OnlyChecksLeft() => reads.All(read => read.IsCompleted || read.IsInCheck) && reads.Any(read => read.IsCompleted);
+        void Expire()
         {
-            // Looked at when a read ends or its check returns: never at the start, when every
-            // check has just begun.
-            if (reads.All(read => read.IsCompleted || read.IsCheckingFolder) && reads.Any(read => read.IsCompleted))
+            patience?.Dispose();
+            patience = null;
+            if (OnlyChecksLeft())
             {
                 ended.TrySetResult();
+            }
+        }
+
+        void Look(object? sender, EventArgs e)
+        {
+            // Looked at when a read ends or its check returns. With every read ended the pass
+            // ends. With only folder checks left, it waits for them CheckPatience by the read
+            // clock (a normal check returns in microseconds), then ends without them: a check that
+            // has not returned holds nothing (2.10).
+            if (reads.All(read => read.IsCompleted))
+            {
+                ended.TrySetResult();
+            }
+            else if (patience is null && OnlyChecksLeft())
+            {
+                patience = ReadClock.CreateTimer(
+                    _ =>
+                    {
+                        if (ui is null)
+                        {
+                            Expire();
+                        }
+                        else
+                        {
+                            ui.Post(_ => Expire(), null);
+                        }
+                    },
+                    null,
+                    CheckPatience,
+                    Timeout.InfiniteTimeSpan);
             }
         }
 
@@ -570,6 +610,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
                 read.Progressed -= Look;
             }
 
+            patience?.Dispose();
             IsPassRunning = false;
         }
 
