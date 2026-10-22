@@ -482,11 +482,37 @@ public class RepositoryOperationsRemotesTests
         app.Dialogs.CloseError();
         await app.Operations.CheckoutAsync("refs/remotes/origin/feature/x");
 
-        var error = Assert.Single(app.Dialogs.Errors);
-        Assert.Equal("Checkout failed", error.Title);
-        Assert.Contains("origin/feature/x is fetched from origin and backup", error.Summary + "\n" + error.Output, StringComparison.Ordinal);
+        // 14.1, 14.4: "Checkout failed" with R1 alone, before git, no output and no command.
+        AssertRefusedBeforeGit(app, Assert.Single(app.Dialogs.Errors), "Check out origin/feature/x");
         Assert.Equal(("Check out origin/feature/x failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
         Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git switch", StringComparison.Ordinal));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/feature/x"));
+        Assert.Equal("refs/heads/main", await HeadRefAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Stash_changes_and_check_out_a_ref_two_remotes_fetch_is_refused_before_anything_is_stashed()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await AddBackupFetchingIntoOriginAsync(repo, "feature/x");
+        repo.WriteFile("README.md", "# refspecs\nmy own edit\n");
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+        var status = await PorcelainAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.StashAndCheckoutAsync("refs/remotes/origin/feature/x");
+
+        AssertRefusedBeforeGit(app, Assert.Single(app.Dialogs.Errors), "Check out origin/feature/x with your changes");
+        Assert.Equal(("Check out origin/feature/x with your changes failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        // The refs reads list the stashes (git stash list); nothing else of git stash runs.
+        Assert.DoesNotContain(
+            app.Calls.Snapshot(),
+            call => (call.CommandText.StartsWith("git stash ", StringComparison.Ordinal) && !call.CommandText.StartsWith("git stash list ", StringComparison.Ordinal))
+                || call.CommandText.StartsWith("git switch", StringComparison.Ordinal));
+        Assert.Empty(await repo.StashListAsync());
+        Assert.Equal(status, await PorcelainAsync(repo));
+        Assert.Equal("# refspecs\nmy own edit\n", Read(repo, "README.md"));
         Assert.Null(await repo.RefTargetAsync("refs/heads/feature/x"));
         Assert.Equal("refs/heads/main", await HeadRefAsync(repo));
         app.AssertScriptFollowed();
@@ -564,6 +590,21 @@ public class RepositoryOperationsRemotesTests
         Assert.Equal("fork/up/main", app.Operations.MergedRemoteBranch("main", Topic));
         Assert.Equal("origin/main", app.Operations.MergedRemoteBranch("main", Parser));
         Assert.Null(app.Operations.MergedRemoteBranch("up/main", Topic));
+    }
+
+    /// <summary>
+    /// The error dialog of a checkout of origin/feature/x that the app refused before git because
+    /// two remotes fetch it (10.4 #10, R1): "Checkout failed", R1 as its summary, no output, no
+    /// command, no extra button; the refusal logged as one, not as an unexpected error.
+    /// </summary>
+    private static void AssertRefusedBeforeGit(OperationsHarness app, ErrorDialogViewModel error, string title)
+    {
+        const string Reason = "origin/feature/x is fetched from origin and backup";
+        Assert.Equal(("Checkout failed", Reason), (error.Title, error.Summary));
+        Assert.Equal((null, null), (error.Output, error.Command));
+        Assert.False(error.HasExtraAction);
+        Assert.Contains(app.Log.Messages, message => message.Contains($": {title}: refused, {Reason}", StringComparison.Ordinal));
+        Assert.DoesNotContain(app.Log.Messages, message => message.Contains("unexpected error", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Opens the harness with Keep ignored files off, so that a checkout's command has no <c>--no-overwrite-ignore</c> (9.11).</summary>

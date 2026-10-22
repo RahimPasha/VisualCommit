@@ -18,16 +18,15 @@ public sealed partial class RepositoryOperations
     /// checked out as it is; otherwise a new one tracking the remote branch, or, for one its remote
     /// fetches from two refs (R2, D201), a new one without an upstream, since git would track the
     /// wrong first candidate. A ref two remotes fetch, or none (R1, R3), has no local name: the
-    /// caller refuses it before git (<see cref="RefuseUnfetchedRemoteBranch"/>), and reached here
-    /// it is refused all the same, git never runs.
+    /// checkouts' operations refuse it before git (<see cref="RefuseUnfetchedRemoteBranch"/>).
     /// </summary>
     private async Task<string> CheckoutRemoteBranchAsync(string remoteRef, NetworkOptions options)
     {
         var shown = ShortName(remoteRef);
         if (LocalNameOfRemoteBranch(remoteRef) is not { } local)
         {
-            // A menu built before the fetch lines changed, whose caller did not refuse it first: git
-            // would fail, and for R1 leave the new branch behind (0.5's H).
+            // A backstop only: the operation refused such a ref before (RefuseUnfetchedRemoteBranch);
+            // git would fail, and for R1 leave the new branch behind (0.5's H).
             throw new InvalidOperationException(UnfetchedReason(remoteRef) ?? $"{shown} is not fetched from any remote");
         }
 
@@ -59,11 +58,10 @@ public sealed partial class RepositoryOperations
     /// 10.4 #10's refusal before git, inside a checkout's operation, of a remote branch that two
     /// remotes fetch or none (R1, R3) and so has no local branch to check out into: a menu built
     /// before the fetch lines changed reaches it. The error dialog says "Checkout failed" with the
-    /// reason; nothing is written. Null for any other target.
+    /// reason; nothing is written, and "Stash changes and check out" stashes nothing. Null for any
+    /// other target. CheckoutAsync and StashAndCheckoutAsync (RepositoryOperations.Branches.cs)
+    /// call it first in their operations.
     /// </summary>
-    // For the checkouts' operations in RepositoryOperations.Branches.cs to call before their plan
-    // runs (the request to the lead in WP-RA's report); until then CheckoutRemoteBranchAsync refuses
-    // such a ref itself, without git.
     private OperationReport? RefuseUnfetchedRemoteBranch(OperationText text, string target) =>
         target.StartsWith(RemotesPrefix, StringComparison.Ordinal) && LocalNameOfRemoteBranch(target) is null && UnfetchedReason(target) is { } reason
             ? Refused(text, reason)
