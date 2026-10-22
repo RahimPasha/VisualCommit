@@ -70,8 +70,8 @@ public sealed record RunOptions
 
     /// <summary>
     /// Where a result's dialog goes instead of opening at once (4.6, D195): a bulk run's row keeps
-    /// it for its Details…. Null (the default): dialogs open at once (D95). Work package WP-B makes
-    /// <see cref="RepositoryOperations"/> honour it; until then dialogs open at once.
+    /// it for its Details…, and <see cref="RepositoryOperations.ShowDeferredAsync"/> opens it later.
+    /// Null (the default): dialogs open at once (D95).
     /// </summary>
     public Action<DeferredDialog>? Defer { get; init; }
 }
@@ -377,6 +377,12 @@ public sealed partial class RepositoryOperations
         {
             await ShowResultAsync(text, result, options, operationId);
         }
+        else if (options.Defer is { } defer && !IsClosed && DeferredOf(text, result, options, operationId) is { } dialog)
+        {
+            // A bulk run's call merged into a waiting operation of the tab, whose caller shows the
+            // dialog: the row keeps the same display, computed by the same rule (4.6).
+            defer(dialog);
+        }
 
         return result;
     }
@@ -552,6 +558,13 @@ public sealed partial class RepositoryOperations
     /// shows as its command (4f: "the cancelled git call"), and whose record in the operation log
     /// gets the failure's summary as the dialog gives it, also when no dialog opens
     /// (docs/phase-5-design.md 2.3).
+    /// <para>
+    /// With <see cref="RunOptions.Defer"/> (a bulk run's row, docs/phase-6-design.md 4.6, D195) it
+    /// does all of that but open the dialog: what the dialog would show goes to
+    /// <see cref="RunOptions.Defer"/> as a <see cref="DeferredDialog"/>, the lock files with their
+    /// stamps taken now, for <see cref="ShowDeferredAsync"/> to open later. After the tab closed
+    /// nothing is deferred: the failure is only logged, as for a closed tab.
+    /// </para>
     /// </summary>
     public async Task ShowResultAsync(OperationText text, OperationResult result, RunOptions? options = null, string? operationId = null)
     {
@@ -575,6 +588,16 @@ public sealed partial class RepositoryOperations
             return;
         }
 
+        if (options.Defer is { } defer)
+        {
+            if (DeferredOf(text, result, options, operationId) is { } dialog)
+            {
+                defer(dialog);
+            }
+
+            return;
+        }
+
         if (failure is not null && display is not null && options.ShowsErrorDialog)
         {
             await ShowFailureAsync(display, failure);
@@ -583,6 +606,49 @@ public sealed partial class RepositoryOperations
         {
             await ShowStaleLockFilesAsync(text, result.StaleLockFiles, operationId);
         }
+    }
+
+    /// <summary>
+    /// Opens a dialog a bulk run kept (docs/phase-6-design.md 4.6, D195): a failure through
+    /// <see cref="ShowFailureAsync"/>, the identical error dialog of D95 (its title, summary, git's
+    /// output, the command, "Copy output" and the extra button, whose action starts after the
+    /// dialog closes), naming the repository; lock files through the "{Title} cancelled" dialog
+    /// with "Remove lock files", which removes only files that are still those it was given. Opens
+    /// as often as it is called; nothing after the view model closed.
+    /// </summary>
+    public async Task ShowDeferredAsync(DeferredDialog dialog)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+        if (dialog is { Display: { } display, Failure: { } failure })
+        {
+            await ShowFailureAsync(display, failure);
+        }
+        else if (dialog.StaleLockFiles.Count > 0)
+        {
+            await ShowStaleLockFilesAsync(dialog.Text, dialog.StaleLockFiles, dialog.Listed, dialog.OperationId);
+        }
+    }
+
+    /// <summary>
+    /// The dialog <see cref="ShowResultAsync"/> would open for <paramref name="result"/>, kept for
+    /// later (4.6): the failure's display by the same rule, or a cancel's lock files with their
+    /// stamps taken now; null when it would open none.
+    /// </summary>
+    private static DeferredDialog? DeferredOf(OperationText text, OperationResult result, RunOptions options, string? operationId)
+    {
+        if (result is { Outcome: OperationOutcome.Failed, Failure: { } failure })
+        {
+            var display = options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
+            return options.ShowsErrorDialog ? new DeferredDialog(text, display, failure, [], null, operationId) : null;
+        }
+
+        if (result is { Outcome: OperationOutcome.Cancelled, StaleLockFiles.Count: > 0 })
+        {
+            var listed = result.StaleLockFiles.ToDictionary(file => file, LockFiles.Stamp, StringComparer.Ordinal);
+            return new DeferredDialog(text, null, null, result.StaleLockFiles, listed, operationId);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -704,6 +770,38 @@ public sealed partial class RepositoryOperations
         {
             await ShowExceptionAsync(text, ex);
             return fallback;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="GuardAsync(OperationText, Func{Task})"/>'s variant for a bulk run's row
+    /// (docs/phase-6-design.md 4.6, D195): an exception outside the queue opens no dialog but hands
+    /// the one it would have opened to <paramref name="defer"/>, and the row counts a failure
+    /// (<c>{Title} failed</c>, with the failure); a cancel counts <c>{Title} cancelled</c>. The
+    /// body's own result otherwise, null when it started nothing.
+    /// </summary>
+    public async Task<OperationResult?> GuardAsync(OperationText text, Func<Task<OperationResult?>> body, Action<DeferredDialog> defer)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(body);
+        ArgumentNullException.ThrowIfNull(defer);
+        try
+        {
+            return await body();
+        }
+        catch (OperationCanceledException)
+        {
+            return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
+        }
+        catch (Exception ex)
+        {
+            var failure = FailureOfException(text, ex);
+            if (!IsClosed && text.ErrorTitle.Length > 0)
+            {
+                defer(new DeferredDialog(text, new FailureDisplay(text.ErrorTitle, text.FailureSummary), failure, [], null, null));
+            }
+
+            return new OperationResult(OperationOutcome.Failed, $"{text.Title} failed", failure);
         }
     }
 
@@ -853,11 +951,18 @@ public sealed partial class RepositoryOperations
     private IReadOnlyList<string> NamesOf(RefKind kind) =>
         Refs?.Refs.Where(gitRef => gitRef.Kind == kind).Select(gitRef => gitRef.Name).ToList() ?? [];
 
-    private async Task ShowStaleLockFilesAsync(OperationText text, IReadOnlyList<string> files, string? operationId)
-    {
+    private Task ShowStaleLockFilesAsync(OperationText text, IReadOnlyList<string> files, string? operationId) =>
         // What each file is as it is listed, right after the queue found it: the button removes
         // only files that are still these (1.8).
-        var listed = files.ToDictionary(file => file, LockFiles.Stamp, StringComparer.Ordinal);
+        ShowStaleLockFilesAsync(text, files, files.ToDictionary(file => file, LockFiles.Stamp, StringComparer.Ordinal), operationId);
+
+    /// <summary>
+    /// The "{Title} cancelled" dialog of <paramref name="files"/> with "Remove lock files" (1.8),
+    /// which removes only those still as <paramref name="listed"/> stamps them: taken when the queue
+    /// found them, or when a bulk run kept the dialog (docs/phase-6-design.md 4.6).
+    /// </summary>
+    private async Task ShowStaleLockFilesAsync(OperationText text, IReadOnlyList<string> files, IReadOnlyDictionary<string, (DateTime Time, long Length)?>? listed, string? operationId)
+    {
         // 4f: ErrorCommand is the cancelled git call, the operation's last one in the session's call log.
         var cancelledCall = operationId is null
             ? null
@@ -889,7 +994,8 @@ public sealed partial class RepositoryOperations
         }
     }
 
-    private async Task ShowExceptionAsync(OperationText text, Exception exception)
+    /// <summary>The failure an exception outside the queue gives, logged: git's output, or the system's message, or "Unexpected error: …" (logged at Error).</summary>
+    private GitFailure FailureOfException(OperationText text, Exception exception)
     {
         GitFailure failure;
         switch (exception)
@@ -910,6 +1016,12 @@ public sealed partial class RepositoryOperations
                 break;
         }
 
+        return failure;
+    }
+
+    private async Task ShowExceptionAsync(OperationText text, Exception exception)
+    {
+        var failure = FailureOfException(text, exception);
         if (IsClosed || text.ErrorTitle.Length == 0)
         {
             return;

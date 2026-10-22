@@ -167,7 +167,7 @@ public static partial class Phase3Expectations
 
         public const string PushMainCommand = "git push --progress origin refs/heads/main:refs/heads/main";
 
-        public const string MergeFetchHeadCommand = "git merge --no-edit FETCH_HEAD";
+        public const string MergeFetchHeadCommand = "git merge --no-edit --no-overwrite-ignore FETCH_HEAD";
 
         // ---- Check 18b -----------------------------------------------------------------------
 
@@ -235,9 +235,9 @@ public static partial class Phase3Expectations
 
         public static readonly ErrorTexts PullRefusedDialog = new(
             "Pull failed",
-            "Git could not pull origin/main into main.",
+            "main and origin/main have diverged, and pull.ff is set to only: merge origin/main into main or rebase main onto origin/main.",
             "sync",
-            "git merge --ff-only FETCH_HEAD",
+            "git merge --ff-only --no-overwrite-ignore FETCH_HEAD",
             ["Copy output", "Close"],
             ["fatal: Not possible to fast-forward, aborting."],
             "fatal: Not possible to fast-forward, aborting.");
