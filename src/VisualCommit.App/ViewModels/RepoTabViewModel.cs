@@ -65,8 +65,12 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowsRightPanel), nameof(ShowsDetailsPanel), nameof(ShowsStagePanel), nameof(GraphColumnSpan))]
     public partial RepositoryViewModel? Repository { get; private set; }
 
-    /// <summary>The toolbar's buttons (docs/phase-3-design.md 4d): the repository's, or a toolbar whose commands are all disabled.</summary>
-    public ToolbarViewModel Toolbar => Repository?.Toolbar ?? _emptyToolbar;
+    /// <summary>
+    /// The toolbar's buttons (docs/phase-3-design.md 4d): a dashboard's (Fetch and Pull run Fetch all
+    /// and Pull all, docs/phase-6-design.md 2.8, 4.10), the repository's, or a toolbar whose commands
+    /// are all disabled.
+    /// </summary>
+    public ToolbarViewModel Toolbar => Dashboard?.Toolbar ?? Repository?.Toolbar ?? _emptyToolbar;
 
     /// <summary>
     /// What the status bar shows of the operations (4e): a dashboard's bulk runs
@@ -76,12 +80,32 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The workspace's dashboard this tab shows (D205, docs/phase-6-design.md 2.1), set once by
-    /// <see cref="ShowDashboard"/>; null for a repository's or an empty tab. Work package WP-D
-    /// makes the tab show it.
+    /// <see cref="ShowDashboard"/>; null for a repository's or an empty tab. It spans the main area's
+    /// three columns, where neither side panel shows (2.4).
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDashboard), nameof(ShowsDashboard), nameof(ShowsLeftPanel), nameof(GraphColumn), nameof(TabAutomationId), nameof(OperationStatus))]
+    [NotifyPropertyChangedFor(nameof(Toolbar), nameof(BranchText), nameof(ShowsWelcome), nameof(ShowsRightPanel), nameof(ShowsDetailsPanel), nameof(ShowsStagePanel), nameof(GraphColumnSpan))]
     public partial DashboardViewModel? Dashboard { get; private set; }
+
+    /// <summary>
+    /// While the tab waits before it opens a worktree whose closed tab's or released summary's
+    /// queue still runs there (docs/phase-6-design.md 3.3): <c>Waiting for {title} to finish…</c>,
+    /// shown centred in the graph area (<c>TabWaitingText</c>); null otherwise.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWaitingForClosedQueue))]
+    public partial string? WaitingText { get; private set; }
+
+    /// <summary><see cref="WaitingText"/> shows.</summary>
+    public bool IsWaitingForClosedQueue => WaitingText is not null;
+
+    /// <summary>
+    /// The tab can become a dashboard in place (docs/phase-6-design.md 2.2): no repository, not
+    /// opening, no pending folder, not a dashboard, no clone running on its welcome page; a tab whose
+    /// restore failed counts (its folder is dropped then).
+    /// </summary>
+    public bool IsEmpty => Repository is null && !IsOpening && PendingPath is null && !IsDashboard && Welcome.RunningClone is null;
 
     /// <summary>The tab is a workspace's dashboard.</summary>
     public bool IsDashboard => Dashboard is not null;
@@ -108,8 +132,8 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowsWelcome))]
     public partial bool IsOpening { get; private set; }
 
-    /// <summary>The graph area shows the welcome page.</summary>
-    public bool ShowsWelcome => Repository is null && !IsOpening;
+    /// <summary>The graph area shows the welcome page: not on a dashboard (2.1).</summary>
+    public bool ShowsWelcome => Repository is null && !IsOpening && !IsDashboard;
 
     public WelcomeViewModel Welcome { get; }
 
@@ -125,9 +149,9 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The right panel and its splitter are shown: not while the conflict resolver spans the graph
-    /// and right-panel columns (docs/phase-4-design.md 11.2).
+    /// and right-panel columns (docs/phase-4-design.md 11.2), nor on a dashboard (docs/phase-6-design.md 2.4).
     /// </summary>
-    public bool ShowsRightPanel => Repository?.IsResolverOpen != true;
+    public bool ShowsRightPanel => !IsDashboard && Repository?.IsResolverOpen != true;
 
     /// <summary>The right panel shows the commit's details.</summary>
     public bool ShowsDetailsPanel => ShowsRightPanel && !ShowsWorkingChanges;
@@ -135,11 +159,14 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// <summary>The right panel shows the stage panel.</summary>
     public bool ShowsStagePanel => ShowsRightPanel && ShowsWorkingChanges;
 
-    /// <summary>The columns the graph area spans: the right panel's too while the resolver is open (11.2).</summary>
-    public int GraphColumnSpan => ShowsRightPanel ? 1 : 2;
+    /// <summary>
+    /// The columns the graph area spans: the right panel's too while the resolver is open (11.2);
+    /// on a dashboard all three (docs/phase-6-design.md 2.4).
+    /// </summary>
+    public int GraphColumnSpan => IsDashboard ? 3 : ShowsRightPanel ? 1 : 2;
 
-    /// <summary>What the status bar shows for this tab.</summary>
-    public string BranchText => Repository?.BranchText ?? "No repository";
+    /// <summary>What the status bar shows for this tab: on a dashboard the workspace's name, following a rename (2.1, 2.8).</summary>
+    public string BranchText => Dashboard?.Name ?? Repository?.BranchText ?? "No repository";
 
     /// <summary>The working tree of the open repository, or null.</summary>
     public string? RepositoryPath => Repository?.Path;
@@ -163,15 +190,26 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Makes this tab <paramref name="workspace"/>'s dashboard (2.1): the restore of a dashboard
     /// tab (1.11) and <c>IWorkspaceHost.ShowWorkspace</c> (2.2) call it. Sets <see cref="Dashboard"/>,
-    /// <see cref="IsDashboard"/>, <see cref="Title"/> and <see cref="SavedWorkspaceId"/>; work
-    /// package WP-D gives the dashboard its rows and the tab its toolbar.
+    /// <see cref="IsDashboard"/>, <see cref="Title"/> (which follows a rename) and
+    /// <see cref="SavedWorkspaceId"/>, and gives the tab the dashboard's toolbar (2.8, 4.10). A
+    /// folder a failed restore kept is dropped. A tab is made a dashboard once.
     /// </summary>
     public void ShowDashboard(Workspace workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);
+        if (Dashboard is not null)
+        {
+            return;
+        }
+
+        FailedPath = null;
         SavedWorkspaceId = workspace.Id;
         Title = workspace.Name;
-        Dashboard = new DashboardViewModel(workspace, _services);
+
+        // "Active" is the window's active tab (2.10): a closed tab is never it.
+        var dashboard = new DashboardViewModel(workspace, _services, () => IsActive && !_disposed);
+        dashboard.PropertyChanged += OnDashboardPropertyChanged;
+        Dashboard = dashboard;
     }
 
     /// <summary>
@@ -208,7 +246,9 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             }
 
             PendingPath = null;
-            IsOpening = false;
+
+            // IsOpening stays true until ShowAsync shows the repository: it may first wait for a
+            // closed queue on the worktree (docs/phase-6-design.md 3.3).
             await ShowAsync(repository, sinceOpening, remember);
             return true;
         }
@@ -237,7 +277,14 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Shows a repository that was just opened, initialised or cloned, and loads it.</summary>
+    /// <summary>
+    /// Shows a repository that was just opened, initialised or cloned, and loads it. While the
+    /// queue of a closed tab or of a released summary still runs on its worktree, it first waits for
+    /// it, opening (<see cref="IsOpening"/>) and saying so (<see cref="WaitingText"/>), and opens
+    /// nothing if the tab closes meanwhile (docs/phase-6-design.md 3.3). Then it adopts the
+    /// worktree's summary-mode view model a dashboard holds, when there is one, so that a row and the
+    /// tab share one queue (D209), and registers the view model (3.4).
+    /// </summary>
     public async Task ShowAsync(IGitRepository repository, Stopwatch? sinceOpening = null, bool remember = true)
     {
         ArgumentNullException.ThrowIfNull(repository);
@@ -247,15 +294,42 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var registry = _services.OpenRepositories;
+        var key = WorktreeKey.Of(repository.GitDirectory);
+        var idle = registry.WhenIdleAsync(key);
+        if (!idle.IsCompleted)
+        {
+            IsOpening = true;
+            while (!idle.IsCompleted && !_disposed)
+            {
+                WaitingText = registry.ClosedRunningOn(key)?.Queue.Current is { } running
+                    ? DashboardTexts.WaitingToFinish(running.Title)
+                    : WaitingText;
+                await idle;
+                idle = registry.WhenIdleAsync(key);
+            }
+
+            WaitingText = null;
+            if (_disposed)
+            {
+                return;
+            }
+        }
+
+        IsOpening = false;
         FailedPath = null;
         var previous = Repository;
-        var opened = new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening, _services.Dialogs, _services);
+        var opened = registry.TryAdopt(key) is { } adopted
+            ? Adopt(adopted, sinceOpening)
+            : new RepositoryViewModel(repository, _services.Settings, _services.Dates, _services.Log, sinceOpening, _services.Dialogs, _services);
         opened.PropertyChanged += OnRepositoryPropertyChanged;
+        registry.RegisterTab(opened);
         Repository = opened;
-        Title = repository.Name;
+        Title = opened.Name;
         if (previous is not null)
         {
             previous.PropertyChanged -= OnRepositoryPropertyChanged;
+            registry.UnregisterTab(previous);
             previous.Dispose();
         }
 
@@ -278,11 +352,41 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         _disposed = true;
         Welcome.Dispose();
         _emptyStatus.Dispose();
-        Dashboard?.Dispose();
+        if (Dashboard is { } dashboard)
+        {
+            dashboard.PropertyChanged -= OnDashboardPropertyChanged;
+            dashboard.Dispose();
+        }
+
         if (Repository is { } repository)
         {
             repository.PropertyChanged -= OnRepositoryPropertyChanged;
+
+            // The worktree's registry keeps its queue's idle task (3.4), so no tab and no summary
+            // is made there while a local operation of this one still runs.
+            _services.OpenRepositories.UnregisterTab(repository);
             repository.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The tab takes a dashboard's summary-mode view model (docs/phase-6-design.md 3.3): the freshly
+    /// opened repository is dropped (the adopted one points at the same folders) and the view model
+    /// is promoted with the tab's stopwatch, so that its full start counts from the user's open.
+    /// </summary>
+    private static RepositoryViewModel Adopt(RepositoryViewModel adopted, Stopwatch? sinceOpening)
+    {
+        adopted.Promote(sinceOpening ?? Stopwatch.StartNew());
+        return adopted;
+    }
+
+    private void OnDashboardPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DashboardViewModel.Name) && Dashboard is { } dashboard)
+        {
+            // A rename follows (2.1).
+            Title = dashboard.Name;
+            OnPropertyChanged(nameof(BranchText));
         }
     }
 

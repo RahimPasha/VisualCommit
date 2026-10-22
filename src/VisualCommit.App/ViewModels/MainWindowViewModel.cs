@@ -66,10 +66,14 @@ public partial class MainWindowViewModel : ObservableObject
         Theme = themes.Setting;
 
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
+        // On a dashboard the log line names the workspace (docs/phase-6-design.md 2.7).
         Menu = new MenuLayerViewModel(
             _log,
-            () => ActiveTab?.Repository?.Name,
+            () => ActiveTab?.Repository?.Name ?? ActiveTab?.Dashboard?.Name,
             owner => ReferenceEquals(ActiveTab?.Repository, owner) && !Dialogs.IsOpen);
+
+        // The dashboards' rows open their repositories through the window (docs/phase-6-design.md 2.3).
+        WatchDashboards();
 
         // The tabs of the last session are there from the first frame, under their folder names;
         // InitializeAsync opens them once git has been found.
@@ -158,9 +162,12 @@ public partial class MainWindowViewModel : ObservableObject
             GitStatusText = "Git is not working";
         }
 
+        // A restored active dashboard reads its rows beside the restored tabs' openings
+        // (docs/phase-6-design.md 2.10).
         var opening = Tabs
             .Where(tab => tab.PendingPath is not null)
             .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
+            .Append(ReadActiveDashboardAtStartAsync())
             .ToList();
         await Task.WhenAll(opening);
 
@@ -233,6 +240,10 @@ public partial class MainWindowViewModel : ObservableObject
             tab.Dispose();
         }
 
+        // The dashboards released their summaries above (D81's rules); what is left goes now
+        // (docs/phase-6-design.md 3.7).
+        _tabServices.OpenRepositories.DisposeAll();
+
         if (clones.Length > 0)
         {
             try
@@ -268,10 +279,9 @@ public partial class MainWindowViewModel : ObservableObject
             return true;
         }
 
-        var running = Tabs
-            .Select(tab => tab.Repository)
-            .OfType<RepositoryViewModel>()
-            .Concat(_closedButRunning)
+        // The dashboards' view models too (docs/phase-6-design.md 3.7).
+        var listed = RepositoriesToFinish().ToList();
+        var running = listed
             .Select(repository => (Repository: repository, Current: repository.Queue.Current))
             .Where(entry => entry.Current is { IsBackground: false })
             .ToList();
@@ -283,9 +293,11 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (_finishing is not { } finishing || (finishing.IsClosed && !QuitNowChosen(finishing)))
         {
-            foreach (var tab in Tabs)
+            // Bulk runs start no more rows first (4.12), then the queues drop what waits.
+            StopBulkRunsStarting();
+            foreach (var repository in listed)
             {
-                tab.Repository?.Queue.DropWaiting();
+                repository.Queue.DropWaiting();
             }
 
             _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), closeWindow);
@@ -395,7 +407,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         foreach (var tab in Tabs)
         {
-            tab.CanClose = Tabs.Count > 1 || tab.HasRepository || tab.PendingPath is not null;
+            tab.CanClose = Tabs.Count > 1 || tab.HasRepository || tab.PendingPath is not null || tab.IsDashboard;
         }
     }
 
