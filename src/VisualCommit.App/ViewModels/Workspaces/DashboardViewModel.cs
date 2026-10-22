@@ -169,7 +169,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     public partial string? AddOpenTabsToolTip { get; private set; }
 
     /// <summary>The header's run text shows: from the dashboard's first run on (2.5, 4.9: the status bar says "Ready" before it, the header nothing).</summary>
-    public bool ShowsBulkText => !string.Equals(Bulk.Text, OperationStatusViewModel.ReadyText, StringComparison.Ordinal);
+    public bool ShowsBulkText => Bulk.RunText is not null;
 
     /// <summary>A read pass is under way (WD37): what a trigger decided, read at once on the UI thread.</summary>
     [ObservableProperty]
@@ -349,8 +349,9 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         IsClosed = true;
         _lifetime.Cancel();
 
-        // Its run is cancelled as Cancel all does (4.12; work package WP-B's run).
-        Bulk.StopStarting();
+        // Its run is cancelled as Cancel all does and abandoned: a result that comes afterwards
+        // opens its dialog in the view model that ran it (4.5, 4.6, 4.12).
+        Bulk.Close();
         Bulk.PropertyChanged -= OnBulkChanged;
         _services.Workspaces.Changed -= OnStoreChanged;
         _services.OpenRepositories.Changed -= OnRegistryChanged;
@@ -802,7 +803,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
     private void OnBulkChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(DashboardBulkViewModel.Text))
+        if (e.PropertyName is null or nameof(DashboardBulkViewModel.RunText))
         {
             OnPropertyChanged(nameof(ShowsBulkText));
         }
