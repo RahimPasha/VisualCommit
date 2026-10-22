@@ -19,4 +19,19 @@ public interface IWorkspaceHost
 
     /// <summary>The working trees of the tabs with a repository open, in tab order (dashboards, empty tabs and tabs still opening left out): "Add open tabs" (1.7).</summary>
     IReadOnlyList<string> OpenRepositoryFolders();
+
+    /// <summary>
+    /// Whether the workspace's dashboard is open in a tab: the deletion's question then says
+    /// <c>Its dashboard tab closes.</c> (1.6). No dashboard by default.
+    /// </summary>
+    bool HasOpenDashboard(string workspaceId) => false;
+
+    /// <summary>
+    /// The working directory of the open dashboard's row whose saved folder is
+    /// <paramref name="savedPath"/>, while that row's repository is open
+    /// (<c>DashboardViewModel.OpenedWorkingDirectoryOf</c>, 2.10); null otherwise. 1.2's
+    /// <see cref="WorkspaceMembership"/> asks it, so that a saved folder through a junction or a
+    /// link counts as the repository git reports. Null by default.
+    /// </summary>
+    string? OpenedWorkingDirectoryOf(string workspaceId, string savedPath) => null;
 }
