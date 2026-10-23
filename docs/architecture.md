@@ -3684,10 +3684,11 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   Git-layer tests follow the same rule (`PseudoRefTests` asserts on 2.36 that git refuses
   `--ref-format`). Phase 5's facts were derived with Git 2.36 and replayed with the Git 2.55 inside
   Visual Studio on the development machine (put its `mingw64/bin` first on `PATH`); the
-  differences the code handles are under "Git versions" in "Git layer". Not explained yet
-  (a risk in `plan.md`): with that Git 2.55 first on `PATH`, 7 fetch and pull tests of
-  `VisualCommit.App.Tests` fail on the development machine, while every CI job passes them,
-  `ubuntu-latest`'s Git 2.55 included.
+  differences the code handles are under "Git versions" in "Git layer". With that Git 2.55
+  first on `PATH` the tests against `AuthRemoteServer` fail: it is a trimmed distribution without
+  `git http-backend`, which the server runs, and since phase 6 the server says so when it starts
+  (plan risk 28); every CI job passes them, `ubuntu-latest`'s Git 2.55 included. Phase 6 checked Git
+  2.56 behaviours locally with MinGit 2.56.0.windows.2 first on `PATH`.
 - xunit runs the tests of one class (or of one `[Collection]`) one after another and different
   ones side by side, so big test classes are split by subject: `ScenarioTests` and
   `Phase3ScenarioTests`, the pull parity classes by group of settings, and

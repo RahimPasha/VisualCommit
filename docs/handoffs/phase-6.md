@@ -120,8 +120,13 @@ fixed with tests, each merged with its notes in the design and the report: C `15
 screen, the session and the texts; D234, D235, D236), B `1dfdd6d` (the dashboard, summary mode, the
 registry and the bulk runs), A `d6a634d` (the git layer, refspecs, pushes and the runner, twelve
 findings; D233) and D `da54d8b` (the keys, the palette, part S's read-backs and the timing tests).
-[LEAD-TBD: the review's angles and the number of findings confirmed and refuted, which the repo does
-not record.] The design's notes "As built at status step 22's review" record every behaviour the
+The review was four Opus reviewers, read-only, on `fb4aa59`, one per angle: git safety and data loss
+(13 minor findings; the worst, git's directory-rename detection writing over an ignored file at a
+path the app's check never read), threads, lifetimes and leaks (1 major, 8 minor, a nit), integration
+and design fit (1 major, 15 minor) and tests and CI robustness (part S's read-backs its major one).
+The lead ruled on each: a few became known issues (design 10.8 #8 and #10, the palette's macOS
+duplicate, design 1.2), the rest went to the fixers by area: 14 to C, 18 to B, 12 to A and 11 to D.
+The design's notes "As built at status step 22's review" record every behaviour the
 fixes changed.
 
 [GATE-TBD: the phase's state: "Awaiting acceptance" with the gate's commit, or "Blocked" and why.]
@@ -516,10 +521,6 @@ Risks to watch:
 - **At acceptance, to confirm or answer**:
   - design 17.5's reading of "ten repos can be checked and updated from one screen" (Result above:
     W2 reads the ten rows on one screen, one Fetch all and one Pull all each decide every row);
-  - D221's reading of D193's "checkouts then follow git's own default" as turning off only D193's
-    extension of D179, so that Off restores phase 5 exactly. D221 and the design's list of answers
-    record it as confirmed by the owner on 2026-10-18; design 16.2 asks for it to be confirmed again
-    at acceptance;
   - the by-hand step of the report's checklist: with System chosen, switch Windows' app mode while
     the app runs (D224).
 - **Decisions made during the phase without the owner**, which the owner may want to look at: the

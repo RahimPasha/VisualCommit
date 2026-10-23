@@ -455,7 +455,10 @@ Left out of phase 6 (design 16.2): reordering workspace rows by a drag (design 1
 a line from blame and the diff (12.1); editing `mergetool.<tool>.path` or `.cmd` and `merge.guitool`
 (8.10); branch keys other than `branch.<b>.rebase` (8.8); keys the user can change (D192); a write that
 refreshes a stale index (risk 29, the owner's call); undo of a remote's removal under a namespace outside
-`refs/remotes/<r>/` (10.8 #1). Profiles (O16) stay in the backlog.
+`refs/remotes/<r>/` (10.8 #1); a fetch line that writes into `refs/heads/` (`git remote add
+--mirror=fetch`) overwrites local branches on every fetch, Fetch all and auto-fetch included, as `git
+fetch` does, with no backup: skipping or backing up such lines (10.8 #10). Profiles (O16) stay in the
+backlog.
 
 ## Risks and open decisions
 

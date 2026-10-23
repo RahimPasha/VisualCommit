@@ -6158,7 +6158,7 @@ across one run's repositories (4.4); 9.6's fork-point gaps and 9.14's limits; 17
 the project chosen; on a Mac keyboard F6, Shift+F6 and Shift+F10 need Fn unless "Use F1, F2, etc. keys
 as standard function keys" is on, and Home, End, PageUp and PageDown are Fn with the arrows (6.1), and
 the dashboard list's Remove is Cmd+Backspace there (2.7); D221's reading of D193's "checkouts then
-follow git's own default" (9.1), for the owner to confirm at acceptance.
+follow git's own default" (9.1), which the owner confirmed on 2026-10-18 (D221).
 
 ---
 
