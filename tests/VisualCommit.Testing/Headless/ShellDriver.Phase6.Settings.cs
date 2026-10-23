@@ -67,7 +67,6 @@ public sealed partial class ShellDriver
     /// <summary>
     /// Opens the settings screen as <paramref name="how"/> says and waits until it shows and its
     /// reads have ended (SD29): <c>GitReading</c> and <c>EditorStatus</c> hidden, the fields filled.
-    /// The key and the palette need the router and the palette (work package WP-K).
     /// </summary>
     public async Task<SettingsDialogViewModel> OpenSettingsAsync(SettingsOpening how = SettingsOpening.Button, TimeSpan? timeout = null)
     {

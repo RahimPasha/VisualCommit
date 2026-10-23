@@ -51,12 +51,24 @@
   <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <!-- The header presenter takes the item's whole width, so that a keyed item's key lies at its
+       right edge whatever Fluent's template gives (docs/phase-6-design.md 6.7). -->
   <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem /template/ ContentPresenter#PART_HeaderPresenter">
     <Setter Property="Foreground" Value="{Binding $parent[MenuItem].Foreground}" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
+  <!-- Avalonia's own gesture text stays hidden: the app draws a keyed item's key itself, in its
+       own words (D214), as the text block vcMenuKey of the item's header (MenuLayer). -->
   <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem /template/ TextBlock#PART_InputGestureText">
     <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem TextBlock.vcMenuKey">
+    <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem:disabled TextBlock.vcMenuKey">
+    <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
   </Style>
   <Style Selector="MenuFlyoutPresenter.vcContextMenu MenuItem:selected /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />

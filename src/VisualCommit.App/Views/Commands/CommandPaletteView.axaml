@@ -1,0 +1,153 @@
+<dialogs:DialogView xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
+                    xmlns:c="using:VisualCommit.App.Controls"
+                    xmlns:vm="using:VisualCommit.App.ViewModels.Commands"
+                    x:Class="VisualCommit.App.Views.Commands.CommandPaletteView"
+                    x:DataType="vm:CommandPaletteViewModel"
+                    AutomationProperties.AutomationId="CommandPalette"
+                    AutomationProperties.Name="{Binding Title}">
+
+  <!-- The command palette (D191, D212; docs/phase-6-design.md 5.2, 5.3): a dialog of the dialog
+       layer without dimming. The transparent backdrop takes a press outside the card, which
+       cancels; the card at the top centre holds the box and, under it, the list of matches (12
+       rows show, the rest scroll) or "No matches". No title is drawn and there are no buttons:
+       the box takes Up, Down, PageUp, PageDown and Enter (5.8). -->
+  <Panel Name="PaletteBackdrop" Classes="paletteBackdrop">
+    <Border Name="CommandPaletteCard"
+            Classes="paletteCard"
+            AutomationProperties.AutomationId="CommandPaletteCard">
+      <StackPanel>
+        <TextBox Name="CommandPaletteBox"
+                 Height="32"
+                 Text="{Binding Query, Mode=TwoWay}"
+                 PlaceholderText="{x:Static vm:CommandPaletteViewModel.Placeholder}"
+                 AutomationProperties.AutomationId="CommandPaletteBox"
+                 AutomationProperties.Name="Search commands" />
+        <ListBox Name="CommandPaletteList"
+                 Margin="0,6,0,0"
+                 MaxHeight="336"
+                 ItemsSource="{Binding Shown}"
+                 SelectedIndex="{Binding HighlightedIndex, Mode=TwoWay}"
+                 IsVisible="{Binding ShowsList}"
+                 Focusable="False"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 Padding="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.AutomationId="CommandPaletteList"
+                 AutomationProperties.Name="Commands">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <!-- A row (5.3): the label (at most 380, cut with "…", whole in its tooltip), 8 after it
+               the detail (or a disabled entry's reason), cut first, and 16 after that the key,
+               right-aligned and never cut; a row without a key has no key column. -->
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:PaletteEntry">
+              <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+                <c:TrimmedTextBlock Name="CommandPaletteItemLabel"
+                                    Classes="paletteLabel"
+                                    Classes.danger="{Binding ShowsDanger}"
+                                    Classes.disabled="{Binding !IsEnabled}"
+                                    Text="{Binding Label}"
+                                    MaxWidth="380"
+                                    TextTrimming="CharacterEllipsis"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.AutomationId="CommandPaletteItemLabel" />
+                <c:TrimmedTextBlock Name="CommandPaletteItemDetail"
+                                    Grid.Column="1"
+                                    Classes="paletteSecondary"
+                                    Classes.disabled="{Binding !IsEnabled}"
+                                    Text="{Binding ShownDetail}"
+                                    Margin="8,0,0,0"
+                                    TextTrimming="CharacterEllipsis"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.AutomationId="CommandPaletteItemDetail" />
+                <TextBlock Name="CommandPaletteItemKey"
+                           Grid.Column="2"
+                           Classes="paletteSecondary"
+                           Classes.disabled="{Binding !IsEnabled}"
+                           Text="{Binding KeyText}"
+                           IsVisible="{Binding HasKey}"
+                           Margin="16,0,0,0"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="CommandPaletteItemKey" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <Border Height="28"
+                Margin="0,6,0,0"
+                IsVisible="{Binding ShowsNothing}">
+          <TextBlock Name="CommandPaletteEmpty"
+                     Classes="secondary"
+                     Text="{x:Static vm:CommandPaletteViewModel.NoMatchesText}"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center"
+                     AutomationProperties.AutomationId="CommandPaletteEmpty"
+                     AutomationProperties.Name="{x:Static vm:CommandPaletteViewModel.NoMatchesText}" />
+        </Border>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <!-- Each row is a CommandPaletteItem named by its label, its detail as its item status, a
+       disabled entry's reason as its help text and its key as its accelerator key (5.11); 28
+       high, 10 of padding, corner 4, no focus of its own (the box keeps it), the highlighted one
+       on the selection background, no hover look (the pointer moves the highlight, 5.8). -->
+  <dialogs:DialogView.Styles>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem" x:DataType="vm:PaletteEntry">
+      <Setter Property="AutomationProperties.AutomationId" Value="CommandPaletteItem" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+      <Setter Property="AutomationProperties.ItemStatus" Value="{Binding Detail}" />
+      <Setter Property="AutomationProperties.HelpText" Value="{Binding ToolTip}" />
+      <Setter Property="AutomationProperties.AcceleratorKey" Value="{Binding KeyText}" />
+      <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+    <Style Selector="ListBox#CommandPaletteList ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+
+    <!-- The parts' colours (5.3, 5.7): the label primary (danger for an enabled destructive
+         entry), the detail and key secondary, every part of a disabled entry disabled. -->
+    <Style Selector="TextBlock.paletteLabel">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.paletteLabel.danger">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="TextBlock.paletteSecondary">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.disabled">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+    </Style>
+  </dialogs:DialogView.Styles>
+</dialogs:DialogView>

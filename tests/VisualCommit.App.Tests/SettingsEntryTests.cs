@@ -67,18 +67,14 @@ public class SettingsEntryTests
     [Fact]
     public void The_tooltip_names_the_key_in_the_platforms_words()
     {
-        // 6.8, 14.11: "Open settings (Ctrl+,)", "Cmd+," on macOS. The key texts come from the key
-        // table, which work package WP-K fills (6.4); until it does a command has no key text and
-        // the tooltip is the text alone.
-        // WP-K: once your key table gives AppCommand.Settings its key, drop the null from both
-        // Contains lists and assert "Open settings (Ctrl+,)" and "Open settings (Cmd+,)" alone.
+        // 6.8, 14.11: "Open settings (Ctrl+,)", "Cmd+," on macOS, from the key table (6.4).
         var ctrl = new KeyTexts(CommandKey.Ctrl);
         var cmd = new KeyTexts(CommandKey.Cmd);
 
-        Assert.Contains(ctrl.Of(AppCommand.Settings), new string?[] { null, "Ctrl+," });
-        Assert.Contains(cmd.Of(AppCommand.Settings), new string?[] { null, "Cmd+," });
-        Assert.Equal(ctrl.Of(AppCommand.Settings) is null ? "Open settings" : "Open settings (Ctrl+,)", MainWindowViewModel.SettingsToolTipFor(ctrl));
-        Assert.Equal(cmd.Of(AppCommand.Settings) is null ? "Open settings" : "Open settings (Cmd+,)", MainWindowViewModel.SettingsToolTipFor(cmd));
+        Assert.Equal("Ctrl+,", ctrl.Of(AppCommand.Settings));
+        Assert.Equal("Cmd+,", cmd.Of(AppCommand.Settings));
+        Assert.Equal("Open settings (Ctrl+,)", MainWindowViewModel.SettingsToolTipFor(ctrl));
+        Assert.Equal("Open settings (Cmd+,)", MainWindowViewModel.SettingsToolTipFor(cmd));
     }
 
     [AvaloniaFact]

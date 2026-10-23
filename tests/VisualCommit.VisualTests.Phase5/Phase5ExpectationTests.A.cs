@@ -96,7 +96,8 @@ public sealed class Phase5ExpectationTestsA : Phase5Checks
 
         Assert.Equal(["ThemeSwitch"], PartA.EmptyTabToolbar.Where(state => state.Enabled).Select(state => state.Id));
         Assert.All(PartA.EmptyTabToolbar.Take(9), state => Assert.Null(state.ToolTip));
-        Assert.Equal((true, PartA.UndoCommit), (PartA.CommittedToolbar(false)[0].Enabled, PartA.CommittedToolbar(false)[0].ToolTip));
+        Assert.Equal((true, PartA.UndoCommit + " (Ctrl+Z)"), (PartA.CommittedToolbar(false)[0].Enabled, PartA.CommittedToolbar(false)[0].ToolTip));
+        Assert.Equal("Undo commit \"Describe the lines\" (Cmd+Z)", PartA.CommittedToolbar(true)[0].ToolTip);
     }
 
     /// <summary>R1 is 16 lines with one block; FM's merge markers name feature/theirs as a terminal's merge writes them.</summary>

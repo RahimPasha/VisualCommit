@@ -85,8 +85,8 @@ public sealed partial class Phase5ChecksA
 
     /// <summary>
     /// Asserts each toolbar button as part A's conventions say: enabled or not
-    /// (<c>IsEffectivelyEnabled</c>), its tooltip (null: none), for Undo, Redo and Search its
-    /// automation help text, which equals the tooltip (empty where there is none), a disabled
+    /// (<c>IsEffectivelyEnabled</c>), its tooltip (null: none), its automation help text, which
+    /// equals the tooltip (empty where there is none; every button's since phase 6), a disabled
     /// button that has a tooltip showing it while disabled, and its icon and label drawn in the
     /// primary colour while enabled and the disabled colour while not.
     /// </summary>
@@ -99,12 +99,11 @@ public sealed partial class Phase5ChecksA
             var button = ToolbarButton(app, state.Id);
             Assert.True(state.Enabled == button.IsEffectivelyEnabled, $"{state.Id} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")}; the report says {(state.Enabled ? "enabled" : "disabled")}.");
             Assert.True(state.ToolTip == ToolTip.GetTip(button) as string, $"{state.Id}'s tooltip is \"{ToolTip.GetTip(button)}\"; the report says \"{state.ToolTip}\".");
-            if (state.Id is ShellDriver.UndoButtonId or ShellDriver.RedoButtonId or "SearchButton")
-            {
-                Assert.True(
-                    (state.ToolTip ?? string.Empty) == (AutomationProperties.GetHelpText(button) ?? string.Empty),
-                    $"{state.Id}'s help text is \"{AutomationProperties.GetHelpText(button)}\"; its tooltip is \"{state.ToolTip}\".");
-            }
+
+            // Since phase 6 every button's help text is its tooltip (docs/phase-6-design.md 6.8, 15.5).
+            Assert.True(
+                (state.ToolTip ?? string.Empty) == (AutomationProperties.GetHelpText(button) ?? string.Empty),
+                $"{state.Id}'s help text is \"{AutomationProperties.GetHelpText(button)}\"; its tooltip is \"{state.ToolTip}\".");
 
             if (!state.Enabled && state.ToolTip is not null)
             {

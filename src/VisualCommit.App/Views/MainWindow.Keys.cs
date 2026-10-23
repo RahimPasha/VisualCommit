@@ -1,87 +1,75 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
-using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
-using VisualCommit.App.Views.Conflicts;
+using VisualCommit.App.ViewModels.Commands;
 
 namespace VisualCommit.App.Views;
 
-// The window's keys (docs/phase-5-design.md 1.3, D163): the toolbar's Undo, Redo and Search by
-// their keys, moved here unchanged from MainWindow.axaml.cs (docs/phase-6-design.md 18). Work
-// package WP-K moves them into the key router with phase 6's fixed set (6.2, 6.3).
-public partial class MainWindow
+// The window's keys (docs/phase-6-design.md 6.2, 6.3, D192, D213, D214): the router (KeyRouter)
+// on the window's two passes, and what the window does for a key or a palette entry that moves
+// the focus (IWindowKeyActions): the commit message, the filter, F6's regions.
+public partial class MainWindow : IWindowKeyActions
 {
-    /// <summary>
-    /// The platform's undo (<c>HotkeyConfiguration.Undo</c>: Ctrl+Z, Cmd+Z) and every gesture of its
-    /// redo (Ctrl+Y and Ctrl+Shift+Z, Cmd+Shift+Z) are the active tab's toolbar's Undo and Redo
-    /// (docs/phase-5-design.md 1.3, D163). Seen only on the way up and only when nothing took the
-    /// key before (a text box with something to undo, the resolver's own undo, D148); they decline,
-    /// so that the key goes on as before, while a dialog or a menu is open, a branch drag runs, or
-    /// the focus is in a text box or anywhere in the conflict resolver. A disabled Undo or Redo
-    /// takes its key and does nothing. The gestures are read at each press.
-    /// </summary>
-    private void OnGitUndoOrRedo(object? sender, KeyEventArgs e)
+    private readonly KeyRegionNavigator _regions = new();
+    private KeyRouter? _router;
+    private bool _focusFollowed;
+
+    /// <summary>The window's key router (6.3).</summary>
+    private KeyRouter Router => _router ??= new KeyRouter(this);
+
+    /// <summary>Focuses <c>CommitSummary</c> once the stage panel is laid out (6.3: the working-changes row is selected first).</summary>
+    public void FocusCommitMessage() =>
+        Dispatcher.UIThread.Post(
+            () => VisibleTextBox("CommitSummary")?.Focus(NavigationMethod.Unspecified),
+            DispatcherPriority.Loaded);
+
+    /// <summary>Focuses <c>FilterBox</c>, its text selected (6.1's row 33).</summary>
+    public void FocusFilter()
     {
-        if (e.Handled || DataContext is not MainWindowViewModel shell || this.GetPlatformSettings()?.HotkeyConfiguration is not { } keys)
+        if (VisibleTextBox("FilterBox") is { } filter && filter.Focus(NavigationMethod.Tab))
         {
-            return;
+            filter.SelectAll();
         }
-
-        var undo = keys.Undo.Any(gesture => gesture.Matches(e));
-        if ((!undo && !keys.Redo.Any(gesture => gesture.Matches(e))) || DeclinesGitUndo(shell))
-        {
-            return;
-        }
-
-        var toolbar = shell.ActiveTab.Toolbar;
-        var command = undo ? toolbar.UndoCommand : toolbar.RedoCommand;
-        if (command.CanExecute(null))
-        {
-            command.Execute(null);
-        }
-
-        e.Handled = true;
     }
 
-    /// <summary>Whether the undo and redo keys are not the window's now (1.3): something else takes them, or nothing should.</summary>
-    private bool DeclinesGitUndo(MainWindowViewModel shell)
-    {
-        if (shell.Dialogs.IsOpen || shell.Menu.IsOpen || DragLayer.Service?.IsDragging == true)
-        {
-            return true;
-        }
-
-        var focused = FocusManager?.GetFocusedElement();
-        return focused is TextBox
-            || (focused is Visual visual && visual.GetSelfAndVisualAncestors().OfType<ConflictResolverView>().Any());
-    }
+    /// <summary>F6 and Shift+F6 (6.6).</summary>
+    public void MoveFocusToRegion(bool backwards) => _regions.Move(this, FocusManager?.GetFocusedElement(), backwards);
 
     /// <summary>
-    /// The command modifier with F (Ctrl+F; Cmd+F) is the toolbar's Search while it is enabled
-    /// (docs/phase-5-design.md 1.3, 3.1), wherever the focus is, unless a dialog or a menu is open;
-    /// in the search box it opens the bar again, which selects the box's text. Taken on the way
-    /// down, as Shift+F10 is (D106): nothing else uses the key. The modifier is the platform's, as
-    /// the graph's (<see cref="CommitGraphControl.CommandModifiers"/>), read at each press.
+    /// The window's data context is set (once, by the session): the window's actions are its
+    /// view model's (6.3), and from then on each region remembers its last focused element (6.6).
     /// </summary>
-    private void OnSearchKey(object? sender, KeyEventArgs e)
+    protected override void OnDataContextChanged(EventArgs e)
     {
-        if (e.Key != Key.F || DataContext is not MainWindowViewModel shell || shell.Dialogs.IsOpen || shell.Menu.IsOpen)
+        base.OnDataContextChanged(e);
+        if (!_focusFollowed)
         {
-            return;
+            _focusFollowed = true;
+            AddHandler(GotFocusEvent, (_, args) => _regions.Remember(args.Source), RoutingStrategies.Bubble, handledEventsToo: true);
         }
 
-        var command = this.GetPlatformSettings()?.HotkeyConfiguration.CommandModifiers is { } modifiers && modifiers != KeyModifiers.None
-            ? modifiers
-            : KeyModifiers.Control;
-        var search = shell.ActiveTab.Toolbar.SearchCommand;
-        if (e.KeyModifiers != command || !search.CanExecute(null))
+        if (DataContext is MainWindowViewModel shell)
         {
-            return;
+            shell.WindowActions = this;
         }
-
-        search.Execute(null);
-        e.Handled = true;
     }
+
+    /// <summary>
+    /// The window's bubbling pass (phase 5 design 1.3, D163), which the window's constructor adds:
+    /// the toolbar's Undo and Redo by the platform's keys, after a text box or the conflict
+    /// resolver had them first (<see cref="KeyRouter.OnBubble"/>).
+    /// </summary>
+    private void OnKeyBubble(object? sender, KeyEventArgs e) => Router.OnBubble(sender, e);
+
+    /// <summary>
+    /// The window's tunnelling pass, with <c>handledEventsToo</c>, which the window's constructor
+    /// adds: the router's fixed set (<see cref="KeyRouter.OnTunnel"/>, 6.1, 6.3).
+    /// </summary>
+    private void OnKeyTunnel(object? sender, KeyEventArgs e) => Router.OnTunnel(sender, e);
+
+    private TextBox? VisibleTextBox(string name) =>
+        this.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box => box.Name == name && box.IsEffectivelyVisible && box.IsEffectivelyEnabled);
 }

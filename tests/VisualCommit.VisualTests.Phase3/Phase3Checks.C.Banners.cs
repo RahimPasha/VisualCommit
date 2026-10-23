@@ -242,7 +242,9 @@ public sealed partial class Phase3ChecksC
         var commit = app.Find<Button>("CommitButton");
         Assert.Equal(PartC.ContinueCherryPick, commit.Content);
         Assert.True(commit.IsEffectivelyEnabled);
-        AssertTip(commit, null);
+
+        // Enabled, the button says what it does with its key (docs/phase-6-design.md 6.8, 16.1, D199).
+        AssertTip(commit, PartC.ContinueCherryPick + " (Ctrl+Enter)");
         var amend = (CheckBox)app.FindByAutomationId("AmendCheckBox");
         Assert.False(amend.IsEffectivelyEnabled);
         AssertTip(amend, PartC.FinishCherryPickFirst);

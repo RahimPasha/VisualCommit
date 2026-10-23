@@ -60,6 +60,8 @@ public class Phase5ExpectationTestsU16ToU19
         Assert.Equal("Undid commit \"Describe the reader and add Length\"", PartU.Undo.DoneText(PartU.CommitText));
         Assert.Equal("Redid reset of main to 8beca34 (soft)", PartU.Redo.DoneText(PartU.ResetText("soft")));
         Assert.Equal("VisualCommit: redo creation of keep", PartU.Redo.Message(PartU.CreateKeepText));
+        Assert.Equal("Undo commit \"Describe the reader and add Length\" (Ctrl+Z)", PartU.Undo.ToolTip(PartU.CommitText));
+        Assert.Equal("Redo restore of the discarded files (Ctrl+Y)", PartU.Redo.ToolTip(PartU.RestoreText));
 
         // The call log writes a command as a user would type it: the message is one argument.
         Assert.Equal(

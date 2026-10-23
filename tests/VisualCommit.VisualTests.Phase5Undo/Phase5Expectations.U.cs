@@ -22,11 +22,15 @@ public static partial class Phase5Expectations
         /// <summary>
         /// The texts of one direction of a step: its operation's title (<c>Undo {text}</c>), its
         /// running text (<c>Undoing {text}…</c>), its result in the status bar (<c>Undid {text}</c>)
-        /// and the reflog message of its ref writes (<c>VisualCommit: undo {text}</c>).
+        /// and the reflog message of its ref writes (<c>VisualCommit: undo {text}</c>); the toolbar
+        /// button's tooltip while the step is next is its title with the button's key
+        /// (<c>Undo {text} (Ctrl+Z)</c>, since phase 6: docs/phase-6-design.md 6.8, 16.1).
         /// </summary>
-        public sealed record StepTexts(string Verb, string Running, string Done, string Reflog)
+        public sealed record StepTexts(string Verb, string Running, string Done, string Reflog, string Key)
         {
             public string Title(string text) => $"{Verb} {text}";
+
+            public string ToolTip(string text) => $"{Title(text)} ({Key})";
 
             public string RunningText(string text) => $"{Running} {text}…";
 
@@ -36,10 +40,10 @@ public static partial class Phase5Expectations
         }
 
         /// <summary>Undo's texts.</summary>
-        public static StepTexts Undo { get; } = new("Undo", "Undoing", "Undid", "VisualCommit: undo");
+        public static StepTexts Undo { get; } = new("Undo", "Undoing", "Undid", "VisualCommit: undo", "Ctrl+Z");
 
         /// <summary>Redo's texts.</summary>
-        public static StepTexts Redo { get; } = new("Redo", "Redoing", "Redid", "VisualCommit: redo");
+        public static StepTexts Redo { get; } = new("Redo", "Redoing", "Redid", "VisualCommit: redo", "Ctrl+Y");
 
         /// <summary>
         /// A step's ref transaction as the call log writes it (UD20, design 15.8):

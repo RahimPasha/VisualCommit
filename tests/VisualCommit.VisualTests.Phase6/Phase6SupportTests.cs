@@ -6,7 +6,6 @@ using Avalonia.VisualTree;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
-using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -219,16 +218,7 @@ public sealed class Phase6SupportTests : Phase6Checks
         AssertRow(app, "api", api);
         AssertRow(app, "mobile", new ExpectedRow("main", ExpectedCell.Arrows(1, 2, "1 ahead, 2 behind", "1 commit ahead of and 2 behind origin/main"), ExpectedCell.Secondary("Clean"), ExpectedCell.Empty, ExpectedCell.Empty));
         AssertRow(app, "old-site", new ExpectedRow(string.Empty, ExpectedCell.Empty, ExpectedCell.Empty, ExpectedCell.Warning("Folder not found", copy.PathOf("old-site") + " does not exist"), ExpectedCell.Empty));
-        // The three keyed buttons' tooltips end with their keys, as TD writes them, once work package
-        // WP-K's key table gives Fetch, Pull and Refresh their keys (6.8, AppShortcuts.Shown); until
-        // then the app's tooltips carry none, so they are the app's own texts here.
-        // WP-K: once your key table is in, assert ExpectedDashboardHeader.Idle("Web", "10 repositories") as it stands.
-        AssertDashboardHeader(app, ExpectedDashboardHeader.Idle("Web", "10 repositories") with
-        {
-            FetchAll = ExpectedHeaderButton.Enabled(OperationTexts.FetchEveryRepository("Web")),
-            PullAll = ExpectedHeaderButton.Enabled(OperationTexts.PullEveryRepository("Web")),
-            Refresh = ExpectedHeaderButton.Enabled(DashboardTexts.RefreshToolTip("Web")),
-        });
+        AssertDashboardHeader(app, ExpectedDashboardHeader.Idle("Web", "10 repositories"));
 
         var wrongCell = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertRow(app, "api", api with { Changes = ExpectedCell.Primary("Clean") }));
         Assert.Contains("The row api is not the expected one.", wrongCell.Message, StringComparison.Ordinal);
@@ -425,11 +415,9 @@ public sealed class Phase6SupportTests : Phase6Checks
         using var data = new TempDirectory("data");
         using var app = await OpenWorkspaceAsync(data, copy);
 
-        // Trigger 3 by the header's Refresh: F5 reaches it only through work package WP-K's key
-        // table (AppShortcuts.All), which is not in yet.
-        // WP-K: once your key table is in, press F5 here (app.PressKey(Key.F5)), as the lead asked.
+        // Trigger 3 by F5, the dashboard's Refresh.
         var mark = app.LogMark();
-        app.Click(app.FindByAutomationId("DashboardRefresh"));
+        app.PressKey(Key.F5);
         app.MoveToNeutral();
         var started = app.DashboardSnapshot();
         Assert.True(started.IsPassRunning, "The refresh started no pass.");

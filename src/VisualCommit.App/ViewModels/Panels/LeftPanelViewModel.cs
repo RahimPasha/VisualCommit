@@ -301,13 +301,15 @@ public partial class LeftPanelViewModel : ObservableObject
     /// <summary>
     /// Adds refs as a tree: their names split at slashes into folders. In each folder the
     /// subfolders come first, then the refs, each sorted by name, as the report's left panel
-    /// shows them. A folder's tooltip is its path after <paramref name="namePrefix"/>: the
-    /// name its refs' full names start with, such as <c>origin/feature</c>.
+    /// shows them (<see cref="RefTreeOrder"/>, which the command palette's local branches follow
+    /// too: the tree is built from the refs in that order). A folder's tooltip is its path after
+    /// <paramref name="namePrefix"/>: the name its refs' full names start with, such as
+    /// <c>origin/feature</c>.
     /// </summary>
     private void AddTree(List<RefListRow> rows, string keyPrefix, string namePrefix, int depth, IEnumerable<Leaf> leaves)
     {
         var root = new Folder();
-        foreach (var leaf in leaves)
+        foreach (var leaf in leaves.OrderBy(leaf => leaf.Path, RefTreeOrder.Instance))
         {
             var parts = leaf.Path.Split('/');
             var folder = root;
@@ -344,7 +346,7 @@ public partial class LeftPanelViewModel : ObservableObject
             }
         }
 
-        foreach (var (name, leaf) in folder.Leaves.OrderBy(entry => entry.Name, NameOrder.Instance))
+        foreach (var (name, leaf) in folder.Leaves)
         {
             rows.Add(Selected(new RefItemRow(
                 leaf.Kind, leaf.Key, name, leaf.FullName, depth, Activate,
@@ -439,9 +441,10 @@ public partial class LeftPanelViewModel : ObservableObject
     /// <summary>What a ref's row shows, apart from its position in the tree.</summary>
     private sealed record LeafRow(RefItemKind Kind, string Key, string FullName, string Sha, bool IsHead, int Ahead, int Behind);
 
+    /// <summary>A folder of a tree, its subfolders and refs in the order they were added: <see cref="RefTreeOrder"/>'s.</summary>
     private sealed class Folder
     {
-        public SortedDictionary<string, Folder> Folders { get; } = new(NameOrder.Instance);
+        public OrderedDictionary<string, Folder> Folders { get; } = new(StringComparer.Ordinal);
 
         public List<(string Name, LeafRow Row)> Leaves { get; } = [];
 

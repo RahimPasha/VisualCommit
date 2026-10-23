@@ -255,7 +255,10 @@ public sealed partial class Phase4ChecksC : Phase4Checks
             Assert.Equal(description, ((TextBox)app.FindByAutomationId("CommitDescription")).Text ?? string.Empty);
         }
 
-        /// <summary>The stage panel's commit button: its label, whether it is enabled, its tooltip.</summary>
+        /// <summary>
+        /// The stage panel's commit button: its label, whether it is enabled, its tooltip (an enabled
+        /// one's says what it does with its key since phase 6: docs/phase-6-design.md 6.8, 16.1).
+        /// </summary>
         public static void AssertCommitButton(ShellDriver app, string label, bool enabled, string? toolTip = null)
         {
             var button = app.Find<Button>("CommitButton");

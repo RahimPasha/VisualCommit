@@ -53,6 +53,34 @@ public sealed record MenuSnapshot(string? Header, string? HeaderToolTip, IReadOn
         return lines;
     }
 
+    /// <summary>
+    /// <see cref="Lines"/> with each keyed item's key after it as phase 6's report writes it
+    /// (docs/test-reports/phase-6.md, part K's conventions): <c>Pull [Ctrl+Shift+L]</c>, the key
+    /// before " (danger)" or " (disabled: …)".
+    /// </summary>
+    public IReadOnlyList<string> LinesWithKeys()
+    {
+        var lines = new List<string>();
+        if (Header is not null)
+        {
+            lines.Add(Header);
+        }
+
+        lines.AddRange(Entries.Select(entry =>
+        {
+            var label = entry.KeyText is { } key ? $"{entry.Label} [{key}]" : entry.Label;
+            return entry switch
+            {
+                { IsSeparator: true } => "—",
+                { IsEnabled: false, ToolTip: { } reason } => string.Create(CultureInfo.InvariantCulture, $"{label} (disabled: \"{reason}\")"),
+                { IsEnabled: false } => label + " (disabled)",
+                { IsDestructive: true } => label + " (danger)",
+                _ => label,
+            };
+        }));
+        return lines;
+    }
+
     public override string ToString() => string.Join(" | ", Lines());
 }
 
@@ -65,6 +93,10 @@ public sealed record MenuSnapshot(string? Header, string? HeaderToolTip, IReadOn
 /// <param name="ToolTip">The item's tooltip text (a disabled item's reason), or null.</param>
 /// <param name="TextColor">The colour its text is drawn in, or null when it is not a plain colour.</param>
 /// <param name="Bounds">Where the entry is drawn, in the window's logical pixels.</param>
+/// <param name="KeyText">
+/// A keyed item's key as the menu draws it at its right (docs/phase-6-design.md 6.7: the text of
+/// its <c>ContextMenuItemKey</c>), or null for an item without a key and a separator.
+/// </param>
 public sealed record MenuEntrySnapshot(
     string Label,
     bool IsSeparator,
@@ -73,4 +105,5 @@ public sealed record MenuEntrySnapshot(
     bool IsHighlighted,
     string? ToolTip,
     Color? TextColor,
-    Rect Bounds);
+    Rect Bounds,
+    string? KeyText = null);
