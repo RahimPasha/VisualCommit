@@ -353,6 +353,21 @@ every commit.
   `ubuntu-latest` failed fixer A's new push-back test, whose `git remote add team/fork` beside `team`
   Git 2.55 and 2.56 refuse (`is a subset of existing remote`), and macOS S19 again; the test writes the
   remote as configuration since `6fe269c`, and S19 waits for the watchers since `da54d8b`.
+  Run 40011779192 on `9cb2ec9` (all four fixers): `ubuntu-latest` and both containers green; Windows
+  failed W3 alone (its Test step 32 min 0 s): the runner's temporary folder brings design-system's
+  folder to the Folder cell's 632 px and the scenario's random name tips it either way, while the
+  check asserted the cell whole on every Windows machine (WD29 asks it only where it fits); W3 now
+  asserts the cell cut exactly when the folder is wider (`a937ca6`). macOS failed phase 2's
+  `Check_11_stage_one_line_then_unstage_it` once with Avalonia's `Could not create glyphTypeface.`
+  `Font family: $Default` while the diff's editor took its document (its Test step 21 min 33 s);
+  nothing phase 6 changed is on that path, and no earlier run showed it: watch it.
+- The gate's first default run, on `1b7b316` (the code of `da54d8b`), with two agents writing docs
+  beside it: every project passed but `VisualCommit.Git.Tests`, which the hang watchdog stopped 658 s
+  in: `ProtectedChangesTests.A_refused_checkout_of_each_form_throws_gits_refusal_and_changes_nothing`,
+  five refused checkouts on five scenarios in one test (12 s alone), had run 180 s under the load,
+  while tests beside it took 80 to 103 s; it is one case per form since `a937ca6`. The other eight
+  projects passed 3,033 of 3,033 in 49 min 22 s (App.Tests the last). The second run, on `a937ca6`,
+  is the gate's.
 - 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
   worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
   files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
