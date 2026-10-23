@@ -146,7 +146,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
     /// Whose words the tooltips' keys use (docs/phase-6-design.md 6.4): <see cref="KeyTexts.Current"/>,
     /// unless a test of another platform's texts sets its own; setting it writes the tooltips again.
     /// </summary>
-    public KeyTexts Keys
+    public KeyTexts KeyTexts
     {
         get => _keys;
         set
@@ -365,19 +365,10 @@ public sealed partial class ToolbarViewModel : ObservableObject
     private Task Redo() => RunAsync("Redo", actions => actions.RedoAsync());
 
     /// <summary>
-    /// What Search's tooltip says while it is enabled (1.1): <c>Search commits (Ctrl+F)</c>, with
-    /// the key the window takes for it (1.3), in <see cref="KeyTexts.Current"/>'s words.
+    /// What Search's tooltip says while it is enabled (1.1), in <paramref name="keys"/>' words:
+    /// <c>Search commits (Ctrl+F)</c>, with the key the window takes for it (1.3), <c>Cmd+F</c>
+    /// where the key texts are macOS's.
     /// </summary>
-    public static string SearchText => SearchTextFor(KeyTexts.Current);
-
-    /// <summary>
-    /// The search's key in words (docs/phase-6-design.md 6.4): the platform's command modifier with
-    /// F, <c>Ctrl+F</c>, or <c>Cmd+F</c> where the key texts are macOS's (<see cref="KeyTexts.Current"/>,
-    /// set from Avalonia's hotkey configuration, never from a test of the operating system).
-    /// </summary>
-    public static string SearchGestureText => KeyTexts.Current.Of(AppCommand.Search) ?? string.Empty;
-
-    /// <summary><see cref="SearchText"/> in <paramref name="keys"/>' words.</summary>
     public static string SearchTextFor(KeyTexts keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
@@ -529,7 +520,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Search's state (1.1, 11.2): enabled with <see cref="SearchText"/> while the tab has a
+    /// Search's state (1.1, 11.2): enabled with <see cref="SearchTextFor"/>'s text while the tab has a
     /// repository and neither the conflict resolver nor the interactive rebase's list is open (they
     /// hold work, and leaving them asks), otherwise disabled with the reason (12.4); in a tab
     /// without a repository disabled without a tooltip.

@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
-using Avalonia.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
@@ -147,10 +146,7 @@ public sealed class AppSession : IDisposable
 
         // Every key text is in the platform's words (docs/phase-6-design.md 6.4), set before the
         // window is made: Cmd where the command modifier is Meta (macOS), Ctrl otherwise.
-        KeyTexts.Current = new KeyTexts(
-            application.PlatformSettings?.HotkeyConfiguration.CommandModifiers.HasFlag(KeyModifiers.Meta) == true
-                ? CommandKey.Cmd
-                : CommandKey.Ctrl);
+        KeyTexts.Current = new KeyTexts(ShortcutKeys.CommandKeyOf(ShortcutKeys.CommandModifierOf(application.PlatformSettings?.HotkeyConfiguration)));
 
         Directory.CreateDirectory(paths.DataDirectory);
         var log = new FileAppLog(paths.LogDirectory);

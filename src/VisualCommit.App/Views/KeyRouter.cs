@@ -48,7 +48,7 @@ public sealed class KeyRouter
 
         var command = CommandModifier();
         if (ShortcutKeys.FromEvent(e, command) is not { } shortcut
-            || AppShortcuts.Route(shortcut, command.HasFlag(KeyModifiers.Meta) ? CommandKey.Cmd : CommandKey.Ctrl) is not { } routed)
+            || AppShortcuts.Route(shortcut, ShortcutKeys.CommandKeyOf(command)) is not { } routed)
         {
             return;
         }
@@ -107,10 +107,7 @@ public sealed class KeyRouter
     }
 
     /// <summary>The platform's command modifier, read at each press (Control when it names none).</summary>
-    private KeyModifiers CommandModifier() =>
-        _window.GetPlatformSettings()?.HotkeyConfiguration.CommandModifiers is { } modifiers && modifiers != KeyModifiers.None
-            ? modifiers
-            : KeyModifiers.Control;
+    private KeyModifiers CommandModifier() => ShortcutKeys.CommandModifierOf(_window.GetPlatformSettings()?.HotkeyConfiguration);
 
     /// <summary>The router's own declines that depend on where the focus is (6.3, 6.5, 6.10).</summary>
     private bool Declines(RoutedCommand routed, Shortcut shortcut)

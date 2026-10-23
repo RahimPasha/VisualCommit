@@ -53,11 +53,11 @@ public sealed partial class AppCommands
         ArgumentNullException.ThrowIfNull(shell);
         ArgumentNullException.ThrowIfNull(keys);
         _shell = shell;
-        Keys = keys;
+        KeyTexts = keys;
     }
 
     /// <summary>Whose words the palette's keys use.</summary>
-    public KeyTexts Keys { get; }
+    public KeyTexts KeyTexts { get; }
 
     /// <summary>What <paramref name="command"/> is for the active tab now; <paramref name="argument"/> is Go to tab's place, from 1.</summary>
     public CommandState Describe(AppCommand command, int argument = 0) => Resolve(command, argument, new Snapshot(_shell)).State;
@@ -386,7 +386,7 @@ public sealed partial class AppCommands
     }
 
     /// <summary>A command's state and what runs it.</summary>
-    private sealed record Resolved(CommandState State, Action? Run, bool IsDestructive = false);
+    private sealed record Resolved(CommandState State, Action? Run);
 
     /// <summary>
     /// The active tab as the commands read it, once per call: its repository (a repository tab's,
@@ -416,8 +416,6 @@ public sealed partial class AppCommands
 
         /// <summary>The detail of a repository's commands (5.4's rows 1 to 10, KD2): its name while dialogs name it (3.8).</summary>
         public string? RepositoryDetail { get; }
-
-        public RepositoryMenuContext? Context => _context;
 
         public MenuModel? EmptyArea => _context is null ? null : _emptyArea ??= RepositoryMenus.ForEmptyGraphArea(_context, Repository!.MenuActions);
 

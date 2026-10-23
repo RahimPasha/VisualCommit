@@ -43,7 +43,7 @@ public sealed partial class AppCommands
             if (listed && resolved.State.IsListed && resolved.Run is { } run)
             {
                 var state = resolved.State;
-                entries.Add(new PaletteEntry(state.Label, state.Detail, Keys.Of(command), state.IsEnabled, state.DisabledReason, resolved.IsDestructive, PaletteEntryKind.Command, entries.Count, run) { Command = command });
+                entries.Add(new PaletteEntry(state.Label, state.Detail, KeyTexts.Of(command), state.IsEnabled, state.DisabledReason, IsDestructive: false, PaletteEntryKind.Command, entries.Count, run) { Command = command });
             }
         }
 
@@ -113,7 +113,7 @@ public sealed partial class AppCommands
         var entries = new List<PaletteEntry>();
         if (tab is { IsDashboard: false, Repository: { IsClosed: false } repository })
         {
-            entries.AddRange(repository.PaletteItems(Keys, context ?? repository.MenuContext, commands));
+            entries.AddRange(repository.PaletteItems(KeyTexts, context ?? repository.MenuContext, commands));
         }
 
         entries.AddRange(WindowItems(entries.Count));
@@ -267,7 +267,7 @@ public sealed partial class AppCommands
                 continue;
             }
 
-            entries.Add(new PaletteEntry($"Go to {tab.Title}", $"Tab {i + 1}", GoToTabKeyText(i + 1, tabs.Count, Keys), true, null, false, PaletteEntryKind.Item, order + entries.Count, () => _shell.ActivateTabCommand.Execute(tab)));
+            entries.Add(new PaletteEntry($"Go to {tab.Title}", $"Tab {i + 1}", GoToTabKeyText(i + 1, tabs.Count, KeyTexts), true, null, false, PaletteEntryKind.Item, order + entries.Count, () => _shell.ActivateTabCommand.Execute(tab)));
         }
 
         // Every recent repository, then every workspace's not listed yet, but the active tab's.

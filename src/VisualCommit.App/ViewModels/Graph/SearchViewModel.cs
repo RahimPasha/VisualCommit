@@ -79,18 +79,31 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     public static string? NextKey => KeyTexts.Current.Of(AppCommand.NextMatch);
 
     /// <summary><see cref="PreviousToolTip"/> in <paramref name="keys"/>' words.</summary>
-    public static string PreviousToolTipFor(KeyTexts keys) => MatchToolTip("Previous match", "Shift+Enter", keys, AppCommand.PreviousMatch);
+    public static string PreviousToolTipFor(KeyTexts keys) => MatchToolTip("Previous match", new Shortcut(ShortcutKey.Enter, ShortcutModifiers.Shift), keys, AppCommand.PreviousMatch);
 
     /// <summary><see cref="NextToolTip"/> in <paramref name="keys"/>' words.</summary>
-    public static string NextToolTipFor(KeyTexts keys) => MatchToolTip("Next match", "Enter", keys, AppCommand.NextMatch);
+    public static string NextToolTipFor(KeyTexts keys) => MatchToolTip("Next match", new Shortcut(ShortcutKey.Enter, ShortcutModifiers.None), keys, AppCommand.NextMatch);
 
-    private static string MatchToolTip(string text, string inTheBox, KeyTexts keys, AppCommand command)
+    /// <summary>
+    /// A match button's text: what it does, then the search box's own key (Enter, Shift+Enter,
+    /// phase 5) and the command's shown key, both in the one formatter's words (D214).
+    /// </summary>
+    private static string MatchToolTip(string text, Shortcut inTheBox, KeyTexts keys, AppCommand command)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        return keys.Of(command) is { } key ? $"{text} ({inTheBox}, {key})" : $"{text} ({inTheBox})";
+        var box = ShortcutText.Format(inTheBox, keys.Platform);
+        return keys.Of(command) is { } key ? $"{text} ({box}, {key})" : $"{text} ({box})";
     }
 
-    public const string CloseToolTip = "Close the search (Esc)";
+    /// <summary>The close button's tooltip and help text: <c>Close the search (Esc)</c>, the Esc chain's key (6.8).</summary>
+    public static string CloseToolTip => CloseToolTipFor(KeyTexts.Current);
+
+    /// <summary><see cref="CloseToolTip"/> in <paramref name="keys"/>' words.</summary>
+    public static string CloseToolTipFor(KeyTexts keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        return keys.WithKey("Close the search", AppCommand.Close);
+    }
 
     public const string SearchingText = "Searching…";
 
