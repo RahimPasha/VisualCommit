@@ -133,8 +133,11 @@ public class KeyRouterTests
         var selected = new List<int>();
         foreach (var (command, index) in new[] { (AppCommand.NextMatch, 0), (AppCommand.NextMatch, 1), (AppCommand.PreviousMatch, 0), (AppCommand.PreviousMatch, 1) })
         {
-            // The move waits for the search to know the next match (phase 5 design 3.1), so under
-            // load the selection follows the key a little later: wait for it, then record it.
+            // From one match to the other the second and fourth presses wrap round the graph, and a
+            // move that wraps waits until the search has gone through the rows it crosses (phase 5
+            // design 3.1, SearchViewModel.IsKnown): with git still searching, as on CI's loaded
+            // runner, the selection followed later, and the next press replaced the waiting move
+            // (CI runs 39962856421, 39980785501: 5, 5, 4, 4). Wait for it, then record it.
             var before = repository.SelectedIndex;
             Assert.True(app.PressShortcutHandled(command, index));
             await app.WaitForAsync(
