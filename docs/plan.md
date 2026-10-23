@@ -78,8 +78,9 @@ too, but they do not replace it.
 2. **Scenario repos.** Scripts build small repos with known content for each check (for example,
    two branches set up to conflict), so every run starts from the same state.
 3. **Scripted walk-through.** `VisualCommit.VisualTests` (phases 0 to 2; since then projects of
-   their own, `VisualCommit.VisualTests.Phase3` and `.Phase4`, and for phase 5 `.Phase5` and
-   `.Phase5Undo`, D133, D151, D181) drives the full app UI in
+   their own, `VisualCommit.VisualTests.Phase3` and `.Phase4`, for phase 5 `.Phase5` and
+   `.Phase5Undo`, and for phase 6 `.Phase6` and `.Phase6Look`, D133, D151, D181, phase 6's design
+   17.3) drives the full app UI in
    Avalonia's headless mode, with real rendering and simulated mouse and keyboard input (click, right-click,
    double-click, drag, typing), against a scenario repo, and saves a screenshot after every step.
    This runs without taking over the desktop, so it is repeatable and also runs in CI. Standard

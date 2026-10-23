@@ -2,15 +2,16 @@
 
   <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 6: its parts W
        (workspaces and the dashboard), K (keys and the palette), S (settings and the theme's
-       following), G (ignored files and refspecs) and L (the look: the sweep, the long folder, the
-       tab strip), with their expected values and support (docs/phase-6-design.md 17.3). It drives
+       following) and G (ignored files and refspecs), with their expected values and the support
+       that part L's project, VisualCommit.VisualTests.Phase6Look, links (docs/phase-6-design.md
+       17.3). It drives
        the whole app in Avalonia's headless mode and saves a screenshot after every step under
        artifacts/visual/phase-6/ (VisualRun, in VisualCommit.Testing). A project of its own, as
        phases 3 to 5's are (D133, D151, D181): a test assembly has one headless UI thread, on which
        its headless tests run one at a time, and a second assembly is a second test process with a
-       UI thread of its own that "dotnet test" runs beside the others. Part L moves to a project of
-       its own if the methods pass 40 or the project ends after the run's longest other project
-       (17.3). The real-window pass compiles the Phase6Expectations files from here. -->
+       UI thread of its own that "dotnet test" runs beside the others. Part L has a project of its
+       own, as 17.3's rule asked once the methods passed 40 (the lead's ruling 1 in the report). The
+       real-window pass compiles the Phase6Expectations files of both projects. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
