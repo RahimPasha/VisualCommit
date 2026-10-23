@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
@@ -81,6 +83,18 @@ public class ToolbarToolTipTests
         Assert.Equal(("Undo commit \"Fix the parser\"", "Redo checkout of main"), (toolbar.UndoText, toolbar.RedoText));
         toolbar.Keys = new KeyTexts(CommandKey.Cmd);
         Assert.Equal(("Undo commit \"Fix the parser\" (Cmd+Z)", "Redo checkout of main (Cmd+Shift+Z)"), (toolbar.UndoToolTip, toolbar.RedoToolTip));
+    }
+
+    [Fact]
+    public void A_dashboards_Fetch_and_Pull_name_the_workspace_with_their_keys_in_the_toolbars_words()
+    {
+        // 4.10, 6.8: the dashboard's toolbar's texts take its keys, not the app's (the review's finding 9).
+        var toolbar = ToolbarViewModel.ForDashboard(new FixedDashboard());
+        Assert.Equal(("Fetch every repository of Web (Ctrl+Shift+F)", "Pull every repository of Web (Ctrl+Shift+L)"), (toolbar.FetchToolTip, toolbar.PullToolTip));
+
+        toolbar.Keys = new KeyTexts(CommandKey.Cmd);
+        Assert.Equal(("Fetch every repository of Web (Cmd+Shift+F)", "Pull every repository of Web (Cmd+Shift+L)"), (toolbar.FetchToolTip, toolbar.PullToolTip));
+        Assert.Equal((null, null), (toolbar.FetchDisabledReason, toolbar.PullDisabledReason));
     }
 
     [Fact]
@@ -197,6 +211,30 @@ public class ToolbarToolTipTests
             {
             }
         }
+    }
+
+    /// <summary>The workspace "Web" whose Fetch all and Pull all can run, and never change.</summary>
+    private sealed class FixedDashboard : IDashboardToolbar
+    {
+        public event PropertyChangedEventHandler? PropertyChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public string WorkspaceName => "Web";
+
+        public bool CanFetchAll => true;
+
+        public string? FetchAllDisabledReason => null;
+
+        public bool CanPullAll => true;
+
+        public string? PullAllDisabledReason => null;
+
+        public Task FetchAllAsync() => Task.CompletedTask;
+
+        public Task PullAllAsync() => Task.CompletedTask;
     }
 
     /// <summary>A stage panel host that does nothing.</summary>

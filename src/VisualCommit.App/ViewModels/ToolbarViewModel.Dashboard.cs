@@ -45,9 +45,9 @@ public sealed partial class ToolbarViewModel
         }
 
         var (canFetch, fetchReason) = (dashboard.CanFetchAll, dashboard.FetchAllDisabledReason);
-        (FetchDisabledReason, FetchToolTip, CanFetch) = (canFetch ? null : fetchReason, canFetch ? OperationTexts.FetchEveryRepository(dashboard.WorkspaceName) : fetchReason, canFetch);
+        (FetchDisabledReason, FetchToolTip, CanFetch) = (canFetch ? null : fetchReason, canFetch ? OperationTexts.FetchEveryRepository(dashboard.WorkspaceName, _keys) : fetchReason, canFetch);
         var (canPull, pullReason) = (dashboard.CanPullAll, dashboard.PullAllDisabledReason);
-        (PullDisabledReason, PullToolTip, CanPull) = (canPull ? null : pullReason, canPull ? OperationTexts.PullEveryRepository(dashboard.WorkspaceName) : pullReason, canPull);
+        (PullDisabledReason, PullToolTip, CanPull) = (canPull ? null : pullReason, canPull ? OperationTexts.PullEveryRepository(dashboard.WorkspaceName, _keys) : pullReason, canPull);
     }
 
     /// <summary>A dashboard's toolbar's actions: Fetch and Pull run Fetch all and Pull all; nothing else is enabled.</summary>
