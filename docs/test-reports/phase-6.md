@@ -3830,6 +3830,27 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   ends before Settings." (16.1's Settings row). Unchanged, as 16.1 says: `Phase0RealWindowPass.cs:134-141`
   (it finds buttons by id), phase 5's `PartA.ToolbarButtons` and `EmptyTabToolbar`, `ShellTests.cs:99`;
   phase 3's Pick dialog pictures rendered byte-identical before and after its `PickRowPanel`.
+- **WP-K (the keys and the palette), merged in `73ac284`.** 16.1's tooltip and keyed-menu rows: phase 3's
+  `AssertToolbar` (each enabled button's tooltip and help text with its key, Pull's and Push's per check,
+  `Pull from main (Ctrl+Shift+L)` among them; Undo and Redo with their keys) and `C.Banners.cs:245`
+  (`Continue cherry-pick (Ctrl+Enter)`); phase 4's enabled commit buttons + ` (Ctrl+Enter)` in
+  `Editing.cs:214`, `Kinds.cs:147`, `MergeTool.cs:122`; phase 5's `Phase5Expectations.A` (the toolbar
+  texts with keys, `UndoCommitToolTip`, the log toggle's two texts with Ctrl+J, the match buttons'
+  texts), `Phase5Expectations.F.cs:185-186`, `ShellDriver.Phase5.Undo.cs`' `CanUndo` and `CanRedo` with
+  (Ctrl+Z) and (Ctrl+Y); `RepositoryMenusTests.AssertWholeLabels` counting label + 24 + key; the App
+  tests `ToolbarTests`, `ActivityLogViewModelTests`, `StatusBarTests`, `SearchBarTests`,
+  `WorkingChangesInProgressTests` (`:86` unchanged, the button disabled there). Beyond 16.1, each for a
+  key 6.8 gives an enabled control: phase 4's `C.Terminal.cs:105` (an enabled Continue rebase with its
+  key); phase 5's `B.Support.cs:110-111`, `Phase5ExpectationTests.A.cs:99-100`, part U's
+  `Phase5Expectations.U.cs`, `Phase5Checks.U16.cs:69`, `:503` and `Phase5ExpectationTests.U16-U19.cs`
+  (Undo's and Redo's tooltips with their keys); `Phase5Checks.A.Helpers.cs:99-106` now asserts that
+  every toolbar button's help text equals its tooltip, where phase 5 asserted Undo, Redo and Search
+  only; the App tests `ShellDriverPhase5UndoTests`, `ActivityLogViewTests`, `UndoToolbarTests`,
+  `SettingsDialogViewTests` and `SettingsEntryTests` (the settings tooltip's literal key). Also
+  `WelcomeViewModel.InitAtAsync` (5.10's palette Init) and `ShellDriver.Phase3.cs`' `Menu()` passing
+  the key text. The real-window lines that read Undo's and Redo's help texts are WP-R's to update
+  (`Phase5RealWindowPass.A.cs:480`, `:515`, `:528`, `:765`, `B.cs:266`, `P.cs:108`, `:125`, `:133`,
+  `U.cs:53`, `:76`, `:104`).
 
 ### Changed in this report after its first commit
 

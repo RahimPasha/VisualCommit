@@ -155,27 +155,27 @@ Git layer and Core:
 
 App:
 
-- [ ] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
+- [x] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
   uncommitted changes; opening a repository from it. (WP-W merged in `0da0eec`, WP-D in `125e792`,
   each built, reviewed and fixed; the bulk run's parts of the dashboard are WP-B's.)
 - [x] 14. Bulk fetch and pull from the dashboard: progress per repository, Cancel, errors. (WP-B,
   merged in `e974c35`.)
-- [ ] 15. The command palette: search and run the app's commands and the menus' actions, with
-  their keys shown.
-- [ ] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
-  redo, Ctrl+F, `EscapeOrder`).
+- [x] 15. The command palette: search and run the app's commands and the menus' actions, with
+  their keys shown. (WP-K, built, reviewed and fixed, merged in `73ac284`.)
+- [x] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
+  redo, Ctrl+F, `EscapeOrder`). (WP-K, merged in `73ac284`.)
 - [x] 17. The settings screen: identity, pull mode, auto-fetch interval (`AutoFetchMinutes`,
   D85), `StashIncludeUntracked`, the extensions "Open file" asks about (D130), external tools
   ("Open in editor" beside "Open file"), the merge tool, and the checkout setting of step 12; each
   change takes effect. (WP-SET, built, reviewed and fixed, merged in `eae7edc`; its Keyboard
   shortcuts section fills with WP-K's list.)
-- [ ] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
+- [x] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
   pictured in the dark theme only), and the welcome page's long folder that wraps at awkward
   places (phase 1's follow-up). (WP-T, built, reviewed and fixed, merged in `e7144ec`: the theme
   follows the system while System is chosen, the light status colours and lanes 1, 2, 4 and 7 at
   4.5:1, `VcDangerTextBrush`, tooltips in the app's colours, the drag layer's redraw, `TextInk`;
   the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock`
-  merged in `0da0eec`. Part L's sweep: WP-V.)
+  merged in `0da0eec`. Part L's sweep pictures: WP-V's part L, step 20.)
 - [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
   "Changes to expected results" in the phase 6 report.
 
