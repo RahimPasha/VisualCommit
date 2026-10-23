@@ -135,7 +135,7 @@ public sealed partial class RepositoryOperations
             Log.Warning($"{Repository.Name}: Open in editor: {name} is not at {editor.Program}.", ex);
             await ShowEditorFailureAsync(OperationTexts.EditorIsGone(name, editor.Program));
         }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or ArgumentException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or EditorCommandException or UnauthorizedAccessException)
         {
             Log.Warning($"{Repository.Name}: Open in editor: {name} could not be started.", ex);
             await ShowEditorFailureAsync(OperationTexts.EditorCouldNotStart(name, ex.Message));

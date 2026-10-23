@@ -80,8 +80,31 @@ public class EditorCommandsTests
     public void An_unclosed_quote_is_refused()
     {
         Assert.Null(EditorCommands.SplitArguments("--title=\"My editor {path}"));
-        var thrown = Assert.Throws<ArgumentException>(() => Build(new EditorSetting(KnownEditors.CustomId, @"D:\Tools\Ed.exe", "\"{path}"), null, EditorPlatform.Windows, null));
-        Assert.StartsWith(EditorCommands.UnclosedQuote, thrown.Message, StringComparison.Ordinal);
+        var thrown = Assert.Throws<EditorCommandException>(() => Build(new EditorSetting(KnownEditors.CustomId, @"D:\Tools\Ed.exe", "\"{path}"), null, EditorPlatform.Windows, null));
+        Assert.Equal(EditorCommands.UnclosedQuote, thrown.Message);
+    }
+
+    [Fact]
+    public void A_refusals_message_is_the_reason_alone_as_the_error_dialog_shows_it()
+    {
+        // 12.7's summary takes the message: no " (Parameter '…')" of .NET's argument exceptions.
+        Assert.Equal(
+            @"C:\Tools\ed.cmd is not an .exe or .com program.",
+            Assert.Throws<EditorCommandException>(() => Build(new EditorSetting(KnownEditors.CustomId, @"C:\Tools\ed.cmd", "{path}"), null, EditorPlatform.Windows, null)).Message);
+        Assert.Equal(
+            "The editor's program code is not an absolute path.",
+            Assert.Throws<EditorCommandException>(() => EditorCommands.Build(new EditorSetting(KnownEditors.CustomId, "code", "{path}"), null, "/a.txt", null, EditorPlatform.Linux, "/home/ann")).Message);
+    }
+
+    [Fact]
+    public void A_path_holding_the_other_token_is_put_in_as_it_is()
+    {
+        // Both tokens are replaced in one pass: the path's own "{line}" or "{n}" is no token.
+        var other = EditorCommands.Build(new EditorSetting(KnownEditors.CustomId, "/opt/ed", "--goto {path}:{line}"), null, "/src/{line}/{path}.cs", 7, EditorPlatform.Linux, "/home/ann");
+        Assert.Equal(["--goto", "/src/{line}/{path}.cs:7"], other.Arguments);
+
+        var known = EditorCommands.Build(new EditorSetting("vscode", "/opt/code"), KnownEditors.Find("vscode", EditorPlatform.Linux), "/src/{n}/{p}.cs", 3, EditorPlatform.Linux, "/home/ann");
+        Assert.Equal(["--goto", "/src/{n}/{p}.cs:3"], known.Arguments);
     }
 
     [Theory]
@@ -92,7 +115,7 @@ public class EditorCommandsTests
     public void On_windows_a_program_that_is_not_an_exe_or_com_is_refused(string program)
     {
         // 12.4: CreateProcess hands a .cmd or .bat to cmd.exe, which parses the arguments (0.9).
-        Assert.Throws<ArgumentException>(() => Build(new EditorSetting(KnownEditors.CustomId, program, "{path}"), null, EditorPlatform.Windows, null));
+        Assert.Throws<EditorCommandException>(() => Build(new EditorSetting(KnownEditors.CustomId, program, "{path}"), null, EditorPlatform.Windows, null));
         Assert.False(EditorCommands.IsWindowsProgram(program));
     }
 
@@ -123,8 +146,8 @@ public class EditorCommandsTests
     [Fact]
     public void A_program_that_is_not_absolute_is_refused()
     {
-        Assert.Throws<ArgumentException>(() => Build(new EditorSetting(KnownEditors.CustomId, "code.exe", "{path}"), null, EditorPlatform.Windows, null));
-        Assert.Throws<ArgumentException>(() => EditorCommands.Build(new EditorSetting(KnownEditors.CustomId, "code", "{path}"), null, "/a.txt", null, EditorPlatform.Linux, "/home/ann"));
+        Assert.Throws<EditorCommandException>(() => Build(new EditorSetting(KnownEditors.CustomId, "code.exe", "{path}"), null, EditorPlatform.Windows, null));
+        Assert.Throws<EditorCommandException>(() => EditorCommands.Build(new EditorSetting(KnownEditors.CustomId, "code", "{path}"), null, "/a.txt", null, EditorPlatform.Linux, "/home/ann"));
     }
 
     private static LaunchCommand Build(EditorSetting editor, string? id, EditorPlatform platform, int? line) =>

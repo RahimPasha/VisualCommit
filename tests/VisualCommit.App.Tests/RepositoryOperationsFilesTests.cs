@@ -427,6 +427,25 @@ public class RepositoryOperationsFilesTests
     }
 
     [Fact]
+    public async Task A_hand_edited_cmd_editor_says_why_in_plain_words()
+    {
+        // 12.4, 12.7: the reason alone after "{Name} could not be started:", nothing started.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, @"C:\Tools\ed.cmd", "{path}") });
+        app.Dialogs.CloseError();
+
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+
+        var reason = OperatingSystem.IsWindows()
+            ? @"C:\Tools\ed.cmd is not an .exe or .com program."
+            : @"The editor's program C:\Tools\ed.cmd is not an absolute path.";
+        Assert.Equal($"ed.cmd could not be started: {reason}", Assert.Single(app.Dialogs.Errors).Summary);
+        Assert.Empty(app.Launcher.Edits);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task Open_in_editor_does_nothing_without_an_editor_with_an_unknown_one_or_for_a_file_that_is_gone()
     {
         using var repo = await Scenarios.ChangesAsync();

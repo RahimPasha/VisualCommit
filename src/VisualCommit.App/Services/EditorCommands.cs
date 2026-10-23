@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Settings;
 
 namespace VisualCommit.App.Services;
@@ -34,7 +35,7 @@ public static class EditorCommands
     /// <see cref="Build(EditorSetting, KnownEditor?, string, int?)"/> for <paramref name="platform"/>,
     /// whose working directory off Windows is <paramref name="home"/>.
     /// </summary>
-    /// <exception cref="ArgumentException">The program is not absolute, on Windows is not an <c>.exe</c> or <c>.com</c>, or Other's arguments have a quote that is not closed.</exception>
+    /// <exception cref="EditorCommandException">The program is not absolute, on Windows is not an <c>.exe</c> or <c>.com</c>, or Other's arguments have a quote that is not closed; its message is the reason, as the error dialog shows it (12.7).</exception>
     public static LaunchCommand Build(EditorSetting editor, KnownEditor? known, string fullPath, int? line, EditorPlatform platform, string? home)
     {
         ArgumentNullException.ThrowIfNull(editor);
@@ -42,13 +43,13 @@ public static class EditorCommands
         var program = editor.Program;
         if (!IsAbsolute(program, platform))
         {
-            throw new ArgumentException($"The editor's program {program} is not an absolute path.", nameof(editor));
+            throw new EditorCommandException($"The editor's program {program} is not an absolute path.");
         }
 
         if (platform == EditorPlatform.Windows && !IsWindowsProgram(program))
         {
             // CreateProcess hands a .cmd or .bat to cmd.exe, which parses the arguments (0.9).
-            throw new ArgumentException($"{program} is not an .exe or .com program.", nameof(editor));
+            throw new EditorCommandException($"{program} is not an .exe or .com program.");
         }
 
         var arguments = known is not null
@@ -123,7 +124,7 @@ public static class EditorCommands
 
     private static IReadOnlyList<string> FillOther(string template, string fullPath, int? line)
     {
-        var parts = SplitArguments(template) ?? throw new ArgumentException(UnclosedQuote, nameof(template));
+        var parts = SplitArguments(template) ?? throw new EditorCommandException(UnclosedQuote);
         var filled = Fill(parts, fullPath, line, "{path}", "{line}").ToList();
 
         // Without {path}, the path comes last.
@@ -138,10 +139,15 @@ public static class EditorCommands
     private static List<string> SplitTemplate(string template) =>
         [.. template.Split(' ', StringSplitOptions.RemoveEmptyEntries)];
 
+    /// <summary>
+    /// Puts the file's path and the line into each part, both tokens in one pass, so that a path
+    /// holding the other token (a folder named <c>{line}</c>) is put in as it is.
+    /// </summary>
     private static IReadOnlyList<string> Fill(IEnumerable<string> parts, string fullPath, int? line, string pathToken, string lineToken)
     {
         var lineText = (line ?? FirstLine).ToString(CultureInfo.InvariantCulture);
-        return [.. parts.Select(part => part.Replace(pathToken, fullPath, StringComparison.Ordinal).Replace(lineToken, lineText, StringComparison.Ordinal))];
+        var tokens = new Regex($"{Regex.Escape(pathToken)}|{Regex.Escape(lineToken)}", RegexOptions.CultureInvariant);
+        return [.. parts.Select(part => tokens.Replace(part, match => match.Value == pathToken ? fullPath : lineText))];
     }
 
     private static bool IsAbsolute(string program, EditorPlatform platform) =>
@@ -169,3 +175,6 @@ public static class EditorCommands
         return dot < 0 ? string.Empty : name[dot..];
     }
 }
+
+/// <summary>Why an editor's command could not be built (docs/phase-6-design.md 12.4, 12.5): its message is the reason the error dialog shows.</summary>
+public sealed class EditorCommandException(string message) : Exception(message);
