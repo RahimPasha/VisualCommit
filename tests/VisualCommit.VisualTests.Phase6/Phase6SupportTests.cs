@@ -21,20 +21,14 @@ namespace VisualCommit.VisualTests.Phase6;
 
 /// <summary>
 /// The assertions every part of phase 6's walk-through shares (Phase6Checks.Support.cs) and the
-/// helpers of Phase6Expectations.Common.cs, tried once; the isolation's tripwire (design 17.2); and
-/// the settings scenario opened in the app with the harness's per-session git environment, so that
+/// helpers of Phase6Expectations.Common.cs, tried once (the isolation's tripwire, design 17.2, is
+/// <see cref="Phase6TripwireTests"/> below, run last); and the settings scenario opened in the app
+/// with the harness's per-session git environment, so that
 /// a check that fails points at the app and not at the assertion, the harness or the scenario. No
 /// pictures: these are not checks of the report.
 /// </summary>
 public sealed class Phase6SupportTests : Phase6Checks
 {
-    [Fact]
-    public void Nothing_wrote_a_global_configuration_outside_a_session()
-    {
-        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
-        Assert.True(findings.Count == 0, string.Join('\n', findings));
-    }
-
     [Theory]
     [InlineData("2026-01-02T09:00:00+00:00")]
     [InlineData("2026-01-02T09:00:00Z")]
@@ -569,4 +563,30 @@ public sealed class Phase6SupportTests : Phase6Checks
             && WorkspacePaths.Same(folder, repository.Path));
         Assert.True(repository.Queue.Current is null && repository.Queue.Waiting == 0);
     }
+}
+
+/// <summary>
+/// The isolation's tripwire (design 17.2) for this project, run after its tests that run side by
+/// side: xunit runs a collection without parallelization after the parallel ones, so every check's
+/// git calls have ended when it looks. The isolation folder is every test process's, so it sees
+/// what the projects beside it wrote until then too.
+/// </summary>
+[Collection(Phase6TripwireTests.Last)]
+public sealed class Phase6TripwireTests
+{
+    /// <summary>The collection that runs the tripwire after the parallel tests.</summary>
+    public const string Last = "Phase 6's isolation tripwire, after the parallel tests";
+
+    [Fact]
+    public void Nothing_wrote_a_global_configuration_outside_a_session()
+    {
+        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
+        Assert.True(findings.Count == 0, string.Join('\n', findings));
+    }
+}
+
+/// <summary>Runs <see cref="Phase6TripwireTests"/> after the parallel tests, with none beside it.</summary>
+[CollectionDefinition(Phase6TripwireTests.Last, DisableParallelization = true)]
+public sealed class Phase6TripwireCollection
+{
 }
