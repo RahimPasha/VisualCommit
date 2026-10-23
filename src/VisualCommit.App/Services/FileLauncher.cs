@@ -65,6 +65,36 @@ public sealed class FileLauncher : IFileLauncher
         return Task.Run(() => RunAsync(commands, cancellationToken), CancellationToken.None);
     }
 
+    /// <summary>
+    /// Starts an editor (docs/phase-6-design.md 12.4) off the UI thread (D59): first checks there
+    /// that its program exists (a <see cref="FileNotFoundException"/> when not: a check of a share
+    /// that does not answer blocks for minutes, 0.9), then starts it with no shell, not waited for,
+    /// its process object disposed at once. Throws when it cannot start (12.7).
+    /// </summary>
+    public Task OpenInEditorAsync(LaunchCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        return Task.Run(() => StartEditor(command, File.Exists), cancellationToken);
+    }
+
+    /// <summary>
+    /// The start <see cref="OpenInEditorAsync"/> makes, given how files are checked: throws
+    /// <see cref="FileNotFoundException"/> before any start when <paramref name="fileExists"/> says
+    /// the program is not there.
+    /// </summary>
+    public static void StartEditor(LaunchCommand command, Func<string, bool> fileExists)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(fileExists);
+        if (!fileExists(command.FileName))
+        {
+            throw new FileNotFoundException($"{command.FileName} does not exist.", command.FileName);
+        }
+
+        using var process = Process.Start(command.ToStartInfo())
+            ?? throw new InvalidOperationException($"{command.FileName} did not start.");
+    }
+
     /// <summary>The platform this process runs on, as <see cref="RevealCommands"/> takes it; any other Unix counts as Linux.</summary>
     public static RevealPlatform CurrentPlatform =>
         OperatingSystem.IsWindows() ? RevealPlatform.Windows
@@ -359,6 +389,12 @@ public sealed record LaunchCommand(string FileName, IReadOnlyList<string> Argume
     /// <summary>Whether the command is waited for and the next one tried when it cannot start or exits with an error.</summary>
     public bool FallBackOnFailure { get; init; }
 
+    /// <summary>The folder the program starts in (an editor's, docs/phase-6-design.md 12.4); null for this process's.</summary>
+    public string? WorkingDirectory { get; init; }
+
+    /// <summary>Variables of this process's environment the program does not get (<c>ELECTRON_RUN_AS_NODE</c> for an editor, 12.4).</summary>
+    public IReadOnlyList<string> RemovedVariables { get; init; } = [];
+
     /// <summary>The command as a user would type it, for the log.</summary>
     public string DisplayText => CommandLine is not null
         ? $"{FileName} {CommandLine}"
@@ -383,6 +419,20 @@ public sealed record LaunchCommand(string FileName, IReadOnlyList<string> Argume
             foreach (var argument in Arguments)
             {
                 startInfo.ArgumentList.Add(argument);
+            }
+        }
+
+        if (WorkingDirectory is not null)
+        {
+            startInfo.WorkingDirectory = WorkingDirectory;
+        }
+
+        foreach (var variable in RemovedVariables)
+        {
+            // The environment's keys ignore case on Windows, as the process's do.
+            foreach (var key in startInfo.Environment.Keys.Where(key => string.Equals(key, variable, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)).ToList())
+            {
+                startInfo.Environment.Remove(key);
             }
         }
 

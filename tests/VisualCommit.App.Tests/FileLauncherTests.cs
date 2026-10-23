@@ -1,4 +1,5 @@
 using VisualCommit.App.Services;
+using VisualCommit.Testing;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
@@ -166,6 +167,61 @@ public class FileLauncherTests
             : RevealPlatform.Linux;
 
         Assert.Equal(expected, FileLauncher.CurrentPlatform);
+    }
+
+    [Fact]
+    public void An_editors_start_info_has_its_folder_its_arguments_as_a_list_no_shell_and_lacks_the_removed_variables()
+    {
+        // docs/phase-6-design.md 12.4: no shell anywhere, the arguments one by one, the working
+        // directory given, ELECTRON_RUN_AS_NODE removed from the app's environment.
+        var folder = Path.GetFullPath(Path.GetTempPath());
+        var command = new LaunchCommand("/opt/tools/vscode/code", ["--goto", "/src/a b.cs:1"])
+        {
+            WorkingDirectory = folder,
+            RemovedVariables = [EditorCommands.ElectronRunAsNode, "PATH"],
+        };
+
+        var startInfo = command.ToStartInfo();
+
+        Assert.False(startInfo.UseShellExecute);
+        Assert.Equal("/opt/tools/vscode/code", startInfo.FileName);
+        Assert.Equal(["--goto", "/src/a b.cs:1"], startInfo.ArgumentList);
+        Assert.Equal(string.Empty, startInfo.Arguments);
+        Assert.Equal(folder, startInfo.WorkingDirectory);
+        Assert.DoesNotContain(startInfo.Environment.Keys, key => string.Equals(key, EditorCommands.ElectronRunAsNode, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(startInfo.Environment.Keys, key => string.Equals(key, "PATH", StringComparison.OrdinalIgnoreCase));
+        Assert.False(startInfo.RedirectStandardOutput);
+    }
+
+    [Fact]
+    public void A_command_without_a_folder_or_removed_variables_starts_as_before()
+    {
+        var startInfo = new LaunchCommand("xdg-open", ["/home/ann"]).ToStartInfo();
+
+        Assert.Equal(string.Empty, startInfo.WorkingDirectory);
+        Assert.Contains(startInfo.Environment.Keys, key => string.Equals(key, "PATH", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Opening_in_an_editor_whose_program_is_gone_throws_file_not_found_from_its_task_before_any_start()
+    {
+        // 12.4: the check runs off the UI thread, inside the launcher's Task.Run; nothing starts.
+        using var folder = new TempDirectory("editor");
+        var missing = Path.Combine(folder.Path, OperatingSystem.IsWindows() ? "Missing.exe" : "missing");
+        var launcher = new FileLauncher(() => null);
+
+        var opening = launcher.OpenInEditorAsync(new LaunchCommand(missing, [Path.Combine(folder.Path, "a.txt")]), TestContext.Current.CancellationToken);
+        var thrown = await Assert.ThrowsAsync<FileNotFoundException>(() => opening);
+        Assert.Equal(missing, thrown.FileName);
+
+        // The check comes first: a program the check says is gone is never started.
+        var asked = new List<string>();
+        Assert.Throws<FileNotFoundException>(() => FileLauncher.StartEditor(new LaunchCommand("/bin/sh", ["-c", "exit 0"]), path =>
+        {
+            asked.Add(path);
+            return false;
+        }));
+        Assert.Equal(["/bin/sh"], asked);
     }
 
     private static IReadOnlyList<LaunchCommand> Reveal(string path, RevealPlatform platform, string[]? files = null, string[]? folders = null)

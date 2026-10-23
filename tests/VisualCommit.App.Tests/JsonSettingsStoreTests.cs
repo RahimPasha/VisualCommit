@@ -122,6 +122,67 @@ public class JsonSettingsStoreTests
     }
 
     [Fact]
+    public void A_file_without_phase_6s_settings_loads_their_defaults()
+    {
+        // docs/phase-6-design.md 7.10: an older file loads (D107).
+        using var folder = new TempDirectory("settings");
+        var file = folder.Combine("settings.json");
+        File.WriteAllText(file, "{ \"theme\": \"Light\", \"autoFetchMinutes\": 120, \"stashIncludeUntracked\": false, \"showAllFiles\": true }");
+
+        var store = new JsonSettingsStore(file);
+
+        Assert.Equal(
+            (AppTheme.Light, 120, false, true, true, (EditorSetting?)null, string.Empty),
+            (store.Current.Theme, store.Current.AutoFetchMinutes, store.Current.StashIncludeUntracked, store.Current.ShowAllFiles, store.Current.KeepIgnoredFiles, store.Current.Editor, store.Current.ExtraRunnableExtensions));
+    }
+
+    [Theory]
+    [InlineData("vscode", @"C:\Tools\Microsoft VS Code\Code.exe", null)]
+    [InlineData("custom", @"D:\Tools\Ed.exe", "-l {line} {path}")]
+    public void The_editor_and_the_extra_extensions_round_trip_as_12_6_writes_them(string id, string program, string? arguments)
+    {
+        using var folder = new TempDirectory("settings");
+        var file = folder.Combine("settings.json");
+        var editor = new EditorSetting(id, program, arguments);
+
+        new JsonSettingsStore(file).Update(settings => settings with { Editor = editor, ExtraRunnableExtensions = ".py .pl", KeepIgnoredFiles = false });
+
+        var loaded = new JsonSettingsStore(file).Current;
+        Assert.Equal((editor, ".py .pl", false), (loaded.Editor, loaded.ExtraRunnableExtensions, loaded.KeepIgnoredFiles));
+        var json = File.ReadAllText(file);
+        Assert.Contains($"\"id\": \"{id}\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"extraRunnableExtensions\": \".py .pl\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"keepIgnoredFiles\": false", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_stored_custom_editor_reads_as_12_5_stores_it()
+    {
+        using var folder = new TempDirectory("settings");
+        var file = folder.Combine("settings.json");
+        File.WriteAllText(file, "{ \"editor\": { \"id\": \"custom\", \"program\": \"D:\\\\Tools\\\\Ed.exe\", \"arguments\": \"-l {line} {path}\" } }");
+
+        Assert.Equal(new EditorSetting("custom", @"D:\Tools\Ed.exe", "-l {line} {path}"), new JsonSettingsStore(file).Current.Editor);
+    }
+
+    [Fact]
+    public void System_loads_and_round_trips_while_the_default_stays_dark()
+    {
+        // 11.2, 11.15: "theme": "System" loads; { "theme": "Purple" } is still set aside (above).
+        using var folder = new TempDirectory("settings");
+        var file = folder.Combine("settings.json");
+        File.WriteAllText(file, "{ \"theme\": \"System\" }");
+
+        var store = new JsonSettingsStore(file);
+        Assert.Equal(AppTheme.System, store.Current.Theme);
+        store.Update(settings => settings with { KeepIgnoredFiles = false });
+
+        Assert.Contains("\"theme\": \"System\"", File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Equal(AppTheme.System, new JsonSettingsStore(file).Current.Theme);
+        Assert.Equal(AppTheme.Dark, new AppSettings().Theme);
+    }
+
+    [Fact]
     public void A_save_that_fails_is_logged_and_the_change_still_applies_in_memory()
     {
         using var folder = new TempDirectory("settings");
