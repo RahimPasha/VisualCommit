@@ -1222,7 +1222,11 @@ gives to 1.2's `WorkspaceMembership`. After a pass of triggers 1 to 3 or 6 the d
 summary read logs at Debug `{name}: summary read in {ms} ms`. A trigger that finds no row to read
 starts no pass and logs no line (WD35): a row to read is one without a tab that, for triggers 1 and
 2, was never read or was last read 10 s ago or more; a row that follows a tab is never read and never
-counted in a pass's `{n}`. So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
+counted in a pass's `{n}`. A request that folds into "one more pass" while a pass runs judges the 10 s
+as of the moment it was made, not when it runs: a row the running pass read after the request is
+fresh, so the window's activation at start, which folds into the start-up read, reads nothing twice
+however long the first pass takes (the lead's ruling of 2026-10-23, after the helpers' smoke test saw
+`read 10` in 16 s followed by `read 3` under load). So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
 before the read clock moves log no pass line, and `WaitForDashboardReadAsync` is ended only by a pass
 that read; `DashboardRefreshTests` pins it (2.12). `ShellDriver.Phase6.Dashboard.cs`
 (17.2) has `WaitForDashboardReadAsync()` (the pass's line, no row `Reading…`) and `ActivateWindow()`
