@@ -79,11 +79,23 @@ public class FileMenuEditorTests
         app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, @"D:\Tools\Ed.exe", "{path}") });
         Assert.Equal(new EditorMenuState("Ed.exe"), app.Repository.MenuContext.Editor);
 
-        // An id the catalogue no longer knows means none chosen, logged once (12.6).
+        // An id the catalogue no longer knows means none chosen, logged once while it stays (12.6).
         app.Settings.Update(settings => settings with { Editor = new EditorSetting("an-editor-of-the-future", @"C:\x.exe") });
         Assert.Null(app.Repository.MenuContext.Editor);
         Assert.Null(app.Repository.MenuContext.Editor);
         Assert.Single(app.Log.Messages, message => message.Contains("an-editor-of-the-future", StringComparison.Ordinal));
+
+        // Each view model keeps its own note, not the process: another tab says it in its own log,
+        // and this one says it again once the id has left the settings and come back.
+        using var other = await OperationsHarness.OpenAsync(repo);
+        other.Settings.Update(settings => settings with { Editor = new EditorSetting("an-editor-of-the-future", @"C:\x.exe") });
+        Assert.Null(other.Repository.MenuContext.Editor);
+        Assert.Single(other.Log.Messages, message => message.Contains("an-editor-of-the-future", StringComparison.Ordinal));
+        app.Settings.Update(settings => settings with { Editor = null });
+        Assert.Null(app.Repository.MenuContext.Editor);
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("an-editor-of-the-future", @"C:\x.exe") });
+        Assert.Null(app.Repository.MenuContext.Editor);
+        Assert.Equal(2, app.Log.Messages.Count(message => message.Contains("an-editor-of-the-future", StringComparison.Ordinal)));
     }
 
     private static MenuModel Menu(string builder, RepositoryMenuContext context, FileMenuTarget file, IRepositoryActions actions) => builder switch
