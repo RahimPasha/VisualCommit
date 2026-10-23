@@ -413,6 +413,9 @@ public static partial class Phase6Expectations
 
         public const string ConflictsFile = "notes.txt";
 
+        /// <summary>GC-M's banner (scenario facts' "conflicts" stopped in its merge).</summary>
+        public const string MergingBanner = "Merging: \"Merge branch 'feature/theirs'\". 1 file has conflicts.";
+
         /// <summary><c>MERGE_HEAD</c> of GC-M: Theirs edits.</summary>
         public const string TheirsEditsSha = "5c77ffb0ec78abf986d121f42013eee14422e5a5";
 
