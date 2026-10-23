@@ -42,16 +42,17 @@ public class CommitKeyTests
         Assert.Equal(string.Empty, changes.Summary);
         Assert.DoesNotContain(app.GitCalls(), call => call.CommandText.StartsWith("git commit", StringComparison.Ordinal));
 
-        // In the description: it commits the summary and types no line break.
+        // In the description: it commits the summary and types no line break, read right after
+        // the key, before the commit empties the boxes.
         app.Type("Keys only");
         description.Focus();
         app.Settle();
         Assert.True(app.PressKeyHandled(Key.Enter, RawInputModifiers.Control));
+        Assert.Equal((string.Empty, "Keys only"), (description.Text ?? string.Empty, summary.Text));
         await app.WaitForAsync(() => app.GitCalls().Any(call => call.CommandText.StartsWith("git commit", StringComparison.Ordinal)), "the commit");
         await app.WaitForIdleAsync();
         await app.WaitForAsync(() => !repository.HasWorkingChanges, "the status after the commit");
-        Assert.Equal("Keys only", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.Trim());
-        Assert.Equal(string.Empty, description.Text ?? string.Empty);
+        Assert.Equal("Keys only\n\n", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.ReplaceLineEndings("\n"));
 
         // In the summary: commits too, and its text stays one line.
         await File.WriteAllTextAsync(Path.Combine(repo.Path, "README.md"), "# Operations\n\nMore.\n");
@@ -62,9 +63,9 @@ public class CommitKeyTests
         summary.Focus();
         app.Type("Second");
         Assert.True(app.PressKeyHandled(Key.Enter, RawInputModifiers.Control));
+        Assert.Equal(("Second", string.Empty), (summary.Text, description.Text ?? string.Empty));
         await app.WaitForAsync(() => repository.Status.Staged.Count == 0 && !repository.HasWorkingChanges, "the second commit");
-        Assert.Equal("Second", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.Trim());
-        Assert.DoesNotContain('\n', summary.Text ?? string.Empty);
+        Assert.Equal("Second\n\n", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.ReplaceLineEndings("\n"));
     }
 
     [AvaloniaFact]

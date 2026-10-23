@@ -1,9 +1,11 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.Views;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -131,7 +133,13 @@ public class KeyRouterTests
         var selected = new List<int>();
         foreach (var (command, index) in new[] { (AppCommand.NextMatch, 0), (AppCommand.NextMatch, 1), (AppCommand.PreviousMatch, 0), (AppCommand.PreviousMatch, 1) })
         {
+            // The move waits for the search to know the next match (phase 5 design 3.1), so under
+            // load the selection follows the key a little later: wait for it, then record it.
+            var before = repository.SelectedIndex;
             Assert.True(app.PressShortcutHandled(command, index));
+            await app.WaitForAsync(
+                () => repository.SelectedIndex != before && repository.Search!.MatchRows.Contains(repository.SelectedIndex),
+                $"{command}'s key {index} to select the other match (from row {before})");
             selected.Add(repository.SelectedIndex);
         }
 
@@ -245,6 +253,9 @@ public class KeyRouterTests
         Assert.Equal(0, searches);
         Assert.Null(repository.Search);
         Assert.True(repository.IsResolverOpen);
+
+        // Its reason alone, the disabled button's tooltip too (6.8).
+        Assert.Equal((false, "Close the conflict resolver first", "Close the conflict resolver first"), (repository.Toolbar.CanSearch, repository.Toolbar.SearchDisabledReason, repository.Toolbar.SearchToolTip));
     }
 
     [AvaloniaFact]
@@ -328,7 +339,11 @@ public class KeyRouterTests
         app.ReleaseMouse(main);
     }
 
-    /// <summary>Presses every key of every command the router takes, after <paramref name="ensure"/> has set the condition up again.</summary>
+    /// <summary>
+    /// Presses every key of every command the router takes, after <paramref name="ensure"/> has set
+    /// the condition up again, and asserts that each declined (6.3): its key reached the control
+    /// with the keyboard focus not handled, on the tunnelling pass the router takes keys on.
+    /// </summary>
     private static void PressEveryKey(ShellDriver app, Action ensure)
     {
         foreach (var binding in AppShortcuts.Bindings.Where(binding => binding.Pass == KeyPass.Tunnel))
@@ -336,7 +351,31 @@ public class KeyRouterTests
             for (var index = 0; index < binding.Keys.Count; index++)
             {
                 ensure();
-                app.PressShortcut(binding.Command, index);
+                var focused = app.FocusedElement as InputElement
+                    ?? throw new Xunit.Sdk.XunitException($"Nothing has the keyboard focus before {binding.Command}'s key {index}.");
+                var key = ShortcutKeys.ToGesture(binding.Keys[index], app.CommandModifier).Key;
+                bool? reachedUnhandled = null;
+                void Record(object? sender, KeyEventArgs e)
+                {
+                    if (e.Key == key && ReferenceEquals(e.Source, focused))
+                    {
+                        reachedUnhandled ??= !e.Handled;
+                    }
+                }
+
+                focused.AddHandler(InputElement.KeyDownEvent, Record, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+                try
+                {
+                    app.PressShortcut(binding.Command, index);
+                }
+                finally
+                {
+                    focused.RemoveHandler(InputElement.KeyDownEvent, Record);
+                }
+
+                Assert.True(
+                    reachedUnhandled == true,
+                    $"{binding.Command}'s key {index} ({ShortcutText.Format(binding.Keys[index], CommandKey.Ctrl)}) did not reach {focused.GetType().Name} {AutomationProperties.GetAutomationId((StyledElement)focused)} unhandled: {(reachedUnhandled is null ? "it never arrived" : "something took it on the way")}.");
             }
         }
     }

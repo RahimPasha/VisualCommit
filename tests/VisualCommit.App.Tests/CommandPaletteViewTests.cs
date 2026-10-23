@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -231,12 +232,21 @@ public class CommandPaletteViewTests
         app.PressPalette();
         Assert.Equal("Create branch…", app.Palette.Shown[0].Label);
 
-        // A press outside the card cancels, handled: the graph's selection stays.
-        app.Click(new Point(480, 600));
+        // A press outside the card, on the left panel's tag v1.0 (left of the card's x 250),
+        // cancels, handled: neither the panel nor the graph's selection sees it.
+        var tag = app.BoundsOf(await app.RefRowAsync("Tags", "v1.0")).Center;
+        Assert.True(tag.X < 250, $"The row's point {tag} is not left of the card.");
+        app.Click(tag);
         Assert.False(app.IsPaletteOpen);
         Assert.Equal(MainWork, app.Session.Shell.ActiveTab.Repository!.Selection.Single);
+        Assert.False(app.RefRowModel("Tags", "v1.0") is RefItemRow { IsSelected: true }, "The press reached the tag's row.");
         Assert.Equal("GraphRows", app.FocusedAutomationId());
         Assert.Equal(1, app.LogLinesSince(mark).Count(line => line.Contains("Command palette ran", StringComparison.Ordinal)));
+
+        // The same press without the palette selects the tag and its commit: the point is the row's.
+        app.Click(tag);
+        await app.WaitForAsync(() => app.Session.Shell.ActiveTab.Repository!.Selection.Single is { } selected && selected != MainWork, "v1.0's commit to be selected");
+        Assert.True(app.RefRowModel("Tags", "v1.0") is RefItemRow { IsSelected: true }, "The tag's row is not selected.");
     }
 
     [AvaloniaFact]
