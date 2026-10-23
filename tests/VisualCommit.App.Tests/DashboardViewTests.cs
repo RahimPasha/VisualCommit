@@ -69,6 +69,17 @@ public class DashboardViewTests
             Assert.Equal(buttons[i - 1].Right + 6, buttons[i].X, 1);
         }
 
+        // The keyed buttons' keys (6.8, 6.9: Fetch all and Pull all are the toolbar's Fetch and
+        // Pull there), and Add repository…'s help text, its tooltip (15.5).
+        Assert.Equal(
+            ("Ctrl+Shift+F", "Ctrl+Shift+L", "F5"),
+            (ShellDriver.AcceleratorKeyOf(app.FindByAutomationId("DashboardFetchAll")), ShellDriver.AcceleratorKeyOf(app.FindByAutomationId("DashboardPullAll")), ShellDriver.AcceleratorKeyOf(app.FindByAutomationId("DashboardRefresh"))));
+        Assert.Equal(
+            ("Fetch every repository of Web (Ctrl+Shift+F)", "Read the repositories of Web again (F5)"),
+            (ShellDriver.HelpTextOf(app.FindByAutomationId("DashboardFetchAll")), ShellDriver.HelpTextOf(app.FindByAutomationId("DashboardRefresh"))));
+        var addRepository = app.FindByAutomationId("DashboardAddRepository");
+        Assert.Equal(("Add a repository to Web", "Add a repository to Web"), (ShellDriver.HelpTextOf(addRepository), ToolTip.GetTip(addRepository) as string));
+
         // The headings and the rows by DashboardColumns (2.6).
         var columns = DashboardColumns.Compute(1100);
         AssertBounds(app, "DashboardColumnHeaders", 0, 124, 1100, 28);

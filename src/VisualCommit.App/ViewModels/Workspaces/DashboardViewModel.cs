@@ -156,6 +156,13 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary>Refresh's tooltip: <c>Read the repositories of {workspace} again ({key})</c>.</summary>
     public string RefreshToolTip => DashboardTexts.RefreshToolTip(Name);
 
+    /// <summary>
+    /// The shown key texts the header's keyed buttons give UI Automation (6.8, 15.5): Fetch all's and
+    /// Pull all's are the toolbar's Fetch and Pull (6.9), Refresh's F5; from
+    /// <see cref="Commands.KeyTexts.Current"/>, as the window's.
+    /// </summary>
+    public Commands.ShellKeys Keys { get; } = new(Commands.KeyTexts.Current);
+
     /// <summary><c>DashboardNotice</c> (2.5): the failed save's notice while the store's last save failed; null otherwise.</summary>
     public string? Notice => _services.Workspaces.SaveFailed ? DashboardTexts.SaveFailedNotice : null;
 

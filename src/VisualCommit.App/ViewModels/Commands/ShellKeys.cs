@@ -3,7 +3,8 @@ namespace VisualCommit.App.ViewModels.Commands;
 /// <summary>
 /// The shown key texts of the shell's buttons (docs/phase-6-design.md 6.8): what
 /// <c>AutomationProperties.AcceleratorKey</c> of the toolbar's, the tab strip's and the status
-/// bar's buttons binds to (<see cref="MainWindowViewModel.Keys"/>), enabled or not; null for a
+/// bar's buttons binds to (<see cref="MainWindowViewModel.Keys"/>), and the dashboard header's
+/// Fetch all, Pull all and Refresh (<c>DashboardViewModel.Keys</c>), enabled or not; null for a
 /// command without a key. A class, not a record: a record may not have a member named
 /// <see cref="Clone"/>.
 /// </summary>
@@ -15,6 +16,7 @@ public sealed class ShellKeys
         ArgumentNullException.ThrowIfNull(keys);
         Palette = keys.Of(AppCommand.CommandPalette);
         Settings = keys.Of(AppCommand.Settings);
+        Refresh = keys.Of(AppCommand.Refresh);
         NewTab = keys.Of(AppCommand.NewTab);
         CloseTab = keys.Of(AppCommand.CloseTab);
         Fetch = keys.Of(AppCommand.Fetch);
@@ -35,6 +37,9 @@ public sealed class ShellKeys
     public string? Palette { get; }
 
     public string? Settings { get; }
+
+    /// <summary>Refresh's key (F5; Cmd+R on macOS): the dashboard header's <c>DashboardRefresh</c>.</summary>
+    public string? Refresh { get; }
 
     public string? NewTab { get; }
 
