@@ -51,6 +51,11 @@ public class CommandPaletteViewTests
         Assert.Equal(new Rect(left + 9, 105, 582, 32), snapshot.BoxBounds);
         Assert.Equal(new Rect(left + 9, 143, 582, 28), snapshot.Rows[0].Bounds);
         Assert.Equal(12, snapshot.Rows.Count(row => row.Bounds.Bottom <= 488 + 0.5));
+
+        // The rows as drawn (5.3, 5.7): a command's key; a disabled one's reason in the detail's place.
+        Assert.Equal(
+            [("Fetch all remotes", null, "Ctrl+Shift+F", true, null), ("Stash changes…", null, "Ctrl+Shift+S", false, "There are no changes to stash"), ("Show backups", null, null, true, null)],
+            snapshot.Rows.Where(row => row.Label is "Fetch all remotes" or "Stash changes…" or "Show backups").Select(row => (row.Label, row.Detail, row.KeyText, row.IsEnabled, row.Reason)));
         Assert.Equal(string.Empty, snapshot.Query);
         Assert.Same(app.PaletteBox, app.FocusedElement);
         Assert.Equal("Search commands, branches, tags, stashes, remotes, repositories and workspaces", app.PaletteBox.PlaceholderText);
@@ -125,8 +130,8 @@ public class CommandPaletteViewTests
         app.TypeInPalette("delete main");
         var delete = app.PaletteSnapshot();
         Assert.Equal(
-            [("Delete main on origin…", "origin/main", true, true), ("Delete main…", "main", false, false)],
-            delete.Rows.Select(row => (row.Label, row.Detail, row.IsEnabled, row.IsHighlighted)));
+            [("Delete main on origin…", "origin/main", null, true, null, true), ("Delete main…", "main", null, false, "You cannot delete the branch you are on", false)],
+            delete.Rows.Select(row => (row.Label, row.Detail, row.KeyText, row.IsEnabled, row.Reason, row.IsHighlighted)));
         Assert.Equal(new Rect(250, 96, 600, 112), delete.CardBounds);
 
         // Enter on a disabled entry does nothing: the palette stays open (5.7).
@@ -341,10 +346,17 @@ public class CommandPaletteViewTests
         // the read finds the other worktree, so the items are built again with it disabled.
         Assert.Contains(shell.Commands.PaletteItems(), entry => entry is { Label: "Fast-forward feature/alpha to origin/feature/alpha", IsEnabled: true });
         _ = shell.OpenPaletteAsync("fast-forward feature/alpha");
-        app.Settle();
+
+        // The palette is open before the window runs anything more, the read's end included: the
+        // count sees every change of its rows from here (as below, where none may come).
         var palette = app.Palette;
+        Assert.True(palette.Shown is [{ IsEnabled: true }], "Built before the read, it is enabled.");
+        var replaced = 0;
+        palette.Shown.CollectionChanged += (_, _) => replaced++;
+        app.Settle();
         await shell.PaletteWorktreeRead;
         app.Settle();
+        Assert.True(replaced > 0, "The read's items replaced the rows.");
         Assert.True(palette.Shown is [{ IsEnabled: false }], "Built again after the read, it is disabled.");
         Assert.Equal("fast-forward feature/alpha", palette.Query);
         Assert.Equal(0, palette.HighlightedIndex);
@@ -354,10 +366,11 @@ public class CommandPaletteViewTests
         // The second opening builds them with that worktree, and its read finds the same: nothing replaced.
         var calls = app.GitCalls().Count;
         _ = shell.OpenPaletteAsync("fast-forward feature/alpha");
-        app.Settle();
         var second = app.Palette;
+        Assert.NotSame(palette, second);
         var resets = 0;
         second.Shown.CollectionChanged += (_, _) => resets++;
+        app.Settle();
         await shell.PaletteWorktreeRead;
         app.Settle();
         Assert.Contains(app.GitCalls().Skip(calls), call => call.CommandText.Contains("worktree list --porcelain", StringComparison.Ordinal));

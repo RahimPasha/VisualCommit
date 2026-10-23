@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -65,18 +66,26 @@ public sealed partial class ShellDriver
         {
             foreach (var container in list.GetRealizedContainers().OfType<ListBoxItem>().OrderBy(list.IndexFromContainer))
             {
-                if (container.DataContext is not PaletteEntry entry || !container.IsEffectivelyVisible)
+                if (container.DataContext is not PaletteEntry || !container.IsEffectivelyVisible)
                 {
                     continue;
                 }
 
-                var label = container.GetVisualDescendants().OfType<TextBlock>().First(block => block.Name == "CommandPaletteItemLabel");
+                // As drawn (5.3, 5.7): the label, the detail's place (a disabled entry's reason
+                // where it has one, its detail then being the row's item status) and the key,
+                // shown or not.
+                var blocks = container.GetVisualDescendants().OfType<TextBlock>().ToList();
+                var label = blocks.First(block => block.Name == "CommandPaletteItemLabel");
+                var shownDetail = NullIfEmpty(blocks.First(block => block.Name == "CommandPaletteItemDetail").Text);
+                var key = blocks.First(block => block.Name == "CommandPaletteItemKey");
+                var enabled = !label.Classes.Contains("disabled");
+                var showsReason = !enabled && AutomationProperties.GetHelpText(container) is not null;
                 rows.Add(new PaletteRow(
-                    entry.Label,
-                    entry.Detail,
-                    entry.KeyText,
-                    entry.IsEnabled,
-                    entry.IsEnabled ? null : entry.DisabledReason,
+                    label.Text ?? string.Empty,
+                    showsReason ? AutomationProperties.GetItemStatus(container) : shownDetail,
+                    key.IsVisible ? key.Text : null,
+                    enabled,
+                    showsReason ? shownDetail : null,
                     container.IsSelected,
                     BoundsOf(container),
                     label.Foreground is ISolidColorBrush brush ? brush.Color : default));
@@ -89,6 +98,8 @@ public sealed partial class ShellDriver
             BoundsOf(PaletteBox),
             rows,
             palette.ShowsNothing);
+
+        static string? NullIfEmpty(string? text) => string.IsNullOrEmpty(text) ? null : text;
     }
 
     /// <summary>
@@ -125,12 +136,15 @@ public sealed partial class ShellDriver
 /// <param name="ShowsNothing">Nothing matches: <c>No matches</c> shows in place of the list.</param>
 public sealed record PaletteSnapshot(string Query, Rect CardBounds, Rect BoxBounds, IReadOnlyList<PaletteRow> Rows, bool ShowsNothing);
 
-/// <summary>One realised row of the palette (docs/phase-6-design.md 5.11).</summary>
-/// <param name="Label">The entry's label.</param>
-/// <param name="Detail">Its detail (UI Automation's item status), or null.</param>
-/// <param name="KeyText">Its key's text, or null.</param>
-/// <param name="IsEnabled">Whether it can run.</param>
-/// <param name="Reason">A disabled entry's reason, shown in the detail's place; null otherwise.</param>
+/// <summary>One realised row of the palette (docs/phase-6-design.md 5.3, 5.11), read from what the row draws.</summary>
+/// <param name="Label">The label's text (<c>CommandPaletteItemLabel</c>).</param>
+/// <param name="Detail">
+/// The detail's text (<c>CommandPaletteItemDetail</c>), or null when it shows none; for a disabled
+/// entry with a reason, whose detail's place shows the reason, the row's item status.
+/// </param>
+/// <param name="KeyText">The key's text (<c>CommandPaletteItemKey</c>) while the key shows, or null.</param>
+/// <param name="IsEnabled">Whether it can run: its label not drawn disabled.</param>
+/// <param name="Reason">A disabled entry's reason, as the detail's place shows it; null otherwise.</param>
 /// <param name="IsHighlighted">The highlighted row.</param>
 /// <param name="Bounds">The row in the window's logical pixels.</param>
 /// <param name="LabelColour">The colour its label is drawn in.</param>
