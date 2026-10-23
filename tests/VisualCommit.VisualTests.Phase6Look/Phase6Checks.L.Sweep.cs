@@ -421,12 +421,41 @@ public sealed partial class Phase6ChecksL
         Assert.True(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= size.Width && bounds.Bottom <= size.Height, $"The tooltip at {bounds} is not inside the window.");
     }
 
-    /// <summary>An icon's colour in a picture: the icon's bounds "contain" <paramref name="colour"/>.</summary>
+    /// <summary>The first visible icon inside <paramref name="owner"/> (or the owner itself), in <paramref name="colour"/>: see <see cref="AssertIconColour"/>.</summary>
     private static void AssertIcon(ShellDriver app, Screenshot picture, Visual owner, Color colour, string what)
     {
-        var icon = owner.GetVisualDescendants().OfType<VisualCommit.App.Controls.Icon>().First(candidate => candidate.IsEffectivelyVisible);
-        AssertContains(picture, app.BoundsOf(icon), colour, what);
+        var icon = owner as VisualCommit.App.Controls.Icon
+            ?? owner.GetVisualDescendants().OfType<VisualCommit.App.Controls.Icon>().First(candidate => candidate.IsEffectivelyVisible);
+        AssertIconColour(app, picture, icon, colour, what);
     }
+
+    /// <summary>
+    /// An icon drawn in <paramref name="colour"/> (part L's "Colours" for a mark that is not text):
+    /// its brush is the token's, and it is drawn, some pixel of its bounds lying nearer the colour
+    /// than 48 in every channel. A 12-to-18-px line icon's strokes are thinner than a pixel, so no
+    /// pixel of it need be exactly its colour (phase 5's 12-px IconAlert reached #C79036 for
+    /// #E0A23B; IconSolo #6875D4 for #7C8CFF): "contains" is not asserted for an icon, which the
+    /// report's handback names.
+    /// </summary>
+    private static void AssertIconColour(ShellDriver app, Screenshot picture, VisualCommit.App.Controls.Icon icon, Color colour, string what)
+    {
+        Assert.True((icon.Foreground as ISolidColorBrush)?.Color == colour, $"{what} is drawn with {(icon.Foreground as ISolidColorBrush)?.Color}, not {Hex(colour)}.");
+        var bounds = app.BoundsOf(icon);
+        var drawn = false;
+        for (var y = (int)Math.Floor(bounds.Top); y < (int)Math.Ceiling(bounds.Bottom) && !drawn; y++)
+        {
+            for (var x = (int)Math.Floor(bounds.Left); x < (int)Math.Ceiling(bounds.Right) && !drawn; x++)
+            {
+                var pixel = picture.PixelAt(x, y);
+                drawn = Math.Abs(pixel.R - colour.R) < IconInk && Math.Abs(pixel.G - colour.G) < IconInk && Math.Abs(pixel.B - colour.B) < IconInk;
+            }
+        }
+
+        Assert.True(drawn, $"{what} at {bounds} is not drawn: no pixel lies within {IconInk} of {Hex(colour)}.");
+    }
+
+    /// <summary>How near the colour an icon's fullest pixel lies at least (<see cref="AssertIconColour"/>).</summary>
+    private const int IconInk = 48;
 
     /// <summary>The heads <c>ls-remote origin</c> lists, by name.</summary>
     private static async Task<List<string>> RemoteHeadsAsync(TempRepo repo) =>
