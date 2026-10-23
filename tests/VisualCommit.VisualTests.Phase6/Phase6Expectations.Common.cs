@@ -160,17 +160,18 @@ public static partial class Phase6Expectations
     public const int ServerPort = AuthRemoteServer.Phase6VisualChecksPort;
 
     /// <summary>
-    /// <paramref name="text"/> with the server's port in place of 47393 (<see cref="ServerPort"/>), as
-    /// <c>Phase3Expectations.WithPort</c> does for 47391: for a text that shows a server's URL (W6's
-    /// sign-in dialog, <c>l31g</c>'s) in a run whose server fell back to a free port
-    /// (<see cref="AuthRemoteServer.PortWasTaken"/>), which the report's notes then name (D97,
-    /// design 17.2).
+    /// <paramref name="text"/> with the server's port in place of <paramref name="from"/> (47393,
+    /// <see cref="ServerPort"/>, unless given), as <c>Phase3Expectations.WithPort</c> does for 47391:
+    /// for a text that shows a server's URL (W6's sign-in dialog; <c>l31g</c>'s, written with part
+    /// L's 47394, <see cref="AuthRemoteServer.Phase6LookVisualChecksPort"/>, as <paramref name="from"/>)
+    /// in a run whose server fell back to a free port (<see cref="AuthRemoteServer.PortWasTaken"/>),
+    /// which the report's notes then name (D97, design 17.2).
     /// </summary>
-    public static string WithPort(string text, int port)
+    public static string WithPort(string text, int port, int from = ServerPort)
     {
         ArgumentNullException.ThrowIfNull(text);
         return text.Replace(
-            ServerPort.ToString(CultureInfo.InvariantCulture),
+            from.ToString(CultureInfo.InvariantCulture),
             port.ToString(CultureInfo.InvariantCulture),
             StringComparison.Ordinal);
     }

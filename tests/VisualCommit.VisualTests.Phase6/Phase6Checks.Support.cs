@@ -1489,6 +1489,51 @@ public abstract partial class Phase6Checks
         return app.WaitForStatusReadAsync(staged, unstaged, mark, until, OutsideChangeTimeout);
     }
 
+    /// <summary>
+    /// What the clone form shows for <paramref name="url"/>'s failed clone (part L's L32 step 2):
+    /// <c>git clone --progress -- {url} cloned</c> run in <paramref name="parent"/> by the tests' git,
+    /// before the app starts, in the session's git environment the app's calls get
+    /// (<see cref="GitIsolation.SessionGitEnvironment"/> of <paramref name="dataDirectory"/>); it must
+    /// fail and leave no folder <c>cloned</c>; then <c>GitOutputCleaner.Clean(standardError,
+    /// standardOutput)</c>, the app's own cleaning (<c>GitRepository.Clone.cs</c>), trimmed as
+    /// <c>WelcomeViewModel</c> trims it. Phase 1's <c>GitCloneErrorAsync</c> gives only the first
+    /// <c>fatal:</c> line; this gives the whole text, so it holds on every git.
+    /// </summary>
+    protected static async Task<string> CloneErrorTextAsync(string url, string parent, string dataDirectory)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(url);
+        ArgumentException.ThrowIfNullOrEmpty(parent);
+        ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
+        var git = VisualCommit.Git.GitLocator.FindExecutable(VisualCommit.Git.GitSearchContext.FromSystem())
+            ?? throw new InvalidOperationException("Git was not found on this machine.");
+        var result = await new VisualCommit.Git.GitRunner(git).RunAsync(
+            new GitCommand("clone", "--progress", "--", url, "cloned") { WorkingDirectory = parent, Environment = GitIsolation.SessionGitEnvironment(dataDirectory) },
+            TestContext.Current.CancellationToken);
+        Assert.False(result.Succeeded, $"The clone of {url} succeeded.");
+        Assert.False(Directory.Exists(Path.Combine(parent, "cloned")), "The failed clone left a folder cloned.");
+        return VisualCommit.Core.Operations.GitOutputCleaner.Clean(result.StandardError, result.StandardOutput).Trim();
+    }
+
+    /// <summary>
+    /// Phase 1's <c>TypeCloneFormAsync</c> (part L's L32 step 2): once <c>CloneUrlBox</c> has the
+    /// keyboard focus, <paramref name="url"/> typed into it, <paramref name="parent"/> into
+    /// <c>CloneParentBox</c>, and <paramref name="name"/> over <c>CloneNameBox</c>'s text (selected
+    /// first with the platform's command modifier and A).
+    /// </summary>
+    protected static async Task TypeCloneFormAsync(ShellDriver app, string url, string parent, string name)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        await app.WaitForAsync(() => app.Find<TextBox>("CloneUrlBox").IsFocused, "the URL field to have the focus");
+        app.Type(url);
+        app.Click(app.Find<TextBox>("CloneParentBox"));
+        app.Type(parent);
+        app.Click(app.Find<TextBox>("CloneNameBox"));
+        app.PressKey(
+            Avalonia.Input.Key.A,
+            app.CommandModifier == Avalonia.Input.KeyModifiers.Meta ? Avalonia.Input.RawInputModifiers.Meta : Avalonia.Input.RawInputModifiers.Control);
+        app.Type(name);
+    }
+
     /// <summary>The working tree's folder name: the tab's and the repository's name.</summary>
     protected static string NameOf(TempRepo repo)
     {
