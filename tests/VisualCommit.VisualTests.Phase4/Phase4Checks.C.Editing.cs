@@ -211,7 +211,7 @@ public sealed partial class Phase4ChecksC
         Assert.Equal(PartC2.Working, Graph(app).WorkingRowText);
         C14To17.AssertEmptyLists(app, unstagedEmpty: true, stagedEmpty: false);
         Assert.Equal(["M notes.txt"], C14To17.FileRows(app, "StagedFileList"));
-        C14To17.AssertCommitButton(app, PartC2.Commit1File, enabled: true);
+        C14To17.AssertCommitButton(app, PartC2.Commit1File, enabled: true, PartC2.Commit1File + " (Ctrl+Enter)");
         AssertStatus(app, "Ready");
 
         // Step 11: Continue with markers staged asks first; Cancel commits nothing.

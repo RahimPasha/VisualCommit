@@ -503,8 +503,9 @@ public partial class RepositoryMenusTests
 
     /// <summary>
     /// The open menu shows each label whole (none cut, none clipped) and is as wide as its longest
-    /// label needs, between the narrowest and the widest menu (4a); <paramref name="longest"/> is
-    /// its longest label.
+    /// label needs, a keyed item's label with 24 and its key (docs/phase-6-design.md 6.7), between
+    /// the narrowest and the widest menu (4a); <paramref name="longest"/> is the label of the item
+    /// that needs the most.
     /// </summary>
     private static void AssertWholeLabels(ShellDriver app, string longest)
     {
@@ -518,7 +519,12 @@ public partial class RepositoryMenusTests
             Assert.Null(ToolTip.GetTip(label));
         }
 
-        var widest = labels.MaxBy(NaturalWidth)!;
+        // A keyed item needs its label, 24 and its key (docs/phase-6-design.md 6.7).
+        static double Need(TextBlock label) =>
+            NaturalWidth(label) + (label.Parent is Grid grid && grid.Children.OfType<TextBlock>().FirstOrDefault(part => part.Name == MenuLayer.KeyName) is { IsVisible: true } key
+                ? MenuLayer.KeyGap + NaturalWidth(key)
+                : 0);
+        var widest = labels.MaxBy(Need)!;
         Assert.Equal(longest, widest.Text);
         Assert.InRange(menu.Bounds.Width, MenuLayer.MinMenuWidth, MenuLayer.MaxMenuWidth - 1);
 

@@ -113,10 +113,10 @@ public sealed partial class Phase5ChecksA : Phase5Checks
 
         // Step 5: Undo's tooltip names the commit; resting runs nothing.
         undo = ToolbarButton(app, ShellDriver.UndoButtonId);
-        Assert.Equal(PartA.UndoCommit, await app.RestPointerOnAsync(undo));
+        Assert.Equal(PartA.UndoCommitToolTip(meta), await app.RestPointerOnAsync(undo));
         pointer = app.BoundsOf(undo).Center;
         Shot(app, PartA.A1UndoTooltip, keepPointer: true);
-        AssertTipBelowPointer(app, PartA.UndoCommit, pointer, app.BoundsOf(undo).Bottom);
+        AssertTipBelowPointer(app, PartA.UndoCommitToolTip(meta), pointer, app.BoundsOf(undo).Bottom);
         app.MoveToNeutral();
         Assert.Equal(PartA.DescribeTheLinesSha, await repo.HeadAsync());
         Assert.DoesNotContain(app.Session.Operations.Snapshot(), record => record.Title == PartA.UndoCommit);

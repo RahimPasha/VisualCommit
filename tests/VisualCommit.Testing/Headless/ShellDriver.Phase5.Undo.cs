@@ -111,9 +111,12 @@ public sealed record UndoRedoButtons(bool UndoEnabled, string? UndoToolTip, bool
     /// <summary>T0: Undo disabled with <c>Nothing to undo</c>, Redo disabled with <c>Nothing to redo</c>.</summary>
     public static UndoRedoButtons Nothing { get; } = new(false, "Nothing to undo", false, "Nothing to redo");
 
-    /// <summary>T+ x: Undo enabled with <c>Undo x</c>; Redo disabled with <c>Nothing to redo</c>.</summary>
-    public static UndoRedoButtons CanUndo(string text) => new(true, $"Undo {text}", false, "Nothing to redo");
+    /// <summary>
+    /// T+ x: Undo enabled with <c>Undo x (Ctrl+Z)</c>, its key since phase 6 (docs/phase-6-design.md
+    /// 6.8, 16.1); Redo disabled with <c>Nothing to redo</c>.
+    /// </summary>
+    public static UndoRedoButtons CanUndo(string text) => new(true, $"Undo {text} (Ctrl+Z)", false, "Nothing to redo");
 
-    /// <summary>T− x: Undo disabled with <c>Nothing to undo</c>; Redo enabled with <c>Redo x</c>.</summary>
-    public static UndoRedoButtons CanRedo(string text) => new(false, "Nothing to undo", true, $"Redo {text}");
+    /// <summary>T− x: Undo disabled with <c>Nothing to undo</c>; Redo enabled with <c>Redo x (Ctrl+Y)</c>, its key since phase 6.</summary>
+    public static UndoRedoButtons CanRedo(string text) => new(false, "Nothing to undo", true, $"Redo {text} (Ctrl+Y)");
 }

@@ -34,6 +34,12 @@ public partial class MainWindowViewModel
     internal TabServices Services => _tabServices;
 
     /// <summary>
+    /// The worktrees' read the last opening of the palette started (5.5), with the items' rebuild
+    /// it may have led to; completed when there was none. Tests wait on it.
+    /// </summary>
+    public Task PaletteWorktreeRead { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
     /// Opens the command palette (5.2, 5.9) with <paramref name="query"/> in its box: builds the
     /// commands and the items, shows the palette, and once it has closed runs the chosen entry.
     /// The opening also reads the worktrees (5.5) and builds the items again when the other
@@ -56,10 +62,9 @@ public partial class MainWindowViewModel
             var context = repository?.MenuContext;
             palette = new CommandPaletteViewModel(commands, Commands.PaletteItems(commands, context), _paletteRuns.ToList(), query);
             _log.Debug($"{PalettePrefix()}Command palette opened");
-            if (repository is not null && context is not null)
-            {
-                _ = ReplaceItemsAfterTheWorktreesAsync(palette, repository, context.OtherWorktrees, commands);
-            }
+            PaletteWorktreeRead = repository is not null && context is not null
+                ? ReplaceItemsAfterTheWorktreesAsync(palette, repository, context.OtherWorktrees, commands)
+                : Task.CompletedTask;
         }
         catch (Exception ex)
         {

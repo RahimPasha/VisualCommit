@@ -469,13 +469,15 @@ public partial class MenuLayer : UserControl
     private static FuncDataTemplate<string> KeyedLabelTemplate(string keyText) => new(
         (label, _) =>
         {
+            // At the label's foot: the key's smaller text then sits on the label's baseline within
+            // half a pixel (Inter's descent grows with the size), where centring raised it by more.
             var key = new TextBlock
             {
                 Name = KeyName,
                 Text = keyText,
                 Margin = new Thickness(KeyGap, 0, 0, 0),
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
             };
             key.Classes.Add(KeyClass);
             AutomationProperties.SetAutomationId(key, KeyAutomationId);

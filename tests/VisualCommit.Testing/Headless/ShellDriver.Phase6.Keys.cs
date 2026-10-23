@@ -34,6 +34,47 @@ public sealed partial class ShellDriver
         PressKey(gesture.Key, Raw(gesture.KeyModifiers));
     }
 
+    /// <summary>
+    /// <see cref="PressShortcut"/>, returning whether the key press was handled once its route had
+    /// ended (the window's last bubbling handler sees it): the router consumes a key it takes.
+    /// </summary>
+    public bool PressShortcutHandled(AppCommand command, int index = 0)
+    {
+        var keys = AppShortcuts.All(command);
+        if (index < 0 || index >= keys.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index), index, $"{command} has {keys.Count} keys.");
+        }
+
+        var gesture = ShortcutKeys.ToGesture(keys[index], CommandModifier);
+        return PressKeyHandled(gesture.Key, Raw(gesture.KeyModifiers));
+    }
+
+    /// <summary><see cref="PressKey"/>, returning whether the key press was handled once its route had ended.</summary>
+    public bool PressKeyHandled(Key key, RawInputModifiers modifiers = RawInputModifiers.None)
+    {
+        bool? handled = null;
+        void Record(object? sender, KeyEventArgs e)
+        {
+            if (e.Key == key)
+            {
+                handled = e.Handled;
+            }
+        }
+
+        Window.AddHandler(InputElement.KeyDownEvent, Record, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+        try
+        {
+            PressKey(key, modifiers);
+        }
+        finally
+        {
+            Window.RemoveHandler(InputElement.KeyDownEvent, Record);
+        }
+
+        return handled ?? throw new InvalidOperationException($"The window saw no key press of {key}.");
+    }
+
     /// <summary>Ctrl+Tab, or with <paramref name="shift"/> Ctrl+Shift+Tab: the next or previous tab, with Control on every platform (6.5).</summary>
     public void PressCtrlTab(bool shift = false) => PressKey(Key.Tab, shift ? RawInputModifiers.Control | RawInputModifiers.Shift : RawInputModifiers.Control);
 
