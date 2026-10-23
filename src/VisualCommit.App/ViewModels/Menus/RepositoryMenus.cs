@@ -225,7 +225,10 @@ public static partial class RepositoryMenus
         MenuItem? forcePush = null;
         if (!branch.HasLocalUpstream)
         {
-            var pushReason = context.HasRemotes ? null : ToolbarViewModel.AddRemoteText;
+            // An upstream that is no branch on its remote (R4, docs/phase-6-design.md 10.5): git
+            // would push to that ref, a pull request's head.
+            var notABranch = ToolbarViewModel.UpstreamNotABranchReason(branch);
+            var pushReason = context.HasRemotes ? notABranch : ToolbarViewModel.AddRemoteText;
             push = Item(actions, hasRemoteUpstream ? PushTo(name, upstream!) : PushWithDialog(name), () => actions.PushBranchAsync(branchRef), pushReason, command: isCurrent ? AppCommand.Push : null);
             if (hasRemoteUpstream)
             {
@@ -233,7 +236,7 @@ public static partial class RepositoryMenus
                     actions,
                     ForcePushLabel(name),
                     () => actions.ForcePushAsync(branchRef),
-                    branch.UpstreamGone ? NoLongerExistsPushNormally(upstream!) : pushReason,
+                    branch.UpstreamGone && notABranch is null ? NoLongerExistsPushNormally(upstream!) : pushReason,
                     isDestructive: true);
             }
         }
@@ -309,7 +312,7 @@ public static partial class RepositoryMenus
         // The deletion names the branch on its remote; any other ref keeps phase 5's label.
         var (deleted, remote) = source is { IsBranch: true, Branch: { } onRemote, Remote: { } mapped }
             ? (onRemote, mapped)
-            : (NameOnItsRemote(branch), branch.RemoteName ?? string.Empty);
+            : (RemoteBranchNames.WithoutRemote(branch.Name, branch.RemoteName), branch.RemoteName ?? string.Empty);
 
         return Build(
             Header(name),
@@ -863,19 +866,6 @@ public static partial class RepositoryMenus
         }
 
         return fullRef;
-    }
-
-    /// <summary>
-    /// A remote branch's name less <c>&lt;its remote&gt;/</c>, as phase 5 named the branch on the
-    /// remote (<c>origin/pr/1</c> → <c>pr/1</c>): the deletion's label for a ref that no branch of
-    /// one ref fills (docs/phase-6-design.md 10.4 #6).
-    /// </summary>
-    private static string NameOnItsRemote(GitRef remoteBranch)
-    {
-        var prefix = remoteBranch.RemoteName + "/";
-        return remoteBranch.RemoteName is not null && remoteBranch.Name.StartsWith(prefix, StringComparison.Ordinal)
-            ? remoteBranch.Name[prefix.Length..]
-            : remoteBranch.Name;
     }
 
     private static bool IsCurrent(RepositoryMenuContext context, GitRef branch) =>

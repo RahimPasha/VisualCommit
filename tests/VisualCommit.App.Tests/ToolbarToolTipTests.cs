@@ -52,7 +52,14 @@ public class ToolbarToolTipTests
         var pr = new GitRef("refs/heads/pr/7", "pr/7", RefKind.LocalBranch, Main, Upstream: "upstream/pr/7", IsHead: true, UpstreamRef: "refs/remotes/upstream/pr/7", UpstreamRemote: "upstream", UpstreamRemoteRef: "refs/pull/7/head");
         using var tracking = await StartAsync(new RepoRefs(new HeadState("pr/7", Main), [pr], [], ["upstream"]), WorkingTreeStatus.Clean);
         Assert.Equal("Pull from upstream/pr/7 (Ctrl+Shift+L)", tracking.Toolbar.PullToolTip);
-        Assert.Equal("Push pr/7 to upstream/pr/7 (Ctrl+Shift+K)", tracking.Toolbar.PushToolTip);
+
+        // Its Push is disabled: refs/pull/7/head is no branch (R4); its reason names the upstream so too.
+        Assert.Equal((false, "upstream/pr/7 is refs/pull/7/head on upstream, not a branch"), (tracking.Toolbar.CanPush, tracking.Toolbar.PushToolTip));
+
+        // A renamed branch's Push names it by its tracking ref (fork's main fetched into fork/up/main).
+        var forked = new GitRef("refs/heads/forked", "forked", RefKind.LocalBranch, Main, Upstream: "fork/up/main", IsHead: true, UpstreamRef: "refs/remotes/fork/up/main", UpstreamRemote: "fork", UpstreamRemoteRef: "refs/heads/main");
+        using var renamed = await StartAsync(new RepoRefs(new HeadState("forked", Main), [forked], [], ["fork"]), WorkingTreeStatus.Clean);
+        Assert.Equal("Push forked to fork/up/main (Ctrl+Shift+K)", renamed.Toolbar.PushToolTip);
 
         var topic = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, Main, IsHead: true);
         using var untracked = await StartAsync(new RepoRefs(new HeadState("topic", Main), [topic], [], ["origin"]), WorkingTreeStatus.Clean);

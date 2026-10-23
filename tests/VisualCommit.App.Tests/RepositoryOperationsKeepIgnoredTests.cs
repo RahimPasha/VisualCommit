@@ -511,6 +511,59 @@ public class RepositoryOperationsKeepIgnoredTests
         }
     }
 
+    public static TheoryData<string> RenamedDirectoryOperations => ["merge", "cherry-pick", "rebase", "apply"];
+
+    [Theory]
+    [MemberData(nameof(RenamedDirectoryOperations))]
+    public async Task An_ignored_file_a_directory_rename_would_write_over_is_refused_before_git(string operation)
+    {
+        // The phase's review: ren renames dir to newdir, main adds dir/new.txt, and an ignored
+        // newdir/new.txt is on disk; git's directory-rename detection writes main's file there
+        // ("CONFLICT (file location)", Git 2.36, 2.55 and 2.56; a stash apply on 2.55 and 2.56).
+        using var repo = await TempRepo.CreateAsync("renamed-directory");
+        static string Lines(string name) => string.Concat(Enumerable.Range(1, 8).Select(i => $"{name} line {i}\n"));
+        repo.WriteFile(".gitignore", "/newdir/new.txt\n").WriteFile("dir/a.txt", Lines("a")).WriteFile("dir/b.txt", Lines("b")).WriteFile("dir/c.txt", Lines("c"));
+        var root = await repo.CommitAsync("base");
+        await repo.GitAsync("switch", "--quiet", "--create", "ren", root);
+        await repo.GitAsync("mv", "dir", "newdir");
+        var ren = await repo.CommitAsync("Rename dir");
+        await repo.DetachAsync(root);
+        await repo.GitAsync("mv", "dir", "newdir");
+        var stash = await repo.StashAsync("Rename dir");
+        await repo.CheckoutAsync("main");
+        await repo.CommitFileAsync("dir/new.txt", Lines("new"), "Add dir/new.txt");
+        repo.WriteFile("newdir/new.txt", Ignored.SecretLocal);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var before = await repo.ExactStateAsync();
+        var mark = app.Calls.Snapshot().Count;
+
+        var (title, summary) = operation switch
+        {
+            "merge" => ("Merge failed", "1 ignored file is in the way of the merge: newdir/new.txt. Move it away first."),
+            "cherry-pick" => ("Cherry-pick failed", "1 ignored file is in the way of the cherry-pick: newdir/new.txt. Move it away first."),
+            "rebase" => ("Rebase failed", "1 ignored file is in the way of the rebase: newdir/new.txt. Move it away first."),
+            _ => ("Applying the stash failed", "1 ignored file is in the way of applying the stash: newdir/new.txt. Move it away first."),
+        };
+        await (operation switch
+        {
+            "merge" => app.Operations.MergeAsync("refs/heads/ren", MergeMode.Default),
+            "cherry-pick" => app.Operations.CherryPickAsync(ren),
+            "rebase" => app.Operations.RebaseAsync(new RebaseTarget(ren, "ren")),
+            _ => app.Operations.ApplyStashAsync(stash),
+        });
+
+        var dialog = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal((title, summary), (dialog.Title, dialog.Summary));
+        Assert.False(dialog.HasOutput || dialog.HasCommand || dialog.HasExtraAction);
+        var calls = OperationCalls(app, mark);
+        Assert.Contains(calls, call => call.CommandText.StartsWith("git diff-tree -r -z -M --name-status ", StringComparison.Ordinal));
+        AssertNoWrite(calls);
+        Assert.Equal(before, await repo.ExactStateAsync());
+        Assert.Equal(Ignored.SecretLocal, Read(repo, "newdir/new.txt"));
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Empty(app.Repository.UndoHistory.Entries);
+    }
+
     [Fact]
     public async Task A_list_of_picks_or_reverts_is_checked_as_git_gets_it_and_names_every_file_in_the_way()
     {

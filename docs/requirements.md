@@ -37,19 +37,22 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | C9 | Stash and tags | Stash, apply, pop, drop; create, delete and push tags |
 | C10 | Conflict resolution | Conflicted-file list; built-in three-pane resolver (pick ours, theirs or both per hunk, edit the result); take a whole file from one side; continue or abort |
 | C11 | Remote sign-in | HTTPS through Git Credential Manager; SSH keys; prompts shown as in-app dialogs |
-| C12 | Protect uncommitted changes | An operation that could lose uncommitted changes does not start and says why; checking out another commit on the same branch stashes them automatically, and the stash shows in the graph as a hollow circle joined to the commit it was taken on (D138). Phase 5, as D153 settles it. From phase 6 every checkout also keeps ignored files by default (D193) |
+| C12 | Protect uncommitted changes | An operation that could lose uncommitted changes does not start and says why; checking out another commit on the same branch stashes them automatically, and the stash shows in the graph as a hollow circle joined to the commit it was taken on (D138). Phase 5, as D153 settles it. From phase 6 every checkout, merge, rebase, cherry-pick, revert and stash apply or pop also keeps ignored files by default, the hard reset aside (D193, D196) |
 
 ## Main window layout
 
 | Region | Position | Contents |
 |---|---|---|
-| Repo tabs | Top edge | One tab per open repo, plus a button to open, clone or init another |
-| Toolbar | Under the tabs | Undo, redo, fetch, pull, push, branch, stash, pop, search, theme switch |
+| Repo tabs | Top edge | One tab per open repo or workspace dashboard, the dashboards first, plus a button to open, clone or init another |
+| Toolbar | Under the tabs | Undo, redo, fetch, pull, push, branch, stash, pop, settings, search, theme switch |
 | Left panel | Left, resizable, about 260 wide | Sections for local branches, remotes, pull requests, tags, stashes; filter box on top |
 | Commit graph | Centre, takes the remaining width | Columns: branch and tag labels, graph, message, author, date, SHA. The working-changes row sits on top |
 | Right panel | Right, resizable, about 400 wide | Commit details for the selected commit, or the stage-and-commit panel when the working-changes row is selected |
 | Diff view | Replaces the commit graph while a file is open | The file's diff, with a close button that returns to the graph |
 | Status bar | Bottom edge | Current branch, progress of the running operation, activity-log toggle |
+
+On a workspace dashboard's tab the dashboard takes the place of the panels and the graph, and the status
+bar's branch part shows the workspace's name (D187, D188).
 
 Dark is the default theme. Colours, icons and styling are VisualCommit's own, not GitKraken's.
 
@@ -116,7 +119,7 @@ commits) must still open and work normally.
 | Q2 | Responsive: the UI never freezes during a git operation; long operations show progress and can be cancelled |
 | Q3 | Safe: destructive actions (hard reset, discard, force-push, branch delete) ask for confirmation and save a backup first, so they can be undone |
 | Q4 | In sync: a file watcher refreshes the UI when the repo changes from a terminal or editor |
-| Q5 | Compatible: behaviour matches command-line git; existing config, hooks and credential helpers work unchanged. One deliberate exception: checkouts keep ignored files by default, which a setting turns off (D193) |
+| Q5 | Compatible: behaviour matches command-line git; existing config, hooks and credential helpers work unchanged. One deliberate exception: operations that would overwrite or delete an ignored file keep it by default, which a setting turns off (D193, D196) |
 | Q6 | Consistent: same features and look on Windows, macOS and Linux |
 
 ## Public-release requirements

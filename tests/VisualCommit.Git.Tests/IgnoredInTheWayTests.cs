@@ -664,7 +664,195 @@ public class IgnoredInTheWayTests
         Assert.Equal(["check-ignore"], (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfStashAsync(stash, TestCancelled))).Calls.Select(call => Kind(call.CommandText)));
     }
 
-    /// <summary>What a recorded read is, by its command's first words: <c>diff-tree --stdin</c>, <c>diff-tree --diff-filter=A</c>, <c>merge-base --all</c>, …</summary>
+    // ---- Directory renames (the phase's review; DirectoryRenames) ------------------------------------
+
+    /// <summary>The directory-rename shapes, built once and copied per test.</summary>
+    private static readonly Lazy<Task<RenameShapes>> RenameTemplate = new(BuildRenamesAsync);
+
+    /// <summary>
+    /// The lab's shapes (derived with Git 2.36, 2.55 and 2.56, each of which writes the file named
+    /// over the ignored one, but for a stash apply on 2.36, which writes beside it): <c>base</c>
+    /// (README, <c>dir/a.txt</c>, <c>dir/b.txt</c>, <c>dir/c.txt</c> of eight lines each, so that
+    /// renames pair, and a <c>.gitignore</c> of <c>/newdir/new.txt</c>, <c>/new.txt</c> and
+    /// <c>/dir/new2.txt</c>); <c>ren</c> renames <c>dir</c> to <c>newdir</c>; <c>main</c> adds
+    /// <c>dir/new.txt</c>; <c>flat</c> moves <c>dir</c>'s files to the root; <c>ren2</c> adds
+    /// <c>newdir/new2.txt</c> after <c>ren</c>; <c>ahead</c> follows <c>main</c>, renames
+    /// <c>dir</c>'s three to <c>newdir</c> and deletes <c>dir/new.txt</c>; <c>side</c> adds
+    /// <c>docs.txt</c> at the root, no rename. On <c>main</c>; nothing ignored on disk.
+    /// </summary>
+    private static async Task<RenameShapes> BuildRenamesAsync()
+    {
+        static string Lines(string name) => string.Concat(Enumerable.Range(1, 8).Select(i => $"{name} line {i}\n"));
+        var repo = await TempRepo.CreateAsync("renames");
+        repo.WriteFile("README", "base\n").WriteFile(".gitignore", "/newdir/new.txt\n/new.txt\n/dir/new2.txt\n")
+            .WriteFile("dir/a.txt", Lines("a")).WriteFile("dir/b.txt", Lines("b")).WriteFile("dir/c.txt", Lines("c"));
+        var root = await repo.CommitAsync("base");
+
+        await repo.GitAsync("switch", "--quiet", "--create", "ren", root);
+        await repo.GitAsync("mv", "dir", "newdir");
+        var ren = await repo.CommitAsync("Rename dir");
+        var ren2 = await repo.WriteFile("newdir/new2.txt", Lines("n2")).CommitAsync("Add newdir/new2.txt");
+        await repo.GitAsync("branch", "--quiet", "--force", "ren2", ren2);
+        await repo.GitAsync("reset", "--quiet", "--hard", ren);
+
+        await repo.GitAsync("switch", "--quiet", "--create", "flat", root);
+        foreach (var name in new[] { "a.txt", "b.txt", "c.txt" })
+        {
+            await repo.GitAsync("mv", "dir/" + name, name);
+        }
+
+        await repo.CommitAsync("Flatten dir");
+        await repo.GitAsync("switch", "--quiet", "--create", "side", root);
+        await repo.CommitFileAsync("docs.txt", "docs\n", "Add docs");
+
+        await repo.GitAsync("switch", "--quiet", "main");
+        await repo.GitAsync("reset", "--quiet", "--hard", root);
+        var main = await repo.CommitFileAsync("dir/new.txt", Lines("new"), "Add dir/new.txt");
+        await repo.GitAsync("switch", "--quiet", "--create", "ahead", main);
+        Directory.CreateDirectory(Path.Combine(repo.Path, "newdir"));
+        await repo.GitAsync("mv", "dir/a.txt", "dir/b.txt", "dir/c.txt", "newdir");
+        await repo.GitAsync("rm", "--quiet", "dir/new.txt");
+        await repo.CommitAsync("Rename dir and drop new.txt");
+        await repo.GitAsync("switch", "--quiet", "main");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => repo.Dispose();
+        return new RenameShapes(repo, root, ren, ren2, main);
+    }
+
+    private sealed record RenameShapes(TempRepo Repo, string Base, string Ren, string Ren2, string Main);
+
+    private static async Task<(TempRepo Repo, RenameShapes Commits)> CopyRenamesAsync()
+    {
+        var shapes = await HangWatchdogAttribute.SharedPreparationAsync("the directory-rename template", RenameTemplate.Value);
+        return (await shapes.Repo.CopyAsync(), shapes);
+    }
+
+    [Fact]
+    public async Task A_merge_finds_an_ignored_file_where_a_directory_rename_moves_the_other_sides_new_file()
+    {
+        // ren renames dir to newdir, main adds dir/new.txt: git writes newdir/new.txt either way,
+        // "CONFLICT (file location)", over the ignored file (status AU, or UA merged into ren).
+        var (repo, _) = await CopyRenamesAsync();
+        using var __ = repo;
+        repo.WriteFile("newdir/new.txt", Local);
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+
+        var (found, made) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/ren", TestCancelled));
+
+        Assert.Equal(["newdir/new.txt"], found);
+
+        // Nothing else in the way (the added newdir/a.txt and the rest are not on disk); then the
+        // renames, check-ignore, and whether either side is the other's ancestor (neither).
+        Assert.Equal(["diff-tree --diff-filter=A", "diff-tree -M", "check-ignore", "merge-base --is-ancestor", "merge-base --is-ancestor"], made.Select(call => Kind(call.CommandText)));
+        Assert.Equal("git diff-tree -r -z -M --name-status HEAD refs/heads/ren --", made[1].CommandText);
+
+        // The other way: ren checked out, main merged into it.
+        await repo.GitAsync("switch", "--quiet", "ren");
+        Assert.Equal(["newdir/new.txt"], await repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/main", TestCancelled));
+        Assert.Equal(Local, File.ReadAllText(Path.Combine(repo.Path, "newdir", "new.txt")));
+    }
+
+    [Fact]
+    public async Task A_merge_finds_the_ignored_file_a_directory_renamed_into_the_root_moves_onto()
+    {
+        // flat moves dir's files to the root: git writes main's dir/new.txt as new.txt.
+        var (repo, _) = await CopyRenamesAsync();
+        using var __ = repo;
+        repo.WriteFile("new.txt", Local);
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(["new.txt"], await repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/flat", TestCancelled));
+    }
+
+    [Fact]
+    public async Task A_fast_forward_moves_nothing_where_the_renames_alone_would_say_so()
+    {
+        // ahead follows main, renames dir's three files and deletes dir/new.txt: compared with
+        // HEAD that reads as dir renamed with new.txt left behind, but git only checks ahead out.
+        var (repo, _) = await CopyRenamesAsync();
+        using var __ = repo;
+        repo.WriteFile("newdir/new.txt", Local);
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+
+        var (found, made) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/ahead", TestCancelled));
+
+        Assert.Empty(found);
+        Assert.Equal(["diff-tree --diff-filter=A", "diff-tree -M", "check-ignore", "merge-base --is-ancestor"], made.Select(call => Kind(call.CommandText)));
+    }
+
+    [Fact]
+    public async Task A_pick_or_a_revert_finds_an_ignored_file_where_a_directory_rename_moves_a_new_file()
+    {
+        var (repo, c) = await CopyRenamesAsync();
+        using var __ = repo;
+        repo.WriteFile("newdir/new.txt", Local);
+        var repository = await OpenAsync(repo);
+
+        // On main, the pick of the rename moves main's dir/new.txt; on ren, the pick of main's
+        // addition lands in newdir.
+        Assert.Equal(["newdir/new.txt"], await repository.FindIgnoredInTheWayOfCommitsAsync([c.Ren], revert: false, cancellationToken: TestCancelled));
+        await repo.GitAsync("switch", "--quiet", "ren");
+        Assert.Equal(["newdir/new.txt"], await repository.FindIgnoredInTheWayOfCommitsAsync([c.Main], revert: false, cancellationToken: TestCancelled));
+
+        // On ren2, the revert of the rename moves ren2's newdir/new2.txt back into dir.
+        await repo.GitAsync("switch", "--quiet", "ren2");
+        repo.WriteFile("dir/new2.txt", Local);
+        Assert.Equal(["dir/new2.txt"], await repository.FindIgnoredInTheWayOfCommitsAsync([c.Ren], revert: true, cancellationToken: TestCancelled));
+
+        // A root commit's revert in the list applies the empty tree, which moves nothing.
+        Assert.Equal(["dir/new2.txt"], await repository.FindIgnoredInTheWayOfCommitsAsync([c.Ren, c.Base], revert: true, cancellationToken: TestCancelled));
+    }
+
+    [Fact]
+    public async Task A_rebase_finds_an_ignored_file_where_a_directory_rename_moves_a_new_file()
+    {
+        var (repo, c) = await CopyRenamesAsync();
+        using var __ = repo;
+        repo.WriteFile("newdir/new.txt", Local);
+        var repository = await OpenAsync(repo);
+
+        // main onto ren: the upstream's rename moves the replayed dir/new.txt; ren onto main: the
+        // replayed rename moves the upstream's.
+        Assert.Equal(["newdir/new.txt"], await repository.FindIgnoredInTheWayOfRebaseAsync("HEAD", c.Ren, TestCancelled));
+        Assert.Equal(["newdir/new.txt"], await repository.FindIgnoredInTheWayOfRebaseAsync("refs/heads/ren", c.Main, TestCancelled));
+    }
+
+    [Fact]
+    public async Task A_stash_that_renames_a_directory_finds_where_the_new_file_of_HEAD_lands()
+    {
+        // The rename stashed on base, applied on main: Git 2.55 and 2.56 write newdir/new.txt over
+        // the ignored file (2.36 writes it beside, as newdir/new.txt~Updated upstream).
+        var (repo, c) = await CopyRenamesAsync();
+        using var __ = repo;
+        await repo.DetachAsync(c.Base);
+        await repo.GitAsync("mv", "dir", "newdir");
+        var stash = await repo.StashAsync("rename");
+        await repo.CheckoutAsync("main");
+        repo.WriteFile("newdir/new.txt", Local);
+        var repository = await OpenAsync(repo);
+
+        Assert.Equal(["newdir/new.txt"], await repository.FindIgnoredInTheWayOfStashAsync(stash, TestCancelled));
+    }
+
+    [Fact]
+    public async Task Without_a_rename_that_could_move_a_file_onto_the_disk_the_reads_make_their_usual_calls()
+    {
+        // side adds docs.txt at the root, which no top-level folder holds: no directory rename can
+        // bring a file onto the disk, so no read with renames, for the merge and the pick alike.
+        var (repo, _) = await CopyRenamesAsync();
+        using var __ = repo;
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+        var side = (await repo.RefTargetAsync("refs/heads/side"))!;
+
+        var (merge, mergeCalls) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/side", TestCancelled));
+        var (pick, pickCalls) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfCommitsAsync([side], revert: false, cancellationToken: TestCancelled));
+
+        Assert.Empty(merge);
+        Assert.Empty(pick);
+        Assert.Equal(["diff-tree --diff-filter=A"], mergeCalls.Select(call => Kind(call.CommandText)));
+        Assert.Equal(["diff-tree --stdin"], pickCalls.Select(call => Kind(call.CommandText)));
+    }
+
+    /// <summary>What a recorded read is, by its command's first words: <c>diff-tree --stdin</c>, <c>diff-tree --diff-filter=A</c>, <c>diff-tree -M</c>, <c>merge-base --all</c>, …</summary>
     private static string Kind(string commandText)
     {
         var words = commandText.Split(' ');
@@ -672,6 +860,7 @@ public class IgnoredInTheWayTests
         return words[1] switch
         {
             "diff-tree" when words.Contains("--stdin") => "diff-tree --stdin",
+            "diff-tree" when words.Contains("-M") => "diff-tree -M",
             "diff-tree" => "diff-tree " + words.Single(word => word.StartsWith("--diff-filter=", StringComparison.Ordinal)),
             "merge-base" => "merge-base " + words[2],
             var command => command,

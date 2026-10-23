@@ -36,6 +36,16 @@ public static partial class OperationTexts
     public static string PushWouldStopFetch(string branch, string target, string trackingName, string remote) =>
         $"Pushing {branch} to {target} would stop every fetch of {remote}: {MenuTexts.FetchedFromSeveralRefs(trackingName, remote)}.";
 
+    /// <summary>
+    /// The summary of a push or force push of a branch whose upstream is no branch on its remote,
+    /// refused before git (R4 as a sentence): under GitHub's pull-request line alone a branch
+    /// checked out from <c>origin/pr/1</c> tracks <c>refs/pull/1/head</c>, and git would push to
+    /// that ref (<c>git push origin refs/heads/pr/1:refs/pull/1/head</c> exits 0 on a bare server,
+    /// while git's own <c>git push</c> refuses).
+    /// </summary>
+    public static string PushToNotABranch(string trackingName, string remoteRef, string remote) =>
+        $"{MenuTexts.NotABranch(trackingName, remoteRef, remote)}.";
+
     public static partial class MenuTexts
     {
         /// <summary>R1: two or more remotes fetch the tracking ref (git's "not tracking: ambiguous information").</summary>

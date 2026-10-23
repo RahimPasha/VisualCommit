@@ -4,7 +4,7 @@ namespace VisualCommit.Core.Git;
 /// Git's own settings as the settings screen reads and writes them (D190, docs/phase-6-design.md
 /// section 8): the identity, the pull mode and the merge tool, kept in git's configuration, never
 /// in the app's files. Built in the Git project over the session's runner; one instance per
-/// session (<c>TabServices.GitSettings</c>). Work package WP2 builds it.
+/// session (<c>TabServices.GitSettings</c>).
 /// </summary>
 public interface IGitConfiguration : IDisposable
 {
