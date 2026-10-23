@@ -606,10 +606,13 @@ public class RepositoryOperationsPushTests
     {
         // Remotes team and team/fork (names may hold slashes, 0.5's T): a deletion of fork/main on
         // team and one of main on team/fork both save team/fork/main, and the longest name would
-        // push to team/fork whichever it was.
+        // push to team/fork whichever it was. Git 2.55 and 2.56 refuse `git remote add team/fork`
+        // beside team ("is a subset of existing remote"), which 2.36 and 2.43 allow, so team/fork is
+        // written as the configuration an older git or a hand edit leaves.
         using var repo = await Scenarios.RenamingRefspecAsync();
         await repo.GitAsync("remote", "add", "team", "../team.git");
-        await repo.GitAsync("remote", "add", "team/fork", "../team-fork.git");
+        await repo.GitAsync("config", "remote.team/fork.url", "../team-fork.git");
+        await repo.GitAsync("config", "remote.team/fork.fetch", "+refs/heads/*:refs/remotes/team/fork/*");
         await repo.GitAsync("update-ref", $"refs/visualcommit/backup/remote-branch-{DateTime.UtcNow:yyyyMMdd'T'HHmmssfff'Z'}/team/fork/main", Parser);
         using var app = await OperationsHarness.OpenAsync(repo);
         const string Reason = "The remote this backup came from cannot be told: team/fork/main fits team/fork and team";
