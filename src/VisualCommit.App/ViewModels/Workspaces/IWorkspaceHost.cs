@@ -22,16 +22,16 @@ public interface IWorkspaceHost
 
     /// <summary>
     /// Whether the workspace's dashboard is open in a tab: the deletion's question then says
-    /// <c>Its dashboard tab closes.</c> (1.6). No dashboard by default.
+    /// <c>Its dashboard tab closes.</c> (1.6).
     /// </summary>
-    bool HasOpenDashboard(string workspaceId) => false;
+    bool HasOpenDashboard(string workspaceId);
 
     /// <summary>
     /// The working directory of the open dashboard's row whose saved folder is
     /// <paramref name="savedPath"/>, while that row's repository is open
     /// (<c>DashboardViewModel.OpenedWorkingDirectoryOf</c>, 2.10); null otherwise. 1.2's
     /// <see cref="WorkspaceMembership"/> asks it, so that a saved folder through a junction or a
-    /// link counts as the repository git reports. Null by default.
+    /// link counts as the repository git reports.
     /// </summary>
-    string? OpenedWorkingDirectoryOf(string workspaceId, string savedPath) => null;
+    string? OpenedWorkingDirectoryOf(string workspaceId, string savedPath);
 }

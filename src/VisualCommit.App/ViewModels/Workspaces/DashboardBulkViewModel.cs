@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core.Logging;
 
 namespace VisualCommit.App.ViewModels.Workspaces;
 
@@ -93,6 +94,8 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
     // IDashboardToolbar (4.10).
 
     public string WorkspaceName => _dashboard.Name;
+
+    public IAppLog Log => _dashboard.Services.Log;
 
     public bool CanFetchAll => FetchAllDisabledReason is null && !_closed;
 
@@ -288,20 +291,6 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
             : OperationTexts.NoRepositoryCanBePulled(_dashboard.Name);
     }
 
-    /// <summary>Whether a run of <paramref name="kind"/> started now could act on <paramref name="row"/>: it would, or the row is still being read.</summary>
-    private static bool WouldAct(DashboardRowViewModel row, BulkKind kind)
-    {
-        if (row.FolderState is not null || row.ErrorText is not null)
-        {
-            return false;
-        }
-
-        if (!row.HasRepository || row.Refs is not { } refs || row.Status is not { } status)
-        {
-            return true;
-        }
-
-        var states = ToolbarViewModel.StatesFor(refs, status);
-        return kind == BulkKind.Fetch ? states.Fetch.IsEnabled : states.Pull.IsEnabled;
-    }
+    /// <summary>Whether a run of <paramref name="kind"/> started now could act on <paramref name="row"/>: the run's own rule does not leave it out (it would act, or it reads the row first).</summary>
+    private static bool WouldAct(DashboardRowViewModel row, BulkKind kind) => BulkRun.Decide(row, kind) is not BulkRun.Decision.Skip;
 }

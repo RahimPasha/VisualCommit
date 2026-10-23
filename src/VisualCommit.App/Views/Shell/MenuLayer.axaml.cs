@@ -502,7 +502,7 @@ public partial class MenuLayer : UserControl
         // The label stays the header (harnesses find an item by it); the template draws it as text
         // that is cut with "…" past the widest menu, never clipped. A keyed item draws its key at
         // its right (6.7), which is also its AcceleratorKey.
-        var keyText = model.Command is { } command ? KeyTexts.Current.Of(command) : null;
+        var keyText = model.KeyText ?? (model.Command is { } command ? KeyTexts.Current.Of(command) : null);
         var item = new ContextMenuItem
         {
             Header = model.Label,

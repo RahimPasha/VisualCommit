@@ -44,7 +44,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         _dashboard = dashboard;
         _token = CancellationTokenSource.CreateLinkedTokenSource(dashboard.Lifetime);
         Path = path;
-        Name = DashboardTexts.NameOf(path);
+        Name = WorkspaceTexts.FolderName(path);
     }
 
     /// <summary>The saved folder, as <c>workspaces.json</c> holds it; a read never rewrites it. Locate… replaces it (1.10).</summary>
@@ -194,9 +194,6 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     /// <summary>The view model's status, for the row menu's <c>Cancel {title}</c> (2.7); null without one.</summary>
     public OperationStatusViewModel? OperationStatus => _status;
 
-    /// <summary>A click on <c>Details…</c> or the menu's <c>Error details…</c> (4.6): raised as the kept dialog opens.</summary>
-    public event EventHandler? DetailsRequested;
-
     /// <summary>The view model that ran the operation whose dialog the row keeps: it opens the dialog (4.6).</summary>
     private RepositoryViewModel? _keptBy;
 
@@ -258,7 +255,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             return null;
         }
 
-        var read = new DashboardRowRead();
+        var read = new DashboardRowRead(_dashboard.ReadClock);
         _read = read;
         IsReading = true;
         _ = RunReadAsync(read, _token.Token);
@@ -282,9 +279,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
     /// <summary>
     /// The registry changed for <paramref name="key"/> (3.5, 3.6): a tab registered or
-    /// unregistered, a summary adopted. The row follows the first registered tab on its worktree,
-    /// keeps its own summary while it holds it, and otherwise keeps its values, counts as never
-    /// read and waits for the dashboard's next trigger. It starts no read.
+    /// unregistered, the tab that adopted the row's summary among them. The row follows the first
+    /// registered tab on its worktree (an adopted summary: the same object, with what the row keeps
+    /// of it), keeps its own summary while it holds it, and otherwise keeps its values, counts as
+    /// never read and waits for the dashboard's next trigger. It starts no read.
     /// </summary>
     internal void OnRegistryChanged(string key)
     {
@@ -307,10 +305,18 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
         if (_key is { } own && registry.TabFor(own) is { } tab)
         {
-            if (!ReferenceEquals(tab, Repository) || _owns)
+            if (ReferenceEquals(tab, Repository) && _owns)
             {
-                // A tab adopted the row's summary (the same object: the row goes on using it), or
-                // registered first on the worktree.
+                // A tab adopted the row's summary (3.3): the same object, which the row goes on
+                // using (3.5) with what it keeps of it, a run's kept dialog included (4.6); the
+                // registry holds it for the dashboard no more, so there is nothing to release.
+                _owns = false;
+                OnPropertyChanged(nameof(FollowsTab));
+                CopyFrom(tab);
+            }
+            else if (!ReferenceEquals(tab, Repository))
+            {
+                // A tab registered first on the worktree.
                 ReleaseOwn();
                 Follow(tab);
             }
@@ -330,9 +336,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
         if (!_owns || !registry.Holds(Repository, _dashboard))
         {
-            // The tab the row followed closed with no other on the worktree (3.6), or the summary
-            // was taken away (adopted by a tab that is not registered yet): the row keeps its
-            // values, its Operation cell empties and it counts as never read.
+            // The tab the row followed closed with no other on the worktree (3.6), or the registry
+            // let the summary go: the row keeps its values, its Operation cell empties and it
+            // counts as never read. (An adoption raises no change of its own: the adopting tab's
+            // registration, above, keeps the row on the same object.)
             _owns = false;
             Detach();
             LastRead = null;
@@ -358,7 +365,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         LastRead = null;
         (Refs, Status, FolderState, ErrorText) = (null, null, null, null);
         Path = path;
-        Name = DashboardTexts.NameOf(path);
+        Name = WorkspaceTexts.FolderName(path);
         RaiseCells();
     }
 
@@ -375,7 +382,6 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             return Task.CompletedTask;
         }
 
-        DetailsRequested?.Invoke(this, EventArgs.Empty);
         return repository.Operations.ShowDeferredAsync(dialog);
     }
 
@@ -437,7 +443,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
                 if (present)
                 {
-                    counted = await ReadOwnAsync(own, token);
+                    counted = await ReadOwnAsync(own, read, token);
                     return;
                 }
 
@@ -472,7 +478,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             await _dashboard.ReadSlots.WaitAsync(token);
             try
             {
-                probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, token, exists);
+                using (read.GitCall())
+                {
+                    probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, token, exists);
+                }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -547,7 +556,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             }
 
             Own(acquired);
-            counted = await ReadOwnAsync(acquired, token);
+            counted = await ReadOwnAsync(acquired, read, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -579,9 +588,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     /// The summary read in one of the dashboard's slots: the first, or a refresh of one read before
     /// (another dashboard's included). Reads nothing, and returns false, when the row no longer owns
     /// <paramref name="own"/> once it has its slot: a tab adopted it meanwhile, and a followed row is
-    /// never read by the dashboard (2.10).
+    /// never read by the dashboard (2.10). Its git calls are <paramref name="read"/>'s: one that
+    /// runs on past the patience leaves the pass to end without the row.
     /// </summary>
-    private async Task<bool> ReadOwnAsync(RepositoryViewModel own, CancellationToken token)
+    private async Task<bool> ReadOwnAsync(RepositoryViewModel own, DashboardRowRead read, CancellationToken token)
     {
         await _dashboard.ReadSlots.WaitAsync(token);
         try
@@ -591,7 +601,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
                 return false;
             }
 
-            await (own.HasFirstRead ? own.RefreshAsync() : own.StartAsync());
+            using (read.GitCall())
+            {
+                await (own.HasFirstRead ? own.RefreshAsync() : own.StartAsync());
+            }
         }
         finally
         {
@@ -604,6 +617,48 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// A bulk run's turn for the row (4.3, D207): before its operation, the row's folder and git
+    /// folder are checked again off the UI thread, as a read's step 2 checks them, so that a nested
+    /// repository whose <c>.git</c> was deleted while the row waited in line is never fetched or
+    /// pulled as the outer one (D204: <c>git -C outer/inner</c> would find the outer). Both there,
+    /// the folder is still its repository's top (git finds its own <c>.git</c> first), with no git
+    /// call: null. Otherwise what the folder is now, by <see cref="WorkspaceFolderProbe.ProbeAsync"/>
+    /// (its open and <see cref="IGitRepository.OpenedAtTopAsync"/>; an outer repository it finds
+    /// dropped unread): for the row's own summary the row shows that folder state from now on and
+    /// lets the summary go, or, when the folder is a repository's top again
+    /// (<see cref="WorkspaceFolderState.Ready"/>, its git folder replaced), lets it go and counts as
+    /// never read, to be read anew. A followed tab's view model stays the tab's.
+    /// </summary>
+    internal async Task<WorkspaceFolderProbe?> CheckAtTurnAsync(RepositoryViewModel repository, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+        var path = Path;
+        var gitDirectory = repository.Repository.GitDirectory;
+        var exists = _dashboard.DirectoryExists;
+        if (await Task.Run(() => exists(path) && exists(gitDirectory), CancellationToken.None).WaitAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        var probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, cancellationToken, exists);
+        if (_disposed || !ReferenceEquals(Repository, repository) || !_owns)
+        {
+            return probe.State == WorkspaceFolderState.Ready ? null : probe;
+        }
+
+        if (probe.State == WorkspaceFolderState.Ready)
+        {
+            ReleaseOwn();
+            Detach();
+            LastRead = null;
+            return probe;
+        }
+
+        ShowFolderState(probe);
+        return probe;
     }
 
     /// <summary>The row still holds <paramref name="own"/> as its own summary-mode view model.</summary>
@@ -790,15 +845,39 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 /// pass's <c>{n}</c>, and whether it sits in a wait that holds nothing: a folder check (queued for
 /// the thread pool, running there, or returned and waiting for the UI thread) or the wait for a
 /// closed queue on its worktree. Its pass ends without it once only such waits have been left for
-/// the dashboard's <see cref="DashboardViewModel.CheckPatience"/>.
+/// the dashboard's <see cref="DashboardViewModel.CheckPatience"/>. A read whose git call has run
+/// for <see cref="DashboardViewModel.GitCallPatience"/> by the read clock is overdue: it holds its
+/// pass no more (it keeps its slot and ends later), so its pass ends without it at once.
 /// </summary>
-internal sealed class DashboardRowRead
+/// <param name="clock">The dashboard's read clock, which times a git call's patience.</param>
+internal sealed class DashboardRowRead(TimeProvider clock)
 {
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
     private int _waits;
+    private int _overdue;
 
     /// <summary>The read sits in a folder check or waits for a closed queue: it holds nothing.</summary>
     public bool IsWaiting => Volatile.Read(ref _waits) > 0;
+
+    /// <summary>
+    /// A git call of the read ran for <see cref="DashboardViewModel.GitCallPatience"/> by the read
+    /// clock (a share that stopped answering after its folder check): from then on the read holds
+    /// its pass no more, whatever it does next (2.10, the lead's ruling at status step 22).
+    /// </summary>
+    public bool IsOverdue => Volatile.Read(ref _overdue) != 0;
+
+    /// <summary>
+    /// A git call of the read begins, in one of the dashboard's slots: should it still run after
+    /// <see cref="DashboardViewModel.GitCallPatience"/> by the read clock, the read becomes
+    /// <see cref="IsOverdue"/> and its pass looks again. Dispose the handle when the call ends.
+    /// </summary>
+    public IDisposable GitCall()
+    {
+        var call = new GitCallPatience(this);
+        call.Start(clock);
+        return call;
+    }
 
     /// <summary>The read has ended.</summary>
     public bool IsCompleted => _completion.Task.IsCompleted;
@@ -861,5 +940,74 @@ internal sealed class DashboardRowRead
     {
         Interlocked.Decrement(ref _waits);
         Progressed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The git call's patience ran out with the call still running: on the UI thread, the read is overdue and its pass looks again.</summary>
+    private void BecomeOverdue()
+    {
+        void Mark()
+        {
+            if (Interlocked.Exchange(ref _overdue, 1) == 0 && !IsCompleted)
+            {
+                Progressed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        if (_ui is null)
+        {
+            Mark();
+        }
+        else
+        {
+            _ui.Post(_ => Mark(), null);
+        }
+    }
+
+    /// <summary>One git call's patience: a timer on the read clock, disposed when the call ends.</summary>
+    private sealed class GitCallPatience(DashboardRowRead read) : IDisposable
+    {
+        private readonly Lock _gate = new();
+        private ITimer? _timer;
+        private bool _ended;
+
+        public void Start(TimeProvider clock)
+        {
+            var timer = clock.CreateTimer(_ => Expire(), null, DashboardViewModel.GitCallPatience, Timeout.InfiniteTimeSpan);
+            lock (_gate)
+            {
+                if (_ended)
+                {
+                    timer.Dispose();
+                    return;
+                }
+
+                _timer = timer;
+            }
+        }
+
+        public void Dispose()
+        {
+            ITimer? timer;
+            lock (_gate)
+            {
+                _ended = true;
+                (timer, _timer) = (_timer, null);
+            }
+
+            timer?.Dispose();
+        }
+
+        private void Expire()
+        {
+            lock (_gate)
+            {
+                if (_ended)
+                {
+                    return;
+                }
+            }
+
+            read.BecomeOverdue();
+        }
     }
 }

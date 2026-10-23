@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Logging;
@@ -24,6 +25,36 @@ public class DashboardMenusTests
             Lines(menu));
         Assert.All(menu.Items, item => Assert.True(item.IsEnabled, item.Label));
         Assert.DoesNotContain(menu.Items, item => item.IsDestructive);
+    }
+
+    [Fact]
+    public void The_items_the_lists_own_keys_run_show_those_keys_in_each_platforms_words()
+    {
+        // 6.7 (the lead's ruling at status step 22, D192, D215): Open, Move up, Move down and
+        // Remove from workspace act on the selected row as Enter, Alt+Up, Alt+Down and Delete do;
+        // a disabled item keeps its key, as a keyed button does (6.8). Never the global KeyTexts.
+        var (row, actions) = Row();
+        var held = Ready() with { ShowsLocate = true, RemoveReason = "Wait for Fetch all to finish" };
+
+        var windows = DashboardMenus.ForRow(row, Ready(), actions, new KeyTexts(CommandKey.Ctrl));
+        var mac = DashboardMenus.ForRow(row, held, actions, new KeyTexts(CommandKey.Cmd));
+
+        Assert.Equal(
+            ["Open · Enter", "Fetch", "Pull", "Show in folder", "Copy path", "Move up · Alt+Up", "Move down · Alt+Down", "Remove from workspace · Delete"],
+            Keyed(windows));
+        Assert.Equal(
+            ["Open · Enter", "Fetch", "Pull", "Show in folder", "Copy path", "Move up · Option+Up", "Move down · Option+Down", "Locate…", "Remove from workspace · Cmd+Delete"],
+            Keyed(mac));
+        Assert.False(mac.Items.Single(item => item.Label == "Remove from workspace").IsEnabled);
+        Assert.All(windows.Items.Concat(mac.Items), item => Assert.Null(item.Command));
+
+        // The settings list names the same keys (6.11), the shown one first.
+        Assert.Equal(
+            [("Open the repository", "Enter"), ("Remove from workspace", "Cmd+Delete, Forward Delete"), ("Move the repository", "Option+Up, Option+Down")],
+            AppShortcuts.Groups(CommandKey.Cmd).Single(group => group.Title == "Dashboard").Rows.Select(entry => (entry.Action, entry.Keys)));
+        Assert.Equal(
+            [("Open the repository", "Enter"), ("Remove from workspace", "Delete"), ("Move the repository", "Alt+Up, Alt+Down")],
+            AppShortcuts.Groups(CommandKey.Ctrl).Single(group => group.Title == "Dashboard").Rows.Select(entry => (entry.Action, entry.Keys)));
     }
 
     [Fact]
@@ -200,6 +231,9 @@ public class DashboardMenusTests
     }
 
     private static string? Reason(MenuModel menu, string label) => menu.Items.Single(item => item.Label == label).DisabledReason;
+
+    /// <summary>The items as the menu draws them: the label, then its key when it has one.</summary>
+    private static List<string> Keyed(MenuModel menu) => [.. menu.Items.Select(item => item.KeyText is { } key ? $"{item.Label} · {key}" : item.Label)];
 
     private static List<string> Lines(MenuModel menu) =>
     [

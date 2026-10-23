@@ -67,10 +67,10 @@ public sealed partial class AppCommands
             // 5.4's row 12: the workspace's own edits (1.5).
             var commands = _shell.Services.WorkspaceCommands;
             var id = dashboard.WorkspaceId;
-            AddEntry(WorkspaceTexts.AddRepository, commands.AddRepositoryReason(id), () => dashboard.AddRepositoryCommand.Execute(null));
+            AddEntry(WorkspaceTexts.AddRepository, commands.AddRepositoryReason, () => dashboard.AddRepositoryCommand.Execute(null));
             AddEntry(WorkspaceTexts.AddOpenTabs, commands.AddOpenTabsReason(id), () => dashboard.AddOpenTabsCommand.Execute(null));
-            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason(id), () => Start(commands.RenameAsync(id), WorkspaceTexts.RenameWorkspace));
-            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason(id), () => Start(commands.DeleteAsync(id), WorkspaceTexts.DeleteWorkspace), destructive: true);
+            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason, () => Start(commands.RenameAsync(id), WorkspaceTexts.RenameWorkspace));
+            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason, () => Start(commands.DeleteAsync(id), WorkspaceTexts.DeleteWorkspace), destructive: true);
         }
 
         Add(AppCommand.NewTab);
@@ -277,11 +277,13 @@ public sealed partial class AppCommands
         // folder is the repository's working directory as its open dashboard reads it, when it
         // does (1.2's second rule), since the recent list and the tabs hold git's spelling, which a
         // saved folder through a link (macOS's /var for /private/var) is not; the detail stays the
-        // folder as the workspace saved it.
-        var folders = new List<(string Name, string Shown, string Path)>();
+        // folder as the workspace saved it. A workspace's folder is a repository's top or nothing
+        // (D204): one its open dashboard found in a folder state is disabled with the row's State
+        // tooltip, and one it has not read is opened only as a top (OpenRepositoryAtAsync).
+        var folders = new List<(string Name, string Shown, string Path, bool Saved, string? Reason)>();
         foreach (var recent in services.Recent.Items)
         {
-            folders.Add((recent.Name, recent.Path, recent.Path));
+            folders.Add((recent.Name, recent.Path, recent.Path, false, null));
         }
 
         var workspaces = services.Workspaces.Current.Workspaces;
@@ -292,19 +294,19 @@ public sealed partial class AppCommands
                 var path = _shell.OpenedWorkingDirectoryOf(workspace.Id, repository.Path) ?? repository.Path;
                 if (!folders.Any(folder => WorkspacePaths.Same(folder.Path, path)))
                 {
-                    folders.Add((DashboardTexts.NameOf(repository.Path), repository.Path, path));
+                    folders.Add((WorkspaceTexts.FolderName(repository.Path), repository.Path, path, true, _shell.FolderReasonOf(workspace.Id, repository.Path)));
                 }
             }
         }
 
-        foreach (var (name, shown, path) in folders)
+        foreach (var (name, shown, path, saved, reason) in folders)
         {
             if (activeFolder is not null && WorkspacePaths.Same(activeFolder, path))
             {
                 continue;
             }
 
-            entries.Add(new PaletteEntry($"Open repository {name}", shown, null, true, null, false, PaletteEntryKind.Item, order + entries.Count, () => Start(_shell.OpenRepositoryAtAsync(path), $"Open repository {name}")));
+            entries.Add(new PaletteEntry($"Open repository {name}", shown, null, reason is null, reason, false, PaletteEntryKind.Item, order + entries.Count, () => Start(_shell.OpenRepositoryAtAsync(path, savedFolder: saved), $"Open repository {name}")));
         }
 
         foreach (var workspace in workspaces)

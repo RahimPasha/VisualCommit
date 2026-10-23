@@ -120,8 +120,9 @@ public sealed class TabServices
     /// <summary>
     /// Whether a dialog that an operation of a repository opens names that repository ("In
     /// &lt;repo&gt;" under its title, docs/phase-3-design.md 4f): the window's one rule
-    /// (<see cref="MainWindowViewModel.NamesRepositoryInDialogs"/>, more than one tab has a
-    /// repository), which the window sets here when it is made. False without a window.
+    /// (<see cref="MainWindowViewModel.NamesRepositoryInDialogs"/>: a dashboard tab is open, or
+    /// more than one tab has a repository, docs/phase-6-design.md 3.8), which the window sets here
+    /// when it is made. False without a window.
     /// </summary>
     public Func<bool> NamesRepositoryInDialogs { get; set; } = static () => false;
 
@@ -165,13 +166,13 @@ public sealed class TabServices
     /// <summary>The window's slots for the rows of bulk runs (4.3).</summary>
     public BulkSlots BulkSlots { get; }
 
-    /// <summary>Git's own settings, read and written by the settings screen (8.1); null where there is none (view-model tests, and the session until work package WP2).</summary>
+    /// <summary>Git's own settings, read and written by the settings screen (8.1); null where there is none (view-model tests).</summary>
     public IGitConfiguration? GitSettings { get; }
 
     /// <summary>
-    /// What the machine has installed, as the harnesses fix it (12.9): <see cref="ToolCatalogues.Fixed"/>
-    /// in the harnesses; null for the machine's own (the settings screen, Open file and the merge
-    /// tools' lookup then read the machine).
+    /// What the machine has installed (12.9): <c>AppSession</c> always gives the session's
+    /// catalogues, the machine's own or, in the harnesses, <see cref="ToolCatalogues.Fixed"/>; null
+    /// only in view-model tests that make their services without one.
     /// </summary>
     public ToolCatalogues? Tools { get; }
 

@@ -364,6 +364,10 @@ public class WelcomeWorkspacesTests
         public void ShowWorkspace(string workspaceId, RepoTabViewModel? from) => Shown.Add((workspaceId, from));
 
         public IReadOnlyList<string> OpenRepositoryFolders() => [];
+
+        public bool HasOpenDashboard(string workspaceId) => false;
+
+        public string? OpenedWorkingDirectoryOf(string workspaceId, string savedPath) => null;
     }
 
     /// <summary>A store whose read-only cause, notice and failed saves the test sets.</summary>

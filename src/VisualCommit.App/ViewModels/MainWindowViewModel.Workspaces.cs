@@ -64,6 +64,15 @@ public partial class MainWindowViewModel : IWorkspaceHost
         [.. Tabs.Where(tab => !tab.IsDashboard && tab.Repository is not null).Select(tab => tab.Repository!.Path)];
 
     /// <summary>
+    /// Why the workspace's saved folder <paramref name="savedPath"/> has no repository of its own to
+    /// open, as its open dashboard's last read found it (its row's State tooltip); null without an
+    /// open dashboard, a row of that folder or a reason. The palette disables its <c>Open
+    /// repository</c> item with it (5.5, D204).
+    /// </summary>
+    public string? FolderReasonOf(string workspaceId, string savedPath) =>
+        FindOpenDashboard(workspaceId)?.FolderReasonOf(savedPath);
+
+    /// <summary>
     /// The window was activated (2.10's trigger 2, Q4): the active dashboard reads its rows last
     /// read 10 s ago or more. <c>MainWindow</c>'s <c>Activated</c> handler calls it.
     /// </summary>
@@ -122,6 +131,7 @@ public partial class MainWindowViewModel : IWorkspaceHost
             {
                 tab.PropertyChanged -= OnTabPropertyChanged;
                 Unwatch(tab);
+                ForgetOpened(tab);
             }
         }
 
@@ -138,6 +148,20 @@ public partial class MainWindowViewModel : IWorkspaceHost
             {
                 Unwatch(tab);
             }
+
+            foreach (var dashboard in _watchedDashboards.Values)
+            {
+                dashboard.OpenedTabs.RemoveAll(opened => !Tabs.Contains(opened));
+            }
+        }
+    }
+
+    /// <summary>A closed tab leaves every dashboard's <c>OpenedTabs</c> (2.3), which would otherwise keep it, and its graph, until that dashboard's next open.</summary>
+    private void ForgetOpened(RepoTabViewModel tab)
+    {
+        foreach (var dashboard in _watchedDashboards.Values)
+        {
+            dashboard.OpenedTabs.Remove(tab);
         }
     }
 
@@ -197,7 +221,6 @@ public partial class MainWindowViewModel : IWorkspaceHost
             return;
         }
 
-        dashboard.OpenedTabs.RemoveAll(opened => !Tabs.Contains(opened));
         var highest = dashboard.OpenedTabs.Count == 0 ? -1 : dashboard.OpenedTabs.Max(Tabs.IndexOf);
         var index = 1 + Math.Max(DashboardCount() - 1, highest);
         var tab = AddTab();

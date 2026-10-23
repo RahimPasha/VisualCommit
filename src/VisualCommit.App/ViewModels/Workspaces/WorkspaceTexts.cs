@@ -163,6 +163,12 @@ public static class WorkspaceTexts
     /// <summary><c>Locate…</c> on a folder that is no repository (1.10).</summary>
     public static string NotAGitRepository(string folder) => $"{folder} is not a git repository.";
 
+    /// <summary>
+    /// The palette's <c>Open repository</c> of a workspace's folder that lies inside another working
+    /// tree (D204, 5.10), on the tab's welcome page: the row's State tooltip as a sentence.
+    /// </summary>
+    public static string NotATopOf(string path, string outer) => $"{WorkspaceFolderProbe.NotARepositoryInside(path, outer).ToolTip}.";
+
     /// <summary><c>Locate…</c> on a repository the workspace holds already (1.10).</summary>
     public static string AlreadyIn(string top, string workspace) => $"{top} is already in {workspace}.";
 

@@ -118,6 +118,41 @@ public class DashboardActivityLogTests
     }
 
     [AvaloniaFact]
+    public async Task Reasons_three_and_four_follow_one_row_and_no_selection_comes_before_both()
+    {
+        // 2.9's order: (2) no row selected, before what any row is; (3) the selected row not read
+        // yet; (4) its folder state, once its read found one. api is held in its probe, then its
+        // folder turns out to be no repository; old-site is gone from the start.
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var gone = provider.PathOf("old-site");
+        provider.Gate = new TaskCompletionSource();
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory, gone));
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var dashboard = window.ActiveTab.Dashboard!;
+        var log = window.ActivityLog;
+        await DashboardTestSupport.WaitUntilAsync(() => dashboard.Rows[1].FolderState is not null && provider.Opens == 1, "old-site's state and api's probe");
+
+        Assert.Equal(DashboardTexts.SelectRepositoryText, log.ToggleToolTip);
+
+        dashboard.SelectedRow = dashboard.Rows[0];
+        Assert.Equal("Wait for api to be read", log.ToggleToolTip);
+        dashboard.SelectedRow = dashboard.Rows[1];
+        Assert.Equal($"{gone} does not exist", log.ToggleToolTip);
+        dashboard.SelectedRow = null;
+        Assert.Equal(DashboardTexts.SelectRepositoryText, log.ToggleToolTip);
+
+        // The selected row goes from reason 3 to reason 4 when its read ends in a folder state.
+        dashboard.SelectedRow = dashboard.Rows[0];
+        provider.Forget("api");
+        provider.Gate.SetResult();
+        await DashboardTestSupport.WaitUntilAsync(() => dashboard.Rows[0].FolderState is not null, "api's read");
+        Assert.Equal($"{api.WorkingDirectory} is not a git repository", log.ToggleToolTip);
+        Assert.False(log.CanToggle);
+    }
+
+    [AvaloniaFact]
     public void On_an_empty_tab_the_toggle_keeps_its_own_text()
     {
         using var provider = new FakeProvider();

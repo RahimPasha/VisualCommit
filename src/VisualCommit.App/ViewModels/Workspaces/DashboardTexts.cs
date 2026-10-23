@@ -107,19 +107,11 @@ public static class DashboardTexts
     /// <summary><c>DashboardNotice</c> while the store's last save failed (1.3, 2.5).</summary>
     public const string SaveFailedNotice = "workspaces.json could not be saved, so changes to workspaces are lost when VisualCommit closes.";
 
-    /// <summary>The header's count: <c>1 repository</c>, <c>{n} repositories</c>, <c>No repositories</c>.</summary>
-    public static string CountText(int repositories) => repositories switch
-    {
-        0 => "No repositories",
-        1 => "1 repository",
-        _ => string.Create(CultureInfo.InvariantCulture, $"{repositories} repositories"),
-    };
+    // The header's count is WorkspaceTexts.RepositoryCount and Add repository…'s enabled tooltip
+    // WorkspaceTexts.AddRepositoryFolderTitle, the welcome item's and the folder dialog's (one source each).
 
     /// <summary>The empty state's line: <c>{workspace} has no repositories yet.</c></summary>
     public static string EmptyText(string workspace) => $"{workspace} has no repositories yet.";
-
-    /// <summary><c>Add repository…</c>'s enabled tooltip: <c>Add a repository to {workspace}</c>.</summary>
-    public static string AddRepositoryToolTip(string workspace) => $"Add a repository to {workspace}";
 
     /// <summary>Refresh's tooltip: <c>Read the repositories of {workspace} again ({key})</c>, Refresh's key (6.8, D199).</summary>
     public static string RefreshToolTip(string workspace) =>
@@ -160,13 +152,6 @@ public static class DashboardTexts
 
     /// <summary>The Changes cell of a clean working tree.</summary>
     public const string CleanText = "Clean";
-
-    /// <summary>The Repository cell: the folder's name of <paramref name="path"/>, what <c>IGitRepository.Name</c> gives once it is open.</summary>
-    public static string NameOf(string path)
-    {
-        ArgumentNullException.ThrowIfNull(path);
-        return Path.GetFileName(Path.TrimEndingDirectorySeparator(path)) is { Length: > 0 } name ? name : path;
-    }
 
     /// <summary>
     /// The Branch cell (2.6): the current branch (also unborn); during a rebase that names its
@@ -339,13 +324,17 @@ public static class DashboardTexts
         return new DashboardCellText(text, DashboardTone.Warning, ConflictBannerViewModel.ToolTipFor(state, conflicts, refs.Head.BranchName ?? "HEAD"));
     }
 
-    /// <summary>The State cell of a row whose repository could not be read (3.1, 2.6): <c>Git could not open {path}: {line}</c>.</summary>
+    /// <summary>
+    /// The State cell of a row whose repository could not be read (3.1, 2.6): the folder state
+    /// <see cref="WorkspaceFolderProbe.NotOpened"/> of <paramref name="error"/>'s first line,
+    /// <c>Git could not open {path}: {line}</c>.
+    /// </summary>
     public static DashboardCellText CouldNotOpen(string path, string error)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(error);
         var line = error.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? error;
-        return new DashboardCellText(WorkspaceFolderProbe.NotOpenedText, DashboardTone.Warning, $"Git could not open {path}: {line}");
+        return FolderState(WorkspaceFolderProbe.NotOpened(path, line));
     }
 
     /// <summary>The State cell of a folder state (1.10): its short text in the warning colour with its tooltip.</summary>
@@ -389,9 +378,6 @@ public static class DashboardTexts
 
     /// <summary>Why a row not read yet cannot be opened, nor its activity shown (2.7, 2.9).</summary>
     public static string WaitToBeRead(string name) => $"Wait for {name} to be read";
-
-    /// <summary>Why <c>Show in folder</c> is disabled: <c>{path} does not exist</c>.</summary>
-    public static string DoesNotExist(string path) => $"{path} does not exist";
 
     /// <summary>Why <c>Move up</c> is disabled on the first row (<c>WorkspaceCommands.MoveUpReason</c>'s).</summary>
     public const string FirstRepositoryText = WorkspaceTexts.FirstRepository;

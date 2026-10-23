@@ -59,6 +59,32 @@ public class FetchHoldTests
         Assert.Equal("245b729", (await docs.RefTargetAsync("refs/remotes/origin/main"))![..7]);
         Assert.Equal(0, hold.Held);
         Assert.Empty(Directory.EnumerateFiles(hold.Folder, "held-*"));
+        Assert.Empty(hold.GaveUp());
+    }
+
+    [Fact]
+    public async Task A_held_fetch_that_gives_up_leaves_a_marker_on_which_the_hold_fails()
+    {
+        // 17.2: a fetch whose rounds run out goes on unheld; the hold says so instead of passing
+        // a test whose steps between hold and release took too long. Two rounds: a second.
+        using var data = new TempDirectory("data");
+        using var copy = await Scenarios.WorkspaceAsync();
+        var hold = FetchHold.Install(data.Path, rounds: 2);
+        var api = copy.Repo("api");
+        hold.HoldIn(copy.PathOf("api"));
+        Assert.Equal(FetchHold.ScriptFor(2), File.ReadAllText(hold.ScriptPath));
+        Assert.Equal(TimeSpan.FromSeconds(1), hold.HeldFor);
+
+        var result = await FetchAsync(api, TestCancelled).WaitAsync(StepTimeout, TestCancelled);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.StartsWith(FetchHold.GaveUpPrefix + "api.git.", Assert.Single(hold.GaveUp()), StringComparison.Ordinal);
+        Assert.Equal(0, hold.Held);
+        var waited = await Assert.ThrowsAsync<InvalidOperationException>(() => hold.WaitForHeldAsync(1, StepTimeout));
+        Assert.StartsWith("The hold gave up: the steps between hold and release took over 1 s (gave-up-api.git.", waited.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(hold.Release);
+        Assert.Throws<InvalidOperationException>(hold.Dispose);
+        Assert.True(File.Exists(Path.Combine(hold.Folder, FetchHold.ReleaseName)));
     }
 
     [Fact]

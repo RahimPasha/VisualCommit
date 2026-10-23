@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Logging;
@@ -108,17 +109,23 @@ public static class DashboardMenus
     /// —; <c>Fetch</c>; <c>Pull</c>; <c>Cancel {title}</c> while an operation that could be
     /// cancelled runs; <c>Error details…</c> while a dialog is kept; —; <c>Show in folder</c>;
     /// <c>Copy path</c>; —; <c>Move up</c>; <c>Move down</c>; <c>Locate…</c> for a folder state;
-    /// <c>Remove from workspace</c>.
+    /// <c>Remove from workspace</c>. The items whose action the list's own keys run on the selected
+    /// row show those keys in <paramref name="keys"/>' words (6.7, D192, D215): <c>Open</c> Enter,
+    /// <c>Move up</c> and <c>Move down</c> Alt+Up and Alt+Down, <c>Remove from workspace</c> Delete
+    /// (Cmd+Backspace, written <c>Cmd+Delete</c>, on macOS); <see cref="KeyTexts.Current"/>'s words
+    /// when none are given.
     /// </summary>
-    public static MenuModel ForRow(DashboardRowViewModel row, DashboardRowMenuState state, IDashboardRowActions actions)
+    public static MenuModel ForRow(DashboardRowViewModel row, DashboardRowMenuState state, IDashboardRowActions actions, KeyTexts? keys = null)
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(actions);
+        var platform = (keys ?? KeyTexts.Current).Platform;
+        string Key(Shortcut shortcut) => ShortcutText.Format(shortcut, platform);
         var entries = new List<MenuEntry>
         {
             new MenuHeader(state.Name, state.Folder),
-            Item(actions.Log, DashboardTexts.Open, () => actions.Open(row), state.OpenReason),
+            Item(actions.Log, DashboardTexts.Open, () => actions.Open(row), state.OpenReason) with { KeyText = Key(AppShortcuts.DashboardOpen) },
             new MenuSeparator(),
             Item(actions.Log, DashboardTexts.Fetch, () => actions.FetchAsync(row), state.FetchReason),
             Item(actions.Log, DashboardTexts.Pull, () => actions.PullAsync(row), state.PullReason),
@@ -137,14 +144,14 @@ public static class DashboardMenus
         entries.Add(Item(actions.Log, OperationTexts.MenuTexts.ShowInFolder, () => actions.ShowInFolderAsync(row), state.ShowInFolderReason));
         entries.Add(Item(actions.Log, OperationTexts.MenuTexts.CopyPath, () => actions.CopyPathAsync(row), null));
         entries.Add(new MenuSeparator());
-        entries.Add(Item(actions.Log, DashboardTexts.MoveUp, () => actions.MoveUp(row), state.MoveUpReason));
-        entries.Add(Item(actions.Log, DashboardTexts.MoveDown, () => actions.MoveDown(row), state.MoveDownReason));
+        entries.Add(Item(actions.Log, DashboardTexts.MoveUp, () => actions.MoveUp(row), state.MoveUpReason) with { KeyText = Key(AppShortcuts.DashboardMoveUp) });
+        entries.Add(Item(actions.Log, DashboardTexts.MoveDown, () => actions.MoveDown(row), state.MoveDownReason) with { KeyText = Key(AppShortcuts.DashboardMoveDown) });
         if (state.ShowsLocate)
         {
             entries.Add(Item(actions.Log, DashboardTexts.Locate, () => actions.LocateAsync(row), state.LocateReason));
         }
 
-        entries.Add(Item(actions.Log, DashboardTexts.RemoveFromWorkspace, () => actions.Remove(row), state.RemoveReason));
+        entries.Add(Item(actions.Log, DashboardTexts.RemoveFromWorkspace, () => actions.Remove(row), state.RemoveReason) with { KeyText = Key(AppShortcuts.DashboardRemove(platform)[0]) });
         return new MenuModel(entries);
     }
 
