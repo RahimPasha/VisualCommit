@@ -1,11 +1,9 @@
-using System.Diagnostics;
-using System.Globalization;
 using VisualCommit.App.ViewModels.Commands;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
 
-/// <summary>The palette's matching and ranking (docs/phase-6-design.md 5.6, 5.12, D212), rule by rule, and its time per query. Pure.</summary>
+/// <summary>The palette's matching and ranking (docs/phase-6-design.md 5.6, 5.12, D212), rule by rule. Pure; its time per query is <see cref="PaletteGrowthTests"/>'.</summary>
 public class PaletteMatcherTests
 {
     [Theory]
@@ -105,44 +103,11 @@ public class PaletteMatcherTests
         Assert.Empty(PaletteMatcher.Rank("zzz", commands, items, []));
     }
 
-    [Fact]
-    public void A_query_over_3000_entries_takes_the_work_of_about_ten_over_300()
-    {
-        // 5.12: a warm-up round, then 300 and 3,000 entries ranked interleaved, the best of three each.
-        // What is caught is work that grows faster than the entries: linear work gives about 10 times
-        // as much. The work is the thread's own (ThreadWork), not a stopwatch's time, which under the
-        // default run's load also counts the waits for a processor; the times are reported.
-        var small = Many(300);
-        var large = Many(3_000);
-        (ulong Work, double Milliseconds) Measure(IReadOnlyList<PaletteEntry> items)
-        {
-            var watch = Stopwatch.StartNew();
-            var start = ThreadWork.Now();
-            var ranked = PaletteMatcher.Rank("check feat", [], items, []);
-            Assert.Equal(items.Count / 2, ranked.Count);
-            return (ThreadWork.Now() - start, watch.Elapsed.TotalMilliseconds);
-        }
-
-        Measure(small);
-        Measure(large);
-        var (bestSmall, bestLarge) = (ulong.MaxValue, ulong.MaxValue);
-        var (fastestSmall, fastestLarge) = (double.MaxValue, double.MaxValue);
-        for (var round = 0; round < 3; round++)
-        {
-            var (work, milliseconds) = Measure(small);
-            (bestSmall, fastestSmall) = (Math.Min(bestSmall, work), Math.Min(fastestSmall, milliseconds));
-            (work, milliseconds) = Measure(large);
-            (bestLarge, fastestLarge) = (Math.Min(bestLarge, work), Math.Min(fastestLarge, milliseconds));
-        }
-
-        var ratio = (double)bestLarge / Math.Max(bestSmall, 1);
-        TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"Ranked: 300 entries in {fastestSmall:F2} ms, 3,000 in {fastestLarge:F2} ms; the thread's work {ratio:F1} times as much."));
-        Assert.True(ratio < 25, string.Create(CultureInfo.InvariantCulture, $"3,000 entries took {ratio:F1} times the work of 300 ({bestLarge} against {bestSmall})."));
-        Assert.True(fastestLarge < 1_000, string.Create(CultureInfo.InvariantCulture, $"3,000 entries took {fastestLarge:F0} ms."));
-    }
-
-    /// <summary>Entries half of which match <c>check feat</c>: branches' check-outs and tags' deletions.</summary>
-    private static List<PaletteEntry> Many(int count) =>
+    /// <summary>
+    /// Entries half of which match <c>check feat</c>: branches' check-outs and tags' deletions. The
+    /// time per query is measured alone in the process (<see cref="PaletteGrowthTests"/>).
+    /// </summary>
+    internal static List<PaletteEntry> Many(int count) =>
         [.. Enumerable.Range(0, count).Select(i => i % 2 == 0
             ? Entry($"Check out feature/topic-{i}", $"feature/topic-{i}", kind: PaletteEntryKind.Item, order: i)
             : Entry($"Delete tag v{i}…", $"v{i}", kind: PaletteEntryKind.Item, order: i))];

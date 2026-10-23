@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using Xunit;
@@ -8,18 +7,63 @@ using Xunit;
 namespace VisualCommit.App.Tests;
 
 /// <summary>
-/// The palette's build and ranking against the size of a repository's refs (docs/phase-6-design.md
-/// 5.12), alone in the process: each measure runs in a region of no garbage collection, which the
-/// whole process shares.
+/// The palette's ranking against the number of entries and its build and ranking against the size
+/// of a repository's refs (docs/phase-6-design.md 5.12), alone in the process: each measure runs
+/// in a region of no garbage collection, which the whole process shares (<see cref="GrowthMeasures"/>).
+/// The ratios compare the thread's own work (<see cref="ThreadWork"/>); the stopwatch's times are
+/// reported, and held only to a gross ceiling.
 /// </summary>
-[Collection(PaletteGrowthTests.Alone)]
+[Collection(GrowthCollection.Name)]
 public class PaletteGrowthTests
 {
-    /// <summary>The collection that runs these tests with no other test beside them.</summary>
-    public const string Alone = "Palette growth, alone";
+    /// <summary>What one measure of the build may allocate: the larger allocates about 80 MB.</summary>
+    private const long BuildBudget = 200L * 1024 * 1024;
 
-    /// <summary>What one measure may allocate: the larger allocates about 80 MB.</summary>
-    private const long NoCollectionBudget = 200L * 1024 * 1024;
+    /// <summary>What one measure of the matcher may allocate: 3,000 entries ranked allocate well under a megabyte.</summary>
+    private const long RankBudget = 64L * 1024 * 1024;
+
+    [Fact]
+    public void A_query_over_3000_entries_takes_the_work_of_about_ten_over_300()
+    {
+        // 5.12: a warm-up round, then 300 and 3,000 entries ranked interleaved, the best of three each.
+        // What is caught is work that grows faster than the entries: linear work gives about 10 times
+        // as much. The work is the thread's own (ThreadWork), not a stopwatch's time, which under the
+        // default run's load also counts the waits for a processor; the measures are a fraction of a
+        // millisecond, so they run alone and without a collection, which beside other tests made the
+        // ratio pass 25 with linear work; the times are reported.
+        var small = PaletteMatcherTests.Many(300);
+        var large = PaletteMatcherTests.Many(3_000);
+        (ulong Work, double Milliseconds) Measure(IReadOnlyList<PaletteEntry> items) =>
+            GrowthMeasures.WithoutCollection(RankBudget, () =>
+            {
+                var watch = Stopwatch.StartNew();
+                var start = ThreadWork.Now();
+                var ranked = PaletteMatcher.Rank("check feat", [], items, []);
+                var work = ThreadWork.Now() - start;
+                var milliseconds = watch.Elapsed.TotalMilliseconds;
+                Assert.Equal(items.Count / 2, ranked.Count);
+                return (work, milliseconds);
+            });
+
+        Measure(small);
+        Measure(large);
+        var (bestSmall, bestLarge) = (ulong.MaxValue, ulong.MaxValue);
+        var (fastestSmall, fastestLarge) = (double.MaxValue, double.MaxValue);
+        for (var round = 0; round < 3; round++)
+        {
+            var (work, milliseconds) = Measure(small);
+            (bestSmall, fastestSmall) = (Math.Min(bestSmall, work), Math.Min(fastestSmall, milliseconds));
+            (work, milliseconds) = Measure(large);
+            (bestLarge, fastestLarge) = (Math.Min(bestLarge, work), Math.Min(fastestLarge, milliseconds));
+        }
+
+        var ratio = (double)bestLarge / Math.Max(bestSmall, 1);
+        TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"Ranked: 300 entries in {fastestSmall:F2} ms, 3,000 in {fastestLarge:F2} ms; the thread's work {ratio:F1} times as much."));
+        Assert.True(ratio < 25, string.Create(CultureInfo.InvariantCulture, $"3,000 entries took {ratio:F1} times the work of 300 ({bestLarge} against {bestSmall})."));
+
+        // A gross ceiling on the time: the laptop alone takes under a millisecond.
+        Assert.True(fastestLarge < 1_000, string.Create(CultureInfo.InvariantCulture, $"3,000 entries took {fastestLarge:F0} ms."));
+    }
 
     [Fact]
     public void The_build_and_a_one_letter_query_grow_in_step_with_the_refs()
@@ -36,13 +80,8 @@ public class PaletteGrowthTests
         var keys = new KeyTexts(CommandKey.Ctrl);
         var small = PaletteEntriesTests.SizeContext(tags: 2_500);
         var large = PaletteEntriesTests.SizeContext(tags: 10_000);
-        (ulong Work, double Milliseconds, int Items) Measure(RepositoryMenuContext context)
-        {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-            Assert.True(GC.TryStartNoGCRegion(NoCollectionBudget), "The region without garbage collection did not start.");
-            try
+        (ulong Work, double Milliseconds, int Items) Measure(RepositoryMenuContext context) =>
+            GrowthMeasures.WithoutCollection(BuildBudget, () =>
             {
                 var watch = Stopwatch.StartNew();
                 var start = ThreadWork.Now();
@@ -51,17 +90,8 @@ public class PaletteGrowthTests
                 var work = ThreadWork.Now() - start;
                 var milliseconds = watch.Elapsed.TotalMilliseconds;
                 Assert.NotEmpty(ranked);
-                Assert.True(GCSettings.LatencyMode == GCLatencyMode.NoGCRegion, "A garbage collection ran during the measure: the budget is too small.");
                 return (work, milliseconds, items.Count);
-            }
-            finally
-            {
-                if (GCSettings.LatencyMode == GCLatencyMode.NoGCRegion)
-                {
-                    GC.EndNoGCRegion();
-                }
-            }
-        }
+            });
 
         Measure(small);
         Measure(large);
@@ -81,12 +111,9 @@ public class PaletteGrowthTests
         TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"Built and ranked: 2,500 tags ({smallCount} items) in {fastestSmall:F0} ms, 10,000 tags ({largeCount} items) in {fastestLarge:F0} ms; the thread's work {ratio:F1} times as much (limit {limit:F1})."));
         Assert.True(largeCount > 60_000, $"The large context gave {largeCount} items.");
         Assert.True(ratio < limit, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {ratio:F1} times the work of 2,500 ({bestLarge} against {bestSmall}), {(double)largeCount / smallCount:F1} times the items; the limit is {limit:F1}."));
-        Assert.True(fastestLarge < 2_000, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {fastestLarge:F0} ms."));
-    }
-}
 
-/// <summary>Runs <see cref="PaletteGrowthTests"/> with no other test beside it.</summary>
-[CollectionDefinition(PaletteGrowthTests.Alone, DisableParallelization = true)]
-public sealed class PaletteGrowthCollection
-{
+        // A gross ceiling on the time, as the diff view's: a stopwatch also counts the waits for a
+        // processor, which another test process beside this one (CI's Git.Tests) makes long.
+        Assert.True(fastestLarge < 20_000, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {fastestLarge:F0} ms."));
+    }
 }
