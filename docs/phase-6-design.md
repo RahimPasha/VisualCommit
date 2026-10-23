@@ -3118,7 +3118,9 @@ questions are for work). Enter saves, also from a text box. Save, in order:
 A failed git write opens the error dialog over the screen (D95, D104): for global writes title
 `Saving the settings failed`, summary `Git could not save the settings for all repositories.`, git's
 output and the command; the repository's operation has its own texts (8.3). Steps 2 and 3 stay
-applied.
+applied. After a failed global write the repository's writes are not made, the read back runs, the
+tabs are told and the screen stays on Git; the read back shows what git holds, so the repository
+scope's unsaved edits are gone without a word of their own (WP-SET's build, accepted by its review).
 
 ### 7.9 When each change takes effect
 
@@ -5080,6 +5082,12 @@ Neither was checked (no such machine). An id that Windows has takes the same arg
 | `gnome-text-editor` | — | `/usr/bin/gnome-text-editor` | `{p}`; none |
 | `kate`, `kwrite` | — | `/usr/bin/kate`, `/usr/bin/kwrite` | `{p}`; `--line {n} {p}` |
 
+WP-SET added unverified guesses as this section allows: `IntelliJ IDEA CE.app` and `PyCharm CE.app` on
+macOS, and the script names under `/snap/bin/` on Linux, where the snaps' own commands are
+`intellij-idea-community`, `intellij-idea-ultimate`, `pycharm-community` and `pycharm-professional`
+(its review), so `/snap/bin/idea` and `/snap/bin/pycharm` find nothing; harmless, and the handoff
+lists them for checking on those systems.
+
 ### 12.3 Finding the editors
 
 `IEditorCatalog` (App, `Services/EditorCatalog.cs`): `Task<IReadOnlyList<FoundEditor>>
@@ -5692,6 +5700,7 @@ while a run runs (2.5, 4.9). Rows have no bar (2.6).
 | `{workspace}: read 1 repository in {ms} ms` / `{workspace}: read {n} repositories in {ms} ms` | Info | 2.10 |
 | `{name}: summary read in {ms} ms` | Debug | 3.1, 2.10 |
 | `{workspace}: Fetch all: started for {n} repositories, {s} skipped`; `{workspace}: Fetch all: {result}` (`Pull all` likewise) | Info | 4.3 |
+| `{repo}: Pull: refused before the fetch, {problem}` (a pull setting git would refuse, read before the fetch; WP-B's) | Info | 8.9 |
 | The menu layer's line, named by the dashboard on a dashboard tab (`Web: Context menu opened: web-app by pointer`) | Debug | 2.7 |
 | `{repo}: Command palette opened`; `{repo}: Command palette ran: {label}`, with ` ({detail})` when there is a detail; the `{repo}: ` prefix only while the active tab has a repository | Debug | 5.9 |
 | `VISUALCOMMIT_AUTO_FETCH_MINUTES={value} overrides the auto-fetch setting ({minutes} minutes).` | Info | 7.3 |
