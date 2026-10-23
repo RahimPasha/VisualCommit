@@ -113,12 +113,12 @@ Start:
 
 Git layer and Core:
 
-- [ ] 7. Workspaces (repository groups): the model, where they are kept, add, remove, rename,
+- [x] 7. Workspaces (repository groups): the model, where they are kept, add, remove, rename,
   and opening one. Tests. (WP4's part merged in `1d99be3`: `WorkspacePaths`, `WorkspaceEdits`,
   `RepositoryScanner`, `JsonWorkspaceStore`, `TabState.WorkspaceId`; the session keeps them in
   `workspaces.json`, `fef0569`. WP-W's commands, dialogs and the session's dashboards, built,
   reviewed and fixed, merged in `0da0eec`.)
-- [ ] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
+- [x] 8. Each repository's status for the dashboard (branch, ahead and behind, uncommitted
   changes, an operation in progress), read cheaply for ten repositories without opening them as
   tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode, the reads off the UI thread
   four at a time, built, reviewed and fixed, merged in `125e792`.)
