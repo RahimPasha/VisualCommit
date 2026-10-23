@@ -164,7 +164,7 @@ public partial class DashboardView : UserControl
         }
     }
 
-    /// <summary><c>DashboardMore</c>'s menu (2.5): below the button, kept inside the window by the menu layer (WD10).</summary>
+    /// <summary><c>DashboardMore</c>'s menu (2.5): below the button, moved (not flipped) to stay inside the window by the menu layer (WD10).</summary>
     private void OnMoreClick(object? sender, RoutedEventArgs e)
     {
         if (_viewModel is not { IsClosed: false } viewModel || ContextMenuRequests.Layer(this) is not { } layer
@@ -173,8 +173,9 @@ public partial class DashboardView : UserControl
             return;
         }
 
-        // Opened by the pointer and placed with the pointer's gap taken back, as phase 4's action buttons' menus (14.3).
-        layer.Open(viewModel.HeaderMenu(), new MenuPosition(corner.X - MenuLayer.PointerGap, corner.Y - MenuLayer.PointerGap), MenuOpenedBy.Pointer);
+        // A button's menu: its top at the button's bottom; at the window's right edge it moves left
+        // to stay 4 inside rather than opening to the left of the corner, as a pointer's would.
+        layer.Open(viewModel.HeaderMenu(), new MenuPosition(corner.X, corner.Y), MenuOpenedBy.Button);
         e.Handled = true;
     }
 
