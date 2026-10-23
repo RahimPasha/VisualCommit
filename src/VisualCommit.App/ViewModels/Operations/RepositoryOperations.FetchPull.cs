@@ -199,10 +199,12 @@ public sealed partial class RepositoryOperations
         }
 
         // 8.9: the settings before the fetch, as git pull reads them at its start. The rebase
-        // chosen for one pull counts only a pull.ff that git pull --rebase refuses (D231).
-        var configuration = await Git.ReadPullConfigurationAsync(branch.Name);
-        if (configuration.Problem is { } problem
-            && (integration == PullIntegration.AsConfigured || string.Equals(configuration.ProblemKey, "pull.ff", StringComparison.Ordinal)))
+        // chosen for one pull reads pull.ff alone, and refuses a value git pull --rebase refuses
+        // (D231).
+        var configuration = integration == PullIntegration.Rebase
+            ? await Git.ReadPullFastForwardSettingAsync()
+            : await Git.ReadPullConfigurationAsync(branch.Name);
+        if (configuration.Problem is { } problem)
         {
             Log.Info($"{Repository.Name}: {text.Title}: refused before the fetch, {problem}");
             return Failed(text, FailureOf(configuration.NotUnderstood(), problem));

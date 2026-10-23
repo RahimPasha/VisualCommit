@@ -263,7 +263,11 @@ public class RepositoryOperationsPullTests
         Assert.Equal(("Pull failed", "pull.ff is set to foo, which this app does not understand.", "git config --get pull.ff"), (error.Title, error.Summary, error.Command));
         Assert.Equal(head, await repo.HeadAsync());
         Assert.Equal(tracking, await repo.RefTargetAsync("refs/remotes/origin/main"));
-        Assert.DoesNotContain(OperationCalls(app, mark), call => call.StartsWith("git fetch", StringComparison.Ordinal));
+        var calls = OperationCalls(app, mark);
+        Assert.DoesNotContain(calls, call => call.StartsWith("git fetch", StringComparison.Ordinal));
+        Assert.Equal(
+            ["git config --get pull.ff", "git config --type=bool --get pull.ff"],
+            calls.Where(call => call.StartsWith("git config --get ", StringComparison.Ordinal) || call.StartsWith("git config --type=bool ", StringComparison.Ordinal)));
         app.AssertScriptFollowed();
     }
 
@@ -283,9 +287,14 @@ public class RepositoryOperationsPullTests
 
         Assert.Equal("Pulled and rebased main onto origin/main", app.StatusText);
         Assert.Equal(remote, (await repo.GitAsync("rev-parse", "HEAD~1")).StandardOutput.Trim());
+        // Before the fetch exactly pull.ff's read (only is no common boolean word, so git is asked
+        // too), and no rebase setting (8.9, 16.1).
         var calls = OperationCalls(app, mark);
-        var read = calls.IndexOf("git config --get pull.ff");
-        Assert.InRange(read, 0, calls.IndexOf("git fetch --progress origin") - 1);
+        var fetch = calls.IndexOf("git fetch --progress origin");
+        Assert.Equal(
+            ["git config --get pull.ff", "git config --type=bool --get pull.ff"],
+            calls[..fetch].Where(call => call.StartsWith("git config --get ", StringComparison.Ordinal) || call.StartsWith("git config --type=bool ", StringComparison.Ordinal)));
+        Assert.DoesNotContain(calls, call => call.Contains("rebase", StringComparison.Ordinal) && call.StartsWith("git config", StringComparison.Ordinal));
         Assert.Empty(app.Dialogs.Shown);
     }
 

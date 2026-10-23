@@ -250,6 +250,9 @@ public abstract class FakeRepositoryBase : IGitRepository
     public virtual Task<PullConfiguration> ReadPullConfigurationAsync(string branch, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PullConfiguration(PullFastForwardSetting.Unset, PullRebaseSetting.None, "pull.rebase", null, null, null, null));
 
+    public virtual Task<PullConfiguration> ReadPullFastForwardSettingAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(new PullConfiguration(PullFastForwardSetting.Unset, PullRebaseSetting.None, "pull.rebase", null, null, null, null));
+
     public virtual Task WriteConfigAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
