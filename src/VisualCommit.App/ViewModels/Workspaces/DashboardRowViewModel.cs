@@ -621,13 +621,14 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
     /// <summary>
     /// A bulk run's turn for the row (4.3, D207): before its operation, the row's folder and git
-    /// folder are checked again off the UI thread, as a read's step 2 checks them, and the folder
-    /// must still be its repository's top (<see cref="IGitRepository.OpenedAtTopAsync"/>, D204), so
-    /// that a nested repository whose <c>.git</c> was deleted while the row waited in line is never
-    /// fetched or pulled as the outer one. Null while <paramref name="repository"/> is still there.
-    /// Otherwise what the folder is now, by <see cref="WorkspaceFolderProbe.ProbeAsync"/> (an outer
-    /// repository it finds dropped unread): for the row's own summary the row shows that folder
-    /// state from now on and lets the summary go, or, when the folder is a repository's top again
+    /// folder are checked again off the UI thread, as a read's step 2 checks them, so that a nested
+    /// repository whose <c>.git</c> was deleted while the row waited in line is never fetched or
+    /// pulled as the outer one (D204: <c>git -C outer/inner</c> would find the outer). Both there,
+    /// the folder is still its repository's top (git finds its own <c>.git</c> first), with no git
+    /// call: null. Otherwise what the folder is now, by <see cref="WorkspaceFolderProbe.ProbeAsync"/>
+    /// (its open and <see cref="IGitRepository.OpenedAtTopAsync"/>; an outer repository it finds
+    /// dropped unread): for the row's own summary the row shows that folder state from now on and
+    /// lets the summary go, or, when the folder is a repository's top again
     /// (<see cref="WorkspaceFolderState.Ready"/>, its git folder replaced), lets it go and counts as
     /// never read, to be read anew. A followed tab's view model stays the tab's.
     /// </summary>
@@ -637,17 +638,9 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         var path = Path;
         var gitDirectory = repository.Repository.GitDirectory;
         var exists = _dashboard.DirectoryExists;
-        var present = await Task.Run(() => exists(path) && exists(gitDirectory), CancellationToken.None).WaitAsync(cancellationToken);
-        try
+        if (await Task.Run(() => exists(path) && exists(gitDirectory), CancellationToken.None).WaitAsync(cancellationToken))
         {
-            if (present && await repository.Repository.OpenedAtTopAsync(cancellationToken))
-            {
-                return null;
-            }
-        }
-        catch (Exception ex) when (ex is GitException or GitUnavailableException)
-        {
-            // Sorted by the probe below.
+            return null;
         }
 
         var probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, cancellationToken, exists);
