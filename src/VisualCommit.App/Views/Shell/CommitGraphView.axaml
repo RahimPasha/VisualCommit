@@ -14,10 +14,12 @@
              AutomationProperties.AutomationId="CommitGraph">
 
   <!-- The graph area of the active tab: the welcome page when it has no repository (D42), the
-       repository's graph or a file's diff when it has one, and nothing while a restored tab is
-       still opening. Under it the activity log (docs/phase-5-design.md 2.1) while the window has
-       it open and the tab has a repository: a 5-high splitter with its 1-px line, then the panel,
-       whose height the code-behind fits; a closed panel takes no room. -->
+       repository's graph or a file's diff when it has one, a workspace's dashboard on a dashboard
+       tab (docs/phase-6-design.md 2.4), and nothing while a restored tab is still opening. Under it
+       the activity log (docs/phase-5-design.md 2.1) while the window has it open and the tab has
+       a repository, or on a dashboard a selected row with one (phase 6 design 2.9): a 5-high
+       splitter with its 1-px line, then the panel, whose height the code-behind fits; a closed
+       panel takes no room. -->
   <Grid Name="GraphAreaGrid" RowDefinitions="*,Auto,Auto" Background="{DynamicResource VcWindowBackgroundBrush}"
         kr:KeyRegion.Role="GraphArea">
     <Panel Grid.Row="0" IsVisible="{Binding ShowsWelcome}">

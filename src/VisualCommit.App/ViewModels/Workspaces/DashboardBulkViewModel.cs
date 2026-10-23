@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core.Logging;
 
 namespace VisualCommit.App.ViewModels.Workspaces;
 
@@ -93,6 +94,8 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
     // IDashboardToolbar (4.10).
 
     public string WorkspaceName => _dashboard.Name;
+
+    public IAppLog Log => _dashboard.Services.Log;
 
     public bool CanFetchAll => FetchAllDisabledReason is null && !_closed;
 

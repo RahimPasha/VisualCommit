@@ -97,13 +97,6 @@ public sealed class OpenRepositories
         return _tabs.FirstOrDefault(tab => !tab.IsClosed && WorkspacePaths.Same(tab.Path, folder));
     }
 
-    /// <summary>The summary-mode view model held for the worktree <paramref name="key"/>, or null.</summary>
-    public RepositoryViewModel? SummaryFor(string key)
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        return _summaries.TryGetValue(key, out var summary) ? summary.ViewModel : null;
-    }
-
     /// <summary>Whether <paramref name="holder"/> holds <paramref name="repository"/> as a summary.</summary>
     public bool Holds(RepositoryViewModel repository, object holder)
     {

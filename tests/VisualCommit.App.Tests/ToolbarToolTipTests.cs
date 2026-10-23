@@ -224,6 +224,8 @@ public class ToolbarToolTipTests
 
         public string WorkspaceName => "Web";
 
+        public VisualCommit.Core.Logging.IAppLog Log => VisualCommit.Core.Logging.NullAppLog.Instance;
+
         public bool CanFetchAll => true;
 
         public string? FetchAllDisabledReason => null;

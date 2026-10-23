@@ -410,10 +410,12 @@ public sealed partial class ToolbarViewModel : ObservableObject
 
     private async Task RunAsync(string button, Func<IToolbarActions, Task> action)
     {
-        var log = Repository?.Operations.Log ?? NullAppLog.Instance;
+        // On a dashboard tab the lines name the workspace, in the session's log (4.10).
+        var log = Repository?.Operations.Log ?? Dashboard?.Log ?? NullAppLog.Instance;
+        var name = Repository?.Name ?? Dashboard?.WorkspaceName;
         if (Actions is not { } actions)
         {
-            log.Warning($"{Repository?.Name}: the toolbar's {button} has nothing to run.");
+            log.Warning($"{name}: the toolbar's {button} has nothing to run.");
             return;
         }
 
@@ -424,7 +426,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
         catch (Exception ex)
         {
             // An operation reports its own failures; this is what slipped past it.
-            log.Error($"{Repository?.Name}: the toolbar's {button} failed.", ex);
+            log.Error($"{name}: the toolbar's {button} failed.", ex);
         }
     }
 

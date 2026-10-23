@@ -67,10 +67,10 @@ public sealed partial class AppCommands
             // 5.4's row 12: the workspace's own edits (1.5).
             var commands = _shell.Services.WorkspaceCommands;
             var id = dashboard.WorkspaceId;
-            AddEntry(WorkspaceTexts.AddRepository, commands.AddRepositoryReason(id), () => dashboard.AddRepositoryCommand.Execute(null));
+            AddEntry(WorkspaceTexts.AddRepository, commands.AddRepositoryReason, () => dashboard.AddRepositoryCommand.Execute(null));
             AddEntry(WorkspaceTexts.AddOpenTabs, commands.AddOpenTabsReason(id), () => dashboard.AddOpenTabsCommand.Execute(null));
-            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason(id), () => _ = commands.RenameAsync(id));
-            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason(id), () => _ = commands.DeleteAsync(id), destructive: true);
+            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason, () => _ = commands.RenameAsync(id));
+            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason, () => _ = commands.DeleteAsync(id), destructive: true);
         }
 
         Add(AppCommand.NewTab);

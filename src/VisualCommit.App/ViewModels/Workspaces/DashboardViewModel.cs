@@ -145,7 +145,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         : DashboardTexts.WaitToBeRead(row.Name);
 
     /// <summary>The header's count: <c>1 repository</c>, <c>{n} repositories</c>, <c>No repositories</c>.</summary>
-    public string CountText => DashboardTexts.CountText(Rows.Count);
+    public string CountText => WorkspaceTexts.RepositoryCount(Rows.Count);
 
     /// <summary>The workspace has rows: the column headings and the list show; otherwise the empty state (2.5, WD2).</summary>
     public bool HasRows => Rows.Count > 0;
@@ -337,8 +337,8 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         return DashboardMenus.ForHeader(
             Name,
             commands.AddOpenTabsReason(WorkspaceId),
-            commands.RenameReason(WorkspaceId),
-            commands.DeleteReason(WorkspaceId),
+            commands.RenameReason,
+            commands.DeleteReason,
             this);
     }
 
@@ -360,11 +360,11 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             status2?.RunningIsCancellable == true,
             status2?.CanCancel == true,
             row.KeptDialog is not null,
-            row.FolderState is { State: WorkspaceFolderState.FolderNotFound } ? DashboardTexts.DoesNotExist(row.Path) : null,
+            row.FolderState is { State: WorkspaceFolderState.FolderNotFound } gone ? gone.ToolTip : null,
             MoveUpReasonOf(row),
             MoveDownReasonOf(row),
             row.FolderState is not null || row.ErrorText is not null,
-            commands.LocateReason(WorkspaceId, row.Path),
+            commands.LocateReason,
             RemoveReasonOf(row));
     }
 
@@ -517,8 +517,8 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
     private string? MoveDownReasonOf(DashboardRowViewModel row) => _services.WorkspaceCommands.MoveDownReason(WorkspaceId, row.Path);
 
-    private string? RemoveReasonOf(DashboardRowViewModel row) =>
-        _services.WorkspaceCommands.EditReason ?? row.HeldByRunReason ?? _services.WorkspaceCommands.RemoveReason(WorkspaceId, row.Path);
+    /// <summary><c>Remove from workspace</c>'s reason (2.7): read-only first, then a running run that holds the row (4.7).</summary>
+    private string? RemoveReasonOf(DashboardRowViewModel row) => _services.WorkspaceCommands.RemoveReason ?? row.HeldByRunReason;
 
     /// <summary>
     /// Starts a read pass of the rows <paramref name="trigger"/> selects (2.10), or, while a pass runs,
@@ -853,9 +853,9 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     private void UpdateCommands()
     {
         var commands = _services.WorkspaceCommands;
-        var addReason = commands.AddRepositoryReason(WorkspaceId);
+        var addReason = commands.AddRepositoryReason;
         CanAddRepository = addReason is null;
-        AddRepositoryToolTip = addReason ?? DashboardTexts.AddRepositoryToolTip(Name);
+        AddRepositoryToolTip = addReason ?? WorkspaceTexts.AddRepositoryFolderTitle(Name);
         var tabsReason = commands.AddOpenTabsReason(WorkspaceId);
         CanAddOpenTabs = tabsReason is null;
         AddOpenTabsToolTip = tabsReason;

@@ -118,6 +118,18 @@ public class DashboardToolbarTests
         Assert.Equal("Pulled 1 repository", host.Bulk.RunText);
     }
 
+    [Fact]
+    public async Task A_button_that_fails_past_its_run_is_logged_under_the_workspaces_name()
+    {
+        var log = new RecordingLog();
+        var toolbar = ToolbarViewModel.ForDashboard(new FailingDashboard(log));
+
+        await toolbar.FetchCommand.ExecuteAsync(null);
+        await toolbar.PullCommand.ExecuteAsync(null);
+
+        Assert.Equal(["Web: the toolbar's Fetch failed.", "Web: the toolbar's Pull failed."], log.Messages);
+    }
+
     [AvaloniaFact]
     public async Task The_tooltips_follow_a_rename()
     {
@@ -153,5 +165,31 @@ public class DashboardToolbarTests
             });
         Assert.False(toolbar.PushCommand.CanExecute(null));
         Assert.False(toolbar.SearchCommand.CanExecute(null));
+    }
+
+    /// <summary>The workspace "Web" whose Fetch all and Pull all can run and throw, which no run of the app does: what slips past it.</summary>
+    private sealed class FailingDashboard(Core.Logging.IAppLog log) : IDashboardToolbar
+    {
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public string WorkspaceName => "Web";
+
+        public Core.Logging.IAppLog Log => log;
+
+        public bool CanFetchAll => true;
+
+        public string? FetchAllDisabledReason => null;
+
+        public bool CanPullAll => true;
+
+        public string? PullAllDisabledReason => null;
+
+        public Task FetchAllAsync() => Task.FromException(new InvalidOperationException("Fetch all slipped."));
+
+        public Task PullAllAsync() => Task.FromException(new InvalidOperationException("Pull all slipped."));
     }
 }

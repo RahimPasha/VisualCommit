@@ -44,7 +44,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         _dashboard = dashboard;
         _token = CancellationTokenSource.CreateLinkedTokenSource(dashboard.Lifetime);
         Path = path;
-        Name = DashboardTexts.NameOf(path);
+        Name = WorkspaceTexts.FolderName(path);
     }
 
     /// <summary>The saved folder, as <c>workspaces.json</c> holds it; a read never rewrites it. Locate… replaces it (1.10).</summary>
@@ -193,9 +193,6 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
     /// <summary>The view model's status, for the row menu's <c>Cancel {title}</c> (2.7); null without one.</summary>
     public OperationStatusViewModel? OperationStatus => _status;
-
-    /// <summary>A click on <c>Details…</c> or the menu's <c>Error details…</c> (4.6): raised as the kept dialog opens.</summary>
-    public event EventHandler? DetailsRequested;
 
     /// <summary>The view model that ran the operation whose dialog the row keeps: it opens the dialog (4.6).</summary>
     private RepositoryViewModel? _keptBy;
@@ -368,7 +365,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         LastRead = null;
         (Refs, Status, FolderState, ErrorText) = (null, null, null, null);
         Path = path;
-        Name = DashboardTexts.NameOf(path);
+        Name = WorkspaceTexts.FolderName(path);
         RaiseCells();
     }
 
@@ -385,7 +382,6 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             return Task.CompletedTask;
         }
 
-        DetailsRequested?.Invoke(this, EventArgs.Empty);
         return repository.Operations.ShowDeferredAsync(dialog);
     }
 

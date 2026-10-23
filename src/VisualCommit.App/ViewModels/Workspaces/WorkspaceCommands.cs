@@ -92,8 +92,8 @@ public sealed class WorkspaceCommands
         _services.WorkspaceHost?.ShowWorkspace(workspaceId, from);
     }
 
-    /// <summary>Why <c>Rename workspace…</c> cannot run (1.6), or null.</summary>
-    public string? RenameReason(string workspaceId) => EditReason;
+    /// <summary>Why <c>Rename workspace…</c> cannot run on any workspace (1.6): read-only; or null.</summary>
+    public string? RenameReason => EditReason;
 
     /// <summary><c>Rename workspace…</c> (1.6): the name dialog, then the rename; the dashboard's title, the welcome pages and the palette follow the store.</summary>
     public async Task RenameAsync(string workspaceId)
@@ -101,14 +101,14 @@ public sealed class WorkspaceCommands
         ArgumentNullException.ThrowIfNull(workspaceId);
         try
         {
-            if (RenameReason(workspaceId) is not null || Find(workspaceId) is not { } workspace)
+            if (RenameReason is not null || Find(workspaceId) is not { } workspace)
             {
                 return;
             }
 
             var others = Store.Current.Workspaces.Where(other => other.Id != workspaceId).Select(other => other.Name);
             var dialog = WorkspaceNameDialogViewModel.Rename(workspace.Name, others);
-            if (await _services.DialogHost.ShowAsync(dialog) is not { } answer || RenameReason(workspaceId) is not null)
+            if (await _services.DialogHost.ShowAsync(dialog) is not { } answer || RenameReason is not null)
             {
                 return;
             }
@@ -121,8 +121,8 @@ public sealed class WorkspaceCommands
         }
     }
 
-    /// <summary>Why <c>Delete workspace…</c> cannot run (1.6), or null.</summary>
-    public string? DeleteReason(string workspaceId) => EditReason;
+    /// <summary>Why <c>Delete workspace…</c> cannot run on any workspace (1.6): read-only; or null.</summary>
+    public string? DeleteReason => EditReason;
 
     /// <summary>
     /// <c>Delete workspace…</c> (1.6): the destructive confirmation, then the deletion; its
@@ -134,7 +134,7 @@ public sealed class WorkspaceCommands
         ArgumentNullException.ThrowIfNull(workspaceId);
         try
         {
-            if (DeleteReason(workspaceId) is not null || Find(workspaceId) is not { } workspace)
+            if (DeleteReason is not null || Find(workspaceId) is not { } workspace)
             {
                 return;
             }
@@ -145,7 +145,7 @@ public sealed class WorkspaceCommands
                 _services.WorkspaceHost?.HasOpenDashboard(workspaceId) == true ? WorkspaceTexts.DeleteDetail : string.Empty,
                 WorkspaceTexts.DeleteConfirm,
                 IsDestructive: true);
-            if (!await _services.Dialogs.ConfirmAsync(request) || DeleteReason(workspaceId) is not null)
+            if (!await _services.Dialogs.ConfirmAsync(request) || DeleteReason is not null)
             {
                 return;
             }
@@ -158,8 +158,8 @@ public sealed class WorkspaceCommands
         }
     }
 
-    /// <summary>Why <c>Add repository…</c> cannot run (1.7), or null.</summary>
-    public string? AddRepositoryReason(string workspaceId) => EditReason;
+    /// <summary>Why <c>Add repository…</c> cannot run in any workspace (1.7): read-only; or null.</summary>
+    public string? AddRepositoryReason => EditReason;
 
     /// <summary>
     /// <c>Add repository…</c> (1.7): the folder dialog, then a working tree's top appended at once,
@@ -181,7 +181,7 @@ public sealed class WorkspaceCommands
         ArgumentNullException.ThrowIfNull(workspaceId);
         try
         {
-            if (AddRepositoryReason(workspaceId) is not null || Find(workspaceId) is not { } workspace)
+            if (AddRepositoryReason is not null || Find(workspaceId) is not { } workspace)
             {
                 return null;
             }
@@ -218,7 +218,7 @@ public sealed class WorkspaceCommands
                 return null;
             }
 
-            if (AddRepositoryReason(workspaceId) is not null || Find(workspaceId) is null)
+            if (AddRepositoryReason is not null || Find(workspaceId) is null)
             {
                 return null;
             }
@@ -234,7 +234,7 @@ public sealed class WorkspaceCommands
             // search (Search) under way, never the completed task of one not yet started.
             _ = dialog.Start();
             var answer = await _services.DialogHost.ShowAsync(dialog);
-            if (answer is { Count: > 0 } && AddRepositoryReason(workspaceId) is null)
+            if (answer is { Count: > 0 } && AddRepositoryReason is null)
             {
                 Store.Update(list => WorkspaceEdits.Append(list, workspaceId, answer));
             }
@@ -285,15 +285,15 @@ public sealed class WorkspaceCommands
         Store.Update(list => WorkspaceEdits.Append(list, workspaceId, add));
     }
 
-    /// <summary>Why <c>Remove from workspace</c> cannot run on <paramref name="path"/> (1.10), or null; a bulk run holding the row adds its own reason (4.7).</summary>
-    public string? RemoveReason(string workspaceId, string path) => EditReason;
+    /// <summary>Why <c>Remove from workspace</c> cannot run on any row (1.10): read-only; or null. A bulk run holding the row adds its own reason after it (4.7).</summary>
+    public string? RemoveReason => EditReason;
 
     /// <summary><c>Remove from workspace</c> (1.10): at once, no question; nothing on disk changes.</summary>
     public void Remove(string workspaceId, string path)
     {
         ArgumentNullException.ThrowIfNull(workspaceId);
         ArgumentNullException.ThrowIfNull(path);
-        if (RemoveReason(workspaceId, path) is null)
+        if (RemoveReason is null)
         {
             Store.Update(list => WorkspaceEdits.Remove(list, workspaceId, path));
         }
@@ -335,8 +335,8 @@ public sealed class WorkspaceCommands
         }
     }
 
-    /// <summary>Why <c>Locate…</c> cannot run on <paramref name="path"/> (1.10), or null.</summary>
-    public string? LocateReason(string workspaceId, string path) => EditReason;
+    /// <summary>Why <c>Locate…</c> cannot run on any row (1.10): read-only; or null.</summary>
+    public string? LocateReason => EditReason;
 
     /// <summary>
     /// <c>Locate…</c> (1.10): the folder dialog titled <c>Locate {folder name}</c>, then the chosen
@@ -351,7 +351,7 @@ public sealed class WorkspaceCommands
         ArgumentNullException.ThrowIfNull(path);
         try
         {
-            if (LocateReason(workspaceId, path) is not null || Find(workspaceId) is not { } workspace)
+            if (LocateReason is not null || Find(workspaceId) is not { } workspace)
             {
                 return;
             }
@@ -383,7 +383,7 @@ public sealed class WorkspaceCommands
                 return;
             }
 
-            if (LocateReason(workspaceId, path) is not null || Find(workspaceId) is not { } current || WorkspacePaths.Same(top, path))
+            if (LocateReason is not null || Find(workspaceId) is not { } current || WorkspacePaths.Same(top, path))
             {
                 return;
             }

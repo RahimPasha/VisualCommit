@@ -17,14 +17,15 @@ public class DashboardTextsTests
     [InlineData(0, "No repositories")]
     [InlineData(1, "1 repository")]
     [InlineData(10, "10 repositories")]
+    [InlineData(1000, "1,000 repositories")]
     public void The_header_counts_the_repositories(int repositories, string text) =>
-        Assert.Equal(text, DashboardTexts.CountText(repositories));
+        Assert.Equal(text, WorkspaceTexts.RepositoryCount(repositories));
 
     [Fact]
     public void The_headers_other_texts()
     {
         Assert.Equal("Web has no repositories yet.", DashboardTexts.EmptyText("Web"));
-        Assert.Equal("Add a repository to Web", DashboardTexts.AddRepositoryToolTip("Web"));
+        Assert.Equal("Add a repository to Web", WorkspaceTexts.AddRepositoryFolderTitle("Web"));
         // Refresh's key (F5, 6.1) comes from the key texts, which work package WP-K fills.
         Assert.Equal(
             ViewModels.Commands.KeyTexts.Current.WithKey("Read the repositories of Web again", ViewModels.Commands.AppCommand.Refresh),
@@ -239,7 +240,7 @@ public class DashboardTextsTests
         Assert.Equal("Web: read 1 repository in 12 ms", DashboardTexts.ReadLine("Web", 1, 12));
         Assert.Equal("Web: read 10 repositories in 4737 ms", DashboardTexts.ReadLine("Web", 10, 4737));
         Assert.Equal("api: summary read in 3 ms", DashboardTexts.SummaryReadLine("api", 3));
-        Assert.Equal("old-site", DashboardTexts.NameOf(Path.Combine("D:", "src", "old-site") + Path.DirectorySeparatorChar));
+        Assert.Equal("old-site", WorkspaceTexts.FolderName(Path.Combine("D:", "src", "old-site") + Path.DirectorySeparatorChar));
     }
 
     private static RepoRefs Refs(int ahead, int behind) => DashboardTestSupport.MainRefs(ahead, behind);
