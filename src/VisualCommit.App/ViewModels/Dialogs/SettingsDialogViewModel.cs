@@ -280,7 +280,8 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         }
 
         // 6. Read back: each scope's read becomes its fields' baseline (8.4).
-        var still = await Git.ReadBackAsync(failed ? [] : globalWritten, failed ? [] : repositoryWritten);
+        // Only what was written whole is compared: a failed list wrote what git's error says.
+        var still = await Git.ReadBackAsync(globalWritten, repositoryWritten);
         Tools.SetGitEditor(Git.CoreEditor);
 
         // 7. Tell the tabs (8.11).

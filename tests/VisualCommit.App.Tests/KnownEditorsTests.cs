@@ -152,6 +152,15 @@ public class KnownEditorsTests
         Assert.Equal(("{p}", "--line {n} {p}"), (KnownEditors.Find("kate", EditorPlatform.Linux)!.Arguments, KnownEditors.Find("kate", EditorPlatform.Linux)!.LineArguments));
     }
 
+    [Fact]
+    public void An_editor_is_chosen_when_it_is_other_or_an_id_the_catalogue_knows()
+    {
+        Assert.False(KnownEditors.IsChosen(null));
+        Assert.True(KnownEditors.IsChosen(new VisualCommit.Core.Settings.EditorSetting("vscode", "/x")));
+        Assert.True(KnownEditors.IsChosen(new VisualCommit.Core.Settings.EditorSetting(KnownEditors.CustomId, "/x", "{path}")));
+        Assert.False(KnownEditors.IsChosen(new VisualCommit.Core.Settings.EditorSetting("an-editor-of-the-future", "/x")));
+    }
+
     private static (string Arguments, string? LineArguments) Arguments(string id)
     {
         var editor = KnownEditors.Find(id, EditorPlatform.Windows)!;

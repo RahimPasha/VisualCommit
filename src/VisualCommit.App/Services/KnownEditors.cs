@@ -1,4 +1,5 @@
 using System.Globalization;
+using VisualCommit.Core.Settings;
 
 namespace VisualCommit.App.Services;
 
@@ -139,6 +140,14 @@ public static class KnownEditors
 
     /// <summary>The editor <paramref name="id"/> of the platform this process runs on, or null.</summary>
     public static KnownEditor? Find(string id) => Find(id, EditorSearchContext.CurrentPlatform);
+
+    /// <summary>
+    /// Whether <paramref name="editor"/> (the settings' <c>Editor</c>) chooses an editor (12.6): Other,
+    /// or an id this platform's catalogue knows; null, or an id it no longer knows, chooses none. The
+    /// file menus' "Open in editor" and the palette's "Choose an editor…" (12.1) go by it.
+    /// </summary>
+    public static bool IsChosen(EditorSetting? editor) =>
+        editor is not null && (editor.Id == CustomId || Find(editor.Id) is not null);
 
     /// <summary>Where <paramref name="editor"/>'s program may be, in the order they are tried, as absolute paths.</summary>
     public static IReadOnlyList<string> Candidates(KnownEditor editor, EditorSearchContext context)
