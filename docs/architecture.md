@@ -3546,8 +3546,9 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `Phase3Expectations.Common.cs` and `Phase3Expectations.A.cs` to `.D.cs` (nested `PartA` to
   `PartD`). A test is named `Check_<NN>[<suffix>]_<what>`, one per app start; every wait is on a
   condition, never a fixed time. `scripts/time-scripted-check.sh` times chosen checks alone and
-  prints each step's time (its second argument picks the phase and the project: 5 when left out;
-  for phase 5 the filter picks the project, `Phase5Undo` for part U and `Phase5` otherwise).
+  prints each step's time (its second argument picks the phase and the project: 6 when left out,
+  since phase 6; for phase 5 the filter picks the project, `Phase5Undo` for part U and `Phase5`
+  otherwise, and for phase 6 `Phase6Look` for part L and `Phase6` otherwise).
 - Phase 4's walk-through is the project `VisualCommit.VisualTests.Phase4` (D151), built the same
   way: the abstract base `Phase4Checks` (`Phase4Checks.Support.cs`, a copy of what phase 3's
   support offers, plus what phase 3 repeated in each part: a graph assertion, the backups,
