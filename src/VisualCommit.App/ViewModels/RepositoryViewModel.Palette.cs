@@ -1,9 +1,6 @@
 using VisualCommit.App.ViewModels.Commands;
-using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Pages;
-using VisualCommit.Core.Diff;
-using VisualCommit.Core.Git;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -31,33 +28,15 @@ public sealed partial class RepositoryViewModel
     }
 
     /// <summary>
-    /// The open diff's menu as <see cref="OpenDiffMenu"/> builds it, without a hunk (5.5): its
-    /// selected lines' items when lines are selected, its file's items, and the file history and
-    /// blame of its file, which Mod+Shift+H and Mod+Shift+B run (6.1's rows 31 and 32); null
-    /// without a diff.
+    /// The open diff's menu as <see cref="OpenDiffMenu"/> builds it (<see cref="DiffMenu"/>),
+    /// without a hunk (5.5): its selected lines' items when lines are selected, its file's items,
+    /// and the file history and blame of its file, which Mod+Shift+H and Mod+Shift+B run (6.1's
+    /// rows 31 and 32); null without a diff.
     /// </summary>
     public MenuModel? DiffMenuForPalette(RepositoryMenuContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        if (Diff is not { } diff || IsClosed)
-        {
-            return null;
-        }
-
-        var target = diff.Target;
-        var file = new FileMenuTarget(
-            new ChangedFile(target.Path, target.Kind, target.OldPath),
-            target.IsUntracked,
-            ExistsInWorkingTree(target.Path),
-            target.Side == DiffSide.Commit ? target.Commit : null)
-        {
-            CommitParent = target.Side == DiffSide.Commit ? target.Parent : null,
-        };
-        return RepositoryMenus.ForDiff(
-            context,
-            new DiffMenuTarget(file, target.Side, diff.HasSelectedLines, null, diff.ActsOnLines),
-            MenuActions,
-            new DiffMenuActions(diff));
+        return Diff is { } diff && !IsClosed ? DiffMenu(context, diff) : null;
     }
 
     /// <summary>The open page's selected row's menu (5.5): the file history's row, the blame's run, the reflog's row; null without one.</summary>
