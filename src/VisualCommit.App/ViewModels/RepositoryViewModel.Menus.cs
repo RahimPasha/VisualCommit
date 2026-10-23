@@ -62,7 +62,7 @@ public sealed partial class RepositoryViewModel
         TipsOnHead = BranchTipsOnHead(),
         MergeTool = _mergeTool,
         Filters = Filters,
-        Editor = EditorForMenus(),
+        HasEditor = IsEditorChosen(),
     };
 
     /// <summary>

@@ -112,7 +112,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task OpenAsync()
     {
-        var path = await _services.Folders.PickFolderAsync("Open a repository");
+        var path = await _services.Folders.PickFolderAsync(OpenFolderTitle);
         if (path is null)
         {
             return;
@@ -121,6 +121,9 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         ErrorText = null;
         await _tab.OpenAsync(path);
     }
+
+    /// <summary>The folder dialog's title of Open (D42), which the palette's and the key's Open ask with too (docs/phase-6-design.md 5.10).</summary>
+    public const string OpenFolderTitle = "Open a repository";
 
     /// <summary>The folder dialog's title of Init (D42), which the palette's and the key's Init ask with too (docs/phase-6-design.md 5.10).</summary>
     public const string InitFolderTitle = "Choose a folder for the new repository";

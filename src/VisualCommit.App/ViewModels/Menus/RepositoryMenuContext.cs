@@ -37,10 +37,6 @@ public sealed record ToolbarMenuState(
     }
 }
 
-/// <summary>The chosen editor as the file menus need it (docs/phase-6-design.md 12.1).</summary>
-/// <param name="Name">The editor's name.</param>
-public sealed record EditorMenuState(string Name);
-
 /// <summary>One selected commit as the commit menus need it (4b, 4h).</summary>
 /// <param name="Sha">Its full id (a stash's commit for a stash row).</param>
 /// <param name="Subject">Its subject; a stash's message.</param>
@@ -151,10 +147,11 @@ public sealed record RepositoryMenuContext(
     public RepositoryGraphFilter? Filters { get; init; }
 
     /// <summary>
-    /// The editor "Open in editor" starts (docs/phase-6-design.md 12.1), by name, or null while none
-    /// is chosen: the file menus then have no such item. Nothing touches the disk for it.
+    /// An editor is chosen (docs/phase-6-design.md 12.1): the file menus have "Open in editor"
+    /// after "Open file", whichever editor it is (its label is fixed); false while none is chosen.
+    /// Nothing touches the disk for it.
     /// </summary>
-    public EditorMenuState? Editor { get; init; }
+    public bool HasEditor { get; init; }
 
     public HeadState Head => Refs.Head;
 

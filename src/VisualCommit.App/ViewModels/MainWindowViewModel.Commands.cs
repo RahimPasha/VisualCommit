@@ -12,6 +12,7 @@ public partial class MainWindowViewModel
     /// <summary>The most entries the session's runs keep (5.6).</summary>
     public const int MaxPaletteRuns = 20;
 
+    /// <summary>The <see cref="PaletteEntry.Key"/>s the palette ran this session, newest first, at most <see cref="MaxPaletteRuns"/>; in memory, never saved (5.6).</summary>
     private readonly List<string> _paletteRuns = [];
     private AppCommands? _commands;
 
@@ -26,9 +27,6 @@ public partial class MainWindowViewModel
 
     /// <summary>The commands for the active tab (6.4), which the router, the palette and the tests share, in <see cref="KeyTexts.Current"/>'s words.</summary>
     public AppCommands Commands => _commands ??= new AppCommands(this, KeyTexts.Current);
-
-    /// <summary>The <see cref="PaletteEntry.Key"/>s the palette ran this session, newest first, at most <see cref="MaxPaletteRuns"/>; in memory, never saved (5.6).</summary>
-    public IReadOnlyList<string> PaletteRuns => _paletteRuns;
 
     /// <summary>The window's services, for the commands (<see cref="AppCommands"/>).</summary>
     internal TabServices Services => _tabServices;
@@ -108,7 +106,7 @@ public partial class MainWindowViewModel
     /// </summary>
     public async Task OpenRepositoryAsync()
     {
-        var path = await _tabServices.Folders.PickFolderAsync("Open a repository");
+        var path = await _tabServices.Folders.PickFolderAsync(WelcomeViewModel.OpenFolderTitle);
         if (path is not null)
         {
             await OpenRepositoryAtAsync(path);

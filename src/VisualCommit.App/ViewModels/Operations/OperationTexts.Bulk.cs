@@ -31,7 +31,7 @@ public static partial class OperationTexts
     public static string WaitForBulkRun(BulkKind kind) => $"Wait for {BulkName(kind)} to finish";
 
     /// <summary>A row a run stopped before its turn (4.5): "Fetch cancelled" / "Pull cancelled".</summary>
-    public static string BulkRowCancelled(BulkKind kind) => Cancelled(kind == BulkKind.Fetch ? FetchAll.Title : "Pull");
+    public static string BulkRowCancelled(BulkKind kind) => Cancelled(kind == BulkKind.Fetch ? FetchAll.Title : PullTitle);
 
     /// <summary>Cancel all's tooltip (2.5, 4.5): "Cancel the rest of Fetch all" / "Cancel the rest of Pull all".</summary>
     public static string CancelTheRestOf(BulkKind kind) => $"Cancel the rest of {BulkName(kind)}";
@@ -84,15 +84,21 @@ public static partial class OperationTexts
     public static string FetchEveryRepository(string workspace, KeyTexts keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        return keys.WithKey($"Fetch every repository of {workspace}", AppCommand.Fetch);
+        return keys.WithKey(FetchEveryRepository(workspace), AppCommand.Fetch);
     }
+
+    /// <summary>The dashboard's Fetch as the palette names it, without its key (5.4, 14.7): "Fetch every repository of Web".</summary>
+    public static string FetchEveryRepository(string workspace) => $"Fetch every repository of {workspace}";
 
     /// <summary>The dashboard's enabled Pull (4.10): "Pull every repository of Web (Ctrl+Shift+L)", with its key in <paramref name="keys"/>' words (6.8).</summary>
     public static string PullEveryRepository(string workspace, KeyTexts keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        return keys.WithKey($"Pull every repository of {workspace}", AppCommand.Pull);
+        return keys.WithKey(PullEveryRepository(workspace), AppCommand.Pull);
     }
+
+    /// <summary>The dashboard's Pull as the palette names it, without its key (5.4, 14.7): "Pull every repository of Web".</summary>
+    public static string PullEveryRepository(string workspace) => $"Pull every repository of {workspace}";
 
     /// <summary>The dashboard's Fetch when no row would be fetched and none is being read (4.10).</summary>
     public static string NoRepositoryHasRemote(string workspace) => $"No repository of {workspace} has a remote";

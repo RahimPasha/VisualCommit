@@ -1,4 +1,5 @@
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Settings;
@@ -87,10 +88,10 @@ public sealed partial class AppCommands
         switch (command)
         {
             case AppCommand.CommandPalette:
-                return Always("Command palette", () => _ = shell.OpenPaletteAsync());
+                return Always(CommandPaletteViewModel.PaletteTitle, () => _ = shell.OpenPaletteAsync());
 
             case AppCommand.Settings:
-                return Always("Open settings…", () => shell.OpenSettingsCommand.Execute(SettingsSection.General));
+                return Always(OperationTexts.OpenSettingsButton, () => shell.OpenSettingsCommand.Execute(SettingsSection.General));
 
             case AppCommand.ShowKeyboardShortcuts:
                 return Always("Show keyboard shortcuts…", () => shell.OpenSettingsCommand.Execute(SettingsSection.KeyboardShortcuts));
@@ -180,16 +181,16 @@ public sealed partial class AppCommands
                 if (dashboard is not null)
                 {
                     // On a dashboard the toolbar's Fetch and Pull are Fetch all and Pull all (4.10, 6.9).
-                    var label = fetch ? $"Fetch every repository of {dashboard.Name}" : $"Pull every repository of {dashboard.Name}";
+                    var label = fetch ? OperationTexts.FetchEveryRepository(dashboard.Name) : OperationTexts.PullEveryRepository(dashboard.Name);
                     var enabled = fetch ? toolbar.CanFetch : toolbar.CanPull;
                     return new(new(true, enabled, label, null, fetch ? toolbar.FetchDisabledReason : toolbar.PullDisabledReason), run);
                 }
 
-                return FromItem(snapshot, snapshot.EmptyArea, fetch ? FetchAllRemotes : "Pull", run);
+                return FromItem(snapshot, snapshot.EmptyArea, fetch ? FetchAllRemotes : ToolbarPull, run);
             }
 
             case AppCommand.Push:
-                return FromItem(snapshot, snapshot.EmptyArea, "Push", () => toolbar.PushCommand.Execute(null));
+                return FromItem(snapshot, snapshot.EmptyArea, ToolbarPush, () => toolbar.PushCommand.Execute(null));
 
             case AppCommand.CreateBranch:
                 return FromItem(snapshot, snapshot.EmptyArea, CreateBranch, () => toolbar.BranchCommand.Execute(null));

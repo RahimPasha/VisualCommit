@@ -254,6 +254,15 @@ public static partial class OperationTexts
 
         public const string FetchAllRemotes = "Fetch all remotes";
 
+        /// <summary>
+        /// The empty graph area's "Pull" (4b): the toolbar's Pull. The palette's Pull and its key
+        /// (Mod+Shift+L) find the item by this label (docs/phase-6-design.md 5.4), so both use it.
+        /// </summary>
+        public const string ToolbarPull = "Pull";
+
+        /// <summary>The empty graph area's "Push" (4b): the toolbar's Push, which the palette's Push and its key (Mod+Shift+K) find by this label.</summary>
+        public const string ToolbarPush = "Push";
+
         public const string ManageRemotes = "Manage remotes…";
 
         public const string ChangeUrl = "Change URL…";

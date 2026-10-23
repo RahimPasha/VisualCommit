@@ -5,6 +5,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Git;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts;
 
 namespace VisualCommit.App.ViewModels.Settings;
@@ -56,12 +57,6 @@ public sealed record GitNotice(string Text, string? ToolTip = null, bool IsWarni
 /// </summary>
 public sealed partial class GitSettingsViewModel : ObservableObject
 {
-    /// <summary>The tools that need a terminal, which the app cannot run (8.10, D149).</summary>
-    public static IReadOnlySet<string> TerminalTools { get; } = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "vimdiff", "vimdiff1", "vimdiff2", "vimdiff3", "nvimdiff", "nvimdiff1", "nvimdiff2", "nvimdiff3", "emerge",
-    };
-
     private readonly IGitConfiguration? _git;
     private readonly ISettingsRepository? _repository;
     private readonly Func<CancellationToken, Task<MergeToolHelp>> _mergeTools;
@@ -163,12 +158,6 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     /// <summary><c>core.editor</c> as 8.1's read has it (the repository read's when there is one): the editor's mark (12.3).</summary>
     public string? CoreEditor => (_inRepository ?? _outside)?.Winner("core.editor")?.Value;
 
-    /// <summary>Raised after the reads have filled the fields (the opening's and every read back's).</summary>
-    public event EventHandler? Loaded;
-
-    /// <summary>A field wants the keyboard focus (the first wrong one after a refused Save), by automation id.</summary>
-    public event EventHandler<string>? FocusRequested;
-
     /// <summary>Whether either scope shows an error (after a Save, SD9).</summary>
     public bool HasError => Global.HasError || Repository.HasError;
 
@@ -214,7 +203,11 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanUseRepositoryScope))]
     private void ShowRepository() => IsRepositoryScope = true;
 
-    /// <summary>Shows every error of both scopes, edited or not (7.8 step 1); shows the first wrong scope and returns whether there is one.</summary>
+    /// <summary>
+    /// Shows every error of both scopes, edited or not (7.8 step 1); shows the first wrong scope and
+    /// returns whether there is one. The screen then focuses that scope's first wrong field
+    /// (<see cref="GitScopeViewModel.FirstErrorField"/> of <see cref="Shown"/>).
+    /// </summary>
     public bool ShowErrors()
     {
         var global = Global.ShowErrors();
@@ -230,15 +223,6 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         }
 
         return global || repository;
-    }
-
-    /// <summary>Focuses the first wrong field of the shown scope (a refused Save).</summary>
-    public void FocusFirstError()
-    {
-        if (Shown.FirstErrorField is { } field)
-        {
-            FocusRequested?.Invoke(this, field);
-        }
     }
 
     /// <summary>The global scope's changed keys, in 8.3's order.</summary>
@@ -348,12 +332,12 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             }
         }
 
-        foreach (var tool in help.Found.Where(tool => !TerminalTools.Contains(tool.Name)))
+        foreach (var tool in help.Found.Where(tool => !GitMergeTools.TerminalTools.Contains(tool.Name)))
         {
             Add(tool.Name, Describe(tool));
         }
 
-        foreach (var tool in help.NotFound.Where(tool => pathFound.Contains(tool.Name) && !TerminalTools.Contains(tool.Name)))
+        foreach (var tool in help.NotFound.Where(tool => pathFound.Contains(tool.Name) && !GitMergeTools.TerminalTools.Contains(tool.Name)))
         {
             Add(tool.Name, Describe(tool));
         }
@@ -363,14 +347,14 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             Add(name, Texts.ToolOfYourOwn(name));
         }
 
-        foreach (var tool in help.NotFound.Where(tool => !TerminalTools.Contains(tool.Name)))
+        foreach (var tool in help.NotFound.Where(tool => !GitMergeTools.TerminalTools.Contains(tool.Name)))
         {
             Add(tool.Name, Texts.ToolNotFound);
         }
 
         if (scope.MergeToolValue is { } current && !listed.Contains(current))
         {
-            Add(current, TerminalTools.Contains(current) ? Texts.ToolInTerminal : Texts.ToolUnknown);
+            Add(current, GitMergeTools.TerminalTools.Contains(current) ? Texts.ToolInTerminal : Texts.ToolUnknown);
         }
 
         return options;
@@ -482,7 +466,7 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         {
             if (_git is null)
             {
-                Unavailable = "Git is not working on this computer." + Texts.GitNeeded;
+                Unavailable = Services.GitAccess.GitNotWorking + Texts.GitNeeded;
                 return;
             }
 
@@ -526,7 +510,6 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         finally
         {
             IsReading = false;
-            Loaded?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -623,8 +606,18 @@ public sealed record GitFileNames(string GlobalFile, string XdgFile, bool XdgVar
     }
 
     /// <summary>
-    /// Whether two paths name one file: their full forms, ignoring case on Windows and macOS, and on
-    /// macOS without the <c>/private</c> that git may add before <c>/var</c> and <c>/tmp</c>.
+    /// Whether two paths name one file: their full forms, compared as <see cref="WorktreeKey.Comparer"/>
+    /// compares paths (ignoring case on Windows and macOS), and on macOS without the <c>/private</c>
+    /// that git may add before <c>/var</c> and <c>/tmp</c>.
+    /// <para>
+    /// Not <c>WorkspacePaths.Same</c>, on purpose: that one compares folders a user saved, leaves a
+    /// path that is not fully qualified as it is, and keeps macOS's <c>/private</c> apart (a saved
+    /// folder is matched against what git reports, 1.2). Here one side is the file a git config
+    /// origin names, as git resolved it (<c>/private/var/…</c> on macOS, separators of either kind
+    /// on Windows), and the other the file the app worked out (8.2: <c>GlobalFile</c>,
+    /// <c>XdgFile</c>, <c>.git/config</c>), so the two spellings of one file must meet; and either
+    /// may be missing (no home folder, no repository), which names no file.
+    /// </para>
     /// </summary>
     public static bool SamePath(string? a, string? b)
     {
@@ -649,7 +642,7 @@ public sealed record GitFileNames(string GlobalFile, string XdgFile, bool XdgVar
             return OperatingSystem.IsMacOS() && full.StartsWith("/private/", StringComparison.Ordinal) ? full["/private".Length..] : full;
         }
 
-        return string.Equals(Normal(a), Normal(b), OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        return WorktreeKey.Comparer.Equals(Normal(a), Normal(b));
     }
 
     private static string FileNameOf(string? origin) =>

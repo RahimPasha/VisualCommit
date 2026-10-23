@@ -93,7 +93,6 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         Git.Global.PropertyChanged += OnSectionChanged;
         Git.Repository.PropertyChanged += OnSectionChanged;
         Tools.PropertyChanged += OnSectionChanged;
-        Git.FocusRequested += (_, field) => FocusRequested?.Invoke(this, field);
         Tools.FocusRequested += (_, field) => FocusRequested?.Invoke(this, field);
         Loaded = LoadAsync();
     }

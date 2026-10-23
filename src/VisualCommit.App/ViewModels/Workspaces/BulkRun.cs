@@ -333,7 +333,7 @@ public sealed class BulkRun
             if (!row.IsDone)
             {
                 row.State = BulkRowState.Ended;
-                row.Result = new OperationResult(OperationOutcome.Failed, $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : "Pull")} failed", null);
+                row.Result = new OperationResult(OperationOutcome.Failed, $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : OperationTexts.PullTitle)} failed", null);
                 row.Row.ShowBulk(null, heldReason: null, clearsOnNextOperation: true);
             }
         }
