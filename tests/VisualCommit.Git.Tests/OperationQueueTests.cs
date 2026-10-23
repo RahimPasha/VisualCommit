@@ -1132,14 +1132,19 @@ public class OperationQueueTests
         Assert.Equal(OperationOutcome.Succeeded, (await queue.Queue.RunAsync(ended).WaitAsync(Patience, TestCancelled)).Outcome);
         var nextStarted = new TaskCompletionSource();
         var nextGate = new TaskCompletionSource();
-        var next = queue.Queue.RunAsync(Network("Fetch", async _ =>
+        CancellationToken nextToken = default;
+        var next = queue.Queue.RunAsync(Network("Fetch", async context =>
         {
+            nextToken = context.CancellationToken;
             nextStarted.SetResult();
             await nextGate.Task;
             return OperationReport.Done("Fetched from all remotes");
         }));
         await nextStarted.Task.WaitAsync(Patience, TestCancelled);
         queue.Queue.Cancel(ended);
+        Assert.True(nextToken.CanBeCanceled);
+        Assert.False(nextToken.IsCancellationRequested);
+        Assert.True(queue.Queue.Current!.CanCancel);
         nextGate.SetResult();
         Assert.Equal(OperationOutcome.Succeeded, (await next.WaitAsync(Patience, TestCancelled)).Outcome);
     }

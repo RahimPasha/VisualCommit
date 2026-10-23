@@ -130,6 +130,9 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
     /// <summary>Holds every open until it completes.</summary>
     public TaskCompletionSource? Gate { get; set; }
 
+    /// <summary>An open held by <see cref="Gate"/> goes on past its cancellation, as a git process that has started does, until the gate opens.</summary>
+    public bool GateIgnoresCancellation { get; set; }
+
     /// <summary>A meter the opens share with the fakes' refs reads: git calls at once, held by its gate too.</summary>
     public ReadMeter? Meter { get; set; }
 
@@ -184,7 +187,7 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
         {
             if (Gate is { } gate)
             {
-                await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await (GateIgnoresCancellation ? gate.Task : gate.Task.WaitAsync(cancellationToken)).ConfigureAwait(false);
             }
 
             if (meter?.Gate is { } shared)
@@ -197,8 +200,14 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
                 throw failure;
             }
 
-            return _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
+            var repository = _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
                 ?? throw new NotARepositoryException(path);
+            if (repository.OpenGate is { } own)
+            {
+                await own.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return repository;
         }
         finally
         {
@@ -247,6 +256,9 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
     public RepoRefs Refs { get; set; } = refs ?? DashboardTestSupport.MainRefs();
 
     public WorkingTreeStatus Status { get; set; } = status ?? WorkingTreeStatus.Clean;
+
+    /// <summary>When set, the provider's open of this repository's folder waits for it (a row's probe, 2.10).</summary>
+    public TaskCompletionSource? OpenGate { get; set; }
 
     /// <summary>When set, a refs read waits for it.</summary>
     public TaskCompletionSource? RefsGate { get; set; }

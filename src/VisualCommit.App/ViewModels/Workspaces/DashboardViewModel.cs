@@ -33,7 +33,8 @@ public enum DashboardFocus
 /// and logs nothing (WD35); one that comes during a pass folds into one more pass after it. At most
 /// four reads run at once (<see cref="ReadSlots"/>), each holding its slot only around its git
 /// calls; a pass ends without a row whose folder check has not returned (or that waits for a
-/// closed queue on its worktree) once <see cref="CheckPatience"/> has passed, and logs
+/// closed queue on its worktree) once <see cref="CheckPatience"/> has passed, and without one
+/// whose git call has run for <see cref="GitCallPatience"/> (it keeps its slot), and logs
 /// <c>{workspace}: read {n} repositories in {ms} ms</c> with the rows that finished having read
 /// their row, none that ended by following a tab (WD27; no line for none, WD35).
 /// </para>
@@ -53,6 +54,14 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// minutes, and the pass ends without it.
     /// </summary>
     public static readonly TimeSpan CheckPatience = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How long a read's git call holds its pass, by the read clock (2.10, the lead's ruling at
+    /// status step 22): a call still running then (a share that stopped answering after its folder
+    /// check) keeps its slot and ends later, and the pass ends and logs without it, so that F5, the
+    /// activation's reads and trigger 6 are not held by it.
+    /// </summary>
+    public static readonly TimeSpan GitCallPatience = TimeSpan.FromSeconds(10);
 
     private readonly TabServices _services;
     private readonly CancellationTokenSource _lifetime = new();
@@ -136,7 +145,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         : DashboardTexts.WaitToBeRead(row.Name);
 
     /// <summary>The header's count: <c>1 repository</c>, <c>{n} repositories</c>, <c>No repositories</c>.</summary>
-    public string CountText => DashboardTexts.CountText(Rows.Count);
+    public string CountText => WorkspaceTexts.RepositoryCount(Rows.Count);
 
     /// <summary>The workspace has rows: the column headings and the list show; otherwise the empty state (2.5, WD2).</summary>
     public bool HasRows => Rows.Count > 0;
@@ -146,6 +155,13 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
     /// <summary>Refresh's tooltip: <c>Read the repositories of {workspace} again ({key})</c>.</summary>
     public string RefreshToolTip => DashboardTexts.RefreshToolTip(Name);
+
+    /// <summary>
+    /// The shown key texts the header's keyed buttons give UI Automation (6.8, 15.5): Fetch all's and
+    /// Pull all's are the toolbar's Fetch and Pull (6.9), Refresh's F5; from
+    /// <see cref="Commands.KeyTexts.Current"/>, as the window's.
+    /// </summary>
+    public Commands.ShellKeys Keys { get; } = new(Commands.KeyTexts.Current);
 
     /// <summary><c>DashboardNotice</c> (2.5): the failed save's notice while the store's last save failed; null otherwise.</summary>
     public string? Notice => _services.Workspaces.SaveFailed ? DashboardTexts.SaveFailedNotice : null;
@@ -178,7 +194,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary>The dashboard is closed (its tab closed, or the window): it reacts to nothing any more (2.10).</summary>
     public bool IsClosed { get; private set; }
 
-    /// <summary>The tabs this dashboard opened in this session (2.3: a new one goes after the last still open); not saved.</summary>
+    /// <summary>The tabs this dashboard opened in this session that are still open (2.3: a new one goes after the last); the window removes a tab as it closes. Not saved.</summary>
     internal List<RepoTabViewModel> OpenedTabs { get; } = [];
 
     /// <summary>A row asked to open its repository (a double-click, Enter, the row menu's Open, 2.3): the window opens or activates its tab.</summary>
@@ -256,6 +272,20 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         return Rows.FirstOrDefault(row => WorkspacePaths.Same(row.Path, savedPath))?.WorkingDirectory;
     }
 
+    /// <summary>
+    /// Why the row whose saved folder is <paramref name="savedPath"/> has no repository of its own
+    /// to open, as its last read found it (its State tooltip, 1.10: a folder state, or git could not
+    /// open it); null while it has one, follows a tab, is not read yet, or there is no such row. The
+    /// palette's <c>Open repository</c> item of that folder is disabled with it (5.5, D204).
+    /// </summary>
+    public string? FolderReasonOf(string savedPath)
+    {
+        ArgumentNullException.ThrowIfNull(savedPath);
+        return Rows.FirstOrDefault(row => WorkspacePaths.Same(row.Path, savedPath)) is { FollowsTab: false } row
+            ? row.FolderState?.ToolTip ?? (row.ErrorText is not null ? row.State.ToolTip : null)
+            : null;
+    }
+
     /// <summary>A double-click or Enter on <paramref name="row"/> (2.3): opens it, or does nothing for a row without a repository.</summary>
     public void OpenRow(DashboardRowViewModel? row)
     {
@@ -307,8 +337,8 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         return DashboardMenus.ForHeader(
             Name,
             commands.AddOpenTabsReason(WorkspaceId),
-            commands.RenameReason(WorkspaceId),
-            commands.DeleteReason(WorkspaceId),
+            commands.RenameReason,
+            commands.DeleteReason,
             this);
     }
 
@@ -330,11 +360,11 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             status2?.RunningIsCancellable == true,
             status2?.CanCancel == true,
             row.KeptDialog is not null,
-            row.FolderState is { State: WorkspaceFolderState.FolderNotFound } ? DashboardTexts.DoesNotExist(row.Path) : null,
+            row.FolderState is { State: WorkspaceFolderState.FolderNotFound } gone ? gone.ToolTip : null,
             MoveUpReasonOf(row),
             MoveDownReasonOf(row),
             row.FolderState is not null || row.ErrorText is not null,
-            commands.LocateReason(WorkspaceId, row.Path),
+            commands.LocateReason,
             RemoveReasonOf(row));
     }
 
@@ -363,6 +393,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         _pending.Clear();
         _pendingDone?.TrySetResult();
         _pendingDone = null;
+        OpenedTabs.Clear();
         _lifetime.Dispose();
     }
 
@@ -486,8 +517,8 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
     private string? MoveDownReasonOf(DashboardRowViewModel row) => _services.WorkspaceCommands.MoveDownReason(WorkspaceId, row.Path);
 
-    private string? RemoveReasonOf(DashboardRowViewModel row) =>
-        _services.WorkspaceCommands.EditReason ?? row.HeldByRunReason ?? _services.WorkspaceCommands.RemoveReason(WorkspaceId, row.Path);
+    /// <summary><c>Remove from workspace</c>'s reason (2.7): read-only first, then a running run that holds the row (4.7).</summary>
+    private string? RemoveReasonOf(DashboardRowViewModel row) => _services.WorkspaceCommands.RemoveReason ?? row.HeldByRunReason;
 
     /// <summary>
     /// Starts a read pass of the rows <paramref name="trigger"/> selects (2.10), or, while a pass runs,
@@ -559,7 +590,8 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     }
 
     /// <summary>
-    /// One pass (2.10): every row's read starts; the pass ends when each has ended or has sat for
+    /// One pass (2.10): every row's read starts; the pass ends when each has ended, is overdue (a
+    /// git call that has run for <see cref="GitCallPatience"/>) or has sat for
     /// <see cref="CheckPatience"/> in a wait that holds nothing (a folder check that has not
     /// returned, a closed queue on its worktree), and logs its line with the rows that finished
     /// having read their row (WD27): a read that ended by following a tab is not counted, and a
@@ -585,7 +617,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         var ui = SynchronizationContext.Current;
         ITimer? patience = null;
         var patienceRound = 0;
-        bool OnlyWaitsLeft() => reads.All(read => read.IsCompleted || read.IsWaiting);
+        bool OnlyWaitsLeft() => reads.All(read => read.IsCompleted || read.IsOverdue || read.IsWaiting);
         void Expire(int round)
         {
             if (round != patienceRound)
@@ -604,11 +636,12 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
         void Look()
         {
-            // Looked at when the pass starts, and when a read's wait starts or ends or the read
-            // ends. With every read ended the pass ends. With only waits that hold nothing left, it
-            // waits for them CheckPatience by the read clock (a normal folder check returns in
-            // microseconds), then ends without them (2.10); anything else running restarts that time.
-            if (reads.All(read => read.IsCompleted))
+            // Looked at when the pass starts, and when a read's wait starts or ends, it becomes
+            // overdue, or it ends. With every read ended or overdue the pass ends. With only waits
+            // that hold nothing left, it waits for them CheckPatience by the read clock (a normal
+            // folder check returns in microseconds), then ends without them (2.10); anything else
+            // running restarts that time.
+            if (reads.All(read => read.IsCompleted || read.IsOverdue))
             {
                 ended.TrySetResult();
                 return;
@@ -820,9 +853,9 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     private void UpdateCommands()
     {
         var commands = _services.WorkspaceCommands;
-        var addReason = commands.AddRepositoryReason(WorkspaceId);
+        var addReason = commands.AddRepositoryReason;
         CanAddRepository = addReason is null;
-        AddRepositoryToolTip = addReason ?? DashboardTexts.AddRepositoryToolTip(Name);
+        AddRepositoryToolTip = addReason ?? WorkspaceTexts.AddRepositoryFolderTitle(Name);
         var tabsReason = commands.AddOpenTabsReason(WorkspaceId);
         CanAddOpenTabs = tabsReason is null;
         AddOpenTabsToolTip = tabsReason;

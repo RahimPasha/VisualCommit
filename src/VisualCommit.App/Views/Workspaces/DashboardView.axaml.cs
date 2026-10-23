@@ -140,7 +140,6 @@ public partial class DashboardView : UserControl
             return;
         }
 
-        var modifiers = e.KeyModifiers & ~KeyModifiers.Shift;
         var mac = (KeysPlatform ?? PlatformCommandKey()) == CommandKey.Cmd;
         switch (e.Key)
         {
@@ -153,11 +152,11 @@ public partial class DashboardView : UserControl
                 viewModel.RemoveSelected();
                 e.Handled = true;
                 break;
-            case Key.Up when modifiers == KeyModifiers.Alt && e.KeyModifiers == KeyModifiers.Alt:
+            case Key.Up when e.KeyModifiers == KeyModifiers.Alt:
                 viewModel.MoveSelected(-1);
                 e.Handled = true;
                 break;
-            case Key.Down when modifiers == KeyModifiers.Alt && e.KeyModifiers == KeyModifiers.Alt:
+            case Key.Down when e.KeyModifiers == KeyModifiers.Alt:
                 viewModel.MoveSelected(1);
                 e.Handled = true;
                 break;

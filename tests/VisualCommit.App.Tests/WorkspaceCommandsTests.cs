@@ -303,8 +303,8 @@ public class WorkspaceCommandsTests
         Assert.Null(session.Commands.MoveDownReason("web", a));
         Assert.Equal("It is the last repository", session.Commands.MoveDownReason("web", c));
         Assert.Null(session.Commands.MoveUpReason("web", c));
-        Assert.Null(session.Commands.RemoveReason("web", b));
-        Assert.Null(session.Commands.LocateReason("web", b));
+        Assert.Null(session.Commands.RemoveReason);
+        Assert.Null(session.Commands.LocateReason);
 
         session.Commands.MoveDown("web", a);
         Assert.Equal([b, a, c], session.PathsOf("web"));
@@ -399,14 +399,14 @@ public class WorkspaceCommandsTests
             new[]
             {
                 session.Commands.CreateReason,
-                session.Commands.RenameReason("web"),
-                session.Commands.DeleteReason("web"),
-                session.Commands.AddRepositoryReason("web"),
+                session.Commands.RenameReason,
+                session.Commands.DeleteReason,
+                session.Commands.AddRepositoryReason,
                 session.Commands.AddOpenTabsReason("web"),
-                session.Commands.RemoveReason("web", path),
+                session.Commands.RemoveReason,
                 session.Commands.MoveUpReason("web", path + "2"),
                 session.Commands.MoveDownReason("web", path),
-                session.Commands.LocateReason("web", path),
+                session.Commands.LocateReason,
             },
             actual => Assert.Equal(reason, actual));
 

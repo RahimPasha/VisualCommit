@@ -183,6 +183,23 @@ public static class AppShortcuts
     public static IReadOnlyList<(string Group, string Action, IReadOnlyList<AppCommand> Commands)> SettingsRows =>
         [.. SettingsGroups.SelectMany(group => group.Rows.Select(row => (group.Title, row.Action, row.Commands)))];
 
+    /// <summary>The dashboard list's Enter, which opens the selected row (docs/phase-6-design.md 2.7): its view handles it; the settings list and the row menu (6.7) show it.</summary>
+    public static Shortcut DashboardOpen => new(Enter);
+
+    /// <summary>The dashboard list's Alt+Up, which moves the selected row up (2.7, 1.10).</summary>
+    public static Shortcut DashboardMoveUp => new(Up, Alt);
+
+    /// <summary>The dashboard list's Alt+Down, which moves the selected row down (2.7, 1.10).</summary>
+    public static Shortcut DashboardMoveDown => new(Down, Alt);
+
+    /// <summary>
+    /// The dashboard list's keys that remove the selected row on <paramref name="platform"/> (2.7):
+    /// Delete; on macOS Cmd+Backspace first (the key a Mac labels "delete" sends Backspace), then
+    /// Delete. The row menu shows the first.
+    /// </summary>
+    public static IReadOnlyList<Shortcut> DashboardRemove(CommandKey platform) =>
+        platform == CommandKey.Cmd ? [new(Backspace, Command), new(Delete)] : [new(Delete)];
+
     /// <summary>The binding of <paramref name="command"/>, or null for a command without a key.</summary>
     private static ShortcutBinding? BindingOf(AppCommand command) => Bindings.FirstOrDefault(binding => binding.Command == command);
 
@@ -288,11 +305,11 @@ public static class AppShortcuts
         ]),
         new("Dashboard",
         [
-            FromKeys("Open the repository", new Shortcut(Enter)),
+            FromKeys("Open the repository", DashboardOpen),
 
             // On a Mac the key labelled "delete" sends Backspace, so Cmd+Backspace there too (2.7).
-            new("Remove from workspace", platform => platform == CommandKey.Cmd ? [new(Backspace, Command), new(Delete)] : [new(Delete)], []),
-            FromKeys("Move the repository", new(Up, Alt), new(Down, Alt)),
+            new("Remove from workspace", DashboardRemove, []),
+            FromKeys("Move the repository", DashboardMoveUp, DashboardMoveDown),
         ]),
         new("Dialogs and menus",
         [

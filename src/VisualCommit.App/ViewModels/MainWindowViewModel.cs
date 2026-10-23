@@ -117,9 +117,11 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The one rule of docs/phase-3-design.md 4f: a dialog that an operation of a repository opens
     /// (a confirmation, the name, choice, pick, push, reset, stash, tag and remotes dialogs, git's
-    /// and ssh's prompts) names that repository, "In &lt;repo&gt;" under its title, while more than
-    /// one tab has a repository. The error dialog names it always. Every tab's operations and the
-    /// prompt dialogs read it when a dialog opens (<see cref="TabServices.NamesRepositoryInDialogs"/>).
+    /// and ssh's prompts) names that repository, "In &lt;repo&gt;" under its title, while a
+    /// dashboard tab is open (docs/phase-6-design.md 3.8: a bulk run's sign-in says which row
+    /// asks) or more than one tab has a repository. The error dialog names it always. Every tab's
+    /// operations and the prompt dialogs read it when a dialog opens
+    /// (<see cref="TabServices.NamesRepositoryInDialogs"/>).
     /// </summary>
     public bool NamesRepositoryInDialogs => AnyDashboardOpen || Tabs.Count(tab => tab.Repository is not null) > 1;
 

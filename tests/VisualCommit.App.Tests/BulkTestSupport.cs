@@ -46,9 +46,19 @@ internal sealed class BulkProvider : IRepositoryProvider, IDisposable
     public string PathOf(string name) => Path.Combine(Root, name);
 
     public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) =>
-        _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value is { } repository
-            ? Task.FromResult<IGitRepository>(repository)
-            : Task.FromException<IGitRepository>(new NotARepositoryException(path));
+        _opensAs.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value is { } other
+            ? Task.FromResult(other)
+            : _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value is { } repository
+                ? Task.FromResult<IGitRepository>(repository)
+                : Task.FromException<IGitRepository>(new NotARepositoryException(path));
+
+    /// <summary>
+    /// From now on an open of <paramref name="name"/>'s folder gives <paramref name="repository"/>:
+    /// a repository git finds around the folder once its own <c>.git</c> is gone (D204, 0.8).
+    /// </summary>
+    public void OpenAs(string name, IGitRepository repository) => _opensAs[Path.Combine(Root, name)] = repository;
+
+    private readonly ConcurrentDictionary<string, IGitRepository> _opensAs = new(StringComparer.OrdinalIgnoreCase);
 
     public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
@@ -101,6 +111,9 @@ internal sealed class BulkRepository(BulkProvider provider, string folder, RepoR
 
     public WorkingTreeStatus Status { get; set; } = status ?? WorkingTreeStatus.Clean;
 
+    /// <summary>What <see cref="OpenedAtTopAsync"/> answers: false for a repository opened from a folder inside its working tree (1.2).</summary>
+    public bool AtTop { get; set; } = true;
+
     public TaskCompletionSource? RefsGate { get; set; }
 
     public TaskCompletionSource? StatusGate { get; set; }
@@ -133,6 +146,8 @@ internal sealed class BulkRepository(BulkProvider provider, string folder, RepoR
     public int Pulls => Volatile.Read(ref _pulls);
 
     public int RefsReads => Volatile.Read(ref _refsReads);
+
+    public override Task<bool> OpenedAtTopAsync(CancellationToken cancellationToken = default) => Task.FromResult(AtTop);
 
     public override async Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default)
     {

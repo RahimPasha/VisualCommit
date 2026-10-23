@@ -1242,7 +1242,9 @@ however long the first pass takes (the lead's ruling of 2026-10-23, after the he
 it started, on the read clock, no longer holds the pass either: it keeps its slot and completes later,
 and the pass ends and logs without it, as with a folder check that has not returned, so a share that
 stops answering after its folder check cannot hold F5, the activation's reads and trigger 6 (the
-lead's ruling at status step 22's review). So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
+lead's ruling at status step 22's review). As built (`DashboardViewModel.GitCallPatience`): the 10 s
+count per git call of the read (the probe's, the summary's read or refresh), a read once overdue stays
+so, and an overdue read ends the pass at once, without the folder check's 2 s. So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
 before the read clock moves log no pass line, and `WaitForDashboardReadAsync` is ended only by a pass
 that read; `DashboardRefreshTests` pins it (2.12). `ShellDriver.Phase6.Dashboard.cs`
 (17.2) has `WaitForDashboardReadAsync()` (the pass's line, no row `Reading…`) and `ActivateWindow()`
@@ -1467,7 +1469,14 @@ adoption and a row's acquisition cannot interleave.
 A worktree is held while any queue on it runs an operation, a background one included, whether the
 queue's view model was a tab's that closed or a summary the registry released: a new queue never runs
 beside a running one on one worktree (the lead's ruling of 2026-10-23 at status step 22's review,
-which found `UnregisterTab` keeping background operations and `ReleaseSummary` not).
+which found `UnregisterTab` keeping background operations and `ReleaseSummary` not). As built there
+too: an adoption raises no `Changed`; the adopting tab's registration does, so a row whose summary a
+tab adopts keeps the same object and its kept dialog (4.6); a tab that closes leaves every dashboard's
+`OpenedTabs` at once (2.3); at each row's turn in a run the folder and its git folder are checked off
+the UI thread and, when either is gone, the probe decides (the row's own summary shows the folder state
+and is let go, a followed tab's row is left out with that state's reason, a folder that is a top
+again is read again, 4.3, D207); a run's failure outside the queue shows `Fetch failed` / `Pull failed`
+in the danger tone with `{Title} failed: {message}` as its tooltip (4.6).
 
 ### 3.5 Rows that use a tab's view model
 
@@ -2721,7 +2730,9 @@ so a menu of the table grows where a keyed item is its widest (16.1); at 520 the
 key stays whole (the `Auto` column is measured first). A dashboard row's menu shows the keys its
 selected row's own keys run (Open: Enter; Move up and Move down: Alt+Up, Alt+Down; Remove from
 workspace: Delete, Cmd+Backspace on macOS), as D192 and D215 allow (the lead's ruling at status step
-22's review; the table above had left the row out).
+22's review; the table above had left the row out), through `MenuItem.KeyText` and
+`AppShortcuts.DashboardOpen`, `DashboardMoveUp`, `DashboardMoveDown` and `DashboardRemove(platform)`,
+which the settings screen's Dashboard group shows too.
 
 ### 6.8 Tooltips, help texts and AcceleratorKey
 

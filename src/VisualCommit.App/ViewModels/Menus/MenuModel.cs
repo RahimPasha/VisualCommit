@@ -36,6 +36,14 @@ public sealed record MenuItem(
     /// which shows no key.
     /// </summary>
     public AppCommand? Command { get; init; }
+
+    /// <summary>
+    /// The key the item's own view handles for the same action on the same object, which is no
+    /// command of the catalogue (6.7, the lead's ruling at status step 22: the dashboard row's
+    /// Enter, Alt+Up, Alt+Down and Delete), in the platform's words; the menu shows it beside the
+    /// label as it shows <see cref="Command"/>'s. Null for every other item.
+    /// </summary>
+    public string? KeyText { get; init; }
 }
 
 /// <summary>A whole menu: its entries in order, the header first.</summary>

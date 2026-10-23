@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using VisualCommit.Core.Logging;
 
 namespace VisualCommit.App.ViewModels.Workspaces;
 
@@ -11,8 +12,11 @@ namespace VisualCommit.App.ViewModels.Workspaces;
 /// </summary>
 public interface IDashboardToolbar : INotifyPropertyChanged
 {
-    /// <summary>The workspace's name, as its tab shows it: the enabled tooltips name it ("Fetch every repository of {workspace}").</summary>
+    /// <summary>The workspace's name, as its tab shows it: the enabled tooltips name it ("Fetch every repository of {workspace}"), and the toolbar's log lines.</summary>
     string WorkspaceName { get; }
+
+    /// <summary>Where the toolbar logs a button that failed past its run (the session's log).</summary>
+    IAppLog Log { get; }
 
     /// <summary>Fetch all can run now.</summary>
     bool CanFetchAll { get; }

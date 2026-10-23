@@ -3,7 +3,8 @@ namespace VisualCommit.App.ViewModels.Commands;
 /// <summary>
 /// The shown key texts of the shell's buttons (docs/phase-6-design.md 6.8): what
 /// <c>AutomationProperties.AcceleratorKey</c> of the toolbar's buttons, the tab strip's "+" and the
-/// status bar's activity log toggle binds to (<see cref="MainWindowViewModel.Keys"/>), enabled or
+/// status bar's activity log toggle binds to (<see cref="MainWindowViewModel.Keys"/>), and the
+/// dashboard header's Fetch all, Pull all and Refresh (<c>DashboardViewModel.Keys</c>), enabled or
 /// not; null for a command without a key. Each key text has one source: the close button's is
 /// its tab's (<see cref="RepoTabViewModel.CloseKeyText"/>), the welcome page's and the buttons'
 /// outside the shell are <see cref="ShellToolTips"/>'.
@@ -15,6 +16,7 @@ public sealed class ShellKeys
     {
         ArgumentNullException.ThrowIfNull(keys);
         Settings = keys.Of(AppCommand.Settings);
+        Refresh = keys.Of(AppCommand.Refresh);
         NewTab = keys.Of(AppCommand.NewTab);
         Fetch = keys.Of(AppCommand.Fetch);
         Pull = keys.Of(AppCommand.Pull);
@@ -29,6 +31,9 @@ public sealed class ShellKeys
     }
 
     public string? Settings { get; }
+
+    /// <summary>Refresh's key (F5; Cmd+R on macOS): the dashboard header's <c>DashboardRefresh</c>.</summary>
+    public string? Refresh { get; }
 
     public string? NewTab { get; }
 

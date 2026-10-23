@@ -12,8 +12,9 @@ using VisualCommit.Core.Workspaces;
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
-/// One tab (D45): a repository, or the welcome page when it has none. The window's regions show
-/// the active tab's left panel, graph area, details and branch.
+/// One tab (D45): a repository, a workspace's dashboard (D205, docs/phase-6-design.md 2.1), or the
+/// welcome page when it has neither. The window's regions show the active tab's left panel, graph
+/// area, details and branch; a dashboard spans the three columns, with no side panel (2.4).
 /// </summary>
 public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 {
@@ -221,7 +222,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         PendingPath = path;
         IsOpening = true;
-        Title = FolderName(path);
+        Title = WorkspaceTexts.FolderName(path);
     }
 
     /// <summary>
@@ -234,7 +235,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         var sinceOpening = Stopwatch.StartNew();
         var previousTitle = Title;
         IsOpening = true;
-        Title = FolderName(path);
+        Title = WorkspaceTexts.FolderName(path);
         var restoring = PendingPath is not null;
         try
         {
@@ -393,9 +394,6 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(BranchText));
         }
     }
-
-    private static string FolderName(string path) =>
-        System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(path));
 
     private void OnRepositoryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

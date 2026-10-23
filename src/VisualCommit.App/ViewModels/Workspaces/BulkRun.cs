@@ -326,15 +326,18 @@ public sealed class BulkRun
         }
         catch (Exception ex)
         {
-            // An operation reports its own failures; this is what slipped past the run.
+            // An operation reports its own failures; this is what slipped past the run. No status
+            // bar says it, so the row does: "{Title} failed" in the danger tone, the exception's
+            // message in its tooltip, until the row's next operation (4.6).
             _log.Error($"{_workspace}: {OperationTexts.BulkName(Kind)}: {row.Row.Name} failed.", ex);
             row.Request?.Release();
             row.Request = null;
             if (!row.IsDone)
             {
+                var failed = $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : OperationTexts.PullTitle)} failed";
                 row.State = BulkRowState.Ended;
-                row.Result = new OperationResult(OperationOutcome.Failed, $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : OperationTexts.PullTitle)} failed", null);
-                row.Row.ShowBulk(null, heldReason: null, clearsOnNextOperation: true);
+                row.Result = new OperationResult(OperationOutcome.Failed, failed, null);
+                row.Row.ShowBulk(new DashboardCellText(failed, DashboardTone.Danger, $"{failed}: {ex.Message}"), heldReason: null, clearsOnNextOperation: true);
             }
         }
         finally
@@ -373,7 +376,36 @@ public sealed class BulkRun
 
         try
         {
-            // The row's turn (4.3): its current view model, never the one of the run's start.
+            // The row's turn (4.3): its folder checked again (D207, D204: a folder that lies inside
+            // another working tree now is never acted on as the outer one), then its current view
+            // model decided, never the one of the run's start.
+            if (row.Row.Repository is { IsClosed: false } current)
+            {
+                WorkspaceFolderProbe? found;
+                try
+                {
+                    found = await row.Row.CheckAtTurnAsync(current, _stop.Token);
+                }
+                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+                {
+                    // Stopped while the folder was checked: StopStarting ended the row in line.
+                    return false;
+                }
+
+                if (row.State == BulkRowState.CancelledInLine)
+                {
+                    return false;
+                }
+
+                if (found is { State: not WorkspaceFolderState.Ready } && row.Row.FolderState is null)
+                {
+                    // A followed tab's folder: the tab keeps its view model, the row is left out
+                    // with the folder state's reason.
+                    Skip(row, found.ToolTip);
+                    return false;
+                }
+            }
+
             switch (Decide(row.Row))
             {
                 case Decision.Skip skip:
@@ -502,12 +534,15 @@ public sealed class BulkRun
     }
 
     /// <summary>
-    /// 4.2's table from the row's state now: a folder state or a failed read leaves it out with
-    /// nothing new in its Operation cell; a row not read yet, or without a live view model, waits
-    /// for a read; otherwise the toolbar's rule, its first reason in <c>Reasons</c>' order.
+    /// 4.2's table from <paramref name="row"/>'s state now, for a run of <paramref name="kind"/>: a
+    /// folder state or a failed read leaves it out with nothing new in its Operation cell; a row not
+    /// read yet, or without a live view model, waits for a read; otherwise the toolbar's rule, its
+    /// first reason in <c>Reasons</c>' order. The one rule: the dashboard's toolbar asks it too
+    /// (<see cref="DashboardBulkViewModel"/>: a run would act on a row it does not leave out, 4.10).
     /// </summary>
-    private Decision Decide(DashboardRowViewModel row)
+    internal static Decision Decide(DashboardRowViewModel row, BulkKind kind)
     {
+        ArgumentNullException.ThrowIfNull(row);
         if (row.FolderState is not null || row.ErrorText is not null)
         {
             return new Decision.Skip(null);
@@ -518,15 +553,17 @@ public sealed class BulkRun
             return Decision.Read.Instance;
         }
 
-        return DecideReason(row) is { } reason ? new Decision.Skip(reason) : Decision.Go.Instance;
+        return ReasonOf(row.Refs, row.Status, kind) is { } reason ? new Decision.Skip(reason) : Decision.Go.Instance;
     }
 
-    private string? DecideReason(DashboardRowViewModel row) => ReasonOf(row.Refs, row.Status);
+    private Decision Decide(DashboardRowViewModel row) => Decide(row, Kind);
+
+    private string? DecideReason(DashboardRowViewModel row) => ReasonOf(row.Refs, row.Status, Kind);
 
     /// <summary>The toolbar's reason from <paramref name="repository"/>'s own refs and status, or null.</summary>
-    private string? ReasonOf(RepositoryViewModel repository) => ReasonOf(repository.Refs, repository.Status);
+    private string? ReasonOf(RepositoryViewModel repository) => ReasonOf(repository.Refs, repository.Status, Kind);
 
-    private string? ReasonOf(RepoRefs? refs, WorkingTreeStatus? status)
+    private static string? ReasonOf(RepoRefs? refs, WorkingTreeStatus? status, BulkKind kind)
     {
         if (refs is null || status is null)
         {
@@ -534,7 +571,7 @@ public sealed class BulkRun
         }
 
         var states = ToolbarViewModel.StatesFor(refs, status);
-        return Kind == BulkKind.Fetch ? states.Fetch.Reason : states.Pull.Reason;
+        return kind == BulkKind.Fetch ? states.Fetch.Reason : states.Pull.Reason;
     }
 
     private void Skip(BulkRunRow row, string? reason)
@@ -609,7 +646,7 @@ public sealed class BulkRun
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
     /// <summary>What 4.2's table decides for a row now.</summary>
-    private abstract record Decision
+    internal abstract record Decision
     {
         /// <summary>Left out, with the toolbar's reason, or none for a row without a repository.</summary>
         public sealed record Skip(string? Reason) : Decision;

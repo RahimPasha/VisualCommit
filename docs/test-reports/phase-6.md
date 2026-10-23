@@ -3909,6 +3909,13 @@ or the gate finds, goes here with its reason.
   pointer moves onto the item in one move; L30 asserts the Changes cells' tooltips that design 14 and
   W0 give them (scenario facts 2.3 left them out); and a recent folder is drawn whole where it fits, as
   on CI's Linux with its short `/tmp`, else its start and "…".
+- **The dashboard row's menu (W2 step 3, W2's `w2c`/`w2d`, L30's row menu), 2026-10-23.** At status step
+  22's review the lead ruled that the row menu shows the keys its row's own keys run (design 6.7):
+  Open `Enter`, Move up `Alt+Up`, Move down `Alt+Down`, Remove from workspace `Delete` (Option and
+  Cmd+Backspace on macOS). The checks assert those menus' labels and places, which hold; the gate's
+  inspectors see the keys drawn at the items' right, and the menus as wide as 6.7's rule makes them.
+- **Palette items of a workspace folder that is not Ready (K10's items), 2026-10-23.** Listed disabled with
+  the row's State tooltip, and opening one inside another working tree is refused (design 5.10, D204).
 - **K10 step 7's Open, Clone and Init repository…, 2026-10-23.** Written without their keys, which
   6.1 gives them and k10a's rows 23 to 25 show (`Ctrl+O`, `Ctrl+Shift+C`, `Ctrl+Shift+I`); part K's
   writer asserts the keys, and the step now names them.

@@ -20,8 +20,8 @@ public static class WorkspaceMenus
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(commands);
-        var renameReason = commands.RenameReason(item.Id);
-        var deleteReason = commands.DeleteReason(item.Id);
+        var renameReason = commands.RenameReason;
+        var deleteReason = commands.DeleteReason;
         return new MenuModel(
         [
             new MenuHeader(item.Name),

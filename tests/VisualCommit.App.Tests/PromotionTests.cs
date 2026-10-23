@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -91,21 +92,73 @@ public class PromotionTests
         using var summary = RepositoryViewModel.ForSummary(repository, DashboardTestSupport.Services(provider));
 
         var summaryRead = summary.StartAsync();
-        await DashboardTestSupport.WaitUntilAsync(() => repository.RefsReads == 1, "the summary read");
+        await DashboardTestSupport.WaitUntilAsync(() => repository.RefsReads == 1 && repository.StatusReads == 1, "the summary read");
         summary.Promote(Stopwatch.StartNew());
         Assert.False(summary.HasFirstRead);
 
+        // The full start begins, held in its status read; the summary read ends meanwhile and
+        // applies nothing, its first read left to the full start.
         var fresh = DashboardTestSupport.MainRefs(behind: 7);
         repository.Refs = fresh;
         repository.RefsGate = null;
-        await summary.StartAsync().WaitAsync(Patience);
-        Assert.True(summary.HasFirstRead);
+        repository.StatusGate = new TaskCompletionSource();
+        var full = summary.StartAsync();
+        await DashboardTestSupport.WaitUntilAsync(() => repository.StatusReads == 2 && summary.Refs is not null, "the full start's refs, its status read held");
         Assert.Same(fresh, summary.Refs);
-
         held.SetResult();
         await summaryRead.WaitAsync(Patience);
-        await DashboardTestSupport.SettleAsync();
+        Assert.False(summary.HasFirstRead);
+        Assert.False(full.IsCompleted);
         Assert.Same(fresh, summary.Refs);
+
+        repository.StatusGate.SetResult();
+        await full.WaitAsync(Patience);
+        Assert.True(summary.HasFirstRead);
+        Assert.Same(fresh, summary.Refs);
+    }
+
+    [AvaloniaFact]
+    public async Task A_promotion_after_a_failed_summary_read_drops_its_error_and_its_rows_wait_for_the_full_start()
+    {
+        // 3.1's step 5 completed FirstRead with the failure; the tab that adopts the view model
+        // shows no error over its graph, and the row that follows it reads Reading… until the full
+        // start applies, Open enabled (it activates the tab), no run deciding it meanwhile.
+        using var provider = new FakeProvider();
+        var repository = provider.Add("api");
+        repository.StatusFailure = new GitException("git status --porcelain=v2 --branch", 128, "fatal: index file corrupt\n");
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(repository.WorkingDirectory), new ManualTimeProvider(), new RecordingLog());
+        var dashboard = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
+        var row = dashboard.Rows[0];
+        dashboard.OnBecameActive();
+        await DashboardTestSupport.WaitUntilAsync(() => row.ErrorText is not null && !row.IsReading, "the failed summary read");
+        var summary = row.Repository!;
+        Assert.True(summary.HasFirstRead);
+        Assert.Equal(ViewModels.Workspaces.WorkspaceFolderProbe.NotOpenedText, row.State.Text);
+        Assert.NotNull(dashboard.MenuStateOf(row).OpenReason);
+
+        // The status reads again now; the full start is held in its refs read.
+        repository.StatusFailure = null;
+        repository.RefsGate = new TaskCompletionSource();
+        using var tab = new RepoTabViewModel(services);
+        var opening = tab.OpenAsync(repository.WorkingDirectory);
+        await DashboardTestSupport.WaitUntilAsync(() => tab.Repository is not null, "the adoption");
+
+        Assert.Same(summary, tab.Repository);
+        Assert.Equal((null, null, false), (summary.ErrorText, summary.StatusErrorText, summary.HasFirstRead));
+        Assert.True(row.FollowsTab);
+        Assert.Equal((null, null), (row.FolderState, row.ErrorText));
+        Assert.True(row.IsNotReadYet);
+        Assert.False(row.HasRepository);
+        Assert.Equal(ViewModels.Workspaces.DashboardTexts.ReadingText, row.State.Text);
+        Assert.Null(dashboard.MenuStateOf(row).OpenReason);
+
+        repository.RefsGate.SetResult();
+        Assert.True(await opening.WaitAsync(Patience));
+        Assert.True(summary.HasFirstRead);
+        Assert.Null(summary.ErrorText);
+        Assert.True(row.HasRepository);
+        Assert.Equal(("main", string.Empty), (row.BranchText, row.State.Text));
+        dashboard.Dispose();
     }
 
     [AvaloniaFact]
@@ -279,8 +332,12 @@ public class PromotionTests
         var services = DashboardTestSupport.Services(provider);
         using var summary = RepositoryViewModel.ForSummary(repository, services);
         await summary.StartAsync();
+
+        // In summary mode a save reads nothing; the positive control, a tab on the same services
+        // told after it, reads merge.tool.
+        var control = await GitSettingsChangedTests.ControlAsync(provider, services);
         services.RaiseGitSettingsChanged();
-        await DashboardTestSupport.SettleAsync();
+        await control.ToldAsync();
         Assert.Equal(0, repository.MergeToolReads);
 
         summary.Promote(Stopwatch.StartNew());
