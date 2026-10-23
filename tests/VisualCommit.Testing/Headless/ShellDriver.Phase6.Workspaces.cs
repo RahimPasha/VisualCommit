@@ -64,7 +64,8 @@ public sealed partial class ShellDriver
     /// first tab is the dashboard of <paramref name="openDashboardOf"/> (when given) followed by
     /// <paramref name="extraTabs"/>, the first tab active, and starts as <see cref="Start"/> does.
     /// With neither a dashboard nor extra tabs the session holds no tab, so the app starts on one
-    /// empty tab whose welcome page lists the workspaces.
+    /// empty tab whose welcome page lists the workspaces. <paramref name="tools"/> is
+    /// <see cref="Start"/>'s: other tool catalogues than the fixed ones, such as <see cref="HeldMergeTools.Catalogues"/>.
     /// </summary>
     public static ShellDriver StartWithWorkspace(
         string dataDirectory,
@@ -75,13 +76,14 @@ public sealed partial class ShellDriver
         int? height = 700,
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
-        TimeProvider? readClock = null)
+        TimeProvider? readClock = null,
+        ToolCatalogues? tools = null)
     {
         ArgumentNullException.ThrowIfNull(workspaces);
         WriteWorkspaces(dataDirectory, workspaces);
         List<TabState> tabs = openDashboardOf is null ? [] : [new TabState(null, openDashboardOf)];
         tabs.AddRange(extraTabs ?? []);
-        return StartWithTabs(dataDirectory, tabs, 0, width, height, promptHandler, systemDark, readClock);
+        return StartWithTabs(dataDirectory, tabs, 0, width, height, promptHandler, systemDark, readClock, tools);
     }
 
     /// <summary>
