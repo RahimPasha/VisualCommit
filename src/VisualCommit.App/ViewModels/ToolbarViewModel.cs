@@ -270,20 +270,36 @@ public sealed partial class ToolbarViewModel : ObservableObject
     };
 
     /// <summary>
-    /// How a branch's upstream is named in texts (design, "Upstreams"): <c>&lt;r&gt;/&lt;u&gt;</c>
-    /// from <see cref="GitRef.UpstreamRemote"/> and <see cref="GitRef.UpstreamRemoteRef"/>, or the
-    /// local branch's name alone for a local upstream (D114); null without an upstream.
+    /// How a branch's upstream is named in texts (design, "Upstreams"; docs/phase-6-design.md 10.4,
+    /// GD15): git's <c>%(upstream)</c> (<see cref="GitRef.UpstreamRef"/>) without <c>refs/remotes/</c>
+    /// when it lies there, the name <c>git status</c> shortens (<c>upstream/pr/7</c> for a branch
+    /// that tracks <c>refs/pull/7/head</c> on <c>upstream</c>); otherwise <c>&lt;r&gt;/&lt;u&gt;</c> from
+    /// <see cref="GitRef.UpstreamRemote"/> and <see cref="GitRef.UpstreamRemoteRef"/>; the local
+    /// branch's name alone for a local upstream (D114); null without an upstream. Git maps the ref
+    /// on the remote forward by the remote's first fetch line that matches it, in configuration
+    /// order, as a push updates the tracking ref; a negative line takes that mapping away only
+    /// from an exact line (with it, git shows no upstream at all). With the default lines every
+    /// upstream reads <c>&lt;r&gt;/&lt;u&gt;</c>, as before. A mirror line (<c>+refs/*:refs/*</c>)
+    /// before the remote's other lines makes <c>%(upstream)</c> the local branch of the same name,
+    /// so the text falls back to <c>&lt;r&gt;/&lt;u&gt;</c> (git's status says just the branch's
+    /// name). Display only: what an operation acts on is still the three values (D101).
     /// </summary>
     public static string? UpstreamText(GitRef branch)
     {
         ArgumentNullException.ThrowIfNull(branch);
         const string Heads = "refs/heads/";
+        const string Remotes = "refs/remotes/";
         var remoteRef = branch.UpstreamRemoteRef is { } full && full.StartsWith(Heads, StringComparison.Ordinal)
             ? full[Heads.Length..]
             : branch.UpstreamRemoteRef;
         if (branch.HasLocalUpstream)
         {
             return remoteRef ?? branch.Upstream;
+        }
+
+        if (branch.UpstreamRef is { } tracking && tracking.Length > Remotes.Length && tracking.StartsWith(Remotes, StringComparison.Ordinal))
+        {
+            return tracking[Remotes.Length..];
         }
 
         return branch.UpstreamRemote is { } remote && remoteRef is not null ? $"{remote}/{remoteRef}" : branch.Upstream;

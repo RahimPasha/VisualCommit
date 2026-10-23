@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
@@ -73,15 +74,11 @@ public sealed record CommitMenuInfo(string Sha, string Subject, IReadOnlyList<st
 /// <summary>What a drop of a branch onto a branch found when it read the repository (4g), before its menu is built.</summary>
 /// <param name="TargetIsAncestorOfSource">
 /// <c>git merge-base --is-ancestor &lt;B&gt; &lt;A&gt;</c> succeeded: B can be fast-forwarded to A
-/// (2.7, 2.10); otherwise "&lt;B&gt; has commits that &lt;A&gt; does not have".
+/// (2.7, 2.10); otherwise "&lt;B&gt; has commits that &lt;A&gt; does not have". How a remote
+/// branch as the target is fetched is read from the refs' snapshot, not here
+/// (<see cref="RepoRefs.SourceOf(GitRef)"/>, docs/phase-6-design.md 10.7).
 /// </param>
-/// <param name="RemoteMapsBranchesDifferently">
-/// For a remote branch as the target: its remote's fetch refspec is not the default
-/// (<c>+refs/heads/*:refs/remotes/&lt;r&gt;/*</c>), so the branch's name on the remote is not
-/// known and the drop offers nothing but its reason (4g).
-/// </param>
-// Known issue (phase 3): nothing sets RemoteMapsBranchesDifferently yet, because no code reads remote.<r>.fetch; a drop onto a remote with another fetch refspec offers the push as for the default one.
-public sealed record DropFacts(bool TargetIsAncestorOfSource, bool RemoteMapsBranchesDifferently = false)
+public sealed record DropFacts(bool TargetIsAncestorOfSource)
 {
     /// <summary>
     /// The source A already contains the target B (<c>git merge-base --is-ancestor &lt;B&gt;
@@ -187,9 +184,17 @@ public sealed record RepositoryMenuContext(
     /// <summary>Two or more commits are selected: their menu is the one for several commits (4h).</summary>
     public bool HasMultiSelection => SelectedCommits.Count > 1;
 
-    /// <summary>The branch, remote branch or tag with this full name, or null.</summary>
-    public GitRef? FindRef(string fullName) =>
-        Refs.Refs.FirstOrDefault(gitRef => string.Equals(gitRef.FullName, fullName, StringComparison.Ordinal));
+    /// <summary>
+    /// The branch, remote branch or tag with this full name, or null: the first of that name in
+    /// <see cref="RepoRefs.Refs"/>, found in an index by full name (docs/phase-6-design.md 5.5),
+    /// built at the first call and kept with the list it was built from, so that a copy whose
+    /// <see cref="Refs"/> holds another list builds its own.
+    /// </summary>
+    public GitRef? FindRef(string fullName)
+    {
+        ArgumentNullException.ThrowIfNull(fullName);
+        return RefIndexes.GetValue(Refs.Refs, BuildRefIndex).GetValueOrDefault(fullName);
+    }
 
     /// <summary>The stash whose commit is <paramref name="sha"/>, or null.</summary>
     public StashEntry? FindStash(string sha) =>
@@ -202,20 +207,21 @@ public sealed record RepositoryMenuContext(
     /// <summary>How the menus name a branch's upstream: <c>origin/main</c>, or a local upstream's branch alone (D114); null without one.</summary>
     public static string? UpstreamText(GitRef branch) => ToolbarViewModel.UpstreamText(branch);
 
-    /// <summary>
-    /// The local branch name a remote branch checks out into (2.2): the part after
-    /// <c>&lt;remote&gt;/</c> (<c>origin/feature/x</c> → <c>feature/x</c>); null for a ref that is not a remote branch.
-    /// </summary>
-    public static string? LocalNameOf(GitRef remoteBranch)
+    // The local branch a remote branch checks out into is RepoRefs.LocalNameOf (docs/phase-6-design.md 10.6).
+
+    /// <summary>Each refs list's index by full name, the first ref of each name (<see cref="FindRef"/>); kept as long as its list lives.</summary>
+    private static readonly ConditionalWeakTable<IReadOnlyList<GitRef>, Dictionary<string, GitRef>> RefIndexes = new();
+
+    private static Dictionary<string, GitRef> BuildRefIndex(IReadOnlyList<GitRef> refs)
     {
-        ArgumentNullException.ThrowIfNull(remoteBranch);
-        if (remoteBranch.Kind != RefKind.RemoteBranch || remoteBranch.RemoteName is not { } remote)
+        var index = new Dictionary<string, GitRef>(refs.Count, StringComparer.Ordinal);
+        foreach (var gitRef in refs)
         {
-            return null;
+            // The first of a name wins, as FirstOrDefault found it.
+            index.TryAdd(gitRef.FullName, gitRef);
         }
 
-        var prefix = remote + "/";
-        return remoteBranch.Name.StartsWith(prefix, StringComparison.Ordinal) ? remoteBranch.Name[prefix.Length..] : remoteBranch.Name;
+        return index;
     }
 
     /// <summary>The other worktree where the local branch <paramref name="branchRef"/> is checked out, or null (2.7).</summary>
