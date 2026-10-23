@@ -285,17 +285,18 @@ public partial class Phase5RealWindowPass(Phase5Run fixture) : IClassFixture<Pha
 
     /// <summary>
     /// Asserts the toolbar's buttons as part A writes them (<see cref="Phase5Expectations.PartA.ButtonState"/>),
-    /// as far as UI Automation tells them: each enabled or not, and for Undo, Redo and Search the
-    /// help text, which is their tooltip (empty where there is none). The other buttons' tooltips
-    /// have no help text, so the pass reads only whether they are enabled. Waits for the states,
-    /// which follow the queue's <c>Changed</c> on the UI thread.
+    /// as far as UI Automation tells them: each enabled or not, and its help text, which is its
+    /// tooltip (empty where there is none). Phase 5 read the help texts of Undo, Redo and Search
+    /// only; since phase 6 every toolbar button has one, an enabled button's with its key
+    /// (docs/phase-6-design.md 6.8, 15.5; phase 6's report, "Changes to expected results", A1), as
+    /// the scripted run's <c>AssertToolbar</c> asserts it. Waits for the states, which follow the
+    /// queue's <c>Changed</c> on the UI thread.
     /// </summary>
     private static void AssertToolbar(RealApp app, IEnumerable<Phase5Expectations.PartA.ButtonState> states)
     {
         foreach (var state in states)
         {
-            var help = state.Id is "UndoButton" or "RedoButton" or "SearchButton" ? state.ToolTip ?? string.Empty : null;
-            app.WaitForButtonState(state.Id, state.Enabled, help);
+            app.WaitForButtonState(state.Id, state.Enabled, state.ToolTip ?? string.Empty);
         }
     }
 
