@@ -64,6 +64,9 @@ public partial class MainWindowViewModel : ObservableObject
         // A workspace opens through the window (docs/phase-6-design.md 1.3, 2.2).
         _tabServices.WorkspaceHost = this;
 
+        // The welcome page's Open takes Open repository…'s first step too (5.10, D215).
+        _tabServices.ActivateTabShowing = ActivateTabShowing;
+
         // The theme shown follows the service: the user's choice, or the system's mode (11.6).
         FollowThemeService();
 
@@ -235,12 +238,14 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Stops the work of every tab. The session keeps the tabs for the next start. A clone that
-    /// is still running is cancelled, and its half-written folder removed, before this returns
-    /// (at most a few seconds), since the process may end right after.
+    /// Stops the work of every tab and of every open dialog, which is cancelled first
+    /// (<see cref="DialogHostViewModel.CancelAll"/>). The session keeps the tabs for the next
+    /// start. A clone that is still running is cancelled, and its half-written folder removed,
+    /// before this returns (at most a few seconds), since the process may end right after.
     /// </summary>
     public void CloseAll()
     {
+        Dialogs.CancelAll();
         AutoFetch.Dispose();
         ActivityLog.Dispose();
         var clones = Tabs.Select(tab => tab.Welcome.RunningClone).OfType<Task>().ToArray();
@@ -269,10 +274,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The window is closing (docs/phase-3-design.md 1.8): returns true when it may close now.
     /// While a repository runs an operation the user started, the close waits (also for the local
-    /// operation of a tab closed meanwhile, which goes on to its end): what waits is
-    /// dropped, "Finishing operations" lists what runs, and <paramref name="closeWindow"/> is
-    /// called when they have ended, or when the user chooses "Quit now". A background auto-fetch
-    /// does not hold the window. Once the close is confirmed, every later call returns true.
+    /// operation of a tab closed meanwhile, which goes on to its end), and so does it while the
+    /// settings screen's global git writes run, which no queue holds (docs/phase-6-design.md 7.8
+    /// step 4): what waits is dropped, "Finishing operations" lists what runs, and
+    /// <paramref name="closeWindow"/> is called when they have ended, or when the user chooses
+    /// "Quit now". A background auto-fetch does not hold the window. Once the close is confirmed,
+    /// every later call returns true.
     /// <para>
     /// What a close does follows the dialog's own state, not when its answer is acted on (a
     /// continuation that runs later on the UI thread): while the dialog is open, or after "Quit
@@ -294,7 +301,8 @@ public partial class MainWindowViewModel : ObservableObject
             .Select(repository => (Repository: repository, Current: repository.Queue.Current))
             .Where(entry => entry.Current is { IsBackground: false })
             .ToList();
-        if (running.Count == 0)
+        var saving = SettingsSaves();
+        if (running.Count == 0 && saving.Count == 0)
         {
             _closeConfirmed = true;
             return true;
@@ -302,14 +310,16 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (_finishing is not { } finishing || (finishing.IsClosed && !QuitNowChosen(finishing)))
         {
-            // Bulk runs start no more rows first (4.12), then the queues drop what waits.
+            // Bulk runs and settings saves start no more rows or writes first (4.12, 7.8), then the
+            // queues drop what waits.
             StopBulkRunsStarting();
+            saving.ForEach(save => save.StopStarting());
             foreach (var repository in listed)
             {
                 repository.Queue.DropWaiting();
             }
 
-            _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), closeWindow);
+            _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), saving, closeWindow);
         }
 
         return false;
@@ -336,25 +346,34 @@ public partial class MainWindowViewModel : ObservableObject
     private static bool QuitNowChosen(FinishingDialogViewModel dialog) =>
         dialog.Result.IsCompletedSuccessfully && dialog.Result.Result;
 
+    /// <summary>The open settings screens whose global git writes run now (7.8 step 4), which the window's close waits for.</summary>
+    private List<SettingsDialogViewModel> SettingsSaves() =>
+        [.. Dialogs.Open.OfType<SettingsDialogViewModel>().Where(dialog => dialog.GlobalWrites is { IsCompleted: false })];
+
     /// <summary>
-    /// Shows "Finishing operations" and closes the window when the operations have ended or the
-    /// user chooses "Quit now". <see cref="_finishing"/> keeps the dialog afterwards, also after
-    /// "Keep open": <see cref="TryClose"/> goes by its state.
+    /// Shows "Finishing operations" and closes the window when the operations and the settings
+    /// screens' global writes have ended, or the user chooses "Quit now". <see cref="_finishing"/>
+    /// keeps the dialog afterwards, also after "Keep open": <see cref="TryClose"/> goes by its state.
     /// </summary>
-    private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, Action closeWindow)
+    private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, IReadOnlyList<SettingsDialogViewModel> saves, Action closeWindow)
     {
+        var writes = saves
+            .Select(save => (Writes: save.GlobalWrites, Several: save.GlobalWriteCount > 1))
+            .Where(save => save.Writes is { IsCompleted: false })
+            .ToList();
         var items = repositories
             .Select(repository => (Repository: repository, Current: repository.Queue.Current))
             .Where(entry => entry.Current is { IsBackground: false })
             .Select(entry => new FinishingItem(
                 $"{entry.Current!.Title} — {entry.Repository.Name}",
                 entry.Current.Kind == OperationKind.Local && entry.Current.HasSeveralSteps))
+            .Concat(writes.Select(save => new FinishingItem(OperationTexts.SettingsTexts.FinishingGlobalWrites, save.Several)))
             .ToList();
         var dialog = new FinishingDialogViewModel(items);
         _finishing = dialog;
         try
         {
-            var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()));
+            var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()).Concat(writes.Select(save => save.Writes!)));
             var answer = Dialogs.ShowAsync(dialog);
             var first = await Task.WhenAny(idle, answer);
             if (first == idle)

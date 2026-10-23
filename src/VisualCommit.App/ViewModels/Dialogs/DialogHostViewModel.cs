@@ -111,6 +111,21 @@ public sealed partial class DialogHostViewModel : ObservableObject, IDialogServi
     }
 
     /// <summary>
+    /// The session ends (<c>MainWindowViewModel.CloseAll</c>): every open dialog is cancelled, the
+    /// top one first, as its Cancel does (<see cref="DialogViewModel.Cancel"/>, past what its
+    /// <see cref="DialogViewModel.HandleEscape"/> would refuse), so that each dialog's own token
+    /// stops its work (a folder scan, the settings screen's reads and writes) and whoever awaits a
+    /// dialog gets its cancelled answer instead of waiting for ever.
+    /// </summary>
+    public void CancelAll()
+    {
+        foreach (var dialog in Open.Reverse().ToList())
+        {
+            dialog.Cancel();
+        }
+    }
+
+    /// <summary>
     /// Esc: the top dialog handles it (<see cref="DialogViewModel.HandleEscape"/>: it cancels, or
     /// goes back a step); the dialogs below see nothing of it. Returns whether one was open.
     /// </summary>

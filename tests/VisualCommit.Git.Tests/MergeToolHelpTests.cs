@@ -284,6 +284,46 @@ public class MergeToolHelpTests
         AssertSameHelp(MergeToolHelp.FailedLookup, await configuration.ReadToolHelpAsync(TestCancelled));
     }
 
+    [Fact]
+    public async Task A_run_that_ends_just_after_the_session_keeps_nothing()
+    {
+        // Git finished as the session ended: its answer comes after Dispose, past the cancel, and
+        // the ended session's data folder gets no merge-tools.json.
+        using var lab = new ConfigLab();
+        var runner = new HeldToolHelpRunner { AnswersPastCancel = true };
+        var configuration = new GitConfiguration(runner, lab.DataDirectory, lab.MergeToolsFile, lab.Environment, lab.Log);
+
+        var answer = configuration.ReadToolHelpAsync(TestCancelled);
+        await runner.ToolHelpStarted.WaitAsync(TestCancelled);
+        configuration.Dispose();
+        runner.Release(new GitResult(0, Recorded255, string.Empty, TimeSpan.Zero));
+
+        AssertSameHelp(GitMergeTools.ParseToolHelp(Recorded255), await answer);
+        await runner.ToolHelpEnded.WaitAsync(TestCancelled);
+        Assert.False(runner.ToolHelpCancelled);
+        Assert.False(File.Exists(lab.MergeToolsFile));
+        Assert.False(File.Exists(lab.MergeToolsFile + ".tmp"));
+    }
+
+    [Fact]
+    public async Task After_the_session_a_read_does_not_make_the_data_folder_again()
+    {
+        // A screen's read can end after the session (8.1's outside read runs in the data folder):
+        // it no longer makes the folder, which the ended session (a test's) may have removed.
+        using var lab = new ConfigLab();
+        var runner = new HeldToolHelpRunner();
+        var configuration = new GitConfiguration(runner, lab.DataDirectory, lab.MergeToolsFile, lab.Environment, lab.Log);
+        Assert.Empty((await configuration.ReadAsync(null, TestCancelled)).Values);
+        Assert.True(Directory.Exists(lab.DataDirectory));
+        Directory.Delete(lab.DataDirectory, recursive: true);
+
+        configuration.Dispose();
+        var read = await configuration.ReadAsync(null, TestCancelled);
+
+        Assert.Empty(read.Values);
+        Assert.False(Directory.Exists(lab.DataDirectory));
+    }
+
     /// <summary>Writes a kept list as the app keeps it: <c>{ "git", "version", "found", "notFound" }</c>, each tool with its name and description (8.10).</summary>
     private static void WriteKept(ConfigLab lab, string git, string version, MergeToolHelp help)
     {
@@ -365,6 +405,9 @@ public class MergeToolHelpTests
 
         public bool ToolHelpCancelled { get; private set; }
 
+        /// <summary>The held run answers when released even when its token was cancelled first: git that ended as the session did.</summary>
+        public bool AnswersPastCancel { get; init; }
+
         public void Release(GitResult result) => _release.TrySetResult(result);
 
         public async Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
@@ -379,6 +422,11 @@ public class MergeToolHelpTests
                 return new GitResult(0, FakeVersion + "\n", string.Empty, TimeSpan.Zero);
             }
 
+            if (command.Arguments is ["config", "--show-scope", "--show-origin", "-z", "--list"])
+            {
+                return new GitResult(0, string.Empty, string.Empty, TimeSpan.Zero);
+            }
+
             if (command.Arguments is not ["mergetool", "--tool-help"])
             {
                 throw new InvalidOperationException($"Not expected: {command.DisplayText}");
@@ -388,7 +436,7 @@ public class MergeToolHelpTests
             _started.TrySetResult();
             try
             {
-                return await _release.Task.WaitAsync(cancellationToken);
+                return await (AnswersPastCancel ? _release.Task : _release.Task.WaitAsync(cancellationToken));
             }
             catch (OperationCanceledException)
             {

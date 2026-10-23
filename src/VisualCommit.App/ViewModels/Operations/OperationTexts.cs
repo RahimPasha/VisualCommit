@@ -342,7 +342,10 @@ public static partial class OperationTexts
 
     /// <summary>2.18: <paramref name="upstream"/> as the menus name it (<c>origin/main</c>, or a local upstream's branch alone, D114).</summary>
     public static OperationText Pull(string upstream, string branch) =>
-        new("Pull", $"Pulling {upstream} into {branch}…", "Pull failed", $"Git could not pull {upstream} into {branch}.");
+        new(PullTitle, $"Pulling {upstream} into {branch}…", "Pull failed", $"Git could not pull {upstream} into {branch}.");
+
+    /// <summary>Pull's title (<see cref="Pull(string, string)"/>), which a bulk row's texts name too (docs/phase-6-design.md 4.5, 4.8).</summary>
+    public const string PullTitle = "Pull";
 
     public static string PullUpToDate(string branch) => $"{branch} is already up to date";
 

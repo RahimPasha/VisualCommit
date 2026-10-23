@@ -62,7 +62,7 @@ public sealed partial class RepositoryViewModel
         TipsOnHead = BranchTipsOnHead(),
         MergeTool = _mergeTool,
         Filters = Filters,
-        Editor = EditorForMenus(),
+        HasEditor = IsEditorChosen(),
     };
 
     /// <summary>
@@ -283,9 +283,12 @@ public sealed partial class RepositoryViewModel
     /// The diff view's menu (4b) on <paramref name="context"/>: its file's items, its selected
     /// lines' when lines are selected, and the hunk <paramref name="hunk"/>'s when it is one of the
     /// diff's. The right-click's menu and the palette's items of the open diff (docs/phase-6-design.md
-    /// 5.5, with no hunk) both come from here.
+    /// 5.5, with no hunk) both come from here. Whether the file is in the working tree is
+    /// <paramref name="existsInWorkingTree"/> when given (the palette passes the diff's own,
+    /// <see cref="DiffViewModel.ExistsInWorkingTree"/>, so that its openings and Mod+Shift+H and
+    /// Mod+Shift+B read no disk), else the disk's now (a right-click).
     /// </summary>
-    public MenuModel DiffMenu(RepositoryMenuContext context, DiffViewModel diff, int? hunk = null)
+    public MenuModel DiffMenu(RepositoryMenuContext context, DiffViewModel diff, int? hunk = null, bool? existsInWorkingTree = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(diff);
@@ -293,7 +296,7 @@ public sealed partial class RepositoryViewModel
         var file = new FileMenuTarget(
             new ChangedFile(target.Path, target.Kind, target.OldPath),
             target.IsUntracked,
-            ExistsInWorkingTree(target.Path),
+            existsInWorkingTree ?? ExistsInWorkingTree(target.Path),
             target.Side == DiffSide.Commit ? target.Commit : null)
         {
             CommitParent = target.Side == DiffSide.Commit ? target.Parent : null,
@@ -516,10 +519,12 @@ public sealed partial class RepositoryViewModel
         return true;
     }
 
+    /// <summary>Whether <paramref name="path"/> is in the working tree now, read from the disk on the caller's thread (a right-click's menu; the palette's go by the diff's own check).</summary>
     private bool ExistsInWorkingTree(string path)
     {
         var full = System.IO.Path.Combine(Path, path.TrimEnd('/'));
-        return File.Exists(full) || Directory.Exists(full);
+        var fileExists = _services?.FileExists ?? File.Exists;
+        return fileExists(full) || Directory.Exists(full);
     }
 
     /// <summary>Lets a task run without waiting for it, logging a failure that got past its own handling.</summary>

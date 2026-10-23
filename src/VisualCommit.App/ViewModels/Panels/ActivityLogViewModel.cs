@@ -130,12 +130,6 @@ public sealed partial class ActivityLogViewModel : ObservableObject, IDisposable
     /// <summary>The panel's header (2.2): all that shows of it when the window is too low for more.</summary>
     public const double HeaderHeight = 30;
 
-    /// <summary>The status bar's toggle while the panel is hidden (1.2).</summary>
-    public const string ShowText = "Show every git command the app has run";
-
-    /// <summary>The status bar's toggle while the panel shows (1.2).</summary>
-    public const string HideText = "Hide the activity log";
-
     /// <summary>A running operation's message (2.2).</summary>
     public const string RunningText = "Running…";
 

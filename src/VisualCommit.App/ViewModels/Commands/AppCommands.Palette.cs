@@ -69,8 +69,8 @@ public sealed partial class AppCommands
             var id = dashboard.WorkspaceId;
             AddEntry(WorkspaceTexts.AddRepository, commands.AddRepositoryReason(id), () => dashboard.AddRepositoryCommand.Execute(null));
             AddEntry(WorkspaceTexts.AddOpenTabs, commands.AddOpenTabsReason(id), () => dashboard.AddOpenTabsCommand.Execute(null));
-            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason(id), () => _ = commands.RenameAsync(id));
-            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason(id), () => _ = commands.DeleteAsync(id), destructive: true);
+            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason(id), () => Start(commands.RenameAsync(id), WorkspaceTexts.RenameWorkspace));
+            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason(id), () => Start(commands.DeleteAsync(id), WorkspaceTexts.DeleteWorkspace), destructive: true);
         }
 
         Add(AppCommand.NewTab);
@@ -304,7 +304,7 @@ public sealed partial class AppCommands
                 continue;
             }
 
-            entries.Add(new PaletteEntry($"Open repository {name}", shown, null, true, null, false, PaletteEntryKind.Item, order + entries.Count, () => _ = _shell.OpenRepositoryAtAsync(path)));
+            entries.Add(new PaletteEntry($"Open repository {name}", shown, null, true, null, false, PaletteEntryKind.Item, order + entries.Count, () => Start(_shell.OpenRepositoryAtAsync(path), $"Open repository {name}")));
         }
 
         foreach (var workspace in workspaces)

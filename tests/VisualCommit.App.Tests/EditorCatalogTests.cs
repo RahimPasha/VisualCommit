@@ -116,6 +116,39 @@ public class EditorCatalogTests
     }
 
     [Fact]
+    public async Task A_search_stopped_as_it_ends_leaves_the_setting_alone()
+    {
+        // The screen that asked closed (its Cancel, or the session's end) just as the search ended:
+        // nothing writes the setting from the pool after that (the session's data folder may be gone).
+        var root = $@"{ProgramFiles}\JetBrains";
+        var newer = $@"{root}\IntelliJ IDEA 2024.1\bin\idea64.exe";
+        var stored = new EditorSetting("idea", $@"{root}\IntelliJ IDEA 2023.1\bin\idea64.exe");
+        var settings = new MainWindowViewModelTests.FakeSettings();
+        settings.Update(current => current with { Editor = stored });
+        using var stop = new CancellationTokenSource();
+        var files = Windows([newer], new Dictionary<string, string[]> { [root] = [$@"{root}\IntelliJ IDEA 2024.1"] });
+        var context = files with
+        {
+            // Notepad is the catalogue's last Windows editor: its check is the search's last.
+            FileExists = path =>
+            {
+                if (path.EndsWith(@"\notepad.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    stop.Cancel();
+                }
+
+                return files.FileExists(path);
+            },
+        };
+        var log = new RecordingLog();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new EditorCatalog(context, settings, log).FindAsync(stop.Token));
+
+        Assert.Equal(stored, settings.Current.Editor);
+        Assert.DoesNotContain(log.Messages, message => message.Contains("moved to", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task An_editor_whose_program_is_there_or_that_is_not_found_again_and_others_choice_stay()
     {
         var settings = new MainWindowViewModelTests.FakeSettings();
