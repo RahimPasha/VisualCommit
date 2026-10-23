@@ -96,16 +96,78 @@ public partial class BulkRunTests
         Assert.Equal(before, await docs.HeadAsync());
     }
 
+    [AvaloniaFact]
+    public async Task The_sign_in_prompts_of_one_run_carry_its_prompt_group()
+    {
+        // 4.4: the run's group reaches every prompt of its rows' fetches (the prompt dialogs answer
+        // a group's same prompt once, PromptDialogsTests'); a fetch outside a run has none.
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var server = await AuthRemoteServer.StartForFolderAsync(Path.GetDirectoryName(copy.RemoteOf("docs"))!);
+        server.RequireAuth = true;
+        foreach (var name in new[] { "docs", "mobile" })
+        {
+            await copy.Repo(name).GitAsync("remote", "set-url", "origin", server.UrlOf(name));
+        }
+
+        var prompts = new SignIn(server.Credentials.UserName, server.Credentials.Password);
+        using var data = new TempDirectory("bulk-prompts");
+        using var app = await OpenAsync(copy, data, ["docs", "mobile"], prompts);
+
+        await app.FetchAllAsync();
+        var run = await app.WaitForBulkRunAsync(GitPatience);
+
+        Assert.Equal("Fetched 2 repositories", app.DashboardSnapshot().BulkText);
+        Assert.Equal(["docs", "docs", "mobile", "mobile"], prompts.Prompts.Select(prompt => prompt.RepositoryName).Order(StringComparer.Ordinal));
+        Assert.All(prompts.Prompts, prompt => Assert.Same(run.PromptGroup, prompt.Group));
+        Assert.True(run.PromptGroup.IsEnded);
+
+        await app.ActiveDashboard!.Rows[0].Repository!.Operations.FetchAllAsync();
+        Assert.Equal(6, prompts.Prompts.Count);
+        Assert.All(prompts.Prompts.Skip(4), prompt => Assert.Null(prompt.Group));
+    }
+
     /// <summary>The app on <paramref name="copy"/>'s workspace "Web" of <paramref name="names"/>, its dashboard open and read.</summary>
-    private static async Task<ShellDriver> OpenAsync(TempWorkspace copy, TempDirectory data, string[] names)
+    private static async Task<ShellDriver> OpenAsync(TempWorkspace copy, TempDirectory data, string[] names, Core.Operations.IGitPromptHandler? prompts = null)
     {
         ShellDriver.WriteWorkspaces(data.Path, new WorkspaceList { Workspaces = [new Workspace("web", "Web", [.. names.Select(name => new WorkspaceRepository(copy.PathOf(name)))])] });
-        var app = ShellDriver.Start(data.Path, 1100, 700);
+        var app = ShellDriver.Start(data.Path, 1100, 700, prompts);
         await app.WaitUntilReadyAsync();
         var mark = app.LogMark();
         app.Session.Shell.ShowWorkspace("web", app.Session.Shell.ActiveTab);
         await app.WaitForDashboardReadAsync(mark, GitPatience);
         await app.WaitForAsync(() => app.ActiveDashboard!.Rows.All(row => row.Repository is not { } repository || repository.Queue.Current is null), "every row's queue idle", GitPatience);
         return app;
+    }
+
+    /// <summary>Answers git's user name and password prompts with the server's credentials, and records every prompt.</summary>
+    private sealed class SignIn(string user, string password) : Core.Operations.IGitPromptHandler
+    {
+        private readonly List<Core.Operations.GitPrompt> _prompts = [];
+
+        public IReadOnlyList<Core.Operations.GitPrompt> Prompts
+        {
+            get
+            {
+                lock (_prompts)
+                {
+                    return [.. _prompts];
+                }
+            }
+        }
+
+        public Task<Core.Operations.PromptAnswer> AnswerAsync(Core.Operations.GitPrompt prompt, CancellationToken cancellationToken)
+        {
+            lock (_prompts)
+            {
+                _prompts.Add(prompt);
+            }
+
+            return Task.FromResult(prompt.Kind switch
+            {
+                Core.Operations.GitPromptKind.Username => Core.Operations.PromptAnswer.Of(user),
+                Core.Operations.GitPromptKind.Password => Core.Operations.PromptAnswer.Of(password),
+                _ => Core.Operations.PromptAnswer.Refused,
+            });
+        }
     }
 }

@@ -649,6 +649,69 @@ public partial class BulkRunTests
     }
 
     [AvaloniaFact]
+    public async Task A_kept_dialog_goes_when_the_next_run_starts_or_the_rows_view_model_changes()
+    {
+        using var provider = new BulkProvider();
+        var api = provider.Add("api");
+        api.FetchFailure = BulkRepository.CannotFetch("../remotes/missing.git");
+        var docs = provider.Add("docs");
+        docs.FetchFailure = BulkRepository.CannotFetch("../remotes/gone.git");
+        var services = Services(provider, ["api", "docs"]);
+        var tab = await TabAsync(services, docs);
+        using var host = await BulkHost.StartAsync(provider, ["api", "docs"], services: services);
+
+        await host.Bulk.FetchAllAsync().WaitAsync(Patience);
+        Assert.Equal((true, true), (host["api"].ShowsDetails, host["docs"].ShowsDetails));
+
+        // docs follows a tab that closes (3.6): its dialog goes with the view model.
+        services.OpenRepositories.UnregisterTab(tab);
+        tab.Dispose();
+        Assert.Null(host["docs"].KeptDialog);
+
+        // The next run starts: what the last one kept goes, and api, fixed, keeps nothing.
+        api.FetchFailure = null;
+        api.FetchGate = new TaskCompletionSource();
+        var run = host.Bulk.FetchAllAsync();
+        Assert.Null(host["api"].KeptDialog);
+        api.FetchGate.SetResult();
+        await run.WaitAsync(Patience);
+        Assert.Equal(("Fetched from all remotes", false), (host.Operation("api"), host["api"].ShowsDetails));
+    }
+
+    [AvaloniaFact]
+    public async Task A_pulls_rebase_stop_with_nothing_to_look_at_keeps_its_notice_for_Details()
+    {
+        // 4.6: the pull's "Rebase stopped" notice of a stop with nothing to look at (an exec that
+        // failed) is deferred as the failures are; the row says the stop in the warning tone.
+        using var provider = new BulkProvider();
+        var docs = provider.Add("docs");
+        docs.Pulled = new PullResult(PullOutcome.Conflicts, 0);
+        docs.PullGate = new TaskCompletionSource();
+        using var host = await BulkHost.StartAsync(provider, ["docs"]);
+        using var dialogs = new ScriptedDialogs(host.Services.DialogHost);
+
+        var run = host.Bulk.PullAllAsync();
+        await docs.PullIntegrating.Task.WaitAsync(Patience);
+        docs.Status = WorkingTreeStatus.Clean with
+        {
+            InProgress = new InProgressState(InProgressKind.Rebase, Head, "Local edit", "main", Upstream, 0, false) { StopKind = RebaseStopKind.ExecFailed },
+        };
+        docs.PullGate.SetResult();
+        await run.WaitAsync(Patience);
+        await SettleAsync();
+
+        Assert.Empty(dialogs.Shown);
+        Assert.Equal(DashboardTone.Warning, host["docs"].Operation.Tone);
+        Assert.StartsWith("Rebase stopped at ", host.Operation("docs"), StringComparison.Ordinal);
+        Assert.Equal(("Rebase stopped", true), (host["docs"].KeptDialog?.Display?.Title, host["docs"].ShowsDetails));
+        Assert.Equal(("Pulled no repositories; 1 stopped", OperationStatusTone.Warning), (host.Bulk.RunText, host.Bulk.RunTone));
+
+        dialogs.CloseError();
+        await host["docs"].ShowDetailsCommand.ExecuteAsync(null);
+        Assert.Equal("Rebase stopped", Assert.Single(dialogs.Errors).Title);
+    }
+
+    [AvaloniaFact]
     public async Task A_stopped_pull_makes_the_result_warning_and_a_failure_danger()
     {
         using var provider = new BulkProvider();
