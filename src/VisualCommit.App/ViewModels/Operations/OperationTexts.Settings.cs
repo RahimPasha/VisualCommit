@@ -63,6 +63,9 @@ public static partial class OperationTexts
 
         public static string WaitingFor(string title) => $"Waiting for {title} to finish…";
 
+        /// <summary>"Finishing operations"' line while a Save's global writes run (3.7, 7.8 step 4, 14's <c>{what} — {where}</c>): no queue holds them.</summary>
+        public const string FinishingGlobalWrites = "Saving the settings — all repositories";
+
         // General (7.3).
         public const string ThemeLabel = "Theme";
         public const string ThemeDark = "Dark";

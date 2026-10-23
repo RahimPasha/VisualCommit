@@ -63,10 +63,12 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     private readonly Func<DialogViewModel<string?>, Task<string?>> _showPick;
     private readonly Func<string, bool> _fileExists;
     private readonly IAppLog _log;
+    private readonly CancellationToken _cancellation;
     private GitConfigRead? _outside;
     private GitConfigRead? _inRepository;
     private MergeToolHelp? _tools;
     private IReadOnlySet<string> _pathFoundTools = new HashSet<string>(StringComparer.Ordinal);
+    private string? _branch;
 
     /// <param name="git">Git's configuration (8.1); null when there is none, which shows as no usable git.</param>
     /// <param name="repository">The active tab's repository, or null on an empty tab, a dashboard and while its refs are unread.</param>
@@ -74,13 +76,15 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     /// <param name="showPick">Shows a Pick dialog over the screen and returns its answer.</param>
     /// <param name="log">The app's log.</param>
     /// <param name="fileExists">Whether a file exists, called off the UI thread only (a merge tool's <c>path</c>, 8.10); null for the disk.</param>
+    /// <param name="cancellation">The screen's token: its reads and the global writes stop when the screen closes (Cancel, or the session's end).</param>
     public GitSettingsViewModel(
         IGitConfiguration? git,
         ISettingsRepository? repository,
         Func<CancellationToken, Task<MergeToolHelp>> mergeTools,
         Func<DialogViewModel<string?>, Task<string?>> showPick,
         IAppLog? log = null,
-        Func<string, bool>? fileExists = null)
+        Func<string, bool>? fileExists = null,
+        CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(mergeTools);
         ArgumentNullException.ThrowIfNull(showPick);
@@ -90,8 +94,10 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         _showPick = showPick;
         _fileExists = fileExists ?? File.Exists;
         _log = log ?? NullAppLog.Instance;
+        _cancellation = cancellation;
         Global = new GitScopeViewModel(this, GitConfigScope.Global);
         Repository = new GitScopeViewModel(this, GitConfigScope.Local);
+        _branch = repository?.Branch;
         IsReading = true;
     }
 
@@ -104,8 +110,13 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     /// <summary>The repository's name, or null without one.</summary>
     public string? RepositoryName => _repository?.Name;
 
-    /// <summary>The branch whose pull the repository scope speaks of, or null.</summary>
-    public string? Branch => _repository?.Branch;
+    /// <summary>
+    /// The branch whose pull the repository scope speaks of, or null: the branch HEAD was on when
+    /// the reads began (the opening's, or the last read back's), so that <c>PullInEffect</c>,
+    /// <c>BranchRebaseNotice</c>, its button and Save's <c>branch.&lt;b&gt;.rebase</c> all name the
+    /// branch the read was of (8.7, 8.8), even after HEAD moved while the screen is open.
+    /// </summary>
+    public string? Branch => _branch;
 
     /// <summary><c>GitReading</c>: 8.1's reads run (about 0.1 s); nothing editable meanwhile.</summary>
     [ObservableProperty]
@@ -233,12 +244,13 @@ public sealed partial class GitSettingsViewModel : ObservableObject
 
     /// <summary>
     /// Writes the global keys through the app-level writer (8.3), one at a time, stopping at the
-    /// first failure, which throws <see cref="GitException"/>.
+    /// first failure, which throws <see cref="GitException"/>; the screen's token stops the list
+    /// before its next key (<see cref="OperationCanceledException"/>), never during one.
     /// </summary>
     public Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes)
     {
         ArgumentNullException.ThrowIfNull(writes);
-        return writes.Count == 0 || _git is null ? Task.CompletedTask : _git.WriteGlobalAsync(writes);
+        return writes.Count == 0 || _git is null ? Task.CompletedTask : _git.WriteGlobalAsync(writes, _cancellation);
     }
 
     /// <summary>This repository's writes as one operation of its queue (8.3, 7.8 step 5).</summary>
@@ -470,10 +482,12 @@ public sealed partial class GitSettingsViewModel : ObservableObject
                 return;
             }
 
+            // The branch is taken once, with the reads: what they say is of that branch (8.8).
+            _branch = _repository?.Branch;
             var outside = ReadOutsideAsync();
             var inRepository = _repository is null ? Task.FromResult<GitConfigRead?>(null) : ReadRepositoryAsync(_repository.Path);
             var identity = _repository is null ? Task.FromResult<GitIdentityRead?>(null) : ReadIdentityAsync(_repository.Path);
-            var pull = _repository?.Branch is { } branch ? ReadPullAsync(branch) : Task.FromResult<(PullConfiguration?, string?)>((null, null));
+            var pull = _branch is { } branch ? ReadPullAsync(branch) : Task.FromResult<(PullConfiguration?, string?)>((null, null));
             try
             {
                 await Task.WhenAll((Task)outside, inRepository);
@@ -513,15 +527,15 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         }
     }
 
-    private async Task<GitConfigRead> ReadOutsideAsync() => await _git!.ReadAsync(null);
+    private async Task<GitConfigRead> ReadOutsideAsync() => await _git!.ReadAsync(null, _cancellation);
 
-    private async Task<GitConfigRead?> ReadRepositoryAsync(string workingTree) => await _git!.ReadAsync(workingTree);
+    private async Task<GitConfigRead?> ReadRepositoryAsync(string workingTree) => await _git!.ReadAsync(workingTree, _cancellation);
 
     private async Task<GitIdentityRead?> ReadIdentityAsync(string workingTree)
     {
         try
         {
-            return await _git!.ReadIdentityAsync(workingTree);
+            return await _git!.ReadIdentityAsync(workingTree, _cancellation);
         }
         catch (Exception ex) when (ex is GitException or GitUnavailableException or IOException)
         {
@@ -534,7 +548,7 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     {
         try
         {
-            return (await _repository!.ReadPullConfigurationAsync(branch), null);
+            return (await _repository!.ReadPullConfigurationAsync(branch, _cancellation), null);
         }
         catch (Exception ex) when (ex is GitException or GitUnavailableException or IOException)
         {

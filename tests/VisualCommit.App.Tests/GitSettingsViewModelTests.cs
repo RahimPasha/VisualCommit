@@ -452,6 +452,32 @@ public class GitSettingsViewModelTests
     }
 
     [Fact]
+    public async Task Use_the_repositorys_setting_removes_the_rebase_setting_of_the_branch_it_was_read_for_after_head_moved()
+    {
+        // 8.8: the notice, its button and Save name the branch of the read. HEAD moving to another
+        // branch while the screen is open (a checkout in a terminal, a pull of another tab) must
+        // not make Save unset that other branch's setting, which the screen never showed.
+        var git = new FakeGitConfiguration { Outside = Read(false), InRepository = Read(true, Local("branch.main.rebase", "false"), Local("branch.other.rebase", "true")) };
+        var repository = new FakeSettingsRepository();
+        var section = await LoadAsync(git, repository);
+        var scope = section.Repository;
+        scope.ToggleBranchRebaseCommand.Execute(null);
+
+        repository.BranchName = "other";
+
+        Assert.Equal("main", section.Branch);
+        Assert.Equal(("Save removes branch.main.rebase, so main pulls as set above.", "Keep main's setting"), (scope.BranchRebaseNoticeText, scope.BranchRebaseButtonText));
+        Assert.Equal([new GitConfigWrite("branch.main.rebase", null)], section.RepositoryWrites());
+        Assert.Equal(["main"], repository.PullReads);
+
+        // A read back reads the branch HEAD is on then, and speaks of it.
+        Assert.False(await section.ReadBackAsync([], []));
+        Assert.Equal(("other", "other has its own pull setting, branch.other.rebase = true, which git uses instead of the mode above."), (section.Branch, scope.BranchRebaseNoticeText));
+        Assert.Equal(["main", "other"], repository.PullReads);
+        Assert.Empty(section.RepositoryWrites());
+    }
+
+    [Fact]
     public async Task The_merge_tools_list_leaves_out_terminal_tools_adds_ones_own_and_a_path_found_one_and_ends_with_the_current_value()
     {
         var kdiff3 = Path.Combine(Root, "tools", "kdiff3.exe");

@@ -73,6 +73,7 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
     private readonly Func<DialogViewModel<string?>, Task<string?>> _showPick;
     private readonly EditorPlatform _platform;
     private readonly IAppLog _log;
+    private readonly CancellationToken _cancellation;
     private Task<IReadOnlyList<FoundEditor>>? _finding;
     private string? _gitEditorCommand;
     private bool _programEdited;
@@ -88,6 +89,7 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
     /// <param name="log">The app's log.</param>
     /// <param name="platform">The platform whose rules the program follows; null for this one.</param>
     /// <param name="storedEditor">The editor as the settings hold it now, read again after the search, which may have followed a known editor that moved (12.3); null for none.</param>
+    /// <param name="cancellation">The screen's token: the search stops, and follows no moved editor, when the screen closes (Cancel, or the session's end).</param>
     public ToolSettingsViewModel(
         EditorSetting? editor,
         Func<CancellationToken, Task<IReadOnlyList<FoundEditor>>> findEditors,
@@ -95,7 +97,8 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
         Func<DialogViewModel<string?>, Task<string?>> showPick,
         IAppLog? log = null,
         EditorPlatform? platform = null,
-        Func<EditorSetting?>? storedEditor = null)
+        Func<EditorSetting?>? storedEditor = null,
+        CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(findEditors);
         ArgumentNullException.ThrowIfNull(folders);
@@ -106,6 +109,7 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
         _log = log ?? NullAppLog.Instance;
         _platform = platform ?? EditorSearchContext.CurrentPlatform;
         _storedEditor = storedEditor;
+        _cancellation = cancellation;
 
         // An id the catalogue no longer knows means none chosen (12.6).
         _start = editor is not null && (editor.Id == KnownEditors.CustomId || KnownEditors.Find(editor.Id, _platform) is not null) ? editor : null;
@@ -332,7 +336,13 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
         IsLooking = true;
         try
         {
-            Found = await _findEditors(CancellationToken.None);
+            Found = await _findEditors(_cancellation);
+        }
+        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+        {
+            // The screen closed during the search: it offers nothing more.
+            Found = [];
+            return Found;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

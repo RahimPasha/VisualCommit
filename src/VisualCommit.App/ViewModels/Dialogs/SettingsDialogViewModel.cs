@@ -61,14 +61,22 @@ public sealed record SettingsScreenServices(
 /// queue, the read back, the tabs told, and the close unless a key is still decided by another
 /// file of its scope or a write failed. Cancel and Esc change nothing. Answers true after a Save
 /// that closed it, false for Cancel and Esc.
+/// <para>
+/// The screen's work ends with it: Cancel, Esc and the session's end
+/// (<see cref="DialogHostViewModel.CancelAll"/>) cancel its token, which stops the reads, the
+/// editor search, the global writes before their next key and a repository write that waits. While
+/// the global writes run (no queue holds them), <see cref="GlobalWrites"/> lets the window's close
+/// wait for them (3.7).
+/// </para>
 /// </summary>
 public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
 {
     private readonly SettingsScreenServices _services;
-    private readonly CancellationTokenSource _repositoryCancel = new();
+    private readonly CancellationTokenSource _lifetime = new();
     private readonly SynchronizationContext? _ui;
     private bool _saveAttempted;
     private bool _writingRepository;
+    private bool _stopStarting;
 
     /// <param name="services">What the screen works with.</param>
     /// <param name="section">The section it opens on (7.2): General unless the entry says otherwise.</param>
@@ -79,7 +87,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         _ui = SynchronizationContext.Current;
         SelectedSection = section;
         General = new GeneralSettingsViewModel(services.Settings.Current, services.Theme, services.Tools.PathExtensions());
-        Git = new GitSettingsViewModel(services.Git, services.Repository, services.Tools.MergeTools, ShowPickAsync, services.Log, services.FileExists);
+        Git = new GitSettingsViewModel(services.Git, services.Repository, services.Tools.MergeTools, ShowPickAsync, services.Log, services.FileExists, _lifetime.Token);
         Tools = new ToolSettingsViewModel(
             services.Settings.Current.Editor,
             services.Tools.FindEditors,
@@ -87,7 +95,8 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             ShowPickAsync,
             services.Log,
             services.Platform,
-            () => services.Settings.Current.Editor);
+            () => services.Settings.Current.Editor,
+            _lifetime.Token);
         Shortcuts = services.Shortcuts;
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
@@ -152,6 +161,16 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
     /// <summary>Cancel is enabled: no write runs.</summary>
     public bool CanCancelNow => !IsWriting;
 
+    /// <summary>
+    /// The global git writes of a Save while they run (7.8 step 4), or null: they belong to no
+    /// repository's queue, so the window's close waits for this task and "Finishing operations"
+    /// lists them (<c>SettingsTexts.FinishingGlobalWrites</c>, 3.7). It completes, never faults, when they end.
+    /// </summary>
+    public Task? GlobalWrites { get; private set; }
+
+    /// <summary>How many keys <see cref="GlobalWrites"/> writes, one git call each: past the first, "Quit now" leaves the rest unwritten.</summary>
+    public int GlobalWriteCount { get; private set; }
+
     /// <summary>Raised when a field should take the keyboard focus, by automation id (the first wrong one after a refused Save, Other…'s program box).</summary>
     public event EventHandler<string>? FocusRequested;
 
@@ -168,12 +187,23 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         }
     }
 
-    /// <summary>Cancel and Esc: nothing changes; a waiting repository write is dropped through its token (7.8 step 5, 4.5).</summary>
+    /// <summary>
+    /// Cancel and Esc, and the session's end: nothing more changes; the screen's token stops its
+    /// reads, the editor search and the global writes before their next key, and drops a waiting
+    /// repository write (7.8 step 5, 4.5).
+    /// </summary>
     protected override void OnCancel()
     {
-        _repositoryCancel.Cancel();
+        _lifetime.Cancel();
         base.OnCancel();
     }
+
+    /// <summary>
+    /// The window is closing while this Save's global writes run (3.7, as a bulk run's
+    /// <c>StopStarting</c>, 4.12): they go on to their end, but this repository's writes, which wait
+    /// for them, do not start. The screen then stays on Git, as after a write that did not run.
+    /// </summary>
+    public void StopStarting() => _stopStarting = true;
 
     /// <summary>Save (7.8): the steps in order; Enter saves, also from a text box.</summary>
     [RelayCommand]
@@ -221,6 +251,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         }
 
         // 4. The global writes, through the app-level writer; the first failure stops them.
+        _stopStarting = false;
         var globalWrites = Git.GlobalWrites();
         var repositoryWrites = Git.RepositoryWrites();
         IReadOnlyList<GitConfigWrite> globalWritten = [];
@@ -229,35 +260,28 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         var failed = false;
         if (globalWrites.Count > 0)
         {
-            IsWriting = true;
-            SavingText = Texts.Saving;
-            try
+            var failure = await WriteGlobalAsync(globalWrites);
+            anyWritten = true;
+            if (failure is null)
             {
-                await Git.WriteGlobalAsync(globalWrites);
                 globalWritten = globalWrites;
-                anyWritten = true;
             }
-            catch (Exception ex) when (ex is GitException or GitUnavailableException or IOException)
+            else
             {
                 // Part-way, some keys may be written: the tabs are told all the same (7.8 step 7).
+                // A cancel is the session's end or the screen's: no dialog then.
                 failed = true;
-                anyWritten = true;
-                _services.Log.Warning("Saving git's global settings failed.", ex);
-                IsWriting = false;
-                SavingText = null;
-                await ShowGlobalFailureAsync(ex);
-            }
-            finally
-            {
-                IsWriting = false;
-                SavingText = null;
+                if (failure is not OperationCanceledException && !IsClosed)
+                {
+                    await ShowGlobalFailureAsync(failure);
+                }
             }
         }
 
-        // 5. This repository's writes, one operation of its queue.
+        // 5. This repository's writes, one operation of its queue; not started while the window closes.
         if (!failed && repositoryWrites.Count > 0 && !IsClosed)
         {
-            var result = await WriteRepositoryAsync(repositoryWrites);
+            var result = _stopStarting ? new OperationResult(OperationOutcome.Cancelled, string.Empty, null) : await WriteRepositoryAsync(repositoryWrites);
             switch (result.Outcome)
             {
                 case OperationOutcome.Succeeded:
@@ -270,7 +294,9 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
                     anyWritten = true;
                     break;
                 default:
-                    // Dropped while it waited: the screen's Cancel closed it.
+                    // Dropped while it waited, or not started: the screen's Cancel closed it, or the
+                    // window's close dropped it (3.7); a screen still open stays on Git.
+                    failed = true;
                     break;
             }
         }
@@ -287,7 +313,22 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
 
         // 6. Read back: each scope's read becomes its fields' baseline (8.4).
         // Only what was written whole is compared: a failed list wrote what git's error says.
-        var still = await Git.ReadBackAsync(globalWritten, repositoryWritten);
+        bool still;
+        try
+        {
+            still = await Git.ReadBackAsync(globalWritten, repositoryWritten);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // The screen closed during the read back (the session ended): the tabs are still told.
+            if (anyWritten)
+            {
+                _services.GitSettingsChanged?.Invoke();
+            }
+
+            return;
+        }
+
         Tools.SetGitEditor(Git.CoreEditor);
 
         // 7. Tell the tabs (8.11).
@@ -313,6 +354,43 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         return Tools.IsChanged ? next with { Editor = Tools.Setting } : next;
     }
 
+    /// <summary>
+    /// 7.8 step 4: the global writes, with <c>Saving…</c> and both buttons disabled, seen by the
+    /// window's close through <see cref="GlobalWrites"/> until they end. Returns the failure (git's,
+    /// git missing, the disk, or the screen's cancel), or null when every key was written.
+    /// </summary>
+    private async Task<Exception?> WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes)
+    {
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        GlobalWriteCount = writes.Count;
+        GlobalWrites = ended.Task;
+        IsWriting = true;
+        SavingText = Texts.Saving;
+        try
+        {
+            await Git.WriteGlobalAsync(writes);
+            return null;
+        }
+        catch (Exception ex) when (ex is GitException or GitUnavailableException or IOException)
+        {
+            _services.Log.Warning("Saving git's global settings failed.", ex);
+            return ex;
+        }
+        catch (OperationCanceledException ex) when (_lifetime.IsCancellationRequested)
+        {
+            _services.Log.Info("Saving git's global settings stopped: the settings screen closed.");
+            return ex;
+        }
+        finally
+        {
+            IsWriting = false;
+            SavingText = null;
+            GlobalWrites = null;
+            GlobalWriteCount = 0;
+            ended.TrySetResult();
+        }
+    }
+
     private async Task<OperationResult> WriteRepositoryAsync(IReadOnlyList<GitConfigWrite> writes)
     {
         var repository = _services.Repository!;
@@ -321,7 +399,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         _writingRepository = true;
         try
         {
-            var running = Git.WriteRepositoryAsync(writes, _repositoryCancel.Token);
+            var running = Git.WriteRepositoryAsync(writes, _lifetime.Token);
             ShowRepositoryProgress();
             return await running;
         }
@@ -365,11 +443,18 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
 
     private async Task LoadAsync()
     {
-        var git = Git.LoadAsync();
-        var tools = Tools.StartLookingAsync();
-        await git;
-        Tools.SetGitEditor(Git.CoreEditor);
-        await tools;
+        try
+        {
+            var git = Git.LoadAsync();
+            var tools = Tools.StartLookingAsync();
+            await git;
+            Tools.SetGitEditor(Git.CoreEditor);
+            await tools;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // The screen closed before its reads ended (Cancel, or the session's end).
+        }
     }
 
     private void OnSectionChanged(object? sender, PropertyChangedEventArgs e)

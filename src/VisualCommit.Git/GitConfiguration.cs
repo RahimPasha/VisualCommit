@@ -260,7 +260,11 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         return AnswerAsync(lookup, cancellationToken);
     }
 
-    /// <summary>Stops the merge tools' lookup (the app closes). Reads and writes keep working.</summary>
+    /// <summary>
+    /// Stops the merge tools' lookup (the app closes): a run that ends afterwards keeps nothing.
+    /// Reads and writes keep working, but no longer make the data folder, which the ended session
+    /// may have removed (a test's), so that nothing is written there after the session.
+    /// </summary>
     public void Dispose()
     {
         lock (_gate)
@@ -418,9 +422,14 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
             ? FullPath(file)
             : string.Empty;
 
+    /// <summary>The data folder, made first while the session lasts; after <see cref="Dispose"/> it is not made again.</summary>
     private string PrepareDataDirectory()
     {
-        Directory.CreateDirectory(_dataDirectory);
+        if (!_lifetime.IsCancellationRequested)
+        {
+            Directory.CreateDirectory(_dataDirectory);
+        }
+
         return _dataDirectory;
     }
 
@@ -498,6 +507,13 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
 
             // The kept list is read first: replacing the file while it is read would fail on Windows.
             await kept.ConfigureAwait(false);
+
+            // Git may end just as the session does: an ended session writes nothing into its data folder.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return help;
+            }
+
             WriteKept(git, help);
             return help;
         }
