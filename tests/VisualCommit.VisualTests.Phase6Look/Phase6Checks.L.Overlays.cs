@@ -219,7 +219,7 @@ public sealed partial class Phase6ChecksL
         // Step 5: Git, read on All repositories (global); Choose…: the Pick dialog stacked on it.
         app.ChooseSection(SettingsSection.Git);
         await app.WaitForSettingsReadsAsync();
-        AssertGitGlobal(app, repo, data);
+        AssertGitGlobal(app, await WorkingTreeAsync(repo), data);
         app.Click(app.FindByAutomationId("MergeToolChooseButton"));
         await app.WaitForDialogAsync<PickDialogViewModel>();
         await WaitForDialogFocusAsync(app, "PickFilter");
@@ -633,7 +633,7 @@ public sealed partial class Phase6ChecksL
     }
 
     /// <summary>L31 step 5's Git section on <c>All repositories (global)</c> before the Pick dialog (7.4, D200, D202).</summary>
-    private static void AssertGitGlobal(ShellDriver app, TempRepo repo, TempDirectory data)
+    private static void AssertGitGlobal(ShellDriver app, string workingTree, TempDirectory data)
     {
         var settings = app.SettingsSnapshot();
         Assert.Equal(SettingsSection.Git, settings.Section);
@@ -643,7 +643,7 @@ public sealed partial class Phase6ChecksL
         var scope = settings.Field("GitScopeRepository");
         Assert.Equal((PartL.ThisRepository, true), (scope?.Text, scope?.IsEnabled == true));
         Assert.StartsWith("ops — ", scope?.ToolTip, StringComparison.Ordinal);
-        Assert.True(WorkspacePathsSame(scope!.ToolTip!["ops — ".Length..], repo.Path), $"This repository's tooltip names {scope.ToolTip}, not ops's working tree.");
+        Assert.True(WorkspacePathsSame(scope!.ToolTip!["ops — ".Length..], workingTree), $"This repository's tooltip names {scope.ToolTip}, not ops's working tree {workingTree} (git's spelling).");
         var caption = settings.Field("GitScopeCaption");
         Assert.Equal(PartL.GlobalCaption, caption?.Text);
         Assert.True(WorkspacePathsSame(caption!.ToolTip!, ShellDriver.GlobalGitConfigPath(data.Path)), $"GitScopeCaption's tooltip is {caption.ToolTip}, not the session's global file.");

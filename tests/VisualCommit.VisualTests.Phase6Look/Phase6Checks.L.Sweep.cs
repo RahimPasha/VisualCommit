@@ -459,6 +459,20 @@ public sealed partial class Phase6ChecksL
             $"{what} at {bounds} is not drawn toward {Hex(colour)}: its nearest pixel {Hex(nearest)} is not at most half as far from it as the background {Hex(background)}.");
     }
 
+    /// <summary>
+    /// A recent item's folder "cut with … at the item's right edge" (phase 1's 10a): drawn as its
+    /// start and "…" when the folder is wider than its room, which it is wherever the temporary
+    /// folder is as long as Windows' (<c>%TEMP%\VisualCommit.Tests\…</c>); drawn whole only when it
+    /// fits, as a short temporary folder such as CI's Linux <c>/tmp</c> can make it.
+    /// </summary>
+    private static void AssertFolderCut(TextBlock block, string folder, string name)
+    {
+        var drawn = DrawnLines.Of(block).Single();
+        Assert.True(
+            drawn == folder || (drawn.EndsWith('…') && folder.StartsWith(drawn[..^1], StringComparison.Ordinal)),
+            $"{name}'s folder is drawn \"{drawn}\": neither whole nor its start cut with \"…\".");
+    }
+
     /// <summary>The heads <c>ls-remote origin</c> lists, by name.</summary>
     private static async Task<List<string>> RemoteHeadsAsync(TempRepo repo) =>
         [.. (await repo.GitAsync("ls-remote", "--heads", "origin")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Split('\t')[1].TrimEnd('\r'))];
@@ -541,8 +555,7 @@ public sealed partial class Phase6ChecksL
             Assert.Equal(palette.TextPrimary, (texts[0].Foreground as ISolidColorBrush)?.Color);
             Assert.Equal(palette.TextSecondary, (texts[1].Foreground as ISolidColorBrush)?.Color);
             Assert.True(Math.Abs(app.BoundsOf(texts[1]).Left - app.BoundsOf(texts[0]).Right - 12) <= PartL.Tolerance, $"{name}'s folder does not start 12 after its name.");
-            var drawn = DrawnLines.Of(texts[1]).Single();
-            Assert.True(drawn.EndsWith('…') && drawn.Length < folder.Length, $"{name}'s folder is drawn \"{drawn}\", not cut with \"…\".");
+            AssertFolderCut(texts[1], folder, name);
             Assert.True(Math.Abs(app.BoundsOf(texts[1]).Right - (app.BoundsOf(button).Right - 8)) <= PartL.Tolerance, $"{name}'s folder does not end at the item's right edge.");
             AssertInk(picture, app.BoundsOf(texts[1]), palette.TextSecondary, palette.Window, $"{name}'s folder");
         }

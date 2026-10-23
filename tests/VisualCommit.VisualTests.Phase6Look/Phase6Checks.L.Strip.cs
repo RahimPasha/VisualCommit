@@ -184,11 +184,11 @@ public sealed partial class Phase6ChecksL
         Assert.Equal(PartL.WelcomeTexts(recent), TextsIn(app.ActiveWelcomeView));
         var items = app.ActiveWelcomeView.GetVisualDescendants().OfType<Button>()
             .Where(button => Avalonia.Automation.AutomationProperties.GetAutomationId(button) == "RecentRepository").ToList();
-        foreach (var (button, (_, path)) in items.Zip(recent))
+        foreach (var (button, (name, path)) in items.Zip(recent))
         {
             Assert.Equal(path, ToolTip.GetTip(button) as string);
             var folder = button.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).OrderBy(text => app.BoundsOf(text).X).Last();
-            Assert.EndsWith("…", DrawnLines.Of(folder).Single(), StringComparison.Ordinal);
+            AssertFolderCut(folder, path, name);
         }
 
         var section = app.WelcomeWorkspaces();
