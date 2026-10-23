@@ -609,15 +609,19 @@ public static partial class Phase6Expectations
 
         private static Cell Clean { get; } = new("Clean", Secondary);
 
-        /// <summary>Scenario facts 2.3's ten rows, with old-site's folder <paramref name="oldSite"/> (<c>{root}\old-site</c>).</summary>
+        /// <summary>
+        /// Scenario facts 2.3's ten rows, with old-site's folder <paramref name="oldSite"/>
+        /// (<c>{root}\old-site</c>). A Changes cell with counts has its whole text as its tooltip, as
+        /// design 14's table and part W's W0 give it (2.3's table leaves the tooltip out).
+        /// </summary>
         public static IReadOnlyList<DashboardRow> DashboardRows(string oldSite) =>
         [
             new("api", "main", UpToDate, Clean, Cell.Empty, Cell.Empty),
             new("web-app", "main", new("↑ 2", Secondary, "2 commits ahead of origin/main", "2 ahead"), Clean, Cell.Empty, Cell.Empty),
             new("docs", "main", new("↓ 3", Secondary, "3 commits behind origin/main", "3 behind"), Clean, Cell.Empty, Cell.Empty),
             new("mobile", "main", new("↑ 1 ↓ 2", Secondary, "1 commit ahead of and 2 behind origin/main", "1 ahead, 2 behind"), Clean, Cell.Empty, Cell.Empty),
-            new("design-system", "main", UpToDate, new("1 staged, 2 unstaged, 1 untracked", Primary), Cell.Empty, Cell.Empty),
-            new("billing", "main", UpToDate, new("1 conflict", Danger), new("Merge in progress", Warning, "Continue commits the merge with the message in the stage panel. Abort puts main back where it was before the merge."), Cell.Empty),
+            new("design-system", "main", UpToDate, new("1 staged, 2 unstaged, 1 untracked", Primary, "1 staged, 2 unstaged, 1 untracked"), Cell.Empty, Cell.Empty),
+            new("billing", "main", UpToDate, new("1 conflict", Danger, "1 conflict"), new("Merge in progress", Warning, "Continue commits the merge with the message in the stage panel. Abort puts main back where it was before the merge."), Cell.Empty),
             new("infra", "Detached at 09d320a", Cell.Empty, Clean, Cell.Empty, Cell.Empty),
             new("scratch", "experiment", new("No upstream", Secondary, "experiment has no upstream"), Clean, Cell.Empty, Cell.Empty),
             new("notes", "main", new("No remote", Secondary, "This repository has no remotes"), Clean, Cell.Empty, Cell.Empty),
