@@ -28,7 +28,7 @@ jobs:
   build-and-test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -58,9 +58,10 @@ jobs:
       # Phase 3 added about 900 tests (the default run took 3.5 minutes on CI before it, 7 to 8 after
       # it); phase 4 a fifth test process, and Windows passed 12 of the old 14 minutes (D152);
       # phase 5 two more and the undo history's reads in every operation, and Windows reached
-      # the 24-minute limit (run 38853641791, D184).
+      # the 24-minute limit (run 38853641791, D184); phase 6 two more walk-through projects, and
+      # macOS passed 32 of the 40 minutes (run 39943973579, D232).
       - name: Test
-        timeout-minutes: 40
+        timeout-minutes: 55
         run: dotnet test --configuration Release --no-build
 
       # The real-window pass is outside the solution and never runs here. Building it keeps it
