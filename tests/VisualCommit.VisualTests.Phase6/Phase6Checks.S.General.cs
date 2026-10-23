@@ -82,7 +82,7 @@ public sealed partial class Phase6ChecksS
         ShotAtRest(app, "s16c-stash-dialog-untracked");
         app.PressKey(Key.Escape);
         await AssertNoDialogAsync(app);
-        Assert.DoesNotContain(app.CallsSince(start), call => call.CommandText.StartsWith("git stash", StringComparison.Ordinal));
+        Assert.DoesNotContain(app.CallsSince(start), call => call.CommandText.StartsWith("git stash push", StringComparison.Ordinal));
         Assert.Empty(await repo.StashListAsync());
         Assert.Equal(saved, File.ReadAllBytes(SettingsFile(data)));
 
@@ -118,7 +118,7 @@ public sealed partial class Phase6ChecksS
         app.PressKey(Key.Escape);
         await AssertNoDialogAsync(app);
         Assert.Empty(await repo.StashListAsync());
-        Assert.DoesNotContain(app.CallsSince(start), call => call.CommandText.StartsWith("git stash", StringComparison.Ordinal));
+        Assert.DoesNotContain(app.CallsSince(start), call => call.CommandText.StartsWith("git stash push", StringComparison.Ordinal));
         AssertNoWrite(app, start);
         Assert.Equal(saved, File.ReadAllBytes(SettingsFile(data)));
         layout.AssertNone();

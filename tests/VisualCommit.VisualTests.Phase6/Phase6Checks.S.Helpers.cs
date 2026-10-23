@@ -686,29 +686,34 @@ public sealed partial class Phase6ChecksS
             || (OperatingSystem.IsMacOS() && WorkspacePaths.Same(directory, "/private" + folder)));
 
     /// <summary>A call as the report writes it: its command, its folder's kind and its exit code.</summary>
-    private sealed record ExpectedCall(string Command, string Where, int ExitCode, string? Output = null);
+    private sealed record ExpectedCall(string Command, string Where, int? ExitCode, string? Output = null);
 
     /// <summary>
-    /// The screen's reads (SD29) since <paramref name="sequence"/>, asserted as a set: the outside
-    /// read in the data folder (exit 0); with <paramref name="repo"/>, the repository read and both
-    /// <c>git var</c> in its working tree (<paramref name="varExit"/>, and <paramref name="ident"/> on
-    /// standard output when they succeed), then Pull's reader's calls <paramref name="pull"/> in its
+    /// The screen's reads (SD29) since <paramref name="sequence"/> (and up to <paramref name="until"/>
+    /// when given: an opening's reads before a read back's), asserted as a set: the outside read in
+    /// the data folder (exit 0); with <paramref name="repo"/>, the repository read and both
+    /// <c>git var</c> in its working tree (<paramref name="varExit"/>, not asserted when null: without
+    /// a seed git guesses an identity from the machine, SD3; 128 with the seed's refusal, its last
+    /// line asserted; and <paramref name="ident"/> on standard output when they succeed), then Pull's
+    /// reader's calls <paramref name="pull"/> in its
     /// order; nothing else, unless <paramref name="others"/> lets a call through (a step's own
-    /// writes); no write; no <c>git mergetool</c>.
+    /// writes); no write unless <paramref name="allowWrites"/>; no <c>git mergetool</c>.
     /// </summary>
     private static async Task AssertScreenReadsAsync(
         ShellDriver app,
         long sequence,
         TempDirectory data,
         TempRepo? repo,
-        int varExit = 0,
+        int? varExit = 0,
         string? ident = null,
         IReadOnlyList<PartS.PullRead>? pull = null,
         Func<GitCallRecord, bool>? others = null,
-        bool allowWrites = false)
+        bool allowWrites = false,
+        long? until = null)
     {
         var gitFolder = repo is null ? null : await WorkingTreeAsync(repo);
-        var calls = app.CallsSince(sequence).Where(call => others is null || !others(call)).ToList();
+        var window = Window(app, sequence, until);
+        var calls = window.Where(call => others is null || !others(call)).ToList();
         var expected = new List<ExpectedCall> { new(PartS.ConfigListCommand, "data", 0) };
         if (repo is not null)
         {
@@ -725,8 +730,8 @@ public sealed partial class Phase6ChecksS
         Assert.True(calls.Count == expected.Count, $"The screen's reads are {calls.Count} calls, not {expected.Count}:\n  {described}");
         foreach (var want in expected)
         {
-            var match = calls.FirstOrDefault(call => call.CommandText == want.Command && Where(call) == want.Where && call.ExitCode == want.ExitCode);
-            Assert.True(match is not null, $"No call \"{want.Command}\" in the {want.Where} folder with exit {want.ExitCode}. The calls:\n  {described}");
+            var match = calls.FirstOrDefault(call => call.CommandText == want.Command && Where(call) == want.Where && (want.ExitCode is null || call.ExitCode == want.ExitCode));
+            Assert.True(match is not null, $"No call \"{want.Command}\" in the {want.Where} folder with exit {want.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "(any)"}. The calls:\n  {described}");
             if (want.Output is { Length: > 0 } output && want.Command.StartsWith("git var ", StringComparison.Ordinal))
             {
                 Assert.Equal($"{output} {PartS.IdentDate}", match!.StandardOutput.Trim());
@@ -741,12 +746,12 @@ public sealed partial class Phase6ChecksS
 
         if (repo is not null)
         {
-            AssertPullReadsInOrder(app, sequence, pull ?? PartS.PullReadsNothingSet);
-            if (varExit != 0)
+            AssertPullReadsInOrder(app, sequence, pull ?? PartS.PullReadsNothingSet, until);
+            if (varExit is 128)
             {
                 foreach (var command in new[] { PartS.VarAuthorCommand, PartS.VarCommitterCommand })
                 {
-                    var call = app.CallsSince(sequence).Last(record => record.CommandText == command);
+                    var call = window.Last(record => record.CommandText == command);
                     Assert.Equal(PartS.NoEmailGiven, call.StandardError.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n').Split('\n')[^1]);
                 }
             }
@@ -754,18 +759,22 @@ public sealed partial class Phase6ChecksS
 
         if (!allowWrites)
         {
-            AssertNoWrite(app, sequence);
+            Assert.DoesNotContain(window, IsWrite);
         }
 
         AssertNoMergetool(app);
     }
 
+    /// <summary>The calls since <paramref name="sequence"/> and up to <paramref name="until"/> (all after it when null).</summary>
+    private static List<GitCallRecord> Window(ShellDriver app, long sequence, long? until) =>
+        [.. app.CallsSince(sequence).Where(call => until is null || call.Sequence <= until)];
+
     /// <summary>Pull's reader's calls since <paramref name="sequence"/> in its order (8.9), each with its exit code; the reads after them are not made.</summary>
-    private static void AssertPullReadsInOrder(ShellDriver app, long sequence, IReadOnlyList<PartS.PullRead> reads)
+    private static void AssertPullReadsInOrder(ShellDriver app, long sequence, IReadOnlyList<PartS.PullRead> reads, long? until = null)
     {
         var commands = reads.Select(read => read.Command).ToHashSet(StringComparer.Ordinal);
         commands.UnionWith([PartS.GetPullFfCommand, PartS.BoolPullFfCommand, PartS.GetBranchRebaseCommand, PartS.GetPullRebaseCommand, PartS.BoolPullRebaseCommand]);
-        var made = app.CallsSince(sequence).Where(call => commands.Contains(call.CommandText)).OrderBy(call => call.Sequence).ToList();
+        var made = Window(app, sequence, until).Where(call => commands.Contains(call.CommandText)).OrderBy(call => call.Sequence).ToList();
         Assert.True(
             made.Select(call => (call.CommandText, call.ExitCode ?? -1)).SequenceEqual(reads.Select(read => (read.Command, read.ExitCode))),
             "Pull's reader's calls are not the report's, in its order.\nExpected:\n  " + string.Join("\n  ", reads.Select(read => $"{read.Command} → {read.ExitCode}")) + "\nActual:\n  " + string.Join("\n  ", made.Select(call => $"{call.CommandText} → {call.ExitCode}")));
