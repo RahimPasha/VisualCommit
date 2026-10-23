@@ -242,7 +242,7 @@ public sealed partial class RepositoryOperations
     /// <summary>
     /// What Open file asks about beyond its fixed list, read at each call (12.8): the user's
     /// extensions (<c>AppSettings.ExtraRunnableExtensions</c>) and, on Windows, <c>PATHEXT</c>'s, from
-    /// the session's catalogues (<see cref="TabServices.Tools"/>) or else the process's.
+    /// the session's catalogues (<see cref="TabServices.Tools"/>); none without them.
     /// </summary>
     private HashSet<string> ExtraRunnableExtensions()
     {
@@ -252,11 +252,8 @@ public sealed partial class RepositoryOperations
             extensions.Add(extension);
         }
 
-        if (OperatingSystem.IsWindows())
-        {
-            var pathExt = Services?.Tools is { } tools ? tools.PathExtensions() : Environment.GetEnvironmentVariable("PATHEXT");
-            extensions.UnionWith(PathExtExtensions(pathExt));
-        }
+        // The session's catalogues hold PATHEXT (12.9: the machine's, or the harnesses' fixed one); null off Windows.
+        extensions.UnionWith(PathExtExtensions(Services?.Tools?.PathExtensions()));
 
         return extensions;
     }

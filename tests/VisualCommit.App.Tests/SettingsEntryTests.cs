@@ -6,6 +6,8 @@ using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
@@ -19,10 +21,12 @@ namespace VisualCommit.App.Tests;
 /// <c>SettingsButton</c> at the start of the right-hand group, enabled on every kind of tab and
 /// bound without a parameter, with its tooltip, and <c>OpenSettingsCommand</c>, which gives the
 /// screen the active tab's repository (none on an empty or a dashboard tab) and opens it on the
-/// section it is given.
+/// section it is given; and the window's early start of the merge-tool lookup (8.10).
 /// </summary>
 public class SettingsEntryTests
 {
+    private static readonly GitDetection GitFound = new(GitAvailability.Available, "/usr/bin/git", new GitVersion(2, 47, 1), null);
+
     [AvaloniaFact]
     public async Task The_settings_button_is_the_first_of_the_right_group_and_enabled_on_every_tab()
     {
@@ -133,5 +137,111 @@ public class SettingsEntryTests
         dialog.Cancel();
     }
 
+    [Fact]
+    public async Task The_merge_tool_lookup_starts_once_when_the_first_restored_tabs_load_ends()
+    {
+        // 8.10: once start-up has settled the window calls Tools.MergeTools and drops the task: when
+        // the first restored tab's load ends (here the second tab's, which fails), and only once.
+        var first = Path.Combine(Path.GetTempPath(), "restored", "api");
+        var second = Path.Combine(Path.GetTempPath(), "restored", "web");
+        var repositories = new HeldRepositories();
+        var lookups = new CountedLookups();
+        var session = new SessionMemory(new SessionState { Tabs = [new TabState(first), new TabState(second)], ActiveTab = 0 });
+        var shell = Shell(repositories, lookups, session, _ => Task.FromResult(GitFound));
+
+        var starting = shell.InitializeAsync(TestContext.Current.CancellationToken);
+        Assert.Equal([first, second], repositories.Opened);
+        Assert.Equal(0, lookups.Count);
+
+        repositories.Fail(second);
+        await lookups.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        repositories.Fail(first);
+        await starting;
+
+        Assert.Equal(1, lookups.Count);
+    }
+
+    [Fact]
+    public async Task Without_a_restored_repository_the_lookup_starts_once_git_has_been_looked_for()
+    {
+        // 8.10: no repository's tab to wait for, so at once once git's search has ended.
+        var search = new TaskCompletionSource<GitDetection>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lookups = new CountedLookups();
+        var shell = Shell(new HeldRepositories(), lookups, new SessionMemory(new SessionState()), _ => search.Task);
+
+        var starting = shell.InitializeAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(0, lookups.Count);
+
+        search.SetResult(GitFound);
+        await starting;
+
+        Assert.Equal(1, lookups.Count);
+    }
+
     private static string ToolTipText() => MainWindowViewModel.SettingsToolTipFor(KeyTexts.Current);
+
+    private static MainWindowViewModel Shell(HeldRepositories repositories, CountedLookups lookups, SessionMemory session, Func<CancellationToken, Task<GitDetection>> detectGit)
+    {
+        var settings = new MainWindowViewModelTests.FakeSettings();
+        var services = new TabServices(repositories, new FakeFolderPicker(), settings, session, new DateDisplay(TimeZoneInfo.Utc), tools: lookups.Catalogues);
+        return new MainWindowViewModel(settings, new MainWindowViewModelTests.FakeThemes(), detectGit, tabServices: services, session: session);
+    }
+
+    /// <summary>The window's session in memory.</summary>
+    private sealed class SessionMemory(SessionState state) : ISessionStore
+    {
+        public SessionState Current { get; private set; } = state;
+
+        public void Update(Func<SessionState, SessionState> change) => Current = change(Current);
+    }
+
+    /// <summary>Repositories whose opening waits until the test fails it (<see cref="Fail"/>).</summary>
+    private sealed class HeldRepositories : IRepositoryProvider
+    {
+        private readonly Dictionary<string, TaskCompletionSource<IGitRepository>> _openings = [];
+
+        public List<string> Opened { get; } = [];
+
+        public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
+        {
+            var opening = new TaskCompletionSource<IGitRepository>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _openings[path] = opening;
+            Opened.Add(path);
+            return opening.Task;
+        }
+
+        public void Fail(string path) => _openings[path].SetException(new IOException($"{path} is gone."));
+
+        public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) => throw new NotSupportedException();
+    }
+
+    /// <summary>Tool catalogues that count the merge-tool lookups started (8.10).</summary>
+    private sealed class CountedLookups
+    {
+        private int _count;
+
+        public CountedLookups() =>
+            Catalogues = new ToolCatalogues(
+                _ => Task.FromResult(ToolCatalogues.FixedEditors),
+                _ =>
+                {
+                    Interlocked.Increment(ref _count);
+                    Started.TrySetResult();
+                    return Task.FromResult(ToolCatalogues.FixedMergeTools);
+                },
+                () => null);
+
+        public ToolCatalogues Catalogues { get; }
+
+        public int Count => Volatile.Read(ref _count);
+
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
 }

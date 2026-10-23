@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -6,6 +7,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -158,6 +160,14 @@ public sealed class AppSession : IDisposable
 
         var settings = new JsonSettingsStore(paths.SettingsFile, log);
 
+        // The environment's auto-fetch interval wins over the setting (D85, docs/phase-6-design.md
+        // 7.3): said once, after the settings are loaded, read through the reader the scheduler gets.
+        readEnvironment ??= Environment.GetEnvironmentVariable;
+        if (int.TryParse(readEnvironment(AutoFetchScheduler.MinutesVariable), NumberStyles.Integer, CultureInfo.InvariantCulture, out var overriddenMinutes))
+        {
+            log.Info($"{AutoFetchScheduler.MinutesVariable}={overriddenMinutes} overrides the auto-fetch setting ({settings.Current.AutoFetchMinutes} minutes).");
+        }
+
         // The theme is applied before the window exists, so the first frame already has it (11.5).
         var ownedSystemTheme = systemTheme is null ? new PlatformSystemTheme(application.PlatformSettings) : null;
         var themes = new ThemeService(application, systemTheme ?? ownedSystemTheme!, log);
@@ -214,6 +224,10 @@ public sealed class AppSession : IDisposable
         // with the kept list of merge tools in the data folder (8.10); disposed with the session.
         var gitAccess = new GitAccess(gitFound.Task);
         var gitSettings = new GitConfiguration(gitAccess.GetRunnerAsync, paths.DataDirectory, paths.MergeToolsFile, gitEnvironment, log);
+
+        // What the machine has installed, unless the harnesses fixed it (12.9): its editors, the
+        // merge tools git knows (8.10) and PATHEXT, held in TabServices.Tools.
+        tools ??= EditorCatalog.MachineCatalogues(gitSettings, settings, log);
         var tabServices = new TabServices(
             new GitRepositoryProvider(gitAccess, log, backupClock),
             folderPicker ?? new StorageFolderPicker(() => mainWindow),

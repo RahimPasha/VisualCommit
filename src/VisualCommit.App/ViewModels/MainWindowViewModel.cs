@@ -172,9 +172,12 @@ public partial class MainWindowViewModel : ObservableObject
         var opening = Tabs
             .Where(tab => tab.PendingPath is not null)
             .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
-            .Append(ReadActiveDashboardAtStartAsync())
-            .ToList();
-        await Task.WhenAll(opening);
+            .ToList<Task>();
+
+        // The merge tools git knows are looked up once start-up has settled: when the first
+        // restored tab's load ends, or at once without one (docs/phase-6-design.md 8.10).
+        _ = LookUpMergeToolsAfterAsync(opening);
+        await Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()));
 
         // A restored tab that could not be opened is a "New tab" now; a lone one has no close button.
         UpdateCanClose();

@@ -1,12 +1,16 @@
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Session;
+using VisualCommit.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 
@@ -328,38 +332,54 @@ public class RepositoryOperationsFilesTests
     public async Task Open_file_asks_for_an_extension_the_user_added_and_on_windows_for_pathexts()
     {
         // 12.8: run.py opens at once, and with .py added in the settings asks on every platform;
-        // tool.msc asks on Windows through PATHEXT (the test process's is Windows' default, 17.2).
+        // tool.msc asks on Windows through PATHEXT, which the session's catalogues hold (12.9:
+        // the harnesses' fixed one is Windows' default, none elsewhere).
         using var repo = await Scenarios.ChangesAsync();
         await File.WriteAllTextAsync(Path.Combine(repo.Path, "run.py"), "print(1)\n", TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(Path.Combine(repo.Path, "tool.msc"), "x\n", TestContext.Current.CancellationToken);
-        using var app = await OperationsHarness.OpenAsync(repo);
+        using var app = await FixedToolsTab.OpenAsync(repo);
         var run = Path.Combine(app.Repository.Path, "run.py");
         var tool = Path.Combine(app.Repository.Path, "tool.msc");
 
-        await app.Operations.OpenFileAsync("run.py");
+        await app.Repository.Operations.OpenFileAsync("run.py");
         Assert.Equal([run], app.Launcher.Opened);
         Assert.Empty(app.Dialogs.Confirmations);
 
         if (OperatingSystem.IsWindows())
         {
             app.Dialogs.Confirm(yes: false);
-            await app.Operations.OpenFileAsync("tool.msc");
+            await app.Repository.Operations.OpenFileAsync("tool.msc");
             Assert.Equal("Open tool.msc?", Assert.Single(app.Dialogs.Confirmations).Title);
         }
         else
         {
-            await app.Operations.OpenFileAsync("tool.msc");
+            await app.Repository.Operations.OpenFileAsync("tool.msc");
             Assert.Contains(tool, app.Launcher.Opened);
         }
 
         var asked = app.Dialogs.Confirmations.Count;
         app.Settings.Update(settings => settings with { ExtraRunnableExtensions = ".py .pl" });
         app.Dialogs.Confirm(yes: false);
-        await app.Operations.OpenFileAsync("run.py");
+        await app.Repository.Operations.OpenFileAsync("run.py");
         Assert.Equal(asked + 1, app.Dialogs.Confirmations.Count);
         Assert.Equal("Open run.py?", app.Dialogs.Confirmations[^1].Title);
         Assert.Single(app.Launcher.Opened, path => path == run);
-        app.AssertScriptFollowed();
+        Assert.Empty(app.Dialogs.Problems);
+        Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Fact]
+    public async Task Without_the_sessions_catalogues_open_file_asks_by_its_lists_alone()
+    {
+        // 12.8, 12.9: PATHEXT comes from TabServices.Tools only, never from the test process's own.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "tool.msc"), "x\n", TestContext.Current.CancellationToken);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.OpenFileAsync("tool.msc");
+
+        Assert.Equal([Path.Combine(app.Repository.Path, "tool.msc")], app.Launcher.Opened);
+        Assert.Empty(app.Dialogs.Confirmations);
     }
 
     [Fact]
@@ -599,4 +619,71 @@ public class RepositoryOperationsFilesTests
 
     private static async Task<IReadOnlyList<string>> PorcelainAllAsync(TempRepo repo) =>
         (await repo.GitAsync("status", "--porcelain", "--untracked-files=all")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// A repository's view model opened as <see cref="OperationsHarness"/> opens one, with the
+    /// session's tool catalogues fixed as the harnesses fix them (<see cref="ToolCatalogues.Fixed"/>,
+    /// 12.9), which the harness gives none.
+    /// </summary>
+    private sealed class FixedToolsTab : IDisposable
+    {
+        private FixedToolsTab(RepositoryViewModel repository, ScriptedDialogs dialogs, FakeFileLauncher launcher, MainWindowViewModelTests.FakeSettings settings)
+        {
+            Repository = repository;
+            Dialogs = dialogs;
+            Launcher = launcher;
+            Settings = settings;
+        }
+
+        public RepositoryViewModel Repository { get; }
+
+        public ScriptedDialogs Dialogs { get; }
+
+        public FakeFileLauncher Launcher { get; }
+
+        public MainWindowViewModelTests.FakeSettings Settings { get; }
+
+        public static async Task<FixedToolsTab> OpenAsync(TempRepo repo)
+        {
+            var gitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The tests need git.");
+            var git = await GitRepository.OpenAsync(new GitRunner(gitPath, new GitCallLog()), repo.Path, TestContext.Current.CancellationToken);
+            var host = new DialogHostViewModel();
+            var launcher = new FakeFileLauncher();
+            var settings = new MainWindowViewModelTests.FakeSettings();
+            var dates = new DateDisplay(TimeZoneInfo.Utc);
+            var log = new RecordingLog();
+            var services = new TabServices(new NoRepositories(), new FakeFolderPicker(), settings, new MemorySession(), dates, log, dialogs: host, launcher: launcher, tools: ToolCatalogues.Fixed);
+            var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
+            var tab = new FixedToolsTab(repository, new ScriptedDialogs(host), launcher, settings);
+            await repository.StartAsync();
+            return tab;
+        }
+
+        public void Dispose()
+        {
+            Dialogs.Dispose();
+            Repository.Dispose();
+        }
+
+        private sealed class MemorySession : ISessionStore
+        {
+            public SessionState Current { get; private set; } = new();
+
+            public void Update(Func<SessionState, SessionState> change) => Current = change(Current);
+        }
+
+        private sealed class NoRepositories : IRepositoryProvider
+        {
+            public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+            public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+            public Task<IGitRepository> CloneAsync(
+                string url,
+                string destination,
+                IProgress<CloneProgress>? progress,
+                CancellationToken cancellationToken = default,
+                IReadOnlyDictionary<string, string?>? environment = null) => throw new NotSupportedException();
+        }
+    }
 }
