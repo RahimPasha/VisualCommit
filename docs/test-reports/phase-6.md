@@ -3796,6 +3796,14 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   blocked" with phase 5's conflicts text, not "Checkout failed". Pictures expected to change: the
   `ErrorCommand` of the checkout and merge dialogs (`14b`, `14c`, `14f`, `14g`, P24 to P27, `a2c`, a longer
   line that may wrap) and activity-log pictures with "Show reads".
+- **WP-RA (fetch refspecs, the app half), merged in `0c91d01`.** `RepositoryMenusTests.A_remote_that_maps_its_branches_differently_offers_no_push_by_drop`
+  (16.1's row, `:798`) rewritten with refspecs in the snapshot: origin's default line plus
+  `+refs/pull/*/head:refs/remotes/origin/*`, which makes `origin/main` R2, so both pushes are disabled
+  with "origin/main is fetched from more than one ref of origin" in place of "origin maps its branches
+  differently: use Push main…". `RepositoryMenuContextTests`' two `LocalNameOf` calls moved to
+  `context.Refs.LocalNameOf` with the same answers (a compile fix; its class under test is WP-RA's).
+  Nothing else: phase 3's and phase 5's walk-throughs pass unchanged, `07d-drop-onto-remote-branch`
+  included (every earlier scenario uses the identity mapping).
 
 ### Changed in this report after its first commit
 
