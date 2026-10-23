@@ -21,7 +21,10 @@ namespace VisualCommit.Testing;
 /// its rounds (each <c>sleep</c> a process on Windows: 89 s measured in Git 2.36.0's <c>sh</c> on
 /// the development machine with two other builds at work, against the design's estimate of 60 to
 /// 70 s), below the hang watchdog's limit, so a test that waits for <see cref="Held"/> releases
-/// well within about 60 s or the hold no longer holds. Disposing releases, so that a cancelled fetch's shell ends (call it in a
+/// well within about 60 s or the hold no longer holds: a fetch that gave up leaves a marker
+/// <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>, on which <see cref="WaitForHeldAsync"/>,
+/// <see cref="Release"/> and <see cref="Dispose"/> fail, so that a test never passes on a hold that
+/// held nothing. Disposing releases, so that a cancelled fetch's shell ends (call it in a
 /// <c>finally</c>, as <see cref="Scenarios.ReleaseWaitingMergeTool"/>).
 /// </para>
 /// </summary>
@@ -40,37 +43,59 @@ public sealed class FetchHold : IDisposable
     public const string MarkerPrefix = "held-";
 
     /// <summary>
-    /// The script. <c>$0</c> is its own path and <c>$1</c> the remote's folder, as git hands an
-    /// upload-pack command; its files are found beside it by parameter expansion, which starts no
-    /// process.
+    /// The start of the marker a held fetch leaves when it gives up (its rounds over without a
+    /// release): <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>. <see cref="WaitForHeldAsync"/>,
+    /// <see cref="Release"/> and <see cref="Dispose"/> fail on one.
     /// </summary>
-    public const string Script =
-        "#!/bin/sh\n" +
-        "# docs/phase-6-design.md 17.2: holds this fetch's upload-pack until the file release is beside the script.\n" +
-        "here=\"${0%/*}\"\n" +
-        "if [ ! -e \"$here/release\" ]; then\n" +
-        "  remote=\"${1%/}\"\n" +
-        "  marker=\"$here/held-${remote##*/}.$$\"\n" +
-        "  : > \"$marker\"\n" +
-        "  rounds=0\n" +
-        "  while [ ! -e \"$here/release\" ] && [ \"$rounds\" -lt 120 ]; do\n" +
-        "    sleep 0.5\n" +
-        "    rounds=$((rounds + 1))\n" +
-        "  done\n" +
-        "  rm -f \"$marker\"\n" +
-        "fi\n" +
-        "exec git upload-pack \"$1\"\n";
+    public const string GaveUpPrefix = "gave-up-";
+
+    /// <summary>The script with <see cref="Rounds"/> rounds, as <see cref="Install"/> writes it by default.</summary>
+    public static string Script { get; } = ScriptFor(Rounds);
 
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly Lock _gate = new();
     private HashSet<string> _baseline = [];
 
-    private FetchHold(string folder)
+    private FetchHold(string folder, int rounds)
     {
         Folder = folder;
         ScriptPath = Path.Combine(folder, ScriptName);
+        HeldFor = TimeSpan.FromSeconds(rounds * 0.5);
     }
+
+    /// <summary>
+    /// The script for <paramref name="rounds"/> rounds of <c>sleep 0.5</c>. <c>$0</c> is its own
+    /// path and <c>$1</c> the remote's folder, as git hands an upload-pack command; its files are
+    /// found beside it by parameter expansion, which starts no process. A fetch whose rounds run
+    /// out before the release leaves a <see cref="GaveUpPrefix"/> marker and goes on.
+    /// </summary>
+    public static string ScriptFor(int rounds)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rounds);
+        return
+            "#!/bin/sh\n" +
+            "# docs/phase-6-design.md 17.2: holds this fetch's upload-pack until the file release is beside the script.\n" +
+            "here=\"${0%/*}\"\n" +
+            "if [ ! -e \"$here/release\" ]; then\n" +
+            "  remote=\"${1%/}\"\n" +
+            "  marker=\"$here/held-${remote##*/}.$$\"\n" +
+            "  : > \"$marker\"\n" +
+            "  rounds=0\n" +
+            "  while [ ! -e \"$here/release\" ] && [ \"$rounds\" -lt " + rounds.ToString(System.Globalization.CultureInfo.InvariantCulture) + " ]; do\n" +
+            "    sleep 0.5\n" +
+            "    rounds=$((rounds + 1))\n" +
+            "  done\n" +
+            "  rm -f \"$marker\"\n" +
+            "  if [ ! -e \"$here/release\" ]; then\n" +
+            "    : > \"$here/gave-up-${remote##*/}.$$\"\n" +
+            "  fi\n" +
+            "fi\n" +
+            "exec git upload-pack \"$1\"\n";
+    }
+
+    /// <summary>How long a held fetch waits at most for its release: its rounds' sleeps.</summary>
+    public TimeSpan HeldFor { get; }
 
     /// <summary>The harness folder the script and its files lie in: <c>&lt;data&gt;/harness</c>.</summary>
     public string Folder { get; }
@@ -107,12 +132,12 @@ public sealed class FetchHold : IDisposable
     /// install it before the app starts on the data folder) and arms it (<see cref="Arm"/>). Hold a
     /// repository with <see cref="HoldIn"/>.
     /// </summary>
-    public static FetchHold Install(string dataDirectory)
+    public static FetchHold Install(string dataDirectory, int rounds = Rounds)
     {
         var folder = GitIsolation.SessionHarnessFolder(dataDirectory);
         Directory.CreateDirectory(folder);
-        var hold = new FetchHold(folder);
-        File.WriteAllText(hold.ScriptPath, Script, Utf8);
+        var hold = new FetchHold(folder, rounds);
+        File.WriteAllText(hold.ScriptPath, ScriptFor(rounds), Utf8);
         hold.Arm();
         return hold;
     }
@@ -160,6 +185,7 @@ public sealed class FetchHold : IDisposable
 
     /// <summary>Waits until at least <paramref name="count"/> fetches wait (<see cref="Held"/>), looking every 50 ms; at most <paramref name="timeout"/> (60 s when null, about a held fetch's patience).</summary>
     /// <exception cref="TimeoutException">Fewer fetches wait when the time is up.</exception>
+    /// <exception cref="InvalidOperationException">A held fetch gave up (<see cref="GaveUpPrefix"/>).</exception>
     public async Task WaitForHeldAsync(int count, TimeSpan? timeout = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
@@ -167,6 +193,7 @@ public sealed class FetchHold : IDisposable
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (Held < count)
         {
+            ThrowIfGaveUp();
             if (clock.Elapsed >= limit)
             {
                 throw new TimeoutException($"Timed out after {limit.TotalSeconds:0.###} s waiting for {count} held fetches; {Held} wait in {Folder}.");
@@ -175,17 +202,42 @@ public sealed class FetchHold : IDisposable
             // No ConfigureAwait(false): a headless check goes on on its UI thread.
             await Task.Delay(TimeSpan.FromMilliseconds(50));
         }
+
+        ThrowIfGaveUp();
     }
 
-    /// <summary>Lets every held fetch go, and every later one through at once until <see cref="Arm"/>: writes <c>release</c>.</summary>
-    public void Release() => File.WriteAllText(Path.Combine(Folder, ReleaseName), string.Empty);
+    /// <summary>
+    /// Lets every held fetch go, and every later one through at once until <see cref="Arm"/>: writes
+    /// <c>release</c>; then fails if a held fetch had given up before (the hold held nothing any more).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A held fetch gave up (<see cref="GaveUpPrefix"/>).</exception>
+    public void Release()
+    {
+        File.WriteAllText(Path.Combine(Folder, ReleaseName), string.Empty);
+        ThrowIfGaveUp();
+    }
 
-    /// <summary>Releases (<see cref="Release"/>), if the harness folder is still there.</summary>
+    /// <summary>Releases (<see cref="Release"/>), if the harness folder is still there, and so fails as it does when a held fetch gave up.</summary>
     public void Dispose()
     {
         if (Directory.Exists(Folder))
         {
             Release();
+        }
+    }
+
+    /// <summary>The markers of held fetches that gave up, in the harness folder now.</summary>
+    public IReadOnlyList<string> GaveUp() =>
+        Directory.Exists(Folder)
+            ? [.. Directory.EnumerateFiles(Folder, GaveUpPrefix + "*").Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)]
+            : [];
+
+    private void ThrowIfGaveUp()
+    {
+        if (GaveUp() is { Count: > 0 } markers)
+        {
+            throw new InvalidOperationException(
+                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"The hold gave up: the steps between hold and release took over {HeldFor.TotalSeconds:0.###} s ({string.Join(", ", markers)} in {Folder})."));
         }
     }
 
