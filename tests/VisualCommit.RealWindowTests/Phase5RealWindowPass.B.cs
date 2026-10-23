@@ -263,7 +263,7 @@ public partial class Phase5RealWindowPass
         create.Wait(OperationOutcome.Succeeded, CreateShortcut.Status);
         app.WaitUntilGone("NameDialog", StepTimeout);
         WaitForStatus(app, CreateShortcut.Status);
-        AssertUndoRedo(app, true, "Undo " + CreateShortcut.UndoText, false, "Nothing to redo");
+        AssertUndoRedo(app, true, PartU.Undo.ToolTip(CreateShortcut.UndoText), false, "Nothing to redo");
         Assert.Equal(ShortcutSha, await repo.RefTargetAsync("refs/heads/shortcut"));
         Assert.Equal([ShortcutReflog], await GitLinesAsync(repo, "log", "--walk-reflogs", "--format=%gs", "refs/heads/shortcut"));
         Assert.Equal(["## main...origin/main [ahead 2]"], await GitLinesAsync(repo, "status", "--porcelain", "--branch"));

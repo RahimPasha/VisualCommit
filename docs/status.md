@@ -176,8 +176,10 @@ App:
   4.5:1, `VcDangerTextBrush`, tooltips in the app's colours, the drag layer's redraw, `TextInk`;
   the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock`
   merged in `0da0eec`. Part L's sweep pictures: WP-V's part L, step 20.)
-- [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
-  "Changes to expected results" in the phase 6 report.
+- [x] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
+  "Changes to expected results" in the phase 6 report. (Each package's lines as merged are listed in
+  the report's "The earlier tests and expectations each work package changed, as merged"; the gate
+  checks the pictures against 16.1's regions, 17.7.)
 
 Visual checks:
 
@@ -186,7 +188,8 @@ Visual checks:
   `e0f3c4a` and L `fb4aa59`, part L in `VisualCommit.VisualTests.Phase6Look`; each part written by its
   own writer with every picture inspected and every expected result that did not hold ruled on and
   recorded in the report; Phase6 130 of 130 and Phase6Look 19 of 19 on `fb4aa59`.)
-- [ ] 21. Real-window pass for the checks marked for it (`Phase6RealWindowPass`).
+- [x] 21. Real-window pass for the checks marked for it (`Phase6RealWindowPass`). (WP-R: 26 captures
+  in 8 methods and 9 launches, written and built, never run before the gate.)
 
 Closing:
 

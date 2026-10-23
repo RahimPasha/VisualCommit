@@ -3853,6 +3853,22 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   the key text. The real-window lines that read Undo's and Redo's help texts are WP-R's to update
   (`Phase5RealWindowPass.A.cs:480`, `:515`, `:528`, `:765`, `B.cs:266`, `P.cs:108`, `:125`, `:133`,
   `U.cs:53`, `:76`, `:104`).
+- **WP-R (the real-window pass), merged at the commit after `0b23a1d`.** Phase 5's real-window lines
+  that the merged packages changed: Undo's and Redo's help texts with their keys at
+  `Phase5RealWindowPass.A.cs:480`, `:515`, `:528`, `:765`, `B.cs:266`, `P.cs:108`, `:125`, `:133`,
+  `U.cs:53`, `:76`, `:104`, and beyond WP-K's list `U.cs:62-63` (the tooltip the pointer rests on in
+  `u16a`, which the report says grows by ` (Ctrl+Z)` in the real window too) and
+  `Phase5RealWindowPass.cs`' `AssertToolbar` now reading every toolbar button's help text, as phase 5's
+  scripted check does since WP-K; A2's checkout and merge lines (`A.cs:144`, `:157`, `:259-277`)
+  unchanged, as they read `PartA.CheckoutCommand` and `MergeCommand`, which WP-IA changed. In phase 6's
+  pass: W1's one read pass per step (WD27) relaxed in the real window, where closing Windows' own
+  folder dialog gives the window its activation back and can start 2.10's trigger 1 for rows read
+  more than 10 s before (extra passes go into `run.txt`); W1 step 5's folder line matched as a folder,
+  its line breaks scripted only; the cells' tones and tooltips, the help texts no control binds and
+  the column headers' border scripted only; S14 also asserts that `GitScopeCaption`'s help text is the
+  launch's own `<data>\harness\global.gitconfig` (8.13) and reads each PickItem's help text, its
+  detail; L34 samples the graph area at (480, 600), below ops's eight rows, where phase 0's spot falls
+  on a commit row.
 
 ### Changed in this report after its first commit
 
