@@ -509,17 +509,19 @@ public class GitSettingsViewModelTests
         var git = new FakeGitConfiguration { Outside = Read(false, Global("mergetool.slow.cmd", "true"), Global("merge.tool", "mystery")), InRepository = Read(true) };
         var pick = new FakePick();
         var section = new GitSettingsViewModel(git, new FakeSettingsRepository(), held.Catalogues.MergeTools, pick.ShowAsync);
-        var loading = section.LoadAsync();
-        await WaitAsync(() => !section.IsReading);
+        await section.LoadAsync();
 
+        // The fields are there; the list is not (8.10).
+        Assert.False(section.IsReading);
         Assert.True(section.IsLookingForMergeTools);
+        Assert.False(section.MergeToolsLoaded.IsCompleted);
         Assert.False(section.Global.ChooseMergeToolCommand.CanExecute(null));
         Assert.Equal("Looking for the merge tools git knows…", section.Global.MergeToolChooseToolTip);
         Assert.Equal("Looking for the merge tools git knows…", section.Global.MergeToolStatus);
         Assert.Equal("mystery", section.Global.MergeToolText);
 
         held.Fail();
-        await loading;
+        await section.MergeToolsLoaded;
         Assert.True(section.Global.ChooseMergeToolCommand.CanExecute(null));
         Assert.Null(section.Global.MergeToolChooseToolTip);
         Assert.Equal("Git could not list its merge tools.", section.Global.MergeToolStatus);
@@ -560,6 +562,7 @@ public class GitSettingsViewModelTests
         var tools = help ?? VisualCommit.Core.ToolCatalogues.FixedMergeTools;
         var section = new GitSettingsViewModel(git, repository, _ => Task.FromResult(tools), (pick ?? new FakePick()).ShowAsync, fileExists: fileExists ?? (_ => false));
         await section.LoadAsync();
+        await section.MergeToolsLoaded;
         return section;
     }
 
@@ -574,16 +577,6 @@ public class GitSettingsViewModelTests
     internal static GitConfigValue Command(string key, string? value) => new(G.Command, null, key, value);
 
     private static List<string> Texts(IEnumerable<GitNotice> notices) => [.. notices.Select(notice => notice.Text)];
-
-    private static async Task WaitAsync(Func<bool> condition)
-    {
-        var until = DateTime.UtcNow.AddSeconds(30);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < until, "Timed out.");
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
 
     /// <summary>Git's configuration as the screen reads and writes it, from values the test sets; every call recorded.</summary>
     internal sealed class FakeGitConfiguration : IGitConfiguration

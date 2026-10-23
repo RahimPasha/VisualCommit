@@ -11,6 +11,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Settings;
 using VisualCommit.App.Views.Dialogs;
 using VisualCommit.Core;
 using VisualCommit.Core.Settings;
@@ -301,6 +302,72 @@ public class SettingsDialogViewTests
 
         TestPictures.Save(app, $"settings-shortcuts-end-{width}x{height}");
         dialog.Cancel();
+    }
+
+    [AvaloniaFact]
+    public async Task The_screen_reads_and_writes_gits_own_settings_through_real_git()
+    {
+        // The report's S14 step 2 and S18 and S19's saves, in one start: the opening's seven reads,
+        // the global identity through the app's writer, Rebase in "This repository" as one
+        // operation of its queue, each read back and the screen closed.
+        using var repo = await Scenarios.GitSettingsAsync();
+        using var data = new TempDirectory("data");
+        ShellDriver.SeedGlobalGitConfig(data.Path, UseConfigOnly);
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitForRepositoryAsync();
+        await app.WaitForIdleAsync();
+        var since = app.Session.GitCalls.Snapshot().Count;
+
+        await app.OpenSettingsAsync();
+        // The backups' clean-up at the tab's opening (phase 4's) may still run its read meanwhile.
+        var opening = app.Session.GitCalls.Snapshot().Skip(since)
+            .Where(call => !call.CommandText.StartsWith("git for-each-ref", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(opening.Count == 7, string.Join("\n", opening.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+        Assert.Equal(2, opening.Count(call => call.CommandText == "git config --show-scope --show-origin -z --list"));
+        Assert.Contains(opening, call => call.CommandText == "git config --show-scope --show-origin -z --list" && GitFileNames.SamePath(call.WorkingDirectory, data.Path));
+        Assert.Equal(["git config --get pull.ff", "git config --get branch.main.rebase", "git config --get pull.rebase"], opening.Where(call => call.CommandText.StartsWith("git config --get", StringComparison.Ordinal)).Select(call => call.CommandText));
+        Assert.Equal(2, opening.Count(call => call.CommandText.StartsWith("git var GIT_", StringComparison.Ordinal)));
+
+        app.ChooseScope(SettingsScope.Repository);
+        var snapshot = app.SettingsSnapshot();
+        Assert.Equal("Git cannot make commits here: no email is set.", snapshot.Field("IdentityInEffect")?.Text);
+        Assert.Equal(["user.useConfigOnly is set, so git does not guess a missing name or email."], snapshot.Lines("IdentityNotices"));
+        Assert.Equal("Pull into main: Merge (fast-forward when possible): nothing is set, so the app merges; git in a terminal stops when the branches have diverged.", snapshot.Field("PullInEffect")?.Text);
+        Assert.Equal("Same as global (not set)", snapshot.Field("MergeToolValue")?.Text);
+
+        // A global identity: two writes in the data folder, then the read back; the screen closes.
+        app.SetIdentity(SettingsScope.Global, "Ann Example", "ann@example.com");
+        since = app.Session.GitCalls.Snapshot().Count;
+        Assert.True(await app.SaveSettingsAsync());
+        var saved = app.Session.GitCalls.Snapshot().Skip(since).ToList();
+        Assert.Equal(
+            ["git config --global --replace-all user.name \"Ann Example\"", "git config --global --replace-all user.email ann@example.com"],
+            saved.Where(call => call.CommandText.Contains("--replace-all", StringComparison.Ordinal)).Select(call => call.CommandText));
+        Assert.Equal(
+            "[user]\n\tuseConfigOnly = true\n\tname = Ann Example\n\temail = ann@example.com\n",
+            File.ReadAllText(ShellDriver.GlobalGitConfigPath(data.Path)).Replace("\r\n", "\n", StringComparison.Ordinal));
+
+        // The repository's Rebase: one operation, both keys at --local, the status bar's result.
+        await app.OpenSettingsAsync();
+        app.ChooseScope(SettingsScope.Repository);
+        snapshot = app.SettingsSnapshot();
+        Assert.Equal(("Same as global: Ann Example", "Commits here are made as Ann Example <ann@example.com>."), (snapshot.Field("UserNameBox")?.Placeholder, snapshot.Field("IdentityInEffect")?.Text));
+        app.ChoosePullMode(SettingsScope.Repository, Core.Git.PullMode.Rebase);
+        Assert.True(await app.SaveSettingsAsync());
+        await app.WaitForIdleAsync();
+        Assert.Equal("Saved the repository's settings", app.Session.Shell.ActiveTab.OperationStatus.Text);
+        Assert.Equal("true", (await repo.GitAsync("config", "--local", "--get", "pull.rebase")).StandardOutput.Trim());
+        Assert.Equal("true", (await repo.GitAsync("config", "--local", "--get", "pull.ff")).StandardOutput.Trim());
+
+        // The global scope notices the repository's own mode (SD8); its in-effect line names .git/config (SD18).
+        await app.OpenSettingsAsync(SettingsOpening.Button);
+        app.ChooseSection(SettingsSection.Git);
+        Assert.Equal(["settings sets its own: Rebase."], app.SettingsSnapshot().Lines("PullNotices"));
+        app.ChooseScope(SettingsScope.Repository);
+        Assert.Equal("Pull into main: Rebase (pull.rebase = true in .git/config).", app.SettingsSnapshot().Field("PullInEffect")?.Text);
+        TestPictures.Save(app, "settings-real-git-repository");
+        app.CancelSettings();
     }
 
     private static string? Focused(ShellDriver app)

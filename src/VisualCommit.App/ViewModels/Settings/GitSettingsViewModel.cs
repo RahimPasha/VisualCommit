@@ -188,16 +188,19 @@ public sealed partial class GitSettingsViewModel : ObservableObject
 
     /// <summary>
     /// The reads of the screen's opening (8.1, 8.6, 8.7, SD29), side by side: the outside read, and
-    /// with a repository the repository read, its identity and, on a branch, Pull's reader; then the
-    /// merge tools' list (8.10), which does not hold the fields.
+    /// with a repository the repository read, its identity and, on a branch, Pull's reader. The
+    /// merge tools' list (8.10) is asked for at the same time and does not hold the fields, nor
+    /// this task: <see cref="MergeToolsLoaded"/> completes when it is there.
     /// </summary>
     public async Task LoadAsync()
     {
         var reads = ReadAllAsync();
-        var tools = LoadMergeToolsAsync();
+        MergeToolsLoaded = LoadMergeToolsAsync(reads);
         await reads;
-        await tools;
     }
+
+    /// <summary>Completes when the merge tools' list is there (8.10), or failed; <c>Choose…</c> is enabled then.</summary>
+    public Task MergeToolsLoaded { get; private set; } = Task.CompletedTask;
 
     /// <summary>Shows the global scope.</summary>
     [RelayCommand]
@@ -415,17 +418,30 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         }
     }
 
-    private async Task LoadMergeToolsAsync()
+    private async Task LoadMergeToolsAsync(Task reads)
     {
+        MergeToolHelp tools;
         try
         {
-            _tools = await _mergeTools(CancellationToken.None);
+            tools = await _mergeTools(CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log.Warning("The settings screen could not get the merge tools git knows.", ex);
-            _tools = MergeToolHelp.FailedLookup;
+            tools = MergeToolHelp.FailedLookup;
         }
+
+        // The user's own tools and the tools' paths come from the reads.
+        try
+        {
+            await reads;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.Warning("Git's configuration could not be read for the merge tools' list.", ex);
+        }
+
+        _tools = tools;
 
         // A path set in either scope's read counts (the repository read holds the global one too).
         var found = new HashSet<string>(await PathFoundAsync(_tools, _outside), StringComparer.Ordinal);
