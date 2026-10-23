@@ -3804,6 +3804,19 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   `context.Refs.LocalNameOf` with the same answers (a compile fix; its class under test is WP-RA's).
   Nothing else: phase 3's and phase 5's walk-throughs pass unchanged, `07d-drop-onto-remote-branch`
   included (every earlier scenario uses the identity mapping).
+- **WP-B (bulk fetch and pull, Pull's app path), merged in `e974c35`.** `Phase3Expectations.D.cs:170`
+  (`MergeFetchHeadCommand`: `git merge --no-edit --no-overwrite-ignore FETCH_HEAD`, check 18c);
+  `Phase3Expectations.D.cs:236-243` (`PullRefusedDialog`, check 18b step 4, picture `18b3-pull-refused`:
+  the summary "main and origin/main have diverged, and pull.ff is set to only: merge origin/main into
+  main or rebase main onto origin/main.", the command `git merge --ff-only --no-overwrite-ignore
+  FETCH_HEAD`); `RepositoryOperationsPullTests.Pull_refused_by_pull_ff_only_shows_gits_message_after_the_fetch_ran`
+  (the new summary and command) and `Pull_with_a_setting_the_app_does_not_understand_says_which_and_changes_nothing`
+  (`git config --get pull.rebase`, `origin/main` not fetched, no fetch among the operation's calls, the
+  configuration reads in order); the chosen rebase's call log gains `git config --get pull.ff` (and
+  `--type=bool` for an uncommon value) before its fetch, which phase 4's part A pull checks, asserting
+  calls by name, pass unchanged; WP-D's `DashboardViewTests` long-name case now runs a real Fetch all
+  (accepted by the lead). `OperationQueueTests`' waiting-cancel case gains the `Finished` event and the
+  last result (4.5).
 
 ### Changed in this report after its first commit
 

@@ -122,10 +122,14 @@ Git layer and Core:
   changes, an operation in progress), read cheaply for ten repositories without opening them as
   tabs. Tests. (WP4's `OpenedAtTopAsync` merged; WP-D's summary mode, the reads off the UI thread
   four at a time, built, reviewed and fixed, merged in `125e792`.)
-- [ ] 9. Bulk fetch and pull through each repository's `OperationQueue` (D81), with the
+- [x] 9. Bulk fetch and pull through each repository's `OperationQueue` (D81), with the
   toolbar's titles, Cancel and error dialog; what is recorded for undo and where the activity
   log shows it. Tests. (WP4's `OperationQueue.Cancel`, prompt groups and `MaxConnections` 16
-  merged; WP-B: wave 2.)
+  merged. WP-B, built, reviewed and fixed, merged in `e974c35`: the run, the window's four slots,
+  the prompt group, Cancel all and a row's Cancel, failures kept in rows, the header and status bar,
+  Pull's settings read before the fetch with the chosen rebase reading pull.ff alone (D231), the
+  queue telling a dropped waiting operation as Finished (4.5), auto-fetch skipping a common folder a
+  run fetches.)
 - [x] 10. The settings that are git's own, read and written through git's configuration: the
   identity, the pull mode (`pull.rebase`, `pull.ff`, `branch.<name>.rebase`, D78, D84), the merge
   tool (`merge.tool`, D149). Tests, the pull-parity tests unchanged. (WP2, built, reviewed and
@@ -154,7 +158,8 @@ App:
 - [ ] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
   uncommitted changes; opening a repository from it. (WP-W merged in `0da0eec`, WP-D in `125e792`,
   each built, reviewed and fixed; the bulk run's parts of the dashboard are WP-B's.)
-- [ ] 14. Bulk fetch and pull from the dashboard: progress per repository, Cancel, errors.
+- [x] 14. Bulk fetch and pull from the dashboard: progress per repository, Cancel, errors. (WP-B,
+  merged in `e974c35`.)
 - [ ] 15. The command palette: search and run the app's commands and the menus' actions, with
   their keys shown.
 - [ ] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
@@ -297,9 +302,9 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
-(`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`) and WP-RA (`0c91d01`) merged;
-WP-B built, under review; WP-SET being built. Next: WP-B's fixes and merge (with the line it gives
-for `MainWindowViewModel.cs:99`), WP-SET's review and merge, then WP-K last; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`), WP-RA (`0c91d01`) and WP-B
+(`e974c35`) merged; WP-SET reviewed, its fixes being made; the lead's `Phase6Checks.Support.cs`
+helpers being built in a worktree (`wip/p6-check-helpers`). Next: WP-SET's merge, then WP-K last; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
