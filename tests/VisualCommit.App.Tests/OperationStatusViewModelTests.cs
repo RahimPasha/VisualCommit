@@ -529,13 +529,18 @@ public class OperationStatusViewModelTests
     private static OperationQueue NewQueue() =>
         new("graph", Path.Combine(Path.GetTempPath(), "no-such-git-folder"), () => null, _ => Task.CompletedTask, null, null, NullAppLog.Instance);
 
+    /// <summary>Waits until <paramref name="condition"/> holds; fails after 30 s, as <c>DashboardTestSupport.WaitUntilAsync</c> does.</summary>
     private static async Task WaitForAsync(Func<bool> condition)
     {
-        for (var wait = 0; !condition() && wait < 500; wait++)
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (!condition())
         {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Timed out after 30 s waiting for the status.");
+            }
+
             await Task.Delay(10, TestCancelled);
         }
-
-        Assert.True(condition());
     }
 }

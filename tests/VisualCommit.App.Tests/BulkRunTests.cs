@@ -167,27 +167,37 @@ public partial class BulkRunTests
     public async Task A_row_whose_state_changed_while_it_waited_is_left_out_at_its_turn_and_gives_its_slot_back()
     {
         using var provider = new BulkProvider();
-        var gate = new TaskCompletionSource();
+        var (first, rest) = (new TaskCompletionSource(), new TaskCompletionSource());
         foreach (var name in new[] { "a", "b", "c", "d", "e" })
         {
-            provider.Add(name).FetchGate = gate;
+            provider.Add(name).FetchGate = name == "a" ? first : rest;
         }
 
         using var host = await BulkHost.StartAsync(provider, ["a", "b", "c", "d", "e"]);
         var run = host.Bulk.FetchAllAsync();
         await WaitUntilAsync(() => provider.FetchesNow == 4, "four fetches");
+        var slots = host.Services.BulkSlots;
+        Assert.Equal((4, 1), (slots.Held, slots.Waiting));
 
         // e's remote was removed in a terminal, and its view model read it again.
         provider["e"].Refs = DashboardTestSupport.MainRefs(remote: false);
         await host["e"].Repository!.RefreshAsync();
         Assert.Equal("Waiting to fetch…", host.Operation("e"));
 
-        gate.SetResult();
+        // a ends: e gets its slot, is left out at its turn and gives the slot back at once, while
+        // b, c and d still run.
+        first.SetResult();
+        await WaitUntilAsync(() => host.Bulk.Current!.Rows[4].State == BulkRowState.Skipped, "e's turn");
+        Assert.Equal((3, 0), (slots.Held, slots.Waiting));
+        Assert.Equal(3, provider.FetchesNow);
+
+        rest.SetResult();
         await run.WaitAsync(Patience);
 
         Assert.Equal((BulkRowState.Skipped, "This repository has no remotes"), (host.Bulk.Current!.Rows[4].State, host.Bulk.Current.Rows[4].Reason));
         Assert.Equal(("This repository has no remotes", 0), (host.Operation("e"), provider["e"].Fetches));
         Assert.Equal("Fetched 4 repositories; 1 skipped", host.Bulk.RunText);
+        Assert.Equal((0, 0), (slots.Held, slots.Waiting));
     }
 
     [AvaloniaFact]
@@ -458,6 +468,58 @@ public partial class BulkRunTests
         await run.WaitAsync(Patience);
         Assert.Equal("Fetched 5 repositories; 1 skipped", host.Bulk.RunText);
         Assert.Null(host.Dashboard.MenuStateOf(host["a"]).RemoveReason);
+    }
+
+    [AvaloniaFact]
+    public async Task In_Pull_all_a_reading_row_cannot_be_removed_and_an_ended_rows_removal_leaves_the_counts()
+    {
+        // 4.7, 4.13: a row the run holds (reading, in line, running) is not removed by Remove
+        // from workspace or its key (RemoveSelected); one that ended is, and the run's counts and
+        // text stay as they were, describing the run as it started.
+        using var provider = new BulkProvider();
+        var gate = new TaskCompletionSource();
+        provider.Add("x");
+        foreach (var name in new[] { "a", "b", "c", "d", "e" })
+        {
+            provider.Add(name).PullGate = gate;
+        }
+
+        provider.Add("r");
+        using var host = await BulkHost.StartAsync(provider, ["x", "a", "b", "c", "d", "e", "r"], read: false);
+        var check = new TaskCompletionSource();
+        host.HeldChecks[provider.PathOf("r")] = check;
+        host.Dashboard.OnBecameActive();
+        await WaitUntilAsync(() => host.Dashboard.Rows.Take(6).All(row => row.HasRepository), "the rows' reads but r's");
+        Assert.True(host["r"].IsNotReadYet);
+
+        var run = host.Bulk.PullAllAsync();
+        var current = host.Bulk.Current!;
+        await WaitUntilAsync(() => current.Rows[0].State == BulkRowState.Ended && current.RunningRows == 4, "x's pull to end and d's to run");
+        Assert.Equal(
+            [BulkRowState.Ended, BulkRowState.Running, BulkRowState.Running, BulkRowState.Running, BulkRowState.Running, BulkRowState.InLine, BulkRowState.Reading],
+            current.Rows.Select(row => row.State));
+        Assert.Equal("Pulling 7 repositories… 1 done", host.Bulk.RunText);
+
+        foreach (var held in new[] { "r", "e", "a" })
+        {
+            Assert.Equal("Wait for Pull all to finish", host.Dashboard.MenuStateOf(host[held]).RemoveReason);
+            host.Dashboard.SelectedRow = host[held];
+            host.Dashboard.RemoveSelected();
+            Assert.Contains(host.Dashboard.Rows, row => row.Name == held);
+        }
+
+        // x ended: it goes, the run's counts stay.
+        Assert.Null(host.Dashboard.MenuStateOf(host["x"]).RemoveReason);
+        host.Dashboard.SelectedRow = host["x"];
+        host.Dashboard.RemoveSelected();
+        Assert.DoesNotContain(host.Dashboard.Rows, row => row.Name == "x");
+        Assert.Equal(("Pulling 7 repositories… 1 done", 7, 1), (host.Bulk.RunText, current.ActedOn, current.Done));
+
+        gate.SetResult();
+        check.SetResult();
+        await run.WaitAsync(Patience);
+        Assert.Equal(("Pulled 7 repositories", 7), (host.Bulk.RunText, current.Succeeded));
+        Assert.Null(host.Dashboard.MenuStateOf(host["r"]).RemoveReason);
     }
 
     [AvaloniaFact]

@@ -38,6 +38,9 @@ public partial class BulkRunTests
             Assert.Equal(("This repository has no remotes", "No remote"), (snapshot.Row("notes").Operation.Text, snapshot.Row("notes").AheadBehind.Text));
             Assert.Equal("Fetching 6 repositories…", snapshot.BulkText);
             Assert.Equal(4, hold.Held);
+            var current = app.ActiveDashboard!.Bulk.Current!;
+            Assert.Equal((4, 2), (current.RunningRows, current.InLine));
+            Assert.Equal([BulkRowState.InLine, BulkRowState.InLine], current.Rows.Skip(4).Take(2).Select(row => row.State));
 
             // An F5 read under the hold: notes is still without a remote and left out, and no
             // fifth fetch started.
@@ -46,7 +49,7 @@ public partial class BulkRunTests
             snapshot = app.DashboardSnapshot();
             Assert.Equal(("This repository has no remotes", "No remote"), (snapshot.Row("notes").Operation.Text, snapshot.Row("notes").AheadBehind.Text));
             Assert.Equal(4, hold.Held);
-            Assert.Equal(4, app.ActiveDashboard.Bulk.Current!.RunningRows);
+            Assert.Equal((4, 2), (current.RunningRows, current.InLine));
 
             hold.Release();
             var run = await app.WaitForBulkRunAsync(GitPatience);

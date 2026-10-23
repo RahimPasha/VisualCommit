@@ -154,6 +154,51 @@ public class JsonWorkspaceStoreTests
     }
 
     [Fact]
+    public void An_unreadable_file_left_in_place_is_read_again_at_the_next_start()
+    {
+        // 1.3: nothing writes over a file that could be neither read nor set aside, so the next
+        // start, when the other program has let go, reads it as it was.
+        using var data = new TempDirectory("data");
+        var file = WorkspacesFile(data);
+        JsonWorkspaceStore.Write(file, Platform);
+        var held = new FakeFiles
+        {
+            FailRead = _ => new IOException("The process cannot access the file because it is being used by another process."),
+            FailMove = (_, _) => new IOException("The process cannot access the file because it is being used by another process."),
+        };
+        var first = new JsonWorkspaceStore(file, files: held);
+        Assert.Equal(WorkspaceReadOnlyCause.Unreadable, first.ReadOnlyCause);
+        first.Update(list => WorkspaceEdits.Create(list, "w1", "Web"));
+
+        var next = new JsonWorkspaceStore(file, files: new FakeFiles());
+
+        Assert.Equal((false, (WorkspaceReadOnlyCause?)null, (string?)null), (next.IsReadOnly, next.ReadOnlyCause, next.Notice));
+        Assert.Equal(["Platform", "Mobile"], next.Current.Workspaces.Select(workspace => workspace.Name));
+        Assert.False(File.Exists(Path.Combine(data.Path, "workspaces.unreadable.json")));
+    }
+
+    [Fact]
+    public void A_read_the_file_system_does_not_support_is_not_tried_again_and_the_file_is_set_aside()
+    {
+        using var data = new TempDirectory("data");
+        var file = WorkspacesFile(data);
+        JsonWorkspaceStore.Write(file, Platform);
+        var bytes = File.ReadAllBytes(file);
+        var files = new FakeFiles { FailRead = _ => new NotSupportedException("The given path's format is not supported.") };
+        var log = new RecordingLog();
+
+        var store = new JsonWorkspaceStore(file, log, files);
+
+        Assert.Equal(1, files.Reads);
+        Assert.Equal(JsonWorkspaceStore.SetAsideNotice("workspaces.unreadable.json"), store.Notice);
+        Assert.False(store.IsReadOnly);
+        Assert.Empty(store.Current.Workspaces);
+        Assert.False(File.Exists(file));
+        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(data.Path, "workspaces.unreadable.json")));
+        Assert.Contains(log.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    [Fact]
     public void A_read_refused_by_the_files_permissions_is_not_tried_again_and_the_file_is_set_aside()
     {
         using var data = new TempDirectory("data");

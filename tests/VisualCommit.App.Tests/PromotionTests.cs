@@ -92,20 +92,28 @@ public class PromotionTests
         using var summary = RepositoryViewModel.ForSummary(repository, DashboardTestSupport.Services(provider));
 
         var summaryRead = summary.StartAsync();
-        await DashboardTestSupport.WaitUntilAsync(() => repository.RefsReads == 1, "the summary read");
+        await DashboardTestSupport.WaitUntilAsync(() => repository.RefsReads == 1 && repository.StatusReads == 1, "the summary read");
         summary.Promote(Stopwatch.StartNew());
         Assert.False(summary.HasFirstRead);
 
+        // The full start begins, held in its status read; the summary read ends meanwhile and
+        // applies nothing, its first read left to the full start.
         var fresh = DashboardTestSupport.MainRefs(behind: 7);
         repository.Refs = fresh;
         repository.RefsGate = null;
-        await summary.StartAsync().WaitAsync(Patience);
-        Assert.True(summary.HasFirstRead);
+        repository.StatusGate = new TaskCompletionSource();
+        var full = summary.StartAsync();
+        await DashboardTestSupport.WaitUntilAsync(() => repository.StatusReads == 2 && summary.Refs is not null, "the full start's refs, its status read held");
         Assert.Same(fresh, summary.Refs);
-
         held.SetResult();
         await summaryRead.WaitAsync(Patience);
-        await DashboardTestSupport.SettleAsync();
+        Assert.False(summary.HasFirstRead);
+        Assert.False(full.IsCompleted);
+        Assert.Same(fresh, summary.Refs);
+
+        repository.StatusGate.SetResult();
+        await full.WaitAsync(Patience);
+        Assert.True(summary.HasFirstRead);
         Assert.Same(fresh, summary.Refs);
     }
 
@@ -324,8 +332,12 @@ public class PromotionTests
         var services = DashboardTestSupport.Services(provider);
         using var summary = RepositoryViewModel.ForSummary(repository, services);
         await summary.StartAsync();
+
+        // In summary mode a save reads nothing; the positive control, a tab on the same services
+        // told after it, reads merge.tool.
+        var control = await GitSettingsChangedTests.ControlAsync(provider, services);
         services.RaiseGitSettingsChanged();
-        await DashboardTestSupport.SettleAsync();
+        await control.ToldAsync();
         Assert.Equal(0, repository.MergeToolReads);
 
         summary.Promote(Stopwatch.StartNew());

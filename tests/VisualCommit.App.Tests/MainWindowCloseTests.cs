@@ -69,6 +69,54 @@ public class MainWindowCloseTests
     }
 
     [AvaloniaFact]
+    public async Task Closing_the_window_during_Fetch_all_ends_its_rows_in_line_and_waits_for_the_four_running()
+    {
+        // 3.7, 4.12: the run starts no more rows before the queues drop what waits; "Finishing
+        // operations" lists the four running fetches only; on "Keep open" the run ends with them,
+        // counting the rest cancelled, no fifth fetch starts, and a later Fetch all works.
+        using var provider = new BulkProvider();
+        var gate = new TaskCompletionSource();
+        string[] names = ["a", "b", "c", "d", "e", "f"];
+        foreach (var name in names)
+        {
+            provider.Add(name).FetchGate = gate;
+        }
+
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store([.. names.Select(provider.PathOf)]));
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var dashboard = window.ActiveTab.Dashboard!;
+        await DashboardTestSupport.WaitUntilAsync(() => !dashboard.IsPassRunning && dashboard.Rows.All(row => row.HasRepository), "the dashboard's first read");
+        var run = dashboard.Bulk.FetchAllAsync();
+        var current = dashboard.Bulk.Current!;
+        await DashboardTestSupport.WaitUntilAsync(() => provider.FetchesNow == 4, "four fetches");
+        Assert.Equal((4, 2), (current.RunningRows, current.InLine));
+        var closed = 0;
+
+        Assert.False(window.TryClose(() => closed++));
+
+        Assert.Equal([BulkRowState.CancelledInLine, BulkRowState.CancelledInLine], current.Rows.Skip(4).Select(row => row.State));
+        Assert.Equal(["Fetch cancelled", "Fetch cancelled"], dashboard.Rows.Skip(4).Select(row => row.Operation.Text));
+        var finishing = Assert.IsType<FinishingDialogViewModel>(Assert.Single(window.Dialogs.Open));
+        Assert.Equal(["Fetch — a", "Fetch — b", "Fetch — c", "Fetch — d"], finishing.Items.Select(item => item.Text).Order(StringComparer.Ordinal));
+
+        // Keep open: the window stays; the four end.
+        finishing.CancelCommand.Execute(null);
+        await DashboardTestSupport.WaitUntilAsync(() => finishing.IsClosed, "the dialog to close");
+        gate.SetResult();
+        await run.WaitAsync(Patience);
+        Assert.Equal(0, closed);
+        Assert.Equal(("Fetched 4 repositories; 2 cancelled", 4, 2), (dashboard.Bulk.RunText, current.Succeeded, current.Cancelled));
+        Assert.Equal((0, 0, 4), (provider["e"].Fetches, provider["f"].Fetches, provider.MaxFetchesAtOnce));
+        Assert.Equal(0, services.BulkSlots.Held);
+
+        await dashboard.Bulk.FetchAllAsync().WaitAsync(Patience);
+        Assert.Equal("Fetched 6 repositories", dashboard.Bulk.RunText);
+        Assert.Equal((1, 1), (provider["e"].Fetches, provider["f"].Fetches));
+        window.CloseAll();
+    }
+
+    [AvaloniaFact]
     public async Task A_dashboards_idle_rows_do_not_hold_the_window()
     {
         using var provider = new FakeProvider();
@@ -124,18 +172,34 @@ public class MainWindowCloseTests
     {
         using var provider = new FakeProvider();
         var api = provider.Add("api");
+
+        // A gate that ignores the reads' cancellation, so that both probes return after CloseAll
+        // and reach what refuses them: the closed row's token, the registry's DisposeAll.
         provider.Gate = new TaskCompletionSource();
+        provider.GateIgnoresCancellation = true;
         var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory));
         var window = DashboardTestSupport.Window(services);
         services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var row = window.ActiveTab.Dashboard!.Rows[0];
         await DashboardTestSupport.WaitUntilAsync(() => provider.Opens == 1, "the row's probe");
 
+        // The positive control: a dashboard of the workspace outside the window, on the same
+        // services, its probe held at the same gate, which CloseAll leaves alone.
+        var control = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
+        control.OnBecameActive();
+        await DashboardTestSupport.WaitUntilAsync(() => provider.Opens == 2, "the control's probe");
         window.CloseAll();
         provider.Gate.SetResult();
-        await DashboardTestSupport.SettleAsync();
 
+        // The closed row's read ends, and the control's read, refused a summary after DisposeAll,
+        // ends with nothing either.
+        await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading && !control.Rows[0].IsReading && !control.IsPassRunning, "both reads to end");
+        Assert.NotNull(control.Rows[0].Key);
+        Assert.Null(row.Key);
         Assert.Empty(services.OpenRepositories.Summaries);
+        Assert.Equal((null, null), (row.Repository, control.Rows[0].Repository));
         Assert.Equal((0, 0), (api.RefsReads, api.StatusReads));
+        control.Dispose();
     }
 
     [AvaloniaFact]

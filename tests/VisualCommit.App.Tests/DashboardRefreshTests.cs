@@ -26,8 +26,9 @@ public class DashboardRefreshTests
     public async Task Becoming_active_reads_rows_never_read_and_again_only_ten_seconds_after_their_last_read()
     {
         using var provider = new FakeProvider();
-        var (api, docs) = (provider.Add("api"), provider.Add("docs"));
-        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory, docs.WorkingDirectory]);
+        var (api, docs, late, later) = (provider.Add("api"), provider.Add("docs"), provider.Add("late"), provider.Add("later"));
+        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory, docs.WorkingDirectory], active: false);
+        var store = Store(dashboard);
 
         dashboard.OnBecameActive();
         await WaitForPassesAsync(log, 1);
@@ -35,42 +36,93 @@ public class DashboardRefreshTests
         Assert.Equal((1, 1), (api.RefsReads, docs.RefsReads));
         Assert.All(dashboard.Rows, row => Assert.Equal(DashboardTexts.UpToDateText, row.AheadBehind.Text));
 
-        // Within 10 s: no row to read, so no pass and no line (WD35), decided at once (WD37).
+        // Within 10 s: no row of the two is read, so none starts at once (WD37). The positive
+        // control, on the same activation: a row gained in the background, never read, is.
+        store.Update(list => WorkspaceEdits.Append(list, "web", [late.WorkingDirectory]));
         dashboard.OnBecameActive();
-        Assert.False(dashboard.IsPassRunning);
-        Assert.DoesNotContain(dashboard.Rows, row => row.IsReading);
-        clock.Advance(TimeSpan.FromSeconds(10) - TimeSpan.FromTicks(1));
-        dashboard.OnBecameActive();
-        await DashboardTestSupport.SettleAsync();
-        Assert.Single(PassLines(log));
-        Assert.Equal((1, 1), (api.RefsReads, docs.RefsReads));
+        Assert.DoesNotContain(dashboard.Rows.Take(2), row => row.IsReading);
+        await WaitForPassesAsync(log, 2);
+        Assert.Equal(["Web: read 2 repositories in", "Web: read 1 repository in"], PassLines(log));
+        Assert.Equal((1, 1, 1), (api.RefsReads, docs.RefsReads, late.RefsReads));
 
+        // A tick short of 10 s: the same, with another row gained in the background as the control.
+        clock.Advance(TimeSpan.FromSeconds(10) - TimeSpan.FromTicks(1));
+        store.Update(list => WorkspaceEdits.Append(list, "web", [later.WorkingDirectory]));
+        dashboard.OnBecameActive();
+        await WaitForPassesAsync(log, 3);
+        Assert.Equal((1, 1, 1, 1), (api.RefsReads, docs.RefsReads, late.RefsReads, later.RefsReads));
+        Assert.Equal("Web: read 1 repository in", PassLines(log)[2]);
+
+        // 10 s after their read: api, docs and late are read again; later, read a tick ago, is not.
         clock.Advance(TimeSpan.FromTicks(1));
         dashboard.OnBecameActive();
         Assert.True(dashboard.IsPassRunning);
-        await WaitForPassesAsync(log, 2);
-        Assert.Equal((2, 2), (api.RefsReads, docs.RefsReads));
+        await WaitForPassesAsync(log, 4);
+        Assert.Equal("Web: read 3 repositories in", PassLines(log)[3]);
+        Assert.Equal((2, 2, 2, 1), (api.RefsReads, docs.RefsReads, late.RefsReads, later.RefsReads));
     }
 
     [AvaloniaFact]
     public async Task The_windows_activation_follows_the_same_ten_seconds()
     {
         using var provider = new FakeProvider();
-        var api = provider.Add("api");
-        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory]);
+        var (api, late) = (provider.Add("api"), provider.Add("late"));
+        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory], active: false);
         dashboard.OnWindowActivated();
         await WaitForPassesAsync(log, 1);
         Assert.Equal(["Web: read 1 repository in"], PassLines(log));
 
+        // Within 10 s api is not read again; the positive control on the same activation is a row
+        // gained in the background, never read.
         api.Status = new WorkingTreeStatus([], [new ChangedFile("todo.txt", FileChangeKind.Added)], new HashSet<string>(StringComparer.Ordinal) { "todo.txt" });
+        Store(dashboard).Update(list => WorkspaceEdits.Append(list, "web", [late.WorkingDirectory]));
         dashboard.OnWindowActivated();
-        await DashboardTestSupport.SettleAsync();
+        await WaitForPassesAsync(log, 2);
+        Assert.Equal(1, late.StatusReads);
         Assert.Equal(("Clean", 1), (dashboard.Rows[0].Changes.Text, api.StatusReads));
 
         clock.Advance(TimeSpan.FromSeconds(10));
         dashboard.OnWindowActivated();
-        await WaitForPassesAsync(log, 2);
+        await WaitForPassesAsync(log, 3);
         Assert.Equal("1 untracked", dashboard.Rows[0].Changes.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task The_windows_activation_reaches_the_active_dashboard_through_the_window_and_no_other()
+    {
+        // Trigger 2 (2.10): MainWindow's Activated handler calls MainWindowViewModel.OnWindowActivated,
+        // which reads the active dashboard's stale rows; a dashboard in the background reads nothing.
+        using var provider = new FakeProvider();
+        var (api, docs) = (provider.Add("api"), provider.Add("docs"));
+        var store = new InMemoryWorkspaceStore(new WorkspaceList
+        {
+            Workspaces = [new Workspace("web", "Web", [new WorkspaceRepository(api.WorkingDirectory)]), new Workspace("tools", "Tools", [new WorkspaceRepository(docs.WorkingDirectory)])],
+        });
+        var (log, clock) = (new RecordingLog(), new ManualTimeProvider());
+        var services = DashboardTestSupport.Services(provider, store, clock, log);
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var web = window.ActiveTab.Dashboard!;
+        await DashboardTestSupport.WaitUntilAsync(() => web.Rows[0].HasRepository && !web.IsPassRunning, "Web's first read");
+        services.WorkspaceHost.ShowWorkspace("tools", window.ActiveTab);
+        var tools = window.ActiveTab.Dashboard!;
+        await DashboardTestSupport.WaitUntilAsync(() => tools.Rows[0].HasRepository && !tools.IsPassRunning, "Tools' first read");
+
+        // Within 10 s: nothing to read, decided at once (WD37).
+        window.OnWindowActivated();
+        Assert.False(tools.IsPassRunning || web.IsPassRunning);
+
+        // 10 s later: Tools, active, reads docs; Web, in the background, does not read api.
+        clock.Advance(DashboardViewModel.RereadAfter);
+        window.OnWindowActivated();
+        Assert.True(tools.IsPassRunning);
+        Assert.False(web.IsPassRunning);
+        await DashboardTestSupport.WaitUntilAsync(() => docs.RefsReads == 2 && !tools.IsPassRunning, "Tools' read on the activation");
+        Assert.Equal(1, api.RefsReads);
+        Assert.Equal(
+            ["Web: read 1 repository in", "Tools: read 1 repository in", "Tools: read 1 repository in"],
+            log.Messages.Where(message => message.Contains(": read ", StringComparison.Ordinal)).Select(message => message[..(message.IndexOf(" in ", StringComparison.Ordinal) + 3)]));
+        window.CloseAll();
     }
 
     [AvaloniaFact]
@@ -150,19 +202,30 @@ public class DashboardRefreshTests
         using var provider = new FakeProvider();
         var docs = provider.Add("docs");
         var (dashboard, log, _) = Dashboard(provider, [], active: false);
+        var services = ServicesOf(dashboard);
         var store = (InMemoryWorkspaceStore)Store(dashboard);
 
+        // The positive control on the same change: an active dashboard of the workspace on the
+        // same services reads the gained row at once (trigger 6); the background one does not.
+        var control = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
         store.Update(list => WorkspaceEdits.Append(list, "web", [docs.WorkingDirectory]));
-        await DashboardTestSupport.SettleAsync();
+        Assert.False(dashboard.IsPassRunning);
+        await DashboardTestSupport.WaitUntilAsync(() => control.Rows.Single().HasRepository && !control.IsPassRunning, "the active dashboard's read of the gained row");
 
         Assert.Single(dashboard.Rows);
         Assert.False(dashboard.IsPassRunning);
-        Assert.Equal((0, 0), (docs.RefsReads, provider.Opens));
+        Assert.Equal((1, 1), (docs.RefsReads, provider.Opens));
         Assert.Equal(DashboardTexts.ReadingText, dashboard.Rows[0].State.Text);
+        Assert.Null(dashboard.Rows[0].Repository);
+        Assert.False(services.OpenRepositories.Holds(control.Rows[0].Repository!, dashboard));
+        Assert.Single(PassLines(log));
 
+        // Active, it reads the row: it joins the summary the other holds and reads it again.
         dashboard.OnBecameActive();
-        await WaitForPassesAsync(log, 1);
-        Assert.Equal(1, docs.RefsReads);
+        await WaitForPassesAsync(log, 2);
+        Assert.Equal((2, 2), (docs.RefsReads, provider.Opens));
+        Assert.Same(control.Rows[0].Repository, dashboard.Rows[0].Repository);
+        control.Dispose();
     }
 
     [AvaloniaFact]
@@ -741,17 +804,29 @@ public class DashboardRefreshTests
         using var provider = new FakeProvider();
         var api = provider.Add("api");
         provider.Gate = new TaskCompletionSource();
-        var (dashboard, _, _) = Dashboard(provider, [api.WorkingDirectory]);
+        var (dashboard, log, _) = Dashboard(provider, [api.WorkingDirectory]);
         var services = ServicesOf(dashboard);
+        var row = dashboard.Rows[0];
         dashboard.OnBecameActive();
         await DashboardTestSupport.WaitUntilAsync(() => provider.Opens == 1, "the probe's open");
 
+        // The positive control: another dashboard of the workspace on the same services, its probe
+        // held at the same gate, reads once the gate opens.
+        var control = new DashboardViewModel(services.Workspaces.Current.Find("web")!, services, () => true);
+        control.OnBecameActive();
+        await DashboardTestSupport.WaitUntilAsync(() => provider.Opens == 2, "the control's probe");
         dashboard.Dispose();
         provider.Gate.SetResult();
-        await DashboardTestSupport.SettleAsync();
+        await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading && control.Rows[0].HasRepository && !control.IsPassRunning, "the closed row's read to end and the control's read");
 
+        var summary = Assert.Single(services.OpenRepositories.Summaries);
+        Assert.Same(control.Rows[0].Repository, summary);
+        Assert.False(services.OpenRepositories.Holds(summary, dashboard));
+        Assert.Null(row.Repository);
+        Assert.Equal((1, 1), (api.RefsReads, api.StatusReads));
+        Assert.Single(PassLines(log));
+        control.Dispose();
         Assert.Empty(services.OpenRepositories.Summaries);
-        Assert.Equal((0, 0), (api.RefsReads, api.StatusReads));
     }
 
     [AvaloniaFact]
