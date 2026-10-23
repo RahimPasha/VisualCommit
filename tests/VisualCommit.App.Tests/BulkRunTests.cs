@@ -218,6 +218,45 @@ public partial class BulkRunTests
     }
 
     [AvaloniaFact]
+    public async Task A_nested_repository_whose_git_folder_goes_while_it_waits_is_left_out_at_its_turn_and_the_outer_one_is_not_fetched()
+    {
+        // D207 at the row's turn (4.3): e lies inside outer's working tree; its .git is deleted
+        // while it waits in line, so git would now open outer from e's folder (`git -C outer/e
+        // rev-parse --show-toplevel` prints outer). Neither is fetched, and e shows its state.
+        using var provider = new BulkProvider();
+        var gate = new TaskCompletionSource();
+        foreach (var name in new[] { "a", "b", "c", "d" })
+        {
+            provider.Add(name).FetchGate = gate;
+        }
+
+        var outer = provider.Add("outer");
+        var e = provider.Add(Path.Combine("outer", "e"));
+        using var host = await BulkHost.StartAsync(provider, ["a", "b", "c", "d", Path.Combine("outer", "e")]);
+        var row = host.Dashboard.Rows[4];
+        var summary = row.Repository!;
+        var run = host.Bulk.FetchAllAsync();
+        await WaitUntilAsync(() => provider.FetchesNow == 4, "four fetches");
+        Assert.Equal(BulkRowState.InLine, host.Bulk.Current!.Rows[4].State);
+
+        host.Gone.Add(e.GitDirectory);
+        var around = new BulkRepository(provider, outer.WorkingDirectory, null, null) { AtTop = false };
+        provider.OpenAs(Path.Combine("outer", "e"), around);
+        gate.SetResult();
+        await run.WaitAsync(Patience);
+        await SettleAsync();
+
+        Assert.Equal(BulkRowState.Skipped, host.Bulk.Current.Rows[4].State);
+        Assert.Equal((0, 0, 0), (e.Fetches, outer.Fetches, around.Fetches));
+        Assert.Equal(("Not a repository", $"{row.Path} is not a git repository of its own: it lies inside {outer.WorkingDirectory}"), (row.State.Text, row.State.ToolTip));
+        Assert.Equal(string.Empty, host.Operation(row.Name));
+        Assert.True(summary.IsClosed);
+        Assert.Null(row.Repository);
+        Assert.Equal(("Fetched 4 repositories; 1 skipped", 0), (host.Bulk.RunText, host.Bulk.Current.Cancelled));
+        Assert.Equal(0, host.Services.BulkSlots.Held);
+    }
+
+    [AvaloniaFact]
     public async Task A_row_in_line_whose_last_tab_closes_is_read_again_and_fetched_in_the_background_and_the_run_ends()
     {
         using var provider = new BulkProvider();
@@ -928,6 +967,44 @@ public partial class BulkRunTests
         api.FetchFailure = null;
         await host["api"].Repository!.Operations.FetchAllAsync();
         Assert.Equal(("Fetched from all remotes", false), (host.Operation("api"), host["api"].ShowsDetails));
+    }
+
+    [AvaloniaFact]
+    public async Task A_failure_that_slips_past_the_run_shows_in_the_row_in_the_danger_tone_until_its_next_operation()
+    {
+        // RunRowAsync's last resort (4.6): here a listener of the row that fails once as the row's
+        // turn shows it running, before its fetch is called.
+        using var provider = new BulkProvider();
+        provider.Add("api");
+        provider.Add("docs");
+        using var host = await BulkHost.StartAsync(provider, ["api", "docs"]);
+        var failOnce = true;
+        host["api"].PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DashboardRowViewModel.BulkText) && failOnce && host.Bulk.Current?.Rows[0].State == BulkRowState.Running)
+            {
+                failOnce = false;
+                throw new InvalidOperationException("A listener failed.");
+            }
+        };
+        using var dialogs = new ScriptedDialogs(host.Services.DialogHost);
+
+        await host.Bulk.FetchAllAsync().WaitAsync(Patience);
+        await SettleAsync();
+
+        var row = host.Bulk.Current!.Rows[0];
+        Assert.False(failOnce);
+        Assert.Equal((BulkRowState.Ended, OperationOutcome.Failed), (row.State, row.Result?.Outcome));
+        Assert.Equal(new DashboardCellText("Fetch failed", DashboardTone.Danger, "Fetch failed: A listener failed."), host["api"].Operation);
+        Assert.Equal((0, "Fetched from all remotes"), (provider["api"].Fetches, host.Operation("docs")));
+        Assert.Equal(("Fetched 1 repository; 1 failed", OperationStatusTone.Danger), (host.Bulk.RunText, host.Bulk.RunTone));
+        Assert.Contains("Web: Fetch all: api failed.", host.Log.Messages);
+        Assert.Equal(0, host.Services.BulkSlots.Held);
+        Assert.Empty(dialogs.Shown);
+
+        // The row's next operation: its own text in the cell.
+        await host["api"].Repository!.Operations.FetchAllAsync();
+        Assert.Equal(("Fetched from all remotes", DashboardTone.Secondary), (host.Operation("api"), host["api"].Operation.Tone));
     }
 
     [AvaloniaFact]

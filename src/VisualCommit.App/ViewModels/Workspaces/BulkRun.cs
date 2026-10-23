@@ -326,15 +326,18 @@ public sealed class BulkRun
         }
         catch (Exception ex)
         {
-            // An operation reports its own failures; this is what slipped past the run.
+            // An operation reports its own failures; this is what slipped past the run. No status
+            // bar says it, so the row does: "{Title} failed" in the danger tone, the exception's
+            // message in its tooltip, until the row's next operation (4.6).
             _log.Error($"{_workspace}: {OperationTexts.BulkName(Kind)}: {row.Row.Name} failed.", ex);
             row.Request?.Release();
             row.Request = null;
             if (!row.IsDone)
             {
+                var failed = $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : "Pull")} failed";
                 row.State = BulkRowState.Ended;
-                row.Result = new OperationResult(OperationOutcome.Failed, $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : "Pull")} failed", null);
-                row.Row.ShowBulk(null, heldReason: null, clearsOnNextOperation: true);
+                row.Result = new OperationResult(OperationOutcome.Failed, failed, null);
+                row.Row.ShowBulk(new DashboardCellText(failed, DashboardTone.Danger, $"{failed}: {ex.Message}"), heldReason: null, clearsOnNextOperation: true);
             }
         }
         finally
@@ -373,7 +376,36 @@ public sealed class BulkRun
 
         try
         {
-            // The row's turn (4.3): its current view model, never the one of the run's start.
+            // The row's turn (4.3): its folder checked again (D207, D204: a folder that lies inside
+            // another working tree now is never acted on as the outer one), then its current view
+            // model decided, never the one of the run's start.
+            if (row.Row.Repository is { IsClosed: false } current)
+            {
+                WorkspaceFolderProbe? found;
+                try
+                {
+                    found = await row.Row.CheckAtTurnAsync(current, _stop.Token);
+                }
+                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+                {
+                    // Stopped while the folder was checked: StopStarting ended the row in line.
+                    return false;
+                }
+
+                if (row.State == BulkRowState.CancelledInLine)
+                {
+                    return false;
+                }
+
+                if (found is { State: not WorkspaceFolderState.Ready } && row.Row.FolderState is null)
+                {
+                    // A followed tab's folder: the tab keeps its view model, the row is left out
+                    // with the folder state's reason.
+                    Skip(row, found.ToolTip);
+                    return false;
+                }
+            }
+
             switch (Decide(row.Row))
             {
                 case Decision.Skip skip:
