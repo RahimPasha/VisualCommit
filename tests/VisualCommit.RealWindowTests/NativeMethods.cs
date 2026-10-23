@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace VisualCommit.RealWindowTests;
 
-/// <summary>The few Win32 calls the real-window pass needs for window sizes and display scaling.</summary>
+/// <summary>The few Win32 calls the real-window pass needs for window sizes and display scaling, and the high contrast setting it reads (phase 6's S15).</summary>
 internal static class NativeMethods
 {
     public const uint SwpNoZOrder = 0x0004;
@@ -56,6 +56,21 @@ internal static class NativeMethods
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);
+
+    /// <summary>SystemParametersInfo's action that reads the high contrast settings (<c>SPI_GETHIGHCONTRAST</c>).</summary>
+    public const uint SpiGetHighContrast = 0x0042;
+
+    /// <summary>The flag of <see cref="HighContrast.Flags"/> that says high contrast is on (<c>HCF_HIGHCONTRASTON</c>).</summary>
+    public const uint HcfHighContrastOn = 0x00000001;
+
+    /// <summary>
+    /// Reads a system-wide setting (<c>SystemParametersInfoW</c>). The pass only reads with it
+    /// (<c>fWinIni</c> 0, an SPI_GET action): it never changes a setting of the desktop (D224,
+    /// docs/phase-6-design.md 11.8).
+    /// </summary>
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SystemParametersInfo(uint action, uint parameter, ref HighContrast value, uint winIni);
 
     /// <summary>Every process of the machine with its parent's id, from a Toolhelp snapshot: to find the processes an app started (check 31).</summary>
     public static IReadOnlyList<(int Id, int ParentId, string ExeName)> Processes()
@@ -137,6 +152,15 @@ internal static class NativeMethods
         public readonly int Width => Right - Left;
 
         public readonly int Height => Bottom - Top;
+    }
+
+    /// <summary>The high contrast settings as <see cref="SystemParametersInfo"/> reads them (<c>HIGHCONTRASTW</c>).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HighContrast
+    {
+        public uint Size;
+        public uint Flags;
+        public IntPtr DefaultScheme;
     }
 
     [StructLayout(LayoutKind.Sequential)]
