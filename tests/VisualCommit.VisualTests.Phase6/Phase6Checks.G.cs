@@ -6,7 +6,8 @@
 // and B) and G24 (Keep ignored files off); Phase6Checks.G.Refspecs.cs holds G25 (fetch refspecs),
 // and Phase6Checks.G.Helpers.cs what they share.
 // A file named *.G.cs is generated code to the compiler (its *.g.cs rule, which ignores case):
-// nullable annotations are off in it and the code analyzers skip it, so it turns them on here.
+// nullable annotations are off in it unless the file turns them on, as it does here, and the
+// analyzers that leave generated code alone leave it alone too.
 #nullable enable
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.Services;

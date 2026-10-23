@@ -7,7 +7,8 @@
 // Phase6Expectations.PartG. Compiled by the real-window pass too: see Phase6Expectations.Common.cs
 // for what may be used here (no type of the walk-through's own files).
 // A file named *.G.cs is generated code to the compiler (its *.g.cs rule, which ignores case):
-// nullable annotations are off in it and the code analyzers skip it, so it turns them on here.
+// nullable annotations are off in it unless the file turns them on, as it does here, and the
+// analyzers that leave generated code alone leave it alone too.
 #nullable enable
 using Avalonia;
 using VisualCommit.Core.Graph;
