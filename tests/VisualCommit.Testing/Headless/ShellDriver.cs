@@ -98,7 +98,9 @@ public sealed partial class ShellDriver : IDisposable
     /// machine's editors, merge tools or <c>PATHEXT</c>, and a system theme of their own
     /// (<see cref="SystemTheme"/>), dark unless <paramref name="systemDark"/> is false.
     /// <paramref name="readClock"/> is the clock of a dashboard's 10 s rule (<see cref="ReadClock"/>);
-    /// without it the session's own clock.
+    /// without it the session's own clock. <paramref name="tools"/> replaces the fixed catalogues
+    /// for a check that needs other ones (12.9's <c>HeldMergeTools</c>, which holds the merge
+    /// tools' list back for a check of its loading state); without it <see cref="ToolCatalogues.Fixed"/>.
     /// </para>
     /// </summary>
     public static ShellDriver Start(
@@ -107,7 +109,8 @@ public sealed partial class ShellDriver : IDisposable
         int? height = 700,
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
-        TimeProvider? readClock = null)
+        TimeProvider? readClock = null,
+        ToolCatalogues? tools = null)
     {
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
@@ -132,7 +135,7 @@ public sealed partial class ShellDriver : IDisposable
             backupClock: BackupClock.Fixed(AppClocks.HarnessTime),
             gitEnvironment: GitIsolation.SessionGitEnvironment(dataDirectory),
             systemTheme: systemTheme,
-            tools: ToolCatalogues.Fixed,
+            tools: tools ?? ToolCatalogues.Fixed,
             readClock: readClock);
         if (width is not null)
         {
@@ -164,13 +167,14 @@ public sealed partial class ShellDriver : IDisposable
         int? height = 700,
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
-        TimeProvider? readClock = null)
+        TimeProvider? readClock = null,
+        ToolCatalogues? tools = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools);
     }
 
     /// <summary>

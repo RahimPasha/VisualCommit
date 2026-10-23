@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Workspaces;
@@ -167,7 +168,42 @@ public sealed partial class ShellDriver
             view is not null,
             Text("DashboardTitle"),
             Text("DashboardCount"),
-            rows);
+            rows)
+        {
+            Header = view is null ? null : HeaderOf(dashboard, view),
+        };
+    }
+
+    /// <summary>The drawn header (2.5, 4.9): its texts with their colours, the run's tone and bar, and its buttons.</summary>
+    private static DashboardHeaderSnapshot HeaderOf(DashboardViewModel dashboard, Control view)
+    {
+        DashboardTextSnapshot? TextOf(string id) => DashboardFind(view, id) is TextBlock { IsEffectivelyVisible: true } text
+            ? new DashboardTextSnapshot(text.Text ?? string.Empty, DashboardColorOf(text.Foreground), text is TrimmedTextBlock { IsTrimmed: true })
+            : null;
+
+        DashboardButtonSnapshot ButtonOf(string id) => DashboardFind(view, id) is { } button
+            ? new DashboardButtonSnapshot(
+                button.IsEffectivelyVisible,
+                button.IsEffectivelyEnabled,
+                ToolTip.GetTip(button) as string,
+                AutomationProperties.GetHelpText(button),
+                AutomationProperties.GetName(button))
+            : new DashboardButtonSnapshot(false, false, null, null, null);
+
+        var progress = DashboardFind(view, "DashboardBulkProgress") as ProgressBar;
+        return new DashboardHeaderSnapshot(
+            TextOf("DashboardTitle"),
+            TextOf("DashboardCount"),
+            TextOf("DashboardBulkText"),
+            dashboard.Bulk.RunTone,
+            progress is { IsEffectivelyVisible: true } bar ? (int)Math.Round(bar.Value) : null,
+            ButtonOf("DashboardCancelAll"),
+            ButtonOf("DashboardAddRepository"),
+            ButtonOf("DashboardFetchAll"),
+            ButtonOf("DashboardPullAll"),
+            ButtonOf("DashboardRefresh"),
+            ButtonOf("DashboardMore"),
+            TextOf("DashboardNotice"));
     }
 
     private static DashboardRowSnapshot RowOf(DashboardRowViewModel row, ListBoxItem? item, bool selected)
@@ -262,10 +298,46 @@ public sealed record DashboardSnapshot(
     string? DrawnCount,
     IReadOnlyList<DashboardRowSnapshot> Rows)
 {
+    /// <summary>The header as drawn (2.5, 4.9), or null when the dashboard is not drawn (a dashboard in the background).</summary>
+    public DashboardHeaderSnapshot? Header { get; init; }
+
     /// <summary>The row named <paramref name="name"/>.</summary>
     public DashboardRowSnapshot Row(string name) =>
         Rows.FirstOrDefault(row => row.Name == name) ?? throw new InvalidOperationException($"The dashboard has no row {name}.");
 }
+
+/// <summary>The dashboard's header as drawn (2.5, 4.9): the report's part W writes it by these parts.</summary>
+/// <param name="Title"><c>DashboardTitle</c>.</param>
+/// <param name="Count"><c>DashboardCount</c>.</param>
+/// <param name="Run"><c>DashboardBulkText</c> while it shows, else null.</param>
+/// <param name="RunTone">The run text's tone (<c>DashboardBulkViewModel.RunTone</c>).</param>
+/// <param name="Progress"><c>DashboardBulkProgress</c>'s value while the bar shows, else null.</param>
+/// <param name="CancelAll"><c>DashboardCancelAll</c>.</param>
+/// <param name="AddRepository"><c>DashboardAddRepository</c>.</param>
+/// <param name="FetchAll"><c>DashboardFetchAll</c>.</param>
+/// <param name="PullAll"><c>DashboardPullAll</c>.</param>
+/// <param name="Refresh"><c>DashboardRefresh</c>.</param>
+/// <param name="More"><c>DashboardMore</c>.</param>
+/// <param name="Notice"><c>DashboardNotice</c> while it shows (a failed save, 1.3), else null.</param>
+public sealed record DashboardHeaderSnapshot(
+    DashboardTextSnapshot? Title,
+    DashboardTextSnapshot? Count,
+    DashboardTextSnapshot? Run,
+    OperationStatusTone RunTone,
+    int? Progress,
+    DashboardButtonSnapshot CancelAll,
+    DashboardButtonSnapshot AddRepository,
+    DashboardButtonSnapshot FetchAll,
+    DashboardButtonSnapshot PullAll,
+    DashboardButtonSnapshot Refresh,
+    DashboardButtonSnapshot More,
+    DashboardTextSnapshot? Notice);
+
+/// <summary>A text of the header as drawn: its text, its colour (#RRGGBB) and whether it is cut with "…".</summary>
+public sealed record DashboardTextSnapshot(string Text, string? Color, bool IsTrimmed);
+
+/// <summary>A button of the header as drawn: whether it shows, whether it is enabled, its tooltip, help text and automation name.</summary>
+public sealed record DashboardButtonSnapshot(bool IsShown, bool IsEnabled, string? ToolTip, string? HelpText, string? AutomationName);
 
 /// <summary>One row as <see cref="ShellDriver.DashboardSnapshot()"/> reads it (2.6).</summary>
 public sealed record DashboardRowSnapshot(
