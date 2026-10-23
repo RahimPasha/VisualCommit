@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
@@ -184,6 +185,55 @@ public class OpenRepositoriesTests
         await idle.WaitAsync(Patience);
         await DashboardTestSupport.WaitUntilAsync(() => registry.Closing.Count == 0 && registry.WhenIdleAsync(key).IsCompleted, "the closing summary to go");
         Assert.Null(registry.ClosedRunningOn(key));
+    }
+
+    [AvaloniaFact]
+    public async Task A_released_summarys_background_fetch_holds_the_worktree_as_a_closed_tabs_does()
+    {
+        // The lead's ruling at status step 22 (3.4): one rule for a closed tab and a released
+        // summary, background operations included: no new queue runs beside a running one.
+        using var provider = new FakeProvider();
+        var services = DashboardTestSupport.Services(provider);
+        var registry = services.OpenRepositories;
+        var repository = provider.Add("api");
+        var holder = new object();
+        var summary = (await registry.AcquireSummaryAsync(repository, holder, CancellationToken.None))!;
+        await summary.StartAsync();
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        Assert.True(summary.Queue.TryStartInBackground(new GitOperation(AutoFetchScheduler.Title, string.Empty, OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            // Held past the cancel that the release's dispose sends, as a git process may take its time to end.
+            running.SetResult();
+            await finish.Task;
+            return OperationReport.Done(string.Empty);
+        })
+        {
+            IsBackground = true,
+            Prompts = PromptMode.Deny,
+        }));
+        await running.Task.WaitAsync(Patience);
+        var key = OpenRepositories.KeyOf(summary);
+
+        registry.ReleaseSummary(summary, holder);
+
+        Assert.True(summary.IsClosed);
+        Assert.Same(summary, Assert.Single(registry.Closing));
+        Assert.Same(summary, registry.ClosedRunningOn(key));
+        Assert.False(registry.WhenIdleAsync(key).IsCompleted);
+        Assert.Same(summary.Queue, registry.NetworkQueueOn(WorktreeKey.Of(repository.CommonDirectory), except: null));
+
+        // A new summary is made only once that queue is idle.
+        var acquiring = registry.AcquireSummaryAsync(repository, new object(), CancellationToken.None);
+        Assert.False(acquiring.IsCompleted);
+        Assert.Empty(registry.Summaries);
+
+        finish.SetResult();
+        var next = await acquiring.WaitAsync(Patience);
+        Assert.NotNull(next);
+        Assert.NotSame(summary, next);
+        Assert.True(summary.Queue.Current is null);
+        await DashboardTestSupport.WaitUntilAsync(() => registry.Closing.Count == 0 && registry.WhenIdleAsync(key).IsCompleted, "the closing summary to go");
+        next.Dispose();
     }
 
     [AvaloniaFact]

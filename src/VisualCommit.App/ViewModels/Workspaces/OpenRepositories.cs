@@ -33,7 +33,7 @@ public sealed class OpenRepositories
     /// <summary>The summary-mode view models held by dashboards.</summary>
     public IReadOnlyList<RepositoryViewModel> Summaries => [.. _summaries.Values.Select(summary => summary.ViewModel)];
 
-    /// <summary>The summary-mode view models released while an operation of the user ran, already disposed (3.7).</summary>
+    /// <summary>The summary-mode view models released while an operation ran (a background one too), already disposed, until their queues are idle (3.4, 3.7).</summary>
     public IReadOnlyList<RepositoryViewModel> Closing => [.. _closing];
 
     /// <summary>The tabs' view models in registration order (3.7: the window waits for them as for its tabs').</summary>
@@ -199,8 +199,11 @@ public sealed class OpenRepositories
     /// Removes one hold of <paramref name="holder"/> on <paramref name="repository"/>. With no holder
     /// left the view model leaves <see cref="Summaries"/> and is disposed (3.2, D81: what waits is
     /// dropped, a running network operation cancelled, a running local one finishes); while an
-    /// operation of the user still runs then, it stays in <see cref="Closing"/> and its queue's idle
-    /// task is kept for the worktree until that completes, as a closed tab's is (3.7).
+    /// operation still runs then, a background one too, it stays in <see cref="Closing"/> and its
+    /// queue's idle task is kept for the worktree until that completes, as <see cref="UnregisterTab"/>
+    /// keeps a closed tab's: a new queue never runs beside a running one on one worktree (3.4, the
+    /// lead's ruling at status step 22). The window's close waits only for an operation of the user
+    /// (3.7).
     /// </summary>
     public void ReleaseSummary(RepositoryViewModel repository, object holder)
     {
@@ -219,7 +222,7 @@ public sealed class OpenRepositories
 
         _summaries.Remove(key);
         repository.Dispose();
-        if (repository.Queue.Current is { IsBackground: false })
+        if (repository.Queue.Current is not null)
         {
             _closing.Add(repository);
             KeepUntilIdle(key, repository, closing: true);
