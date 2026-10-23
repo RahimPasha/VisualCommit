@@ -153,6 +153,8 @@ public sealed partial class Phase6ChecksG
         refs = await RefsAsync(repo);
 
         // Step 7: "Push pr/1…" to origin through the push dialog: refused before git (10.4's guard, GD13).
+        mark = app.LogMark();
+        calls = app.GitCalls().Count;
         (menu, _) = await RightClickRefAsync(app, "Local branches", "pr", "1");
         AssertItemEnabled(menu, "pr/1", PartG.PushPr1Item);
         AssertMenuKey(app, PartG.PushPr1Item, PartG.PushKey);
@@ -165,8 +167,6 @@ public sealed partial class Phase6ChecksG
         Assert.True(((CheckBox)app.FindByAutomationId(view, "PushSetUpstream")).IsChecked == true, "\"Set as upstream\" is not ticked.");
         Assert.Equal(["Cancel", "Push"], view.GetVisualDescendants().OfType<Button>().Where(button => button is not Avalonia.Controls.Primitives.ToggleButton && button.IsEffectivelyVisible && button.Content is string).OrderBy(button => app.BoundsOf(button).X).Select(button => (string)button.Content!));
         app.Click(PushRemoteOption(app, "origin"));
-        mark = app.LogMark();
-        calls = app.GitCalls().Count;
         app.Click(app.FindByAutomationId(view, "ConfirmButton"));
         await WaitForFailureAsync(app, repo, PartG.PushPr1, mark);
         Shot(app, "g25f-push-would-stop-fetch");
