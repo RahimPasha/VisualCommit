@@ -236,13 +236,13 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     /// while enabled what it does with its key, <c>Commit 1 file (Ctrl+Enter)</c>,
     /// <c>Continue rebase (Ctrl+Enter)</c> (the key works from the message boxes, 6.10).
     /// </summary>
-    public string? CommitToolTip => CommitDisabledReason ?? (CanCommit ? Keys.WithKey(CommitButtonText, AppCommand.Commit) : null);
+    public string? CommitToolTip => CommitDisabledReason ?? (CanCommit ? KeyTexts.WithKey(CommitButtonText, AppCommand.Commit) : null);
 
     /// <summary>
     /// Whose words the commit button's key uses (6.4): <see cref="KeyTexts.Current"/>,
     /// unless a test of another platform's texts sets its own.
     /// </summary>
-    public KeyTexts Keys
+    public KeyTexts KeyTexts
     {
         get;
         set

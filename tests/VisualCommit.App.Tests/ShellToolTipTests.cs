@@ -171,6 +171,10 @@ public class ShellToolTipTests
             ("SearchNext", "Next match (Enter, F3)", "F3"));
         var mac = new KeyTexts(CommandKey.Cmd);
         Assert.Equal(("Previous match (Shift+Enter, Cmd+Shift+G)", "Next match (Enter, Cmd+G)"), (SearchViewModel.PreviousToolTipFor(mac), SearchViewModel.NextToolTipFor(mac)));
+
+        // Its close button: the Esc chain's key, through the formatter on both platforms (D214).
+        Assert.Equal("Close the search (Esc)", ToolTip.GetTip(app.FindByAutomationId("SearchClose")) as string);
+        Assert.Equal(("Close the search (Esc)", "Close the search (Esc)"), (SearchViewModel.CloseToolTipFor(new KeyTexts(CommandKey.Ctrl)), SearchViewModel.CloseToolTipFor(mac)));
         app.PressKey(Key.Escape);
         await app.WaitForAsync(() => repository.Search is null, "the search bar to close");
 

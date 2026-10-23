@@ -63,7 +63,7 @@ public sealed partial class Phase6ChecksS
         AssertHidden(snapshot, "MergeToolStatus");
         AssertLines(snapshot, "MergeToolNotices");
         var operations = OperationCount(app);
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         Assert.True(await app.SaveSettingsAsync(), "Save did not close the screen.");
         await WaitForScreenClosedAsync(app, screen);
         await app.WaitForAsync(() => app.Resolver().MergeTool is { IsEnabled: true }, "Merge tool… to be enabled in the open resolver");
@@ -97,7 +97,7 @@ public sealed partial class Phase6ChecksS
         snapshot = app.SettingsSnapshot();
         AssertText(snapshot, "MergeToolValue", PartS.NotSet);
         AssertHidden(snapshot, "MergeToolStatus");
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         Assert.True(await app.SaveSettingsAsync(), "Save did not close the screen.");
         await WaitForScreenClosedAsync(app, screen);
         await app.WaitForAsync(() => app.Resolver().MergeTool is { IsEnabled: false }, "Merge tool… to be disabled in the open resolver");

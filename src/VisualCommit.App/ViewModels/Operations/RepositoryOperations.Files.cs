@@ -182,14 +182,24 @@ public sealed partial class RepositoryOperations
     {
         ArgumentNullException.ThrowIfNull(path);
         var fullPath = FullPathOf(path);
-        if (!File.Exists(fullPath))
+
+        // Off the UI thread (D59), as Open in editor's: a file on a share that does not answer
+        // holds the check, and the read of its mode, for minutes (docs/phase-6-design.md 0.9).
+        var fileExists = Services?.FileExists ?? File.Exists;
+        var (exists, unixMode) = await Task.Run(() => fileExists(fullPath) ? (true, ReadUnixFileMode(fullPath)) : (false, (UnixFileMode?)null));
+        if (!exists)
         {
             // The menu disables the item then ("The file is not in the working tree"); it may have gone since.
             Log.Warning($"{Repository.Name}: Open file: {path} is not in the working tree.");
             return;
         }
 
-        if (CanRunPrograms(fullPath, ReadUnixFileMode(fullPath), ExtraRunnableExtensions()) && !await ConfirmAsync(OperationTexts.ConfirmOpenRunnable(FileNameOf(path))))
+        if (IsClosed)
+        {
+            return;
+        }
+
+        if (CanRunPrograms(fullPath, unixMode, ExtraRunnableExtensions()) && !await ConfirmAsync(OperationTexts.ConfirmOpenRunnable(FileNameOf(path))))
         {
             return;
         }

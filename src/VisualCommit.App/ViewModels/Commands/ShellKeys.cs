@@ -2,11 +2,12 @@ namespace VisualCommit.App.ViewModels.Commands;
 
 /// <summary>
 /// The shown key texts of the shell's buttons (docs/phase-6-design.md 6.8): what
-/// <c>AutomationProperties.AcceleratorKey</c> of the toolbar's, the tab strip's and the status
-/// bar's buttons binds to (<see cref="MainWindowViewModel.Keys"/>), and the dashboard header's
-/// Fetch all, Pull all and Refresh (<c>DashboardViewModel.Keys</c>), enabled or not; null for a
-/// command without a key. A class, not a record: a record may not have a member named
-/// <see cref="Clone"/>.
+/// <c>AutomationProperties.AcceleratorKey</c> of the toolbar's buttons, the tab strip's "+" and the
+/// status bar's activity log toggle binds to (<see cref="MainWindowViewModel.Keys"/>), and the
+/// dashboard header's Fetch all, Pull all and Refresh (<c>DashboardViewModel.Keys</c>), enabled or
+/// not; null for a command without a key. Each key text has one source: the close button's is
+/// its tab's (<see cref="RepoTabViewModel.CloseKeyText"/>), the welcome page's and the buttons'
+/// outside the shell are <see cref="ShellToolTips"/>'.
 /// </summary>
 public sealed class ShellKeys
 {
@@ -14,11 +15,9 @@ public sealed class ShellKeys
     public ShellKeys(KeyTexts keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        Palette = keys.Of(AppCommand.CommandPalette);
         Settings = keys.Of(AppCommand.Settings);
         Refresh = keys.Of(AppCommand.Refresh);
         NewTab = keys.Of(AppCommand.NewTab);
-        CloseTab = keys.Of(AppCommand.CloseTab);
         Fetch = keys.Of(AppCommand.Fetch);
         Pull = keys.Of(AppCommand.Pull);
         Push = keys.Of(AppCommand.Push);
@@ -29,12 +28,7 @@ public sealed class ShellKeys
         Redo = keys.Of(AppCommand.Redo);
         Search = keys.Of(AppCommand.Search);
         ActivityLog = keys.Of(AppCommand.ToggleActivityLog);
-        Open = keys.Of(AppCommand.OpenRepository);
-        Clone = keys.Of(AppCommand.CloneRepository);
-        Init = keys.Of(AppCommand.InitRepository);
     }
-
-    public string? Palette { get; }
 
     public string? Settings { get; }
 
@@ -42,8 +36,6 @@ public sealed class ShellKeys
     public string? Refresh { get; }
 
     public string? NewTab { get; }
-
-    public string? CloseTab { get; }
 
     public string? Fetch { get; }
 
@@ -64,10 +56,4 @@ public sealed class ShellKeys
     public string? Search { get; }
 
     public string? ActivityLog { get; }
-
-    public string? Open { get; }
-
-    public string? Clone { get; }
-
-    public string? Init { get; }
 }

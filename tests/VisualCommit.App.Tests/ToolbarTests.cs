@@ -303,18 +303,17 @@ public class ToolbarTests
         // each disabled with its reason 4; Search needs only the repository (11.2).
         var repository = new StateRepository(OpsRefs(), WorkingTreeStatus.Clean);
         using var viewModel = Open(repository);
-        Assert.Equal((ToolbarViewModel.SearchText, true), (viewModel.Toolbar.SearchToolTip, viewModel.Toolbar.CanSearch));
+        Assert.Equal(("Search commits (Ctrl+F)", true), (viewModel.Toolbar.SearchToolTip, viewModel.Toolbar.CanSearch));
 
         await viewModel.StartAsync();
 
         var toolbar = viewModel.Toolbar;
         Assert.Equal((false, "Nothing to undo", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
-        Assert.Equal((ToolbarViewModel.SearchText, true), (toolbar.SearchToolTip, toolbar.CanSearch));
+        Assert.Equal(("Search commits (Ctrl+F)", true), (toolbar.SearchToolTip, toolbar.CanSearch));
         Assert.True(toolbar.SearchCommand.CanExecute(null));
 
-        // Ctrl+F, or Cmd+F where the platform's command modifier is Cmd (macOS).
-        Assert.Contains(ToolbarViewModel.SearchGestureText, new[] { "Ctrl+F", "Cmd+F" });
-        Assert.Equal($"Search commits ({ToolbarViewModel.SearchGestureText})", ToolbarViewModel.SearchText);
+        // Cmd+F where the key texts are macOS's (docs/phase-6-design.md 6.4), never from a test of the operating system.
+        Assert.Equal("Search commits (Cmd+F)", ToolbarViewModel.SearchTextFor(new VisualCommit.App.ViewModels.Commands.KeyTexts(VisualCommit.App.ViewModels.Commands.CommandKey.Cmd)));
     }
 
     [Fact]
@@ -393,12 +392,12 @@ public class ToolbarTests
         await viewModel.ShowInteractiveRebaseAsync(request, new RebaseList(Older, Main, [new RebaseListEntry(Main, "Main work", "Test Author", "Main work\n")], 0));
 
         Assert.True(viewModel.IsInteractiveRebaseOpen);
-        Assert.Equal((false, "Close the interactive rebase first"), (toolbar.CanSearch, toolbar.SearchToolTip));
+        Assert.Equal((false, "Close the interactive rebase first", "Close the interactive rebase first"), (toolbar.CanSearch, toolbar.SearchToolTip, toolbar.SearchDisabledReason));
         Assert.False(toolbar.SearchCommand.CanExecute(null));
 
         viewModel.InteractiveRebase!.CancelCommand.Execute(null);
         await WaitForAsync(() => !viewModel.IsInteractiveRebaseOpen, "the list closed");
-        Assert.Equal((true, ToolbarViewModel.SearchText), (toolbar.CanSearch, toolbar.SearchToolTip));
+        Assert.Equal((true, "Search commits (Ctrl+F)", (string?)null), (toolbar.CanSearch, toolbar.SearchToolTip, toolbar.SearchDisabledReason));
     }
 
     [Fact]

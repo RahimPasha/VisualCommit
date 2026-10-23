@@ -245,13 +245,6 @@ public class GitIsolationTests
     }
 
     [Fact]
-    public void Nothing_wrote_a_global_configuration_outside_a_session()
-    {
-        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
-        Assert.True(findings.Count == 0, string.Join('\n', findings));
-    }
-
-    [Fact]
     public void The_tripwire_names_each_trace_of_a_global_configuration_written_outside_a_session()
     {
         // The rules over a folder of this test's, laid out as the tests' isolation folder: the
@@ -309,4 +302,30 @@ public class GitIsolationTests
         repo.Runner.RunAsync(
             new GitCommand("ls-remote", "origin", "refs/heads/main") { WorkingDirectory = repo.Path, Environment = environment },
             TestCancelled);
+}
+
+/// <summary>
+/// The isolation's tripwire (docs/phase-6-design.md 17.2), run after the tests of this process
+/// that run side by side: xunit runs a collection without parallelization after the parallel
+/// ones, so every git call of theirs has ended when it looks. The isolation folder is every test
+/// process's, so it sees what the projects beside it wrote until then too.
+/// </summary>
+[Collection(GitIsolationTripwireTests.Last)]
+public class GitIsolationTripwireTests
+{
+    /// <summary>The collection that runs the tripwire after the parallel tests.</summary>
+    public const string Last = "The isolation's tripwire, after the parallel tests";
+
+    [Fact]
+    public void Nothing_wrote_a_global_configuration_outside_a_session()
+    {
+        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
+        Assert.True(findings.Count == 0, string.Join('\n', findings));
+    }
+}
+
+/// <summary>Runs <see cref="GitIsolationTripwireTests"/> after the parallel tests, with none beside it.</summary>
+[CollectionDefinition(GitIsolationTripwireTests.Last, DisableParallelization = true)]
+public sealed class GitIsolationTripwireCollection
+{
 }

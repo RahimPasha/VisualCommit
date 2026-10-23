@@ -21,20 +21,14 @@ namespace VisualCommit.VisualTests.Phase6;
 
 /// <summary>
 /// The assertions every part of phase 6's walk-through shares (Phase6Checks.Support.cs) and the
-/// helpers of Phase6Expectations.Common.cs, tried once; the isolation's tripwire (design 17.2); and
-/// the settings scenario opened in the app with the harness's per-session git environment, so that
+/// helpers of Phase6Expectations.Common.cs, tried once (the isolation's tripwire, design 17.2, is
+/// <see cref="Phase6TripwireTests"/> below, run last); and the settings scenario opened in the app
+/// with the harness's per-session git environment, so that
 /// a check that fails points at the app and not at the assertion, the harness or the scenario. No
 /// pictures: these are not checks of the report.
 /// </summary>
 public sealed class Phase6SupportTests : Phase6Checks
 {
-    [Fact]
-    public void Nothing_wrote_a_global_configuration_outside_a_session()
-    {
-        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
-        Assert.True(findings.Count == 0, string.Join('\n', findings));
-    }
-
     [Theory]
     [InlineData("2026-01-02T09:00:00+00:00")]
     [InlineData("2026-01-02T09:00:00Z")]
@@ -158,6 +152,68 @@ public sealed class Phase6SupportTests : Phase6Checks
         Assert.Same(ToolCatalogues.Fixed, app.Session.Services.Tools);
         Assert.False(app.SystemTheme.IsDark);
         Assert.Empty(GitIsolation.GlobalConfigurationWrittenOutsideASession());
+    }
+
+    /// <summary>
+    /// Part S's rule for calls besides a step's own (its conventions' "The screen's reads"): only
+    /// whole refreshes outside every operation, the refs read's five forms and the status, each as
+    /// often as the others.
+    /// </summary>
+    [Fact]
+    public void Calls_besides_a_steps_own_pass_only_as_whole_refreshes_outside_every_operation()
+    {
+        static GitCallRecord Call(string command, string? operation = null) =>
+            new(DateTimeOffset.UnixEpoch, TimeSpan.Zero, command, "/repo", GitCallOutcome.Completed, 0, string.Empty, string.Empty, operation);
+        GitCallRecord[] refresh =
+        [
+            Call("git stash list --no-show-signature --no-color --encoding=UTF-8 --format=%gd"),
+            Call("git for-each-ref --format=%(refname) refs/heads refs/remotes refs/tags"),
+            Call("git rev-parse -q --verify HEAD"),
+            Call("git config --null --get-regexp ^remote\\."),
+            Call("git symbolic-ref -q HEAD"),
+            Call("git status --porcelain=v2 -z --untracked-files=all --renames"),
+        ];
+
+        Assert.Null(Phase6ChecksS.NotWholeRefreshes([]));
+        Assert.Null(Phase6ChecksS.NotWholeRefreshes(refresh));
+        Assert.Null(Phase6ChecksS.NotWholeRefreshes([.. refresh, .. Enumerable.Reverse(refresh)]));
+        Assert.Contains("not whole refreshes", Phase6ChecksS.NotWholeRefreshes(refresh[..5]), StringComparison.Ordinal);
+        Assert.Contains("not whole refreshes", Phase6ChecksS.NotWholeRefreshes([.. refresh, refresh[5]]), StringComparison.Ordinal);
+        Assert.Contains("git config --show-scope --show-origin -z --list is no refresh's call", Phase6ChecksS.NotWholeRefreshes([.. refresh, Call("git config --show-scope --show-origin -z --list")]), StringComparison.Ordinal);
+        Assert.Contains("(in op-3) is no refresh's call", Phase6ChecksS.NotWholeRefreshes([.. refresh[..5], Call(refresh[5].CommandText, "op-3")]), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The watcher's refresh as the app makes it, on "settings": a write to <c>.git/config</c>
+    /// outside the app starts it, <see cref="ShellDriver.WaitForWatchersQuietAsync"/> waits for its
+    /// end, and its calls are whole refreshes by part S's rule (<see cref="Phase6ChecksS.RefreshForms"/>
+    /// are the app's own forms), as is a refresh asked for.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_write_to_the_git_folder_outside_the_app_is_waited_out_as_whole_refreshes()
+    {
+        using var repo = await Scenarios.GitSettingsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+
+        // The opening's clean-up decided too (its backups' read, outside every operation).
+        await app.WaitForTabOpenedAsync(repository.Path, OperationChainTimeout);
+        await app.WaitForWatchersQuietAsync();
+        Assert.True(app.WatchersQuiet);
+
+        var mark = app.CallMark();
+        await repository.RefreshAsync();
+        var asked = app.CallsSince(mark);
+        Assert.True(asked.Count == Phase6ChecksS.RefreshForms.Length && Phase6ChecksS.NotWholeRefreshes(asked) is null, "A refresh is not one whole refresh:\n  " + string.Join("\n  ", asked.Select(call => call.CommandText)));
+
+        await app.WaitForWatchersQuietAsync();
+        mark = app.CallMark();
+        await repo.ConfigAsync("pull.ff", "true");
+        await app.WaitForAsync(() => app.CallsSince(mark).Any(call => call.CommandText.StartsWith("git status --porcelain=v2 ", StringComparison.Ordinal)), "the watcher's refresh after the write");
+        await app.WaitForWatchersQuietAsync();
+        var refreshed = app.CallsSince(mark);
+        Assert.True(refreshed.Count >= Phase6ChecksS.RefreshForms.Length && Phase6ChecksS.NotWholeRefreshes(refreshed) is null, "The watcher's refresh is not whole refreshes:\n  " + string.Join("\n  ", refreshed.Select(call => call.CommandText)));
     }
 
     /// <summary>
@@ -507,4 +563,30 @@ public sealed class Phase6SupportTests : Phase6Checks
             && WorkspacePaths.Same(folder, repository.Path));
         Assert.True(repository.Queue.Current is null && repository.Queue.Waiting == 0);
     }
+}
+
+/// <summary>
+/// The isolation's tripwire (design 17.2) for this project, run after its tests that run side by
+/// side: xunit runs a collection without parallelization after the parallel ones, so every check's
+/// git calls have ended when it looks. The isolation folder is every test process's, so it sees
+/// what the projects beside it wrote until then too.
+/// </summary>
+[Collection(Phase6TripwireTests.Last)]
+public sealed class Phase6TripwireTests
+{
+    /// <summary>The collection that runs the tripwire after the parallel tests.</summary>
+    public const string Last = "Phase 6's isolation tripwire, after the parallel tests";
+
+    [Fact]
+    public void Nothing_wrote_a_global_configuration_outside_a_session()
+    {
+        var findings = GitIsolation.GlobalConfigurationWrittenOutsideASession();
+        Assert.True(findings.Count == 0, string.Join('\n', findings));
+    }
+}
+
+/// <summary>Runs <see cref="Phase6TripwireTests"/> after the parallel tests, with none beside it.</summary>
+[CollectionDefinition(Phase6TripwireTests.Last, DisableParallelization = true)]
+public sealed class Phase6TripwireCollection
+{
 }

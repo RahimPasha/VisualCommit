@@ -35,18 +35,23 @@ public class RegionKeysTests
         Assert.True(repository.IsWorkingRowSelected);
         Assert.Equal((KeyRegionRole.GraphArea, "GraphRows"), (app.FocusedRegion(), app.FocusedAutomationId()));
 
-        // F6: the stage panel's unstaged list's first row (6.6's mark), not StageFlatButton.
+        // F6: the stage panel's unstaged list's first row (6.6's mark), not StageFlatButton: its button.
         app.PressF6();
         Assert.Equal(KeyRegionRole.Right, app.FocusedRegion());
-        Assert.True(app.FocusIsWithin(app.FindByAutomationId("UnstagedFileList")), "The focus is on UnstagedFileList's row.");
+        Assert.Equal("src/core.txt", repository.Changes.Unstaged.Rows[0].Key);
+        Assert.Same(await app.FileRowAsync("UnstagedFileList", "src/core.txt"), app.FocusedElement);
 
         // Moved as by Tab, so the keyboard's frame shows.
         Assert.True(((StyledElement)app.FocusedElement!).Classes.Contains(":focus-visible"), "The focused row shows the keyboard's frame.");
 
-        // F6: round to the left panel (no activity log shown): RefList's selected or first row, not FilterBox.
+        // F6: round to the left panel (no activity log shown): RefList's selected or first row, not
+        // FilterBox; with no ref clicked yet, the first row, the section Local branches, by its button.
         app.PressF6();
         Assert.Equal(KeyRegionRole.Left, app.FocusedRegion());
-        Assert.True(app.FocusIsWithin(app.FindByAutomationId("RefList")), "The focus is in RefList.");
+        var leftRows = app.Session.Shell.ActiveTab.LeftPanel.Rows;
+        Assert.DoesNotContain(leftRows.OfType<VisualCommit.App.ViewModels.Panels.RefItemRow>(), row => row.IsSelected);
+        Assert.Equal("Local branches", leftRows[0].Text);
+        Assert.Same(await app.RefRowAsync("Local branches"), app.FocusedElement);
 
         // F6: the graph again; Shift+F6 back.
         app.PressF6();
@@ -128,7 +133,8 @@ public class RegionKeysTests
 
         app.PressF6();
         Assert.Equal(KeyRegionRole.GraphArea, app.FocusedRegion());
-        Assert.True(app.FocusIsWithin(app.FindByAutomationId("DashboardList")), "The focus is in the dashboard's list.");
+        // 6.6's target: the dashboard's list itself, which takes the keys of its rows (2.7).
+        Assert.Same(app.FindByAutomationId("DashboardList"), app.FocusedElement);
         app.PressF6(shift: true);
         Assert.True(app.FocusIsWithin(app.FindByAutomationId("DashboardList")), "The only region keeps the focus.");
     }

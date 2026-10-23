@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using VisualCommit.App.ViewModels.Commands;
 
 namespace VisualCommit.App.Views;
@@ -9,6 +10,24 @@ namespace VisualCommit.App.Views;
 /// </summary>
 public static class ShortcutKeys
 {
+    /// <summary>
+    /// The platform's command modifier from its hotkey configuration (6.1, 6.3): its
+    /// <c>CommandModifiers</c>, read at each press, or Control when there is none or it names
+    /// none. Never from a test of the operating system (phase 5's rule).
+    /// </summary>
+    public static KeyModifiers CommandModifierOf(PlatformHotkeyConfiguration? hotkeys) => CommandModifierOf(hotkeys?.CommandModifiers);
+
+    /// <summary><see cref="CommandModifierOf(PlatformHotkeyConfiguration?)"/> of a configuration's <c>CommandModifiers</c>, null for none.</summary>
+    public static KeyModifiers CommandModifierOf(KeyModifiers? commandModifiers) =>
+        commandModifiers is { } modifiers && modifiers != KeyModifiers.None ? modifiers : KeyModifiers.Control;
+
+    /// <summary>
+    /// Whose words the key texts use for the command modifier <paramref name="command"/> (6.4):
+    /// Cmd where it is Meta (macOS), Ctrl otherwise.
+    /// </summary>
+    public static CommandKey CommandKeyOf(KeyModifiers command) =>
+        command.HasFlag(KeyModifiers.Meta) ? CommandKey.Cmd : CommandKey.Ctrl;
+
     /// <summary>
     /// <paramref name="e"/> as a <see cref="Shortcut"/>, or null for a key outside
     /// <see cref="ShortcutKey"/> or a modifier the app has no word for (the Windows key, Super, on

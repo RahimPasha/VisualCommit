@@ -120,6 +120,33 @@ public class RepositoryWatcherTests
     }
 
     [Fact]
+    public async Task It_is_not_quiet_from_a_bursts_first_change_until_its_raise_has_ended()
+    {
+        // IsQuiet, which the harnesses wait for before they mark a check's next calls: a burst
+        // waiting for its quiet period and one being raised are not quiet. On a clock the test
+        // holds; a folder made gives one event, so no late notice starts a second burst.
+        using var folder = new TempDirectory("watch");
+        var clock = new ManualTimeProvider();
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
+        var counted = new CountedEvents(watcher);
+        bool? quietWhileRaised = null;
+        watcher.Changed += (_, _) => quietWhileRaised = watcher.IsQuiet;
+        watcher.Start();
+        Assert.True(watcher.IsQuiet);
+
+        Directory.CreateDirectory(folder.Combine("made"));
+        Assert.True(await counted.WaitForAsync(["made"], Timeout), $"The watcher did not count an event for {counted.Missing(["made"])}.");
+        Assert.False(watcher.IsQuiet, "A change waits for its quiet period, and the watcher is quiet.");
+        clock.Advance(Quiet - TimeSpan.FromTicks(1));
+        Assert.False(watcher.IsQuiet);
+
+        // The raise runs on this thread, within the advance.
+        clock.Advance(TimeSpan.FromTicks(1));
+        Assert.False(quietWhileRaised, "The watcher was quiet while its handlers ran.");
+        Assert.True(watcher.IsQuiet);
+    }
+
+    [Fact]
     public async Task Changes_that_keep_coming_are_still_reported_after_the_maximum_delay()
     {
         using var folder = new TempDirectory("watch");
