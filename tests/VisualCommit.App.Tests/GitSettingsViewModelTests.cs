@@ -552,6 +552,113 @@ public class GitSettingsViewModelTests
         Assert.False(unavailable.ShowsFields);
     }
 
+    [Fact]
+    public async Task Any_other_failure_of_the_reads_shows_what_failed_and_leaves_nothing_editable()
+    {
+        // 7.4: nothing is editable when a read fails, whatever failed (a file of the configuration on a
+        // share that went away, say); the screen still opens and its other sections work.
+        var git = new FakeGitConfiguration { ReadFailure = new IOException("The network path was not found.") };
+        var section = await LoadAsync(git, new FakeSettingsRepository());
+
+        Assert.Equal("Git's configuration could not be read: The network path was not found.", section.ReadError);
+        Assert.Null(section.Unavailable);
+        Assert.False(section.IsReading);
+        Assert.False(section.ShowsFields);
+        Assert.Empty(section.GlobalWrites());
+        Assert.Empty(section.RepositoryWrites());
+    }
+
+    [Fact]
+    public async Task The_captions_tooltip_waits_for_the_outside_read_before_it_asks_for_the_global_file()
+    {
+        // 8.2: IGitConfiguration.GlobalFile looks at files on a home share that may not answer; the
+        // caption's tooltip, bound on the UI thread, asks for it only once the outside read has run.
+        var git = new FakeGitConfiguration { GuardGlobalFile = true, Outside = Read(false, Global("user.name", "Ann")), InRepository = Read(true, Global("user.name", "Ann")) };
+        var section = new GitSettingsViewModel(git, new FakeSettingsRepository(), _ => Task.FromResult(VisualCommit.Core.ToolCatalogues.FixedMergeTools), new FakePick().ShowAsync, fileExists: _ => false);
+        var changed = new List<string?>();
+        section.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        Assert.Null(section.CaptionToolTip);
+        Assert.Equal("Saved in your global git configuration, which git in a terminal uses too.", section.Caption);
+
+        await section.LoadAsync();
+        await section.MergeToolsLoaded;
+
+        Assert.Contains(nameof(GitSettingsViewModel.CaptionToolTip), changed);
+        Assert.Equal(GlobalFile, section.CaptionToolTip);
+        Assert.Equal("Ann", section.Global.UserName);
+    }
+
+    [Fact]
+    public async Task An_empty_or_space_padded_value_read_is_never_rewritten_by_a_save_that_did_not_touch_it()
+    {
+        // 8.3: git gives "name =" as an empty value and keeps a quoted value's spaces; only changed keys
+        // are written, so boxes left as they were write nothing. An empty merge.tool names no tool.
+        var git = new FakeGitConfiguration
+        {
+            Outside = Read(false, Global("user.name", string.Empty), Global("user.email", " ann@example.com "), Global("merge.tool", string.Empty)),
+            InRepository = Read(
+                true,
+                Global("user.name", string.Empty),
+                Global("user.email", " ann@example.com "),
+                Global("merge.tool", string.Empty),
+                Local("user.email", "  "),
+                Local("merge.tool", string.Empty)),
+        };
+        var section = await LoadAsync(git, new FakeSettingsRepository());
+
+        Assert.Empty(section.GlobalWrites());
+        Assert.Empty(section.RepositoryWrites());
+        Assert.Null(section.Global.MergeToolValue);
+        Assert.Equal("Not set", section.Global.MergeToolText);
+        Assert.Null(section.Repository.MergeToolValue);
+        Assert.Equal("Same as global (not set)", section.Repository.MergeToolText);
+
+        // Another setting changes: only its keys are written.
+        section.Global.IsRebase = true;
+        Assert.Equal([new GitConfigWrite("pull.rebase", "true"), new GitConfigWrite("pull.ff", "true")], section.GlobalWrites());
+        Assert.Empty(section.RepositoryWrites());
+    }
+
+    [Fact]
+    public async Task Each_opening_of_choose_asks_for_the_list_again_so_the_runs_list_follows_the_kept_one()
+    {
+        // 8.10: a Pick dialog opened from the kept list keeps its options; the next opening shows the
+        // run's, which the catalogue gives once the run has ended.
+        var kept = new MergeToolHelp([new MergeTool("meld", null)], [], Failed: false);
+        var run = new MergeToolHelp([new MergeTool("meld", null), new MergeTool("kdiff3", null)], [new MergeTool("bc", null)], Failed: false);
+        var answer = kept;
+        var asked = 0;
+        var git = new FakeGitConfiguration { Outside = Read(false), InRepository = Read(true) };
+        var pick = new FakePick();
+        var section = new GitSettingsViewModel(
+            git,
+            new FakeSettingsRepository(),
+            _ =>
+            {
+                asked++;
+                return Task.FromResult(answer);
+            },
+            pick.ShowAsync,
+            fileExists: _ => false);
+        await section.LoadAsync();
+        await section.MergeToolsLoaded;
+
+        await section.Global.ChooseMergeToolCommand.ExecuteAsync(null);
+        Assert.Equal(["Not set", "meld"], pick.Shown[^1].Options.Select(option => option.Text));
+
+        answer = run;
+        await section.Global.ChooseMergeToolCommand.ExecuteAsync(null);
+        Assert.Equal(["Not set", "meld", "kdiff3", "bc"], pick.Shown[^1].Options.Select(option => option.Text));
+        Assert.Equal(3, asked);
+
+        // The status of a chosen tool goes by the list the screen has now.
+        section.Global.MergeToolValue = "kdiff3";
+        Assert.Null(section.Global.MergeToolStatus);
+        section.Global.MergeToolValue = "bc";
+        Assert.Equal("git did not find bc on this computer: Merge tool… fails until it is installed.", section.Global.MergeToolStatus);
+    }
+
     internal static async Task<GitSettingsViewModel> LoadAsync(
         FakeGitConfiguration git,
         FakeSettingsRepository? repository,
@@ -599,7 +706,15 @@ public class GitSettingsViewModelTests
 
         public List<IReadOnlyList<GitConfigWrite>> GlobalWrites { get; } = [];
 
-        public string GlobalFile => GitSettingsViewModelTests.GlobalFile;
+        /// <summary>
+        /// <see cref="GlobalFile"/> throws until the outside read has run: the real one checks files on
+        /// a home share that may not answer, which only that read, off the UI thread, may do first (8.2).
+        /// </summary>
+        public bool GuardGlobalFile { get; set; }
+
+        public string GlobalFile => GuardGlobalFile && !Reads.Contains(null)
+            ? throw new InvalidOperationException("GlobalFile was asked for before the outside read.")
+            : GitSettingsViewModelTests.GlobalFile;
 
         public string XdgFile => GitSettingsViewModelTests.XdgFile;
 

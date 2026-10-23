@@ -150,7 +150,11 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     public string Caption => IsRepositoryScope ? Texts.CaptionRepository : Texts.CaptionGlobal;
 
     /// <summary>The global caption's tooltip and help text: the global file's full path (8.2); null in the repository scope.</summary>
-    public string? CaptionToolTip => IsRepositoryScope || string.IsNullOrEmpty(_git?.GlobalFile) ? null : _git!.GlobalFile;
+    /// <remarks>
+    /// Null until the outside read has run: <see cref="IGitConfiguration.GlobalFile"/> checks files on
+    /// a home share that may not answer, which only that read, off the UI thread, may do first (8.2).
+    /// </remarks>
+    public string? CaptionToolTip => IsRepositoryScope || _outside is null || _git is null || _git.GlobalFile is not { Length: > 0 } file ? null : file;
 
     /// <summary>The merge tools' list is not there yet (8.10): <c>Choose…</c> waits, disabled.</summary>
     [ObservableProperty]
@@ -298,6 +302,17 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             return;
         }
 
+        // Asked again at each opening of the Pick dialog (8.10: the kept list answers while the run
+        // goes on, the run's list once it has ended), which answers at once either way.
+        try
+        {
+            await AdoptToolsAsync(await _mergeTools(CancellationToken.None));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.Warning("The settings screen could not get the merge tools git knows again; the list it has stays.", ex);
+        }
+
         var options = await MergeToolOptionsAsync(scope);
         var selected = scope.MergeToolValue ?? Texts.NotSet;
         var answer = await _showPick(new PickDialogViewModel(Texts.ChooseMergeToolTitle, options, selected, Texts.PickConfirm));
@@ -441,13 +456,20 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             _log.Warning("Git's configuration could not be read for the merge tools' list.", ex);
         }
 
-        _tools = tools;
-
-        // A path set in either scope's read counts (the repository read holds the global one too).
-        var found = new HashSet<string>(await PathFoundAsync(_tools, _outside), StringComparer.Ordinal);
-        found.UnionWith(await PathFoundAsync(_tools, _inRepository));
-        _pathFoundTools = found;
+        await AdoptToolsAsync(tools);
         IsLookingForMergeTools = false;
+        Global.RefreshMergeTool();
+        Repository.RefreshMergeTool();
+    }
+
+    /// <summary>Takes <paramref name="tools"/> as the list the screen offers, with the tools whose paths exist (8.10).</summary>
+    private async Task AdoptToolsAsync(MergeToolHelp tools)
+    {
+        // A path set in either scope's read counts (the repository read holds the global one too).
+        var found = new HashSet<string>(await PathFoundAsync(tools, _outside), StringComparer.Ordinal);
+        found.UnionWith(await PathFoundAsync(tools, _inRepository));
+        _tools = tools;
+        _pathFoundTools = found;
         Global.RefreshMergeTool();
         Repository.RefreshMergeTool();
     }
@@ -464,7 +486,7 @@ public sealed partial class GitSettingsViewModel : ObservableObject
                 return;
             }
 
-            var outside = _git.ReadAsync(null);
+            var outside = ReadOutsideAsync();
             var inRepository = _repository is null ? Task.FromResult<GitConfigRead?>(null) : ReadRepositoryAsync(_repository.Path);
             var identity = _repository is null ? Task.FromResult<GitIdentityRead?>(null) : ReadIdentityAsync(_repository.Path);
             var pull = _repository?.Branch is { } branch ? ReadPullAsync(branch) : Task.FromResult<(PullConfiguration?, string?)>((null, null));
@@ -477,10 +499,11 @@ public sealed partial class GitSettingsViewModel : ObservableObject
                 Unavailable = ex.Message + Texts.GitNeeded;
                 return;
             }
-            catch (GitException ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Nothing is editable when a read fails (7.4): git's own line, or what failed.
                 _log.Warning("Git's configuration could not be read.", ex);
-                ReadError = $"{Texts.ReadFailed} {FirstGitLine(ex)}";
+                ReadError = $"{Texts.ReadFailed} {(ex is GitException git ? FirstGitLine(git) : ex.Message)}";
                 return;
             }
             finally
@@ -496,6 +519,9 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             Global.Fill();
             Repository.Fill();
             Repository.FillInEffect(await identity, await pull);
+
+            // The global file's path may be worked out now that the outside read has run (8.2).
+            OnPropertyChanged(nameof(CaptionToolTip));
         }
         finally
         {
@@ -503,6 +529,8 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             Loaded?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    private async Task<GitConfigRead> ReadOutsideAsync() => await _git!.ReadAsync(null);
 
     private async Task<GitConfigRead?> ReadRepositoryAsync(string workingTree) => await _git!.ReadAsync(workingTree);
 
@@ -846,15 +874,18 @@ public sealed partial class GitScopeViewModel : ObservableObject
     /// <summary>The scope's changed keys, in 8.3's order: an untouched field writes nothing.</summary>
     internal IReadOnlyList<GitConfigWrite> Writes()
     {
+        // A box is compared as it would be written, trimmed and empty as none, with the value read the
+        // same way: git gives "name =" as an empty value and keeps a value's spaces, which an untouched
+        // box must never rewrite (8.3: only changed keys are written).
         var writes = new List<GitConfigWrite>();
-        var name = NullIfEmpty(UserName.Trim());
-        if (name != _nameBaseline)
+        var name = Normal(UserName);
+        if (name != Normal(_nameBaseline))
         {
             writes.Add(new GitConfigWrite(NameKey, name));
         }
 
-        var email = NullIfEmpty(UserEmail.Trim());
-        if (email != _emailBaseline)
+        var email = Normal(UserEmail);
+        if (email != Normal(_emailBaseline))
         {
             writes.Add(new GitConfigWrite(EmailKey, email));
         }
@@ -888,7 +919,8 @@ public sealed partial class GitScopeViewModel : ObservableObject
             var files = _owner.Files;
             _nameBaseline = LastOf(read, NameKey)?.Value;
             _emailBaseline = LastOf(read, EmailKey)?.Value;
-            _mergeToolBaseline = LastOf(read, MergeToolKey)?.Value;
+            // An empty merge.tool names no tool: it shows as Not set (git's mergetool finds none either).
+            _mergeToolBaseline = Normal(LastOf(read, MergeToolKey)?.Value);
             UserName = _nameBaseline ?? string.Empty;
             UserEmail = _emailBaseline ?? string.Empty;
             MergeToolValue = _mergeToolBaseline;
@@ -904,7 +936,7 @@ public sealed partial class GitScopeViewModel : ObservableObject
 
             NamePlaceholder = Placeholder(NameKey);
             EmailPlaceholder = Placeholder(EmailKey);
-            LowerMergeTool = IsGlobal ? null : LowerOf(_owner.RepositoryRead, MergeToolKey)?.Value;
+            LowerMergeTool = IsGlobal ? null : Normal(LowerOf(_owner.RepositoryRead, MergeToolKey)?.Value);
 
             Replace(NameNotices, Notices(NameKey, value => value, files));
             Replace(EmailNotices, Notices(EmailKey, value => value, files));
@@ -1088,7 +1120,8 @@ public sealed partial class GitScopeViewModel : ObservableObject
         return $"{Texts.CannotCommit} {text}";
     }
 
-    private static string? NullIfEmpty(string text) => text.Length == 0 ? null : text;
+    /// <summary>A value as it is written and compared: trimmed, and none when empty.</summary>
+    private static string? Normal(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void Replace(ObservableCollection<GitNotice> list, IEnumerable<GitNotice> notices)
     {
