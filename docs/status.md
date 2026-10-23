@@ -305,8 +305,15 @@ report is committed. Wave 2 of design section 18 is under way, each package buil
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
 (`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`), WP-RA (`0c91d01`) and WP-B
 (`e974c35`) and WP-SET (`eae7edc`) merged, and the lead's `Phase6Checks.Support.cs` helpers
-(`9ed9ba3`); WP-K, the last, being built. Next: WP-K's review, fixes and merge, then the default run
-and wave 3 (WP-V's parts, WP-R); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`9ed9ba3`); WP-K, the last, being built. Wave 3 has begun: WP-V's part G is written on
+`wip/p6-walk-g` (`fb7acda`, pushed nowhere, its worktree removed), its 26 pictures inspected by its
+writer and matching, 12 expectation tests passing, and four of its six checks failing only at the
+key texts WP-K adds; merge it after WP-K and run `--filter-class "*Phase6ChecksG"` on the merge,
+adding to `.editorconfig` `[tests/VisualCommit.VisualTests.Phase6*/*.G.cs]` with
+`generated_code = false` (a `*.g.cs` name is taken for generated code; its three files start with
+`#nullable enable` until then) and re-timing G22 and G23 part A on a quiet machine (83 s and 91 s
+under load). Next: WP-K's review, fixes and merge, part G's merge, then WP-V's parts W, S, K and L
+and WP-R; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
