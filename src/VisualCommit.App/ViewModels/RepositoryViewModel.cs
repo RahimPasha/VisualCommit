@@ -41,7 +41,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private readonly ISettingsStore _settings;
     private readonly IDialogService? _dialogs;
     private readonly TabServices? _services;
-    private readonly TaskCompletionSource _firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource _firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Lock _watcherGate = new();
     private Stopwatch _sinceOpening;
     private readonly List<double> _frameTimes = [];
@@ -69,6 +69,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private bool _promoted;
     private int _readGeneration;
     private Task? _summaryStart;
+
+    // The first read was completed by a summary read that failed (3.1's step 5): a promotion gives
+    // the view model a new first read, which its full start completes (3.2, 3.3).
+    private bool _firstReadFailedInSummary;
 
     // The watcher's pause belongs to the view model (3.3): the queue's operation pauses it once,
     // also a watcher made while that operation runs.
@@ -187,8 +191,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// A tab adopts this summary-mode view model (3.3): it leaves summary mode, a summary read still
     /// running applies nothing when it ends (the read generation), and <paramref name="sinceOpening"/>,
     /// the tab's stopwatch, becomes the opening's, so that Q1's lines and auto-fetch's first interval
-    /// count from the user's open. Then the tab calls <see cref="StartAsync"/>, which runs in full
-    /// mode and puts off a refresh asked for during its first load until its end. No I/O.
+    /// count from the user's open. A summary read's failure goes with summary mode
+    /// (<see cref="ErrorText"/> and <see cref="StatusErrorText"/> cleared), and a first read that such
+    /// a failure completed starts again (<see cref="HasFirstRead"/> false), so that the tab shows no
+    /// error over its graph and the rows that follow it, and a bulk run, wait for the full start.
+    /// Then the tab calls <see cref="StartAsync"/>, which runs in full mode and puts off a refresh
+    /// asked for during its first load until its end. No I/O.
     /// </summary>
     public void Promote(Stopwatch sinceOpening)
     {
@@ -198,6 +206,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         _promoted = true;
         _sinceOpening = sinceOpening;
         _readGeneration++;
+        ErrorText = null;
+        StatusErrorText = null;
+        if (_firstReadFailedInSummary)
+        {
+            _firstReadFailedInSummary = false;
+            _firstRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            OnPropertyChanged(nameof(FirstRead));
+            OnPropertyChanged(nameof(HasFirstRead));
+        }
 
         // A summary refresh still running ends without applying anything; the next refresh, put
         // off until the full start ends, starts a run of its own.
@@ -563,6 +580,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
             _log.Error($"{Name}: the repository could not be read.", ex);
             ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;
+            _firstReadFailedInSummary = !_firstRead.Task.IsCompleted;
             CompleteFirstRead();
         }
     }
