@@ -30,8 +30,7 @@ public sealed class GitCommand
     /// On Windows the git process runs at below-normal priority, set right after it starts (the
     /// processes it starts inherit it): the merge tools' lookup, <c>git mergetool --tool-help</c>,
     /// which runs in the background for 20 to 60 s and must not slow the first repository's reads
-    /// (docs/phase-6-design.md 8.10, D202, Q1). Ignored elsewhere. The runner applies it from work
-    /// package WP-S on.
+    /// (docs/phase-6-design.md 8.10, D202, Q1). Ignored elsewhere.
     /// </summary>
     public bool BelowNormalPriority { get; init; }
 

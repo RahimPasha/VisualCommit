@@ -46,7 +46,9 @@ public class UpstreamNameTests
         var (actions, _) = RecordingActions.Create();
         var menu = RepositoryMenusTests.Lines(RepositoryMenus.ForLocalBranch(context, "refs/heads/pr/7", actions));
         Assert.Contains("Pull from upstream/pr/7", menu);
-        Assert.Contains("Push pr/7 to upstream/pr/7", menu);
+
+        // Its Push and Force push are disabled (R4: refs/pull/7/head is no branch), naming it so too.
+        Assert.Contains("Push pr/7 to upstream/pr/7 (disabled: \"upstream/pr/7 is refs/pull/7/head on upstream, not a branch\")", menu);
         Assert.Contains("Stop tracking upstream/pr/7", menu);
         Assert.Equal("pr/7 is level with upstream/pr/7", DashboardTexts.AheadBehind(refs, WorkingTreeStatus.Clean).ToolTip);
     }

@@ -56,6 +56,9 @@ public sealed partial class GitRepository
         return new RepoRefs(head, refs, stashes, remotes) { Refspecs = refspecs };
     }
 
+    public async Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) =>
+        (await ReadRemoteKeysAsync(cancellationToken).ConfigureAwait(false)).Refspecs;
+
     /// <summary>
     /// The remotes and their fetch lines in one read, in place of <c>git remote</c>
     /// (docs/phase-6-design.md 10.2): <c>git config --null --get-regexp ^remote\.</c>, without
@@ -66,8 +69,13 @@ public sealed partial class GitRepository
     /// subsection of a <c>remote.&lt;name&gt;.&lt;var&gt;</c> key, each once, sorted ordinally; a
     /// key without one (<c>remote.pushdefault</c>) and a name starting with <c>/</c> (which git
     /// skips with a warning) name none, and neither lists a legacy <c>.git/remotes</c> file.
-    /// The <c>.fetch</c> values are the lines; one git refuses, or one without a source, is
-    /// skipped and logged. Exit 1 is no remote and no line.
+    /// The <c>.fetch</c> values are the lines. Every value the mapping leaves out but an empty one
+    /// is logged as skipped, once per repository object (10.1): a key without a value and a line
+    /// git refuses, with which git's own reads fail too (<c>for-each-ref</c>: <c>bad config
+    /// variable</c> or <c>invalid refspec</c>, 128, so this read's snapshot is never made and the
+    /// warning names the line), and a line git takes that names no source
+    /// (<c>:refs/remotes/origin/x</c>). An empty value, which git takes and which fetches into
+    /// <c>FETCH_HEAD</c> only, maps nothing and is not logged. Exit 1 is no remote and no line.
     /// </summary>
     private async Task<(List<string> Remotes, FetchRefspecs Refspecs)> ReadRemoteKeysAsync(CancellationToken cancellationToken)
     {
@@ -93,7 +101,9 @@ public sealed partial class GitRepository
                 names.Add(name);
                 if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".fetch") is not null)
                 {
-                    // An empty value is a line git takes (it fetches into FETCH_HEAD only) and maps nothing.
+                    // Logged: a key without a value, and a value the mapping cannot take (one git
+                    // refuses, or one without a source). Not an empty value, which git takes (it
+                    // fetches into FETCH_HEAD only) and which maps nothing.
                     var value = newline < 0 ? string.Empty : entry[(newline + 1)..];
                     if ((newline < 0 || (value.Length > 0 && FetchRefspec.Parse(name, value) is null))
                         && _skippedFetchLines.TryAdd(name + "\n" + value, 0))
@@ -167,8 +177,7 @@ public sealed partial class GitRepository
     {
         // A remote branch's remote is the one whose fetch lines fill it (10.3). When two remotes
         // or none do, it is the longest configured name that its name starts with: remote names
-        // may contain slashes ("team/origin").
-        var remotesLongestFirst = remotes.OrderByDescending(remote => remote.Length).ToList();
+        // may contain slashes ("team/origin"); without one, its first part.
         var refs = new List<GitRef>();
         var nestedTags = new List<int>();
 
@@ -214,7 +223,7 @@ public sealed partial class GitRepository
                 var name = fullName[RemotesPrefix.Length..];
                 var remote = refspecs.SourceOf(fullName) is { Kind: RemoteSourceKind.Mapped or RemoteSourceKind.AmbiguousRefs, Remote: { } mapped }
                     ? mapped
-                    : FindRemote(name, remotesLongestFirst);
+                    : RemoteBranchNames.RemoteOf(name, remotes);
                 gitRef = new GitRef(fullName, name, RefKind.RemoteBranch, objectName, RemoteName: remote);
             }
             else if (fullName.StartsWith(TagsPrefix, StringComparison.Ordinal))
@@ -255,23 +264,6 @@ public sealed partial class GitRepository
         {
             refs[indexes[i]] = refs[indexes[i]] with { TargetSha = lines[i] };
         }
-    }
-
-    private static string FindRemote(string remoteBranchName, IReadOnlyList<string> remotesLongestFirst)
-    {
-        foreach (var remote in remotesLongestFirst)
-        {
-            if (remoteBranchName.Length > remote.Length
-                && remoteBranchName[remote.Length] == '/'
-                && remoteBranchName.StartsWith(remote, StringComparison.Ordinal))
-            {
-                return remote;
-            }
-        }
-
-        // A remote branch whose remote is no longer configured: its first part is the best guess.
-        var slash = remoteBranchName.IndexOf('/', StringComparison.Ordinal);
-        return slash > 0 ? remoteBranchName[..slash] : remoteBranchName;
     }
 
     /// <summary>

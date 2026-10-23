@@ -355,10 +355,17 @@ public partial class RepositoryMenusTests
         var gone = Backup("remote-branch-20260101T121701000Z", "remote-branch", Ref("remote-branch-20260101T121701000Z/mirror/x", WriteNotes, "mirror/x"));
         Assert.Equal("Push x back to mirror… (disabled: \"mirror no longer exists\")", Lines(RepositoryMenus.ForBackup(Context(ReflogRefs()), gone, actions))[1]);
 
-        // A remote whose name holds "/": the longest configured name wins.
-        var nested = ReflogRefs() with { Remotes = ["origin", "origin/eu"] };
+        // A remote whose name holds "/" (0.5): the one configured name the backup starts with.
+        // When two do, the backup does not say which it came from (main on origin/eu and eu/main
+        // on origin save the same name), and the push back is disabled; the description still
+        // names the longest (the phase's review, which amends phase 5's "the longest wins").
         var eu = Backup("remote-branch-20260101T121701000Z", "remote-branch", Ref("remote-branch-20260101T121701000Z/origin/eu/main", WriteNotes, "origin/eu/main"));
+        var nested = ReflogRefs() with { Remotes = ["origin/eu", "upstream"] };
         Assert.Equal(["Deleted main on origin/eu", "Push main back to origin/eu…"], Lines(RepositoryMenus.ForBackup(Context(nested), eu, actions)).Take(2));
+        var both = ReflogRefs() with { Remotes = ["origin", "origin/eu"] };
+        Assert.Equal(
+            ["Deleted main on origin/eu", "Push main back to origin/eu… (disabled: \"The remote this backup came from cannot be told: origin/eu/main fits origin/eu and origin\")"],
+            Lines(RepositoryMenus.ForBackup(Context(both), eu, actions)).Take(2));
 
         // A force push of a remote-tracking name no upstream maps and no remote prefixes.
         var unknown = Backup("force-push-20260101T120901000Z", "force-push", Ref("force-push-20260101T120901000Z/mirror/topic", WriteNotes, "mirror/topic"));

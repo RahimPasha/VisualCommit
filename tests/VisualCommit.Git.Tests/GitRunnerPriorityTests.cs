@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using VisualCommit.Core.Git;
+using VisualCommit.Testing;
 using Xunit;
 
 namespace VisualCommit.Git.Tests;
@@ -31,47 +32,89 @@ public class GitRunnerPriorityTests
         // lowered processes: under a full test run a chain of below-normal shells starves behind
         // the normal-priority work, which is what the class is for, so a test that waited for
         // their output hung. It waits only for the runner's own lowering of git's descendants.
+        // The calls run in a folder of their own, outside the project's repository.
+        using var folder = new TempDirectory("priority");
         var runner = new GitRunner(GitPath);
+        GitCommand Sleep(bool belowNormal) => new("-c", "alias.script=!sleep 120", "script") { WorkingDirectory = folder.Path, BelowNormalPriority = belowNormal };
         if (!OperatingSystem.IsWindows())
         {
             // Ignored elsewhere: the call runs as any other.
-            var elsewhere = await runner.RunAsync(new GitCommand("--version") { BelowNormalPriority = true }, TestCancelled);
+            var elsewhere = await runner.RunAsync(new GitCommand("--version") { WorkingDirectory = folder.Path, BelowNormalPriority = true }, TestCancelled);
             Assert.True(elsewhere.Succeeded, elsewhere.StandardError);
             return;
         }
 
-        // No other test runs beside this one (its collection), so no other git child is below normal.
-        Assert.Empty(GitChildrenAt(ProcessPriorityClass.BelowNormal));
-        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
-        var call = runner.RunAsync(new GitCommand("-c", "alias.script=!sleep 120", "script") { BelowNormalPriority = true }, cancel.Token);
+        // This process at normal priority for the test, whatever started it: a host that runs below
+        // normal, as CI's runner runs it, gives every git it starts its class, and the test would
+        // pass without the runner lowering anything (run 39190992859).
+        using var self = Process.GetCurrentProcess();
+        var priorityBefore = self.PriorityClass;
+        self.PriorityClass = ProcessPriorityClass.Normal;
         try
         {
-            var clock = Stopwatch.StartNew();
-            List<int> lowered;
-            while ((lowered = GitChildrenAt(ProcessPriorityClass.BelowNormal)).Count == 0)
+            // No other test runs beside this one (its collection), so no other git child is below normal.
+            Assert.Empty(GitChildrenAt(ProcessPriorityClass.BelowNormal));
+
+            // A call without the flag starts git at normal priority: what the lowering then changes.
+            using (var stopNormal = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled))
             {
-                Assert.False(call.IsCompleted, "The call ended before its git was seen.");
-                Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), "No git child of this process runs below normal.");
-                await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
+                var held = runner.RunAsync(Sleep(belowNormal: false), stopNormal.Token);
+                try
+                {
+                    await WaitForGitChildAsync(held, ProcessPriorityClass.Normal, Stopwatch.StartNew());
+                    Assert.Empty(GitChildrenAt(ProcessPriorityClass.BelowNormal));
+                }
+                finally
+                {
+                    await stopNormal.CancelAsync();
+                }
+
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => held);
             }
 
-            // Whatever git has started by now (the real git behind Git for Windows' launcher, its
-            // shell, sleep) runs below normal too, however the start and the lowering raced.
-            var git = Assert.Single(lowered);
-            while (DescendantsOf(git).Where(process => process.Priority != ProcessPriorityClass.BelowNormal).ToList() is { Count: > 0 } normal)
+            using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+            var call = runner.RunAsync(Sleep(belowNormal: true), cancel.Token);
+            try
             {
-                Assert.True(
-                    clock.Elapsed < TimeSpan.FromSeconds(60),
-                    "Processes git started run at another priority: " + string.Join(", ", normal.Select(process => $"{process.Name} {process.Priority}")));
-                await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
+                var clock = Stopwatch.StartNew();
+                var git = await WaitForGitChildAsync(call, ProcessPriorityClass.BelowNormal, clock);
+
+                // Whatever git has started by now (the real git behind Git for Windows' launcher, its
+                // shell, sleep) runs below normal too, however the start and the lowering raced.
+                while (DescendantsOf(git).Where(process => process.Priority != ProcessPriorityClass.BelowNormal).ToList() is { Count: > 0 } others)
+                {
+                    Assert.True(
+                        clock.Elapsed < TimeSpan.FromSeconds(60),
+                        "Processes git started run at another priority: " + string.Join(", ", others.Select(process => $"{process.Name} {process.Priority}")));
+                    await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
+                }
             }
+            finally
+            {
+                await cancel.CancelAsync();
+            }
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
         }
         finally
         {
-            await cancel.CancelAsync();
+            self.PriorityClass = priorityBefore;
+        }
+    }
+
+    /// <summary>The one git child of this process at <paramref name="priority"/> while <paramref name="call"/> runs, waited for up to 60 s (Windows).</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static async Task<int> WaitForGitChildAsync(Task call, ProcessPriorityClass priority, Stopwatch clock)
+    {
+        List<int> found;
+        while ((found = GitChildrenAt(priority)).Count == 0)
+        {
+            Assert.False(call.IsCompleted, "The call ended before its git was seen.");
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), $"No git child of this process runs at {priority}.");
+            await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
         }
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+        return Assert.Single(found);
     }
 
     [Fact]
@@ -86,8 +129,11 @@ public class GitRunnerPriorityTests
             return;
         }
 
+        // In a folder of its own, outside the project's repository.
+        using var folder = new TempDirectory("priority-tree");
         var start = new ProcessStartInfo(GitPath)
         {
+            WorkingDirectory = folder.Path,
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,

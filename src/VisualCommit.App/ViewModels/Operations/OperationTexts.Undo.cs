@@ -211,6 +211,15 @@ public static partial class OperationTexts
     /// <summary>A force push's backup whose remote cannot be mapped back (7.10, 12.4).</summary>
     public const string RemoteOfBackupNotFound = "The remote this backup came from cannot be found";
 
+    /// <summary>
+    /// A deleted remote branch's or tag's backup, <c>&lt;r&gt;/&lt;name&gt;</c>, that more than one
+    /// configured remote name starts (<c>team/fork/main</c> with <c>team</c> and <c>team/fork</c>,
+    /// whose names hold slashes, 0.5): the backup does not say which remote it came from, and the
+    /// longest is not always the one (deleting <c>fork/main</c> on <c>team</c> saved the same name).
+    /// </summary>
+    public static string RemoteOfBackupAmbiguous(string name, IReadOnlyList<string> remotes) =>
+        $"The remote this backup came from cannot be told: {name} fits {List(remotes)}";
+
     /// <summary>A force push's backup whose lease is no longer in the remote-tracking reflog (7.10, 12.4).</summary>
     public const string ForcePushCommitNotFound = "The commit your force push left can no longer be found";
 

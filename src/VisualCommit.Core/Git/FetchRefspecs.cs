@@ -244,39 +244,73 @@ public sealed class FetchRefspecs
         var mapping = new List<RemoteSource>();
         foreach (var (remote, lines) in _byRemote)
         {
-            var candidates = new List<string>();
-            foreach (var line in lines)
+            if (SourceOn(remote, lines, trackingRef) is { } source)
             {
-                if (line.IsNegative || line.Destination is not { } destination)
-                {
-                    continue;
-                }
-
-                var candidate = line.IsPattern
-                    ? MatchPattern(destination, trackingRef, line.Source)
-                    : string.Equals(destination, trackingRef, StringComparison.Ordinal) ? line.Source : null;
-                if (candidate is not null && !candidates.Contains(candidate, StringComparer.Ordinal))
-                {
-                    candidates.Add(candidate);
-                }
+                mapping.Add(source);
             }
-
-            if (candidates.Count == 0 || candidates.Exists(candidate => IsExcluded(lines, candidate)))
-            {
-                continue;
-            }
-
-            mapping.Add(candidates.Count == 1
-                ? new RemoteSource(RemoteSourceKind.Mapped, remote, candidates[0], [])
-                : new RemoteSource(RemoteSourceKind.AmbiguousRefs, remote, null, []));
         }
 
         return mapping.Count switch
         {
-            0 => new RemoteSource(RemoteSourceKind.NotFetched, null, null, []),
+            0 => NotFetched,
             1 => mapping[0],
             _ => new RemoteSource(RemoteSourceKind.AmbiguousRemotes, null, null, [.. mapping.Select(source => source.Remote!)]),
         };
+    }
+
+    /// <summary>
+    /// Where <paramref name="remote"/>'s own lines fetch <paramref name="trackingRef"/> from, by
+    /// 10.1's rules 1 to 3 for that remote alone: <see cref="RemoteSourceKind.Mapped"/>,
+    /// <see cref="RemoteSourceKind.AmbiguousRefs"/> or <see cref="RemoteSourceKind.NotFetched"/>,
+    /// whatever another remote maps it to. 10.4's push guard asks it of the push's remote, so that
+    /// another remote whose lines also fill the ref (a mirror line, <c>+refs/*:refs/*</c>) does not
+    /// hide that this one fetches it from two refs, which the push would make every fetch of it fail on.
+    /// </summary>
+    public RemoteSource SourceOf(string trackingRef, string remote)
+    {
+        ArgumentNullException.ThrowIfNull(trackingRef);
+        ArgumentNullException.ThrowIfNull(remote);
+        foreach (var (name, lines) in _byRemote)
+        {
+            if (string.Equals(name, remote, StringComparison.Ordinal))
+            {
+                return SourceOn(name, lines, trackingRef) ?? NotFetched;
+            }
+        }
+
+        return NotFetched;
+    }
+
+    private static RemoteSource NotFetched { get; } = new(RemoteSourceKind.NotFetched, null, null, []);
+
+    /// <summary>Rules 1 to 3 for one remote's <paramref name="lines"/>: its one candidate, AmbiguousRefs for two or more, null for none or one a negative line excludes.</summary>
+    private static RemoteSource? SourceOn(string remote, FetchRefspec[] lines, string trackingRef)
+    {
+        var candidates = new List<string>();
+        foreach (var line in lines)
+        {
+            if (line.IsNegative || line.Destination is not { } destination)
+            {
+                continue;
+            }
+
+            var candidate = line.IsPattern
+                ? MatchPattern(destination, trackingRef, line.Source)
+                : string.Equals(destination, trackingRef, StringComparison.Ordinal) ? line.Source : null;
+            if (candidate is not null && !candidates.Contains(candidate, StringComparer.Ordinal))
+            {
+                candidates.Add(candidate);
+            }
+        }
+
+        if (candidates.Count == 0 || candidates.Exists(candidate => IsExcluded(lines, candidate)))
+        {
+            return null;
+        }
+
+        return candidates.Count == 1
+            ? new RemoteSource(RemoteSourceKind.Mapped, remote, candidates[0], [])
+            : new RemoteSource(RemoteSourceKind.AmbiguousRefs, remote, null, []);
     }
 
     /// <summary>

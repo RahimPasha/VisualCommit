@@ -220,11 +220,15 @@ public class GitConfigLocationsTests
             .ToList();
         if (predicted is null)
         {
-            // No global file: git refuses the write ("could not write config file", exit 4) and
-            // writes it nowhere.
+            // No global file: git refuses the write with git config's own code for a file it
+            // cannot write (4) and writes it nowhere; its words ("could not write config file")
+            // are asserted on the report's git only.
             Assert.Equal(4, write.ExitCode);
-            Assert.Contains("could not write config file", write.StandardError, StringComparison.Ordinal);
             Assert.Empty(written);
+            if (await GitConfigTestSupport.GitIs236Async())
+            {
+                Assert.Contains("could not write config file", write.StandardError, StringComparison.Ordinal);
+            }
         }
         else
         {

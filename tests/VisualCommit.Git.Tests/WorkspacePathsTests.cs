@@ -111,7 +111,7 @@ public class WorkspacePathsTests
             return;
         }
 
-        var shortName = folder.Combine(GitRepositoryOpenTests.ShortNameOf(folder.Path, "A Rather Long Folder Name"));
+        var shortName = GitRepositoryOpenTests.ShortSpellingOf(longName);
 
         Assert.Equal(longName, WorkspacePaths.Normalise(shortName), StringComparer.OrdinalIgnoreCase);
         Assert.True(WorkspacePaths.Same(shortName, longName));

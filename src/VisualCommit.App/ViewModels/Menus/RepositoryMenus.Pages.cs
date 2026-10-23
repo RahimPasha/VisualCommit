@@ -295,7 +295,8 @@ public static partial class RepositoryMenus
                 return Restore(RestoreTheChanges);
             case "remote-branch" or "remote-tag":
                 var (remote, rest, configured) = SplitRemote(name, context.Remotes);
-                return Restore(PushBackTo(rest, remote), configured ? null : NoLongerExists(remote));
+                var fits = RemoteBranchNames.RemotesOf(name, context.Remotes);
+                return Restore(PushBackTo(rest, remote), !configured ? NoLongerExists(remote) : fits.Count > 1 ? RemoteOfBackupAmbiguous(name, fits) : null);
             case "force-push":
                 return ForcePushRestore(context, name, hasForcePushLease, Restore);
             default:
