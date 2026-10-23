@@ -849,12 +849,6 @@ public static partial class RepositoryMenus
         return new MenuItem(label, () => Start(actions, label, action), disabledReason is null, disabledReason, isDestructive) { Command = command };
     }
 
-    /// <summary>The empty graph area's "Pull" (4b): the toolbar's Pull.</summary>
-    private const string ToolbarPull = "Pull";
-
-    /// <summary>The empty graph area's "Push" (4b): the toolbar's Push.</summary>
-    private const string ToolbarPush = "Push";
-
     private static MenuHeader Header(string text, string? toolTip = null) => new(text, toolTip);
 
     /// <summary>The short name of a full ref, when the context does not know it: <c>refs/heads/x</c> → <c>x</c>.</summary>
@@ -925,12 +919,12 @@ public static partial class RepositoryMenus
 
     /// <summary>
     /// Open file, show in folder, copy path (2.32); with an editor chosen, Open in editor after
-    /// Open file (docs/phase-6-design.md 12.1, <see cref="RepositoryMenuContext.Editor"/>), never asking.
+    /// Open file (docs/phase-6-design.md 12.1, <see cref="RepositoryMenuContext.HasEditor"/>), never asking.
     /// </summary>
     private static MenuItem?[] FileItems(FileMenuTarget file, RepositoryMenuContext context, IRepositoryActions actions) =>
     [
         Item(actions, OpenFile, () => actions.OpenFileAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
-        context.Editor is null ? null : Item(actions, OpenInEditor, () => actions.OpenInEditorAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
+        !context.HasEditor ? null : Item(actions, OpenInEditor, () => actions.OpenInEditorAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
         Item(actions, ShowInFolder, () => actions.ShowInFolderAsync(file.Path)),
         Item(actions, CopyPath, () => actions.CopyPathAsync(file.Path)),
     ];

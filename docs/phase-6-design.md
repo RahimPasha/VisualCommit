@@ -571,6 +571,12 @@ RepoTabViewModel? from)`, the one way a workspace opens (placed by 2.2), called 
 `WorkspaceCommands` and the palette (`from` the active tab), never through an event; and
 `OpenRepositoryFolders()`, the working trees of the tabs with a repository open, in tab order.
 
+As built at status step 22's review: a file that cannot be parsed but whose `version` (read with
+`JsonDocument`, comments and trailing commas allowed) is above this build's is kept read-only with
+`NewerVersion`, neither set aside nor written over (D203's "a newer version's file is read, never
+saved"); any other unreadable file is set aside as above. The stores write through
+`VisualCommit.Core.DurableFile`, flushed to disk before the rename (D236).
+
 ### 1.4 The edits (`src/VisualCommit.Core/Workspaces/WorkspaceEdits.cs`, pure but for `WorkspacePaths.Same`'s short-name expansion, 1.2)
 
 Each returns the same object when it changes nothing, so the store neither saves nor raises
@@ -1507,6 +1513,12 @@ include the dashboards' view models:
 - Closing a dashboard tab releases its rows' summaries, which disposes them (3.4): a fetch from a
   row's menu, outside any run, is cancelled; a running pull past its fetch stays in `Closing`, so the
   window waits for a pull a closed dashboard started as for a closed tab's.
+
+As built at status step 22's review: the window also waits for an open settings screen's global
+writes (7.8's step 4, which run outside any queue), listed as `Saving the settings — all
+repositories` with "remaining steps will not run" when more than one key is written, and stops its
+step 5 from starting; and the session's end cancels every open dialog, top first, so a scan, an
+editor search or a read still running stops before its next step (D234).
 
 ### 3.8 `NamesRepositoryInDialogs`
 
@@ -3149,6 +3161,12 @@ output and the command; the repository's operation has its own texts (8.3). Step
 applied. After a failed global write the repository's writes are not made, the read back runs, the
 tabs are told and the screen stays on Git; the read back shows what git holds, so the repository
 scope's unsaved edits are gone without a word of their own (WP-SET's build, accepted by its review).
+
+As built at status step 22's review: Cancel, Esc and the session's end stop the screen's reads,
+its editor search and its global writes before their next key (one lifetime token); step 5 is not
+started while the window closes (3.7); a screen whose repository write was dropped or not run stays
+open on Git; the Git section takes the branch once at each read, and "Use the repository's setting"
+acts on that branch even if HEAD moves while the screen is open.
 
 ### 7.9 When each change takes effect
 
@@ -5050,7 +5068,7 @@ chosen the palette lists `Choose an editor…` (5.4), which opens the settings s
 the Tools note (7.5) it makes the item findable. The palette lists no Open in editor of its own
 (5.5: what a menu leaves out the palette lacks too).
 
-- `RepositoryMenuContext` (`ViewModels/Menus/RepositoryMenuContext.cs:106`) gains `EditorMenuState?
+- (As built: `bool HasEditor`, the record below having had no reader; status step 22.) `RepositoryMenuContext` (`ViewModels/Menus/RepositoryMenuContext.cs:106`) gains `EditorMenuState?
   Editor` (`record EditorMenuState(string Name)`), filled by `RepositoryViewModel.MenuContext`
   (`RepositoryViewModel.Menus.cs:52`) from `Services.Settings.Current.Editor`: null for none, else the
   editor's name. Nothing touches the disk for it: `MenuContext` is built on the UI thread for every
@@ -5123,7 +5141,7 @@ lists them for checking on those systems.
 
 ### 12.3 Finding the editors
 
-`IEditorCatalog` (App, `Services/EditorCatalog.cs`): `Task<IReadOnlyList<FoundEditor>>
+`IEditorCatalog` (as built, no interface: `EditorCatalog` alone, status step 22) (App, `Services/EditorCatalog.cs`): `Task<IReadOnlyList<FoundEditor>>
 FindAsync(CancellationToken)`, `KnownEditor? Known(string id)`, with
 `FoundEditor(string Id, string Name, string Program)` in Core beside `ToolCatalogues` (12.9). The real
 `EditorCatalog` takes an `EditorSearchContext` (the folders from `Environment.GetFolderPath` and the

@@ -31,8 +31,8 @@ public class FileMenuEditorTests
     {
         var (actions, recorder) = RecordingActions.Create();
 
-        var without = RepositoryMenusTests.Lines(Menu(builder, Context(editor: null), Reader, actions));
-        var with = RepositoryMenusTests.Lines(Menu(builder, Context(new EditorMenuState("Visual Studio Code")), Reader, actions));
+        var without = RepositoryMenusTests.Lines(Menu(builder, Context(hasEditor: false), Reader, actions));
+        var with = RepositoryMenusTests.Lines(Menu(builder, Context(hasEditor: true), Reader, actions));
 
         Assert.DoesNotContain("Open in editor", without);
         var openFile = with.IndexOf("Open file");
@@ -43,7 +43,7 @@ public class FileMenuEditorTests
         Assert.Equal(without, with);
 
         // Its click opens the working tree's file in the editor.
-        var menu = Menu(builder, Context(new EditorMenuState("Visual Studio Code")), Reader, actions);
+        var menu = Menu(builder, Context(hasEditor: true), Reader, actions);
         menu.Items.Single(item => item.Label == "Open in editor").Invoke();
         Assert.Contains(recorder.Calls, call => call.Method == nameof(IRepositoryActions.OpenInEditorAsync) && Equals(call.Arguments[0], "src/Reader.cs"));
     }
@@ -55,46 +55,46 @@ public class FileMenuEditorTests
         var (actions, _) = RecordingActions.Create();
         var gone = Reader with { ExistsInWorkingTree = false };
 
-        var lines = RepositoryMenusTests.Lines(Menu(builder, Context(new EditorMenuState("Other")), gone, actions));
+        var lines = RepositoryMenusTests.Lines(Menu(builder, Context(hasEditor: true), gone, actions));
 
         Assert.Contains("Open in editor (disabled: \"The file is not in the working tree\")", lines);
     }
 
     [Fact]
-    public async Task The_menu_context_names_the_chosen_editor_from_the_settings_and_never_looks_at_its_program()
+    public async Task The_menu_context_has_the_chosen_editor_from_the_settings_and_never_looks_at_its_program()
     {
         using var repo = await Scenarios.ChangesAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
 
-        Assert.Null(app.Repository.MenuContext.Editor);
+        Assert.False(app.Repository.MenuContext.HasEditor);
 
         // A program that does not exist: the item is still offered and enabled (12.1: a program
         // that is gone is said when the item is clicked, 12.7).
         app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", @"Z:\nowhere\Code.exe") });
-        Assert.Equal(new EditorMenuState("Visual Studio Code"), app.Repository.MenuContext.Editor);
+        Assert.True(app.Repository.MenuContext.HasEditor);
         var file = new FileMenuTarget(new ChangedFile("src/helpers.py", FileChangeKind.Modified), false, true);
         var menu = RepositoryMenus.ForUnstagedFile(app.Repository.MenuContext, file, app.Operations);
         Assert.True(menu.Items.Single(item => item.Label == "Open in editor").IsEnabled);
 
         app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, @"D:\Tools\Ed.exe", "{path}") });
-        Assert.Equal(new EditorMenuState("Ed.exe"), app.Repository.MenuContext.Editor);
+        Assert.True(app.Repository.MenuContext.HasEditor);
 
         // An id the catalogue no longer knows means none chosen, logged once while it stays (12.6).
         app.Settings.Update(settings => settings with { Editor = new EditorSetting("an-editor-of-the-future", @"C:\x.exe") });
-        Assert.Null(app.Repository.MenuContext.Editor);
-        Assert.Null(app.Repository.MenuContext.Editor);
+        Assert.False(app.Repository.MenuContext.HasEditor);
+        Assert.False(app.Repository.MenuContext.HasEditor);
         Assert.Single(app.Log.Messages, message => message.Contains("an-editor-of-the-future", StringComparison.Ordinal));
 
         // Each view model keeps its own note, not the process: another tab says it in its own log,
         // and this one says it again once the id has left the settings and come back.
         using var other = await OperationsHarness.OpenAsync(repo);
         other.Settings.Update(settings => settings with { Editor = new EditorSetting("an-editor-of-the-future", @"C:\x.exe") });
-        Assert.Null(other.Repository.MenuContext.Editor);
+        Assert.False(other.Repository.MenuContext.HasEditor);
         Assert.Single(other.Log.Messages, message => message.Contains("an-editor-of-the-future", StringComparison.Ordinal));
         app.Settings.Update(settings => settings with { Editor = null });
-        Assert.Null(app.Repository.MenuContext.Editor);
+        Assert.False(app.Repository.MenuContext.HasEditor);
         app.Settings.Update(settings => settings with { Editor = new EditorSetting("an-editor-of-the-future", @"C:\x.exe") });
-        Assert.Null(app.Repository.MenuContext.Editor);
+        Assert.False(app.Repository.MenuContext.HasEditor);
         Assert.Equal(2, app.Log.Messages.Count(message => message.Contains("an-editor-of-the-future", StringComparison.Ordinal)));
     }
 
@@ -107,7 +107,7 @@ public class FileMenuEditorTests
         _ => RepositoryMenus.ForCompareFile(context, file with { CommitSha = MainWork }, actions),
     };
 
-    private static RepositoryMenuContext Context(EditorMenuState? editor)
+    private static RepositoryMenuContext Context(bool hasEditor)
     {
         var refs = new RepoRefs(
             new HeadState("main", MainWork),
@@ -117,7 +117,7 @@ public class FileMenuEditorTests
         var status = WorkingTreeStatus.Clean;
         return new RepositoryMenuContext("repo", "C:/repo", refs, status, [], ToolbarViewModel.StatesFor(refs, status), IsOperationRunning: false)
         {
-            Editor = editor,
+            HasEditor = hasEditor,
         };
     }
 

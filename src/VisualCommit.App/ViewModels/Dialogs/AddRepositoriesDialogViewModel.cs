@@ -38,11 +38,8 @@ public sealed partial class FoundRepositoryRow : ObservableObject
     /// <summary>The secondary text after the name, cut with "…", whole in its tooltip.</summary>
     public string Detail { get; }
 
-    /// <summary>The row's box can be changed: false for a repository the workspace holds already.</summary>
+    /// <summary>The row's box can be changed: false for a repository the workspace holds already (the box checked and disabled).</summary>
     public bool IsEnabled { get; }
-
-    /// <summary>The workspace holds the repository already (the box checked and disabled).</summary>
-    public bool IsAlreadyInWorkspace => !IsEnabled;
 
     /// <summary>The repository holds the chosen folder (listed first, unchecked).</summary>
     public bool IsEnclosing { get; }

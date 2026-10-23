@@ -1086,7 +1086,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             backupSaved: backupSaved);
     }
 
-    public async Task<string?> CommitAsync(string message, bool amend)
+    public Task<string?> CommitAsync(string message, bool amend) => CommitAsync(message, amend, amended: null);
+
+    /// <summary>HEAD as the refs were last read (the stage panel's ticked Amend is for it).</summary>
+    public HeadState? Head => Refs?.Head;
+
+    public async Task<string?> CommitAsync(string message, bool amend, HeadState? amended)
     {
         string? commit = null;
         var subject = message.Split('\n', 2)[0].TrimEnd('\r');
@@ -1095,7 +1100,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             "Committing…",
             async cancellationToken => commit = await Repository.CommitAsync(message, amend, cancellationToken),
             UndoScope.Commit(subject, amend, Refs?.Head.BranchName),
-            refsChange: true);
+            refsChange: true,
+            refuse: amend && amended is not null ? cancellationToken => RefuseStaleAmendAsync(amended, cancellationToken) : null);
 
         // With nothing left to commit, the working-changes row is gone: the new commit is selected.
         if (error is null && commit is not null && !HasWorkingChanges)
@@ -1126,6 +1132,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     public Task<FileDiff> ReadDiffAsync(DiffTarget target, CancellationToken cancellationToken) =>
         Repository.ReadDiffAsync(target, cancellationToken);
+
+    /// <summary>The open diff's check of its working-tree file (5.5), on the pool: a file or, for an untracked folder, a folder.</summary>
+    public Task<bool> ExistsInWorkingTreeAsync(string path, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var full = System.IO.Path.Combine(Path, path.TrimEnd('/'));
+        var fileExists = _services?.FileExists ?? File.Exists;
+        return Task.Run(() => fileExists(full) || Directory.Exists(full), cancellationToken);
+    }
 
     public Task<byte[]?> ReadFileAsync(FileVersion version, long maxBytes, CancellationToken cancellationToken) =>
         Repository.ReadFileAsync(version, maxBytes, cancellationToken);
@@ -1498,6 +1513,33 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     }
 
     /// <summary>
+    /// D124 for a ticked Amend: HEAD read inside the commit's operation against <paramref name="amended"/>,
+    /// where it was when Amend was ticked. Another branch, or another commit on the same one, refuses
+    /// in D124's words ("main moved while this waited: it was at a1b2c3d and is at e4f5a6b now.
+    /// Nothing was amended."); null when HEAD is where it was.
+    /// </summary>
+    private async Task<string?> RefuseStaleAmendAsync(HeadState amended, CancellationToken cancellationToken)
+    {
+        var now = await Repository.ReadHeadAsync(cancellationToken);
+        string? summary = null;
+        if (!string.Equals(now.BranchName, amended.BranchName, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadMoved(amended, now, OperationTexts.NothingAmended);
+        }
+        else if (!string.Equals(now.Sha, amended.Sha, StringComparison.Ordinal))
+        {
+            summary = OperationTexts.HeadCommitMoved(amended.BranchName ?? "HEAD", amended.Sha ?? string.Empty, now.Sha ?? string.Empty, OperationTexts.NothingAmended);
+        }
+
+        if (summary is not null)
+        {
+            _log.Info($"{Name}: Commit: amend refused, {summary}");
+        }
+
+        return summary;
+    }
+
+    /// <summary>
     /// Runs one of the stage panel's and diff view's writes (phase 2) as an operation of the
     /// queue (docs/phase-3-design.md 1.4): one at a time, after those queued before it (D76), with
     /// the watcher paused, then reading what changed: the status (and the open diff), and with
@@ -1510,7 +1552,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// sets <paramref name="backupSaved"/>, the backups' clean-up follows the recording, as it
     /// follows that of an operation that saved a backup, so that it keeps what the entry needs.
     /// </summary>
-    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, UndoScope undo, bool refsChange = false, StrongBox<bool>? backupSaved = null)
+    /// <param name="refuse">A check inside the operation before anything is written or recorded: the stage panel's text when it refuses, or null to go on (D124).</param>
+    private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, UndoScope undo, bool refsChange = false, StrongBox<bool>? backupSaved = null, Func<CancellationToken, Task<string?>>? refuse = null)
     {
         var result = await _queue.RunAsync(new GitOperation(
             title,
@@ -1519,6 +1562,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             refsChange ? RefreshScope.Refs : RefreshScope.Status,
             async context =>
             {
+                if (refuse is not null && await refuse(context.CancellationToken) is { } refusal)
+                {
+                    // The status bar says "Commit failed", the stage panel why (as git's output).
+                    return OperationReport.Failed($"{title} failed", new GitFailure(GitFailureKind.Other, $"{title} failed.", refusal, string.Empty, null));
+                }
+
                 var recording = await Operations.BeginRecordingAsync(undo, context, title);
                 OperationReport? report = null;
                 using (UndoCapture.Begin(out var capture))

@@ -1,7 +1,10 @@
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Settings;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Settings;
@@ -368,6 +371,43 @@ public class RepositoryOperationsFilesTests
         Assert.Equal(0, app.Dialogs.Unused);
     }
 
+    [Theory]
+    [InlineData("py,pl")]
+    [InlineData("py")]
+    [InlineData("PY; b/c")]
+    public async Task Open_file_reads_the_users_extensions_as_the_settings_screen_does_a_hand_edited_setting_included(string stored)
+    {
+        // 7.3, 12.8: one reading of the setting for the screen and for Open file: split at spaces,
+        // commas, semicolons and tabs, each entry given its dot, one that is no extension left out.
+        // Open file split at spaces alone and added no dot, so "py,pl" and "py" asked nothing.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "run.py"), "print(1)\n", TestContext.Current.CancellationToken);
+        using var app = await FixedToolsTab.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { ExtraRunnableExtensions = stored });
+        app.Dialogs.Confirm(yes: false);
+
+        await app.Repository.Operations.OpenFileAsync("run.py");
+
+        Assert.Equal("Open run.py?", Assert.Single(app.Dialogs.Confirmations).Title);
+        Assert.Empty(app.Launcher.Opened);
+        Assert.Contains(".py", RunnableExtensionText.Parse(stored));
+        Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Fact]
+    public void The_users_extensions_are_read_lower_case_with_their_dot_in_order_and_without_what_is_no_extension()
+    {
+        Assert.Equal([".py", ".pl"], RunnableExtensionText.Parse("py,pl"));
+        Assert.Equal([".py", ".pl"], RunnableExtensionText.Parse(" .PY;\tpl py "));
+        Assert.Equal([".py"], RunnableExtensionText.Parse("py b/c .abcdefghijklmnopq"));
+        Assert.Empty(RunnableExtensionText.Parse(null));
+        Assert.Equal("b/c", RunnableExtensionText.FirstInvalid("py b/c x?"));
+        Assert.Null(RunnableExtensionText.FirstInvalid("py,pl"));
+
+        // The screen stores what Open file reads: the same entries, the fixed list's left out.
+        Assert.Equal(".py .pl", GeneralSettingsViewModel.NormalizeExtensions("py,pl;.EXE"));
+    }
+
     [Fact]
     public async Task Without_the_sessions_catalogues_open_file_asks_by_its_lists_alone()
     {
@@ -410,6 +450,76 @@ public class RepositoryOperationsFilesTests
         app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, other, "-l {line} {path}") });
         await app.Operations.OpenInEditorAsync("src/helpers.py");
         Assert.Equal(["-l", "1", Path.Combine(app.Repository.Path, "src", "helpers.py")], app.Launcher.Edits[^1].Arguments);
+    }
+
+    [AvaloniaFact]
+    public async Task Open_in_editor_checks_its_file_off_the_ui_thread()
+    {
+        // D59, 0.9: a file on a share that does not answer holds a file check for minutes; the
+        // check runs on the pool while the UI thread goes on (held on a gate here).
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        using var gate = new ManualResetEventSlim();
+        var checking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.FileExists = path =>
+        {
+            checking.TrySetResult(Dispatcher.UIThread.CheckAccess());
+            gate.Wait(TimeSpan.FromSeconds(30));
+            return File.Exists(path);
+        };
+
+        var opening = app.Operations.OpenInEditorAsync("src/helpers.py");
+        var onUiThread = await checking.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(onUiThread);
+        Assert.False(opening.IsCompleted);
+        Assert.Empty(app.Launcher.Edits);
+        gate.Set();
+        await opening.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal([Path.Combine(app.Repository.Path, "src", "helpers.py")], Assert.Single(app.Launcher.Edits).Arguments);
+    }
+
+    [AvaloniaFact]
+    public async Task The_palettes_items_of_the_open_diff_read_no_disk_and_go_by_the_diffs_own_check()
+    {
+        // 5.5: the open diff's items are built at every opening of the palette and on Mod+Shift+H
+        // and Mod+Shift+B, on the UI thread; whether the file is in the working tree comes from the
+        // diff's read, checked on the pool, never from the disk then.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var (onUiThread, onPool) = (0, 0);
+        app.Services.FileExists = path =>
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                Interlocked.Increment(ref onUiThread);
+            }
+            else
+            {
+                Interlocked.Increment(ref onPool);
+            }
+
+            return File.Exists(path);
+        };
+        var calculator = app.Operations.Status.Unstaged.Single(file => file.Path == "src/Calculator.cs");
+
+        app.Repository.OpenDiff(calculator, staged: false);
+        await DashboardTestSupport.WaitUntilAsync(() => app.Repository.Diff is { Body: not VisualCommit.App.ViewModels.Diff.DiffBody.Loading }, "the diff's read");
+
+        Assert.True(app.Repository.Diff!.ExistsInWorkingTree);
+        Assert.True(Volatile.Read(ref onPool) >= 1);
+        Assert.Equal(0, Volatile.Read(ref onUiThread));
+        for (var opening = 0; opening < 3; opening++)
+        {
+            var menu = app.Repository.DiffMenuForPalette(app.Repository.MenuContext);
+            Assert.NotNull(menu);
+            Assert.True(menu.Items.Single(item => item.Label == "Open file").IsEnabled);
+            Assert.True(menu.Items.Single(item => item.Label == "Blame").IsEnabled);
+        }
+
+        Assert.Equal(0, Volatile.Read(ref onUiThread));
     }
 
     [Fact]

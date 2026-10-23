@@ -24,6 +24,34 @@ public class MainWindowViewModelTests
             log);
 
     [Fact]
+    public async Task A_command_whose_task_fails_after_the_key_or_the_palette_has_run_it_is_logged()
+    {
+        // 5.9, 5.10: Open repository… and Init repository… go on with their folder dialog after the
+        // key or the palette; one that throws (the platform's picker has no catch of its own) is
+        // logged as an error, not lost unobserved.
+        using var provider = new FakeProvider();
+        var log = new RecordingLog();
+        var window = DashboardTestSupport.Window(DashboardTestSupport.Services(provider, log: log, folders: new ThrowingFolderPicker()));
+
+        Assert.True(window.Commands.Run(VisualCommit.App.ViewModels.Commands.AppCommand.OpenRepository));
+        Assert.True(window.Commands.Run(VisualCommit.App.ViewModels.Commands.AppCommand.InitRepository));
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (log.Entries.Count(entry => entry.Level == LogLevel.Error) < 2)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "The failures were not logged.");
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(
+            ["Init repository… failed.", "Open repository… failed."],
+            log.Entries.Where(entry => entry.Level == LogLevel.Error).Select(entry => entry.Message).Order(StringComparer.Ordinal));
+        Assert.All(
+            log.Entries.Where(entry => entry.Level == LogLevel.Error),
+            entry => Assert.Contains("The folder dialog failed.", entry.Exception?.ToString(), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void It_starts_in_the_theme_that_is_applied()
     {
         var dark = Create(AppTheme.Dark);
@@ -268,5 +296,12 @@ public class MainWindowViewModelTests
                 Changed?.Invoke(this, EventArgs.Empty);
             }
         }
+    }
+
+    /// <summary>A folder dialog that throws, as the platform's can (no catch in <c>StorageFolderPicker</c>).</summary>
+    private sealed class ThrowingFolderPicker : IFolderPicker
+    {
+        public Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The folder dialog failed.");
     }
 }

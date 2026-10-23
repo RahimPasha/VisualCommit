@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Settings;
@@ -23,10 +22,6 @@ public sealed partial class GeneralSettingsViewModel : ObservableObject
     public const int MinMinutes = 1;
 
     public const int MaxMinutes = 60;
-
-    private static readonly Regex ExtensionPattern = new(@"^\.?[A-Za-z0-9_+~-]{1,16}$", RegexOptions.CultureInvariant);
-
-    private static readonly char[] ExtensionSeparators = [' ', ',', ';', '\t'];
 
     private readonly AppSettings _start;
     private bool _minutesEdited;
@@ -179,9 +174,10 @@ public sealed partial class GeneralSettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The extensions as stored (7.3): each entry of <paramref name="text"/> (split at spaces,
-    /// commas and semicolons) lower-cased with its dot, one space apart, duplicates and the fixed
-    /// list's left out; null when an entry is not an extension.
+    /// The extensions as stored (7.3): each entry of <paramref name="text"/> as
+    /// <see cref="RunnableExtensionText.Parse"/> reads it (split at spaces, commas, semicolons and
+    /// tabs, lower-cased with its dot), one space apart, duplicates and the fixed list's left out;
+    /// null when an entry is not an extension.
     /// </summary>
     public static string? NormalizeExtensions(string text)
     {
@@ -191,25 +187,15 @@ public sealed partial class GeneralSettingsViewModel : ObservableObject
             return null;
         }
 
-        var kept = new List<string>();
-        foreach (var entry in text.Split(ExtensionSeparators, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var extension = (entry.StartsWith('.') ? entry : "." + entry).ToLowerInvariant();
-            if (!kept.Contains(extension) && !RepositoryOperations.FixedRunnableExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-            {
-                kept.Add(extension);
-            }
-        }
-
-        return string.Join(' ', kept);
+        return string.Join(' ', RunnableExtensionText.Parse(text)
+            .Where(extension => !RepositoryOperations.FixedRunnableExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)));
     }
 
     /// <summary>The first entry of <paramref name="text"/> that is not an extension, as <c>RunnableError</c> says it; null when all are.</summary>
     public static string? ExtensionsError(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var bad = text.Split(ExtensionSeparators, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(entry => !ExtensionPattern.IsMatch(entry));
-        return bad is null ? null : Texts.NotAnExtension(bad);
+        return RunnableExtensionText.FirstInvalid(text) is { } bad ? Texts.NotAnExtension(bad) : null;
     }
 
     partial void OnMinutesTextChanged(string value) => _minutesEdited = true;

@@ -9,6 +9,9 @@ namespace VisualCommit.App.Services;
 /// </summary>
 public sealed class GitAccess
 {
+    /// <summary>What <see cref="GetRunnerAsync"/> says of a git that was found but does not work, and the settings screen of no git at all (docs/phase-6-design.md 7.4).</summary>
+    public const string GitNotWorking = "Git is not working on this computer.";
+
     private readonly Task<GitDetection> _detection;
 
     public GitAccess(Task<GitDetection> detection)
@@ -29,7 +32,7 @@ public sealed class GitAccess
         {
             GitAvailability.NotFound => "Git was not found on this computer.",
             GitAvailability.TooOld => $"Git {detection.Version} is too old; VisualCommit needs {GitVersion.Minimum} or newer.",
-            _ => "Git is not working on this computer.",
+            _ => GitNotWorking,
         });
     }
 }

@@ -334,7 +334,7 @@ public sealed class BulkRun
             row.Request = null;
             if (!row.IsDone)
             {
-                var failed = $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : "Pull")} failed";
+                var failed = $"{(Kind == BulkKind.Fetch ? OperationTexts.FetchAll.Title : OperationTexts.PullTitle)} failed";
                 row.State = BulkRowState.Ended;
                 row.Result = new OperationResult(OperationOutcome.Failed, failed, null);
                 row.Row.ShowBulk(new DashboardCellText(failed, DashboardTone.Danger, $"{failed}: {ex.Message}"), heldReason: null, clearsOnNextOperation: true);

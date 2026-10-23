@@ -31,12 +31,14 @@ public sealed partial class RepositoryViewModel
     /// The open diff's menu as <see cref="OpenDiffMenu"/> builds it (<see cref="DiffMenu"/>),
     /// without a hunk (5.5): its selected lines' items when lines are selected, its file's items,
     /// and the file history and blame of its file, which Mod+Shift+H and Mod+Shift+B run (6.1's
-    /// rows 31 and 32); null without a diff.
+    /// rows 31 and 32); null without a diff. Built at every opening of the palette and every such
+    /// key on the UI thread, it reads no disk: whether the file is in the working tree is the
+    /// diff's own, as its last read found it (<see cref="DiffViewModel.ExistsInWorkingTree"/>).
     /// </summary>
     public MenuModel? DiffMenuForPalette(RepositoryMenuContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return Diff is { } diff && !IsClosed ? DiffMenu(context, diff) : null;
+        return Diff is { } diff && !IsClosed ? DiffMenu(context, diff, existsInWorkingTree: diff.ExistsInWorkingTree) : null;
     }
 
     /// <summary>The open page's selected row's menu (5.5): the file history's row, the blame's run, the reflog's row; null without one.</summary>

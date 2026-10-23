@@ -266,6 +266,52 @@ public class JsonWorkspaceStoreTests
     }
 
     [Theory]
+    [InlineData("""{ "version": 2, "workspaces": { "w1": { "name": "Platform" } } }""")]
+    [InlineData("""{ "workspaces": "kept elsewhere", "version": 3, /* a newer version's note */ }""")]
+    public void A_newer_versions_file_this_version_cannot_read_is_kept_read_only_and_not_set_aside(string text)
+    {
+        // D203, 1.3: a newer version may change the file's shape; its file is never set aside nor
+        // written over, as one this version can read (the version is read from the JSON itself).
+        using var data = new TempDirectory("data");
+        var file = WorkspacesFile(data);
+        File.WriteAllText(file, text);
+        var bytes = File.ReadAllBytes(file);
+        var log = new RecordingLog();
+
+        var store = new JsonWorkspaceStore(file, log);
+
+        Assert.Equal((true, WorkspaceReadOnlyCause.NewerVersion), (store.IsReadOnly, store.ReadOnlyCause));
+        Assert.Equal(JsonWorkspaceStore.NewerVersionNotice, store.Notice);
+        Assert.Empty(store.Current.Workspaces);
+        Assert.Equal([file], Directory.GetFiles(data.Path).Where(path => Path.GetFileName(path).StartsWith("workspaces", StringComparison.Ordinal)));
+        Assert.Contains(log.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("newer version", StringComparison.Ordinal));
+
+        store.Update(list => WorkspaceEdits.Create(list, "w9", "Docs"));
+
+        Assert.Equal("Docs", store.Current.Workspaces.Single().Name);
+        Assert.Equal(bytes, File.ReadAllBytes(file));
+        Assert.False(File.Exists(file + ".tmp"));
+    }
+
+    [Theory]
+    [InlineData("""{ "version": 1, "workspaces": { "w1": {} } }""")]
+    [InlineData("""{ "version": "2", "workspaces": 7 }""")]
+    [InlineData("""[ 2 ]""")]
+    public void A_file_this_version_cannot_read_that_is_not_newer_is_still_set_aside(string text)
+    {
+        using var data = new TempDirectory("data");
+        var file = WorkspacesFile(data);
+        File.WriteAllText(file, text);
+
+        var store = new JsonWorkspaceStore(file);
+
+        Assert.False(store.IsReadOnly);
+        Assert.Equal(JsonWorkspaceStore.SetAsideNotice("workspaces.unreadable.json"), store.Notice);
+        Assert.False(File.Exists(file));
+        Assert.Equal(text, File.ReadAllText(Path.Combine(data.Path, "workspaces.unreadable.json")));
+    }
+
+    [Theory]
     [InlineData("""{ "workspaces": [] }""")]
     [InlineData("""{ "version": 0, "workspaces": [] }""")]
     public void A_missing_or_zero_version_is_version_1(string text)

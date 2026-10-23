@@ -84,5 +84,8 @@ public static partial class OperationTexts
 
     public const string NothingReverted = "Nothing was reverted.";
 
+    /// <summary>The last sentence of an amend refused because HEAD moved after "Amend previous commit" was ticked on it (D124).</summary>
+    public const string NothingAmended = "Nothing was amended.";
+
     private static string Commits(int count) => count == 1 ? "1 commit" : $"{count} commits";
 }
