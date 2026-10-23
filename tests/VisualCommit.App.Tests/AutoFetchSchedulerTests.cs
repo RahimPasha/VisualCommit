@@ -276,25 +276,81 @@ public class AutoFetchSchedulerTests
     // docs/phase-6-design.md 4.3, 4.11, 4.13: a dashboard tab, and the common git folder.
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
-    public async Task With_a_dashboard_tab_active_nothing_is_fetched()
+    public async Task The_windows_scheduler_fetches_nothing_while_a_dashboard_tab_is_active_and_its_repository_tab_when_it_is()
     {
         using var provider = new BulkProvider();
+        var api = provider.Add("api");
         var docs = provider.Add("docs");
-        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(provider.PathOf("docs")), new ManualTimeProvider(), new RecordingLog());
-        var window = DashboardTestSupport.Window(services);
-        window.ShowWorkspace("web", window.ActiveTab);
+        var (window, _) = WindowWithAutoFetch(provider, provider.PathOf("docs"));
+        var repoTab = window.ActiveTab;
+        Assert.True(await repoTab.OpenAsync(api.WorkingDirectory));
+        window.ShowWorkspace("web", null);
         await DashboardTestSupport.WaitUntilAsync(() => window.ActiveTab.Dashboard?.Rows[0].HasRepository == true, "the row's read");
-        var clock = new ManualClock(Opened);
-        using var scheduler = Scheduler(clock, () => window.ActiveTab.Repository);
-
-        clock.Advance(TimeSpan.FromHours(1));
-        scheduler.Tick(clock.GetUtcNow());
-        await DashboardTestSupport.SettleAsync();
-
         Assert.True(window.ActiveTab.IsDashboard);
-        Assert.Equal(0, docs.Fetches);
-        Assert.Null(window.ActiveTab.Dashboard!.Rows[0].Repository!.Queue.Current);
+
+        // The window's own scheduler, an hour apart: nothing on a dashboard tab (4.3, D85).
+        window.AutoFetch.Tick(Opened);
+        window.AutoFetch.Tick(Opened.AddHours(1));
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal((0, 0), (api.Fetches, docs.Fetches));
+
+        // Its repository tab active: tracked at the first tick, fetched at the next one due.
+        window.ActivateTabCommand.Execute(repoTab);
+        window.AutoFetch.Tick(Opened.AddHours(1));
+        window.AutoFetch.Tick(Opened.AddHours(2));
+        await repoTab.Repository!.Queue.WhenIdleAsync();
+        Assert.Equal((1, 0), (api.Fetches, docs.Fetches));
         window.CloseAll();
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task The_windows_scheduler_skips_a_tick_while_a_bulk_slot_fetches_from_the_common_folder()
+    {
+        using var provider = new BulkProvider();
+        var api = provider.Add("api");
+        var (window, services) = WindowWithAutoFetch(provider);
+        Assert.True(await window.ActiveTab.OpenAsync(api.WorkingDirectory));
+        window.AutoFetch.Tick(Opened);
+
+        var slot = services.BulkSlots.Request(WorktreeKey.Of(api.CommonDirectory));
+        window.AutoFetch.Tick(Opened.AddHours(1));
+        await window.ActiveTab.Repository!.Queue.WhenIdleAsync();
+        Assert.Equal(0, api.Fetches);
+
+        slot.Release();
+        window.AutoFetch.Tick(Opened.AddHours(1).AddSeconds(30));
+        await window.ActiveTab.Repository!.Queue.WhenIdleAsync();
+        Assert.Equal(1, api.Fetches);
+        window.CloseAll();
+    }
+
+    /// <summary>
+    /// A window over <paramref name="provider"/>'s fakes whose own scheduler is on (its interval's
+    /// variable read as 5 minutes, its timer on a clock that never moves), with a workspace "Web"
+    /// of <paramref name="folders"/>.
+    /// </summary>
+    private static (MainWindowViewModel Window, TabServices Services) WindowWithAutoFetch(BulkProvider provider, params string[] folders)
+    {
+        var settings = new MainWindowViewModelTests.FakeSettings();
+        var services = new TabServices(
+            provider,
+            new NoFolders(),
+            settings,
+            new DashboardTestSupport.MemorySession(),
+            new DateDisplay(TimeZoneInfo.Utc),
+            new RecordingLog(),
+            clock: new ManualTimeProvider(),
+            workspaces: DashboardTestSupport.Store(folders),
+            readClock: new ManualTimeProvider());
+        var window = new MainWindowViewModel(
+            settings,
+            new MainWindowViewModelTests.FakeThemes(),
+            _ => Task.FromResult(new GitDetection(GitAvailability.Available, "git", new GitVersion(2, 47, 1), null)),
+            services.Log,
+            services,
+            services.Session,
+            readEnvironment: name => name == AutoFetchScheduler.MinutesVariable ? "5" : null);
+        return (window, services);
     }
 
     [Fact]
@@ -451,6 +507,12 @@ public class AutoFetchSchedulerTests
             Asked++;
             return Task.FromResult(false);
         }
+    }
+
+    /// <summary>No folder is chosen.</summary>
+    private sealed class NoFolders : VisualCommit.App.Services.IFolderPicker
+    {
+        public Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
     }
 
     /// <summary>No repository opens: the auto-fetch tests make their view models themselves.</summary>
