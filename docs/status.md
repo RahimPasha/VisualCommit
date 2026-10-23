@@ -303,15 +303,18 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Waves 1 to 3 are merged but WP-R: every package of design section 18, each built, reviewed and fixed,
-the lead's walk-through helpers, and WP-V's five parts (the Phase6 project 130 of 130, Phase6Look 19
-of 19 on `fb4aa59`). WP-R, the real-window pass, is written and built on `wip/p6-real-window` (W1, W2,
-W4, W9, K10, S14, S15; L34 being written), never run. Next: WP-R's merge (record its earlier
-real-window lines in the report: Undo's and Redo's help texts with keys, `Phase5RealWindowPass.U.cs`
-:62-63, the full `AssertToolbar`; its relaxed pass count in W1's Notes; S14's added caption check),
-tick steps 19 and 21; then the default run, status step 22 (the independent review of the code),
-17.7's references on `master` in a worktree of their own, and the gate (step 23; tell the owner
-before the real-window pass).
+Status step 22, the independent review of the code: its findings went to four Opus fixers by area.
+Fixers C (the settings screen, the session, the texts; `15b00c8`), B (the dashboard, summary mode,
+the registry, bulk runs; `1dfdd6d`) and A (the git layer, refspecs, pushes, the runner; `d6a634d`) are
+merged, their notes in the design and the report. Fixer D (keys, the palette, part S's read-backs,
+the GC-sensitive timing tests, `KeyRouterTests`' Windows failure, the isolation tripwire) works on
+`wip/p6-review-keys`. Next: fixer D's merge (record part S's read-back rule in the report's
+conventions), tick step 22, the full default run, then the gate (step 23: a rested `dotnet test`
+and, after telling the owner, the real-window pass on one commit; the picture list at once; the
+comparison with `D:/Projects/Personal/gate6-reference/`; every picture inspected). Done ahead of
+the closing steps: design 16.2's wording in `plan.md`, `requirements.md` and this file (`290353b`;
+risks 10, 12, 18 and 25 and the phase's outcome wait for the gate); an architecture draft for step
+25 is being written on `wip/p6-architecture`.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -331,6 +334,21 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- CI since `855ef39`: green on `125e792`, `8c7401b`, `cc3aed3`, `ba63f48`, `eae7edc` and `9ed9ba3`.
+  Run 39936260636 on `48df7af` (WP-K) failed `PaletteEntriesTests` on macOS (git's `/private/var`
+  spelling against `/var`) and its growth test on Windows (collections inflating the measure; now
+  `PaletteGrowthTests`, alone in a no-GC region); run 39943973579 on `5d0a442`, cancelled by a newer
+  push, had macOS's Test step past 32 minutes (D232: 55 and 65). Run 39950853606 on `fb4aa59` failed
+  L28 on Linux and both containers (FreeType's thin `=>` ink, skipped by the ink test) and K's
+  expectation of blame on Windows and macOS (Git 2.56's `--abbrev` width; `blame -l`). Run
+  39958314029 on `f9db5b0` failed `PaletteEntriesTests` and K10 on macOS (paths compared as git spells
+  them; `c6e1cb2`). Runs 39962856421 on `c6e1cb2` and 39980785501 on `15b00c8` failed only
+  `KeyRouterTests.Every_key_of_the_set_runs_its_command_once_and_is_consumed` on Windows, both times
+  with the selections 5, 5, 4, 4 (fixer D). Run
+  [39997105336](https://github.com/RahimPasha/VisualCommit/actions/runs/39997105336) on `1dfdd6d`:
+  four jobs green (Windows' Test step 24 min 0 s, Ubuntu's 5 min 0 s, the containers' 5 min 41 s and
+  5 min 34 s); macOS failed S19 alone (its Test step 28 min 52 s): "The screen's reads are 13 calls,
+  not 7", a watcher refresh after Save's `git config --local` write (fixer D's item).
 - 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
   worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
   files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
