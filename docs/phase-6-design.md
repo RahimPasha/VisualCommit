@@ -2352,7 +2352,11 @@ Pure, in `VisualCommit.App.Tests`:
   3,000-entry time is under 25 times max(the 300-entry time, 1 ms), which catches work that grows faster
   than the entries, and under a loose ceiling of 1 s. (As built: the ratio compares the UI thread's
   own work, `ThreadWork`, divided by max(the 300-entry work, 1 unit), as the diff view's growth test
-  does since `b6d1d01`; the 1-s ceiling stays on the stopwatch.) Under 20 ms per query on the laptop alone is the
+  does since `b6d1d01`; the 1-s ceiling stays on the stopwatch. The refs' build and its one-letter
+  query, `PaletteGrowthTests`, compare 2,500 with 10,000 tags in a region without garbage
+  collection, alone in the process, and allow the items' growth to the power 1.5: the collector's
+  work, which follows the live items and the processor's caches, made 1,000 against 10,000 tags grow
+  29 times on CI's Windows runner, run 39936260636.) Under 20 ms per query on the laptop alone is the
   indication and is not asserted: the default run's load makes a step take 5 to 8 times as long
   (`ShellDriver.cs:28-33`).
 - `CommandPaletteViewModelTests`: 5.2's members (wrapping Up and Down, PageUp and PageDown by 11 to the
