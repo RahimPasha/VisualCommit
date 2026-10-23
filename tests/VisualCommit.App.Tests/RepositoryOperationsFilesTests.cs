@@ -2,6 +2,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Settings;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Settings;
@@ -366,6 +367,43 @@ public class RepositoryOperationsFilesTests
         Assert.Single(app.Launcher.Opened, path => path == run);
         Assert.Empty(app.Dialogs.Problems);
         Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Theory]
+    [InlineData("py,pl")]
+    [InlineData("py")]
+    [InlineData("PY; b/c")]
+    public async Task Open_file_reads_the_users_extensions_as_the_settings_screen_does_a_hand_edited_setting_included(string stored)
+    {
+        // 7.3, 12.8: one reading of the setting for the screen and for Open file: split at spaces,
+        // commas, semicolons and tabs, each entry given its dot, one that is no extension left out.
+        // Open file split at spaces alone and added no dot, so "py,pl" and "py" asked nothing.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "run.py"), "print(1)\n", TestContext.Current.CancellationToken);
+        using var app = await FixedToolsTab.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { ExtraRunnableExtensions = stored });
+        app.Dialogs.Confirm(yes: false);
+
+        await app.Repository.Operations.OpenFileAsync("run.py");
+
+        Assert.Equal("Open run.py?", Assert.Single(app.Dialogs.Confirmations).Title);
+        Assert.Empty(app.Launcher.Opened);
+        Assert.Contains(".py", RunnableExtensionText.Parse(stored));
+        Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Fact]
+    public void The_users_extensions_are_read_lower_case_with_their_dot_in_order_and_without_what_is_no_extension()
+    {
+        Assert.Equal([".py", ".pl"], RunnableExtensionText.Parse("py,pl"));
+        Assert.Equal([".py", ".pl"], RunnableExtensionText.Parse(" .PY;\tpl py "));
+        Assert.Equal([".py"], RunnableExtensionText.Parse("py b/c .abcdefghijklmnopq"));
+        Assert.Empty(RunnableExtensionText.Parse(null));
+        Assert.Equal("b/c", RunnableExtensionText.FirstInvalid("py b/c x?"));
+        Assert.Null(RunnableExtensionText.FirstInvalid("py,pl"));
+
+        // The screen stores what Open file reads: the same entries, the fixed list's left out.
+        Assert.Equal(".py .pl", GeneralSettingsViewModel.NormalizeExtensions("py,pl;.EXE"));
     }
 
     [Fact]

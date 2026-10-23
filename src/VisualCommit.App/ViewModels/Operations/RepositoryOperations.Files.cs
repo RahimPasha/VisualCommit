@@ -241,16 +241,14 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// What Open file asks about beyond its fixed list, read at each call (12.8): the user's
-    /// extensions (<c>AppSettings.ExtraRunnableExtensions</c>) and, on Windows, <c>PATHEXT</c>'s, from
-    /// the session's catalogues (<see cref="TabServices.Tools"/>); none without them.
+    /// extensions (<c>AppSettings.ExtraRunnableExtensions</c>, read as the settings screen reads its
+    /// box: <see cref="RunnableExtensionText.Parse"/>, so a hand-edited <c>py,pl</c> counts too) and,
+    /// on Windows, <c>PATHEXT</c>'s, from the session's catalogues (<see cref="TabServices.Tools"/>);
+    /// none without them.
     /// </summary>
     private HashSet<string> ExtraRunnableExtensions()
     {
-        var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var extension in (Services?.Settings.Current.ExtraRunnableExtensions ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            extensions.Add(extension);
-        }
+        var extensions = new HashSet<string>(RunnableExtensionText.Parse(Services?.Settings.Current.ExtraRunnableExtensions), StringComparer.OrdinalIgnoreCase);
 
         // The session's catalogues hold PATHEXT (12.9: the machine's, or the harnesses' fixed one); null off Windows.
         extensions.UnionWith(PathExtExtensions(Services?.Tools?.PathExtensions()));
