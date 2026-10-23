@@ -66,6 +66,14 @@ public interface IDiffHost
 
     /// <summary>Closes the diff view and shows the graph again.</summary>
     void CloseDiff();
+
+    /// <summary>
+    /// Whether <paramref name="path"/> (the target's path) is in the working tree, checked off the
+    /// UI thread (D59), with each read of the diff: what the diff's menu built for the palette says
+    /// of "Open file", "Open in editor", blame and file history (docs/phase-6-design.md 5.5), which
+    /// must not read the disk on the UI thread. The default: not known to be there.
+    /// </summary>
+    Task<bool> ExistsInWorkingTreeAsync(string path, CancellationToken cancellationToken) => Task.FromResult(false);
 }
 
 /// <summary>
@@ -104,6 +112,13 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLetter), nameof(FileName), nameof(Folder), nameof(HasFolder), nameof(OriginText), nameof(HasOrigin), nameof(PathText), nameof(IsAdded), nameof(IsModified), nameof(IsDeleted), nameof(IsRenamed), nameof(HunkActions), nameof(HasSelectedLines), nameof(ShowsFileActions), nameof(ShowsLineStageDiscard), nameof(ShowsLineUnstage), nameof(ShowsFileStageDiscard), nameof(ShowsFileUnstage))]
     public partial DiffTarget Target { get; private set; }
+
+    /// <summary>
+    /// The target's file is in the working tree, as the last read of the diff found it, off the UI
+    /// thread (<see cref="IDiffHost.ExistsInWorkingTreeAsync"/>); known before the diff shows, false
+    /// before the first read. The palette's items of the open diff go by it, not by the disk (5.5).
+    /// </summary>
+    public bool ExistsInWorkingTree { get; private set; }
 
     /// <summary>"Unstaged", "Staged" or the commit's short id; a diff that a page reuses for each of its rows takes each row's (<see cref="LoadAsync(DiffTarget, string)"/>).</summary>
     [ObservableProperty]
@@ -283,11 +298,20 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
         var version = ++_version;
         var cancellationToken = _lifetime.Token;
         Target = target;
+
+        // Read beside the diff, and known before it shows (5.5).
+        var exists = ExistsInWorkingTreeAsync(target, cancellationToken);
         try
         {
             if (target.IsUntracked && target.Path.EndsWith('/'))
             {
                 // Git lists a repository inside the working tree as one untracked folder.
+                ExistsInWorkingTree = await exists;
+                if (version != _version)
+                {
+                    return;
+                }
+
                 SetDiff(FileDiff.Empty);
                 ErrorText = "This folder is a repository of its own: its files are not shown here.";
                 Body = DiffBody.Error;
@@ -295,11 +319,13 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
             }
 
             var diff = await _host.ReadDiffAsync(target, cancellationToken);
+            var inWorkingTree = await exists;
             if (version != _version)
             {
                 return;
             }
 
+            ExistsInWorkingTree = inWorkingTree;
             SetDiff(diff);
             if (diff.IsBinary)
             {
@@ -330,6 +356,24 @@ public sealed partial class DiffViewModel : ObservableObject, IDisposable
                 ErrorText = ex is GitException git && !string.IsNullOrWhiteSpace(git.StandardError) ? git.StandardError.Trim() : ex.Message;
                 Body = DiffBody.Error;
             }
+        }
+    }
+
+    /// <summary>The host's check of the target's working-tree file; false when it fails or the diff closed.</summary>
+    private async Task<bool> ExistsInWorkingTreeAsync(DiffTarget target, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _host.ExistsInWorkingTreeAsync(target.Path, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+            {
+                _log.Warning($"Whether {target.Path} is in the working tree could not be checked.", ex);
+            }
+
+            return false;
         }
     }
 

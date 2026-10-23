@@ -274,6 +274,42 @@ public class SettingsDialogViewModelTests
     }
 
     [Fact]
+    public async Task The_sessions_end_cancels_the_screen_whose_editor_search_stops_and_follows_nothing()
+    {
+        // DialogHostViewModel.CancelAll (MainWindowViewModel.CloseAll, the session's end): the
+        // screen's token, which its reads, its editor search and its writes take, is cancelled, as
+        // by Cancel; the search then ends at once and offers nothing, and no setting changes.
+        var tokens = new List<CancellationToken>();
+        var screen = new Screen
+        {
+            Tools = new ToolCatalogues(
+                async token =>
+                {
+                    tokens.Add(token);
+                    await Task.Delay(Timeout.Infinite, token);
+                    return ToolCatalogues.FixedEditors;
+                },
+                _ => Task.FromResult(ToolCatalogues.FixedMergeTools),
+                () => null),
+        };
+        var dialog = await screen.OpenAsync(SettingsSection.Tools, waitForReads: false);
+        var token = Assert.Single(tokens);
+        Assert.True(dialog.Tools.IsLooking);
+        Assert.False(token.IsCancellationRequested);
+
+        screen.Dialogs.CancelAll();
+        await dialog.Loaded.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.True(token.IsCancellationRequested);
+        Assert.True(dialog.IsClosed);
+        Assert.False(await dialog.Result);
+        Assert.Empty(screen.Dialogs.Open);
+        Assert.False(dialog.Tools.IsLooking);
+        Assert.Empty(dialog.Tools.Found);
+        Assert.Equal(0, screen.Settings.Updates);
+    }
+
+    [Fact]
     public async Task While_the_repositorys_write_runs_saving_shows_and_both_buttons_are_disabled()
     {
         var screen = new Screen();
@@ -588,7 +624,7 @@ public class SettingsDialogViewModelTests
             }
         }
 
-        public async Task<SettingsDialogViewModel> OpenAsync(SettingsSection section = SettingsSection.General)
+        public async Task<SettingsDialogViewModel> OpenAsync(SettingsSection section = SettingsSection.General, bool waitForReads = true)
         {
             var dialog = new SettingsDialogViewModel(
                 new SettingsScreenServices(
@@ -610,7 +646,11 @@ public class SettingsDialogViewModelTests
                 },
                 section);
             _ = Dialogs.ShowAsync(dialog);
-            await dialog.Loaded;
+            if (waitForReads)
+            {
+                await dialog.Loaded;
+            }
+
             return dialog;
         }
 

@@ -1,4 +1,8 @@
+using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using Xunit;
 
@@ -14,6 +18,28 @@ namespace VisualCommit.App.Tests;
 public class OperationTextsTests
 {
     private const string Sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+
+    [Fact]
+    public void Texts_that_two_places_show_have_one_source_each_with_the_words_the_reports_quote()
+    {
+        // The empty graph area's Pull and Push are what Mod+Shift+L and Mod+Shift+K find by label.
+        Assert.Equal(("Pull", "Push"), (OperationTexts.MenuTexts.ToolbarPull, OperationTexts.MenuTexts.ToolbarPush));
+
+        // Pull's title names a bulk row's cancel and failure.
+        Assert.Equal("Pull", OperationTexts.PullTitle);
+        Assert.Equal(OperationTexts.PullTitle, OperationTexts.Pull("origin/main", "main").Title);
+        Assert.Equal(("Fetch cancelled", "Pull cancelled"), (OperationTexts.BulkRowCancelled(BulkKind.Fetch), OperationTexts.BulkRowCancelled(BulkKind.Pull)));
+
+        // The dashboard's Fetch and Pull: the palette's label, and the button's with its key.
+        Assert.Equal(("Fetch every repository of Web", "Pull every repository of Web"), (OperationTexts.FetchEveryRepository("Web"), OperationTexts.PullEveryRepository("Web")));
+        var keys = new KeyTexts(CommandKey.Ctrl);
+        Assert.Equal(("Fetch every repository of Web (Ctrl+Shift+F)", "Pull every repository of Web (Ctrl+Shift+L)"), (OperationTexts.FetchEveryRepository("Web", keys), OperationTexts.PullEveryRepository("Web", keys)));
+
+        // The palette's commands, the folder dialog's title, git missing in the settings screen.
+        Assert.Equal(("Command palette", "Open settings…"), (CommandPaletteViewModel.PaletteTitle, OperationTexts.OpenSettingsButton));
+        Assert.Equal("Open a repository", WelcomeViewModel.OpenFolderTitle);
+        Assert.Equal("Git is not working on this computer.", GitAccess.GitNotWorking);
+    }
 
     [Fact]
     public void Each_row_of_the_table_has_its_title_running_text_error_title_and_summary()

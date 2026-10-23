@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -259,7 +260,11 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         return AnswerAsync(lookup, cancellationToken);
     }
 
-    /// <summary>Stops the merge tools' lookup (the app closes). Reads and writes keep working.</summary>
+    /// <summary>
+    /// Stops the merge tools' lookup (the app closes): a run that ends afterwards keeps nothing.
+    /// Reads and writes keep working, but no longer make the data folder, which the ended session
+    /// may have removed (a test's), so that nothing is written there after the session.
+    /// </summary>
     public void Dispose()
     {
         lock (_gate)
@@ -417,9 +422,14 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
             ? FullPath(file)
             : string.Empty;
 
+    /// <summary>The data folder, made first while the session lasts; after <see cref="Dispose"/> it is not made again.</summary>
     private string PrepareDataDirectory()
     {
-        Directory.CreateDirectory(_dataDirectory);
+        if (!_lifetime.IsCancellationRequested)
+        {
+            Directory.CreateDirectory(_dataDirectory);
+        }
+
         return _dataDirectory;
     }
 
@@ -497,6 +507,13 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
 
             // The kept list is read first: replacing the file while it is read would fail on Windows.
             await kept.ConfigureAwait(false);
+
+            // Git may end just as the session does: an ended session writes nothing into its data folder.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return help;
+            }
+
             WriteKept(git, help);
             return help;
         }
@@ -554,7 +571,7 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         return new MergeToolHelp([.. kept.Found], [.. kept.NotFound], Failed: false);
     }
 
-    /// <summary>Keeps <paramref name="help"/> as <paramref name="git"/>'s, written beside the file and swapped in, as settings.json is (D46).</summary>
+    /// <summary>Keeps <paramref name="help"/> as <paramref name="git"/>'s, written beside the file, flushed and swapped in, as settings.json is (D46, <see cref="DurableFile"/>).</summary>
     private void WriteKept(KnownGit git, MergeToolHelp help)
     {
         try
@@ -564,10 +581,8 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
                 Directory.CreateDirectory(folder);
             }
 
-            var temporary = _mergeToolsFile + ".tmp";
             var kept = new KeptMergeTools(git.Path, git.Version, help.Found, help.NotFound);
-            File.WriteAllText(temporary, JsonSerializer.Serialize(kept, MergeToolsJsonContext.Default.KeptMergeTools));
-            File.Move(temporary, _mergeToolsFile, overwrite: true);
+            DurableFile.Replace(_mergeToolsFile, JsonSerializer.Serialize(kept, MergeToolsJsonContext.Default.KeptMergeTools));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

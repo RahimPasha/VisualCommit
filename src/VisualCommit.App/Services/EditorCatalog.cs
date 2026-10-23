@@ -5,16 +5,6 @@ using VisualCommit.Core.Settings;
 
 namespace VisualCommit.App.Services;
 
-/// <summary>The editors on this computer (docs/phase-6-design.md 12.3): what the settings screen offers.</summary>
-public interface IEditorCatalog
-{
-    /// <summary>The known editors whose program is found, in the catalogue's order; off the UI thread.</summary>
-    Task<IReadOnlyList<FoundEditor>> FindAsync(CancellationToken cancellationToken);
-
-    /// <summary>The catalogue's entry <paramref name="id"/>, or null.</summary>
-    KnownEditor? Known(string id);
-}
-
 /// <summary>
 /// The editors on this computer (docs/phase-6-design.md 12.3): each known editor of the platform
 /// (<see cref="KnownEditors"/>) whose program exists at one of its candidates, about 40 to 60 file
@@ -24,7 +14,7 @@ public interface IEditorCatalog
 /// machine's <see cref="ToolCatalogues"/> (<see cref="MachineCatalogues"/>); the harnesses give
 /// <see cref="ToolCatalogues.Fixed"/> instead.
 /// </summary>
-public sealed class EditorCatalog : IEditorCatalog
+public sealed class EditorCatalog
 {
     private readonly EditorSearchContext _context;
     private readonly ISettingsStore? _settings;
@@ -41,9 +31,15 @@ public sealed class EditorCatalog : IEditorCatalog
         _log = log ?? NullAppLog.Instance;
     }
 
+    /// <summary>
+    /// The known editors whose program is found, in the catalogue's order, off the UI thread;
+    /// <paramref name="cancellationToken"/> stops the search, and the setting is left alone once it
+    /// is cancelled (the settings screen closed, or the session ended).
+    /// </summary>
     public Task<IReadOnlyList<FoundEditor>> FindAsync(CancellationToken cancellationToken) =>
         Task.Run(() => Find(cancellationToken), cancellationToken);
 
+    /// <summary>The catalogue's entry <paramref name="id"/>, or null.</summary>
     public KnownEditor? Known(string id) => KnownEditors.Find(id, _context.Platform);
 
     /// <summary>
@@ -90,6 +86,9 @@ public sealed class EditorCatalog : IEditorCatalog
             }
         }
 
+        // A search that was stopped writes no setting: the screen that asked has gone (the
+        // session may have ended, and its data folder with it).
+        cancellationToken.ThrowIfCancellationRequested();
         FollowMovedEditor(found);
         return found;
     }

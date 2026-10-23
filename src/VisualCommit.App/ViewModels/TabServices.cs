@@ -182,6 +182,21 @@ public sealed class TabServices
     public TimeProvider ReadClock { get; }
 
     /// <summary>
+    /// Whether a file exists on disk, called off the UI thread only (D59): Open in editor's check of
+    /// its file (docs/phase-6-design.md 12.1) and the open diff's check of its working-tree file,
+    /// which the diff's menu and the palette's items read (5.5). A file on a share that does not
+    /// answer holds such a check for minutes (0.9). The disk, unless a test holds it.
+    /// </summary>
+    public Func<string, bool> FileExists { get; set; } = File.Exists;
+
+    /// <summary>
+    /// Activates the tab that shows a folder's worktree, and answers whether there was one (5.10's
+    /// first step, which Open repository… and its key take): set by the window, so that the welcome
+    /// page's Open, whose tooltip names that key (D215), does what the key does; null without one.
+    /// </summary>
+    public Func<string, bool>? ActivateTabShowing { get; set; }
+
+    /// <summary>
     /// Opens the settings screen on a section (7.2): set by the window, for the editor failure's
     /// "Open settings…" (12.7); null without a window.
     /// </summary>

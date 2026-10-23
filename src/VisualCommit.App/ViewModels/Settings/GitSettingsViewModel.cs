@@ -5,6 +5,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Git;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts;
 
 namespace VisualCommit.App.ViewModels.Settings;
@@ -56,22 +57,18 @@ public sealed record GitNotice(string Text, string? ToolTip = null, bool IsWarni
 /// </summary>
 public sealed partial class GitSettingsViewModel : ObservableObject
 {
-    /// <summary>The tools that need a terminal, which the app cannot run (8.10, D149).</summary>
-    public static IReadOnlySet<string> TerminalTools { get; } = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "vimdiff", "vimdiff1", "vimdiff2", "vimdiff3", "nvimdiff", "nvimdiff1", "nvimdiff2", "nvimdiff3", "emerge",
-    };
-
     private readonly IGitConfiguration? _git;
     private readonly ISettingsRepository? _repository;
     private readonly Func<CancellationToken, Task<MergeToolHelp>> _mergeTools;
     private readonly Func<DialogViewModel<string?>, Task<string?>> _showPick;
     private readonly Func<string, bool> _fileExists;
     private readonly IAppLog _log;
+    private readonly CancellationToken _cancellation;
     private GitConfigRead? _outside;
     private GitConfigRead? _inRepository;
     private MergeToolHelp? _tools;
     private IReadOnlySet<string> _pathFoundTools = new HashSet<string>(StringComparer.Ordinal);
+    private string? _branch;
 
     /// <param name="git">Git's configuration (8.1); null when there is none, which shows as no usable git.</param>
     /// <param name="repository">The active tab's repository, or null on an empty tab, a dashboard and while its refs are unread.</param>
@@ -79,13 +76,15 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     /// <param name="showPick">Shows a Pick dialog over the screen and returns its answer.</param>
     /// <param name="log">The app's log.</param>
     /// <param name="fileExists">Whether a file exists, called off the UI thread only (a merge tool's <c>path</c>, 8.10); null for the disk.</param>
+    /// <param name="cancellation">The screen's token: its reads and the global writes stop when the screen closes (Cancel, or the session's end).</param>
     public GitSettingsViewModel(
         IGitConfiguration? git,
         ISettingsRepository? repository,
         Func<CancellationToken, Task<MergeToolHelp>> mergeTools,
         Func<DialogViewModel<string?>, Task<string?>> showPick,
         IAppLog? log = null,
-        Func<string, bool>? fileExists = null)
+        Func<string, bool>? fileExists = null,
+        CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(mergeTools);
         ArgumentNullException.ThrowIfNull(showPick);
@@ -95,8 +94,10 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         _showPick = showPick;
         _fileExists = fileExists ?? File.Exists;
         _log = log ?? NullAppLog.Instance;
+        _cancellation = cancellation;
         Global = new GitScopeViewModel(this, GitConfigScope.Global);
         Repository = new GitScopeViewModel(this, GitConfigScope.Local);
+        _branch = repository?.Branch;
         IsReading = true;
     }
 
@@ -109,8 +110,13 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     /// <summary>The repository's name, or null without one.</summary>
     public string? RepositoryName => _repository?.Name;
 
-    /// <summary>The branch whose pull the repository scope speaks of, or null.</summary>
-    public string? Branch => _repository?.Branch;
+    /// <summary>
+    /// The branch whose pull the repository scope speaks of, or null: the branch HEAD was on when
+    /// the reads began (the opening's, or the last read back's), so that <c>PullInEffect</c>,
+    /// <c>BranchRebaseNotice</c>, its button and Save's <c>branch.&lt;b&gt;.rebase</c> all name the
+    /// branch the read was of (8.7, 8.8), even after HEAD moved while the screen is open.
+    /// </summary>
+    public string? Branch => _branch;
 
     /// <summary><c>GitReading</c>: 8.1's reads run (about 0.1 s); nothing editable meanwhile.</summary>
     [ObservableProperty]
@@ -163,12 +169,6 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     /// <summary><c>core.editor</c> as 8.1's read has it (the repository read's when there is one): the editor's mark (12.3).</summary>
     public string? CoreEditor => (_inRepository ?? _outside)?.Winner("core.editor")?.Value;
 
-    /// <summary>Raised after the reads have filled the fields (the opening's and every read back's).</summary>
-    public event EventHandler? Loaded;
-
-    /// <summary>A field wants the keyboard focus (the first wrong one after a refused Save), by automation id.</summary>
-    public event EventHandler<string>? FocusRequested;
-
     /// <summary>Whether either scope shows an error (after a Save, SD9).</summary>
     public bool HasError => Global.HasError || Repository.HasError;
 
@@ -214,7 +214,11 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanUseRepositoryScope))]
     private void ShowRepository() => IsRepositoryScope = true;
 
-    /// <summary>Shows every error of both scopes, edited or not (7.8 step 1); shows the first wrong scope and returns whether there is one.</summary>
+    /// <summary>
+    /// Shows every error of both scopes, edited or not (7.8 step 1); shows the first wrong scope and
+    /// returns whether there is one. The screen then focuses that scope's first wrong field
+    /// (<see cref="GitScopeViewModel.FirstErrorField"/> of <see cref="Shown"/>).
+    /// </summary>
     public bool ShowErrors()
     {
         var global = Global.ShowErrors();
@@ -232,15 +236,6 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         return global || repository;
     }
 
-    /// <summary>Focuses the first wrong field of the shown scope (a refused Save).</summary>
-    public void FocusFirstError()
-    {
-        if (Shown.FirstErrorField is { } field)
-        {
-            FocusRequested?.Invoke(this, field);
-        }
-    }
-
     /// <summary>The global scope's changed keys, in 8.3's order.</summary>
     public IReadOnlyList<GitConfigWrite> GlobalWrites() => ShowsFields ? Global.Writes() : [];
 
@@ -249,12 +244,13 @@ public sealed partial class GitSettingsViewModel : ObservableObject
 
     /// <summary>
     /// Writes the global keys through the app-level writer (8.3), one at a time, stopping at the
-    /// first failure, which throws <see cref="GitException"/>.
+    /// first failure, which throws <see cref="GitException"/>; the screen's token stops the list
+    /// before its next key (<see cref="OperationCanceledException"/>), never during one.
     /// </summary>
     public Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes)
     {
         ArgumentNullException.ThrowIfNull(writes);
-        return writes.Count == 0 || _git is null ? Task.CompletedTask : _git.WriteGlobalAsync(writes);
+        return writes.Count == 0 || _git is null ? Task.CompletedTask : _git.WriteGlobalAsync(writes, _cancellation);
     }
 
     /// <summary>This repository's writes as one operation of its queue (8.3, 7.8 step 5).</summary>
@@ -348,12 +344,12 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             }
         }
 
-        foreach (var tool in help.Found.Where(tool => !TerminalTools.Contains(tool.Name)))
+        foreach (var tool in help.Found.Where(tool => !GitMergeTools.TerminalTools.Contains(tool.Name)))
         {
             Add(tool.Name, Describe(tool));
         }
 
-        foreach (var tool in help.NotFound.Where(tool => pathFound.Contains(tool.Name) && !TerminalTools.Contains(tool.Name)))
+        foreach (var tool in help.NotFound.Where(tool => pathFound.Contains(tool.Name) && !GitMergeTools.TerminalTools.Contains(tool.Name)))
         {
             Add(tool.Name, Describe(tool));
         }
@@ -363,14 +359,14 @@ public sealed partial class GitSettingsViewModel : ObservableObject
             Add(name, Texts.ToolOfYourOwn(name));
         }
 
-        foreach (var tool in help.NotFound.Where(tool => !TerminalTools.Contains(tool.Name)))
+        foreach (var tool in help.NotFound.Where(tool => !GitMergeTools.TerminalTools.Contains(tool.Name)))
         {
             Add(tool.Name, Texts.ToolNotFound);
         }
 
         if (scope.MergeToolValue is { } current && !listed.Contains(current))
         {
-            Add(current, TerminalTools.Contains(current) ? Texts.ToolInTerminal : Texts.ToolUnknown);
+            Add(current, GitMergeTools.TerminalTools.Contains(current) ? Texts.ToolInTerminal : Texts.ToolUnknown);
         }
 
         return options;
@@ -482,14 +478,16 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         {
             if (_git is null)
             {
-                Unavailable = "Git is not working on this computer." + Texts.GitNeeded;
+                Unavailable = Services.GitAccess.GitNotWorking + Texts.GitNeeded;
                 return;
             }
 
+            // The branch is taken once, with the reads: what they say is of that branch (8.8).
+            _branch = _repository?.Branch;
             var outside = ReadOutsideAsync();
             var inRepository = _repository is null ? Task.FromResult<GitConfigRead?>(null) : ReadRepositoryAsync(_repository.Path);
             var identity = _repository is null ? Task.FromResult<GitIdentityRead?>(null) : ReadIdentityAsync(_repository.Path);
-            var pull = _repository?.Branch is { } branch ? ReadPullAsync(branch) : Task.FromResult<(PullConfiguration?, string?)>((null, null));
+            var pull = _branch is { } branch ? ReadPullAsync(branch) : Task.FromResult<(PullConfiguration?, string?)>((null, null));
             try
             {
                 await Task.WhenAll((Task)outside, inRepository);
@@ -526,19 +524,18 @@ public sealed partial class GitSettingsViewModel : ObservableObject
         finally
         {
             IsReading = false;
-            Loaded?.Invoke(this, EventArgs.Empty);
         }
     }
 
-    private async Task<GitConfigRead> ReadOutsideAsync() => await _git!.ReadAsync(null);
+    private async Task<GitConfigRead> ReadOutsideAsync() => await _git!.ReadAsync(null, _cancellation);
 
-    private async Task<GitConfigRead?> ReadRepositoryAsync(string workingTree) => await _git!.ReadAsync(workingTree);
+    private async Task<GitConfigRead?> ReadRepositoryAsync(string workingTree) => await _git!.ReadAsync(workingTree, _cancellation);
 
     private async Task<GitIdentityRead?> ReadIdentityAsync(string workingTree)
     {
         try
         {
-            return await _git!.ReadIdentityAsync(workingTree);
+            return await _git!.ReadIdentityAsync(workingTree, _cancellation);
         }
         catch (Exception ex) when (ex is GitException or GitUnavailableException or IOException)
         {
@@ -551,7 +548,7 @@ public sealed partial class GitSettingsViewModel : ObservableObject
     {
         try
         {
-            return (await _repository!.ReadPullConfigurationAsync(branch), null);
+            return (await _repository!.ReadPullConfigurationAsync(branch, _cancellation), null);
         }
         catch (Exception ex) when (ex is GitException or GitUnavailableException or IOException)
         {
@@ -623,8 +620,18 @@ public sealed record GitFileNames(string GlobalFile, string XdgFile, bool XdgVar
     }
 
     /// <summary>
-    /// Whether two paths name one file: their full forms, ignoring case on Windows and macOS, and on
-    /// macOS without the <c>/private</c> that git may add before <c>/var</c> and <c>/tmp</c>.
+    /// Whether two paths name one file: their full forms, compared as <see cref="WorktreeKey.Comparer"/>
+    /// compares paths (ignoring case on Windows and macOS), and on macOS without the <c>/private</c>
+    /// that git may add before <c>/var</c> and <c>/tmp</c>.
+    /// <para>
+    /// Not <c>WorkspacePaths.Same</c>, on purpose: that one compares folders a user saved, leaves a
+    /// path that is not fully qualified as it is, and keeps macOS's <c>/private</c> apart (a saved
+    /// folder is matched against what git reports, 1.2). Here one side is the file a git config
+    /// origin names, as git resolved it (<c>/private/var/…</c> on macOS, separators of either kind
+    /// on Windows), and the other the file the app worked out (8.2: <c>GlobalFile</c>,
+    /// <c>XdgFile</c>, <c>.git/config</c>), so the two spellings of one file must meet; and either
+    /// may be missing (no home folder, no repository), which names no file.
+    /// </para>
     /// </summary>
     public static bool SamePath(string? a, string? b)
     {
@@ -649,7 +656,7 @@ public sealed record GitFileNames(string GlobalFile, string XdgFile, bool XdgVar
             return OperatingSystem.IsMacOS() && full.StartsWith("/private/", StringComparison.Ordinal) ? full["/private".Length..] : full;
         }
 
-        return string.Equals(Normal(a), Normal(b), OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        return WorktreeKey.Comparer.Equals(Normal(a), Normal(b));
     }
 
     private static string FileNameOf(string? origin) =>

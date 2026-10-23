@@ -69,8 +69,8 @@ public sealed partial class AppCommands
             var id = dashboard.WorkspaceId;
             AddEntry(WorkspaceTexts.AddRepository, commands.AddRepositoryReason(id), () => dashboard.AddRepositoryCommand.Execute(null));
             AddEntry(WorkspaceTexts.AddOpenTabs, commands.AddOpenTabsReason(id), () => dashboard.AddOpenTabsCommand.Execute(null));
-            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason(id), () => _ = commands.RenameAsync(id));
-            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason(id), () => _ = commands.DeleteAsync(id), destructive: true);
+            AddEntry(WorkspaceTexts.RenameWorkspace, commands.RenameReason(id), () => Start(commands.RenameAsync(id), WorkspaceTexts.RenameWorkspace));
+            AddEntry(WorkspaceTexts.DeleteWorkspace, commands.DeleteReason(id), () => Start(commands.DeleteAsync(id), WorkspaceTexts.DeleteWorkspace), destructive: true);
         }
 
         Add(AppCommand.NewTab);
@@ -273,15 +273,17 @@ public sealed partial class AppCommands
         // Every recent repository, then every workspace's not listed yet, but the active tab's.
         var services = _shell.Services;
         var activeFolder = active.RepositoryPath ?? active.PendingPath;
-        var folders = new List<(string Name, string Path)>();
+        // Each folder as its detail shows it and as it is compared and opened: a workspace's saved
+        // folder is the repository's working directory as its open dashboard reads it, when it
+        // does (1.2's second rule), since the recent list and the tabs hold git's spelling, which a
+        // saved folder through a link (macOS's /var for /private/var) is not; the detail stays the
+        // folder as the workspace saved it.
+        var folders = new List<(string Name, string Shown, string Path)>();
         foreach (var recent in services.Recent.Items)
         {
-            folders.Add((recent.Name, recent.Path));
+            folders.Add((recent.Name, recent.Path, recent.Path));
         }
 
-        // A workspace's saved folder is the repository's working directory as its open dashboard
-        // reads it, when it does (1.2's second rule): the recent list and the tabs hold git's
-        // spelling, which a saved folder through a link (macOS's /var for /private/var) is not.
         var workspaces = services.Workspaces.Current.Workspaces;
         foreach (var workspace in workspaces)
         {
@@ -290,19 +292,19 @@ public sealed partial class AppCommands
                 var path = _shell.OpenedWorkingDirectoryOf(workspace.Id, repository.Path) ?? repository.Path;
                 if (!folders.Any(folder => WorkspacePaths.Same(folder.Path, path)))
                 {
-                    folders.Add((DashboardTexts.NameOf(repository.Path), path));
+                    folders.Add((DashboardTexts.NameOf(repository.Path), repository.Path, path));
                 }
             }
         }
 
-        foreach (var (name, path) in folders)
+        foreach (var (name, shown, path) in folders)
         {
             if (activeFolder is not null && WorkspacePaths.Same(activeFolder, path))
             {
                 continue;
             }
 
-            entries.Add(new PaletteEntry($"Open repository {name}", path, null, true, null, false, PaletteEntryKind.Item, order + entries.Count, () => _ = _shell.OpenRepositoryAtAsync(path)));
+            entries.Add(new PaletteEntry($"Open repository {name}", shown, null, true, null, false, PaletteEntryKind.Item, order + entries.Count, () => Start(_shell.OpenRepositoryAtAsync(path), $"Open repository {name}")));
         }
 
         foreach (var workspace in workspaces)

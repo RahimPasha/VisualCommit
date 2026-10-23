@@ -1,6 +1,8 @@
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
+using VisualCommit.Core.Logging;
 using VisualCommit.Core.Settings;
 using static VisualCommit.App.ViewModels.Operations.OperationTexts.MenuTexts;
 
@@ -87,10 +89,10 @@ public sealed partial class AppCommands
         switch (command)
         {
             case AppCommand.CommandPalette:
-                return Always("Command palette", () => _ = shell.OpenPaletteAsync());
+                return Always(CommandPaletteViewModel.PaletteTitle, () => Start(shell.OpenPaletteAsync(), CommandPaletteViewModel.PaletteTitle));
 
             case AppCommand.Settings:
-                return Always("Open settings…", () => shell.OpenSettingsCommand.Execute(SettingsSection.General));
+                return Always(OperationTexts.OpenSettingsButton, () => shell.OpenSettingsCommand.Execute(SettingsSection.General));
 
             case AppCommand.ShowKeyboardShortcuts:
                 return Always("Show keyboard shortcuts…", () => shell.OpenSettingsCommand.Execute(SettingsSection.KeyboardShortcuts));
@@ -108,7 +110,7 @@ public sealed partial class AppCommands
             case AppCommand.Refresh:
                 if (repository is not null)
                 {
-                    return new(new(true, true, "Refresh", snapshot.RepositoryDetail, null), () => _ = repository.RefreshAsync());
+                    return new(new(true, true, "Refresh", snapshot.RepositoryDetail, null), () => Start(repository.RefreshAsync(), "Refresh"));
                 }
 
                 return dashboard is not null
@@ -153,23 +155,23 @@ public sealed partial class AppCommands
                 var next = NextDashboard(shell, tab);
                 return new(
                     new(true, true, "Go to the next dashboard", next?.Title, null),
-                    next is not null ? () => shell.ActivateTabCommand.Execute(next) : () => _ = shell.OpenPaletteAsync(WorkspaceQuery));
+                    next is not null ? () => shell.ActivateTabCommand.Execute(next) : () => Start(shell.OpenPaletteAsync(WorkspaceQuery), CommandPaletteViewModel.PaletteTitle));
             }
 
             case AppCommand.OpenRepository:
-                return Always("Open repository…", () => _ = shell.OpenRepositoryAsync());
+                return Always("Open repository…", () => Start(shell.OpenRepositoryAsync(), "Open repository…"));
 
             case AppCommand.CloneRepository:
                 return Always("Clone repository…", shell.CloneRepository);
 
             case AppCommand.InitRepository:
-                return Always("Init repository…", () => _ = shell.InitRepositoryAsync());
+                return Always("Init repository…", () => Start(shell.InitRepositoryAsync(), "Init repository…"));
 
             case AppCommand.NewWorkspace:
             {
                 var commands = shell.Services.WorkspaceCommands;
                 var reason = commands.CreateReason;
-                return new(new(true, reason is null, WorkspaceTexts.NewWorkspace, null, reason), () => _ = commands.CreateAsync(tab));
+                return new(new(true, reason is null, WorkspaceTexts.NewWorkspace, null, reason), () => Start(commands.CreateAsync(tab), WorkspaceTexts.NewWorkspace));
             }
 
             case AppCommand.Fetch:
@@ -180,16 +182,16 @@ public sealed partial class AppCommands
                 if (dashboard is not null)
                 {
                     // On a dashboard the toolbar's Fetch and Pull are Fetch all and Pull all (4.10, 6.9).
-                    var label = fetch ? $"Fetch every repository of {dashboard.Name}" : $"Pull every repository of {dashboard.Name}";
+                    var label = fetch ? OperationTexts.FetchEveryRepository(dashboard.Name) : OperationTexts.PullEveryRepository(dashboard.Name);
                     var enabled = fetch ? toolbar.CanFetch : toolbar.CanPull;
                     return new(new(true, enabled, label, null, fetch ? toolbar.FetchDisabledReason : toolbar.PullDisabledReason), run);
                 }
 
-                return FromItem(snapshot, snapshot.EmptyArea, fetch ? FetchAllRemotes : "Pull", run);
+                return FromItem(snapshot, snapshot.EmptyArea, fetch ? FetchAllRemotes : ToolbarPull, run);
             }
 
             case AppCommand.Push:
-                return FromItem(snapshot, snapshot.EmptyArea, "Push", () => toolbar.PushCommand.Execute(null));
+                return FromItem(snapshot, snapshot.EmptyArea, ToolbarPush, () => toolbar.PushCommand.Execute(null));
 
             case AppCommand.CreateBranch:
                 return FromItem(snapshot, snapshot.EmptyArea, CreateBranch, () => toolbar.BranchCommand.Execute(null));
@@ -349,6 +351,18 @@ public sealed partial class AppCommands
     }
 
     private static Resolved Always(string label, Action run) => new(new(true, true, label, null, null), run);
+
+    /// <summary>
+    /// Lets a command's task go on without waiting for it (the key or the palette has done its part:
+    /// a folder dialog, the palette, a read), logging in the app's log a failure that got past the
+    /// task's own handling (a folder dialog that throws), which would otherwise go unobserved.
+    /// </summary>
+    private void Start(Task task, string what) =>
+        _ = task.ContinueWith(
+            failed => _shell.Services.Log.Error($"{what} failed.", failed.Exception),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
 
     private static Resolved NotListed(string label) => new(CommandState.NotListed(label), null);
 
