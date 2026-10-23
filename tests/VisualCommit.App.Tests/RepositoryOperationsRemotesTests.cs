@@ -391,6 +391,27 @@ public class RepositoryOperationsRemotesTests
     }
 
     [Fact]
+    public async Task A_renamed_remote_branch_fetched_after_the_refs_were_read_checks_out_into_its_name_on_the_remote_too()
+    {
+        // A ref the refs do not hold (a stale menu's, fetched since the snapshot): its local name by
+        // the fetch lines read with the refs, as for one they hold, not by phase 5's split of its
+        // name, which gave up/feature.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+        await repo.PushAsync("fork", setUpstream: false, "topic:refs/heads/feature");
+        await repo.GitAsync("fetch", "--quiet", "fork");
+        Assert.Null(app.Operations.FindRef("refs/remotes/fork/up/feature"));
+
+        await app.Operations.CheckoutAsync("refs/remotes/fork/up/feature");
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Created feature tracking fork/up/feature and checked it out", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git switch --create feature --track refs/remotes/fork/up/feature" && call.Succeeded);
+        Assert.Equal(("fork", "refs/heads/feature"), (await ConfigAsync(repo, "branch.feature.remote"), await ConfigAsync(repo, "branch.feature.merge")));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/up/feature"));
+    }
+
+    [Fact]
     public async Task A_ref_that_is_no_branch_on_its_remote_checks_out_tracking_it_as_git_does()
     {
         using var repo = await Scenarios.RenamingRefspecAsync();

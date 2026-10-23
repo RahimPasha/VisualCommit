@@ -257,9 +257,8 @@ public partial class LeftPanelViewModel : ObservableObject
                 rows.Add(new RefItemRow(RefItemKind.Remote, key, remote, remote, 1, Activate, isOpen: open, marks: marks, showHidden: OnHiddenToggleClicked));
                 if (open)
                 {
-                    var prefix = remote + "/";
-                    AddTree(rows, key + ":", prefix, depth: 2, branches.Select(r => new Leaf(
-                        r.Name.StartsWith(prefix, StringComparison.Ordinal) ? r.Name[prefix.Length..] : r.Name,
+                    AddTree(rows, key + ":", remote + "/", depth: 2, branches.Select(r => new Leaf(
+                        RemoteBranchNames.WithoutRemote(r.Name, remote),
                         LeafFor(r))));
                 }
             }

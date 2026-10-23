@@ -136,17 +136,7 @@ public sealed record RepoRefs(
         }
 
         var name = trackingRef[RemotesPrefix.Length..];
-        var remote = Remotes
-            .Where(candidate => name.Length > candidate.Length && name[candidate.Length] == '/' && name.StartsWith(candidate, StringComparison.Ordinal))
-            .OrderByDescending(candidate => candidate.Length)
-            .FirstOrDefault();
-        if (remote is null)
-        {
-            var slash = name.IndexOf('/', StringComparison.Ordinal);
-            remote = slash > 0 ? name[..slash] : name;
-        }
-
-        return AssumedSource(name, remote);
+        return AssumedSource(name, RemoteBranchNames.RemoteOf(name, Remotes));
     }
 
     /// <summary>
@@ -189,34 +179,39 @@ public sealed record RepoRefs(
             return null;
         }
 
-        var source = SourceOf(remoteBranch);
-        return source switch
-        {
-            { IsBranch: true } => source.Branch,
-            { Kind: RemoteSourceKind.Mapped or RemoteSourceKind.AmbiguousRefs } => TodaysLocalName(remoteBranch),
-            _ => null,
-        };
+        return LocalNameFrom(SourceOf(remoteBranch), remoteBranch.Name, remoteBranch.RemoteName);
     }
 
-    /// <summary>Phase 5's local name: the part after <c>&lt;remote&gt;/</c>, or the whole name when it does not start so.</summary>
-    private static string TodaysLocalName(GitRef remoteBranch)
+    /// <summary>
+    /// <see cref="LocalNameOf(GitRef)"/> of a remote-tracking ref by its full name, for one the
+    /// snapshot may not hold (fetched since it was read): how the fetch lines map it
+    /// (<see cref="SourceOf(string)"/>), today's rule taking off the prefix of the remote that
+    /// fills it; with <see cref="Refspecs"/> null phase 5's name. Null for a ref outside
+    /// <c>refs/remotes/</c>.
+    /// </summary>
+    public string? LocalNameOf(string trackingRef)
     {
-        if (remoteBranch.RemoteName is not { } remote)
+        ArgumentNullException.ThrowIfNull(trackingRef);
+        if (!trackingRef.StartsWith(RemotesPrefix, StringComparison.Ordinal) || trackingRef.Length == RemotesPrefix.Length)
         {
-            return remoteBranch.Name;
+            return null;
         }
 
-        var prefix = remote + "/";
-        return remoteBranch.Name.StartsWith(prefix, StringComparison.Ordinal) ? remoteBranch.Name[prefix.Length..] : remoteBranch.Name;
+        var source = SourceOf(trackingRef);
+        return LocalNameFrom(source, trackingRef[RemotesPrefix.Length..], source.Remote);
     }
 
-    /// <summary>Phase 5's assumption for a remote branch named <paramref name="name"/> of <paramref name="remote"/>: the default fetch line's mapping.</summary>
-    private static RemoteSource AssumedSource(string name, string remote)
+    /// <summary>10.6's rule: the branch's name on the remote; today's (<paramref name="name"/> less <c>&lt;remote&gt;/</c>) for a mapped ref that is no branch and one fetched from two refs; null otherwise.</summary>
+    private static string? LocalNameFrom(RemoteSource source, string name, string? remote) => source switch
     {
-        var prefix = remote + "/";
-        var branch = name.StartsWith(prefix, StringComparison.Ordinal) ? name[prefix.Length..] : name;
-        return new RemoteSource(RemoteSourceKind.Mapped, remote, HeadsPrefix + branch, []);
-    }
+        { IsBranch: true } => source.Branch,
+        { Kind: RemoteSourceKind.Mapped or RemoteSourceKind.AmbiguousRefs } => RemoteBranchNames.WithoutRemote(name, remote),
+        _ => null,
+    };
+
+    /// <summary>Phase 5's assumption for a remote branch named <paramref name="name"/> of <paramref name="remote"/>: the default fetch line's mapping.</summary>
+    private static RemoteSource AssumedSource(string name, string remote) =>
+        new(RemoteSourceKind.Mapped, remote, HeadsPrefix + RemoteBranchNames.WithoutRemote(name, remote), []);
 
     /// <summary>
     /// A text that changes whenever something the graph depends on changes: HEAD, any ref's

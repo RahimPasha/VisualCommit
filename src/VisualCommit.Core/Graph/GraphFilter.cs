@@ -102,23 +102,9 @@ public sealed class GraphFilter : IEquatable<GraphFilter>
     /// <summary>
     /// The remote a remote branch's name (relative to <c>refs/remotes/</c>) belongs to: the longest
     /// of <paramref name="remotes"/> it starts with, followed by a slash; without one, its first
-    /// component (remote names may hold a slash, 0.5).
+    /// component (remote names may hold a slash, 0.5): <see cref="RemoteBranchNames.RemoteOf"/>.
     /// </summary>
-    public static string RemoteOf(string remoteBranch, IEnumerable<string> remotes)
-    {
-        ArgumentNullException.ThrowIfNull(remoteBranch);
-        ArgumentNullException.ThrowIfNull(remotes);
-        var known = remotes
-            .Where(remote => remoteBranch.StartsWith(remote + "/", StringComparison.Ordinal))
-            .MaxBy(remote => remote.Length);
-        if (known is not null)
-        {
-            return known;
-        }
-
-        var slash = remoteBranch.IndexOf('/', StringComparison.Ordinal);
-        return slash < 0 ? remoteBranch : remoteBranch[..slash];
-    }
+    public static string RemoteOf(string remoteBranch, IEnumerable<string> remotes) => RemoteBranchNames.RemoteOf(remoteBranch, remotes);
 
     /// <summary>
     /// <c>--exclude=&lt;b&gt;</c> … <c>--branches</c>, <c>--exclude=&lt;r&gt;/&lt;b&gt;</c> … and

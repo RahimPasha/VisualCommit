@@ -3966,6 +3966,35 @@ then say up to date for a linear branch, and an ignored file the old upstream tr
 overwritten, as git would. And in fork-point mode git uses its own range, so the commits it resets to
 can differ from (5)'s boundaries.
 
+**Directory renames (9.4, 9.5, 9.6 and 9.8; as built at status step 22's review).** When one side
+renames a folder and the other adds a file in it, git's merge-ort writes that file under the new folder
+("CONFLICT (file location)"), over an ignored file there: in both directions, for a merge, a
+cherry-pick, a revert and a rebase, and into the root too (`dir/*` moved to the root writes
+`new.txt`). A stash apply does so on 2.55 and 2.56, while 2.36 writes `newdir/new.txt~Updated upstream`
+beside it (fixer A's lab on 2.36, 2.55 and 2.56). So `DirectoryRenames` (Git, pure) reads one `git
+diff-tree -r -z -M --name-status <ours> <theirs> --` and gives the paths a rename may write, in both
+directions, by merge-ort's rules where that read can tell them: the majority of a folder's moved files
+sets its new place (two of three to `n1` give `n1`), counted at each folder level whose trailing names
+agree; a move into the root, never of the root itself; no rename while the renaming side still has a
+file in the folder. Where the read cannot tell (a tie; folders whose remaining files are the same on
+both sides) every candidate counts. The sides: a merge `into`→`source`, dropped when either is an
+ancestor of the other (a fast-forward moves nothing); a pick `HEAD`→the commit, one read per commit,
+side by side; a revert `HEAD`→the parent (or `mergeParent`), skipped for a root commit, whose read
+fails; a rebase `onto`→`tip`; a stash `HEAD`→the stash. The read runs only when the check found nothing
+else in the way and a test of the disk, with no process, passes: a path the operation writes is missing
+on disk and lies in a folder, or lies at the root while a top-level folder holds a file of that name.
+Otherwise the calls are as before (risk 25's counts hold). The test fires more often than a rename
+does (any merge that adds a file in a folder missing on disk), since only git can tell a rename; and a
+refusal's file count can leave out rename paths when something else is in the way. Not covered: a
+folder renamed into the root from deeper than the top level; a side the disk does not show (the branch
+of "Check out and rebase"); 9.7's interactive rebase and squash, though reordering can make such
+moves. On the safe side: on 2.36 a stash apply is refused where git keeps the file; ties and unchanged
+folders count every candidate; files the renaming side deleted are asked about too. Tests:
+`DirectoryRenamesTests` (the rules); `IgnoredInTheWayTests` (a merge both ways with its call log, into
+the root, the fast-forward, a pick, a revert and a root revert, a rebase both ways, a stash, and a merge
+without a rename making the usual calls); an App theory refusing a merge, a pick, a rebase and an apply
+before git with 9.15's text, the ignored file kept.
+
 ### 9.7 Interactive rebase and squash
 
 `FindIgnoredInTheWayOfRebaseAsync(plan)`, tip `plan.ExpectedTip`, base `plan.Onto`. Git skips the
@@ -4279,8 +4308,11 @@ configuration, and `git for-each-ref`, which reads the upstreams, fails with `fa
 '…'`, so the whole refs read fails, as it did with `git remote` (0.5's line forms). An empty source
 (`:refs/remotes/origin/x`) is skipped too: git accepts it, and its tracking setup takes it with an
 empty name, which names no branch. So the read's warning `Skipped a fetch line of the remote {name}
-that git refuses or that names no source: {value}` (14.14) fires only for a line git accepts that the
-mapping leaves out (an empty source), once per repository object, not at every refs read.
+that git refuses or that names no source: {value}` (14.14) fires once per repository object, not at
+every refs read. As built (status step 22's review), it fires for every fetch line the mapping leaves
+out except an empty value: for an empty source, which git accepts, and for a key without a value or a
+line git refuses, after which git's own `for-each-ref` fails anyway (`bad config variable` or `invalid
+refspec`, 128) and the refs read with it.
 
 **`SourceOf(T)`**, for a tracking ref `T` (`refs/remotes/…`), per remote that has lines:
 
@@ -4443,6 +4475,18 @@ guard follows the fetch, not the push, rightly (10.1's `DestinationsOf`, WP3). T
 P's push of `pr/1` is refused; C2's push of `main` runs (`origin/main` is Mapped and fetched), a new
 `trunk` is refused; the default line's pushes and a renamed branch's (row 8) run.
 
+As built at status step 22's review: the guard reads the fetch lines inside the operation
+(`IGitRepository.ReadFetchRefspecsAsync`, one `git config --null --get-regexp ^remote\.`, so a line
+added after the snapshot counts), and asks the push's remote alone (`FetchRefspecs.SourceOf(trackingRef,
+remote)`). It also guards the push back of a backup (`PushBackAsync`, `PushForcePushBackAsync`) and
+undo's and redo's steps that write a branch on a remote (`RefuseIfStepStopsFetchAsync`), so every push of
+a branch, and every such step, makes that one more git call. A push back whose backup name more than one
+remote fits is refused, and its menu item disabled, with `RemoteOfBackupAmbiguous` ("The remote this
+backup came from cannot be told: team/fork/main fits team/fork and team"). Push and Force push to an
+upstream that is not a branch (`UpstreamRemoteRef` outside `refs/heads/`) are disabled with R4
+(`ToolbarViewModel.UpstreamNotABranchReason`: "upstream/pr/7 is refs/pull/7/head on upstream, not a
+branch") and refused before git with `PushToNotABranch` (R4 with a full stop).
+
 ### 10.5 The reasons R1 to R4, and the texts that take the remote's name
 
 New in `OperationTexts.MenuTexts`, in the partial file `OperationTexts.Menus.Refspecs.cs` (section 18),
@@ -4488,7 +4532,13 @@ AmbiguousRefs, today's rule too (P's `origin/pr/1` → `pr/1`, D201), the branch
 upstream (10.4 #10), since git would track the wrong first candidate and its Pull fail (0.5's P);
 AmbiguousRemotes and NotFetched, null, which disables the item and makes a double-click do nothing. The
 undo history's created branch (`CreatedBranchOf`) uses the same name; with the identity mapping nothing
-changes.
+changes. As built at status step 22's review: for a remote branch the refs no longer hold (a menu built
+before a fetch removed it) the name comes from the fetch lines too (`RepoRefs.LocalNameOf(string)`):
+`fork/up/feature` gives `feature`, not `up/feature`, and R1 and R3's refusal and R2's path read the same
+mapping. The remote-name helpers are one Core class, `RemoteBranchNames` (`WithoutRemote`, `RemotesOf`,
+`LongestRemoteOf`, `RemoteOf`), in place of `FindRemote`, `NameOnItsRemote`, `TodaysLocalName` and
+`SplitRemote`'s copies; `GraphFilter.RemoteOf` calls it, and `SplitRemoteBranch` returns the
+`RemoteSource`.
 
 ### 10.7 `DropFacts.RemoteMapsBranchesDifferently` removed
 
@@ -4513,9 +4563,10 @@ Recorded in the handoff; 1 also goes to the backlog and 2 to plan.md's risks (16
 3. A namespace no remote fetches any more (a refspec changed, a remote renamed by hand) still makes a
    remote row (NotFetched: `FindRemote`'s first-part guess) whose Fetch, Rename and Remove fail with
    git's words; its branches' items say R3.
-4. A short source (O2) makes git write `branch.<b>.merge = main`; that branch's Push stops in
-   `RemoteArguments.RequireFullRef` ("Not a full ref name: main"), and R4 says "main on origin, not a
-   branch". Rare.
+4. A short source (O2) makes git write `branch.<b>.merge = main`; that branch's Push and Force push
+   are disabled with R4, "main on origin, not a branch" (since status step 22's review, which disables
+   a push to any upstream outside `refs/heads/`, 10.4; before it, Push stopped in
+   `RemoteArguments.RequireFullRef` with "Not a full ref name: main"). Rare.
 5. The push dialog's "Set as upstream" to a branch the remote's lines do not fetch (D's `solo`): git
    writes the keys and the result says so, while the app shows no upstream.
 6. A `remote-branch-…` backup phase 5 saved before a deletion refused under a renaming refspec carries

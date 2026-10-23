@@ -84,7 +84,7 @@ public sealed record StashPaths(IReadOnlyList<string> Changed, IReadOnlyList<str
     /// <summary>
     /// Those of <see cref="Changed"/> with status <c>D</c> against its base, from the same
     /// <c>--name-status</c> read: what an apply or a pop deletes, which Keep ignored files' check
-    /// leaves out of what the stash writes (docs/phase-6-design.md 9.8). Work package WP1 fills it.
+    /// leaves out of what the stash writes (docs/phase-6-design.md 9.8).
     /// </summary>
     public IReadOnlyList<string> Deleted { get; init; } = [];
 }
