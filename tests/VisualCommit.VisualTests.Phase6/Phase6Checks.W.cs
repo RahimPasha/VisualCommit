@@ -72,7 +72,9 @@ public sealed partial class Phase6ChecksW : Phase6Checks
         IReadOnlyList<PartW.Row> rows,
         string? selected = null,
         DashboardSnapshot? snapshot = null,
-        IReadOnlyDictionary<string, string>? folders = null)
+        IReadOnlyDictionary<string, string>? folders = null,
+        IReadOnlyCollection<string>? cancel = null,
+        IReadOnlyCollection<string>? details = null)
     {
         var dashboard = snapshot ?? app.DashboardSnapshot();
         Assert.Equal(rows.Select(row => row.Name), dashboard.Rows.Select(row => row.Name));
@@ -82,10 +84,79 @@ public sealed partial class Phase6ChecksW : Phase6Checks
             var actual = dashboard.Row(row.Name);
             var folder = folders?.GetValueOrDefault(row.Name) ?? copy.PathOf(row.Name);
             Assert.True(SameFolder(copy, folder, actual.Path), $"The row {row.Name} holds {actual.Path}, not {folder}.");
-            AssertRow(app, row.Name, Expected(row, actual.Path) with { Selected = row.Name == selected }, dashboard);
+            AssertRow(app, row.Name, Expected(row, actual.Path) with
+            {
+                Selected = row.Name == selected,
+                ShowsCancel = cancel?.Contains(row.Name) == true,
+                ShowsDetails = details?.Contains(row.Name) == true,
+            }, dashboard);
         }
 
         return dashboard;
+    }
+
+    /// <summary>A row's Operation cell for a run's text or a result (2.6, 4.2): its text in <paramref name="tone"/>, its tooltip the same (the status bar's whole text, <c>CompactToolTip</c>).</summary>
+    private static PartW.Cell Shown(string text, string tone = PartW.Secondary) => new(text, tone, text);
+
+    /// <summary>
+    /// The row <paramref name="name"/>'s <c>DashboardRowCancel</c> (2.6, 4.5) shows, named <c>Cancel</c>
+    /// with the tooltip <c>Stop git</c>, or its <c>DashboardRowDetails</c> named <c>Details</c> showing
+    /// <c>Details…</c>.
+    /// </summary>
+    private static void AssertRowButton(ShellDriver app, string name, string automationId)
+    {
+        var button = app.DashboardRowControl(name).GetVisualDescendants().OfType<Button>()
+            .Single(candidate => AutomationProperties.GetAutomationId(candidate) == automationId);
+        Assert.True(button.IsEffectivelyVisible, $"The row {name} shows no {automationId}.");
+        if (automationId == "DashboardRowCancel")
+        {
+            Assert.Equal(("Cancel", PartW.StopGit), (AutomationProperties.GetName(button), TipOf(button)));
+        }
+        else
+        {
+            Assert.Equal("Details", AutomationProperties.GetName(button));
+            Assert.Equal("Details…", button.GetVisualDescendants().OfType<TextBlock>().Single().Text);
+        }
+    }
+
+    /// <summary>The <c>*.lock</c> files under the nine repositories' git folders (none after a cancelled fetch, 4.5).</summary>
+    private static List<string> LockFiles(TempWorkspace copy) =>
+    [
+        .. PartW.WithFolder.SelectMany(name => Directory.EnumerateFiles(Path.Combine(copy.PathOf(name), ".git"), "*.lock", SearchOption.AllDirectories)),
+    ];
+
+    /// <summary>Each repository's refs, as <c>git for-each-ref</c> lists them, against <paramref name="refs"/> (the check's own reads with <c>GIT_OPTIONAL_LOCKS=0</c>).</summary>
+    private static async Task AssertRefsAsync(TempWorkspace copy, IReadOnlyDictionary<string, string[]> refs)
+    {
+        foreach (var name in PartW.WithFolder)
+        {
+            using var repo = copy.Repo(name);
+            var output = (await repo.GitWithEnvironmentAsync(OptionalLocksOff, "for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
+            Assert.True(
+                refs[name].SequenceEqual(output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r'))),
+                $"{name}'s refs are not the report's.\nExpected:\n  {string.Join("\n  ", refs[name])}\nActual:\n  {output.Replace("\n", "\n  ", StringComparison.Ordinal)}");
+        }
+    }
+
+    /// <summary>The check's own git reads run with <c>GIT_OPTIONAL_LOCKS=0</c>, as the app's are, so that they refresh no index the app reads.</summary>
+    private static readonly IReadOnlyDictionary<string, string?> OptionalLocksOff = new Dictionary<string, string?> { ["GIT_OPTIONAL_LOCKS"] = "0" };
+
+    /// <summary>A repository's <c>git status --porcelain=v2 --branch</c> less <c>branch.oid</c>, the check's own read.</summary>
+    private static async Task<List<string>> StatusLinesAsync(TempWorkspace copy, string name)
+    {
+        using var repo = copy.Repo(name);
+        var output = (await repo.GitWithEnvironmentAsync(OptionalLocksOff, "status", "--porcelain=v2", "--branch")).StandardOutput;
+        return [.. output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')).Where(line => !line.StartsWith("# branch.oid ", StringComparison.Ordinal))];
+    }
+
+    /// <summary>A status against the report's lines, "…" standing for a changed file's modes and object names.</summary>
+    private static void AssertStatusLines(string name, IReadOnlyList<string> expected, IReadOnlyList<string> actual)
+    {
+        var matches = expected.Count == actual.Count && expected.Zip(actual).All(pair =>
+            pair.First.Split(" … ") is [var start, var end]
+                ? pair.Second.StartsWith(start + " ", StringComparison.Ordinal) && pair.Second.EndsWith(" " + end, StringComparison.Ordinal)
+                : pair.First == pair.Second);
+        Assert.True(matches, $"{name}'s status is not the report's.\nExpected:\n  {string.Join("\n  ", expected)}\nActual:\n  {string.Join("\n  ", actual)}");
     }
 
     /// <summary>Each drawn row of the active dashboard at y 152 + 26 k, 26 high, spanning the window (±2).</summary>
