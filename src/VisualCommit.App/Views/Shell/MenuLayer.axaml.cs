@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
 using ModelItem = VisualCommit.App.ViewModels.Menus.MenuItem;
@@ -47,6 +48,18 @@ public partial class MenuLayer : UserControl
 
     /// <summary>The class of an item drawn in the danger colour (delete, drop, force push, …).</summary>
     public const string DangerClass = "vcDanger";
+
+    /// <summary>The class of a keyed item's key text (docs/phase-6-design.md 6.7), for <c>Theme/Menus.axaml</c>.</summary>
+    public const string KeyClass = "vcMenuKey";
+
+    /// <summary>The automation id of a keyed item's key text (15.5).</summary>
+    public const string KeyAutomationId = "ContextMenuItemKey";
+
+    /// <summary>The name of a keyed item's key text (15.5).</summary>
+    public const string KeyName = "MenuItemKey";
+
+    /// <summary>How far a keyed item's key is from its label, at least (6.7): a keyed item needs 10 + label + 24 + key + 10.</summary>
+    public const double KeyGap = 24;
 
     /// <summary>How far a menu opened by the pointer is from it (4a).</summary>
     public const double PointerGap = 2;
@@ -446,18 +459,57 @@ public partial class MenuLayer : UserControl
         return item;
     }
 
+    /// <summary>
+    /// A keyed item's header (docs/phase-6-design.md 6.7, D215): the label as <see cref="LabelTemplate"/>
+    /// draws it and, <see cref="KeyGap"/> to its right, right-aligned at the item's edge, the key's
+    /// text in a plain text block (class <see cref="KeyClass"/>, automation id <see cref="KeyAutomationId"/>),
+    /// never cut: the <c>Auto</c> column is measured first, so a label past the widest menu is cut
+    /// and the key stays whole.
+    /// </summary>
+    private static FuncDataTemplate<string> KeyedLabelTemplate(string keyText) => new(
+        (label, _) =>
+        {
+            var key = new TextBlock
+            {
+                Name = KeyName,
+                Text = keyText,
+                Margin = new Thickness(KeyGap, 0, 0, 0),
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+            key.Classes.Add(KeyClass);
+            AutomationProperties.SetAutomationId(key, KeyAutomationId);
+            Grid.SetColumn(key, 1);
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            grid.Children.Add(new TrimmedTextBlock
+            {
+                Text = label,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            });
+            grid.Children.Add(key);
+            return grid;
+        },
+        supportsRecycling: false);
+
     private ContextMenuItem CreateItem(ModelItem model)
     {
         // The label stays the header (harnesses find an item by it); the template draws it as text
-        // that is cut with "…" past the widest menu, never clipped.
+        // that is cut with "…" past the widest menu, never clipped. A keyed item draws its key at
+        // its right (6.7), which is also its AcceleratorKey.
+        var keyText = model.Command is { } command ? KeyTexts.Current.Of(command) : null;
         var item = new ContextMenuItem
         {
             Header = model.Label,
-            HeaderTemplate = LabelTemplate,
+            HeaderTemplate = keyText is null ? LabelTemplate : KeyedLabelTemplate(keyText),
             IsEnabled = model.IsEnabled,
         };
         AutomationProperties.SetAutomationId(item, ItemAutomationId);
         AutomationProperties.SetName(item, model.Label);
+        if (keyText is not null)
+        {
+            AutomationProperties.SetAcceleratorKey(item, keyText);
+        }
         if (model.IsDestructive)
         {
             item.Classes.Add(DangerClass);

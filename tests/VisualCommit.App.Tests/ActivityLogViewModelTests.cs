@@ -374,17 +374,17 @@ public class ActivityLogViewModelTests
         var (_, _, log) = Make();
         var closing = 0;
         log.Closing += (_, _) => closing++;
-        Assert.Equal((false, false, false, "Show every git command the app has run"), (log.CanToggle, log.IsOpen, log.IsShown, log.ToggleToolTip));
+        Assert.Equal((false, false, false, "Show every git command the app has run (Ctrl+J)"), (log.CanToggle, log.IsOpen, log.IsShown, log.ToggleToolTip));
         Assert.False(log.ToggleCommand.CanExecute(null));
 
         log.Show(Graph);
         Assert.Equal((true, "graph"), (log.ToggleCommand.CanExecute(null), log.RepositoryName));
         log.ToggleCommand.Execute(null);
-        Assert.Equal((true, true, "Hide the activity log"), (log.IsOpen, log.IsShown, log.ToggleToolTip));
+        Assert.Equal((true, true, "Hide the activity log (Ctrl+J)"), (log.IsOpen, log.IsShown, log.ToggleToolTip));
 
         // A tab without a repository hides the panel; the window keeps it open for the next one.
         log.Show(null);
-        Assert.Equal((true, false, false, "Show every git command the app has run", string.Empty), (log.IsOpen, log.IsShown, log.CanToggle, log.ToggleToolTip, log.RepositoryName));
+        Assert.Equal((true, false, false, "Show every git command the app has run (Ctrl+J)", string.Empty), (log.IsOpen, log.IsShown, log.CanToggle, log.ToggleToolTip, log.RepositoryName));
         log.Show(Other);
         Assert.Equal((true, "other"), (log.IsShown, log.RepositoryName));
 

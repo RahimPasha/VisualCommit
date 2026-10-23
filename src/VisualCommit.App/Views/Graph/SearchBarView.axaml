@@ -64,7 +64,8 @@
                 ToolTip.Tip="{x:Static vm:SearchViewModel.PreviousToolTip}"
                 ToolTip.ShowOnDisabled="True"
                 AutomationProperties.AutomationId="SearchPrevious"
-                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.PreviousToolTip}">
+                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.PreviousToolTip}"
+                AutomationProperties.AcceleratorKey="{x:Static vm:SearchViewModel.PreviousKey}">
           <c:Icon Data="{StaticResource IconChevronUp}" Width="14" Height="14" />
         </Button>
 
@@ -76,7 +77,8 @@
                 ToolTip.Tip="{x:Static vm:SearchViewModel.NextToolTip}"
                 ToolTip.ShowOnDisabled="True"
                 AutomationProperties.AutomationId="SearchNext"
-                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.NextToolTip}">
+                AutomationProperties.HelpText="{x:Static vm:SearchViewModel.NextToolTip}"
+                AutomationProperties.AcceleratorKey="{x:Static vm:SearchViewModel.NextKey}">
           <c:Icon Data="{StaticResource IconChevronDown}" Width="14" Height="14" />
         </Button>
 

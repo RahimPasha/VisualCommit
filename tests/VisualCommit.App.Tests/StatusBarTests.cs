@@ -41,10 +41,11 @@ public class StatusBarTests
                 .OrderBy(text => app.BoundsOf(text).X)
                 .Select(text => text.Text!));
 
-        // Phase 0's toggle on a tab without a repository, which phase 5 keeps (docs/phase-5-design.md 1.2).
+        // Phase 0's toggle on a tab without a repository, which phase 5 keeps (docs/phase-5-design.md 1.2),
+        // with its key since phase 6 (docs/phase-6-design.md 6.8).
         var toggle = app.FindByAutomationId("ActivityLogToggle");
         Assert.False(toggle.IsEffectivelyEnabled);
-        Assert.Equal("Show every git command the app has run", ToolTip.GetTip(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", ToolTip.GetTip(toggle));
     }
 
     [AvaloniaFact]

@@ -122,15 +122,29 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         await _tab.OpenAsync(path);
     }
 
+    /// <summary>The folder dialog's title of Init (D42), which the palette's and the key's Init ask with too (docs/phase-6-design.md 5.10).</summary>
+    public const string InitFolderTitle = "Choose a folder for the new repository";
+
     [RelayCommand]
     private async Task InitAsync()
     {
-        var path = await _services.Folders.PickFolderAsync("Choose a folder for the new repository");
+        var path = await _services.Folders.PickFolderAsync(InitFolderTitle);
         if (path is null)
         {
             return;
         }
 
+        await InitAtAsync(path);
+    }
+
+    /// <summary>
+    /// Makes a repository in <paramref name="path"/> and shows it in this page's tab: Init after
+    /// its folder dialog, which the palette's and the key's Init call with their own dialog's answer
+    /// (docs/phase-6-design.md 5.10). A failure shows under the buttons.
+    /// </summary>
+    public async Task InitAtAsync(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
         ErrorText = null;
         try
         {
