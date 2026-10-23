@@ -225,7 +225,10 @@ public static partial class RepositoryMenus
         MenuItem? forcePush = null;
         if (!branch.HasLocalUpstream)
         {
-            var pushReason = context.HasRemotes ? null : ToolbarViewModel.AddRemoteText;
+            // An upstream that is no branch on its remote (R4, docs/phase-6-design.md 10.5): git
+            // would push to that ref, a pull request's head.
+            var notABranch = ToolbarViewModel.UpstreamNotABranchReason(branch);
+            var pushReason = context.HasRemotes ? notABranch : ToolbarViewModel.AddRemoteText;
             push = Item(actions, hasRemoteUpstream ? PushTo(name, upstream!) : PushWithDialog(name), () => actions.PushBranchAsync(branchRef), pushReason, command: isCurrent ? AppCommand.Push : null);
             if (hasRemoteUpstream)
             {
@@ -233,7 +236,7 @@ public static partial class RepositoryMenus
                     actions,
                     ForcePushLabel(name),
                     () => actions.ForcePushAsync(branchRef),
-                    branch.UpstreamGone ? NoLongerExistsPushNormally(upstream!) : pushReason,
+                    branch.UpstreamGone && notABranch is null ? NoLongerExistsPushNormally(upstream!) : pushReason,
                     isDestructive: true);
             }
         }

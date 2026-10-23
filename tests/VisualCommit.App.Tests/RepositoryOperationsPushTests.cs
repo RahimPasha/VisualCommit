@@ -564,6 +564,44 @@ public class RepositoryOperationsPushTests
     }
 
     [Fact]
+    public async Task Push_and_force_push_of_a_branch_whose_upstream_is_no_branch_are_disabled_and_refused_before_git()
+    {
+        // 0.5's P2: upstream has GitHub's pull-request line alone, and pr/7, checked out from
+        // upstream/pr/7, tracks refs/pull/7/head there. Push would run git push upstream
+        // refs/heads/pr/7:refs/pull/7/head, which a bare server takes (git's own push refuses).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("switch", "--quiet", "--create", "pr/7", "--track", "refs/remotes/upstream/pr/7");
+        Assert.Equal(("upstream", "refs/pull/7/head"), (await ConfigAsync(repo, "branch.pr/7.remote"), await ConfigAsync(repo, "branch.pr/7.merge")));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        const string Reason = "upstream/pr/7 is refs/pull/7/head on upstream, not a branch";
+
+        // The toolbar's Push and the branch's menu: disabled with R4, in the drop's words (10.5).
+        var toolbar = app.Repository.Toolbar;
+        Assert.Equal((false, Reason, Reason), (toolbar.CanPush, toolbar.PushDisabledReason, toolbar.PushToolTip));
+        var (actions, _) = RecordingActions.Create();
+        var items = ViewModels.Menus.RepositoryMenus.ForLocalBranch(app.Repository.MenuContext, "refs/heads/pr/7", actions).Items.OfType<ViewModels.Menus.MenuItem>().ToList();
+        Assert.Equal((false, Reason), items.Where(item => item.Label == "Push pr/7 to upstream/pr/7").Select(item => (item.IsEnabled, item.DisabledReason)).Single());
+        Assert.Equal((false, Reason), items.Where(item => item.Label == "Force push pr/7…").Select(item => (item.IsEnabled, item.DisabledReason)).Single());
+
+        // A toolbar or menu that showed an older state reaches the operations: refused inside both.
+        app.Dialogs.CloseError().Confirm().CloseError();
+        await app.Operations.PushCurrentBranchAsync();
+        await app.Operations.ForcePushAsync("refs/heads/pr/7");
+
+        Assert.Equal(
+            [("Push failed", Reason + "."), ("Force push failed", Reason + ".")],
+            app.Dialogs.Errors.Select(error => (error.Title, error.Summary)));
+        Assert.All(app.Dialogs.Errors, error => Assert.Equal((null, null, false), (error.Output, error.Command, error.HasExtraAction)));
+        Assert.Equal("Force push pr/7?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Equal(("Force push pr/7 failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Equal(Topic, await RemoteHeadAsync(repo, "refs/pull/7/head", "upstream"));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/7", "upstream"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_push_that_would_stop_its_remotes_fetch_is_refused_also_when_another_remote_maps_the_ref_too()
     {
         // A mirror remote (+refs/*:refs/*) also fills refs/remotes/origin/pr/1, which makes it

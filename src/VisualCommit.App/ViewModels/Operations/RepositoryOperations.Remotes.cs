@@ -157,7 +157,7 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async context =>
             {
-                if (await RefuseIfPushStopsFetchAsync(texts, branch.Name, remote, remoteRef, target) is { } refused)
+                if ((RefuseIfNotABranch(texts, remote, remoteRef, target) ?? await RefuseIfPushStopsFetchAsync(texts, branch.Name, remote, remoteRef, target)) is { } refused)
                 {
                     return refused;
                 }
@@ -170,6 +170,18 @@ public sealed partial class RepositoryOperations
                 dedupe ? $"push:{branch.FullName}->{remote}/{remoteRef}" : null,
                 failure => PushFailureDisplay(failure, branch.Name, remote, current)));
     }
+
+    /// <summary>
+    /// A push or force push to its upstream when that is no branch on its remote (R4, docs/phase-6-design.md
+    /// 10.5; <see cref="ToolbarViewModel.UpstreamNotABranchReason"/>, which disables both): refused
+    /// inside the operation before git, for a toolbar or menu that showed an older state. Every
+    /// other push names a branch (<c>refs/heads/&lt;y&gt;</c>). Null when <paramref name="remoteRef"/>
+    /// is one.
+    /// </summary>
+    private OperationReport? RefuseIfNotABranch(OperationText text, string remote, string remoteRef, string target) =>
+        remoteRef.StartsWith(HeadsPrefix, StringComparison.Ordinal)
+            ? null
+            : Refused(text, OperationTexts.PushToNotABranch(target, remoteRef, remote));
 
     /// <summary>
     /// 10.4's guard, inside a push's operation before git, with the fetch lines read there (one
@@ -256,8 +268,8 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async _ =>
             {
-                // 10.4's guard before anything is written, the backup included.
-                refused = await RefuseIfPushStopsFetchAsync(text, branch.Name, remote, remoteRef, upstream);
+                // R4 and 10.4's guard before anything is written, the backup included.
+                refused = RefuseIfNotABranch(text, remote, remoteRef, upstream) ?? await RefuseIfPushStopsFetchAsync(text, branch.Name, remote, remoteRef, upstream);
                 if (refused is not null)
                 {
                     return null;

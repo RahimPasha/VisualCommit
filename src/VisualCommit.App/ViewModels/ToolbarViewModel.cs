@@ -340,6 +340,24 @@ public sealed partial class ToolbarViewModel : ObservableObject
         return branch.UpstreamRemote is { } remote && remoteRef is not null ? $"{remote}/{remoteRef}" : branch.Upstream;
     }
 
+    /// <summary>
+    /// Why a branch's Push and Force push are disabled when its upstream is no branch on its remote
+    /// (docs/phase-6-design.md 10.5's R4, <see cref="OperationTexts.MenuTexts.NotABranch"/>): its
+    /// <see cref="GitRef.UpstreamRemoteRef"/> is not under <c>refs/heads/</c>, as a branch checked out
+    /// from a ref GitHub's pull-request line alone fetches tracks <c>refs/pull/1/head</c> (0.5's P2),
+    /// or a short name a fetch line without <c>refs/heads/</c> gave (O2). The upstream is named as
+    /// <see cref="UpstreamText"/> names it. Null for a branch without a remote upstream and for one
+    /// whose upstream is a branch.
+    /// </summary>
+    public static string? UpstreamNotABranchReason(GitRef branch)
+    {
+        ArgumentNullException.ThrowIfNull(branch);
+        return branch is { HasLocalUpstream: false, UpstreamRemote: { } remote, UpstreamRemoteRef: { } remoteRef }
+            && !remoteRef.StartsWith("refs/heads/", StringComparison.Ordinal)
+                ? OperationTexts.MenuTexts.NotABranch(UpstreamText(branch) ?? $"{remote}/{remoteRef}", remoteRef, remote)
+                : null;
+    }
+
     [RelayCommand(CanExecute = nameof(CanFetch), AllowConcurrentExecutions = true)]
     private Task Fetch() => RunAsync("Fetch", actions => actions.FetchAllAsync());
 
@@ -620,6 +638,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
             : head.IsUnborn ? UnbornText
             : !hasRemotes ? AddRemoteText
             : current?.HasLocalUpstream == true ? $"{name} tracks a local branch"
+            : current is not null ? UpstreamNotABranchReason(current)
             : null;
         var branch = head.IsUnborn ? UnbornText : null;
         var stash = StashReason(head, status);
