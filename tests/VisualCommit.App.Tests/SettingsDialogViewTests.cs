@@ -235,6 +235,10 @@ public class SettingsDialogViewTests
     [InlineData(1920, 1080)]
     public async Task Every_shortcut_row_shows_its_action_and_keys_apart_and_whole_and_the_extend_row_takes_two_lines(int width, int height)
     {
+        // The rows here come from ShortcutTable, written out by hand, not from the app's own key
+        // table (AppShortcuts.Groups), which work package WP-K fills (6.4, 6.11).
+        // WP-K: once AppShortcuts.Groups gives 6.11's groups, add the assertion that it equals
+        // ShortcutTable on Windows' words, so that the screen and the report's table cannot drift.
         using var data = new TempDirectory("data");
         using var app = ShellDriver.Start(data.Path, width, height);
         await app.WaitUntilReadyAsync();

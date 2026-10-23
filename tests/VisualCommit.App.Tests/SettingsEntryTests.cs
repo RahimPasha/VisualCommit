@@ -66,6 +66,8 @@ public class SettingsEntryTests
         // 6.8, 14.11: "Open settings (Ctrl+,)", "Cmd+," on macOS. The key texts come from the key
         // table, which work package WP-K fills (6.4); until it does a command has no key text and
         // the tooltip is the text alone.
+        // WP-K: once your key table gives AppCommand.Settings its key, drop the null from both
+        // Contains lists and assert "Open settings (Ctrl+,)" and "Open settings (Cmd+,)" alone.
         var ctrl = new KeyTexts(CommandKey.Ctrl);
         var cmd = new KeyTexts(CommandKey.Cmd);
 
