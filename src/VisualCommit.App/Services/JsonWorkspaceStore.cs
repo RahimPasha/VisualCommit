@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
 
@@ -19,7 +20,9 @@ namespace VisualCommit.App.Services;
 /// over it this session (<see cref="WorkspaceReadOnlyCause.Unreadable"/>) and the next start reads
 /// it again.</item>
 /// <item>A newer version's file: what this version understands is read, and nothing is saved
-/// (<see cref="WorkspaceReadOnlyCause.NewerVersion"/>), so its bytes stay as they are.</item>
+/// (<see cref="WorkspaceReadOnlyCause.NewerVersion"/>), so its bytes stay as they are; also when
+/// this version cannot read it at all (a newer version changed its shape): then the list is empty,
+/// and the file is neither set aside nor written over.</item>
 /// <item>A failed save: the change applies for the session, <see cref="SaveFailed"/> and
 /// <see cref="SaveFailedNotice"/> until a save succeeds, which writes the whole list.</item>
 /// </list>
@@ -171,6 +174,17 @@ public sealed class JsonWorkspaceStore : IWorkspaceStore
         }
         catch (JsonException ex)
         {
+            // A newer version may have changed what this one reads (D203): its file is kept as it is,
+            // read-only, never set aside; only a file of this version or older, or no JSON, is unreadable.
+            if (VersionOf(json) is { } version && version > WorkspaceList.CurrentVersion)
+            {
+                _log.Warning(
+                    $"The workspaces file {_filePath} was made by a newer version of VisualCommit (version {version}) and this version cannot read it; " +
+                    "the app starts without workspaces, the file is kept as it is, and workspaces cannot be changed.",
+                    ex);
+                return (new WorkspaceList(), WorkspaceReadOnlyCause.NewerVersion, NewerVersionNotice);
+            }
+
             return Unreadable(ex);
         }
 
@@ -183,6 +197,29 @@ public sealed class JsonWorkspaceStore : IWorkspaceStore
         }
 
         return (list, null, null);
+    }
+
+    /// <summary>
+    /// The top-level <c>"version"</c> of <paramref name="json"/> when it is JSON whose root is an
+    /// object with a whole number there, read as the store reads the file (comments skipped,
+    /// trailing commas allowed); null otherwise.
+    /// </summary>
+    private static int? VersionOf(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("version", out var version)
+                && version.ValueKind == JsonValueKind.Number
+                && version.TryGetInt32(out var number)
+                ? number
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private string ReadWithRetries()
@@ -238,12 +275,12 @@ public sealed class JsonWorkspaceStore : IWorkspaceStore
         }
     }
 
-    /// <summary>Writes the whole list beside the file and swaps it in, so that a crash mid-write cannot leave half a file. False when it failed (logged).</summary>
+    /// <summary>Writes the whole list beside the file, flushed to the disk, and swaps it in, so that a crash mid-write cannot leave half a file (<see cref="DurableFile"/>). False when it failed (logged).</summary>
     private bool Save(WorkspaceList list)
     {
         try
         {
-            var temporary = _filePath + ".tmp";
+            var temporary = DurableFile.TemporaryOf(_filePath);
             _files.WriteAllText(temporary, Serialize(list));
             _files.Move(temporary, _filePath, overwrite: true);
             return true;
@@ -269,7 +306,7 @@ public interface IWorkspaceFiles
     /// <summary>The file's text; throws as <see cref="File.ReadAllText(string)"/> does.</summary>
     string ReadAllText(string path);
 
-    /// <summary>Writes the file, its folder made first; throws as <see cref="File.WriteAllText(string, string?)"/> does.</summary>
+    /// <summary>Writes the file, its folder made first, flushed to the disk (<see cref="DurableFile.Write"/>); throws as <see cref="File.WriteAllText(string, string?)"/> does.</summary>
     void WriteAllText(string path, string contents);
 
     /// <summary>Moves (renames) a file; throws as <see cref="File.Move(string, string, bool)"/> does.</summary>
@@ -288,7 +325,7 @@ public sealed class PhysicalWorkspaceFiles : IWorkspaceFiles
     public void WriteAllText(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, contents);
+        DurableFile.Write(path, contents);
     }
 
     public void Move(string source, string destination, bool overwrite) => File.Move(source, destination, overwrite);

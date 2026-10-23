@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Session;
 
@@ -107,10 +108,8 @@ public sealed class JsonSessionStore : ISessionStore
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
 
-            // Write beside the file and swap it in, so a crash mid-write cannot leave half a file.
-            var temporary = _filePath + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(state, SessionJsonContext.Default.SessionState));
-            File.Move(temporary, _filePath, overwrite: true);
+            // Written beside the file, flushed, and swapped in, so a crash mid-write cannot leave half a file.
+            DurableFile.Replace(_filePath, JsonSerializer.Serialize(state, SessionJsonContext.Default.SessionState));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

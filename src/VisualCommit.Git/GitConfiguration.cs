@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -554,7 +555,7 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
         return new MergeToolHelp([.. kept.Found], [.. kept.NotFound], Failed: false);
     }
 
-    /// <summary>Keeps <paramref name="help"/> as <paramref name="git"/>'s, written beside the file and swapped in, as settings.json is (D46).</summary>
+    /// <summary>Keeps <paramref name="help"/> as <paramref name="git"/>'s, written beside the file, flushed and swapped in, as settings.json is (D46, <see cref="DurableFile"/>).</summary>
     private void WriteKept(KnownGit git, MergeToolHelp help)
     {
         try
@@ -564,10 +565,8 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
                 Directory.CreateDirectory(folder);
             }
 
-            var temporary = _mergeToolsFile + ".tmp";
             var kept = new KeptMergeTools(git.Path, git.Version, help.Found, help.NotFound);
-            File.WriteAllText(temporary, JsonSerializer.Serialize(kept, MergeToolsJsonContext.Default.KeptMergeTools));
-            File.Move(temporary, _mergeToolsFile, overwrite: true);
+            DurableFile.Replace(_mergeToolsFile, JsonSerializer.Serialize(kept, MergeToolsJsonContext.Default.KeptMergeTools));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
