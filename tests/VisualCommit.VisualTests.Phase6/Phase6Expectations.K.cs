@@ -920,7 +920,7 @@ public static partial class Phase6Expectations
         /// <summary>GR0's thirteen rows' subjects, top to bottom (scenario facts 6).</summary>
         public static readonly string[] Gr0Subjects =
         [
-            "Work in progress on README", "Highlight matches", "Add settings page", "Fix typo in docs", "Bump version", "Fix crash on start",
+            "On main: Work in progress on README", "Highlight matches", "Add settings page", "Fix typo in docs", "Bump version", "Fix crash on start",
             "Add search box", "Merge branch 'feature/login'", "Update README", "Validate passwords", "Add login form", "Add app skeleton", "Initial commit",
         ];
 
