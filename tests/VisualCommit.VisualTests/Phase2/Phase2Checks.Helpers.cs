@@ -130,9 +130,10 @@ public partial class Phase2Checks
     /// file, a hunk or a line with its snapshot and, since phase 4, the backups' clean-up; a
     /// restore): with the default run's five test processes side by side, 10 s was not always
     /// enough (check 18 at phase 4's gate, check 19 in phase 5's baseline run). Checks 13, 17, 18
-    /// and 19 wait this long after each discard and restore.
+    /// and 19 wait this long after each discard and restore: 30 s, and since phase 6's gate 60 s, as
+    /// the driver's default (D237).
     /// </summary>
-    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>A list's rows as text: status letter, name, folder (flat) and origin, from the list's own rows, scrolled into view or not.</summary>
     private static List<string> FileRows(ShellDriver app, string list)

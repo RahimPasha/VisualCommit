@@ -96,10 +96,12 @@ public abstract partial class Phase3Checks
     /// after it (check 23's stash: 17 calls, 1.2 s alone on the development machine, 3 s on CI's
     /// Windows job in run 38812370566), and a pop saves a backup first. With the default run's
     /// test processes side by side, 10 s was not enough there once (run 38816004590): 30 s, as
-    /// phase 2's <c>WriteTimeout</c>. The expected result is the state after the wait, not how long
-    /// it took; <see cref="WaitForStatusAsync"/> says what the status bar showed if it runs out.
+    /// phase 2's <c>WriteTimeout</c>; since phase 6's gate 60 s, as the driver's default (D237: the
+    /// pop's 24 calls ran past 30 s with nine projects side by side). The expected result is the
+    /// state after the wait, not how long it took; <see cref="WaitForStatusAsync"/> says what the
+    /// status bar showed if it runs out.
     /// </summary>
-    protected static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
+    protected static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(60);
 
     private static readonly Lock TimingGate = new();
     private static readonly HashSet<string> TimingsStarted = [];

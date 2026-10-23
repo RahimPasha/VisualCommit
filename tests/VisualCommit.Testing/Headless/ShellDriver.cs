@@ -28,10 +28,12 @@ public sealed partial class ShellDriver : IDisposable
     /// How long <see cref="WaitForAsync"/> waits when the test names no time: 30 s, the limit
     /// phases 2 to 4 gave a wait after a write. Phase 5 records every action for undo (a stash
     /// makes 17 git calls), and in the full run's seven projects side by side a step took 5 to 8
-    /// times as long as alone, so 10 s ran out for operations that end in 1 to 3 s alone. A wait
-    /// still ends as soon as its condition holds.
+    /// times as long as alone, so 10 s ran out for operations that end in 1 to 3 s alone. Since
+    /// phase 6's gate 60 s (D237): with nine projects side by side a git call took 10 to 15 times
+    /// as long as alone, and an operation of 24 calls (check 23's pop) ran past 30 s. A wait still
+    /// ends as soon as its condition holds.
     /// </summary>
-    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// The pause between two looks at a condition in <see cref="WaitForAsync"/>: short enough that

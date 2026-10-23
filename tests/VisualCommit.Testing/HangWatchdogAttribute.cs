@@ -19,8 +19,8 @@ namespace VisualCommit.Testing;
 /// <para>
 /// The time a test waits for a shared preparation, a scenario template or the 100k-commit repo
 /// that one test of the process builds for all (<see cref="SharedPreparationAsync{T}"/>), does
-/// not count against that test; the preparation is held to the limit on its own
-/// (<see cref="HangClock"/>).
+/// not count against that test; the preparation is held to a limit of its own,
+/// <see cref="SharedPreparationLimit"/> (<see cref="HangClock"/>).
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Assembly)]
@@ -84,11 +84,20 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
             return await preparation.ConfigureAwait(false);
         }
 
-        using (Clock.Preparing(TestContext.Current.Test?.UniqueID, what))
+        using (Clock.Preparing(TestContext.Current.Test?.UniqueID, what, limit: SharedPreparationLimit))
         {
             return await preparation.ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// The limit a shared preparation is held to: 10 minutes, as <c>git mergetool --tool-help</c>'s
+    /// wait (D237). A template is the whole process's cost and tens of git calls (the reflog
+    /// scenario's 88): 18 s alone, and over the run's 180 s at phase 6's gate, where the default
+    /// run's nine projects side by side made a git call take 10 to 15 times as long. A build that
+    /// hangs is still caught.
+    /// </summary>
+    public static readonly TimeSpan SharedPreparationLimit = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Notes that the current test waits from now, until the result is disposed, for its turn on

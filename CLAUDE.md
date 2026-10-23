@@ -324,7 +324,8 @@ What to know about them:
   folder: `%APPDATA%\VisualCommit` on Windows, `~/.config/VisualCommit` on Linux,
   `~/Library/Application Support/VisualCommit` on macOS.
 - A test run that hangs stops itself after 3 minutes and prints `HANG WATCHDOG` with the names of
-  the tests that were running. A test that really needs longer must raise the limit: the
+  the tests that were running; a shared preparation (a scenario template, the 100k-commit repo) is
+  held to 10 minutes of its own (D237). A test that really needs longer must raise the limit: the
   environment variable `VISUALCOMMIT_TEST_HANG_SECONDS` sets it. To look closer at a hang, run the
   test project's own program with `-diagnostics -longRunning 10`:
   `tests\<project>\bin\Debug\net10.0\<project>.exe` on Windows,
