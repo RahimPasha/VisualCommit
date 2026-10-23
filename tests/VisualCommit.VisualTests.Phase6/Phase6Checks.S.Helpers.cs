@@ -260,6 +260,7 @@ public sealed partial class Phase6ChecksS
         var cancel = (Button)app.FindByAutomationId("CancelButton");
         var save = (Button)app.FindByAutomationId("ConfirmButton");
         Assert.Equal((PartS.Cancel, PartS.Save), ((string?)cancel.Content, (string?)save.Content));
+        Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), save.Theme);
         Assert.True(app.BoundsOf(cancel).Right <= app.BoundsOf(save).X, "Cancel is not left of Save.");
         layout.Near(8, app.BoundsOf(save).X - app.BoundsOf(cancel).Right, "The gap between Cancel and Save");
         layout.Near(card.Right - 22, app.BoundsOf(save).Right, "Save's right (about)");
@@ -456,6 +457,7 @@ public sealed partial class Phase6ChecksS
         AssertHidden(snapshot, "BranchRebaseNotice");
         AssertText(snapshot, "MergeToolValue", mergeTool);
         AssertMergeToolChoose(snapshot);
+        AssertHidden(snapshot, "MergeToolStatus");
         AssertHidden(snapshot, "GitReading");
         AssertGitLayout(app, layout);
     }
@@ -476,7 +478,7 @@ public sealed partial class Phase6ChecksS
         if (repositoryEnabled)
         {
             var prefix = PartS.Settings + " — ";
-            Assert.True(field.ToolTip is { } tip && tip.StartsWith(prefix, StringComparison.Ordinal) && repositoryFolder is not null && WorkspacePaths.Same(tip[prefix.Length..], repositoryFolder), $"This repository's tooltip is \"{field.ToolTip}\", not \"{prefix}{repositoryFolder}\".");
+            Assert.True(field.ToolTip is { } tip && tip.StartsWith(prefix, StringComparison.Ordinal) && repositoryFolder is not null && SamePlace(tip[prefix.Length..], repositoryFolder), $"This repository's tooltip is \"{field.ToolTip}\", not \"{prefix}{repositoryFolder}\".");
         }
         else
         {
@@ -599,7 +601,7 @@ public sealed partial class Phase6ChecksS
     // ---- The Pick dialog (7.7) ----
 
     /// <summary>One item of the open Pick dialog as drawn: its text, its detail (null when hidden), its automation name and help text, whether it is selected, its bounds.</summary>
-    private sealed record PickRow(string Text, string? Detail, string? Name, string? HelpText, bool Selected, Rect Bounds, Rect TextBounds, Rect? DetailBounds, Color? DetailColour, double? DetailSize);
+    private sealed record PickRow(string Text, string? Detail, string? Name, string? HelpText, bool Selected, Rect Bounds, Rect TextBounds, Rect? DetailBounds, Color? DetailColour, double? DetailSize, TextTrimming? DetailTrimming);
 
     /// <summary>The open Pick dialog's items, top to bottom.</summary>
     private static List<PickRow> PickRows(ShellDriver app)
@@ -624,7 +626,8 @@ public sealed partial class Phase6ChecksS
                     app.BoundsOf(text),
                     detail is null ? null : app.BoundsOf(detail),
                     (detail?.Foreground as ISolidColorBrush)?.Color,
-                    detail?.FontSize);
+                    detail?.FontSize,
+                    detail?.TextTrimming);
             })];
     }
 
@@ -666,6 +669,7 @@ public sealed partial class Phase6ChecksS
             Assert.Equal(row.Text == selected, row.Selected);
             Assert.Equal(palette.TextSecondary, row.DetailColour);
             Assert.Equal(11.5, row.DetailSize);
+            Assert.Equal(TextTrimming.LeadingCharacterEllipsis, row.DetailTrimming);
             layout.Near(12, row.DetailBounds!.Value.X - row.TextBounds.Right, $"the gap before the option {row.Text}'s detail", 1);
             layout.Check(row.Bounds.Bottom <= app.BoundsOf(list).Bottom + 0.5, $"the option {row.Text} is not in view.");
         }
@@ -681,9 +685,15 @@ public sealed partial class Phase6ChecksS
     /// <summary>Whether a call's folder is <paramref name="folder"/>: as given, or as git spells it (<paramref name="gitFolder"/>; on macOS <c>/private/var</c> where the path says <c>/var</c>).</summary>
     private static bool InFolder(GitCallRecord call, string folder, string? gitFolder = null) =>
         call.WorkingDirectory is { } directory
-        && (WorkspacePaths.Same(directory, folder)
-            || (gitFolder is not null && WorkspacePaths.Same(directory, gitFolder))
-            || (OperatingSystem.IsMacOS() && WorkspacePaths.Same(directory, "/private" + folder)));
+        && (SamePlace(directory, folder) || (gitFolder is not null && SamePlace(directory, gitFolder)));
+
+    /// <summary>
+    /// Whether two paths name one file or folder (<see cref="WorkspacePaths.Same"/>), also where one
+    /// is spelt as git spells it on macOS, <c>/private/var/…</c> for <c>/var/…</c>.
+    /// </summary>
+    private static bool SamePlace(string a, string b) =>
+        WorkspacePaths.Same(a, b)
+        || (OperatingSystem.IsMacOS() && (WorkspacePaths.Same("/private" + a, b) || WorkspacePaths.Same(a, "/private" + b)));
 
     /// <summary>A call as the report writes it: its command, its folder's kind and its exit code.</summary>
     private sealed record ExpectedCall(string Command, string Where, int? ExitCode, string? Output = null);

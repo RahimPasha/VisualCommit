@@ -58,7 +58,7 @@ public sealed partial class Phase6ChecksS
         app.ClickMenuItem(PartS.OpenFile);
         await app.WaitForAsync(() => app.Launcher.Opened.Count == 1, "Open file to open run.py");
         await AssertNoDialogAsync(app);
-        Assert.True(WorkspacePaths.Same(Assert.Single(app.Launcher.Opened), runPy), $"Open file opened {app.Launcher.Opened[0]}, not {runPy}.");
+        Assert.True(SamePlace(Assert.Single(app.Launcher.Opened), runPy), $"Open file opened {app.Launcher.Opened[0]}, not {runPy}.");
         Assert.True(Path.IsPathFullyQualified(app.Launcher.Opened[0]), "Open file's path is not absolute.");
 
         // Step 3: .py added in General; Save writes settings.json and no git key; the reads at the opening and the read back.
@@ -129,7 +129,7 @@ public sealed partial class Phase6ChecksS
         await AssertNoDialogAsync(app);
         var edit = Assert.Single(app.Launcher.Edits);
         Assert.Equal(PartS.VsCodeProgram, edit.FileName);
-        Assert.True(edit.Arguments.Count == 1 && WorkspacePaths.Same(edit.Arguments[0], runPy) && Path.IsPathFullyQualified(edit.Arguments[0]), $"The editor's arguments are [{string.Join(", ", edit.Arguments)}], not [{runPy}].");
+        Assert.True(edit.Arguments.Count == 1 && SamePlace(edit.Arguments[0], runPy) && Path.IsPathFullyQualified(edit.Arguments[0]), $"The editor's arguments are [{string.Join(", ", edit.Arguments)}], not [{runPy}].");
         Assert.Equal(OperatingSystem.IsWindows() ? PartS.VsCodeFolderOnWindows : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), edit.WorkingDirectory);
         Assert.Contains(PartS.ElectronRunAsNode, edit.RemovedVariables);
         Assert.Equal(2, app.Launcher.Requests.Count);
