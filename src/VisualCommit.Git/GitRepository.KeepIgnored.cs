@@ -20,6 +20,15 @@ namespace VisualCommit.Git;
 /// byte order; a read that fails throws <see cref="GitException"/>, which the operation logs
 /// before it goes on to git (9.3).
 /// </para>
+/// <para>
+/// Git's directory-rename detection writes paths none of those reads lists: a file one side added
+/// under a directory the other side renamed whole lands under the new directory, over an ignored
+/// file there (<see cref="DirectoryRenames"/>; Git 2.36, 2.55 and 2.56). When a read finds nothing
+/// else in the way, and only then, and only when its paths leave room for such a move on disk
+/// (<see cref="MayMoveThroughADirectoryRename"/>, no process), one read with renames,
+/// <c>git diff-tree -r -z -M --name-status</c>, gives those paths, which go to
+/// <see cref="FindIgnoredAtAsync"/> too (<see cref="IgnoredWhereDirectoriesMoveAsync"/>).
+/// </para>
 /// </summary>
 public sealed partial class GitRepository
 {
@@ -156,13 +165,34 @@ public sealed partial class GitRepository
     /// ancestor keeps nothing (U4); no base (unrelated histories, which git refuses anyway) and a
     /// fast-forward (<paramref name="into"/> is the base) keep everything; a criss-cross keeps a
     /// file any base lists. Not <c>merge-tree --write-tree</c>, which would be exact but needs Git
-    /// 2.38 (0.4). Usual cost: one read, two with a candidate on disk.
+    /// 2.38 (0.4). Usual cost: one read, two with a candidate on disk. With nothing in the way and
+    /// an added path that a directory rename could move onto something on disk, the renames
+    /// between <paramref name="into"/> and <paramref name="source"/> too
+    /// (<see cref="IgnoredWhereDirectoriesMoveAsync"/>), and only when they find something, whether
+    /// either is an ancestor of the other: a fast-forward and a merge of an ancestor move nothing.
     /// </summary>
     public async Task<IReadOnlyList<string>> FindIgnoredInTheWayOfMergeAsync(string into, string source, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(into);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         var added = SplitNul(await ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "--no-renames", "--name-only", "--diff-filter=A", into, source, "--").ConfigureAwait(false));
+        var found = await IgnoredWrittenByMergeAsync(into, source, added, cancellationToken).ConfigureAwait(false);
+        if (found.Count > 0 || !MayMoveThroughADirectoryRename(added))
+        {
+            return found;
+        }
+
+        var moved = await IgnoredWhereDirectoriesMoveAsync(into, source, cancellationToken).ConfigureAwait(false);
+        return moved.Count > 0
+            && !await IsAncestorAsync(into, source, cancellationToken).ConfigureAwait(false)
+            && !await IsAncestorAsync(source, into, cancellationToken).ConfigureAwait(false)
+                ? moved
+                : [];
+    }
+
+    /// <summary>9.4's stages 2 and 3 for the paths the source adds (<paramref name="added"/>): the ignored files a merge writes over.</summary>
+    private async Task<IReadOnlyList<string>> IgnoredWrittenByMergeAsync(string into, string source, IReadOnlyList<string> added, CancellationToken cancellationToken)
+    {
         var pairs = await FindIgnoredAtAsync(added, cancellationToken).ConfigureAwait(false);
         if (pairs.Count == 0)
         {
@@ -202,7 +232,11 @@ public sealed partial class GitRepository
     /// every path; no second stage. It is enough: an added or modified path is written where HEAD
     /// lacks it (an addition, or the side git leaves of a modify/delete conflict, 0.4's T9 and T4),
     /// a tracked path is never ignored, and in a list the union covers a path the first pick adds
-    /// and the second deletes. Usual cost: two reads.
+    /// and the second deletes. Usual cost: two reads. With nothing in the way and a written path
+    /// that a directory rename could move onto something on disk, the renames between HEAD and
+    /// what each commit applies too, one read per commit side by side: the commit for a pick, its
+    /// parent for a revert (<paramref name="mergeParent"/> for a merge's), whose own renames and
+    /// HEAD's move each other's new files (<see cref="IgnoredWhereDirectoriesMoveAsync"/>).
     /// </summary>
     /// <param name="commits">The commits in the order git applies them, as full SHAs: <c>--stdin</c> resolves no name (0.4).</param>
     /// <param name="revert">Reverts, not picks.</param>
@@ -229,7 +263,29 @@ public sealed partial class GitRepository
 
         IReadOnlyList<string> lines = mergeParent is null ? commits : [$"{commits[0]} {mergeParent}"];
         var written = await CommitsWriteAsync(lines, revert, cancellationToken).ConfigureAwait(false);
-        return IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+        var found = IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+        if (found.Count > 0 || !MayMoveThroughADirectoryRename(written))
+        {
+            return found;
+        }
+
+        // What git applies to HEAD: the commit, or for a revert its parent, whose read fails only
+        // for a root commit (the commits exist: diff-tree --stdin just read them), and a root
+        // commit's revert applies the empty tree, which renames and adds nothing.
+        IReadOnlyList<string> applied = mergeParent is not null ? [mergeParent] : revert ? [.. commits.Select(commit => commit + "^")] : commits;
+        var moved = await Task.WhenAll(applied.Select(async target =>
+        {
+            try
+            {
+                return await DirectoriesMoveAsync("HEAD", target, cancellationToken).ConfigureAwait(false);
+            }
+            catch (GitException ex) when (revert && mergeParent is null && ex.ExitCode == 128)
+            {
+                return (IReadOnlyList<string>)[];
+            }
+        })).ConfigureAwait(false);
+        var paths = moved.SelectMany(list => list).Distinct(StringComparer.Ordinal).ToList();
+        return paths.Count == 0 ? [] : IgnoredFiles(await FindIgnoredAtAsync(paths, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -283,7 +339,11 @@ public sealed partial class GitRepository
     /// makes the app's plain <c>git rebase</c> one too, so the read does not depend on the rebase's
     /// options. A superset of what git writes (git leaves out commits whose patch is upstream, the
     /// pull's fork point maybe more; a plain rebase writes no branch point). Cost: four reads,
-    /// then <c>check-ignore</c>; with a merge in the range two reads more before it.
+    /// then <c>check-ignore</c>; with a merge in the range two reads more before it. With nothing
+    /// in the way and a path of (2) or the replayed commits that a directory rename could move
+    /// onto something on disk, the renames between <paramref name="onto"/> and
+    /// <paramref name="tip"/> too: the replayed commits' renames move <paramref name="onto"/>'s new
+    /// files, and <paramref name="onto"/>'s move theirs (<see cref="IgnoredWhereDirectoriesMoveAsync"/>).
     /// </summary>
     /// <param name="tip">What is rebased: <c>HEAD</c>, or for "Check out and rebase" the branch's full ref.</param>
     /// <param name="onto">The commit it is rebased onto: the menu's SHA, or the pull's upstream ref.</param>
@@ -310,7 +370,10 @@ public sealed partial class GitRepository
             written.AddRange(await BranchPointsWriteAsync(range, cancellationToken).ConfigureAwait(false));
         }
 
-        return IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+        var found = IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+        return found.Count > 0 || !MayMoveThroughADirectoryRename(written)
+            ? found
+            : await IgnoredWhereDirectoriesMoveAsync(onto, tip, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -445,7 +508,10 @@ public sealed partial class GitRepository
     /// less <see cref="StashPaths.Deleted"/>; a staged new file, and the stash's side of a
     /// modify/delete, which Git 2.55 overwrites and 2.36 does not), and its untracked files (for a
     /// folder above one that is an ignored file: D179's count has already refused one that
-    /// exists), asked about on disk.
+    /// exists), asked about on disk. With nothing in the way and a written path that a directory
+    /// rename could move onto something on disk, the renames between HEAD and the stash too
+    /// (<see cref="IgnoredWhereDirectoriesMoveAsync"/>; Git 2.55 and 2.56 write such a file over an
+    /// ignored one, 2.36 beside it).
     /// </summary>
     public async Task<IReadOnlyList<string>> FindIgnoredInTheWayOfStashAsync(string stashCommit, CancellationToken cancellationToken = default)
     {
@@ -453,8 +519,85 @@ public sealed partial class GitRepository
         var paths = await ReadStashPathsAsync(stashCommit, cancellationToken).ConfigureAwait(false);
         var deleted = paths.Deleted.ToHashSet(StringComparer.Ordinal);
         IReadOnlyList<string> written = [.. paths.Changed.Where(path => !deleted.Contains(path)), .. paths.Untracked];
-        return IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+        var found = IgnoredFiles(await FindIgnoredAtAsync(written, cancellationToken).ConfigureAwait(false));
+        return found.Count > 0 || !MayMoveThroughADirectoryRename(written)
+            ? found
+            : await IgnoredWhereDirectoriesMoveAsync("HEAD", stashCommit, cancellationToken).ConfigureAwait(false);
     }
+
+    // ---- Directory renames --------------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether a directory rename could write, over something on disk, a path the reads above do
+    /// not list, judged from <paramref name="written"/> and the disk alone (no process): a rename
+    /// moves a file into the folder of the files the renaming side moved, which the other side's
+    /// reads list as written where that side lacks them; and a side that renamed a folder away
+    /// lacks it on disk while the other side writes into it. So some written path must be missing
+    /// on disk, in a folder; or, for a folder renamed into the root, at the root while a top-level
+    /// folder holds a file of its name (the rename's old place). Not counted: a folder renamed into
+    /// the root from deeper than the top level, nor a side the disk does not show (the branch of
+    /// "Check out and merge", checked out only after the check).
+    /// </summary>
+    private bool MayMoveThroughADirectoryRename(IEnumerable<string> written)
+    {
+        List<string>? topFolders = null;
+        foreach (var path in written)
+        {
+            var full = WorkingTreePath(path);
+            if (IsFileOrLink(full) || Directory.Exists(full))
+            {
+                continue;
+            }
+
+            if (path.Contains('/', StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            topFolders ??= TopLevelFolders();
+            if (topFolders.Exists(folder => IsFileOrLink(WorkingTreePath(folder + "/" + path))))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The working tree's folders at its top, the git folder and links left out.</summary>
+    private List<string> TopLevelFolders()
+    {
+        try
+        {
+            return [.. new DirectoryInfo(WorkingDirectory)
+                .EnumerateDirectories("*", new EnumerationOptions { AttributesToSkip = 0 })
+                .Where(folder => folder.LinkTarget is null && !string.Equals(folder.Name, ".git", StringComparison.OrdinalIgnoreCase))
+                .Select(folder => folder.Name)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// The ignored files in the way of the paths git's directory-rename detection may write when
+    /// it applies <paramref name="theirs"/> to <paramref name="ours"/> (<see cref="DirectoriesMoveAsync"/>):
+    /// none without a rename, so no process after the read.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> IgnoredWhereDirectoriesMoveAsync(string ours, string theirs, CancellationToken cancellationToken)
+    {
+        var moved = await DirectoriesMoveAsync(ours, theirs, cancellationToken).ConfigureAwait(false);
+        return moved.Count == 0 ? [] : IgnoredFiles(await FindIgnoredAtAsync(moved, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// One <c>git diff-tree -r -z -M --name-status &lt;ours&gt; &lt;theirs&gt; --</c>, and the paths a
+    /// directory rename either side made between them may write (<see cref="DirectoryRenames.Moved"/>).
+    /// </summary>
+    private async Task<IReadOnlyList<string>> DirectoriesMoveAsync(string ours, string theirs, CancellationToken cancellationToken) =>
+        DirectoryRenames.Moved(DirectoryRenames.Parse(
+            await ReadOutputAsync(cancellationToken, "diff-tree", "-r", "-z", "-M", "--name-status", ours, theirs, "--").ConfigureAwait(false)));
 
     // ---- 9.10: the pull --------------------------------------------------------------------------------
 
