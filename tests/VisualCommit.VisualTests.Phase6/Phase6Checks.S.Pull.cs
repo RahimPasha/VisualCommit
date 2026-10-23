@@ -38,7 +38,7 @@ public sealed partial class Phase6ChecksS
         var pull = ToolbarButton(app, "PullButton");
         Assert.True(pull.IsEffectivelyEnabled, "Pull is disabled.");
         Assert.Equal(PartS.PullToolTip, ToolTip.GetTip(pull) as string);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         await app.OpenSettingsAsync();
         app.ChooseSection(SettingsSection.Git);
         ShotAtRest(app, "s19a-global-ff-only");
@@ -50,7 +50,7 @@ public sealed partial class Phase6ChecksS
         layout.Step = "step 2";
         await EscapeScreenAsync(app);
         var mark = app.LogMark();
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         app.Click(pull);
         await WaitForOutcomeAsync(app, repo, PartS.PullTitle, mark, OperationOutcome.Failed, NetworkTimeout);
         Shot(app, "s19b-pull-refused");
@@ -90,13 +90,13 @@ public sealed partial class Phase6ChecksS
 
         // Step 3: This repository: Same as global, in effect Fast-forward only from the global file.
         layout.Step = "step 3";
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         var screen = await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseScope(SettingsScope.Repository);
         ShotAtRest(app, "s19c-repository-same-as-global");
         AssertGitRepository(app, layout, folder, string.Empty, PartS.SameAsGlobalValue("Test Author"), string.Empty, PartS.SameAsGlobalValue("author@example.com"), PartS.CommitsMadeAs(PartS.TestAuthorIdent), [], "PullNotSet", PartS.PullInEffect(PartS.Main, PartS.PullFastForwardOnly, "pull.ff", "only", PartS.GlobalFileName));
         AssertPullInEffectTip(app, ShellDriver.GlobalGitConfigPath(data.Path));
-        await AssertScreenReadsAsync(app, sequence, data, repo, varExit: 0, ident: PartS.TestAuthorIdent, pull: PartS.PullReadsFastForwardOnly, exact: false);
+        await AssertScreenReadsAsync(app, sequence, data, repo, varExit: 0, ident: PartS.TestAuthorIdent, pull: PartS.PullReadsFastForwardOnly);
 
         // Step 4: Rebase saved for the repository: both keys at --local (8.7), one operation.
         layout.Step = "step 4";
@@ -109,7 +109,7 @@ public sealed partial class Phase6ChecksS
 
         // Step 5: the global scope keeps Fast-forward only with SD8's notice; the repository's Rebase in effect.
         layout.Step = "step 5";
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
         ShotAtRest(app, "s19d-global-repository-sets-its-own");
@@ -117,7 +117,7 @@ public sealed partial class Phase6ChecksS
         app.ChooseScope(SettingsScope.Repository);
         ShotAtRest(app, "s19e-repository-rebase");
         AssertGitRepository(app, layout, folder, string.Empty, PartS.SameAsGlobalValue("Test Author"), string.Empty, PartS.SameAsGlobalValue("author@example.com"), PartS.CommitsMadeAs(PartS.TestAuthorIdent), [], "PullRebase", PartS.PullInEffect(PartS.Main, PartS.PullRebase, "pull.rebase", "true", PartS.LocalFileName));
-        await AssertScreenReadsAsync(app, sequence, data, repo, varExit: 0, ident: PartS.TestAuthorIdent, pull: PartS.PullReadsRebase, exact: false);
+        await AssertScreenReadsAsync(app, sequence, data, repo, varExit: 0, ident: PartS.TestAuthorIdent, pull: PartS.PullReadsRebase);
         await EscapeScreenAsync(app);
         Assert.Equal(configAtStart + PartS.LocalPullSection, ConfigText(repo));
         layout.AssertNone();
@@ -140,7 +140,7 @@ public sealed partial class Phase6ChecksS
         AssertGraph(app, PartS.St0, PartS.StLanes, working: null);
         AssertUndo(app, PartS.NothingToUndo);
         var mark = app.LogMark();
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         app.Click(ToolbarButton(app, "PullButton"));
         await WaitForOutcomeAsync(app, repo, PartS.PullTitle, mark, OperationOutcome.Succeeded, OperationChainTimeout);
         Shot(app, "s19f-pulled-rebased");
@@ -202,7 +202,7 @@ public sealed partial class Phase6ChecksS
         using var app = await StartAsync(data, repo, PartS.SeedPullFastForwardOnly);
         var folder = await WorkingTreeAsync(repo);
         AssertGraph(app, PartS.St0, PartS.StLanes, working: null);
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         var screen = await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
         AssertGitGlobal(app, layout, data, repo, name: "Test Author", email: "author@example.com", checkedPull: "PullFastForwardOnly", pullNotices: [PartS.SetsItsOwn(PartS.Settings, PartS.PullRebase)], repositoryFolder: folder);
@@ -219,7 +219,7 @@ public sealed partial class Phase6ChecksS
         layout.Step = "step 8";
         await ChangeConfigOutsideAsync(app, repo, "branch.main.rebase", "false");
         Assert.Equal(configAtCopy.Replace(PartS.BranchMainSection, PartS.BranchMainSection + PartS.BranchRebaseLine, StringComparison.Ordinal), ConfigText(repo));
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseScope(SettingsScope.Repository);
         ShotAtRest(app, "s19g-branch-rebase-notice");
@@ -242,7 +242,7 @@ public sealed partial class Phase6ChecksS
         layout.Step = "step 10";
         await ChangeConfigOutsideAsync(app, repo, "pull.rebase", "preserve");
         Assert.Equal(configAtCopy + PartS.LocalPreserveSection, ConfigText(repo));
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
         AssertGitGlobal(app, layout, data, repo, name: "Test Author", email: "author@example.com", checkedPull: "PullFastForwardOnly", pullNotices: [PartS.SetsItsOwn(PartS.Settings, PartS.PullOther("pull.rebase", "preserve"))], repositoryFolder: folder);
@@ -252,14 +252,16 @@ public sealed partial class Phase6ChecksS
         AssertPullOther(app, PartS.PullOther("pull.rebase", "preserve"), PartS.PullsFail);
         Assert.False(app.SettingsSnapshot().Shows("BranchRebaseNotice"), "BranchRebaseNotice shows.");
         await AssertScreenReadsAsync(app, sequence, data, repo, varExit: 0, ident: PartS.TestAuthorIdent, pull: PartS.PullReadsPreserve);
-        Assert.Equal(9, app.CallsSince(sequence).Count);
+
+        // Nine processes of the screen's reads; any other call is a whole refresh of the watcher's.
+        Assert.Equal(9, app.CallsSince(sequence).Count(IsScreenRead));
         await EscapeScreenAsync(app);
         AssertNoWrite(app, sequence);
 
         // Step 11: Pull refused before any fetch (8.9, D219).
         layout.Step = "step 11";
         var mark = app.LogMark();
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         app.Click(ToolbarButton(app, "PullButton"));
         await WaitForOutcomeAsync(app, repo, PartS.PullTitle, mark, OperationOutcome.Failed);
         AssertOperationCalls(
@@ -347,7 +349,7 @@ public sealed partial class Phase6ChecksS
     private static async Task<long> SaveRepositorySettingsAsync(ShellDriver app, TempDirectory data, TempRepo repo, SettingsDialogViewModel screen, params (string Command, string Where)[] writes)
     {
         var mark = app.LogMark();
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         Assert.True(await app.SaveSettingsAsync(), "Save did not close the screen.");
         await WaitForOutcomeAsync(app, repo, PartS.SaveRepositorySettings, mark, OperationOutcome.Succeeded);
         await WaitForScreenClosedAsync(app, screen);
@@ -367,7 +369,9 @@ public sealed partial class Phase6ChecksS
 
     /// <summary>
     /// A key of <c>.git/config</c> written outside the app (part S's "Outside the app"), then the
-    /// watcher's refresh waited for (a status read with nothing staged or unstaged) and the queue idle.
+    /// watcher's refresh waited for (a status read with nothing staged or unstaged), the queue idle
+    /// and the watcher quiet (a second burst of the write's events, which macOS can report apart,
+    /// refreshed too).
     /// </summary>
     private static async Task ChangeConfigOutsideAsync(ShellDriver app, TempRepo repo, string key, string value)
     {
@@ -375,5 +379,6 @@ public sealed partial class Phase6ChecksS
         await repo.ConfigAsync(key, value);
         await WaitForStatusReadAsync(app, 0, 0, mark);
         await app.WaitForIdleAsync();
+        await app.WaitForWatchersQuietAsync();
     }
 }

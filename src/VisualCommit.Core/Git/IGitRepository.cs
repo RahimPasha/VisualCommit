@@ -1009,6 +1009,13 @@ public interface IRepositoryWatcher : IDisposable
     /// repository; the app refreshes once when its write ends (D71).
     /// </summary>
     IDisposable Pause();
+
+    /// <summary>
+    /// Whether no change the watcher has counted is waiting for its quiet period or being raised
+    /// (a change the system has not reported yet is not known). The harnesses wait for it, through
+    /// the view model, before they mark a check's next calls. True for a watcher that holds no burst.
+    /// </summary>
+    bool IsQuiet => true;
 }
 
 /// <summary>Where a burst of changes happened.</summary>

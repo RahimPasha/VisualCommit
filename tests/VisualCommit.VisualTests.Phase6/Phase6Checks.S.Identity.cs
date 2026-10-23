@@ -36,10 +36,10 @@ public sealed partial class Phase6ChecksS
         using var app = await StartAsync(data, repo, PartS.SeedConfigOnly);
         var configAtStart = ConfigText(repo);
         var folder = await WorkingTreeAsync(repo);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         AssertGraph(app, PartS.St0, PartS.StLanes, PartS.St0wWorking);
         var screen = await app.OpenSettingsAsync();
-        var opened = app.CallMark();
+        var opened = await QuietMarkAsync(app);
         app.ChooseSection(SettingsSection.Git);
         AssertGitGlobal(app, layout, data, repo, repositoryFolder: folder);
         await AssertScreenReadsAsync(app, start, data, repo, varExit: 128);
@@ -48,7 +48,7 @@ public sealed partial class Phase6ChecksS
         layout.Step = "step 2";
         app.ChooseScope(SettingsScope.Repository);
         AssertGitRepository(app, layout, folder, string.Empty, PartS.NotSet, string.Empty, PartS.NotSet, PartS.NoEmailSet, [PartS.UseConfigOnly], "PullNotSet", PartS.PullNothingSet(PartS.Main));
-        Assert.Empty(app.CallsSince(opened));
+        await AssertNoCallsAsync(app, opened, "The scope switch");
 
         // Step 3: a name with "<" and an email without "@" in the global scope: refused at Save (SD25).
         layout.Step = "step 3";
@@ -57,7 +57,7 @@ public sealed partial class Phase6ChecksS
         AssertNameRefused(app);
         app.TypeInto("UserEmailBox", PartS.WarnedEmail);
         AssertEmailWarned(app);
-        var beforeSave = app.CallMark();
+        var beforeSave = await QuietMarkAsync(app);
         Assert.False(await app.SaveSettingsAsync(), "Save closed the screen with a refused name.");
         ShotAtRest(app, "s18a-name-refused");
         Assert.Equal(SettingsSection.Git, screen.SelectedSection);
@@ -66,7 +66,7 @@ public sealed partial class Phase6ChecksS
         AssertEmailWarned(app);
         AssertNav(app, "SettingsNavGit", "SettingsNavGit");
         await AssertFocusAsync(app, "UserNameBox");
-        Assert.Empty(app.CallsSince(beforeSave));
+        await AssertNoCallsAsync(app, beforeSave, "The refused Save");
         Assert.Equal(PartS.SeedConfigOnly, GlobalText(data));
 
         // Step 4: corrected as typed (SD9); Save writes the two global keys, reads back, closes.
@@ -79,7 +79,7 @@ public sealed partial class Phase6ChecksS
         AssertNav(app, "SettingsNavGit");
         var status = app.Session.Shell.ActiveTab.OperationStatus.Text;
         var operations = OperationCount(app);
-        beforeSave = app.CallMark();
+        beforeSave = await QuietMarkAsync(app);
         Assert.True(await app.SaveSettingsAsync(), "Save did not close the screen.");
         await WaitForScreenClosedAsync(app, screen);
         await AssertWritesAsync(app, beforeSave, data, repo, (PartS.WriteGlobalAnnName, "data"), (PartS.WriteGlobalAnnEmail, "data"));
@@ -93,7 +93,7 @@ public sealed partial class Phase6ChecksS
 
         // Step 5: the global scope shows the values; the repository's placeholders and in-effect line follow them.
         layout.Step = "step 5";
-        var step5 = app.CallMark();
+        var step5 = await QuietMarkAsync(app);
         screen = await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
         AssertGitGlobal(app, layout, data, repo, name: PartS.AnnName, email: PartS.AnnEmail, repositoryFolder: folder);
@@ -127,7 +127,7 @@ public sealed partial class Phase6ChecksS
         var folder = await WorkingTreeAsync(repo);
         AssertGraph(app, PartS.St0, PartS.StLanes, PartS.St0wWorking);
         AssertUndo(app, PartS.NothingToUndo);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         var screen = await app.OpenSettingsAsync(SettingsOpening.Key);
         await AssertScreenReadsAsync(app, start, data, repo, varExit: 0, ident: PartS.AnnIdent);
         app.ChooseScope(SettingsScope.Repository);
@@ -135,7 +135,7 @@ public sealed partial class Phase6ChecksS
         app.TypeInto("UserNameBox", PartS.BoName);
         app.TypeInto("UserEmailBox", PartS.BoEmail);
         var mark = app.LogMark();
-        var beforeSave = app.CallMark();
+        var beforeSave = await QuietMarkAsync(app);
         Assert.True(await app.SaveSettingsAsync(), "Save did not close the screen.");
         await WaitForOutcomeAsync(app, repo, PartS.SaveRepositorySettings, mark, OperationOutcome.Succeeded);
         await WaitForScreenClosedAsync(app, screen);
@@ -150,7 +150,7 @@ public sealed partial class Phase6ChecksS
 
         // Step 8: the global scope keeps the file's values with SD8's notices; the repository shows its own.
         layout.Step = "step 8";
-        var step8 = app.CallMark();
+        var step8 = await QuietMarkAsync(app);
         screen = await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
         ShotAtRest(app, "s18d-global-repository-sets-its-own");
@@ -229,7 +229,7 @@ public sealed partial class Phase6ChecksS
         Assert.Equal(PartS.CommitOneFile, button.Content);
         Assert.Equal(PartS.CommitOneFileTip, ToolTip.GetTip(button) as string);
         var mark = app.LogMark();
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         app.Click(button);
         await WaitForOutcomeAsync(app, repo, PartS.CommitTitle, mark, OperationOutcome.Succeeded);
         var commit = app.CallsSince(sequence).Where(call => call.CommandText == PartS.CommitCommand).ToList();

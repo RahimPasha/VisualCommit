@@ -703,17 +703,87 @@ public sealed partial class Phase6ChecksS
     private sealed record ExpectedCall(string Command, string Where, int? ExitCode, string? Output = null);
 
     /// <summary>
+    /// The mark of a step's git calls (<see cref="ShellDriver.CallMark"/>), taken once every
+    /// watcher is quiet (<see cref="ShellDriver.WaitForWatchersQuietAsync"/>): a refresh the step
+    /// before started, by a write reported late (macOS reports the app's own <c>git config
+    /// --local</c> after its operation, run 39948457690), ends before the mark and never crosses it.
+    /// </summary>
+    private static async Task<long> QuietMarkAsync(ShellDriver app)
+    {
+        await app.WaitForWatchersQuietAsync();
+        return app.CallMark();
+    }
+
+    /// <summary>
+    /// The forms of a refresh's calls outside every operation (<c>RepositoryViewModel.RefreshAsync</c>):
+    /// the refs read's five (design 10.2) and the status read, as the watcher's refresh after a
+    /// write to the git folder makes them.
+    /// </summary>
+    internal static readonly (string Name, Func<string, bool> Matches)[] RefreshForms =
+    [
+        ("git for-each-ref --format=… refs/heads refs/remotes refs/tags", text => text.StartsWith("git for-each-ref --format=", StringComparison.Ordinal) && text.EndsWith(" refs/heads refs/remotes refs/tags", StringComparison.Ordinal)),
+        ("git config --null --get-regexp ^remote\\.", text => text == "git config --null --get-regexp ^remote\\."),
+        ("git stash list --no-show-signature --no-color --encoding=UTF-8 --format=…", text => text.StartsWith("git stash list --no-show-signature --no-color --encoding=UTF-8 --format=", StringComparison.Ordinal)),
+        ("git symbolic-ref -q HEAD", text => text == "git symbolic-ref -q HEAD"),
+        ("git rev-parse -q --verify HEAD", text => text == "git rev-parse -q --verify HEAD"),
+        ("git status --porcelain=v2 -z --untracked-files=all --renames", text => text == "git status --porcelain=v2 -z --untracked-files=all --renames"),
+    ];
+
+    /// <summary>
+    /// What keeps <paramref name="calls"/> from being whole refreshes (part S's "The screen's
+    /// reads"), or null when they are, none included: every call of a form of
+    /// <see cref="RefreshForms"/> with no operation id, and every form as often as each other one.
+    /// A refresh the watcher starts for a write the system reports late (macOS) can land in any
+    /// step's calls; it is let through only whole, so that no other call slips past with it.
+    /// </summary>
+    internal static string? NotWholeRefreshes(IReadOnlyCollection<GitCallRecord> calls)
+    {
+        ArgumentNullException.ThrowIfNull(calls);
+        var counts = RefreshForms.ToDictionary(form => form.Name, _ => 0, StringComparer.Ordinal);
+        var problems = new List<string>();
+        foreach (var call in calls)
+        {
+            var form = RefreshForms.FirstOrDefault(candidate => candidate.Matches(call.CommandText)).Name;
+            if (form is null || call.OperationId is not null)
+            {
+                problems.Add($"{call.CommandText}{(call.OperationId is null ? string.Empty : $" (in {call.OperationId})")} is no refresh's call");
+                continue;
+            }
+
+            counts[form]++;
+        }
+
+        if (counts.Values.Distinct().Count() > 1)
+        {
+            problems.Add("the refresh calls are not whole refreshes: " + string.Join(", ", counts.Select(entry => $"{entry.Key} {entry.Value}")));
+        }
+
+        return problems.Count == 0 ? null : string.Join("; ", problems);
+    }
+
+    /// <summary>
+    /// A step that reads nothing (part S's "a scope switch reads nothing"): once every watcher is
+    /// quiet, no call since <paramref name="sequence"/> but whole refreshes (<see cref="NotWholeRefreshes"/>).
+    /// </summary>
+    private static async Task AssertNoCallsAsync(ShellDriver app, long sequence, string what)
+    {
+        await app.WaitForWatchersQuietAsync();
+        var calls = app.CallsSince(sequence);
+        Assert.True(NotWholeRefreshes(calls) is null, $"{what} made git calls:\n  " + string.Join("\n  ", calls.Select(call => $"{call.CommandText} → {call.ExitCode}")));
+    }
+
+    /// <summary>
     /// The screen's reads (SD29) since <paramref name="sequence"/> (and up to <paramref name="until"/>
     /// when given: an opening's reads before a read back's), asserted as a set: the outside read in
     /// the data folder (exit 0); with <paramref name="repo"/>, the repository read and both
     /// <c>git var</c> in its working tree (<paramref name="varExit"/>, not asserted when null: without
     /// a seed git guesses an identity from the machine, SD3; 128 with the seed's refusal, its last
     /// line asserted; and <paramref name="ident"/> on standard output when they succeed), then Pull's
-    /// reader's calls <paramref name="pull"/> in its
-    /// order; nothing else, unless <paramref name="others"/> lets a call through (a step's own
-    /// writes) or the step names the screen's reads only (<paramref name="exact"/> false: S19's "Pull's
-    /// reader as at step 1", where a refresh's reads may come between); no write unless
-    /// <paramref name="allowWrites"/>; no <c>git mergetool</c>.
+    /// reader's calls <paramref name="pull"/> in its order. Once every watcher is quiet, the calls of
+    /// the screen's reads' forms (<see cref="IsScreenRead"/>) are exactly that set, and the others
+    /// are whole refreshes (<see cref="NotWholeRefreshes"/>), unless <paramref name="others"/> lets
+    /// a call through (a step's own writes and operation); no write unless <paramref name="allowWrites"/>;
+    /// no <c>git mergetool</c>.
     /// </summary>
     private static async Task AssertScreenReadsAsync(
         ShellDriver app,
@@ -725,12 +795,17 @@ public sealed partial class Phase6ChecksS
         IReadOnlyList<PartS.PullRead>? pull = null,
         Func<GitCallRecord, bool>? others = null,
         bool allowWrites = false,
-        long? until = null,
-        bool exact = true)
+        long? until = null)
     {
         var gitFolder = repo is null ? null : await WorkingTreeAsync(repo);
+        await app.WaitForWatchersQuietAsync();
         var window = Window(app, sequence, until);
-        var calls = window.Where(call => (others is null || !others(call)) && (exact || IsScreenRead(call))).ToList();
+        var counted = window.Where(call => others is null || !others(call)).ToList();
+        var calls = counted.Where(IsScreenRead).ToList();
+        var refreshes = counted.Where(call => !IsScreenRead(call)).ToList();
+        Assert.True(
+            NotWholeRefreshes(refreshes) is null,
+            $"Besides the screen's reads the step made calls that are no whole refresh ({NotWholeRefreshes(refreshes)}):\n  " + string.Join("\n  ", counted.Select(call => $"{call.CommandText} → {call.ExitCode}")));
         var expected = new List<ExpectedCall> { new(PartS.ConfigListCommand, "data", 0) };
         if (repo is not null)
         {
