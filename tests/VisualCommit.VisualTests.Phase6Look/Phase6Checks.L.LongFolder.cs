@@ -5,12 +5,8 @@
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using VisualCommit.Core.Git;
-using VisualCommit.Core.Operations;
-using VisualCommit.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -89,41 +85,6 @@ public sealed partial class Phase6ChecksL
             AssertInk(picture, app.BoundsOf(error), palette.Danger, palette.Window, "CloneError (VcDangerBrush, 11.10)");
             Assert.False(Directory.Exists(clones.Combine("cloned")), "The failed clone left a folder cloned.");
         });
-    }
-
-    /// <summary>
-    /// What the clone form shows for <paramref name="url"/>'s failed clone (L32 step 2; a support
-    /// helper of 17.2 the report names, kept here until the support has it): <c>git clone --progress
-    /// -- {url} cloned</c> run in <paramref name="parent"/> by the tests' git, in the session's git
-    /// environment the app's calls get; it must fail and leave no folder <c>cloned</c>; then
-    /// <c>GitOutputCleaner.Clean(standardError, standardOutput)</c>, the app's own cleaning, trimmed as
-    /// <c>WelcomeViewModel</c> trims it.
-    /// </summary>
-    private static async Task<string> CloneErrorTextAsync(string url, string parent, string dataDirectory)
-    {
-        var git = GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("Git was not found on this machine.");
-        var result = await new GitRunner(git).RunAsync(
-            new GitCommand("clone", "--progress", "--", url, "cloned") { WorkingDirectory = parent, Environment = GitIsolation.SessionGitEnvironment(dataDirectory) },
-            TestContext.Current.CancellationToken);
-        Assert.False(result.Succeeded, $"The clone of {url} succeeded.");
-        Assert.False(Directory.Exists(Path.Combine(parent, "cloned")), "The failed clone left a folder cloned.");
-        return GitOutputCleaner.Clean(result.StandardError, result.StandardOutput).Trim();
-    }
-
-    /// <summary>
-    /// Phase 1's <c>TypeCloneFormAsync</c> (a private helper of phase 1's project the report names,
-    /// kept here until the support has it): the URL typed into the focused <c>CloneUrlBox</c>, the
-    /// parent folder into <c>CloneParentBox</c>, and the folder name over <c>CloneNameBox</c>'s text.
-    /// </summary>
-    private static async Task TypeCloneFormAsync(ShellDriver app, string url, string parent, string name)
-    {
-        await app.WaitForAsync(() => app.Find<TextBox>("CloneUrlBox").IsFocused, "the URL field to have the focus");
-        app.Type(url);
-        app.Click(app.Find<TextBox>("CloneParentBox"));
-        app.Type(parent);
-        app.Click(app.Find<TextBox>("CloneNameBox"));
-        app.PressKey(Key.A, app.CommandModifier == KeyModifiers.Meta ? RawInputModifiers.Meta : RawInputModifiers.Control);
-        app.Type(name);
     }
 
     /// <summary>The path git names for a <c>file:</c> URL: Windows' drive path with <c>/</c> separators, elsewhere the rooted path.</summary>
