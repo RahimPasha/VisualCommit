@@ -131,6 +131,7 @@ public partial class MainWindowViewModel : IWorkspaceHost
             {
                 tab.PropertyChanged -= OnTabPropertyChanged;
                 Unwatch(tab);
+                ForgetOpened(tab);
             }
         }
 
@@ -147,6 +148,20 @@ public partial class MainWindowViewModel : IWorkspaceHost
             {
                 Unwatch(tab);
             }
+
+            foreach (var dashboard in _watchedDashboards.Values)
+            {
+                dashboard.OpenedTabs.RemoveAll(opened => !Tabs.Contains(opened));
+            }
+        }
+    }
+
+    /// <summary>A closed tab leaves every dashboard's <c>OpenedTabs</c> (2.3), which would otherwise keep it, and its graph, until that dashboard's next open.</summary>
+    private void ForgetOpened(RepoTabViewModel tab)
+    {
+        foreach (var dashboard in _watchedDashboards.Values)
+        {
+            dashboard.OpenedTabs.Remove(tab);
         }
     }
 
@@ -206,7 +221,6 @@ public partial class MainWindowViewModel : IWorkspaceHost
             return;
         }
 
-        dashboard.OpenedTabs.RemoveAll(opened => !Tabs.Contains(opened));
         var highest = dashboard.OpenedTabs.Count == 0 ? -1 : dashboard.OpenedTabs.Max(Tabs.IndexOf);
         var index = 1 + Math.Max(DashboardCount() - 1, highest);
         var tab = AddTab();

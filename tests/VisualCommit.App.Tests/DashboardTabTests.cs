@@ -270,6 +270,48 @@ public class DashboardTabTests
     }
 
     [AvaloniaFact]
+    public async Task A_tab_a_dashboard_opened_is_let_go_when_it_closes()
+    {
+        // 2.3's OpenedTabs keeps the tabs a dashboard opened, for where its next one goes: a closed
+        // tab leaves it at once, not only at that next open, so that it and its graph can go.
+        using var provider = new FakeProvider();
+        var (api, docs) = (provider.Add("api"), provider.Add("docs"));
+        var services = DashboardTestSupport.Services(provider, DashboardTestSupport.Store(api.WorkingDirectory, docs.WorkingDirectory));
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var dashboard = window.ActiveTab.Dashboard!;
+        await DashboardTestSupport.WaitUntilAsync(() => dashboard.Rows.All(row => row.HasRepository), "the rows' reads");
+        dashboard.OpenRow(dashboard.Rows[0]);
+        await DashboardTestSupport.WaitUntilAsync(() => window.Tabs.Count == 2 && window.Tabs[1].Repository is { HasFirstRead: true } && api.HistoryLoads == 1, "api's tab");
+        await window.Tabs[1].Repository!.Queue.WhenIdleAsync();
+
+        var closed = CloseSecondTab(window);
+        await DashboardTestSupport.SettleAsync();
+        for (var i = 0; i < 5 && closed.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            await DashboardTestSupport.SettleAsync();
+        }
+
+        Assert.False(closed.IsAlive);
+
+        // Where the next tab goes is as before: right after the dashboard.
+        dashboard.OpenRow(dashboard.Rows[1]);
+        await DashboardTestSupport.WaitUntilAsync(() => window.Tabs.Count == 2 && window.Tabs[1].Repository is not null, "docs' tab");
+        Assert.Equal(["Web", "docs"], window.Tabs.Select(tab => tab.Title));
+    }
+
+    /// <summary>Closes the window's second tab and returns a weak reference to it, holding none itself.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference CloseSecondTab(MainWindowViewModel window)
+    {
+        var tab = window.Tabs[1];
+        window.CloseTabCommand.Execute(tab);
+        return new WeakReference(tab);
+    }
+
+    [AvaloniaFact]
     public async Task A_rows_pending_tab_is_found_by_the_same_folder_and_activated()
     {
         using var provider = new FakeProvider();

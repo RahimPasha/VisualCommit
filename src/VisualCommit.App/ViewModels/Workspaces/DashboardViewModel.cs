@@ -187,7 +187,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary>The dashboard is closed (its tab closed, or the window): it reacts to nothing any more (2.10).</summary>
     public bool IsClosed { get; private set; }
 
-    /// <summary>The tabs this dashboard opened in this session (2.3: a new one goes after the last still open); not saved.</summary>
+    /// <summary>The tabs this dashboard opened in this session that are still open (2.3: a new one goes after the last); the window removes a tab as it closes. Not saved.</summary>
     internal List<RepoTabViewModel> OpenedTabs { get; } = [];
 
     /// <summary>A row asked to open its repository (a double-click, Enter, the row menu's Open, 2.3): the window opens or activates its tab.</summary>
@@ -386,6 +386,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         _pending.Clear();
         _pendingDone?.TrySetResult();
         _pendingDone = null;
+        OpenedTabs.Clear();
         _lifetime.Dispose();
     }
 
