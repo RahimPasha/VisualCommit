@@ -389,6 +389,24 @@ public static partial class Phase6Expectations
 
         public static Point ChromeSpot { get; } = new(1070, 18);
 
+        /// <summary>
+        /// The spots S15 step 2 also samples for "every view light", each clear of text and controls:
+        /// the toolbar between its two groups and the details panel below its placeholder (the status
+        /// bar at the neutral point besides).
+        /// </summary>
+        public static Point ToolbarSpot { get; } = new(700, 62);
+
+        public static Point DetailsSpot { get; } = new(1080, 640);
+
+        /// <summary>GR0's stash line sampled as phase 5's F15 samples it (FD15's rule): lane 0's centre, x 406, from y 136 to 175, at least 5 dashes.</summary>
+        public const int StashLineX = 406;
+
+        public const int StashLineTop = 136;
+
+        public const int StashLineBottom = 175;
+
+        public const int StashLineDashes = 5;
+
         // ---- "conflicts" stopped in its merge (S20; phase 4's GC-M) ----
 
         public const string Conflicts = "conflicts";
