@@ -188,14 +188,12 @@ public sealed class Phase6SupportTests : Phase6Checks
         Assert.All(rows.Where(row => row.Name != "old-site"), row => Assert.True(row.HasRepository, $"{row.Name} has not been read."));
         Assert.All(rows.Select(row => row.Repository).OfType<RepositoryViewModel>(), repository => Assert.True(repository.Queue.Current is null && repository.Queue.Waiting == 0, $"{repository.Name}'s queue is busy."));
         Assert.Equal("Folder not found", snapshot.Row("old-site").State.Text);
-        // The first pass read every row, old-site's folder check among them (WD27). A later pass may
-        // follow it at a loaded start: the window's activation at its showing folds into one more
-        // pass, which reads the rows then read 10 s ago or more (2.10's rule), so only the first is
-        // asserted here.
+        // W2's read: one pass of every row, old-site's folder check among them (WD27); the window's
+        // activation at its showing folds into it and reads nothing twice, however long it takes (2.10).
         var passes = app.LogLines().Where(line => ShellDriver.ReadPassLine("Web").IsMatch(line)).ToList();
         Assert.True(
-            passes.Count >= 1 && passes[0].Contains("Web: read 10 repositories in ", StringComparison.Ordinal),
-            "The start's first pass did not read the ten rows (WD27); its pass lines:\n" + string.Join('\n', passes));
+            passes.Count == 1 && passes[0].Contains("Web: read 10 repositories in ", StringComparison.Ordinal),
+            "The start did not read the ten rows in one pass (WD27, 2.10); its pass lines:\n" + string.Join('\n', passes));
         Assert.True(app.ShowsDarkTheme);
         Assert.True(app.SystemTheme.IsDark);
     }
