@@ -499,6 +499,74 @@ public class DashboardRefreshTests
         Assert.Equal(2, api.RefsReads);
     }
 
+    /// <summary>
+    /// A request that folds into "one more pass" judges the 10 s rule as of the moment it was made
+    /// (2.10, the lead's ruling of 2026-10-23): the window's activation during a first pass of ten
+    /// rows that takes over 10 s by the read clock reads none of them again, so the start logs one
+    /// line, <c>read 10</c>, however long that pass takes.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_activation_during_a_pass_of_over_ten_seconds_reads_no_row_that_pass_read_again()
+    {
+        using var provider = new FakeProvider();
+        string[] names = ["api", "web-app", "docs", "mobile", "design-system", "billing", "infra", "scratch", "notes", "archive"];
+        var repositories = names.Select(name => provider.Add(name)).ToList();
+        var held = repositories[^1];
+        held.RefsGate = new TaskCompletionSource();
+        var (dashboard, log, clock) = Dashboard(provider, [.. repositories.Select(repository => repository.WorkingDirectory)]);
+
+        var start = dashboard.ReadAtStartAsync();
+        await DashboardTestSupport.WaitUntilAsync(
+            () => dashboard.Rows.Take(9).All(row => row.LastRead is not null) && held.RefsReads == 1,
+            "nine rows read and the tenth held in its refs read");
+        Assert.True(dashboard.IsPassRunning);
+
+        // The activation folds into one more pass; the first pass ends 11 s later by the read clock.
+        dashboard.OnWindowActivated();
+        clock.Advance(TimeSpan.FromSeconds(11));
+        held.RefsGate.SetResult();
+        await start.WaitAsync(Patience);
+        await DashboardTestSupport.SettleAsync();
+
+        Assert.False(dashboard.IsPassRunning);
+        Assert.DoesNotContain(dashboard.Rows, row => row.IsReading);
+        Assert.Equal(["Web: read 10 repositories in"], PassLines(log));
+        Assert.All(repositories, repository => Assert.Equal(1, repository.RefsReads));
+    }
+
+    /// <summary>
+    /// A folded request still reads a row that was 10 s old or more when it was made (2.10): api,
+    /// read 11 s before the window's activation, is read once a pass of docs alone, held meanwhile,
+    /// has ended; docs, read by that pass after the request, is not read again.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_folded_request_reads_a_row_that_was_eleven_seconds_old_when_it_was_made()
+    {
+        using var provider = new FakeProvider();
+        var (api, docs) = (provider.Add("api"), provider.Add("docs"));
+        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory]);
+        var store = (InMemoryWorkspaceStore)Store(dashboard);
+        dashboard.OnBecameActive();
+        await WaitForPassesAsync(log, 1);
+
+        // docs joins 5 s later and is read at once (trigger 6), held in its refs read.
+        clock.Advance(TimeSpan.FromSeconds(5));
+        docs.RefsGate = new TaskCompletionSource();
+        store.Update(list => WorkspaceEdits.Append(list, "web", [docs.WorkingDirectory]));
+        await DashboardTestSupport.WaitUntilAsync(() => docs.RefsReads == 1, "docs' read held");
+        Assert.True(dashboard.IsPassRunning);
+
+        // 11 s after api's read the window is activated: the request folds in, api stale by then.
+        clock.Advance(TimeSpan.FromSeconds(6));
+        dashboard.OnWindowActivated();
+        docs.RefsGate.SetResult();
+        await WaitForPassesAsync(log, 3);
+        await DashboardTestSupport.WaitUntilAsync(() => !dashboard.IsPassRunning, "the folded pass to end");
+
+        Assert.Equal(["Web: read 1 repository in", "Web: read 1 repository in", "Web: read 1 repository in"], PassLines(log));
+        Assert.Equal((2, 1), (api.RefsReads, docs.RefsReads));
+    }
+
     [AvaloniaFact]
     public async Task A_rows_deleted_git_folder_releases_its_summary_and_the_folder_is_probed_again()
     {

@@ -57,7 +57,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     private readonly TabServices _services;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Func<bool> _isActive;
-    private readonly List<(ReadTrigger Trigger, IReadOnlyList<DashboardRowViewModel>? Rows)> _pending = [];
+    private readonly List<(ReadTrigger Trigger, IReadOnlyList<DashboardRowViewModel>? Rows, DateTimeOffset RequestedAt)> _pending = [];
     private Task? _pass;
     private TaskCompletionSource? _pendingDone;
     private bool _deleted;
@@ -492,7 +492,11 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// <summary>
     /// Starts a read pass of the rows <paramref name="trigger"/> selects (2.10), or, while a pass runs,
     /// folds into one more pass after it; completes when that pass has ended. Starts nothing and
-    /// logs nothing when no row is to be read (WD35).
+    /// logs nothing when no row is to be read (WD35). A folded request keeps the moment it was made,
+    /// by which triggers 1 and 2 judge the 10 s rule when it runs (design 2.10, the lead's ruling of
+    /// 2026-10-23): a row the running pass read after the request is fresh, so the window's
+    /// activation at start, folded into the start-up read, reads no row twice however long that
+    /// pass takes.
     /// </summary>
     private Task Read(ReadTrigger trigger, IReadOnlyList<DashboardRowViewModel>? rows = null)
     {
@@ -501,13 +505,14 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             return Task.CompletedTask;
         }
 
+        var requestedAt = ReadClock.GetUtcNow();
         if (_pass is { IsCompleted: false })
         {
-            _pending.Add((trigger, rows));
+            _pending.Add((trigger, rows, requestedAt));
             return (_pendingDone ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
         }
 
-        var selected = Select(trigger, rows);
+        var selected = Select(trigger, rows, requestedAt);
         if (selected.Count == 0)
         {
             return Task.CompletedTask;
@@ -517,18 +522,21 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         return _pass;
     }
 
-    private List<DashboardRowViewModel> Select(ReadTrigger trigger, IReadOnlyList<DashboardRowViewModel>? rows)
-    {
-        var now = ReadClock.GetUtcNow();
-        return
-        [
-            .. (rows ?? Rows).Where(row => Rows.Contains(row) && !row.FollowsTab && !row.IsReading && trigger switch
-            {
-                ReadTrigger.Stale => row.LastRead is not { } last || now - last >= RereadAfter,
-                _ => true,
-            }),
-        ];
-    }
+    /// <summary>
+    /// The rows <paramref name="trigger"/> reads now: of <paramref name="rows"/> (every row when
+    /// null), those still in the workspace, without a tab and with no read outstanding; for triggers
+    /// 1 and 2 only those never read or whose last read ended 10 s or more before
+    /// <paramref name="requestedAt"/>, the moment the request was made, so that a row read since
+    /// then is fresh.
+    /// </summary>
+    private List<DashboardRowViewModel> Select(ReadTrigger trigger, IReadOnlyList<DashboardRowViewModel>? rows, DateTimeOffset requestedAt) =>
+    [
+        .. (rows ?? Rows).Where(row => Rows.Contains(row) && !row.FollowsTab && !row.IsReading && trigger switch
+        {
+            ReadTrigger.Stale => row.LastRead is not { } last || requestedAt - last >= RereadAfter,
+            _ => true,
+        }),
+    ];
 
     private async Task RunPassesAsync(List<DashboardRowViewModel> rows)
     {
@@ -546,7 +554,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
             _pending.Clear();
             folded = _pendingDone;
             _pendingDone = null;
-            rows = [.. requests.SelectMany(request => Select(request.Trigger, request.Rows)).Distinct()];
+            rows = [.. requests.SelectMany(request => Select(request.Trigger, request.Rows, request.RequestedAt)).Distinct()];
         }
     }
 

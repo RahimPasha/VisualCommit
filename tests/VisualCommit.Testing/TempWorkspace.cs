@@ -72,6 +72,32 @@ public sealed class TempWorkspace : IDisposable
     }
 
     /// <summary>
+    /// A <see cref="TempRepo"/> on any folder inside the copy, as <see cref="Repo"/> gives one on a
+    /// named repository: for a check's own git calls in a folder it made there, such as part W's
+    /// <c>archive/old-site</c> (docs/test-reports/phase-6.md, WD7). Its clock starts a minute after
+    /// the latest commit of the whole workspace. It does not own the folder: the workspace does.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="path"/> lies outside the copy's folder.</exception>
+    /// <exception cref="DirectoryNotFoundException">The folder does not exist.</exception>
+    public TempRepo RepoAt(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var relative = Path.GetRelativePath(Root, full);
+        if (relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+        {
+            throw new ArgumentException($"{path} is not inside the workspace's folder {Root}.", nameof(path));
+        }
+
+        if (!Directory.Exists(full))
+        {
+            throw new DirectoryNotFoundException($"{path} does not exist.");
+        }
+
+        return TempRepo.Over(_root, full, _clocks.Values.Max());
+    }
+
+    /// <summary>
     /// An independent copy of the whole folder in a new temporary folder, made by copying files
     /// (<see cref="TempRepo.CopyDirectory"/>) and nothing else: no git process, and so nothing in
     /// <see cref="Calls"/> of either. The relative URLs point the copy's repositories at the copy's

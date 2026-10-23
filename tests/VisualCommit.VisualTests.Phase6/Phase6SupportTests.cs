@@ -1,7 +1,20 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.VisualTree;
+using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
+using VisualCommit.Core.Session;
+using VisualCommit.Core.Settings;
+using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.VisualTests.Phase6.Phase6Expectations;
 
@@ -146,5 +159,364 @@ public sealed class Phase6SupportTests : Phase6Checks
         Assert.Same(ToolCatalogues.Fixed, app.Session.Services.Tools);
         Assert.False(app.SystemTheme.IsDark);
         Assert.Empty(GitIsolation.GlobalConfigurationWrittenOutsideASession());
+    }
+
+    /// <summary>
+    /// OpenWorkspaceAsync (design 17.2, part W's Defaults) on a fresh copy of "workspace": the files
+    /// it writes, one tab, the dashboard of "Web", its ten rows in the workspace's order, all read
+    /// (old-site's folder check among them, WD27) in one pass, none reading, no pass under way and
+    /// every row's queue idle; the theme the fake system's dark.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_workspace_opens_on_its_dashboard_with_all_ten_rows_read()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenWorkspaceAsync(data, copy);
+
+        var workspace = Assert.Single(app.Session.Services.Workspaces.Current.Workspaces);
+        Assert.Equal(("web", "Web"), (workspace.Id, workspace.Name));
+        Assert.Equal(copy.Names.Select(copy.PathOf), workspace.Repositories.Select(repository => repository.Path));
+        var tab = Assert.Single(app.Session.Shell.Tabs);
+        Assert.Equal("web", tab.Dashboard?.WorkspaceId);
+        Assert.Same(tab, app.Session.Shell.ActiveTab);
+
+        var snapshot = app.DashboardSnapshot();
+        Assert.Equal(TempWorkspace.DashboardOrder, snapshot.Rows.Select(row => row.Name));
+        Assert.False(snapshot.IsPassRunning);
+        Assert.All(snapshot.Rows, row => Assert.False(row.IsReading, $"{row.Name} is reading."));
+        Assert.All(snapshot.Rows, row => Assert.True(row.IsDrawn, $"{row.Name} is not drawn."));
+        var rows = app.ActiveDashboard!.Rows;
+        Assert.All(rows.Where(row => row.Name != "old-site"), row => Assert.True(row.HasRepository, $"{row.Name} has not been read."));
+        Assert.All(rows.Select(row => row.Repository).OfType<RepositoryViewModel>(), repository => Assert.True(repository.Queue.Current is null && repository.Queue.Waiting == 0, $"{repository.Name}'s queue is busy."));
+        Assert.Equal("Folder not found", snapshot.Row("old-site").State.Text);
+        // W2's read: one pass of every row, old-site's folder check among them (WD27); the window's
+        // activation at its showing folds into it and reads nothing twice, however long it takes (2.10).
+        var passes = app.LogLines().Where(line => ShellDriver.ReadPassLine("Web").IsMatch(line)).ToList();
+        Assert.True(
+            passes.Count == 1 && passes[0].Contains("Web: read 10 repositories in ", StringComparison.Ordinal),
+            "The start did not read the ten rows in one pass (WD27, 2.10); its pass lines:\n" + string.Join('\n', passes));
+        Assert.True(app.ShowsDarkTheme);
+        Assert.True(app.SystemTheme.IsDark);
+    }
+
+    /// <summary>
+    /// AssertRow and AssertDashboardHeader on W2's first row and header (scenario facts 2.3), and on
+    /// mobile's arrows and old-site's folder state; a wrong cell or count fails with both rows in the
+    /// report's form and the difference in words.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_row_and_the_header_pass_as_the_report_writes_them_and_a_wrong_cell_is_named()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenWorkspaceAsync(data, copy);
+
+        var api = new ExpectedRow("main", ExpectedCell.Secondary("Up to date", "main is level with origin/main"), ExpectedCell.Secondary("Clean"), ExpectedCell.Empty, ExpectedCell.Empty)
+        {
+            Folder = copy.PathOf("api"),
+        };
+        AssertRow(app, "api", api);
+        AssertRow(app, "mobile", new ExpectedRow("main", ExpectedCell.Arrows(1, 2, "1 ahead, 2 behind", "1 commit ahead of and 2 behind origin/main"), ExpectedCell.Secondary("Clean"), ExpectedCell.Empty, ExpectedCell.Empty));
+        AssertRow(app, "old-site", new ExpectedRow(string.Empty, ExpectedCell.Empty, ExpectedCell.Empty, ExpectedCell.Warning("Folder not found", copy.PathOf("old-site") + " does not exist"), ExpectedCell.Empty));
+        // The three keyed buttons' tooltips end with their keys, as TD writes them, once work package
+        // WP-K's key table gives Fetch, Pull and Refresh their keys (6.8, AppShortcuts.Shown); until
+        // then the app's tooltips carry none, so they are the app's own texts here.
+        // WP-K: once your key table is in, assert ExpectedDashboardHeader.Idle("Web", "10 repositories") as it stands.
+        AssertDashboardHeader(app, ExpectedDashboardHeader.Idle("Web", "10 repositories") with
+        {
+            FetchAll = ExpectedHeaderButton.Enabled(OperationTexts.FetchEveryRepository("Web")),
+            PullAll = ExpectedHeaderButton.Enabled(OperationTexts.PullEveryRepository("Web")),
+            Refresh = ExpectedHeaderButton.Enabled(DashboardTexts.RefreshToolTip("Web")),
+        });
+
+        var wrongCell = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertRow(app, "api", api with { Changes = ExpectedCell.Primary("Clean") }));
+        Assert.Contains("The row api is not the expected one.", wrongCell.Message, StringComparison.Ordinal);
+        Assert.Contains("Expected: api · `main` · `Up to date` (secondary; `main is level with origin/main`) · `Clean` (primary; no tooltip) · empty · empty", wrongCell.Message, StringComparison.Ordinal);
+        Assert.Contains("Actual:   api · `main` · `Up to date` (secondary; `main is level with origin/main`) · `Clean` (secondary; no tooltip) · empty · empty", wrongCell.Message, StringComparison.Ordinal);
+        Assert.Contains("- Changes: the tone is secondary, expected primary.", wrongCell.Message, StringComparison.Ordinal);
+
+        var selected = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertRow(app, "api", api with { Selected = true }));
+        Assert.Contains("- Selected: no, expected yes.", selected.Message, StringComparison.Ordinal);
+        var missing = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertRow(app, "archive", api));
+        Assert.Contains("The dashboard Web has no row archive.", missing.Message, StringComparison.Ordinal);
+
+        var wrongCount = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertDashboardHeader(app, ExpectedDashboardHeader.Idle("Web", "9 repositories")));
+        Assert.Contains("The header of Web is not the expected one.", wrongCount.Message, StringComparison.Ordinal);
+        Assert.Contains("- DashboardCount is \"10 repositories\", expected \"9 repositories\".", wrongCount.Message, StringComparison.Ordinal);
+        var running = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertDashboardHeader(app, ExpectedDashboardHeader.Running("Web", "10 repositories", BulkKind.Fetch, "Fetching 8 repositories…", 0)));
+        Assert.Contains("- Fetch all is enabled, expected disabled.", running.Message, StringComparison.Ordinal);
+        Assert.Contains("- The run's text is none, expected \"Fetching 8 repositories…\".", running.Message, StringComparison.Ordinal);
+        Assert.Contains("- Cancel all does not show.", running.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// SameFolder (part W's harness additions) matches a folder of the copy as given and as git
+    /// spells it, once PrepareSameFolderAsync has worked that out (refused before); old-site, which
+    /// git never sees, by its text alone; a folder the check made inside the copy (W2's
+    /// archive/old-site) through TempWorkspace.RepoAt, which refuses a folder outside the copy.
+    /// </summary>
+    [Fact]
+    public async Task SameFolder_matches_a_folder_as_given_and_as_git_spells_it()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        var api = copy.PathOf("api");
+        Assert.Throws<InvalidOperationException>(() => SameFolder(copy, api, api));
+
+        await PrepareSameFolderAsync(copy);
+        var gitsApi = await WorkingTreeAsync(copy.Repo("api"));
+        Assert.True(SameFolder(copy, api, api));
+        Assert.True(SameFolder(copy, api, gitsApi));
+        Assert.True(SameFolder(copy, api, api + Path.DirectorySeparatorChar));
+        Assert.False(SameFolder(copy, api, copy.PathOf("docs")));
+        Assert.False(SameFolder(copy, api, await WorkingTreeAsync(copy.Repo("docs"))));
+        Assert.True(SameFolder(copy, copy.PathOf("old-site"), copy.PathOf("old-site")));
+        Assert.False(SameFolder(copy, copy.PathOf("old-site"), gitsApi));
+
+        var archive = Path.Combine(copy.Root, "archive", "old-site");
+        Directory.CreateDirectory(archive);
+        using (var made = copy.RepoAt(archive))
+        {
+            await made.GitAsync("init", "--quiet");
+        }
+
+        Assert.Throws<InvalidOperationException>(() => SameFolder(copy, archive, archive));
+        await PrepareSameFolderAsync(copy, archive);
+        using var repo = copy.RepoAt(archive);
+        Assert.True(SameFolder(copy, archive, await WorkingTreeAsync(repo)));
+        Assert.False(SameFolder(copy, archive, copy.PathOf("old-site")));
+        Assert.Throws<ArgumentException>(() => copy.RepoAt(Path.GetTempPath()));
+        Assert.Throws<ArgumentException>(() => copy.RepoAt(copy.Root));
+    }
+
+    /// <summary>
+    /// AssertGitOutputShown's app lines (part W: a failed fetch's <c>error: Could not fetch origin</c>,
+    /// D109): the dialog's last lines, held apart from the "a line git printed" rule; refused when they
+    /// are not last, and not passed as git's when they are not named.
+    /// </summary>
+    [Fact]
+    public void The_apps_own_last_lines_are_held_apart_from_the_lines_git_printed()
+    {
+        const string key = "fatal: '../remotes/missing.git' does not appear to be a git repository";
+        var call = new GitCallRecord(
+            DateTimeOffset.UnixEpoch,
+            TimeSpan.Zero,
+            "git fetch --progress origin",
+            null,
+            GitCallOutcome.Completed,
+            128,
+            string.Empty,
+            key + "\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n");
+        var git = ShellDriver.CleanedOutputOf(call);
+        const string appLine = "error: Could not fetch origin";
+
+        AssertGitOutputShown(call, key, git);
+        AssertGitOutputShown(call, key, git + "\n" + appLine, [appLine]);
+        var unnamed = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertGitOutputShown(call, key, git + "\n" + appLine));
+        Assert.Contains($"The dialog shows a line git did not print: \"{appLine}\".", unnamed.Message, StringComparison.Ordinal);
+        var first = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertGitOutputShown(call, key, appLine + "\n" + git, [appLine]));
+        Assert.Contains("The dialog does not end with the app's own lines", first.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The arrows' cell as the report writes it, and what it refuses.</summary>
+    [Fact]
+    public void The_arrows_are_written_as_the_report_writes_them()
+    {
+        Assert.Equal("↑ 2", ExpectedCell.Arrows(2, 0, "2 ahead", "2 commits ahead of origin/main").Text);
+        Assert.Equal("↓ 3", ExpectedCell.Arrows(0, 3, "3 behind", "3 commits behind origin/main").Text);
+        var both = ExpectedCell.Arrows(1, 2, "1 ahead, 2 behind", "1 commit ahead of and 2 behind origin/main");
+        Assert.Equal("↑ 1 ↓ 2", both.Text);
+        Assert.Equal("`↑ 1 ↓ 2` (secondary; `1 commit ahead of and 2 behind origin/main`; name `1 ahead, 2 behind`)", both.ToString());
+        Assert.Equal("empty", ExpectedCell.Empty.ToString());
+        Assert.Throws<ArgumentException>(() => ExpectedCell.Arrows(0, 0, "none", "none"));
+    }
+
+    /// <summary>
+    /// ShotInBothThemesAsync (11.14, part L's "The pairs") on a dashboard started with System and the
+    /// fake dark, under names no check uses, its pictures in a temporary folder and never under
+    /// artifacts/visual/phase-6/scripted/, which the gate lists: both pictures saved, the step's
+    /// assertions run once per variant, the window dark again; a second pair of one name refused
+    /// before anything flips; and the pair with a tooltip (LD19), a menu, a name dialog, the settings
+    /// screen (<c>Border.dialogCard.settings</c>) and the Pick dialog stacked on it (LD1's card of the
+    /// dialog on top) open, each still up.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_pair_saves_its_dark_and_light_pictures_once_and_keeps_the_screen_up()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var pictures = new TempDirectory("pairs");
+        using var app = await OpenWorkspaceAsync(data, copy, theme: AppTheme.System);
+        Task<(Screenshot Dark, Screenshot Light)> PairAsync(string name, bool keepPointer = false, Action<Screenshot, Palette>? assertEach = null) =>
+            ShotInBothThemesAsync(app, name, keepPointer, assertEach, pictures.Path);
+
+        var seen = new List<Palette>();
+        var (dark, light) = await PairAsync("99zz-support-pair", assertEach: (_, palette) => seen.Add(palette));
+        Assert.Equal([Dark, Light], seen);
+        Assert.Equal(["99zz-support-pair-dark.png", "99zz-support-pair-light.png"], Directory.GetFiles(pictures.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal));
+        Assert.False(File.Exists(Path.Combine(VisualRun.FolderFor(Phase), "99zz-support-pair-dark.png")));
+        Assert.Equal(Dark.Chrome, dark.PixelAt(ShellDriver.NeutralPoint));
+        Assert.Equal(Light.Chrome, light.PixelAt(ShellDriver.NeutralPoint));
+        Assert.True(app.ShowsDarkTheme);
+
+        var mark = app.LogMark();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => PairAsync("99zz-support-pair"));
+        Assert.True(app.ShowsDarkTheme);
+        Assert.True(app.SystemTheme.IsDark);
+        Assert.Equal(0, app.CountLogLines(AppLogFile.Containing("The system's theme changed to"), mark));
+
+        await app.RestPointerOnAsync(app.FindByAutomationId("DashboardRefresh"));
+        await PairAsync("99zz-support-tip", keepPointer: true);
+        Assert.True(ToolTip.GetIsOpen(app.FindByAutomationId("DashboardRefresh")));
+
+        app.MoveToNeutral();
+        var menu = await app.RowMenuAsync("api");
+        Assert.Equal("api", menu.Header);
+        await PairAsync("99zz-support-menu");
+        Assert.Equal("api", app.Menu().Header);
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, logMark: null);
+
+        app.Click(app.FindByAutomationId("DashboardMore"));
+        app.ClickMenuItem("Rename workspace…");
+        var rename = await app.WaitForDialogAsync<WorkspaceNameDialogViewModel>();
+        await PairAsync("99zz-support-dialog");
+        Assert.Same(rename, app.Session.Services.DialogHost.Current);
+        app.PressKey(Key.Escape);
+        await AssertNoDialogAsync(app);
+
+        // The settings screen's card, then the Pick dialog's stacked on it: LD1's pixel is the top card's.
+        app.MoveToNeutral();
+        var settings = await app.OpenSettingsAsync();
+        var settingsCard = app.Find<Border>("SettingsCard");
+        Assert.True(settingsCard.Classes.Contains("dialogCard") && settingsCard.Classes.Contains("settings"));
+        var (settingsDark, settingsLight) = await PairAsync("99zz-support-settings");
+        var settingsPixel = app.BoundsOf(settingsCard).TopLeft + new Point(10, 10);
+        Assert.Equal((Dark.Panel, Light.Panel), (settingsDark.PixelAt(settingsPixel), settingsLight.PixelAt(settingsPixel)));
+        Assert.NotEqual(Dark.Chrome, settingsDark.PixelAt(ShellDriver.NeutralPoint));
+
+        app.ChooseSection(SettingsSection.Git);
+        app.Click(app.FindByAutomationId("MergeToolChooseButton"));
+        var pick = await app.WaitForDialogAsync<PickDialogViewModel>();
+        var pickCard = app.TopDialogView!.GetVisualDescendants().OfType<Border>().First(border => border.Classes.Contains("dialogCard"));
+        var (pickDark, pickLight) = await PairAsync("99zz-support-pick");
+        var pickPixel = app.BoundsOf(pickCard).TopLeft + new Point(10, 10);
+        Assert.Equal((Dark.Panel, Light.Panel), (pickDark.PixelAt(pickPixel), pickLight.PixelAt(pickPixel)));
+        Assert.Same(pick, app.Session.Services.DialogHost.Current);
+        Assert.Same(settings, app.SettingsDialog);
+
+        app.Click(app.FindByAutomationId(app.TopDialogView!, "CancelButton"));
+        await app.WaitForAsync(() => pick.IsClosed, "the Pick dialog to close");
+        app.CancelSettings();
+        await AssertNoDialogAsync(app);
+        Assert.Equal("System", new JsonSettingsStore(Path.Combine(data.Path, "settings.json")).Current.Theme.ToString());
+        Assert.Equal(12, Directory.GetFiles(pictures.Path).Length);
+    }
+
+    /// <summary>
+    /// WaitForAllRowsIdleAsync (17.2) after a refresh (2.10's trigger 3, F5 and the header's
+    /// Refresh): the refresh starts a pass that reads the rows at once, and the wait ends only once
+    /// it has ended, no row reads and every row's queue is idle; the pass logged its line.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task All_rows_are_idle_again_after_a_refreshs_pass()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenWorkspaceAsync(data, copy);
+
+        // Trigger 3 by the header's Refresh: F5 reaches it only through work package WP-K's key
+        // table (AppShortcuts.All), which is not in yet.
+        // WP-K: once your key table is in, press F5 here (app.PressKey(Key.F5)), as the lead asked.
+        var mark = app.LogMark();
+        app.Click(app.FindByAutomationId("DashboardRefresh"));
+        app.MoveToNeutral();
+        var started = app.DashboardSnapshot();
+        Assert.True(started.IsPassRunning, "The refresh started no pass.");
+        Assert.Contains(started.Rows, row => row.IsReading);
+
+        await WaitForAllRowsIdleAsync(app, OperationChainTimeout);
+        var dashboard = app.ActiveDashboard!;
+        Assert.False(dashboard.IsPassRunning);
+        Assert.All(dashboard.Rows, row => Assert.False(row.IsReading, $"{row.Name} is reading."));
+        Assert.All(dashboard.Rows.Select(row => row.Repository).OfType<RepositoryViewModel>(), repository => Assert.True(repository.Queue.Current is null && repository.Queue.Waiting == 0, $"{repository.Name}'s queue is busy."));
+        await app.WaitForLogLineAsync(ShellDriver.ReadPassLine("Web"), mark: mark);
+    }
+
+    /// <summary>
+    /// Start, StartWithTabs, StartWithWorkspace and OpenWorkspaceAsync take other tool catalogues than
+    /// the fixed ones (17.2, 12.9): WP-SET's HeldMergeTools, whose merge-tool list the session's early
+    /// lookup (8.10) then waits for.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_start_takes_held_merge_tools_in_place_of_the_fixed_catalogues()
+    {
+        var held = new HeldMergeTools();
+        try
+        {
+            using (var data = new TempDirectory("data"))
+            using (var app = ShellDriver.Start(data.Path, tools: held.Catalogues))
+            {
+                await app.WaitUntilReadyAsync();
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+                await app.WaitForAsync(() => held.Requests == 1, "the session's early lookup of the merge tools");
+            }
+
+            using (var data = new TempDirectory("data"))
+            using (var app = ShellDriver.StartWithTabs(data.Path, [(string?)null], tools: held.Catalogues))
+            {
+                await app.WaitUntilReadyAsync();
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+            }
+
+            using (var data = new TempDirectory("data"))
+            using (var app = ShellDriver.StartWithWorkspace(data.Path, new WorkspaceList(), tools: held.Catalogues))
+            {
+                await app.WaitUntilReadyAsync();
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+            }
+
+            using var copy = await Scenarios.WorkspaceAsync();
+            using (var data = new TempDirectory("data"))
+            using (var app = await OpenWorkspaceAsync(data, copy, tools: held.Catalogues))
+            {
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+                Assert.Equal(10, app.DashboardSnapshot().Rows.Count);
+            }
+        }
+        finally
+        {
+            held.Release();
+        }
+    }
+
+    /// <summary>
+    /// WaitForTabOpenedAsync (part W's harness additions): a repository's tab restored behind the
+    /// active dashboard opens in the background; the wait ends with its history loaded, its status
+    /// read, its clean-up at opening's read made outside any operation in its folder, and its queue
+    /// idle, while the dashboard stays active.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_tab_restored_behind_the_dashboard_is_waited_for_until_it_has_opened()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        ShellDriver.WriteWorkspaces(data.Path, new WorkspaceList { Workspaces = [copy.ToWorkspace()] });
+        using var app = ShellDriver.StartWithTabs(data.Path, [new TabState(null, "web"), new TabState(copy.PathOf("web-app"))]);
+
+        var repository = await app.WaitForTabOpenedAsync(copy.PathOf("web-app"), OperationChainTimeout);
+        Assert.NotNull(app.ActiveDashboard);
+        var tab = app.Session.Shell.Tabs[1];
+        Assert.False(tab.IsActive);
+        Assert.Same(tab.Repository, repository);
+        Assert.False(repository.IsSummary);
+        Assert.True(repository.Graph.IsComplete);
+        Assert.Equal(3, repository.Graph.Count);
+        Assert.True(app.CountLogLines(AppLogFile.WorkingTreeRead("web-app")) > 0);
+        Assert.Contains(app.GitCalls(), call => call.CommandText == ShellDriver.OpeningCleanUpRead
+            && call.OperationId is null
+            && call.WorkingDirectory is { } folder
+            && WorkspacePaths.Same(folder, repository.Path));
+        Assert.True(repository.Queue.Current is null && repository.Queue.Waiting == 0);
     }
 }
