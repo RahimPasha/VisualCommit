@@ -1495,19 +1495,6 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     }
 
     /// <summary>
-    /// Runs one of the stage panel's and diff view's writes (phase 2) as an operation of the
-    /// queue (docs/phase-3-design.md 1.4): one at a time, after those queued before it (D76), with
-    /// the watcher paused, then reading what changed: the status (and the open diff), and with
-    /// <paramref name="refsChange"/> the refs and history too (D71), whether or not it succeeded.
-    /// Returns git's message when the write failed, and shows it in the stage panel, not in a
-    /// dialog. A write asked for after the tab closed (a confirmation was still open) does
-    /// nothing. A write that has started runs to its end, also when the tab closes (1.8). The undo
-    /// history records it as <paramref name="undo"/> says, as every operation of
-    /// <see cref="RepositoryOperations.RunAsync"/> (docs/phase-5-design.md 7.7). When the write
-    /// sets <paramref name="backupSaved"/>, the backups' clean-up follows the recording, as it
-    /// follows that of an operation that saved a backup, so that it keeps what the entry needs.
-    /// </summary>
-    /// <summary>
     /// D124 for a ticked Amend: HEAD read inside the commit's operation against <paramref name="amended"/>,
     /// where it was when Amend was ticked. Another branch, or another commit on the same one, refuses
     /// in D124's words ("main moved while this waited: it was at a1b2c3d and is at e4f5a6b now.
@@ -1534,6 +1521,19 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         return summary;
     }
 
+    /// <summary>
+    /// Runs one of the stage panel's and diff view's writes (phase 2) as an operation of the
+    /// queue (docs/phase-3-design.md 1.4): one at a time, after those queued before it (D76), with
+    /// the watcher paused, then reading what changed: the status (and the open diff), and with
+    /// <paramref name="refsChange"/> the refs and history too (D71), whether or not it succeeded.
+    /// Returns git's message when the write failed, and shows it in the stage panel, not in a
+    /// dialog. A write asked for after the tab closed (a confirmation was still open) does
+    /// nothing. A write that has started runs to its end, also when the tab closes (1.8). The undo
+    /// history records it as <paramref name="undo"/> says, as every operation of
+    /// <see cref="RepositoryOperations.RunAsync"/> (docs/phase-5-design.md 7.7). When the write
+    /// sets <paramref name="backupSaved"/>, the backups' clean-up follows the recording, as it
+    /// follows that of an operation that saved a backup, so that it keeps what the entry needs.
+    /// </summary>
     /// <param name="refuse">A check inside the operation before anything is written or recorded: the stage panel's text when it refuses, or null to go on (D124).</param>
     private async Task<string?> WriteAsync(string title, string runningText, Func<CancellationToken, Task> write, UndoScope undo, bool refsChange = false, StrongBox<bool>? backupSaved = null, Func<CancellationToken, Task<string?>>? refuse = null)
     {
@@ -1546,7 +1546,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             {
                 if (refuse is not null && await refuse(context.CancellationToken) is { } refusal)
                 {
-                    return OperationReport.Failed(refusal, new GitFailure(GitFailureKind.Other, $"{title} failed.", refusal, string.Empty, null));
+                    // The status bar says "Commit failed", the stage panel why (as git's output).
+                    return OperationReport.Failed($"{title} failed", new GitFailure(GitFailureKind.Other, $"{title} failed.", refusal, string.Empty, null));
                 }
 
                 var recording = await Operations.BeginRecordingAsync(undo, context, title);
