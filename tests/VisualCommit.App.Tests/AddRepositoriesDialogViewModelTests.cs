@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.App.Views.Dialogs;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
@@ -64,6 +65,25 @@ public class AddRepositoriesDialogViewModelTests
         // The working trees as git reports them (on macOS /private/var/…, where the scan saw /var/…).
         Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.PathOf("web-app")), answer[0]));
         Assert.True(WorkspacePaths.Same(await GitTopAsync(tree.PathOf("wt")), answer[1]));
+    }
+
+    [Fact]
+    public void A_late_report_of_fewer_folders_changes_nothing_while_searching()
+    {
+        // Progress<T> made where no synchronization context is current posts to the thread pool,
+        // where two reports can run out of order (1.9's ScanProgressText).
+        var session = NewSession();
+        var dialog = new AddRepositoriesDialogViewModel("Web", Path.GetTempPath(), session.Services.Repositories, _ => false);
+        Assert.Equal("Searched 0 folders, found 0 repositories", dialog.ProgressText);
+
+        dialog.ShowProgress(new ScanProgress(200, 3));
+        dialog.ShowProgress(new ScanProgress(100, 1));
+        Assert.Equal("Searched 200 folders, found 3 repositories", dialog.ProgressText);
+
+        dialog.ShowProgress(new ScanProgress(200, 4));
+        Assert.Equal("Searched 200 folders, found 4 repositories", dialog.ProgressText);
+        dialog.ShowProgress(new ScanProgress(1_000, 5));
+        Assert.Equal("Searched 1,000 folders, found 5 repositories", dialog.ProgressText);
     }
 
     [Fact]
@@ -194,6 +214,33 @@ public class AddRepositoriesDialogViewModelTests
         Assert.True(dialog.IsClosed);
         Assert.Equal(0, provider.Opens);
         Assert.Empty(dialog.Rows);
+    }
+
+    [Fact]
+    public async Task Cancel_during_the_opens_stops_them_starts_no_more_and_adds_nothing()
+    {
+        // 1.9: Cancel and Esc stop the search and the opens.
+        var root = Path.Combine(Path.GetTempPath(), "tree");
+        var files = new FakeScanFileSystem();
+        for (var i = 0; i < 6; i++)
+        {
+            files.Add(root, $"repo{i}", repository: true);
+        }
+
+        var provider = new GatedRepositories { Hold = true };
+        var dialog = new AddRepositoriesDialogViewModel("Web", root, provider, _ => false, fileSystem: files);
+        var search = dialog.Start();
+        await WaitUntilAsync(() => provider.Waiting == 4, "four opens held");
+
+        dialog.CancelCommand.Execute(null);
+        await search.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Null(await dialog.Result);
+        Assert.True(dialog.IsClosed);
+        Assert.Equal(4, provider.Opens);
+        Assert.Empty(dialog.Rows);
+        Assert.Equal((false, WorkspaceTexts.AddRepositoriesConfirm), (dialog.CanConfirm, dialog.ConfirmText));
+        provider.Release();
     }
 
     [Fact]

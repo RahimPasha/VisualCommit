@@ -175,6 +175,30 @@ public sealed partial class AddRepositoriesDialogViewModel : DialogViewModel<IRe
 
     protected override IReadOnlyList<string>? CancelledResult => null;
 
+    /// <summary>
+    /// A report of the search (1.9) while it runs: <see cref="ProgressText"/> says it, unless it
+    /// counts fewer folders than the one shown, a report that came late: a
+    /// <see cref="Progress{T}"/> made where no synchronization context is current posts its reports
+    /// to the thread pool, where two can run out of order.
+    /// </summary>
+    public void ShowProgress(ScanProgress report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        lock (_progressGate)
+        {
+            if (!IsSearching || report.FoldersSearched < _shownFolders)
+            {
+                return;
+            }
+
+            _shownFolders = report.FoldersSearched;
+            ProgressText = WorkspaceTexts.Searched(report.FoldersSearched, report.Found);
+        }
+    }
+
+    private readonly Lock _progressGate = new();
+    private int _shownFolders;
+
     /// <summary>Starts the search (once); its task is <see cref="Search"/>.</summary>
     public Task Start() => _search ??= RunAsync();
 
@@ -196,13 +220,7 @@ public sealed partial class AddRepositoriesDialogViewModel : DialogViewModel<IRe
         var token = _cancel.Token;
         try
         {
-            var progress = new Progress<ScanProgress>(report =>
-            {
-                if (IsSearching)
-                {
-                    ProgressText = WorkspaceTexts.Searched(report.FoldersSearched, report.Found);
-                }
-            });
+            var progress = new Progress<ScanProgress>(ShowProgress);
             var result = await Task.Run(() => RepositoryScanner.Scan(_folder, progress, token, _options, _fileSystem), token);
             var opened = await ConfirmAsync(result.Candidates, token);
             if (IsClosed)
@@ -239,6 +257,8 @@ public sealed partial class AddRepositoriesDialogViewModel : DialogViewModel<IRe
             await slots.WaitAsync(token);
             try
             {
+                // A slot an open cancelled by Cancel gave back starts no open (1.9: Cancel stops the opens).
+                token.ThrowIfCancellationRequested();
                 return (Path.GetRelativePath(_folder, candidate), await OpenAtTopAsync(candidate, token));
             }
             finally
