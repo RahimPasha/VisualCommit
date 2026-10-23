@@ -8,19 +8,23 @@
 #
 # Usage, from anywhere in the repository (Git Bash on Windows, bash elsewhere):
 #   bash scripts/time-scripted-check.sh "*Check_W4*"
+#   bash scripts/time-scripted-check.sh "*Check_L27*"
 #   bash scripts/time-scripted-check.sh "*Check_U16*" 5
 #   bash scripts/time-scripted-check.sh "*Check_C10*" 4
 #   bash scripts/time-scripted-check.sh "*Phase3ChecksD*" 3
 # The second argument is the phase whose step times to print (6 when left out). It also picks the
-# walk-through project. For phase 6 tests/VisualCommit.VisualTests.Phase6 (docs/phase-6-design.md
-# 17.3). For phase 5 (design 15.3): tests/VisualCommit.VisualTests.Phase5Undo
-# when the filter names part U (its checks, Check_U<n>, or their class, Phase5ChecksU), and
-# tests/VisualCommit.VisualTests.Phase5 for parts A, B, F and P. For phase 4
+# walk-through project. For phase 6 (docs/phase-6-design.md 17.3):
+# tests/VisualCommit.VisualTests.Phase6Look when the filter names part L (its checks, Check_L<n>,
+# or their class, Phase6ChecksL), and tests/VisualCommit.VisualTests.Phase6 for parts W, K, S and
+# G; both save their step times in phase 6's one timings folder. For phase 5 (design 15.3):
+# tests/VisualCommit.VisualTests.Phase5Undo when the filter names part U (its checks, Check_U<n>,
+# or their class, Phase5ChecksU), and tests/VisualCommit.VisualTests.Phase5 for parts A, B, F and
+# P. For phase 4
 # tests/VisualCommit.VisualTests.Phase4, for phase 3 tests/VisualCommit.VisualTests.Phase3, and
 # for phases 0 to 2 tests/VisualCommit.VisualTests.
 #
-# Like every partial run, it empties the phase's picture folder first (VisualRun.Save; for phase 5
-# the one folder of both projects), so the folder then holds only the pictures of the checks it
+# Like every partial run, it empties the phase's picture folder first (VisualRun.Save; for phases 5
+# and 6 the one folder of both projects), so the folder then holds only the pictures of the checks it
 # ran; run `dotnet test` at the repo root again before the real-window pass. Under load (another
 # build on the machine, a hot laptop) the times grow: time a check alone and more than once before
 # writing a budget.
@@ -31,7 +35,12 @@ phase="${2:-6}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-if [ "$phase" -ge 6 ]; then
+if [ "$phase" -eq 6 ]; then
+  case "$filter" in
+    *Check_L* | *ChecksL*) project="tests/VisualCommit.VisualTests.Phase6Look" ;;
+    *) project="tests/VisualCommit.VisualTests.Phase6" ;;
+  esac
+elif [ "$phase" -gt 6 ]; then
   project="tests/VisualCommit.VisualTests.Phase${phase}"
 elif [ "$phase" -eq 5 ]; then
   case "$filter" in
