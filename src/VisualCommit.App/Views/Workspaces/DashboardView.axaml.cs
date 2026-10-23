@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Workspaces;
@@ -33,6 +34,14 @@ public partial class DashboardView : UserControl
         DashboardList.AddHandler(KeyDownEvent, OnListKeyDown, RoutingStrategies.Tunnel);
         DashboardMore.Click += OnMoreClick;
     }
+
+    /// <summary>
+    /// Whose keys the list takes (docs/phase-6-design.md 2.7, 6.4): Cmd+Backspace removes the
+    /// selected row only where the command key is Cmd. Null (the app's case): the platform's,
+    /// read at each press from its hotkey configuration as the window's router reads it (Cmd where
+    /// the command modifier is Meta); a test of macOS's keys sets its own on this view alone.
+    /// </summary>
+    public CommandKey? KeysPlatform { get; set; }
 
     protected override AutomationPeer OnCreateAutomationPeer() => new PageAutomationPeer(this);
 
@@ -132,7 +141,7 @@ public partial class DashboardView : UserControl
         }
 
         var modifiers = e.KeyModifiers & ~KeyModifiers.Shift;
-        var mac = KeyTexts.Current.Platform == CommandKey.Cmd;
+        var mac = (KeysPlatform ?? PlatformCommandKey()) == CommandKey.Cmd;
         switch (e.Key)
         {
             case Key.Enter when e.KeyModifiers == KeyModifiers.None:
@@ -168,4 +177,8 @@ public partial class DashboardView : UserControl
         layer.Open(viewModel.HeaderMenu(), new MenuPosition(corner.X - MenuLayer.PointerGap, corner.Y - MenuLayer.PointerGap), MenuOpenedBy.Pointer);
         e.Handled = true;
     }
+
+    /// <summary>The platform's command key, from its hotkey configuration as <see cref="KeyRouter"/> reads it: Cmd where the command modifier is Meta, Ctrl otherwise.</summary>
+    private CommandKey PlatformCommandKey() =>
+        this.GetPlatformSettings()?.HotkeyConfiguration.CommandModifiers.HasFlag(KeyModifiers.Meta) == true ? CommandKey.Cmd : CommandKey.Ctrl;
 }
