@@ -7,6 +7,7 @@
 // AssertRow and AssertDashboardHeader (part W's "A row is written", with the expected rows and
 // header, ExpectedCell, ExpectedRow, ExpectedDashboardHeader and ExpectedHeaderButton, at the end
 // of this file), and ShotInBothThemesAsync (11.14, part L's "The pairs", LD1, LD19).
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -23,6 +24,7 @@ using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.App.Views.Shell;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Graph;
 using VisualCommit.Core.Session;
@@ -111,8 +113,10 @@ public abstract partial class Phase6Checks
     /// (<see cref="ShellDriver.WaitForDashboardReadAsync"/>: its line and no row <c>Reading…</c>) and
     /// until every row is idle (<see cref="WaitForAllRowsIdleAsync"/>); and rests the pointer at the
     /// neutral point. Each wait may take <see cref="OperationChainTimeout"/>: the first pass alone is
-    /// some 72 git processes, four at a time (design 17.6). Dispose the driver at the end of the
-    /// check (<c>using var app = …</c>).
+    /// some 72 git processes, four at a time (design 17.6). <paramref name="tools"/> replaces the
+    /// fixed tool catalogues (<see cref="ShellDriver.Start"/>'s, such as
+    /// <see cref="HeldMergeTools.Catalogues"/>). Dispose the driver at the end of the check
+    /// (<c>using var app = …</c>).
     /// </summary>
     protected static async Task<ShellDriver> OpenWorkspaceAsync(
         TempDirectory data,
@@ -120,14 +124,15 @@ public abstract partial class Phase6Checks
         int width = 1100,
         int height = 700,
         AppTheme theme = AppTheme.Dark,
-        TimeProvider? readClock = null)
+        TimeProvider? readClock = null,
+        ToolCatalogues? tools = null)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(copy);
         WriteTheme(data, theme);
         var workspace = copy.ToWorkspace();
         ShellDriver.WriteWorkspaces(data.Path, new WorkspaceList { Workspaces = [workspace] });
-        var app = ShellDriver.StartWithTabs(data.Path, [new TabState(null, workspace.Id)], 0, width, height, readClock: readClock);
+        var app = ShellDriver.StartWithTabs(data.Path, [new TabState(null, workspace.Id)], 0, width, height, readClock: readClock, tools: tools);
         try
         {
             await app.WaitUntilReadyAsync();
@@ -141,6 +146,70 @@ public abstract partial class Phase6Checks
             app.Dispose();
             throw;
         }
+    }
+
+    /// <summary>Git's spelling of each folder <see cref="PrepareSameFolderAsync"/> prepared, by the copy's folder and the folder as given (normalised); null where git has none.</summary>
+    private static readonly ConcurrentDictionary<(string Root, string Folder), string?> GitSpellings = new();
+
+    /// <summary>
+    /// Works out git's own spelling of folders of <paramref name="copy"/> for <see cref="SameFolder"/>
+    /// (part W's "Harness additions"): <c>git rev-parse --show-toplevel</c> in each, run by the
+    /// check's own <see cref="TempRepo"/> with <c>GIT_OPTIONAL_LOCKS=0</c> (so that it refreshes no
+    /// index the app reads), normalised as <c>GitRepository</c> normalises it (the platform's
+    /// separators, full, no trailing one); for a folder that does not exist (old-site), or where git
+    /// finds no repository, none, so that only its text matches. With no <paramref name="folders"/>,
+    /// the copy's ten folders (<see cref="TempWorkspace.Names"/>); otherwise those folders, such as
+    /// one the check made inside the copy (W2's <c>archive/old-site</c>, once it is made). Await it
+    /// once before the first <see cref="SameFolder"/> on those folders; a folder prepared again keeps
+    /// its first spelling.
+    /// </summary>
+    protected static async Task PrepareSameFolderAsync(TempWorkspace copy, params string[] folders)
+    {
+        ArgumentNullException.ThrowIfNull(copy);
+        ArgumentNullException.ThrowIfNull(folders);
+        IEnumerable<string> targets = folders.Length > 0 ? folders : copy.Names.Select(copy.PathOf);
+        var spelt = await Task.WhenAll(targets.Select(async folder => (Folder: folder, Git: await GitSpellingAsync(copy, folder))));
+        foreach (var (folder, git) in spelt)
+        {
+            GitSpellings.TryAdd((copy.Root, WorkspacePaths.Normalise(folder)), git);
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> (a call's <c>WorkingDirectory</c>, a saved path, a row's
+    /// folder) names the folder <paramref name="folder"/> of <paramref name="copy"/> (part W's
+    /// <c>SameFolder</c>): <see cref="WorkspacePaths.Same"/> finds it equal to <paramref name="folder"/>
+    /// as given or to git's own spelling of it, which <see cref="PrepareSameFolderAsync"/> worked out:
+    /// on CI's macOS the copy's <c>/var/…</c> is git's <c>/private/var/…</c>, which no text compare of
+    /// the two sees. For every folder and call-log match of part W.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"><paramref name="folder"/> was not prepared: await <see cref="PrepareSameFolderAsync"/> first.</exception>
+    protected static bool SameFolder(TempWorkspace copy, string folder, string path)
+    {
+        ArgumentNullException.ThrowIfNull(copy);
+        ArgumentException.ThrowIfNullOrEmpty(folder);
+        ArgumentNullException.ThrowIfNull(path);
+        if (!GitSpellings.TryGetValue((copy.Root, WorkspacePaths.Normalise(folder)), out var git))
+        {
+            throw new InvalidOperationException($"Git's spelling of {folder} was not prepared: await PrepareSameFolderAsync(copy) (or with this folder) before the first SameFolder on it.");
+        }
+
+        return WorkspacePaths.Same(path, folder) || (git is not null && WorkspacePaths.Same(path, git));
+    }
+
+    /// <summary>Git's <c>--show-toplevel</c> of <paramref name="folder"/>, normalised; null without the folder or a repository there.</summary>
+    private static async Task<string?> GitSpellingAsync(TempWorkspace copy, string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        using var repo = copy.RepoAt(folder);
+        var result = await repo.GitWithEnvironmentAllowingFailureAsync(new Dictionary<string, string?> { ["GIT_OPTIONAL_LOCKS"] = "0" }, "rev-parse", "--show-toplevel");
+        return result.ExitCode == 0
+            ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(result.StandardOutput.TrimEnd('\r', '\n')))
+            : null;
     }
 
     /// <summary>Writes <paramref name="theme"/> into the data folder's <c>settings.json</c> before the start, unless it is Dark, the default (D194): no file then.</summary>
@@ -501,14 +570,41 @@ public abstract partial class Phase6Checks
     /// once per variant. A name already saved in the run is refused before anything flips
     /// (<see cref="ClaimPictureName"/>). Returns the two pictures.
     /// </summary>
-    protected static async Task<(Screenshot Dark, Screenshot Light)> ShotInBothThemesAsync(
+    protected static Task<(Screenshot Dark, Screenshot Light)> ShotInBothThemesAsync(
         ShellDriver app,
         string name,
         bool keepPointer = false,
-        Action<Screenshot, Palette>? assertEach = null)
+        Action<Screenshot, Palette>? assertEach = null) =>
+        ShotInBothThemesAsync(app, name, keepPointer, assertEach, pictures: null);
+
+    /// <summary>
+    /// <see cref="ShotInBothThemesAsync(ShellDriver, string, bool, Action{Screenshot, Palette}?)"/>, its
+    /// two pictures saved as <c>&lt;name&gt;-dark.png</c> and <c>&lt;name&gt;-light.png</c> in
+    /// <paramref name="pictures"/> (with no note of the steps' times) when it is given, else under
+    /// artifacts/visual/phase-6/scripted/ as <see cref="Shot"/> saves them; the names are claimed in
+    /// the run either way. For the support's own tests, whose pictures the gate must not list.
+    /// </summary>
+    internal static async Task<(Screenshot Dark, Screenshot Light)> ShotInBothThemesAsync(
+        ShellDriver app,
+        string name,
+        bool keepPointer,
+        Action<Screenshot, Palette>? assertEach,
+        string? pictures)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        Screenshot Take(string picture)
+        {
+            if (pictures is null)
+            {
+                return TakePicture(app, picture, keepPointer);
+            }
+
+            var shot = CaptureForPicture(app, keepPointer);
+            shot.Save(Path.Combine(pictures, picture + ".png"));
+            return shot;
+        }
+
         var setting = app.Session.Themes.Setting;
         Assert.True(setting == AppTheme.System, $"A pair needs the theme System chosen (11.14); it is {setting}.");
         Assert.True(app.SystemTheme.IsDark, "A pair starts with the fake system dark (11.14).");
@@ -517,7 +613,7 @@ public abstract partial class Phase6Checks
 
         // (1) Dark.
         Assert.True(app.ShowsDarkTheme, $"The window shows {app.ShownThemeVariant} at the start of the pair {name}, not Dark.");
-        var dark = TakePicture(app, name + "-dark", keepPointer);
+        var dark = Take(name + "-dark");
         var screen = ScreenState.Of(app);
         AssertTokenPixel(app, dark, Dark);
         var tips = AssertOpenToolTips(app, dark, Dark);
@@ -526,7 +622,7 @@ public abstract partial class Phase6Checks
         // (2) Light, following the system without a restart; the setting stays System.
         await FlipAsync(app, dark: false, screen);
         Assert.Equal("System", SavedTheme(app));
-        var light = TakePicture(app, name + "-light", keepPointer);
+        var light = Take(name + "-light");
         AssertTokenPixel(app, light, Light);
         var lightTips = AssertOpenToolTips(app, light, Light);
         Assert.True(
@@ -766,16 +862,22 @@ public abstract partial class Phase6Checks
     /// <summary><see cref="Shot"/> for a name already claimed (<see cref="ClaimPictureName"/>).</summary>
     private static Screenshot TakePicture(ShellDriver app, string name, bool keepPointer)
     {
+        var screenshot = CaptureForPicture(app, keepPointer);
+        screenshot.Save(Phase, name);
+        NoteTime(app.MarkStep(name));
+        return screenshot;
+    }
+
+    /// <summary><see cref="Shot"/>'s capture: the details panel's read waited for, the pointer at the neutral point unless kept, a menu is open or a drag runs.</summary>
+    private static Screenshot CaptureForPicture(ShellDriver app, bool keepPointer)
+    {
         app.WaitForCommitDetails();
         if (!keepPointer && !app.IsMenuOpen && !IsDragging(app))
         {
             app.MoveToNeutral();
         }
 
-        var screenshot = app.Capture();
-        screenshot.Save(Phase, name);
-        NoteTime(app.MarkStep(name));
-        return screenshot;
+        return app.Capture();
     }
 
     /// <summary>
@@ -952,9 +1054,12 @@ public abstract partial class Phase6Checks
     /// cleaner: <paramref name="keyLine"/> is a line git printed and a line of the dialog; every
     /// line of the dialog is a line git printed; every line of standard error that starts with
     /// <c>fatal:</c>, <c>error:</c> or <c> ! [</c> is shown; and no line shows git's progress count
-    /// or a carriage return.
+    /// or a carriage return. <paramref name="appLines"/> are lines the app adds after git's own
+    /// (part W: <c>error: Could not fetch origin</c>, which <c>FetchAsync(null)</c> appends, D109):
+    /// they must be the dialog's last lines, in this order, and the rules above hold for the lines
+    /// before them.
     /// </summary>
-    internal static void AssertGitOutputShown(GitCallRecord call, string keyLine, string shown)
+    internal static void AssertGitOutputShown(GitCallRecord call, string keyLine, string shown, IReadOnlyList<string>? appLines = null)
     {
         ArgumentNullException.ThrowIfNull(call);
         ArgumentException.ThrowIfNullOrEmpty(keyLine);
@@ -962,6 +1067,15 @@ public abstract partial class Phase6Checks
         var error = PrintedLines(call.StandardError);
         var printed = error.Concat(PrintedLines(call.StandardOutput)).ToHashSet(StringComparer.Ordinal);
         var lines = shown.Split('\n');
+        if (appLines is { Count: > 0 })
+        {
+            var last = lines.TakeLast(appLines.Count).ToList();
+            Assert.True(
+                lines.Length > appLines.Count && last.SequenceEqual(appLines, StringComparer.Ordinal),
+                "The dialog does not end with the app's own lines\n  " + string.Join("\n  ", appLines) + "\nafter git's. It shows:\n" + shown);
+            lines = lines[..^appLines.Count];
+        }
+
         Assert.True(printed.Contains(keyLine), $"git did not print the key line \"{keyLine}\". It printed:\n{call.StandardError}\n{call.StandardOutput}");
         Assert.True(lines.Contains(keyLine, StringComparer.Ordinal), $"The dialog does not show the key line \"{keyLine}\". It shows:\n{shown}");
         foreach (var line in lines)

@@ -2,12 +2,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Workspaces;
@@ -248,6 +250,74 @@ public sealed class Phase6SupportTests : Phase6Checks
         Assert.Contains("- Cancel all does not show.", running.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// SameFolder (part W's harness additions) matches a folder of the copy as given and as git
+    /// spells it, once PrepareSameFolderAsync has worked that out (refused before); old-site, which
+    /// git never sees, by its text alone; a folder the check made inside the copy (W2's
+    /// archive/old-site) through TempWorkspace.RepoAt, which refuses a folder outside the copy.
+    /// </summary>
+    [Fact]
+    public async Task SameFolder_matches_a_folder_as_given_and_as_git_spells_it()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        var api = copy.PathOf("api");
+        Assert.Throws<InvalidOperationException>(() => SameFolder(copy, api, api));
+
+        await PrepareSameFolderAsync(copy);
+        var gitsApi = await WorkingTreeAsync(copy.Repo("api"));
+        Assert.True(SameFolder(copy, api, api));
+        Assert.True(SameFolder(copy, api, gitsApi));
+        Assert.True(SameFolder(copy, api, api + Path.DirectorySeparatorChar));
+        Assert.False(SameFolder(copy, api, copy.PathOf("docs")));
+        Assert.False(SameFolder(copy, api, await WorkingTreeAsync(copy.Repo("docs"))));
+        Assert.True(SameFolder(copy, copy.PathOf("old-site"), copy.PathOf("old-site")));
+        Assert.False(SameFolder(copy, copy.PathOf("old-site"), gitsApi));
+
+        var archive = Path.Combine(copy.Root, "archive", "old-site");
+        Directory.CreateDirectory(archive);
+        using (var made = copy.RepoAt(archive))
+        {
+            await made.GitAsync("init", "--quiet");
+        }
+
+        Assert.Throws<InvalidOperationException>(() => SameFolder(copy, archive, archive));
+        await PrepareSameFolderAsync(copy, archive);
+        using var repo = copy.RepoAt(archive);
+        Assert.True(SameFolder(copy, archive, await WorkingTreeAsync(repo)));
+        Assert.False(SameFolder(copy, archive, copy.PathOf("old-site")));
+        Assert.Throws<ArgumentException>(() => copy.RepoAt(Path.GetTempPath()));
+        Assert.Throws<ArgumentException>(() => copy.RepoAt(copy.Root));
+    }
+
+    /// <summary>
+    /// AssertGitOutputShown's app lines (part W: a failed fetch's <c>error: Could not fetch origin</c>,
+    /// D109): the dialog's last lines, held apart from the "a line git printed" rule; refused when they
+    /// are not last, and not passed as git's when they are not named.
+    /// </summary>
+    [Fact]
+    public void The_apps_own_last_lines_are_held_apart_from_the_lines_git_printed()
+    {
+        const string key = "fatal: '../remotes/missing.git' does not appear to be a git repository";
+        var call = new GitCallRecord(
+            DateTimeOffset.UnixEpoch,
+            TimeSpan.Zero,
+            "git fetch --progress origin",
+            null,
+            GitCallOutcome.Completed,
+            128,
+            string.Empty,
+            key + "\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n");
+        var git = ShellDriver.CleanedOutputOf(call);
+        const string appLine = "error: Could not fetch origin";
+
+        AssertGitOutputShown(call, key, git);
+        AssertGitOutputShown(call, key, git + "\n" + appLine, [appLine]);
+        var unnamed = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertGitOutputShown(call, key, git + "\n" + appLine));
+        Assert.Contains($"The dialog shows a line git did not print: \"{appLine}\".", unnamed.Message, StringComparison.Ordinal);
+        var first = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertGitOutputShown(call, key, appLine + "\n" + git, [appLine]));
+        Assert.Contains("The dialog does not end with the app's own lines", first.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>The arrows' cell as the report writes it, and what it refuses.</summary>
     [Fact]
     public void The_arrows_are_written_as_the_report_writes_them()
@@ -263,40 +333,46 @@ public sealed class Phase6SupportTests : Phase6Checks
 
     /// <summary>
     /// ShotInBothThemesAsync (11.14, part L's "The pairs") on a dashboard started with System and the
-    /// fake dark, under names no check uses: both pictures saved, the step's assertions run once per
-    /// variant, the window dark again; a second pair of one name refused before anything flips; and
-    /// the pair with a tooltip (LD19), a menu and a dialog (LD1's card) open, each still up.
+    /// fake dark, under names no check uses, its pictures in a temporary folder and never under
+    /// artifacts/visual/phase-6/scripted/, which the gate lists: both pictures saved, the step's
+    /// assertions run once per variant, the window dark again; a second pair of one name refused
+    /// before anything flips; and the pair with a tooltip (LD19), a menu, a name dialog, the settings
+    /// screen (<c>Border.dialogCard.settings</c>) and the Pick dialog stacked on it (LD1's card of the
+    /// dialog on top) open, each still up.
     /// </summary>
     [AvaloniaFact]
     public async Task A_pair_saves_its_dark_and_light_pictures_once_and_keeps_the_screen_up()
     {
         using var copy = await Scenarios.WorkspaceAsync();
         using var data = new TempDirectory("data");
+        using var pictures = new TempDirectory("pairs");
         using var app = await OpenWorkspaceAsync(data, copy, theme: AppTheme.System);
+        Task<(Screenshot Dark, Screenshot Light)> PairAsync(string name, bool keepPointer = false, Action<Screenshot, Palette>? assertEach = null) =>
+            ShotInBothThemesAsync(app, name, keepPointer, assertEach, pictures.Path);
 
         var seen = new List<Palette>();
-        var (dark, light) = await ShotInBothThemesAsync(app, "99zz-support-pair", assertEach: (_, palette) => seen.Add(palette));
+        var (dark, light) = await PairAsync("99zz-support-pair", assertEach: (_, palette) => seen.Add(palette));
         Assert.Equal([Dark, Light], seen);
-        Assert.True(File.Exists(Path.Combine(VisualRun.FolderFor(Phase), "99zz-support-pair-dark.png")));
-        Assert.True(File.Exists(Path.Combine(VisualRun.FolderFor(Phase), "99zz-support-pair-light.png")));
+        Assert.Equal(["99zz-support-pair-dark.png", "99zz-support-pair-light.png"], Directory.GetFiles(pictures.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal));
+        Assert.False(File.Exists(Path.Combine(VisualRun.FolderFor(Phase), "99zz-support-pair-dark.png")));
         Assert.Equal(Dark.Chrome, dark.PixelAt(ShellDriver.NeutralPoint));
         Assert.Equal(Light.Chrome, light.PixelAt(ShellDriver.NeutralPoint));
         Assert.True(app.ShowsDarkTheme);
 
         var mark = app.LogMark();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => ShotInBothThemesAsync(app, "99zz-support-pair"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => PairAsync("99zz-support-pair"));
         Assert.True(app.ShowsDarkTheme);
         Assert.True(app.SystemTheme.IsDark);
         Assert.Equal(0, app.CountLogLines(AppLogFile.Containing("The system's theme changed to"), mark));
 
         await app.RestPointerOnAsync(app.FindByAutomationId("DashboardRefresh"));
-        await ShotInBothThemesAsync(app, "99zz-support-tip", keepPointer: true);
+        await PairAsync("99zz-support-tip", keepPointer: true);
         Assert.True(ToolTip.GetIsOpen(app.FindByAutomationId("DashboardRefresh")));
 
         app.MoveToNeutral();
         var menu = await app.RowMenuAsync("api");
         Assert.Equal("api", menu.Header);
-        await ShotInBothThemesAsync(app, "99zz-support-menu");
+        await PairAsync("99zz-support-menu");
         Assert.Equal("api", app.Menu().Header);
         app.PressKey(Key.Escape);
         await AssertNoMenuAsync(app, logMark: null);
@@ -304,11 +380,37 @@ public sealed class Phase6SupportTests : Phase6Checks
         app.Click(app.FindByAutomationId("DashboardMore"));
         app.ClickMenuItem("Rename workspace…");
         var rename = await app.WaitForDialogAsync<WorkspaceNameDialogViewModel>();
-        await ShotInBothThemesAsync(app, "99zz-support-dialog");
+        await PairAsync("99zz-support-dialog");
         Assert.Same(rename, app.Session.Services.DialogHost.Current);
         app.PressKey(Key.Escape);
         await AssertNoDialogAsync(app);
+
+        // The settings screen's card, then the Pick dialog's stacked on it: LD1's pixel is the top card's.
+        app.MoveToNeutral();
+        var settings = await app.OpenSettingsAsync();
+        var settingsCard = app.Find<Border>("SettingsCard");
+        Assert.True(settingsCard.Classes.Contains("dialogCard") && settingsCard.Classes.Contains("settings"));
+        var (settingsDark, settingsLight) = await PairAsync("99zz-support-settings");
+        var settingsPixel = app.BoundsOf(settingsCard).TopLeft + new Point(10, 10);
+        Assert.Equal((Dark.Panel, Light.Panel), (settingsDark.PixelAt(settingsPixel), settingsLight.PixelAt(settingsPixel)));
+        Assert.NotEqual(Dark.Chrome, settingsDark.PixelAt(ShellDriver.NeutralPoint));
+
+        app.ChooseSection(SettingsSection.Git);
+        app.Click(app.FindByAutomationId("MergeToolChooseButton"));
+        var pick = await app.WaitForDialogAsync<PickDialogViewModel>();
+        var pickCard = app.TopDialogView!.GetVisualDescendants().OfType<Border>().First(border => border.Classes.Contains("dialogCard"));
+        var (pickDark, pickLight) = await PairAsync("99zz-support-pick");
+        var pickPixel = app.BoundsOf(pickCard).TopLeft + new Point(10, 10);
+        Assert.Equal((Dark.Panel, Light.Panel), (pickDark.PixelAt(pickPixel), pickLight.PixelAt(pickPixel)));
+        Assert.Same(pick, app.Session.Services.DialogHost.Current);
+        Assert.Same(settings, app.SettingsDialog);
+
+        app.Click(app.FindByAutomationId(app.TopDialogView!, "CancelButton"));
+        await app.WaitForAsync(() => pick.IsClosed, "the Pick dialog to close");
+        app.CancelSettings();
+        await AssertNoDialogAsync(app);
         Assert.Equal("System", new JsonSettingsStore(Path.Combine(data.Path, "settings.json")).Current.Theme.ToString());
+        Assert.Equal(12, Directory.GetFiles(pictures.Path).Length);
     }
 
     /// <summary>
@@ -342,8 +444,9 @@ public sealed class Phase6SupportTests : Phase6Checks
     }
 
     /// <summary>
-    /// Start and StartWithTabs take other tool catalogues than the fixed ones (17.2, 12.9): WP-SET's
-    /// HeldMergeTools, whose merge-tool list the session's early lookup (8.10) then waits for.
+    /// Start, StartWithTabs, StartWithWorkspace and OpenWorkspaceAsync take other tool catalogues than
+    /// the fixed ones (17.2, 12.9): WP-SET's HeldMergeTools, whose merge-tool list the session's early
+    /// lookup (8.10) then waits for.
     /// </summary>
     [AvaloniaFact]
     public async Task A_start_takes_held_merge_tools_in_place_of_the_fixed_catalogues()
@@ -364,6 +467,21 @@ public sealed class Phase6SupportTests : Phase6Checks
             {
                 await app.WaitUntilReadyAsync();
                 Assert.Same(held.Catalogues, app.Session.Services.Tools);
+            }
+
+            using (var data = new TempDirectory("data"))
+            using (var app = ShellDriver.StartWithWorkspace(data.Path, new WorkspaceList(), tools: held.Catalogues))
+            {
+                await app.WaitUntilReadyAsync();
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+            }
+
+            using var copy = await Scenarios.WorkspaceAsync();
+            using (var data = new TempDirectory("data"))
+            using (var app = await OpenWorkspaceAsync(data, copy, tools: held.Catalogues))
+            {
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+                Assert.Equal(10, app.DashboardSnapshot().Rows.Count);
             }
         }
         finally
