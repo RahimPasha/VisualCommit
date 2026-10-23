@@ -84,7 +84,7 @@ public sealed class Phase6Order : ITestCaseOrderer
         nameof(Phase6RealWindowPass.Check_K10_palette_search_and_run),
         nameof(Phase6RealWindowPass.Check_S14_settings_screen_sections_and_entries),
         nameof(Phase6RealWindowPass.Check_S15_system_theme_at_a_real_start),
-        "Check_L34_light_overlays_against_their_twins",
+        nameof(Phase6RealWindowPass.Check_L34_light_overlays_against_their_twins),
     ];
 
     public IReadOnlyCollection<TTestCase> OrderTestCases<TTestCase>(IReadOnlyCollection<TTestCase> testCases)
