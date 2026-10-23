@@ -181,8 +181,11 @@ App:
 
 Visual checks:
 
-- [ ] 20. Scripted walk-through in `VisualCommit.VisualTests.Phase6`, screenshots under
-  `artifacts/visual/phase-6/scripted/`.
+- [x] 20. Scripted walk-through in `VisualCommit.VisualTests.Phase6`, screenshots under
+  `artifacts/visual/phase-6/scripted/`. (WP-V's parts G `da4a956`, W `48df7af`, S `5d0a442`, K
+  `e0f3c4a` and L `fb4aa59`, part L in `VisualCommit.VisualTests.Phase6Look`; each part written by its
+  own writer with every picture inspected and every expected result that did not hold ruled on and
+  recorded in the report; Phase6 130 of 130 and Phase6Look 19 of 19 on `fb4aa59`.)
 - [ ] 21. Real-window pass for the checks marked for it (`Phase6RealWindowPass`).
 
 Closing:
@@ -297,16 +300,15 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Waves 1 and 2 are merged: every package of design section 18 but WP-V and WP-R, each built, reviewed
-and fixed (the last, WP-K, in `73ac284`), and the lead's walk-through helpers (`9ed9ba3`). Wave 3:
-WP-V's parts G (`da4a956`), W (`48df7af`) and S (`5d0a442`) are merged, each written by its own writer
-with every picture inspected; the Phase6 project passes 99 of 99 on `5d0a442`. Being built, each in its
-worktree: part K (`wip/p6-walk-k`), part L with its project `VisualCommit.VisualTests.Phase6Look`
-(`wip/p6-walk-l`), and WP-R, the real-window pass, written and built but never run before the gate
-(`wip/p6-real-window`; K10 and L34 after parts K and L merge). Next: parts K's and L's merges (part L
-adds Phase6Look to `VisualCommit.slnx`; the lead adds its commands to CLAUDE.md and plan.md's gate
-step 3), WP-R's merge, then status step 22 (the independent review of the code), 17.7's references
-on `master`, and the gate (step 23: tell the owner before the real-window pass).
+Waves 1 to 3 are merged but WP-R: every package of design section 18, each built, reviewed and fixed,
+the lead's walk-through helpers, and WP-V's five parts (the Phase6 project 130 of 130, Phase6Look 19
+of 19 on `fb4aa59`). WP-R, the real-window pass, is written and built on `wip/p6-real-window` (W1, W2,
+W4, W9, K10, S14, S15; L34 being written), never run. Next: WP-R's merge (record its earlier
+real-window lines in the report: Undo's and Redo's help texts with keys, `Phase5RealWindowPass.U.cs`
+:62-63, the full `AssertToolbar`; its relaxed pass count in W1's Notes; S14's added caption check),
+tick steps 19 and 21; then the default run, status step 22 (the independent review of the code),
+17.7's references on `master` in a worktree of their own, and the gate (step 23; tell the owner
+before the real-window pass).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
