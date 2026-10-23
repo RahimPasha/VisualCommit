@@ -503,7 +503,9 @@ public class DashboardRefreshTests
     /// A request that folds into "one more pass" judges the 10 s rule as of the moment it was made
     /// (2.10, the lead's ruling of 2026-10-23): the window's activation during a first pass of ten
     /// rows that takes over 10 s by the read clock reads none of them again, so the start logs one
-    /// line, <c>read 10</c>, however long that pass takes.
+    /// line, <c>read 10</c>, however long that pass takes. The tenth row's two git calls take 6 s
+    /// and 5 s, so that neither runs past the git call's patience (2.10, the ruling at status step
+    /// 22), which would end the pass without the row.
     /// </summary>
     [AvaloniaFact]
     public async Task An_activation_during_a_pass_of_over_ten_seconds_reads_no_row_that_pass_read_again()
@@ -512,18 +514,24 @@ public class DashboardRefreshTests
         string[] names = ["api", "web-app", "docs", "mobile", "design-system", "billing", "infra", "scratch", "notes", "archive"];
         var repositories = names.Select(name => provider.Add(name)).ToList();
         var held = repositories[^1];
+        held.OpenGate = new TaskCompletionSource();
         held.RefsGate = new TaskCompletionSource();
         var (dashboard, log, clock) = Dashboard(provider, [.. repositories.Select(repository => repository.WorkingDirectory)]);
 
         var start = dashboard.ReadAtStartAsync();
         await DashboardTestSupport.WaitUntilAsync(
-            () => dashboard.Rows.Take(9).All(row => row.LastRead is not null) && held.RefsReads == 1,
-            "nine rows read and the tenth held in its refs read");
+            () => dashboard.Rows.Take(9).All(row => row.LastRead is not null) && provider.Opens == 10,
+            "nine rows read and the tenth held in its probe");
         Assert.True(dashboard.IsPassRunning);
 
-        // The activation folds into one more pass; the first pass ends 11 s later by the read clock.
+        // The activation folds into one more pass; the tenth row's probe ends 6 s later by the read
+        // clock and its summary read 5 s after that: the first pass ends 11 s after the request.
         dashboard.OnWindowActivated();
-        clock.Advance(TimeSpan.FromSeconds(11));
+        clock.Advance(TimeSpan.FromSeconds(6));
+        held.OpenGate.SetResult();
+        await DashboardTestSupport.WaitUntilAsync(() => held.RefsReads == 1, "the tenth row's summary read");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.True(dashboard.IsPassRunning);
         held.RefsGate.SetResult();
         await start.WaitAsync(Patience);
         await DashboardTestSupport.SettleAsync();
@@ -678,6 +686,53 @@ public class DashboardRefreshTests
         {
             gate.Set();
         }
+    }
+
+    [AvaloniaFact]
+    public async Task A_git_read_still_running_after_ten_seconds_no_longer_holds_its_pass()
+    {
+        // The lead's ruling at status step 22 (2.10): a share that answered its folder check and
+        // then stopped answering git keeps its slot, and F5's pass ends and logs without it.
+        using var provider = new FakeProvider();
+        var (api, share, docs) = (provider.Add("api"), provider.Add("share"), provider.Add("docs"));
+        var (dashboard, log, clock) = Dashboard(provider, [api.WorkingDirectory, share.WorkingDirectory, docs.WorkingDirectory]);
+        dashboard.OnBecameActive();
+        await WaitForPassesAsync(log, 1);
+        var row = dashboard.Rows[1];
+        Assert.Equal(0, clock.ArmedTimers);
+
+        share.StatusGate = new TaskCompletionSource();
+        var refresh = dashboard.RefreshCommand.ExecuteAsync(null);
+        await DashboardTestSupport.WaitUntilAsync(
+            () => share.StatusReads == 2 && api.StatusReads == 2 && docs.StatusReads == 2 && !dashboard.Rows[0].IsReading && !dashboard.Rows[2].IsReading,
+            "api and docs read and share's status read held");
+
+        // The held call's patience is armed on the read clock, and nothing else holds the pass.
+        await DashboardTestSupport.WaitUntilAsync(() => clock.ArmedTimers == 1, "the held call's patience");
+        Assert.False(refresh.IsCompleted);
+        Assert.True(row.IsReading);
+        clock.Advance(DashboardViewModel.GitCallPatience - TimeSpan.FromTicks(1));
+        Assert.Equal(1, clock.ArmedTimers);
+        Assert.False(refresh.IsCompleted);
+
+        clock.Advance(TimeSpan.FromTicks(1));
+        await refresh.WaitAsync(Patience);
+        Assert.Equal(["Web: read 3 repositories in", "Web: read 2 repositories in"], PassLines(log));
+        Assert.True(row.IsReading);
+        Assert.False(dashboard.IsPassRunning);
+
+        // F5 again: the held row starts no second read, the others are read.
+        await dashboard.RefreshCommand.ExecuteAsync(null).WaitAsync(Patience);
+        Assert.Equal(["Web: read 3 repositories in", "Web: read 2 repositories in", "Web: read 2 repositories in"], PassLines(log));
+        Assert.Equal((3, 2), (api.StatusReads, share.StatusReads));
+
+        // The call ends: the row's read completes then, logging no pass of its own.
+        share.Status = WorkingTreeStatus.Clean;
+        share.StatusGate.SetResult();
+        await DashboardTestSupport.WaitUntilAsync(() => !row.IsReading, "the held read to end");
+        Assert.Equal(("main", "Clean", string.Empty), (row.BranchText, row.Changes.Text, row.State.Text));
+        Assert.NotNull(row.LastRead);
+        Assert.Equal(3, PassLines(log).Count);
     }
 
     [AvaloniaFact]

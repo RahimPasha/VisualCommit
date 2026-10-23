@@ -197,8 +197,14 @@ internal sealed class FakeProvider : IRepositoryProvider, IDisposable
                 throw failure;
             }
 
-            return _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
+            var repository = _repositories.FirstOrDefault(entry => WorkspacePaths.Same(entry.Key, path)).Value
                 ?? throw new NotARepositoryException(path);
+            if (repository.OpenGate is { } own)
+            {
+                await own.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return repository;
         }
         finally
         {
@@ -247,6 +253,9 @@ internal sealed class CountingRepository(string folder, RepoRefs? refs = null, W
     public RepoRefs Refs { get; set; } = refs ?? DashboardTestSupport.MainRefs();
 
     public WorkingTreeStatus Status { get; set; } = status ?? WorkingTreeStatus.Clean;
+
+    /// <summary>When set, the provider's open of this repository's folder waits for it (a row's probe, 2.10).</summary>
+    public TaskCompletionSource? OpenGate { get; set; }
 
     /// <summary>When set, a refs read waits for it.</summary>
     public TaskCompletionSource? RefsGate { get; set; }

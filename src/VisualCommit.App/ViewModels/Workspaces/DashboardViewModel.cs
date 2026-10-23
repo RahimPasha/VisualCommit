@@ -33,7 +33,8 @@ public enum DashboardFocus
 /// and logs nothing (WD35); one that comes during a pass folds into one more pass after it. At most
 /// four reads run at once (<see cref="ReadSlots"/>), each holding its slot only around its git
 /// calls; a pass ends without a row whose folder check has not returned (or that waits for a
-/// closed queue on its worktree) once <see cref="CheckPatience"/> has passed, and logs
+/// closed queue on its worktree) once <see cref="CheckPatience"/> has passed, and without one
+/// whose git call has run for <see cref="GitCallPatience"/> (it keeps its slot), and logs
 /// <c>{workspace}: read {n} repositories in {ms} ms</c> with the rows that finished having read
 /// their row, none that ended by following a tab (WD27; no line for none, WD35).
 /// </para>
@@ -53,6 +54,14 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     /// minutes, and the pass ends without it.
     /// </summary>
     public static readonly TimeSpan CheckPatience = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How long a read's git call holds its pass, by the read clock (2.10, the lead's ruling at
+    /// status step 22): a call still running then (a share that stopped answering after its folder
+    /// check) keeps its slot and ends later, and the pass ends and logs without it, so that F5, the
+    /// activation's reads and trigger 6 are not held by it.
+    /// </summary>
+    public static readonly TimeSpan GitCallPatience = TimeSpan.FromSeconds(10);
 
     private readonly TabServices _services;
     private readonly CancellationTokenSource _lifetime = new();
@@ -573,7 +582,8 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
     }
 
     /// <summary>
-    /// One pass (2.10): every row's read starts; the pass ends when each has ended or has sat for
+    /// One pass (2.10): every row's read starts; the pass ends when each has ended, is overdue (a
+    /// git call that has run for <see cref="GitCallPatience"/>) or has sat for
     /// <see cref="CheckPatience"/> in a wait that holds nothing (a folder check that has not
     /// returned, a closed queue on its worktree), and logs its line with the rows that finished
     /// having read their row (WD27): a read that ended by following a tab is not counted, and a
@@ -599,7 +609,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         var ui = SynchronizationContext.Current;
         ITimer? patience = null;
         var patienceRound = 0;
-        bool OnlyWaitsLeft() => reads.All(read => read.IsCompleted || read.IsWaiting);
+        bool OnlyWaitsLeft() => reads.All(read => read.IsCompleted || read.IsOverdue || read.IsWaiting);
         void Expire(int round)
         {
             if (round != patienceRound)
@@ -618,11 +628,12 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
 
         void Look()
         {
-            // Looked at when the pass starts, and when a read's wait starts or ends or the read
-            // ends. With every read ended the pass ends. With only waits that hold nothing left, it
-            // waits for them CheckPatience by the read clock (a normal folder check returns in
-            // microseconds), then ends without them (2.10); anything else running restarts that time.
-            if (reads.All(read => read.IsCompleted))
+            // Looked at when the pass starts, and when a read's wait starts or ends, it becomes
+            // overdue, or it ends. With every read ended or overdue the pass ends. With only waits
+            // that hold nothing left, it waits for them CheckPatience by the read clock (a normal
+            // folder check returns in microseconds), then ends without them (2.10); anything else
+            // running restarts that time.
+            if (reads.All(read => read.IsCompleted || read.IsOverdue))
             {
                 ended.TrySetResult();
                 return;

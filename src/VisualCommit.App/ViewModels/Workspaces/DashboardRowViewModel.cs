@@ -258,7 +258,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             return null;
         }
 
-        var read = new DashboardRowRead();
+        var read = new DashboardRowRead(_dashboard.ReadClock);
         _read = read;
         IsReading = true;
         _ = RunReadAsync(read, _token.Token);
@@ -447,7 +447,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
                 if (present)
                 {
-                    counted = await ReadOwnAsync(own, token);
+                    counted = await ReadOwnAsync(own, read, token);
                     return;
                 }
 
@@ -482,7 +482,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             await _dashboard.ReadSlots.WaitAsync(token);
             try
             {
-                probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, token, exists);
+                using (read.GitCall())
+                {
+                    probe = await WorkspaceFolderProbe.ProbeAsync(_dashboard.Services.Repositories, path, token, exists);
+                }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -557,7 +560,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
             }
 
             Own(acquired);
-            counted = await ReadOwnAsync(acquired, token);
+            counted = await ReadOwnAsync(acquired, read, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -589,9 +592,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     /// The summary read in one of the dashboard's slots: the first, or a refresh of one read before
     /// (another dashboard's included). Reads nothing, and returns false, when the row no longer owns
     /// <paramref name="own"/> once it has its slot: a tab adopted it meanwhile, and a followed row is
-    /// never read by the dashboard (2.10).
+    /// never read by the dashboard (2.10). Its git calls are <paramref name="read"/>'s: one that
+    /// runs on past the patience leaves the pass to end without the row.
     /// </summary>
-    private async Task<bool> ReadOwnAsync(RepositoryViewModel own, CancellationToken token)
+    private async Task<bool> ReadOwnAsync(RepositoryViewModel own, DashboardRowRead read, CancellationToken token)
     {
         await _dashboard.ReadSlots.WaitAsync(token);
         try
@@ -601,7 +605,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
                 return false;
             }
 
-            await (own.HasFirstRead ? own.RefreshAsync() : own.StartAsync());
+            using (read.GitCall())
+            {
+                await (own.HasFirstRead ? own.RefreshAsync() : own.StartAsync());
+            }
         }
         finally
         {
@@ -800,15 +807,39 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 /// pass's <c>{n}</c>, and whether it sits in a wait that holds nothing: a folder check (queued for
 /// the thread pool, running there, or returned and waiting for the UI thread) or the wait for a
 /// closed queue on its worktree. Its pass ends without it once only such waits have been left for
-/// the dashboard's <see cref="DashboardViewModel.CheckPatience"/>.
+/// the dashboard's <see cref="DashboardViewModel.CheckPatience"/>. A read whose git call has run
+/// for <see cref="DashboardViewModel.GitCallPatience"/> by the read clock is overdue: it holds its
+/// pass no more (it keeps its slot and ends later), so its pass ends without it at once.
 /// </summary>
-internal sealed class DashboardRowRead
+/// <param name="clock">The dashboard's read clock, which times a git call's patience.</param>
+internal sealed class DashboardRowRead(TimeProvider clock)
 {
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
     private int _waits;
+    private int _overdue;
 
     /// <summary>The read sits in a folder check or waits for a closed queue: it holds nothing.</summary>
     public bool IsWaiting => Volatile.Read(ref _waits) > 0;
+
+    /// <summary>
+    /// A git call of the read ran for <see cref="DashboardViewModel.GitCallPatience"/> by the read
+    /// clock (a share that stopped answering after its folder check): from then on the read holds
+    /// its pass no more, whatever it does next (2.10, the lead's ruling at status step 22).
+    /// </summary>
+    public bool IsOverdue => Volatile.Read(ref _overdue) != 0;
+
+    /// <summary>
+    /// A git call of the read begins, in one of the dashboard's slots: should it still run after
+    /// <see cref="DashboardViewModel.GitCallPatience"/> by the read clock, the read becomes
+    /// <see cref="IsOverdue"/> and its pass looks again. Dispose the handle when the call ends.
+    /// </summary>
+    public IDisposable GitCall()
+    {
+        var call = new GitCallPatience(this);
+        call.Start(clock);
+        return call;
+    }
 
     /// <summary>The read has ended.</summary>
     public bool IsCompleted => _completion.Task.IsCompleted;
@@ -871,5 +902,74 @@ internal sealed class DashboardRowRead
     {
         Interlocked.Decrement(ref _waits);
         Progressed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The git call's patience ran out with the call still running: on the UI thread, the read is overdue and its pass looks again.</summary>
+    private void BecomeOverdue()
+    {
+        void Mark()
+        {
+            if (Interlocked.Exchange(ref _overdue, 1) == 0 && !IsCompleted)
+            {
+                Progressed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        if (_ui is null)
+        {
+            Mark();
+        }
+        else
+        {
+            _ui.Post(_ => Mark(), null);
+        }
+    }
+
+    /// <summary>One git call's patience: a timer on the read clock, disposed when the call ends.</summary>
+    private sealed class GitCallPatience(DashboardRowRead read) : IDisposable
+    {
+        private readonly Lock _gate = new();
+        private ITimer? _timer;
+        private bool _ended;
+
+        public void Start(TimeProvider clock)
+        {
+            var timer = clock.CreateTimer(_ => Expire(), null, DashboardViewModel.GitCallPatience, Timeout.InfiniteTimeSpan);
+            lock (_gate)
+            {
+                if (_ended)
+                {
+                    timer.Dispose();
+                    return;
+                }
+
+                _timer = timer;
+            }
+        }
+
+        public void Dispose()
+        {
+            ITimer? timer;
+            lock (_gate)
+            {
+                _ended = true;
+                (timer, _timer) = (_timer, null);
+            }
+
+            timer?.Dispose();
+        }
+
+        private void Expire()
+        {
+            lock (_gate)
+            {
+                if (_ended)
+                {
+                    return;
+                }
+            }
+
+            read.BecomeOverdue();
+        }
     }
 }
