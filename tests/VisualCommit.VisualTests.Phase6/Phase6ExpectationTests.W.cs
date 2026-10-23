@@ -165,6 +165,49 @@ public sealed class Phase6ExpectationTestsW
         Assert.Empty(await LinesAsync(notes, "remote"));
     }
 
+    /// <summary>
+    /// W6's sign-in over the folder server (scenario facts 2.5): with <c>RequireAuth</c>, a fetch of
+    /// docs and one of mobile each ask git's two prompts, the same texts for both (so one group key
+    /// answers both, 4.4), and each makes the four requests: <c>info/refs</c> without a user (401),
+    /// then as alice (200), <c>ls-refs</c> and <c>fetch</c> as alice (200). The prompts are read
+    /// through an askpass script that logs them and answers alice and s3cret. On a system port.
+    /// </summary>
+    [Fact]
+    public async Task The_folder_servers_sign_in_asks_the_reports_prompts_and_makes_its_requests()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var server = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        server.RequireAuth = true;
+        using var folder = new TempDirectory("askpass");
+        var script = Path.Combine(folder.Path, "askpass.sh");
+        File.WriteAllText(
+            script,
+            "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"$(dirname \"$0\")/prompts.txt\"\ncase \"$1\" in\n  Username*) echo " + PartW.User + " ;;\n  *) echo " + PartW.Password + " ;;\nesac\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var askpass = new Dictionary<string, string?> { ["GIT_ASKPASS"] = script.Replace('\\', '/'), ["GIT_TERMINAL_PROMPT"] = "0" };
+        foreach (var name in new[] { "docs", "mobile" })
+        {
+            using var repo = copy.Repo(name);
+            await repo.GitAsync("remote", "set-url", "origin", server.UrlOf(name));
+            var fetch = await RunAsync(repo, Arguments(PartW.FetchCommand), askpass);
+            Assert.True(fetch.ExitCode == 0, $"{name}'s signed-in fetch exited {fetch.ExitCode}.\n{fetch.StandardError}");
+            var requests = server.Requests.Where(request => request.Path.StartsWith($"/{name}.git/", StringComparison.Ordinal)).ToList();
+            Assert.Equal(
+                PartW.SignedInRequests.Select(request => (request.Method, $"/{name}.git{request.PathEnd}", request.Query, request.Command, request.User, request.Status)),
+                requests.Select(request => (request.Method, request.Path, request.Query, request.Command, request.UserName, request.Status)));
+        }
+
+        var prompts = File.ReadAllText(Path.Combine(folder.Path, "prompts.txt")).Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(
+            [PartW.UsernamePrompt(server.Port), PartW.PasswordPrompt(server.Port), PartW.UsernamePrompt(server.Port), PartW.PasswordPrompt(server.Port)],
+            prompts);
+        Assert.Equal(PartW.SignInTitle(server.Port), "Sign in to 127.0.0.1:" + server.Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     /// <summary>scratch's missing remote (W6): exit 128, the key line on every git, the four lines word for word on 2.36.</summary>
     [Fact]
     public async Task Scratchs_missing_remote_fails_as_W6_shows()

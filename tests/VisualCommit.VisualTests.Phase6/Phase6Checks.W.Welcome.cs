@@ -11,6 +11,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.Views.Dialogs;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Session;
@@ -96,6 +97,10 @@ public sealed partial class Phase6ChecksW
         var palette = PaletteOf(app);
         var header = Control<Border>(app, "DashboardHeader");
         Assert.Equal(palette.Chrome, ((ISolidColorBrush)header.Background!).Color);
+        var headerBounds = app.BoundsOf(header);
+        Assert.True(Math.Abs(headerBounds.Top - PartW.HeaderTop) <= PartW.Tolerance && Math.Abs(headerBounds.Bottom - PartW.HeaderBottom) <= PartW.Tolerance, $"The header is at {headerBounds}, not y 88 to 124.");
+        var moreIcon = app.FindByAutomationId("DashboardMore").GetVisualDescendants().OfType<VisualCommit.App.Controls.Icon>().Single();
+        Assert.True(ReferenceEquals(Application.Current!.FindResource("IconMore"), moreIcon.Data), "DashboardMore's icon is not IconMore.");
         AssertColour(palette.Border, shot, new Point(550, PartW.HeaderBottom - 0.5), "header's bottom line (VcBorderBrush)");
         AssertDashboardHeader(app, new ExpectedDashboardHeader(
             PartW.Workspace,
@@ -197,6 +202,10 @@ public sealed partial class Phase6ChecksW
         Assert.Equal(2, strip.Tabs.Count);
         AssertDashboardTab(app, strip, 0, PartW.Workspace, active: true);
         Assert.Equal(("RepoTab", PartW.NewTab, false), (strip.Tabs[1].AutomationId, strip.Tabs[1].Title, strip.Tabs[1].IsActive));
+
+        // Whether trigger 1 reads rows here depends on the real time since step 6 (the 10 s rule; W1
+        // has no read clock): no read is asserted either way, and the rows are read once any read ended.
+        await WaitForAllRowsIdleAsync(app, OperationChainTimeout);
         AssertRows(app, copy, [.. PartW.WaOrder.Select(name => w0[name])], selected: "api");
         await app.WaitForAsync(() => app.FocusIsWithin(app.Find<ListBox>("DashboardList")), "the dashboard's list to have the keyboard focus");
         AssertTd(app, PartW.Workspace, PartW.Count(9));
@@ -505,6 +514,10 @@ public sealed partial class Phase6ChecksW
             Assert.True(Math.Abs(row.Bounds.Height - PartW.ChecklistRowHeight) <= 0.5, $"The checklist's row {row.Name} is {row.Bounds.Height} high, not 28.");
             Assert.Equal(row.Name, row.AutomationName);
             Assert.Equal(index < 8, row.InView);
+            var drawn = view.GetVisualDescendants().OfType<DialogRow>().Single(candidate => Avalonia.Automation.AutomationProperties.GetName(candidate) == row.Name);
+            var name = drawn.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "FoundRepositoryName");
+            var detail = drawn.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "FoundRepositoryDetail");
+            Assert.Equal((row.Name, PaletteOf(app).TextPrimary, PaletteOf(app).TextSecondary), (name.Text, (name.Foreground as ISolidColorBrush)?.Color, (detail.Foreground as ISolidColorBrush)?.Color));
             if (row.Name == "api")
             {
                 Assert.Equal((PartW.AlreadyInThisWorkspace, true, false), (row.Detail, row.IsChecked, row.IsEnabled));

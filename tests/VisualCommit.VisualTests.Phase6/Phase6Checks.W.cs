@@ -554,23 +554,6 @@ public sealed partial class Phase6ChecksW : Phase6Checks
     /// <summary>A control's tooltip as text.</summary>
     private static string? TipOf(Control control) => ToolTip.GetTip(control) as string;
 
-    /// <summary>Whether <paramref name="picture"/> holds <paramref name="colour"/> anywhere inside <paramref name="area"/> (a text's ink).</summary>
-    private static bool Holds(Screenshot picture, Rect area, Color colour)
-    {
-        for (var y = (int)Math.Ceiling(area.Top); y < (int)Math.Floor(area.Bottom); y++)
-        {
-            for (var x = (int)Math.Ceiling(area.Left); x < (int)Math.Floor(area.Right); x++)
-            {
-                if (picture.PixelAt(x, y) == colour)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     /// <summary>The menu at <paramref name="pointer"/>'s right-click on a row: its top-left 2 right of and 2 below the pointer, moved up only where it would pass y 696 (part W's "Dashboard rows").</summary>
     private static void AssertRowMenuPlace(ShellDriver app, MenuSnapshot menu, Point pointer)
     {
