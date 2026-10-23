@@ -58,18 +58,17 @@ public partial class MainWindow : IWindowKeyActions
     }
 
     /// <summary>
-    /// The window's bubbling pass (phase 5 design 1.3, D163): the toolbar's Undo and Redo by the
-    /// platform's keys, after a text box or the conflict resolver had them first; now the router's
-    /// (<see cref="KeyRouter.OnBubble"/>). The window's constructor adds it.
+    /// The window's bubbling pass (phase 5 design 1.3, D163), which the window's constructor adds:
+    /// the toolbar's Undo and Redo by the platform's keys, after a text box or the conflict
+    /// resolver had them first (<see cref="KeyRouter.OnBubble"/>).
     /// </summary>
-    private void OnGitUndoOrRedo(object? sender, KeyEventArgs e) => Router.OnBubble(sender, e);
+    private void OnKeyBubble(object? sender, KeyEventArgs e) => Router.OnBubble(sender, e);
 
     /// <summary>
-    /// The window's tunnelling pass, with <c>handledEventsToo</c>: phase 5's Mod+F, which the
-    /// window's constructor adds under this name, is now the router's whole fixed set
-    /// (<see cref="KeyRouter.OnTunnel"/>, 6.1, 6.3).
+    /// The window's tunnelling pass, with <c>handledEventsToo</c>, which the window's constructor
+    /// adds: the router's fixed set (<see cref="KeyRouter.OnTunnel"/>, 6.1, 6.3).
     /// </summary>
-    private void OnSearchKey(object? sender, KeyEventArgs e) => Router.OnTunnel(sender, e);
+    private void OnKeyTunnel(object? sender, KeyEventArgs e) => Router.OnTunnel(sender, e);
 
     private TextBox? VisibleTextBox(string name) =>
         this.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box => box.Name == name && box.IsEffectivelyVisible && box.IsEffectivelyEnabled);

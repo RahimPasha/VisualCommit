@@ -44,11 +44,11 @@ public partial class MainWindow : Window
         // press: the app raises it only where the platform does not (D106, OnShiftF10).
         AddHandler(KeyDownEvent, OnShiftF10, RoutingStrategies.Tunnel, handledEventsToo: true);
 
-        // The toolbar's Undo and Redo by the platform's keys, after a text box or the conflict
-        // resolver had them first, and its Search by the command modifier with F on the way down
-        // (docs/phase-5-design.md 1.3, D163).
-        AddHandler(KeyDownEvent, OnGitUndoOrRedo, RoutingStrategies.Bubble);
-        AddHandler(KeyDownEvent, OnSearchKey, RoutingStrategies.Tunnel, handledEventsToo: true);
+        // The window's keys (docs/phase-6-design.md 6.2, 6.3): the router's fixed set on the way
+        // down, before the focused control, and the toolbar's Undo and Redo by the platform's keys
+        // on the way up, after a text box or the conflict resolver had them first (phase 5 1.3, D163).
+        AddHandler(KeyDownEvent, OnKeyBubble, RoutingStrategies.Bubble);
+        AddHandler(KeyDownEvent, OnKeyTunnel, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // The window's own links of the Esc chain; the menu layer and the drag service add theirs.
         AddEscapeHandler(new EscapeHandler(CancelTopDialog), EscapeOrder.Dialog);

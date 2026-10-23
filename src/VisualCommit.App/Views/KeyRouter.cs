@@ -13,7 +13,8 @@ namespace VisualCommit.App.Views;
 /// The window's keys (docs/phase-6-design.md 6.2, 6.3, D192, D213, D214): the fixed set of
 /// <see cref="AppShortcuts"/> on the window's tunnelling pass, before the focused control, and
 /// phase 5's undo and redo on the bubbling pass, after it (phase 5 design 1.3, D163). Phase 5's
-/// Mod+F (<c>OnSearchKey</c>) and undo and redo (<c>OnGitUndoOrRedo</c>) moved into it.
+/// Mod+F and undo and redo moved into it; the window's <c>OnKeyTunnel</c> and <c>OnKeyBubble</c>,
+/// which its constructor adds, hand each pass to it.
 /// <para>
 /// On the tunnelling pass, per press: the key in the app's words (<see cref="ShortcutKeys"/>),
 /// the command modifier read at each press from the platform's hotkey configuration (Control
