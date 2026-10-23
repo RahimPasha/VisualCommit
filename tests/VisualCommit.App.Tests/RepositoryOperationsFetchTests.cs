@@ -135,7 +135,8 @@ public class RepositoryOperationsFetchTests
         var kept = new List<DeferredDialog>();
         using var group = new PromptGroup();
         using var cancel = new CancellationTokenSource();
-        var lockFile = Path.Combine(repo.Path, ".git", "refs", "remotes", "origin", "main.lock");
+        // The folder as git spells it (on macOS /private/var/…), where the queue looks for lock files.
+        var lockFile = Path.Combine(app.Operations.Git.GitDirectory, "refs", "remotes", "origin", "main.lock");
 
         var held = server.HoldNextFetchPack();
         var fetch = app.Operations.FetchAllAsync(new BulkPart(cancel.Token, group, kept.Add));
