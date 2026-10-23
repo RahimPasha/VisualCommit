@@ -211,13 +211,18 @@ public sealed partial class Phase6ChecksW
             var folder = rows.Row(name).Folder;
             Assert.True(folder.IsShown, $"{name}'s Folder cell does not show at 1920.");
             Assert.Equal(copy.PathOf(name), folder.Text);
-            var left = app.BoundsOf(app.DashboardRowControl(name).GetVisualDescendants().OfType<TrimmedTextBlock>().Single(text => Avalonia.Automation.AutomationProperties.GetAutomationId(text) == "DashboardRowFolder")).Left;
+            var block = app.DashboardRowControl(name).GetVisualDescendants().OfType<TrimmedTextBlock>().Single(text => Avalonia.Automation.AutomationProperties.GetAutomationId(text) == "DashboardRowFolder");
+            var left = app.BoundsOf(block).Left;
             Assert.True(Math.Abs(left - (132 + PartW.CellInset)) <= PartW.Tolerance, $"{name}'s Folder cell starts at x {left}, not 140.");
-            if (OperatingSystem.IsWindows())
-            {
-                // Whole on the development machine, whose temporary folder is short enough (WD29).
-                Assert.False(folder.IsTrimmed, $"{name}'s Folder cell is cut: \"{folder.Text}\".");
-            }
+
+            // Whole where the folder fits, as on the development machine, whose temporary folder is
+            // short enough, and cut with "…" where it does not (WD29): CI's Windows runner's longer
+            // folder lies near the cell's width, and the scenario's random name tips it either way.
+            var room = app.BoundsOf(block).Width;
+            var full = new FormattedText(folder.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(block.FontFamily, block.FontStyle, block.FontWeight), block.FontSize, null).WidthIncludingTrailingWhitespace;
+            Assert.True(
+                folder.IsTrimmed == (full > room + 0.5),
+                System.FormattableString.Invariant($"{name}'s folder is {full} px wide in a room of {room}: it should {(full > room + 0.5 ? "be cut with \"…\"" : "show whole")}, and it is {(folder.IsTrimmed ? "cut" : "whole")}: \"{folder.Text}\"."));
         }
 
         AssertArrowsAndBackgrounds(app, shot, PartW.Names);

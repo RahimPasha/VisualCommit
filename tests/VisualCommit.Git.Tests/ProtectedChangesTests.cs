@@ -22,23 +22,44 @@ public class ProtectedChangesTests
 
     // ---- A refusal changes nothing (0.7) ---------------------------------------------------------
 
-    [Fact]
-    public async Task A_refused_checkout_of_each_form_throws_gits_refusal_and_changes_nothing()
+    // One case per form, each on a scenario of its own: the five in one test took 12 s alone and ran
+    // past the hang watchdog's 180 s under the gate's default run.
+    [Theory]
+    [InlineData("switch --no-guess <b>")]
+    [InlineData("switch --detach <sha>")]
+    [InlineData("switch --detach <sha> --no-overwrite-ignore")]
+    [InlineData("switch --create <b> <sha>")]
+    [InlineData("switch --create <b> --track <remote>")]
+    public async Task A_refused_checkout_of_each_form_throws_gits_refusal_and_changes_nothing(string form)
     {
-        // switch --no-guess <b>, switch --detach <sha> with and without --no-overwrite-ignore,
-        // switch --create <b> <sha> (no branch is made) and switch --create <b> --track <remote>.
-        await AssertRefusedAsync(repository => repository.CheckoutBranchAsync("other", keepIgnored: false, cancellationToken: TestCancelled));
-        await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), keepIgnored: false, cancellationToken: TestCancelled));
-        await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), keepIgnored: true, cancellationToken: TestCancelled));
-        await AssertRefusedAsync(async repository => await repository.CreateBranchAsync("topic", await OtherEditsAsync(repository), checkout: true, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
-        await AssertRefusedAsync(
-            repository => repository.CheckoutTrackingBranchAsync("tracked", "refs/remotes/mirror/other", keepIgnored: false, cancellationToken: TestCancelled),
-            async repo =>
-            {
-                // A remote whose branch is other, fetched before the change is made.
-                await repo.GitAsync("remote", "add", "mirror", repo.Path);
-                await repo.GitAsync("fetch", "--quiet", "mirror");
-            });
+        // switch --create <b> <sha> makes no branch.
+        switch (form)
+        {
+            case "switch --no-guess <b>":
+                await AssertRefusedAsync(repository => repository.CheckoutBranchAsync("other", keepIgnored: false, cancellationToken: TestCancelled));
+                break;
+            case "switch --detach <sha>":
+                await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), keepIgnored: false, cancellationToken: TestCancelled));
+                break;
+            case "switch --detach <sha> --no-overwrite-ignore":
+                await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), keepIgnored: true, cancellationToken: TestCancelled));
+                break;
+            case "switch --create <b> <sha>":
+                await AssertRefusedAsync(async repository => await repository.CreateBranchAsync("topic", await OtherEditsAsync(repository), checkout: true, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
+                break;
+            case "switch --create <b> --track <remote>":
+                await AssertRefusedAsync(
+                    repository => repository.CheckoutTrackingBranchAsync("tracked", "refs/remotes/mirror/other", keepIgnored: false, cancellationToken: TestCancelled),
+                    async repo =>
+                    {
+                        // A remote whose branch is other, fetched before the change is made.
+                        await repo.GitAsync("remote", "add", "mirror", repo.Path);
+                        await repo.GitAsync("fetch", "--quiet", "mirror");
+                    });
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(form), form, "No such form.");
+        }
     }
 
     // ---- The automatic stash (9.2) ---------------------------------------------------------------
