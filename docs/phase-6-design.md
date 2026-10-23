@@ -4353,9 +4353,13 @@ git call of the row in every column, the existing local branch's `git switch --n
 WP-RA's rewrite of `CheckoutRemoteBranchAsync` keeps `keepIgnored: KeepIgnored` on each (section 18).
 
 **How an upstream is named** (GD15). An upstream is named by its remote-tracking ref when the fetch
-lines map it to one (the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under
-`refs/remotes/`, shown without `refs/remotes/`), as `git status` names it; only when no line maps it,
-`{remote}/{remote ref}`, as today. So `pr/7`, checked out from `upstream/pr/7` (row 10's "not a
+lines map it to one, as `git status` names it: git's own `%(upstream)` (`GitRef.UpstreamRef`, git's
+first matching fetch line, as a push updates it) shown without `refs/remotes/` when it lies there;
+only when it does not, `{remote}/{remote ref}`, as today. (Built so by WP-RA, the review's lab
+confirming that `%(upstream)` is what `git status` shortens for B1, C2 in either order, B2, E and an
+excluded exact line, on 2.36 and 2.55; the first draft's "first of `FetchRefspecs.DestinationsOf`
+under `refs/remotes/`" differs only for a mirror line before a renaming line, where git's
+`%(upstream)` is `refs/heads/main`, git says `main` and the app `origin/main`: 10.8 #9.) So `pr/7`, checked out from `upstream/pr/7` (row 10's "not a
 branch": git tracks `refs/pull/7/head` on `upstream`), shows `upstream/pr/7` in Pull's tooltip, the
 push dialog and a dashboard row, not `upstream/refs/pull/7/head`; with the default lines every
 upstream reads as today. D101 still holds (the three values are read; the text is only display).
@@ -4465,6 +4469,15 @@ Recorded in the handoff; 1 also goes to the backlog and 2 to plan.md's risks (16
    origin's tracking refs are fetched by two remotes (R1; git says `not tracking: ambiguous
    information`): their checkout, the drop's pushes and the deletion are disabled with R1 and "Set
    upstream…" leaves them out, for every one of them (10.1, WP3).
+8. The push guard (above) refuses some pushes that would not stop the fetch: under P a new branch
+   `pr/fix-typo` counts as filled by two refs (the PR line could fill `origin/pr/fix-typo` from
+   `refs/pull/fix-typo/head`), and with two pattern lines of one remote that rename into two namespaces
+   every new branch does, while git's next fetch exits 0 after either push (WP-RA's review, 2.36 and
+   2.55). The refusal's text says it would stop every fetch. Kept on purpose: refusing only when another
+   source fills the tracking ref now would leave a pull request never fetched unguarded, and that push
+   does stop every fetch (`Cannot fetch both`, 128). A terminal push still works.
+9. With a mirror line before a renaming line, git maps a branch's upstream to `refs/heads/main` and
+   `git status` says `main`; the app names it `origin/main` (GD15's fallback).
 
 ### 10.9 Tests
 

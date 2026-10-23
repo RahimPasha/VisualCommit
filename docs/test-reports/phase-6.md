@@ -3773,6 +3773,29 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   leaves out `New workspace…` and checks the button's name `New workspace`, and
   `Phase0RealWindowPass.AssertShell`'s list gains `Workspaces` and `No workspaces`. The welcome pictures
   move up 34 px ("Changed in this report after its first commit").
+- **WP-IA (keeping ignored files, the app half), merged in `cc3aed3`.** Phase 3: `Phase3Expectations.B.cs:772`
+  (`CheckoutCommand`; the "not called" assertion at `Phase3Checks.B.cs:270` follows it),
+  `Phase3SupportTests.cs:75`, `Phase3Checks.A.Pointer.cs:37`, `:111`, `Phase3Checks.C.cs:83`,
+  `Phase3Checks.A.Toolbar.cs:46`, `Phase3Checks.C.Checkout.cs:65`, `:88`, `:110`, `:140`, `:158`, `:160`,
+  and 14b gains one `git check-ignore --stdin -z` in the checkout's operation, exit 1 (16.1's 14b row;
+  `:288` unchanged, it matches by prefix). Phase 4: `Phase4Expectations.C.cs:823`, `:825`,
+  `Phase4Expectations.A.cs:762`. Phase 5: `Phase5Expectations.P.cs` (`SwitchOtherCommand`,
+  `CreateTopicCommand`, `SwitchMainCommand`, `DetachCommand(sha)`, `MergeOtherCommand`),
+  `Phase5ExpectationTests.P.cs:201`, `:203`; `Phase5Expectations.A.cs` (`CheckoutCommand`,
+  `MergeCommand`: 16.1's `:433`, `:460`, moved by WP-W's lines); `Phase5Expectations.U.cs`
+  (`MergeFfCall`, `MergeOtherCall`), `Phase5Expectations.U2.cs` (`MergeFf`),
+  `Phase5ExpectationTests.U16-U19.cs:75`, `Phase5ExpectationTests.U2.cs:19`, `Phase5Checks.U18.cs:77`,
+  `:230`, `:278`, `:381`, `:483`, `:493`, `Phase5Checks.U19.cs:311`. App tests: `DialogTests` 347, 356,
+  685, 695, 865; `RepositoryOperationsCheckoutTests` 66, 167; `RepositoryOperationsProtectTests` 51, 86
+  (with P24's untracked `notes` gaining its check-ignore, exit 1, found by the checkout's operation),
+  107, 243, 250, 392; `RepositoryOperationsRebaseTests` 251, 332, 362, 439; `ShellDriverCheckSupportTests`
+  242, 249; `UndoRecordingTests` 451; `ActivityLogViewTests` 114, 170; `UndoStepTests` 108. The pull's
+  lines (`Phase3Expectations.D.cs:170`, `:240`, `RepositoryOperationsPullTests:106`) are WP-B's. Beyond
+  16.1, in no earlier check: "Stash changes and check out" with nothing left to stash now shows a
+  checkout's refusal as every checkout does (9.11), so an untracked file in the way gives "Checkout
+  blocked" with phase 5's conflicts text, not "Checkout failed". Pictures expected to change: the
+  `ErrorCommand` of the checkout and merge dialogs (`14b`, `14c`, `14f`, `14g`, P24 to P27, `a2c`, a longer
+  line that may wrap) and activity-log pictures with "Show reads".
 
 ### Changed in this report after its first commit
 
@@ -3798,6 +3821,11 @@ or the gate finds, goes here with its reason.
   stack moves up 34; with three workspaces the old numbers would be 4 px off, beyond the ±2 the checks
   allow. Design 13.1 takes the same values; positions the checks give relative to the centred stack
   are unchanged.
+- **GD15's rule (G25 step 12, the decision under "Decisions this report makes"), 2026-10-22.** Written as
+  "the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under `refs/remotes/`". WP-RA built
+  it from git's own `%(upstream)`, which its review's lab showed to be what `git status` shortens in
+  every case 0.5 lists; the two differ only for a mirror line before a renaming line (design 10.8 #9),
+  which no check uses. `upstream/pr/7` in step 12 is unchanged.
 
 ## How the expected git states were derived
 
@@ -4407,9 +4435,11 @@ under "The lead's rulings on this report's open points".
   text.
 - **GD15** (design 10.4, 14; scenario facts 8, item 5; the lead's ruling 3). **G25 asserts
   `upstream/pr/7` in Pull's tooltip after `Check out upstream/pr/7`** (step 12): an upstream is named
-  by its remote-tracking ref when the fetch lines map it to one (the first of
-  `FetchRefspecs.DestinationsOf(remote, remoteRef)` under `refs/remotes/`, shown without
-  `refs/remotes/`), as `git status` names it; only when no line maps it, `{remote}/{remote ref}`. So
+  by its remote-tracking ref when the fetch lines map it to one, as `git status` names it (git's own
+  `%(upstream)` shown without `refs/remotes/` when it lies there, as WP-RA built it and design 10.4
+  now says; first written as "the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under
+  `refs/remotes/`", which gives the same text in every scenario of part G); only when no line maps
+  it, `{remote}/{remote ref}`. So
   `pr/7`, whose upstream today's `UpstreamText` gives as `upstream/refs/pull/7/head`, shows
   `upstream/pr/7` in Pull's tooltip (`Pull from upstream/pr/7 (Ctrl+Shift+L)`), the push dialog and a
   dashboard row; with the default lines every upstream reads as today. D101 still holds (the three
