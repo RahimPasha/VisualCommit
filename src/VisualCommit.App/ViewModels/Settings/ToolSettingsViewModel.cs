@@ -66,7 +66,8 @@ public sealed record EditorDiskChecks(Func<string, bool> FileExists, Func<string
 /// </summary>
 public sealed partial class ToolSettingsViewModel : ObservableObject
 {
-    private readonly EditorSetting? _start;
+    private readonly Func<EditorSetting?>? _storedEditor;
+    private EditorSetting? _start;
     private readonly Func<CancellationToken, Task<IReadOnlyList<FoundEditor>>> _findEditors;
     private readonly IFolderPicker _folders;
     private readonly Func<DialogViewModel<string?>, Task<string?>> _showPick;
@@ -86,13 +87,15 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
     /// <param name="showPick">Shows a Pick dialog over the screen and returns its answer.</param>
     /// <param name="log">The app's log.</param>
     /// <param name="platform">The platform whose rules the program follows; null for this one.</param>
+    /// <param name="storedEditor">The editor as the settings hold it now, read again after the search, which may have followed a known editor that moved (12.3); null for none.</param>
     public ToolSettingsViewModel(
         EditorSetting? editor,
         Func<CancellationToken, Task<IReadOnlyList<FoundEditor>>> findEditors,
         IFolderPicker folders,
         Func<DialogViewModel<string?>, Task<string?>> showPick,
         IAppLog? log = null,
-        EditorPlatform? platform = null)
+        EditorPlatform? platform = null,
+        Func<EditorSetting?>? storedEditor = null)
     {
         ArgumentNullException.ThrowIfNull(findEditors);
         ArgumentNullException.ThrowIfNull(folders);
@@ -102,6 +105,7 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
         _showPick = showPick;
         _log = log ?? NullAppLog.Instance;
         _platform = platform ?? EditorSearchContext.CurrentPlatform;
+        _storedEditor = storedEditor;
 
         // An id the catalogue no longer knows means none chosen (12.6).
         _start = editor is not null && (editor.Id == KnownEditors.CustomId || KnownEditors.Find(editor.Id, _platform) is not null) ? editor : null;
@@ -340,8 +344,32 @@ public sealed partial class ToolSettingsViewModel : ObservableObject
             IsLooking = false;
         }
 
+        FollowMovedEditor();
         OnPropertyChanged(nameof(EditorValue));
         return Found;
+    }
+
+    /// <summary>
+    /// The search updates the setting of a known editor that moved (12.3): while the field still holds
+    /// what was stored, it shows the new program and takes it as what is stored, so that the screen
+    /// names the program that exists, its Pick dialog selects it, and a Save does not write it back.
+    /// </summary>
+    private void FollowMovedEditor()
+    {
+        if (_storedEditor?.Invoke() is not { } stored
+            || _start is null
+            || stored.Id != _start.Id
+            || stored.Id == KnownEditors.CustomId
+            || stored.Program == _start.Program
+            || Choice != EditorChoice.Known
+            || KnownId != _start.Id
+            || KnownProgram != _start.Program)
+        {
+            return;
+        }
+
+        _start = stored;
+        KnownProgram = stored.Program;
     }
 
     private bool IsGitEditor(string? program) =>

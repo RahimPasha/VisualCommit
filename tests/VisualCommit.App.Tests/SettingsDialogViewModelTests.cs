@@ -8,6 +8,7 @@ using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Settings;
+using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.Tests.GitSettingsViewModelTests;
@@ -326,6 +327,96 @@ public class SettingsDialogViewModelTests
     }
 
     [Fact]
+    public async Task A_failed_repository_write_shows_its_operations_error_over_the_screen_and_keeps_it_on_git()
+    {
+        // 7.8 steps 5 to 8, 8.3: the repository's write is an operation of its queue, whose error
+        // dialog opens over the screen; then the read back runs, the tabs are told and the screen
+        // stays open on Git. A held .git/config.lock makes git refuse the write (8.5).
+        using var repo = await Scenarios.GitSettingsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var lockFile = Path.Combine(repo.Path, ".git", "config.lock");
+        var before = (await repo.GitAsync("config", "--local", "--list")).StandardOutput;
+        await File.WriteAllTextAsync(lockFile, string.Empty, TestContext.Current.CancellationToken);
+        var git = new FakeGitConfiguration { Outside = Read(false), InRepository = Read(true) };
+        var told = 0;
+        var dialog = new SettingsDialogViewModel(
+            new SettingsScreenServices(
+                app.Settings,
+                app.Settings.Current.Theme,
+                _ => { },
+                new RepositorySettingsTarget(app.Repository),
+                git,
+                ToolCatalogues.Fixed,
+                SettingsDialogViewTests.ShortcutTable,
+                new FakeFolderPicker(),
+                app.DialogHost,
+                () => told++,
+                app.Log)
+            {
+                FileExists = _ => false,
+            },
+            SettingsSection.General);
+        app.Dialogs.Keep().CloseError();
+        _ = app.DialogHost.ShowAsync(dialog);
+        await dialog.Loaded;
+        var reads = git.Reads.Count;
+        dialog.Git.ShowRepositoryCommand.Execute(null);
+        dialog.Git.Shown.UserName = "Bo Local";
+
+        await dialog.ConfirmCommand.ExecuteAsync(null);
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Saving the settings failed", "Git could not save the repository's settings."), (error.Title, error.Summary));
+        Assert.Contains("could not lock config file", error.Output, StringComparison.Ordinal);
+        Assert.False(dialog.IsClosed);
+        Assert.Same(dialog, app.DialogHost.Current);
+        Assert.Equal(SettingsSection.Git, dialog.SelectedSection);
+        Assert.Equal(reads * 2, git.Reads.Count);
+        Assert.Equal(1, told);
+        app.AssertScriptFollowed();
+        dialog.Cancel();
+        File.Delete(lockFile);
+        Assert.Equal(before, (await repo.GitAsync("config", "--local", "--list")).StandardOutput);
+    }
+
+    [Fact]
+    public async Task A_known_editor_that_moved_shows_its_new_program_and_a_save_leaves_it_as_the_search_stored_it()
+    {
+        // 12.3: the search follows a known editor that moved and stores its new program; the screen,
+        // made with the old one, names the program that exists, selects it in the pick, and a Save
+        // does not write the editor again.
+        var old = OperatingSystem.IsWindows() ? @"C:\Old\Microsoft VS Code\Code.exe" : "/opt/old/vscode/code";
+        var screen = new Screen();
+        screen.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", old) });
+        var moved = ToolCatalogues.FixedEditors[0];
+        screen.Tools = new ToolCatalogues(
+            _ =>
+            {
+                screen.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", moved.Program) });
+                return Task.FromResult(ToolCatalogues.FixedEditors);
+            },
+            _ => Task.FromResult(ToolCatalogues.FixedMergeTools),
+            () => null);
+        var dialog = await screen.OpenAsync(SettingsSection.Tools);
+        var updates = screen.Settings.Updates;
+
+        Assert.Equal((EditorChoice.Known, "Visual Studio Code", moved.Program), (dialog.Tools.Choice, dialog.Tools.EditorValue, dialog.Tools.EditorProgram));
+        Assert.False(dialog.Tools.IsChanged);
+        var choosing = dialog.Tools.ChooseCommand.ExecuteAsync(null);
+        var pick = await screen.WaitForDialogAsync<PickDialogViewModel>();
+        Assert.Equal("Visual Studio Code", pick.Selected);
+        pick.ConfirmCommand.Execute(null);
+        await choosing;
+        Assert.False(dialog.Tools.IsChanged);
+
+        dialog.General.StashIncludeUntracked = false;
+        await dialog.ConfirmCommand.ExecuteAsync(null);
+        Assert.True(dialog.IsClosed);
+        Assert.Equal(updates + 1, screen.Settings.Updates);
+        Assert.Equal(new EditorSetting("vscode", moved.Program), screen.Settings.Current.Editor);
+    }
+
+    [Fact]
     public async Task The_editor_pick_lists_the_fixed_catalogue_and_a_known_editor_is_stored_without_arguments()
     {
         var screen = new Screen();
@@ -486,6 +577,9 @@ public class SettingsDialogViewModelTests
 
         public EditorPlatform? Platform { get; set; }
 
+        /// <summary>What the machine has installed, as the screen asks for it: the harnesses' fixed catalogues unless the test gives others.</summary>
+        public ToolCatalogues Tools { get; set; } = ToolCatalogues.Fixed;
+
         public Screen(AppSettings? settings = null)
         {
             if (settings is not null)
@@ -503,7 +597,7 @@ public class SettingsDialogViewModelTests
                     UseTheme ?? Themes.Add,
                     Repository,
                     Git,
-                    ToolCatalogues.Fixed,
+                    Tools,
                     SettingsDialogViewTests.ShortcutTable,
                     Folders,
                     Dialogs,

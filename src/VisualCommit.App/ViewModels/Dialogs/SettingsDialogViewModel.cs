@@ -80,7 +80,14 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         SelectedSection = section;
         General = new GeneralSettingsViewModel(services.Settings.Current, services.Theme, services.Tools.PathExtensions());
         Git = new GitSettingsViewModel(services.Git, services.Repository, services.Tools.MergeTools, ShowPickAsync, services.Log, services.FileExists);
-        Tools = new ToolSettingsViewModel(services.Settings.Current.Editor, services.Tools.FindEditors, services.Folders, ShowPickAsync, services.Log, services.Platform);
+        Tools = new ToolSettingsViewModel(
+            services.Settings.Current.Editor,
+            services.Tools.FindEditors,
+            services.Folders,
+            ShowPickAsync,
+            services.Log,
+            services.Platform,
+            () => services.Settings.Current.Editor);
         Shortcuts = services.Shortcuts;
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
