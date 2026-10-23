@@ -304,9 +304,9 @@ for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 m
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
 (`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`), WP-RA (`0c91d01`) and WP-B
-(`e974c35`) and WP-SET (`eae7edc`) merged; WP-K, the last, being built; the lead's
-`Phase6Checks.Support.cs` helpers being built in a worktree (`wip/p6-check-helpers`). Next: WP-K's
-review, fixes and merge, the helpers' merge, then the default run and wave 3 (WP-V's parts, WP-R); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`e974c35`) and WP-SET (`eae7edc`) merged, and the lead's `Phase6Checks.Support.cs` helpers
+(`9ed9ba3`); WP-K, the last, being built. Next: WP-K's review, fixes and merge, then the default run
+and wave 3 (WP-V's parts, WP-R); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
@@ -328,6 +328,12 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- The default run on `eae7edc` (WP-B and WP-SET merged), with two agents building beside it: 4,689
+  of 4,689 in 68 min 59 s. CI run
+  [39893475197](https://github.com/RahimPasha/VisualCommit/actions/runs/39893475197) on `eae7edc`: all
+  five jobs green; Windows' Test step 29 min 0 s (D186's threshold is 32), macOS's 20 min 41 s,
+  Ubuntu's 4 min 44 s, the containers' 4 min 42 s and 4 min 8 s. Phase 6's walk-throughs are still to
+  come, so the Windows Test step is expected to pass 32 minutes: raise the limit then (D186).
 - The default run on `125e792` (WP-D merged), with two builders beside it: 4,340 of 4,341 in 60 min
   48 s; the one failure, `ShellDriverTests`' fresh-application case, gave its own work 60 s to start
   on the headless UI thread, which the dashboard's tests' line exceeded; it now waits as a turn off

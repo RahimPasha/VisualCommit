@@ -1153,7 +1153,10 @@ rule), and every new text is design 14's.
   `Phase6Checks.SameFolder(copy, folder, path)`, true when `WorkspacePaths.Same` finds `path` equal to
   `folder` or to git's own spelling of it (`git rev-parse --show-toplevel` run there once per copy by
   the check's own `TempRepo` with `GIT_OPTIONAL_LOCKS=0`, normalised as `GitRepository` normalises it:
-  the platform's separators, no trailing one), used for every folder and call-log match of part W; and
+  the platform's separators, no trailing one), used for every folder and call-log match of part W
+  (as built: a check first awaits `PrepareSameFolderAsync(copy)` for the copy's ten folders, or
+  `PrepareSameFolderAsync(copy, folders)` for others such as W2's `archive/old-site` once it exists,
+  through `TempWorkspace.RepoAt(path)`; `SameFolder` refuses a folder that was not prepared); and
   `AssertGitOutputShown(call, key, shown, appLines)`, where the lines named in `appLines` must be the
   dialog's last lines, in order, and are left out of the "a line git printed" rule.
 - **Dates** are UTC (`VISUALCOMMIT_TIME_ZONE=UTC`). The scenario's commits are dated 2026-01-01 12:00
@@ -3848,6 +3851,10 @@ or the gate finds, goes here with its reason.
   stack moves up 34; with three workspaces the old numbers would be 4 px off, beyond the ±2 the checks
   allow. Design 13.1 takes the same values; positions the checks give relative to the centred stack
   are unchanged.
+- **Part W's `SameFolder` (its harness additions), 2026-10-23.** Written as one synchronous call. As
+  built by the lead's helpers it needs git's spelling worked out first, so a check awaits
+  `PrepareSameFolderAsync` once and `SameFolder` refuses a folder not prepared (a forgotten preparation
+  would otherwise pass here and fail only on CI's macOS). What it matches is unchanged.
 - **GD15's rule (G25 step 12, the decision under "Decisions this report makes"), 2026-10-22.** Written as
   "the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under `refs/remotes/`". WP-RA built
   it from git's own `%(upstream)`, which its review's lab showed to be what `git status` shortens in
