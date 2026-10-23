@@ -56,6 +56,9 @@ public sealed partial class GitRepository
         return new RepoRefs(head, refs, stashes, remotes) { Refspecs = refspecs };
     }
 
+    public async Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) =>
+        (await ReadRemoteKeysAsync(cancellationToken).ConfigureAwait(false)).Refspecs;
+
     /// <summary>
     /// The remotes and their fetch lines in one read, in place of <c>git remote</c>
     /// (docs/phase-6-design.md 10.2): <c>git config --null --get-regexp ^remote\.</c>, without

@@ -564,6 +564,58 @@ public class RepositoryOperationsPushTests
     }
 
     [Fact]
+    public async Task A_push_that_would_stop_its_remotes_fetch_is_refused_also_when_another_remote_maps_the_ref_too()
+    {
+        // A mirror remote (+refs/*:refs/*) also fills refs/remotes/origin/pr/1, which makes it
+        // fetched by two remotes; that hides that origin alone fetches it from two refs, and the
+        // push of pr/1 to origin would still stop every fetch of origin (the guard asks origin's
+        // own lines, FetchRefspecs.SourceOf(ref, remote)).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("branch", "--quiet", "--track", "pr/1", "refs/remotes/origin/pr/1");
+        await repo.GitAsync("remote", "add", "mirror", "../mirror.git");
+        await repo.GitAsync("config", "remote.mirror.fetch", "+refs/*:refs/*");
+        Assert.Equal("refs/heads/pr/1", await ConfigAsync(repo, "branch.pr/1.merge"));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.Equal(RemoteSourceKind.AmbiguousRemotes, app.Repository.Refs!.SourceOf("refs/remotes/origin/pr/1").Kind);
+        app.Dialogs.CloseError();
+
+        await app.Operations.PushBranchAsync("refs/heads/pr/1");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Push failed", "Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin."), (error.Title, error.Summary));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task The_push_guard_reads_the_fetch_lines_inside_the_push_not_the_tabs_last_refs()
+    {
+        // GitHub's pull-request line added in a terminal after the tab read its refs (10.4: inside
+        // the operation, with the lines read): the snapshot has the default line alone, under
+        // which pr/1's push would run; the operation reads the lines again and refuses it.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("config", "--unset", "remote.origin.fetch", "pull");
+        await repo.GitAsync("branch", "--quiet", "--track", "pr/1", "refs/remotes/origin/pr/1");
+        Assert.Equal("refs/heads/pr/1", await ConfigAsync(repo, "branch.pr/1.merge"));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.Equal(RemoteSourceKind.Mapped, app.Repository.Refs!.SourceOf("refs/remotes/origin/pr/1").Kind);
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*");
+        app.Dialogs.CloseError();
+        var mark = app.Calls.Snapshot().Count;
+
+        await app.Operations.PushBranchAsync("refs/heads/pr/1");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Push failed", "Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin."), (error.Title, error.Summary));
+        var calls = app.Calls.Snapshot().Skip(mark).Where(call => call.OperationId is not null).Select(call => call.CommandText).ToList();
+        Assert.Contains(@"git config --null --get-regexp ^remote\.", calls);
+        Assert.DoesNotContain(calls, call => call.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task Of_two_lines_that_fetch_a_branch_its_push_runs_and_a_new_branch_they_would_share_is_refused()
     {
         // 0.5's C2 without the server's trunk: origin/trunk is fetched from refs/heads/main and,

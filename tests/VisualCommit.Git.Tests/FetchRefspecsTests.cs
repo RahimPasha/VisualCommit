@@ -421,6 +421,26 @@ public class FetchRefspecsTests
     }
 
     [Fact]
+    public void SourceOf_one_remote_answers_by_that_remotes_own_lines_whatever_another_maps()
+    {
+        // P on origin and a mirror line on another remote: the tracking ref is fetched by two
+        // remotes (R1), which hides that origin alone fetches it from two refs (R2): the push
+        // guard asks origin's lines alone (10.4).
+        var lines = Lines(["origin=" + Default, "origin=+refs/pull/*/head:refs/remotes/origin/pr/*", "mirror=+refs/*:refs/*"]);
+
+        Assert.Equal(RemoteSourceKind.AmbiguousRemotes, lines.SourceOf("refs/remotes/origin/pr/1").Kind);
+        AssertSource((RemoteSourceKind.AmbiguousRefs, "origin", null), lines.SourceOf("refs/remotes/origin/pr/1", "origin"));
+        AssertSource((RemoteSourceKind.Mapped, "mirror", "refs/remotes/origin/pr/1"), lines.SourceOf("refs/remotes/origin/pr/1", "mirror"));
+        AssertSource((RemoteSourceKind.Mapped, "origin", "refs/heads/main"), lines.SourceOf("refs/remotes/origin/main", "origin"));
+        AssertSource((RemoteSourceKind.NotFetched, null, null), lines.SourceOf("refs/remotes/origin/pr/1", "nosuch"));
+        AssertSource((RemoteSourceKind.NotFetched, null, null), lines.SourceOf("refs/remotes/fork/main", "origin"));
+
+        // A negative line of the remote excludes its candidate there too (N).
+        var excluded = Lines(["origin=" + Default, "origin=^refs/heads/secret"]);
+        AssertSource((RemoteSourceKind.NotFetched, null, null), excluded.SourceOf("refs/remotes/origin/secret", "origin"));
+    }
+
+    [Fact]
     public void RepoRefs_names_a_ref_it_does_not_hold_by_its_full_name_as_it_names_one_it_holds()
     {
         // A ref fetched since the snapshot was read (a stale menu's checkout, undo's created

@@ -42,6 +42,14 @@ public interface IGitRepository
     Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Every remote's fetch lines as they are now, in one read (<c>git config --null --get-regexp
+    /// ^remote\.</c>, the refs read's own, docs/phase-6-design.md 10.2): what a push's guard reads
+    /// inside its operation (10.4), rather than the tab's last refs. The default answers null, not
+    /// read (the fakes, whose snapshots keep phase 5's assumption): the guard then has nothing to go by.
+    /// </summary>
+    Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FetchRefspecs?>(null);
+
+    /// <summary>
     /// Where HEAD is now, without the rest of the refs: the branch it is on (null while detached)
     /// and its commit (null while unborn). An operation that waited in the queue reads it to check
     /// that HEAD is still where the user saw it. The default implementation reads all the refs.

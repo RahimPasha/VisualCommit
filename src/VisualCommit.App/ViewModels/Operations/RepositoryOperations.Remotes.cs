@@ -157,7 +157,7 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async context =>
             {
-                if (RefuseIfPushStopsFetch(texts, branch.Name, remote, remoteRef, target) is { } refused)
+                if (await RefuseIfPushStopsFetchAsync(texts, branch.Name, remote, remoteRef, target) is { } refused)
                 {
                     return refused;
                 }
@@ -172,19 +172,24 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// 10.4's guard, inside a push's operation before git, with the fetch lines read (the latest
-    /// refs): a push of <paramref name="branch"/> to <paramref name="remoteRef"/> on
-    /// <paramref name="remote"/> is refused when a remote-tracking ref the remote's lines fetch
-    /// that ref into is fetched from more than one ref of the remote (R2) and none of them is a
-    /// branch the remote has already (one ref fills it, and the refs hold it): the push would
-    /// create the ref beside the one that fills that tracking ref, and every later fetch of the
-    /// remote would fail (0.5's P, C2). Only destinations under <c>refs/remotes/</c> count: a
-    /// mirror line also maps the ref to the local branch of its name (10.1). The lines follow the
-    /// fetch, not the push, rightly. Null when the push may run.
+    /// 10.4's guard, inside a push's operation before git, with the fetch lines read there (one
+    /// <c>git config --null --get-regexp ^remote\.</c>, <see cref="IGitRepository.ReadFetchRefspecsAsync"/>):
+    /// a push of <paramref name="branch"/> to <paramref name="remoteRef"/> on <paramref name="remote"/>
+    /// is refused when a remote-tracking ref the remote's lines fetch that ref into is fetched from
+    /// more than one ref of the remote (R2) and none of them is a branch the remote has already
+    /// (one ref fills it, and the refs hold it): the push would create the ref beside the one that
+    /// fills that tracking ref, and every later fetch of the remote would fail (0.5's P, C2). Both
+    /// are asked of <paramref name="remote"/>'s own lines (<see cref="FetchRefspecs.SourceOf(string, string)"/>):
+    /// another remote that also fills the tracking ref (a mirror line) makes it ambiguous between
+    /// remotes, which says nothing about this remote's own two sources. Only destinations under
+    /// <c>refs/remotes/</c> count: a mirror line also maps the ref to the local branch of its name
+    /// (10.1). The lines follow the fetch, not the push, rightly. Null when the push may run, and
+    /// when the lines were not read (a fake repository). Also the restores' and undo's pushes of a
+    /// branch (RepositoryOperations.Undo.cs).
     /// </summary>
-    private OperationReport? RefuseIfPushStopsFetch(OperationText text, string branch, string remote, string remoteRef, string target)
+    private async Task<OperationReport?> RefuseIfPushStopsFetchAsync(OperationText text, string branch, string remote, string remoteRef, string target)
     {
-        if (Refs is not { Refspecs: { } refspecs } refs)
+        if (await Git.ReadFetchRefspecsAsync() is not { } refspecs)
         {
             return null;
         }
@@ -192,9 +197,9 @@ public sealed partial class RepositoryOperations
         var destinations = refspecs.DestinationsOf(remote, remoteRef)
             .Where(destination => destination.StartsWith(RemotesPrefix, StringComparison.Ordinal))
             .ToList();
-        var ambiguous = destinations.FirstOrDefault(destination => refs.SourceOf(destination).Kind == RemoteSourceKind.AmbiguousRefs);
+        var ambiguous = destinations.FirstOrDefault(destination => refspecs.SourceOf(destination, remote).Kind == RemoteSourceKind.AmbiguousRefs);
         if (ambiguous is null
-            || destinations.Exists(destination => refs.SourceOf(destination).Kind == RemoteSourceKind.Mapped && FindRef(destination) is not null))
+            || destinations.Exists(destination => refspecs.SourceOf(destination, remote).Kind == RemoteSourceKind.Mapped && FindRef(destination) is not null))
         {
             return null;
         }
@@ -252,7 +257,7 @@ public sealed partial class RepositoryOperations
             async _ =>
             {
                 // 10.4's guard before anything is written, the backup included.
-                refused = RefuseIfPushStopsFetch(text, branch.Name, remote, remoteRef, upstream);
+                refused = await RefuseIfPushStopsFetchAsync(text, branch.Name, remote, remoteRef, upstream);
                 if (refused is not null)
                 {
                     return null;
