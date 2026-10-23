@@ -911,9 +911,19 @@ public static partial class Phase6Expectations
         [
             "git add", "git commit", "git switch", "git checkout", "git push", "git fetch", "git pull", "git merge", "git rebase",
             "git cherry-pick", "git revert", "git reset", "git update-ref", "git stash push", "git stash pop", "git stash apply",
-            "git stash drop", "git branch ", "git tag ", "git remote add", "git remote remove", "git remote rename", "git config --",
+            "git stash drop", "git branch ", "git tag ", "git remote add", "git remote remove", "git remote rename",
             "git restore", "git rm", "git mv", "git clean", "git init", "git clone", "git gc", "git maintenance",
         ];
+
+        /// <summary>Whether <paramref name="commandText"/> writes git's configuration: <c>git config</c> without <c>--get</c>, <c>--get-regexp</c> or <c>--list</c> (which read it).</summary>
+        public static bool IsConfigWrite(string commandText)
+        {
+            ArgumentNullException.ThrowIfNull(commandText);
+            return commandText.StartsWith("git config ", StringComparison.Ordinal)
+                && !commandText.Contains(" --get", StringComparison.Ordinal)
+                && !commandText.Contains(" --list", StringComparison.Ordinal)
+                && !commandText.Contains(" -l", StringComparison.Ordinal);
+        }
 
         // ---- "graph" (GR0, phase 1; K12's Ctrl+O). ----
 

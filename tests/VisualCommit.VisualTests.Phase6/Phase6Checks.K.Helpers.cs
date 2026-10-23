@@ -96,7 +96,8 @@ public sealed partial class Phase6ChecksK
     private static bool IsWrite(GitCallRecord call) => call.OperationId is not null || IsWriteCommand(call);
 
     /// <summary>Whether a call's command is one of git's writes (<see cref="PartK.WritePrefixes"/>): an operation's own write among its reads.</summary>
-    private static bool IsWriteCommand(GitCallRecord call) => PartK.WritePrefixes.Any(prefix => call.CommandText.StartsWith(prefix, StringComparison.Ordinal));
+    private static bool IsWriteCommand(GitCallRecord call) =>
+        PartK.WritePrefixes.Any(prefix => call.CommandText.StartsWith(prefix, StringComparison.Ordinal)) || PartK.IsConfigWrite(call.CommandText);
 
     /// <summary>Asserts that no call since <paramref name="sequence"/> wrote, and that no operation ended since <paramref name="operations"/> (the operation log's count).</summary>
     private static void AssertNoWrite(ShellDriver app, long sequence, int? operations = null, string? what = null)
