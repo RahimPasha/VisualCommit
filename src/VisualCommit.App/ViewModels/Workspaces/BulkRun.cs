@@ -439,7 +439,10 @@ public sealed class BulkRun
                 return true;
             }
 
-            if (target.IsReading || target.Repository is { HasFirstRead: false, IsClosed: false })
+            // A read runs, a followed tab's first read has not ended, or the row's view model is
+            // closed and the registry has not let it go yet (its tab closing, 3.6): its next
+            // change says more.
+            if (target.IsReading || target.Repository is { HasFirstRead: false } or { IsClosed: true })
             {
                 await NextChangeAsync(target);
                 continue;

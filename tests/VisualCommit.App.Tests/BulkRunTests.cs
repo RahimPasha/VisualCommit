@@ -251,6 +251,35 @@ public partial class BulkRunTests
     }
 
     [AvaloniaFact]
+    public async Task A_row_whose_followed_view_model_closed_before_the_registry_let_it_go_waits_for_that_and_is_fetched()
+    {
+        using var provider = new BulkProvider();
+        var gate = new TaskCompletionSource();
+        foreach (var name in new[] { "a", "b", "c", "d" })
+        {
+            provider.Add(name).FetchGate = gate;
+        }
+
+        var e = provider.Add("e");
+        var services = Services(provider, ["a", "b", "c", "d", "e"]);
+        var tab = await TabAsync(services, e);
+        using var host = await BulkHost.StartAsync(provider, ["a", "b", "c", "d", "e"], services: services);
+        var run = host.Bulk.FetchAllAsync();
+        await WaitUntilAsync(() => provider.FetchesNow == 4, "four fetches");
+
+        // The tab's view model is closed first; at the row's turn the registry still holds it.
+        tab.Dispose();
+        gate.SetResult();
+        await WaitUntilAsync(() => host.Bulk.Current!.Rows[4].State == BulkRowState.Reading, "e back to reading");
+        await SettleAsync();
+        Assert.Equal((BulkRowState.Reading, 0), (host.Bulk.Current!.Rows[4].State, e.Fetches));
+
+        services.OpenRepositories.UnregisterTab(tab);
+        await run.WaitAsync(Patience);
+        Assert.Equal((1, "Fetched 5 repositories"), (e.Fetches, host.Bulk.RunText));
+    }
+
+    [AvaloniaFact]
     public async Task Pull_all_started_while_a_followed_tabs_refs_read_is_held_waits_to_pull_and_decides_the_row_when_it_ends()
     {
         using var provider = new BulkProvider();
