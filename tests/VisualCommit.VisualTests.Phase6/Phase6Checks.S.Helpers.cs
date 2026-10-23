@@ -697,7 +697,9 @@ public sealed partial class Phase6ChecksS
     /// line asserted; and <paramref name="ident"/> on standard output when they succeed), then Pull's
     /// reader's calls <paramref name="pull"/> in its
     /// order; nothing else, unless <paramref name="others"/> lets a call through (a step's own
-    /// writes); no write unless <paramref name="allowWrites"/>; no <c>git mergetool</c>.
+    /// writes) or the step names the screen's reads only (<paramref name="exact"/> false: S19's "Pull's
+    /// reader as at step 1", where a refresh's reads may come between); no write unless
+    /// <paramref name="allowWrites"/>; no <c>git mergetool</c>.
     /// </summary>
     private static async Task AssertScreenReadsAsync(
         ShellDriver app,
@@ -709,11 +711,12 @@ public sealed partial class Phase6ChecksS
         IReadOnlyList<PartS.PullRead>? pull = null,
         Func<GitCallRecord, bool>? others = null,
         bool allowWrites = false,
-        long? until = null)
+        long? until = null,
+        bool exact = true)
     {
         var gitFolder = repo is null ? null : await WorkingTreeAsync(repo);
         var window = Window(app, sequence, until);
-        var calls = window.Where(call => others is null || !others(call)).ToList();
+        var calls = window.Where(call => (others is null || !others(call)) && (exact || IsScreenRead(call))).ToList();
         var expected = new List<ExpectedCall> { new(PartS.ConfigListCommand, "data", 0) };
         if (repo is not null)
         {
@@ -764,6 +767,12 @@ public sealed partial class Phase6ChecksS
 
         AssertNoMergetool(app);
     }
+
+    /// <summary>A call of the screen's reads' forms (SD29): 8.1's read, 8.6's <c>git var</c>, Pull's reader's five forms.</summary>
+    private static bool IsScreenRead(GitCallRecord call) =>
+        call.CommandText == PartS.ConfigListCommand
+        || call.CommandText.StartsWith("git var ", StringComparison.Ordinal)
+        || call.CommandText is PartS.GetPullFfCommand or PartS.BoolPullFfCommand or PartS.GetBranchRebaseCommand or PartS.GetPullRebaseCommand or PartS.BoolPullRebaseCommand;
 
     /// <summary>The calls since <paramref name="sequence"/> and up to <paramref name="until"/> (all after it when null).</summary>
     private static List<GitCallRecord> Window(ShellDriver app, long sequence, long? until) =>
