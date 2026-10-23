@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
@@ -134,47 +132,6 @@ public class PaletteEntriesTests
         // An item of another label stays: the checked-out branch's push, found by "push main".
         Assert.Contains(items, entry => (entry.Label, entry.Detail) == ("Push main to origin/main", "main"));
         Assert.Equal(items.Count, items.Select(entry => entry.Key).Distinct().Count());
-    }
-
-    [Fact]
-    public void The_build_and_a_one_letter_query_grow_in_step_with_the_refs()
-    {
-        // 5.12: 100 local branches, 200 remote branches and 10,000 tags (some 70,000 items) against
-        // 1,000 tags, the best of three each, interleaved. The refs grow about 8 times, so linear
-        // work about 8 times; the lookup that was linear made the build grow about 30 times. The
-        // work is the thread's own (ThreadWork); the times are reported.
-        var (actions, _) = RecordingActions.Create();
-        var keys = new KeyTexts(CommandKey.Ctrl);
-        var small = SizeContext(tags: 1_000);
-        var large = SizeContext(tags: 10_000);
-        (ulong Work, double Milliseconds, int Items) Measure(RepositoryMenuContext context)
-        {
-            var watch = Stopwatch.StartNew();
-            var start = ThreadWork.Now();
-            var items = AppCommands.RepositoryItems(context, actions, keys, false, null, null, []);
-            var ranked = PaletteMatcher.Rank("v", [], items, []);
-            Assert.NotEmpty(ranked);
-            return (ThreadWork.Now() - start, watch.Elapsed.TotalMilliseconds, items.Count);
-        }
-
-        Measure(small);
-        Measure(large);
-        var (bestSmall, bestLarge) = (ulong.MaxValue, ulong.MaxValue);
-        var (fastestSmall, fastestLarge) = (double.MaxValue, double.MaxValue);
-        var count = 0;
-        for (var round = 0; round < 3; round++)
-        {
-            var (work, milliseconds, _) = Measure(small);
-            (bestSmall, fastestSmall) = (Math.Min(bestSmall, work), Math.Min(fastestSmall, milliseconds));
-            (work, milliseconds, count) = Measure(large);
-            (bestLarge, fastestLarge) = (Math.Min(bestLarge, work), Math.Min(fastestLarge, milliseconds));
-        }
-
-        var ratio = (double)bestLarge / Math.Max(bestSmall, 1);
-        TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"Built and ranked: 1,000 tags in {fastestSmall:F0} ms, 10,000 tags ({count} items) in {fastestLarge:F0} ms; the thread's work {ratio:F1} times as much."));
-        Assert.True(count > 60_000, $"The large context gave {count} items.");
-        Assert.True(ratio < 20, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {ratio:F1} times the work of 1,000 ({bestLarge} against {bestSmall})."));
-        Assert.True(fastestLarge < 2_000, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {fastestLarge:F0} ms."));
     }
 
     [AvaloniaFact]
@@ -352,7 +309,8 @@ public class PaletteEntriesTests
         Assert.DoesNotContain(shell.Commands.PaletteItems(), entry => entry.Label == "Open repository ops");
         shell.ActivateTabCommand.Execute(shell.Tabs[3]);
         app.Settle();
-        Assert.Equal([repo.Path], shell.Commands.PaletteItems().Where(entry => entry.Label == "Open repository ops").Select(entry => entry.Detail));
+        // The recent list holds the folder as git spells it (macOS's /private/var for /var).
+        Assert.Equal([shell.Tabs[0].RepositoryPath], shell.Commands.PaletteItems().Where(entry => entry.Label == "Open repository ops").Select(entry => entry.Detail));
 
         // Its run activates the tab that shows the worktree (5.10's first case): nothing opens again.
         shell.Commands.PaletteItems().Single(entry => entry.Label == "Open repository ops").Run();
@@ -410,7 +368,7 @@ public class PaletteEntriesTests
         items.Where(entry => entry.Label.StartsWith("Go to ", StringComparison.Ordinal)).Select(Line);
 
     /// <summary>A repository with 100 local branches, 200 remote branches and <paramref name="tags"/> tags.</summary>
-    private static RepositoryMenuContext SizeContext(int tags)
+    internal static RepositoryMenuContext SizeContext(int tags)
     {
         var refs = new List<GitRef>
         {

@@ -121,7 +121,7 @@
                       <CheckBox Name="AutoFetchCheckBox" Theme="{StaticResource VcCheckBox}" VerticalAlignment="Center"
                                 Content="Fetch in the background every" IsChecked="{Binding IsAutoFetchOn}"
                                 AutomationProperties.AutomationId="AutoFetchCheckBox" AutomationProperties.Name="Fetch in the background every" />
-                      <TextBox Name="AutoFetchMinutesBox" Width="48" TextAlignment="Center" VerticalAlignment="Center"
+                      <TextBox Name="AutoFetchMinutesBox" Width="48" MinWidth="48" TextAlignment="Center" VerticalAlignment="Center"
                                Text="{Binding MinutesText}" IsEnabled="{Binding IsAutoFetchOn}"
                                AutomationProperties.AutomationId="AutoFetchMinutesBox" AutomationProperties.Name="minutes" />
                       <TextBlock Text="minutes" VerticalAlignment="Center" />

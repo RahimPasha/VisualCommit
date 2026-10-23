@@ -298,8 +298,10 @@ public class CommandPaletteViewTests
         var shell = app.Session.Shell;
         await app.WaitForAsync(() => shell.Tabs[0].Repository is not null, "ops to open");
 
-        // 5.10's first case: the tab that shows the worktree is activated; nothing opens again.
-        await shell.OpenRepositoryAtAsync(repo.Path);
+        // 5.10's first case: the tab that shows the worktree is activated; nothing opens again. The
+        // palette's items name the folder as git spells it (macOS's /private/var for /var), as the
+        // tab holds it; 5.10 compares the two as text (WorkspacePaths.Same).
+        await shell.OpenRepositoryAtAsync(shell.Tabs[0].RepositoryPath!);
         Assert.Same(shell.Tabs[0], shell.ActiveTab);
         Assert.Equal(2, shell.Tabs.Count);
 

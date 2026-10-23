@@ -343,8 +343,9 @@ public sealed class TempRepo : IDisposable
     /// "The exact state" of the repository (phase 5's report, part P): what a refused operation
     /// must leave as it was, joined into one text to be compared whole. HEAD (<c>git rev-parse
     /// HEAD</c>), every ref with its object (<c>git for-each-ref</c>), the index (<c>git ls-files
-    /// --stage</c>), the status with the untracked and ignored files (<c>git status --porcelain=v2
-    /// --untracked-files=all --ignored</c>) and every file of the working tree outside <c>.git</c>
+    /// --stage</c>), the status with the untracked and ignored files (<c>git --no-optional-locks status
+    /// --porcelain=v2 --untracked-files=all --ignored</c>, which writes no refreshed index, so that a read
+    /// while the app watches the repository starts no refresh of its own) and every file of the working tree outside <c>.git</c>
     /// with its contents, in ordinal order. The scripted checks, the real-window pass and the App
     /// and Git tests all read it here.
     /// </summary>
@@ -353,7 +354,7 @@ public sealed class TempRepo : IDisposable
         var head = (await GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
         var refs = (await GitAsync("for-each-ref", "--format=%(refname) %(objectname)")).StandardOutput;
         var index = (await GitAsync("ls-files", "--stage")).StandardOutput;
-        var status = (await GitAsync("status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
+        var status = (await GitAsync("--no-optional-locks", "status", "--porcelain=v2", "--untracked-files=all", "--ignored")).StandardOutput;
         var files = Directory.EnumerateFiles(Path, "*", SearchOption.AllDirectories)
             .Where(file => !System.IO.Path.GetRelativePath(Path, file).StartsWith(".git" + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)

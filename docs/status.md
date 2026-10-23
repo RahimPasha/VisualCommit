@@ -155,27 +155,27 @@ Git layer and Core:
 
 App:
 
-- [ ] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
+- [x] 13. Workspaces on screen and the dashboard: each repository's branch, ahead and behind and
   uncommitted changes; opening a repository from it. (WP-W merged in `0da0eec`, WP-D in `125e792`,
   each built, reviewed and fixed; the bulk run's parts of the dashboard are WP-B's.)
 - [x] 14. Bulk fetch and pull from the dashboard: progress per repository, Cancel, errors. (WP-B,
   merged in `e974c35`.)
-- [ ] 15. The command palette: search and run the app's commands and the menus' actions, with
-  their keys shown.
-- [ ] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
-  redo, Ctrl+F, `EscapeOrder`).
+- [x] 15. The command palette: search and run the app's commands and the menus' actions, with
+  their keys shown. (WP-K, built, reviewed and fixed, merged in `73ac284`.)
+- [x] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
+  redo, Ctrl+F, `EscapeOrder`). (WP-K, merged in `73ac284`.)
 - [x] 17. The settings screen: identity, pull mode, auto-fetch interval (`AutoFetchMinutes`,
   D85), `StashIncludeUntracked`, the extensions "Open file" asks about (D130), external tools
   ("Open in editor" beside "Open file"), the merge tool, and the checkout setting of step 12; each
   change takes effect. (WP-SET, built, reviewed and fixed, merged in `eae7edc`; its Keyboard
   shortcuts section fills with WP-K's list.)
-- [ ] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
+- [x] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
   pictured in the dark theme only), and the welcome page's long folder that wraps at awkward
   places (phase 1's follow-up). (WP-T, built, reviewed and fixed, merged in `e7144ec`: the theme
   follows the system while System is chosen, the light status colours and lanes 1, 2, 4 and 7 at
   4.5:1, `VcDangerTextBrush`, tooltips in the app's colours, the drag layer's redraw, `TextInk`;
   the lead's start-up line and the service's disposal in `AppSession`. WP-W's `PathTextBlock`
-  merged in `0da0eec`. Part L's sweep: WP-V.)
+  merged in `0da0eec`. Part L's sweep pictures: WP-V's part L, step 20.)
 - [ ] 19. Phases 0 to 5's checks updated for what phase 6 changes on purpose, recorded under
   "Changes to expected results" in the phase 6 report.
 
@@ -297,31 +297,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, `3146d8d`,
-`1d99be3`), their worktrees removed. The default run after it found two test problems, fixed in
-`80689ef` (a slow program's wait with a limit of its own; an undo test that took WP3's config read
-for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
-report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
-fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
-(`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`), WP-RA (`0c91d01`) and WP-B
-(`e974c35`) and WP-SET (`eae7edc`) merged, and the lead's `Phase6Checks.Support.cs` helpers
-(`9ed9ba3`); WP-K, the last, being built. Wave 3 has begun: WP-V's part G is written on
-`wip/p6-walk-g` (`fb7acda`, pushed nowhere, its worktree removed), its 26 pictures inspected by its
-writer and matching, 12 expectation tests passing, and four of its six checks failing only at the
-key texts WP-K adds; merge it after WP-K and run `--filter-class "*Phase6ChecksG"` on the merge,
-adding to `.editorconfig` `[tests/VisualCommit.VisualTests.Phase6*/*.G.cs]` with
-`generated_code = false` (a `*.g.cs` name is taken for generated code; its three files start with
-`#nullable enable` until then) and re-timing G22 and G23 part A on a quiet machine (83 s and 91 s
-under load). Part W is written on `wip/p6-walk-w` (`a3408ce`, with `wip/p6-keys` merged in, its
-worktree removed): 9 of 11 checks pass, every method under 60 s alone, 45 pictures inspected; the two
-failures are app defects handed to WP-K's fix round (the dashboard's More menu flipped instead of
-clamped, WD10; no row cell's tooltip opens, `DashboardCell`'s style key); its writer saw rows keep the
-hover colour after tab switches in W8's pictures (`w8d`, `w8f` to `w8h`), not asserted: look at it in
-the real window. Part S is being written (on `wip/p6-walk-s`, with `wip/p6-keys` merged). Next:
-WP-K's fixes and merge, then parts G and W merged with it (run `--filter-class "*Phase6ChecksG"` and
-`"*Phase6ChecksW"` on the merge), part S's merge, parts K and L, and WP-R; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
-section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
-`Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
+Waves 1 and 2 are merged: every package of design section 18 but WP-V and WP-R, each built, reviewed
+and fixed (the last, WP-K, in `73ac284`), and the lead's walk-through helpers (`9ed9ba3`). Wave 3:
+WP-V's parts G (`da4a956`), W (`48df7af`) and S (`5d0a442`) are merged, each written by its own writer
+with every picture inspected; the Phase6 project passes 99 of 99 on `5d0a442`. Being built, each in its
+worktree: part K (`wip/p6-walk-k`), part L with its project `VisualCommit.VisualTests.Phase6Look`
+(`wip/p6-walk-l`), and WP-R, the real-window pass, written and built but never run before the gate
+(`wip/p6-real-window`; K10 and L34 after parts K and L merge). Next: parts K's and L's merges (part L
+adds Phase6Look to `VisualCommit.slnx`; the lead adds its commands to CLAUDE.md and plan.md's gate
+step 3), WP-R's merge, then status step 22 (the independent review of the code), 17.7's references
+on `master`, and the gate (step 23: tell the owner before the real-window pass).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
