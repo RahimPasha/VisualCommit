@@ -429,6 +429,39 @@ public static partial class Phase6Expectations
 
         public const string TrackSecretSha = "1ac759d23fd78a78f7660d289a1373ea85378b69";
 
+        /// <summary>IG0, "ignored" as built (scenario facts 4.1).</summary>
+        public static IReadOnlyList<CommitRow> Ig0 { get; } =
+        [
+            Row("On main: Stash the secret", 0, 0, "stash@{0}") with { ShortSha = "c879568", Stash = true, Date = "2026-01-01 12:06" },
+            Row("Main work", 0, 0, Current("main"), "origin/main") with { ShortSha = "c49cac4", Date = "2026-01-01 12:05" },
+            Row("Add the build file", 1, 1, "tools") with { ShortSha = "c8446bb", Date = "2026-01-01 12:04" },
+            Row("Add the vendor secret", 2, 2, "vendor", "origin/vendor", "origin/vendor-remote") with { ShortSha = "133a796", Date = "2026-01-01 12:03" },
+            Row("Stop tracking the secret", 0, 0) with { ShortSha = "39bd803", Date = "2026-01-01 12:02", Ends = [1, 2] },
+            Row("Track the secret", 0, 0) with { ShortSha = "1ac759d", Date = "2026-01-01 12:01" },
+            Row("Initial commit", 0, 0) with { ShortSha = "2e4599b", Date = "2026-01-01 12:00" },
+        ];
+
+        /// <summary>IG0v, after S21's checkout of <c>vendor</c> with Keep ignored files off: IG0's rows, <c>main</c> without its check mark, <c>vendor</c> ✓.</summary>
+        public static IReadOnlyList<CommitRow> Ig0v { get; } =
+        [
+            Ig0[0],
+            Ig0[1] with { Labels = ["main", "origin/main"] },
+            Ig0[2],
+            Ig0[3] with { Labels = [Current("vendor"), "origin/vendor", "origin/vendor-remote"] },
+            .. Ig0.Skip(4),
+        ];
+
+        /// <summary>The local branches and the stash S21's checkout leaves as they were.</summary>
+        public static IReadOnlyList<string> IgnoredHeads { get; } =
+        [
+            "refs/heads/main " + MainWorkSha,
+            "refs/heads/tools c8446bb6a7efb5eb9cc91d4a95e2bd37c0be7ced",
+            "refs/heads/vendor " + VendorSecretSha,
+            "refs/stash c8795683e3b86ad70873326b9897659e3c5140dd",
+        ];
+
+        public const int IgLanes = 3;
+
         /// <summary>IG0's three lanes (Message x 454): rows are clicked at x 484.</summary>
         public const double IgRowPointX = 484;
 
