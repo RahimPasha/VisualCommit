@@ -133,10 +133,13 @@ Git layer and Core:
   fields, the writes, read-back and locks, the pull modes, Pull reading its configuration before
   the fetch (D219) and the chosen rebase's `pull.ff` (D231), the merge-tool list kept in the data
   folder (D202); the parity tests pass unchanged.)
-- [ ] 11. `remote.<r>.fetch` read: `DropFacts.RemoteMapsBranchesDifferently` set, and the push of
+- [x] 11. `remote.<r>.fetch` read: `DropFacts.RemoteMapsBranchesDifferently` set, and the push of
   a drop onto a remote branch and "Delete <b> on <r>…" act on the branch's name on the remote.
   Tests. (WP3's mapping merged in `3146d8d`: `FetchRefspecs`, the refs read's one `git config`
-  call, `RemoteName` from the mapping, parity tests against git; WP-RA's menus: wave 2.)
+  call, `RemoteName` from the mapping, parity tests against git. WP-RA's app half, built,
+  reviewed and fixed, merged in `0c91d01`: the menus, pushes, deletions, checkouts and force-push
+  restore by the branch's name on its remote, R1 to R4, the push guard, D201's checkout without an
+  upstream, an upstream named by git's own tracking ref, GD15 as built: design 10.4, 10.8 #8, #9.)
 - [x] 12. Whether every checkout keeps ignored files (`--no-overwrite-ignore`, design 14.2 of
   phase 5, D179), as the owner decides. Tests. (Decided: D193, D196, D221. WP1's git half merged
   in `31f525b`: the option on checkouts and merges, the app's check before every covered merge,
@@ -294,9 +297,9 @@ Wave 1 is merged: WP-S, WP1, WP2, WP3 and WP4 (`80fc877`, `31f525b`, `5b8b7a8`, 
 for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 min 12 s. Step 6's
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
-(`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`) and WP-IA (`cc3aed3`) merged; WP-RA, WP-B and
-WP-SET being built (three worktrees). Next: their reviews, fixes and merges, then WP-K last, as
-section 18's order allows; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`) and WP-RA (`0c91d01`) merged;
+WP-B built, under review; WP-SET being built. Next: WP-B's fixes and merge (with the line it gives
+for `MainWindowViewModel.cs:99`), WP-SET's review and merge, then WP-K last; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 

@@ -1075,25 +1075,26 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// "Push {b} back to {r}…" of a force push's backup (7.10): <c>refs/remotes/&lt;name&gt;</c> maps
-    /// back to its remote and branch through the local branch whose upstream it is, otherwise by the
-    /// remote list's longest matching name (the default fetch refspec); the lease is the commit the
-    /// force push left, read from the remote-tracking reflog.
+    /// back to its remote and branch through the local branch whose upstream it is, otherwise through
+    /// the remotes' fetch lines (<see cref="RepoRefs.SourceOf(string)"/>, docs/phase-6-design.md
+    /// 10.4 #12: a branch one ref of a configured remote fills); the lease is the commit the force
+    /// push left, read from the remote-tracking reflog.
     /// </summary>
     private Task PushForcePushBackAsync(string name, BackupRefInfo backup)
     {
         var tracking = Refs?.Refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.LocalBranch
             && string.Equals(gitRef.UpstreamRef, RemotesPrefix + name, StringComparison.Ordinal)
             && gitRef is { UpstreamRemote: not null, UpstreamRemoteRef: not null });
-        string? remote;
-        string? remoteRef;
+        string? remote = null;
+        string? remoteRef = null;
         if (tracking is { UpstreamRemote: { } upstreamRemote, UpstreamRemoteRef: { } upstreamRef })
         {
             (remote, remoteRef) = (upstreamRemote, upstreamRef);
         }
-        else
+        else if (Refs?.SourceOf(RemotesPrefix + name) is { IsBranch: true, Remote: { } mapped, RemoteRef: { } mappedRef }
+            && RemoteNames.Contains(mapped, StringComparer.Ordinal))
         {
-            remote = RemoteNames.Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal)).MaxBy(candidate => candidate.Length);
-            remoteRef = remote is null ? null : HeadsPrefix + name[(remote.Length + 1)..];
+            (remote, remoteRef) = (mapped, mappedRef);
         }
 
         var branch = remoteRef is null ? name : ShortName(remoteRef);

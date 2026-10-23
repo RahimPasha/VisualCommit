@@ -305,8 +305,9 @@ public static partial class RepositoryMenus
 
     /// <summary>
     /// A force push's backup (7.10): <c>refs/remotes/&lt;name&gt;</c> maps back to its remote and
-    /// branch through the local branch whose upstream it is, otherwise by the remote list's longest
-    /// matching name (the default fetch refspec); disabled when neither finds it, then when the
+    /// branch through the local branch whose upstream it is, otherwise through the remotes' fetch
+    /// lines (<see cref="RepoRefs.SourceOf(string)"/>, docs/phase-6-design.md 10.4 #12: a branch
+    /// one ref of a configured remote fills); disabled when neither finds it, then when the
     /// remote-tracking reflog no longer has the commit the force push left (its lease,
     /// <paramref name="hasLease"/> false). The restore reads the lease again inside its operation.
     /// </summary>
@@ -320,7 +321,13 @@ public static partial class RepositoryMenus
             return restore(PushBackTo(ShortName(remoteRef), upstreamRemote), leaseReason);
         }
 
-        var (remote, rest, configured) = SplitRemote(name, context.Remotes);
-        return restore(PushBackTo(rest, remote), configured ? leaseReason : RemoteOfBackupNotFound);
+        if (context.Refs.SourceOf("refs/remotes/" + name) is { IsBranch: true, Remote: { } mapped, Branch: { } branchName }
+            && context.Remotes.Contains(mapped, StringComparer.Ordinal))
+        {
+            return restore(PushBackTo(branchName, mapped), leaseReason);
+        }
+
+        var (remote, rest, _) = SplitRemote(name, context.Remotes);
+        return restore(PushBackTo(rest, remote), RemoteOfBackupNotFound);
     }
 }

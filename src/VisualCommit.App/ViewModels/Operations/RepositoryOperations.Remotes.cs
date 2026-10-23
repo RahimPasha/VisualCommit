@@ -4,7 +4,10 @@
 // page), nor auto-fetch (AutoFetchScheduler, WP9), whose title is 2.33's "Auto-fetch". Built by
 // WP7-remotes on the helpers of RepositoryOperations.Run.cs; its tests are in
 // tests/VisualCommit.App.Tests/RepositoryOperations{Fetch,Pull,Push,Remotes}Tests.cs. The toolbar's
-// Fetch all and Pull are in RepositoryOperations.FetchPull.cs (docs/phase-6-design.md 18).
+// Fetch all and Pull are in RepositoryOperations.FetchPull.cs (docs/phase-6-design.md 18). Phase 6
+// (WP-RA, docs/phase-6-design.md 10.4): a remote branch is split into its remote and the branch
+// there by the remotes' fetch lines, and a push that would stop every fetch of its remote is
+// refused before git.
 //
 // Every operation here that talks to a remote is a Network operation with PromptMode.Ask (3.3):
 // git's and ssh's prompts reach the app's dialogs, the status bar offers Cancel, and a cancel
@@ -87,22 +90,30 @@ public sealed partial class RepositoryOperations
         return PushThroughDialogAsync(branch);
     }
 
+    /// <summary>
+    /// A drop's push of <paramref name="branchRef"/> onto the remote branch
+    /// <paramref name="remoteBranchRef"/> (4g): to the branch on its remote that fills it, as the
+    /// remote's fetch lines map it back (docs/phase-6-design.md 10.4 #8): <c>refs/heads/&lt;A&gt;:refs/heads/&lt;y&gt;</c>
+    /// on <c>&lt;r&gt;</c>, named <c>{T}</c> in its texts; onto a renamed branch titled
+    /// <c>Push {A} to {T}</c> (GD24). Not started for a ref that is no such branch (a menu built
+    /// before the lines changed).
+    /// </summary>
     public Task PushBranchToAsync(string branchRef, string remoteBranchRef, bool setUpstream)
     {
         ArgumentNullException.ThrowIfNull(branchRef);
         ArgumentNullException.ThrowIfNull(remoteBranchRef);
         if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch } branch || SplitRemoteBranch(remoteBranchRef) is not { } split)
         {
-            Log.Info($"{Repository.Name}: Push: not started, {branchRef} or {remoteBranchRef} is not known.");
+            Log.Info($"{Repository.Name}: Push: not started, {branchRef} or {remoteBranchRef} is not known, or is no branch of one remote.");
             return Task.CompletedTask;
         }
 
         var (remote, name) = split;
-        var target = $"{remote}/{name}";
+        var target = FindRef(remoteBranchRef)?.Name ?? ShortName(remoteBranchRef);
+        var renamed = !string.Equals(remoteBranchRef, $"{RemotesPrefix}{remote}/{name}", StringComparison.Ordinal);
+        var text = renamed ? OperationTexts.PushToRemoteBranch(branch.Name, target) : OperationTexts.Push(branch.Name, target);
         var toUpstream = string.Equals(branch.UpstreamRef, remoteBranchRef, StringComparison.Ordinal);
-        return GuardAsync(
-            OperationTexts.Push(branch.Name, target),
-            () => PushToAsync(branch, remote, HeadsPrefix + name, target, setUpstream, toUpstream, dedupe: !setUpstream));
+        return GuardAsync(text, () => PushToAsync(branch, remote, HeadsPrefix + name, target, setUpstream, toUpstream, dedupe: !setUpstream, text));
     }
 
     /// <summary>
@@ -131,18 +142,27 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// One push of a local branch (2.19): "Push rejected" offers "Pull" when the current branch was
-    /// pushed to its upstream (<paramref name="toUpstream"/>), otherwise "Fetch &lt;r&gt;".
+    /// pushed to its upstream (<paramref name="toUpstream"/>), otherwise "Fetch &lt;r&gt;". Refused
+    /// before git when it would stop every fetch of <paramref name="remote"/>
+    /// (<see cref="RefuseIfPushStopsFetch"/>). <paramref name="text"/> is its texts when not
+    /// <see cref="OperationTexts.Push"/>'s (the drop's push onto a renamed remote branch, GD24).
     /// </summary>
-    private Task<OperationResult> PushToAsync(GitRef branch, string remote, string remoteRef, string target, bool setUpstream, bool toUpstream, bool dedupe)
+    private Task<OperationResult> PushToAsync(GitRef branch, string remote, string remoteRef, string target, bool setUpstream, bool toUpstream, bool dedupe, OperationText? text = null)
     {
         var request = new PushRequest(remote, branch.Name, remoteRef) { SetUpstream = setUpstream };
         var current = toUpstream && string.Equals(Refs?.Head.BranchName, branch.Name, StringComparison.Ordinal);
+        var texts = text ?? OperationTexts.Push(branch.Name, target);
         return RunAsync(
-            OperationTexts.Push(branch.Name, target),
+            texts,
             OperationKind.Network,
             RefreshScope.Refs,
             async context =>
             {
+                if (RefuseIfPushStopsFetch(texts, branch.Name, remote, remoteRef, target) is { } refused)
+                {
+                    return refused;
+                }
+
                 UndoCapture.Push(remote, await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken));
                 return OperationReport.Done(OperationTexts.Pushed(branch.Name, target, setUpstream));
             },
@@ -153,28 +173,59 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// <c>refs/remotes/&lt;r&gt;/&lt;x&gt;</c> as its remote and the branch's name there: from the
-    /// refs as read, else by the longest configured remote whose name starts it; null when no
-    /// remote does.
+    /// 10.4's guard, inside a push's operation before git, with the fetch lines read (the latest
+    /// refs): a push of <paramref name="branch"/> to <paramref name="remoteRef"/> on
+    /// <paramref name="remote"/> is refused when a remote-tracking ref the remote's lines fetch
+    /// that ref into is fetched from more than one ref of the remote (R2) and none of them is a
+    /// branch the remote has already (one ref fills it, and the refs hold it): the push would
+    /// create the ref beside the one that fills that tracking ref, and every later fetch of the
+    /// remote would fail (0.5's P, C2). Only destinations under <c>refs/remotes/</c> count: a
+    /// mirror line also maps the ref to the local branch of its name (10.1). The lines follow the
+    /// fetch, not the push, rightly. Null when the push may run.
     /// </summary>
-    private (string Remote, string Name)? SplitRemoteBranch(string remoteBranchRef)
+    private OperationReport? RefuseIfPushStopsFetch(OperationText text, string branch, string remote, string remoteRef, string target)
     {
-        if (FindRef(remoteBranchRef) is { Kind: RefKind.RemoteBranch, RemoteName: { } known } gitRef && gitRef.Name.StartsWith(known + "/", StringComparison.Ordinal))
-        {
-            return (known, gitRef.Name[(known.Length + 1)..]);
-        }
-
-        if (!remoteBranchRef.StartsWith(RemotesPrefix, StringComparison.Ordinal))
+        if (Refs is not { Refspecs: { } refspecs } refs)
         {
             return null;
         }
 
-        var rest = remoteBranchRef[RemotesPrefix.Length..];
-        var remote = RemoteNames
-            .Where(name => rest.StartsWith(name + "/", StringComparison.Ordinal) && rest.Length > name.Length + 1)
-            .OrderByDescending(name => name.Length)
-            .FirstOrDefault();
-        return remote is null ? null : (remote, rest[(remote.Length + 1)..]);
+        var destinations = refspecs.DestinationsOf(remote, remoteRef)
+            .Where(destination => destination.StartsWith(RemotesPrefix, StringComparison.Ordinal))
+            .ToList();
+        var ambiguous = destinations.FirstOrDefault(destination => refs.SourceOf(destination).Kind == RemoteSourceKind.AmbiguousRefs);
+        if (ambiguous is null
+            || destinations.Exists(destination => refs.SourceOf(destination).Kind == RemoteSourceKind.Mapped && FindRef(destination) is not null))
+        {
+            return null;
+        }
+
+        return Refused(text, OperationTexts.PushWouldStopFetch(branch, target, ambiguous[RemotesPrefix.Length..], remote));
+    }
+
+    /// <summary>
+    /// <c>refs/remotes/&lt;…&gt;</c> as the remote and the branch's name there that fill it, as the
+    /// remote's fetch lines map it back (<see cref="RepoRefs.SourceOf(GitRef)"/>,
+    /// docs/phase-6-design.md 10.4 #7): null for a ref that one ref of one remote, a branch, does
+    /// not fill (the operation logs "not started": a menu built before the lines changed). A ref
+    /// the refs do not hold is looked up by its name, and its remote must be configured.
+    /// </summary>
+    private (string Remote, string Name)? SplitRemoteBranch(string remoteBranchRef)
+    {
+        if (Refs is not { } refs)
+        {
+            return null;
+        }
+
+        if (FindRef(remoteBranchRef) is { Kind: RefKind.RemoteBranch } gitRef)
+        {
+            return refs.SourceOf(gitRef) is { IsBranch: true, Remote: { } remote, Branch: { } name } ? (remote, name) : null;
+        }
+
+        return refs.SourceOf(remoteBranchRef) is { IsBranch: true, Remote: { } configured, Branch: { } branch }
+            && RemoteNames.Contains(configured, StringComparer.Ordinal)
+            ? (configured, branch)
+            : null;
     }
 
     // 2.20: force push with lease.
@@ -192,6 +243,7 @@ public sealed partial class RepositoryOperations
         var upstream = UpstreamText(branch) ?? ShortName(upstreamRef);
         var text = OperationTexts.ForcePush(branch.Name, upstream);
         var request = new PushRequest(remote, branch.Name, remoteRef) { ForceWithLease = true };
+        OperationReport? refused = null;
         return GuardAsync(text, () => ConfirmAndRunAsync(
             OperationTexts.ConfirmForcePush(branch.Name, remote, ShortName(remoteRef)),
             text,
@@ -199,12 +251,24 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async _ =>
             {
+                // 10.4's guard before anything is written, the backup included.
+                refused = RefuseIfPushStopsFetch(text, branch.Name, remote, remoteRef, upstream);
+                if (refused is not null)
+                {
+                    return null;
+                }
+
                 // UpstreamRef's commit as it is just before the push (2.20).
                 var commit = await Git.ResolveAsync(upstreamRef);
                 return commit is null ? null : new BackupRequest("force-push", [new BackupEntry(ShortName(upstreamRef), commit)]);
             },
             async (context, _) =>
             {
+                if (refused is not null)
+                {
+                    return refused;
+                }
+
                 UndoCapture.Push(remote, await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken));
                 return OperationReport.Done(OperationTexts.ForcePushed(branch.Name, upstream));
             },
@@ -222,7 +286,12 @@ public sealed partial class RepositoryOperations
         var text = OperationTexts.SetUpstream(name);
         return GuardAsync(text, async () =>
         {
-            var remoteBranches = Refs?.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch).ToList() ?? [];
+            // Only a branch one ref of one remote fills (docs/phase-6-design.md 10.4 #11): git
+            // refuses a ref two remotes or none fetch, and one fetched from two refs would track
+            // git's first candidate.
+            List<GitRef> remoteBranches = Refs is { } refs
+                ? [.. refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch && refs.SourceOf(gitRef).IsBranch)]
+                : [];
             if (remoteBranches.Count == 0)
             {
                 Log.Info($"{Repository.Name}: {text.Title}: not started, there are no remote branches to track.");

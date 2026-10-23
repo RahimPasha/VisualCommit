@@ -350,7 +350,6 @@ internal static class WorkspaceTestSupport
         private readonly Dictionary<string, List<string>> _folders = new(StringComparer.Ordinal);
         private readonly HashSet<string> _repositories = new(StringComparer.Ordinal);
         private readonly ManualResetEventSlim _release = new();
-        private readonly Stopwatch _sinceFirstListing = new();
         private string? _holdAt;
         private string? _slowAt;
         private int _waiting;
@@ -389,18 +388,17 @@ internal static class WorkspaceTestSupport
         /// <summary>Makes the check of <paramref name="path"/>'s <c>.git</c> entry wait until <see cref="Release"/>.</summary>
         public void HoldAt(string path) => _holdAt = path;
 
-        /// <summary>Makes the check of <paramref name="path"/> end no sooner than the scan's progress interval after its first listing.</summary>
+        /// <summary>
+        /// Makes the check of <paramref name="path"/> last the scan's progress interval, so that the
+        /// scan reports its progress right after it whatever it reported before: under load the
+        /// root's listing alone can outlast the interval and restart the scan's clock (2026-10-23).
+        /// </summary>
         public void SlowAt(string path) => _slowAt = path;
 
         public void Release() => _release.Set();
 
         public IReadOnlyList<ScanFolder> ListFolders(string path)
         {
-            if (!_sinceFirstListing.IsRunning)
-            {
-                _sinceFirstListing.Start();
-            }
-
             return _folders.TryGetValue(path, out var children) ? [.. children.Select(name => new ScanFolder(name, false, false))] : [];
         }
 
@@ -408,7 +406,8 @@ internal static class WorkspaceTestSupport
         {
             if (path == _slowAt)
             {
-                while (_sinceFirstListing.Elapsed < RepositoryScanner.ProgressInterval)
+                var check = Stopwatch.StartNew();
+                while (check.Elapsed < RepositoryScanner.ProgressInterval)
                 {
                     Thread.Sleep(5);
                 }

@@ -90,6 +90,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return gone;
                     }
 
+                    // A stale menu's remote branch that two remotes fetch or none (docs/phase-6-design.md 10.4 #10).
+                    if (RefuseUnfetchedRemoteBranch(text, target) is { } unfetched)
+                    {
+                        return unfetched;
+                    }
+
                     if (await RefuseCheckoutAsync(text) is { } blocked)
                     {
                         display = blocked.Display;
@@ -163,6 +169,13 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 async context =>
                 {
                     var options = NetworkOptions.From(context);
+
+                    // A stale menu's remote branch that two remotes fetch or none, before anything
+                    // is stashed (docs/phase-6-design.md 10.4 #10).
+                    if (RefuseUnfetchedRemoteBranch(text, target) is { } unfetched)
+                    {
+                        return unfetched;
+                    }
 
                     // After a blocked checkout that asked and saved the backup, nothing more to do.
                     if (!detachedBackedUp && await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)

@@ -330,10 +330,6 @@ public sealed partial class RepositoryViewModel
     /// (<see cref="DropFacts.TargetIsAncestorOfSource"/>, true when the read failed, so that git
     /// decides). Null when the tab closed meanwhile.
     /// </summary>
-    /// <remarks>
-    /// <see cref="DropFacts.RemoteMapsBranchesDifferently"/> is not read: the Git layer has no read
-    /// of a remote's fetch refspec yet, so a drop onto a remote branch always offers the push.
-    /// </remarks>
     public async Task<DropFacts?> ReadDropFactsAsync(string sourceRef, string targetRef)
     {
         ArgumentNullException.ThrowIfNull(sourceRef);
@@ -435,7 +431,11 @@ public sealed partial class RepositoryViewModel
         }
     }
 
-    /// <summary>Checks out a branch by a double-click, unless HEAD is on it already (as the menus leave out or disable the item).</summary>
+    /// <summary>
+    /// Checks out a branch by a double-click, unless HEAD is on it already, or on the local branch a
+    /// remote branch checks out into, or the remote branch has none because two remotes or none
+    /// fetch it (docs/phase-6-design.md 10.4 #10, 10.6): as the menus leave out or disable the item.
+    /// </summary>
     private void CheckOutByDoubleClick(string refName)
     {
         var context = MenuContext;
@@ -444,8 +444,8 @@ public sealed partial class RepositoryViewModel
             return;
         }
 
-        var local = branch.Kind == RefKind.RemoteBranch ? RepositoryMenuContext.LocalNameOf(branch) : branch.Name;
-        if (branch.IsHead || string.Equals(context.Head.BranchName, local, StringComparison.Ordinal))
+        var local = branch.Kind == RefKind.RemoteBranch ? context.Refs.LocalNameOf(branch) : branch.Name;
+        if (local is null || branch.IsHead || string.Equals(context.Head.BranchName, local, StringComparison.Ordinal))
         {
             return;
         }
