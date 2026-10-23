@@ -163,7 +163,7 @@ public sealed partial class Phase6ChecksG
         Assert.Equal(PartG.PushDialogRemotes, PushRemoteOptions(app));
         Assert.Equal("pr/1", ((TextBox)app.FindByAutomationId(view, "PushBranchBox")).Text);
         Assert.True(((CheckBox)app.FindByAutomationId(view, "PushSetUpstream")).IsChecked == true, "\"Set as upstream\" is not ticked.");
-        Assert.Equal(["Cancel", "Push"], view.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible && button.Content is string).OrderBy(button => app.BoundsOf(button).X).Select(button => (string)button.Content!));
+        Assert.Equal(["Cancel", "Push"], view.GetVisualDescendants().OfType<Button>().Where(button => button is not Avalonia.Controls.Primitives.ToggleButton && button.IsEffectivelyVisible && button.Content is string).OrderBy(button => app.BoundsOf(button).X).Select(button => (string)button.Content!));
         app.Click(PushRemoteOption(app, "origin"));
         mark = app.LogMark();
         calls = app.GitCalls().Count;
