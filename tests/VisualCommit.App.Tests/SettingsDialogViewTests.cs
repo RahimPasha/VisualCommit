@@ -375,6 +375,55 @@ public class SettingsDialogViewTests
         app.CancelSettings();
     }
 
+    [AvaloniaFact]
+    public async Task A_refused_save_focuses_the_wrong_box_with_the_caret_at_its_end_and_nothing_selected()
+    {
+        // 7.8: the first wrong field takes the focus, its caret at the end as a dialog's box on
+        // opening. The Tab focus selected the whole text, which a caret already at the end left
+        // selected (the gate's s16b and s18a).
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        await app.OpenSettingsAsync();
+        app.ChooseSection(SettingsSection.General);
+        app.ReplaceText("AutoFetchMinutesBox", "61");
+
+        Assert.False(await app.SaveSettingsAsync(), "Save closed the screen with 61 minutes.");
+
+        await app.WaitForAsync(() => Focused(app) == "AutoFetchMinutesBox", "the focus in the minutes' box");
+        var box = (TextBox)app.FindByAutomationId(app.TopDialogView!, "AutoFetchMinutesBox");
+        Assert.Equal((2, 2, 2), (box.CaretIndex, box.SelectionStart, box.SelectionEnd));
+    }
+
+    [AvaloniaFact]
+    public async Task A_disabled_ticked_box_is_drawn_in_the_disabled_colour_not_the_accent()
+    {
+        // VcCheckBox's box: the accent while ticked and enabled, the disabled colour while ticked
+        // and disabled (the gate's w1e and l30c, whose "Already in this workspace" rows, ticked and
+        // disabled, looked like the others; design 1.9). Keep ignored files is ticked by default.
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        await app.OpenSettingsAsync();
+        app.ChooseSection(SettingsSection.General);
+        var check = (CheckBox)app.FindByAutomationId(app.TopDialogView!, "KeepIgnoredCheckBox");
+        var box = check.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "Box");
+        Assert.True(check.IsChecked);
+
+        Assert.Equal(Brush(app, "VcAccentBrush"), ((ISolidColorBrush)box.Background!).Color);
+        check.IsEnabled = false;
+        app.Settle();
+        Assert.Equal((Brush(app, "VcTextDisabledBrush"), Brush(app, "VcTextDisabledBrush")), (((ISolidColorBrush)box.Background!).Color, ((ISolidColorBrush)box.BorderBrush!).Color));
+        check.IsEnabled = true;
+        app.Settle();
+        Assert.Equal(Brush(app, "VcAccentBrush"), ((ISolidColorBrush)box.Background!).Color);
+    }
+
+    private static Color Brush(ShellDriver app, string key) =>
+        app.Window.TryFindResource(key, app.Window.ActualThemeVariant, out var value) && value is ISolidColorBrush brush
+            ? brush.Color
+            : throw new InvalidOperationException($"No brush {key}.");
+
     private static string? Focused(ShellDriver app)
     {
         app.Settle();

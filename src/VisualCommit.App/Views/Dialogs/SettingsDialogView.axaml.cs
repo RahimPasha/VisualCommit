@@ -83,6 +83,10 @@ public partial class SettingsDialogView : DialogView
                 control.BringIntoView();
                 if (control is TextBox box)
                 {
+                    // The caret at the end and nothing selected, as a dialog's box on opening: the
+                    // Tab focus selects the whole text, which a caret already at the end leaves
+                    // (clearing the selection puts the caret at its start, so it comes first).
+                    box.ClearSelection();
                     box.CaretIndex = box.Text?.Length ?? 0;
                 }
             },
