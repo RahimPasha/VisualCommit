@@ -235,6 +235,9 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         KeptDialog = dialog;
     }
 
+    /// <summary>The row's queue started its next operation as the run's ended (4.6): the dialog the run kept goes.</summary>
+    internal void ForgetKeptDialog() => Forget();
+
     private void Forget()
     {
         _keptBy = null;

@@ -123,6 +123,9 @@ internal sealed class BulkRepository(BulkProvider provider, string folder, RepoR
 
     public PullResult Pulled { get; set; } = new(PullOutcome.UpToDate, 0);
 
+    /// <summary>When set, the status a pull's integration leaves (a rebase stopped, say).</summary>
+    public WorkingTreeStatus? StatusAfterPull { get; set; }
+
     public Exception? PullFailure { get; set; }
 
     public int Fetches => Volatile.Read(ref _fetches);
@@ -205,6 +208,11 @@ internal sealed class BulkRepository(BulkProvider provider, string folder, RepoR
         }
 
         await Task.Yield();
+        if (StatusAfterPull is { } after)
+        {
+            Status = after;
+        }
+
         return PullFailure is { } failure ? throw failure : Pulled;
     }
 

@@ -107,6 +107,9 @@ public sealed partial class RepositoryOperations
     /// <summary>The queue's tasks whose result a caller of <see cref="RunAsync"/> shows: a deduplicated second call does not show it again.</summary>
     private readonly ConditionalWeakTable<Task<OperationResult>, OperationText> _resultsShown = new();
 
+    /// <summary>The first caller of each queue's task: its operation's id and a rebase's stop notice, which a merged bulk run's call shares (4.6).</summary>
+    private readonly ConditionalWeakTable<Task<OperationResult>, FirstCaller> _firstCallers = new();
+
     /// <summary>Set while an operation of <see cref="RunAsync"/> runs: <see cref="SaveBackupAsync"/> marks it, and the operation then ends with the backups' clean-up (D139).</summary>
     private readonly AsyncLocal<StrongBox<bool>?> _backupSaved = new();
 
@@ -298,12 +301,27 @@ public sealed partial class RepositoryOperations
     /// exception of <paramref name="run"/> into the result. After the tab closed it starts nothing
     /// and returns <see cref="OperationOutcome.Cancelled"/>. Call it on the UI thread.
     /// </summary>
-    public async Task<OperationResult> RunAsync(
+    public Task<OperationResult> RunAsync(
         OperationText text,
         OperationKind kind,
         RefreshScope refresh,
         Func<OperationContext, Task<OperationReport>> run,
-        RunOptions? options = null)
+        RunOptions? options = null) =>
+        RunAsync(text, kind, refresh, run, options, notice: null);
+
+    /// <summary>
+    /// <see cref="RunAsync(OperationText, OperationKind, RefreshScope, Func{OperationContext, Task{OperationReport}}, RunOptions?)"/>
+    /// with a rebase's <paramref name="notice"/> (the pull's), which a bulk run's call merged into
+    /// a waiting operation shares with that operation's first caller, so that the row keeps its
+    /// "Rebase stopped" dialog too (docs/phase-6-design.md 4.6).
+    /// </summary>
+    private async Task<OperationResult> RunAsync(
+        OperationText text,
+        OperationKind kind,
+        RefreshScope refresh,
+        Func<OperationContext, Task<OperationReport>> run,
+        RunOptions? options,
+        StopNotice? notice)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(run);
@@ -322,10 +340,10 @@ public sealed partial class RepositoryOperations
         }
 
         // The operation's id, for the git call a "<Title> cancelled" dialog of lock files names (1.8, 4f).
-        string? operationId = null;
+        var operationId = new StrongBox<string?>();
         var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, async context =>
         {
-            operationId = context.OperationId;
+            operationId.Value = context.OperationId;
 
             // An operation that saved a backup (SaveBackupAsync) ends with the backups' clean-up,
             // inside it, after its work, whether the work succeeded or not (docs/phase-4-design.md
@@ -372,20 +390,39 @@ public sealed partial class RepositoryOperations
         // Its own cancellation cancels this operation alone, until this call returns (4.5).
         using var cancellation = options.Cancellation.Register(() => Queue.Cancel(operation));
         var first = _resultsShown.TryAdd(running, text);
+        if (first)
+        {
+            _firstCallers.AddOrUpdate(running, new FirstCaller(operationId, notice));
+        }
+
         var result = await running;
         if (first)
         {
-            await ShowResultAsync(text, result, options, operationId);
+            await ShowResultAsync(text, result, options, operationId.Value);
         }
-        else if (options.Defer is { } defer && !IsClosed && DeferredOf(text, result, options, operationId) is { } dialog)
+        else if (options.Defer is { } defer && !IsClosed)
         {
             // A bulk run's call merged into a waiting operation of the tab, whose caller shows the
-            // dialog: the row keeps the same display, computed by the same rule (4.6).
-            defer(dialog);
+            // dialog: the row keeps the same display, computed by the same rule, with the operation
+            // that ran (its id names the cancelled call of a lock-file dialog), and a rebase's stop
+            // notice the operation's first caller got (4.6).
+            _firstCallers.TryGetValue(running, out var shown);
+            if (DeferredOf(text, result, options, shown?.OperationId.Value) is { } dialog)
+            {
+                defer(dialog);
+            }
+
+            if (notice is not null && shown?.Notice is { } shared)
+            {
+                (notice.Display, notice.Failure) = (shared.Display, shared.Failure);
+            }
         }
 
         return result;
     }
+
+    /// <summary>What the first caller of a queue's task (<see cref="_resultsShown"/>) knows: the operation's id once it runs, and a rebase's stop notice.</summary>
+    private sealed record FirstCaller(StrongBox<string?> OperationId, StopNotice? Notice);
 
     /// <summary>
     /// Asks <paramref name="confirmation"/>, then runs the operation (<see cref="RunAsync"/>), which
@@ -801,9 +838,25 @@ public sealed partial class RepositoryOperations
                 defer(new DeferredDialog(text, new FailureDisplay(text.ErrorTitle, text.FailureSummary), failure, [], null, null));
             }
 
-            return new OperationResult(OperationOutcome.Failed, $"{text.Title} failed", failure);
+            var result = new OperationResult(OperationOutcome.Failed, $"{text.Title} failed", failure);
+            OutsideTheQueue.AddOrUpdate(result, text);
+            return result;
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="result"/> is a failure outside the queue (the deferring
+    /// <see cref="GuardAsync(OperationText, Func{Task{OperationResult?}}, Action{DeferredDialog})"/>):
+    /// no status bar shows it, so a bulk run's row says it itself (4.6).
+    /// </summary>
+    public static bool FailedOutsideTheQueue(OperationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return OutsideTheQueue.TryGetValue(result, out _);
+    }
+
+    /// <summary>The results of failures outside the queue (<see cref="FailedOutsideTheQueue"/>).</summary>
+    private static readonly ConditionalWeakTable<OperationResult, OperationText> OutsideTheQueue = new();
 
     /// <summary>
     /// A failure built from a <see cref="GitException"/> as the queue builds it (1.6): git's output

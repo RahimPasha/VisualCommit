@@ -200,6 +200,63 @@ public class RepositoryOperationsFetchTests
     }
 
     [Fact]
+    public async Task A_bulk_fetch_merged_into_the_toolbars_one_that_left_lock_files_keeps_the_cancelled_call_as_its_command()
+    {
+        // 4.6: the merged call keeps the dialog of the operation that ran, whose id names the
+        // cancelled git call (4f), as the toolbar's own dialog does.
+        await using var server = await AuthRemoteServer.StartAsync();
+        server.RequireAuth = false;
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var kept = new List<DeferredDialog>();
+        using var group = new PromptGroup();
+        using var cancel = new CancellationTokenSource();
+        var lockFile = Path.Combine(app.Operations.Git.GitDirectory, "refs", "remotes", "origin", "main.lock");
+        app.Dialogs.CloseError();
+
+        var (hold, ahead) = HoldQueue(app);
+        var toolbar = app.Operations.FetchAllAsync();
+        var row = app.Operations.FetchAllAsync(new BulkPart(cancel.Token, group, kept.Add));
+        var held = server.HoldNextFetchPack();
+        hold.SetResult();
+        await held.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(lockFile, "left by the stopped fetch", TestContext.Current.CancellationToken);
+        await cancel.CancelAsync();
+        await Task.WhenAll(ahead, toolbar, row).WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
+        server.Release();
+
+        var shown = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Fetch cancelled", OperationTexts.StaleLockFilesSummary), (shown.Title, shown.Summary));
+        var dialog = Assert.Single(kept);
+        Assert.NotNull(dialog.OperationId);
+        app.Dialogs.CloseError();
+        await app.Operations.ShowDeferredAsync(dialog);
+        var deferred = app.Dialogs.Errors[1];
+        Assert.Equal((shown.Title, shown.Output, shown.Command, shown.ExtraAction), (deferred.Title, deferred.Output, deferred.Command, deferred.ExtraAction));
+        Assert.Equal("git fetch --progress origin", deferred.Command);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_failure_outside_the_queue_in_a_bulk_part_is_kept_and_marked_as_no_queues()
+    {
+        // 4.6: the deferring GuardAsync keeps the dialog GuardAsync would open, and the row counts
+        // a failure that no status bar shows.
+        using var repo = await Scenarios.RemoteSyncAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var kept = new List<DeferredDialog>();
+
+        var result = await app.Operations.GuardAsync(OperationTexts.FetchAll, () => throw new IOException("The disk is full."), kept.Add);
+
+        Assert.Equal((OperationOutcome.Failed, "Fetch failed"), (result?.Outcome, result?.Message));
+        Assert.True(RepositoryOperations.FailedOutsideTheQueue(result!));
+        var dialog = Assert.Single(kept);
+        Assert.Equal(("Fetch failed", "Git could not fetch from all remotes.", "The disk is full."), (dialog.Display?.Title, dialog.Display?.Summary, dialog.Failure?.GitOutput));
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.False(RepositoryOperations.FailedOutsideTheQueue(new OperationResult(OperationOutcome.Failed, "Fetch failed", null)));
+    }
+
+    [Fact]
     public void The_remotes_a_fetch_of_all_could_not_fetch_are_read_from_gits_output()
     {
         Assert.Equal(["origin", "my mirror"], RepositoryOperations.FailedRemotes("fatal: x\r\nerror: Could not fetch origin\r\nfatal: y\nerror: Could not fetch my mirror\nerror: Could not fetch origin\n"));

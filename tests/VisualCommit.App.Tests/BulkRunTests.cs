@@ -741,6 +741,142 @@ public partial class BulkRunTests
     }
 
     [AvaloniaFact]
+    public async Task A_tabs_operation_queued_behind_a_rows_failing_fetch_starts_and_the_row_keeps_no_dialog()
+    {
+        // D95, 4.6: the kept dialog goes when the row's queue starts its next operation, also when
+        // that one starts before the run's call has returned.
+        using var provider = new BulkProvider();
+        var docs = provider.Add("docs");
+        docs.FetchGate = new TaskCompletionSource();
+        docs.FetchFailure = BulkRepository.CannotFetch("../remotes/missing.git");
+        var services = Services(provider, ["docs"]);
+        using var tab = await TabAsync(services, docs);
+        using var host = await BulkHost.StartAsync(provider, ["docs"], services: services);
+        using var dialogs = new ScriptedDialogs(services.DialogHost);
+        var run = host.Bulk.FetchAllAsync();
+        await docs.FetchWaiting.Task.WaitAsync(Patience);
+        var pushing = new TaskCompletionSource();
+        var push = tab.Queue.RunAsync(new GitOperation("Push main", "Pushing main to origin/main…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            await pushing.Task.WaitAsync(context.CancellationToken);
+            return OperationReport.Done("Pushed main to origin/main");
+        }));
+
+        docs.FetchGate.SetResult();
+        await run.WaitAsync(Patience);
+        await SettleAsync();
+
+        Assert.Equal(OperationOutcome.Failed, host.Bulk.Current!.Rows[0].Result?.Outcome);
+        Assert.Equal(("Fetched no repositories; 1 failed", "Pushing main to origin/main…"), (host.Bulk.RunText, host.Operation("docs")));
+        Assert.Null(host["docs"].KeptDialog);
+        Assert.Equal((false, true), (host["docs"].ShowsDetails, host["docs"].ShowsCancel));
+        Assert.Empty(dialogs.Shown);
+        pushing.SetResult();
+        await push.WaitAsync(Patience);
+    }
+
+    [AvaloniaFact]
+    public async Task A_rows_pull_merged_into_the_tabs_waiting_pull_keeps_its_rebase_stop_for_Details()
+    {
+        // 4.6: either way the row has Details…: the tab's Pull, first, shows the "Rebase stopped"
+        // notice of a stop with nothing to look at, and the row's call merged into it keeps it.
+        using var provider = new BulkProvider();
+        var docs = provider.Add("docs");
+        docs.Pulled = new PullResult(PullOutcome.Conflicts, 0);
+        docs.StatusAfterPull = WorkingTreeStatus.Clean with
+        {
+            InProgress = new InProgressState(InProgressKind.Rebase, Head, "Local edit", "main", Upstream, 0, false) { StopKind = RebaseStopKind.ExecFailed },
+        };
+        var services = Services(provider, ["docs"]);
+        using var tab = await TabAsync(services, docs);
+        using var host = await BulkHost.StartAsync(provider, ["docs"], services: services);
+        using var dialogs = new ScriptedDialogs(services.DialogHost);
+        dialogs.CloseError();
+        var hold = new TaskCompletionSource();
+        var ahead = tab.Queue.RunAsync(new GitOperation("Held", "Holding…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            await hold.Task;
+            return OperationReport.Done("Held");
+        }));
+        var toolbars = tab.Operations.PullAsync();
+        var run = host.Bulk.PullAllAsync();
+        await WaitUntilAsync(() => host.Bulk.Current!.Rows[0].State == BulkRowState.Running, "the row's turn");
+        await SettleAsync();
+        Assert.Equal(1, tab.Queue.Waiting);
+
+        hold.SetResult();
+        await Task.WhenAll(ahead, toolbars, run).WaitAsync(Patience);
+        await SettleAsync();
+
+        Assert.Equal(1, docs.Pulls);
+        Assert.Equal("Rebase stopped", Assert.Single(dialogs.Errors).Title);
+        Assert.Equal(("Rebase stopped", true), (host["docs"].KeptDialog?.Display?.Title, host["docs"].ShowsDetails));
+        Assert.Equal("Pulled no repositories; 1 stopped", host.Bulk.RunText);
+    }
+
+    [AvaloniaFact]
+    public async Task A_pull_that_starts_nothing_at_its_turn_is_left_out_without_the_waiting_text()
+    {
+        // HEAD's branch names an upstream git has no ref for: the toolbar's rule pulls, the pull
+        // finds no upstream ref and starts nothing (PullAsync(part) is null). The row is left out
+        // with the toolbar's reason if there is one, never "Waiting to pull…".
+        using var provider = new BulkProvider();
+        provider.Add("docs", new RepoRefs(
+            new HeadState("main", Head),
+            [new GitRef("refs/heads/main", "main", RefKind.LocalBranch, Head, Upstream: "origin/main", IsHead: true)],
+            [],
+            ["origin"]));
+        using var host = await BulkHost.StartAsync(provider, ["docs"]);
+
+        await host.Bulk.PullAllAsync().WaitAsync(Patience);
+        await SettleAsync();
+
+        Assert.Equal((BulkRowState.Skipped, (string?)null), (host.Bulk.Current!.Rows[0].State, host.Bulk.Current.Rows[0].Reason));
+        Assert.NotEqual("Waiting to pull…", host.Operation("docs"));
+        Assert.Equal(string.Empty, host.Operation("docs"));
+        Assert.Null(host["docs"].HeldByRunReason);
+        Assert.Equal(("Pulled no repositories; 1 skipped", 0), (host.Bulk.RunText, provider["docs"].Pulls));
+    }
+
+    [AvaloniaFact]
+    public async Task A_failure_outside_the_queue_shows_in_the_row_in_the_danger_tone_until_its_next_operation()
+    {
+        // 4.6: an exception past the queue (here a listener of the row that fails once, as the
+        // row keeps the queue's failure) is kept for Details… by the deferring GuardAsync, and the
+        // row says "Fetch failed" itself, since no status bar shows it.
+        using var provider = new BulkProvider();
+        var api = provider.Add("api");
+        api.FetchFailure = BulkRepository.CannotFetch("../remotes/missing.git");
+        using var host = await BulkHost.StartAsync(provider, ["api"]);
+        var failOnce = true;
+        host["api"].PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DashboardRowViewModel.KeptDialog) && host["api"].KeptDialog is not null && failOnce)
+            {
+                failOnce = false;
+                throw new InvalidOperationException("A listener failed.");
+            }
+        };
+        using var dialogs = new ScriptedDialogs(host.Services.DialogHost);
+
+        await host.Bulk.FetchAllAsync().WaitAsync(Patience);
+        await SettleAsync();
+
+        var result = host.Bulk.Current!.Rows[0].Result!;
+        Assert.True(RepositoryOperations.FailedOutsideTheQueue(result));
+        Assert.Equal(new DashboardCellText("Fetch failed", DashboardTone.Danger, "Fetch failed"), host["api"].Operation);
+        Assert.Equal(("Fetch failed", true), (host["api"].KeptDialog?.Display?.Title, host["api"].ShowsDetails));
+        Assert.Equal("Unexpected error: A listener failed.", host["api"].KeptDialog?.Failure?.GitOutput);
+        Assert.Equal("Fetched no repositories; 1 failed", host.Bulk.RunText);
+        Assert.Empty(dialogs.Shown);
+
+        // The row's next operation: its own text in the cell.
+        api.FetchFailure = null;
+        await host["api"].Repository!.Operations.FetchAllAsync();
+        Assert.Equal(("Fetched from all remotes", false), (host.Operation("api"), host["api"].ShowsDetails));
+    }
+
+    [AvaloniaFact]
     public async Task A_stopped_pull_makes_the_result_warning_and_a_failure_danger()
     {
         using var provider = new BulkProvider();

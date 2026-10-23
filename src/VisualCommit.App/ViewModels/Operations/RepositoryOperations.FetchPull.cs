@@ -143,7 +143,8 @@ public sealed partial class RepositoryOperations
                 branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
                 RefreshScope.Refs,
                 context => PullStepsAsync(context, branch, upstream, text, integration, notice),
-                WithPart(NetworkRun(UndoScope.Pull(branch.Name), dedupeKey, failure => PullRefusalDisplay(failure, text, branch.Name, upstream)), part));
+                WithPart(NetworkRun(UndoScope.Pull(branch.Name), dedupeKey, failure => PullRefusalDisplay(failure, text, branch.Name, upstream)), part),
+                notice);
             await FinishAsync(
                 notice,
                 new SelectionAfter(),

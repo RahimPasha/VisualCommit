@@ -391,19 +391,32 @@ public sealed class BulkRun
             var result = await (Kind == BulkKind.Fetch ? repository.Operations.FetchAllAsync(part) : repository.Operations.PullAsync(part));
             if (result is null)
             {
-                // Nothing started: HEAD was not on a branch with an upstream after all.
-                Skip(row, DecideReason(row.Row) ?? OperationTexts.WaitingFor(Kind));
+                // Nothing started: HEAD was not on a branch with an upstream after all. Left out
+                // with the toolbar's reason, the row's copy's or else its view model's, if any.
+                Skip(row, DecideReason(row.Row) ?? ReasonOf(repository));
                 return false;
             }
 
             row.Result = result;
             row.State = BulkRowState.Ended;
+            if (repository.Queue.Current is { IsBackground: false })
+            {
+                // The row's queue started its next operation (a tab's Push queued behind the row's
+                // fetch) before the call returned: the kept dialog and the run's text go, as they
+                // go when the next operation starts (D95, 4.6), and the row shows that operation.
+                row.Row.ShowBulk(null, heldReason: null, clearsOnNextOperation: false);
+                row.Row.ForgetKeptDialog();
+                return false;
+            }
 
             // The status shows the result, but not of an operation the queue cancelled before it
-            // started (one the row's call merged into, D123): "Fetch cancelled" says so in the row.
+            // started (one the row's call merged into, D123): "Fetch cancelled" says so in the row;
+            // nor a failure outside the queue (4.6): "Fetch failed" in the danger tone.
             var cancelled = OperationTexts.BulkRowCancelled(Kind);
             row.Row.ShowBulk(
-                result.Outcome == OperationOutcome.Cancelled ? new DashboardCellText(cancelled, DashboardTone.Secondary, cancelled) : null,
+                result.Outcome == OperationOutcome.Cancelled ? new DashboardCellText(cancelled, DashboardTone.Secondary, cancelled)
+                    : RepositoryOperations.FailedOutsideTheQueue(result) ? new DashboardCellText(result.Message, DashboardTone.Danger, result.Message)
+                    : null,
                 heldReason: null,
                 clearsOnNextOperation: true);
             return false;
@@ -508,9 +521,14 @@ public sealed class BulkRun
         return DecideReason(row) is { } reason ? new Decision.Skip(reason) : Decision.Go.Instance;
     }
 
-    private string? DecideReason(DashboardRowViewModel row)
+    private string? DecideReason(DashboardRowViewModel row) => ReasonOf(row.Refs, row.Status);
+
+    /// <summary>The toolbar's reason from <paramref name="repository"/>'s own refs and status, or null.</summary>
+    private string? ReasonOf(RepositoryViewModel repository) => ReasonOf(repository.Refs, repository.Status);
+
+    private string? ReasonOf(RepoRefs? refs, WorkingTreeStatus? status)
     {
-        if (row.Refs is not { } refs || row.Status is not { } status)
+        if (refs is null || status is null)
         {
             return null;
         }
