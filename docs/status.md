@@ -137,15 +137,15 @@ Git layer and Core:
   fields, the writes, read-back and locks, the pull modes, Pull reading its configuration before
   the fetch (D219) and the chosen rebase's `pull.ff` (D231), the merge-tool list kept in the data
   folder (D202); the parity tests pass unchanged.)
-- [x] 11. `remote.<r>.fetch` read: `DropFacts.RemoteMapsBranchesDifferently` set, and the push of
-  a drop onto a remote branch and "Delete <b> on <r>…" act on the branch's name on the remote.
-  Tests. (WP3's mapping merged in `3146d8d`: `FetchRefspecs`, the refs read's one `git config`
+- [x] 11. Fetch refspecs read (design 10): the drop's push, `Delete <b> on <r>…` and checkout's
+  local name follow the mapping, reasons R1 to R4, R2's checkout without an upstream (D201);
+  `DropFacts.RemoteMapsBranchesDifferently` removed. Tests. (WP3's mapping merged in `3146d8d`: `FetchRefspecs`, the refs read's one `git config`
   call, `RemoteName` from the mapping, parity tests against git. WP-RA's app half, built,
   reviewed and fixed, merged in `0c91d01`: the menus, pushes, deletions, checkouts and force-push
   restore by the branch's name on its remote, R1 to R4, the push guard, D201's checkout without an
   upstream, an upstream named by git's own tracking ref, GD15 as built: design 10.4, 10.8 #8, #9.)
 - [x] 12. Whether every checkout keeps ignored files (`--no-overwrite-ignore`, design 14.2 of
-  phase 5, D179), as the owner decides. Tests. (Decided: D193, D196, D221. WP1's git half merged
+  phase 5, D179), as the owner decides (D196). Tests. (Decided: D193, D196, D221. WP1's git half merged
   in `31f525b`: the option on checkouts and merges, the app's check before every covered merge,
   rebase, pick, revert and stash apply, including the `--rebase-merges` branch points. WP-IA's app
   half, built, reviewed and fixed, merged in `cc3aed3`: the setting read when each operation runs,
