@@ -2350,7 +2350,9 @@ Pure, in `VisualCommit.App.Tests`:
   (91d7f72): a warm-up round, then 300 and 3,000 entries timed interleaved, the best of three kept for
   each, both reported with `TestContext.Current.SendDiagnosticMessage`; it asserts only that the
   3,000-entry time is under 25 times max(the 300-entry time, 1 ms), which catches work that grows faster
-  than the entries, and under a loose ceiling of 1 s. Under 20 ms per query on the laptop alone is the
+  than the entries, and under a loose ceiling of 1 s. (As built: the ratio compares the UI thread's
+  own work, `ThreadWork`, divided by max(the 300-entry work, 1 unit), as the diff view's growth test
+  does since `b6d1d01`; the 1-s ceiling stays on the stopwatch.) Under 20 ms per query on the laptop alone is the
   indication and is not asserted: the default run's load makes a step take 5 to 8 times as long
   (`ShellDriver.cs:28-33`).
 - `CommandPaletteViewModelTests`: 5.2's members (wrapping Up and Down, PageUp and PageDown by 11 to the
