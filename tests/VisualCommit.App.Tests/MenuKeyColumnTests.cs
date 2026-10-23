@@ -71,9 +71,11 @@ public class MenuKeyColumnTests
                 widest = Math.Max(widest, 10 + labelBlock.TextLayout.Width + 24 + key.TextLayout.Width + 10);
             }
 
-            // The menu as wide as its widest item, the key included: the 4 of its border and padding at each side.
+            // The menu as wide as its widest item, the key included: the 4 of its border and padding
+            // at each side; 239 at 1100×700 (Inter is the app's own font, so on every system).
             TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"The empty area's menu: {menu.Bounds.Width:F1} wide; its widest item needs {widest:F1}."));
             Assert.Equal(Math.Max(widest + 8, MenuLayer.MinMenuWidth), menu.Bounds.Width, 2.0);
+            Assert.Equal(239, menu.Bounds.Width, 3.0);
             TestPictures.Save(app, $"wpk-menu-empty-area-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
             app.PressKey(Avalonia.Input.Key.Escape);
             await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
@@ -96,7 +98,7 @@ public class MenuKeyColumnTests
             ["Working changes", "Stage all [Ctrl+Shift+A]", "Unstage all [Ctrl+Shift+X] (disabled: \"Nothing staged\")", "Discard all changes… (danger)", "—", "Stash changes… [Ctrl+Shift+S]", "Create branch here… [Ctrl+B]", "—", "Show reflog [Ctrl+Shift+R]", "Show backups", "Show in folder"],
             menu.LinesWithKeys());
         TestPictures.Save(app, "wpk-menu-working-changes");
-        AssertMenuAsWideAsItsWidestItem(app, menu);
+        AssertMenuAsWideAsItsWidestItem(app, menu, 235);
         app.PressKey(Avalonia.Input.Key.Escape);
         await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
 
@@ -111,7 +113,20 @@ public class MenuKeyColumnTests
             ],
             menu.LinesWithKeys());
         TestPictures.Save(app, "wpk-menu-main");
-        AssertMenuAsWideAsItsWidestItem(app, menu);
+        AssertMenuAsWideAsItsWidestItem(app, menu, 289);
+        app.PressKey(Avalonia.Input.Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+
+        // K11 step 2: feature/alpha's menu by its label on row 4, another branch's: no item has a
+        // key, its push included (6.7: only the checked-out branch's push and pull are the keys').
+        app.RightClick(app.GraphLabelBounds(4, "feature/alpha").Center);
+        menu = app.Menu();
+        Assert.Equal("feature/alpha", menu.Header);
+        Assert.Contains(menu.Items, item => item.Label == "Push feature/alpha to origin/feature/alpha");
+        Assert.All(menu.Items, item => Assert.Null(item.KeyText));
+        Assert.All(Items(app), item => Assert.Null(AutomationProperties.GetAcceleratorKey(item)));
+        Assert.All(Items(app), item => Assert.Null(ShellDriver.MenuKeyBlockOf(item)));
+        TestPictures.Save(app, "wpk-menu-feature-alpha");
         app.PressKey(Avalonia.Input.Key.Escape);
         await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
     }
@@ -146,8 +161,12 @@ public class MenuKeyColumnTests
         app.PressKey(Avalonia.Input.Key.Escape);
     }
 
-    /// <summary>The open menu is as wide as its widest item needs, a keyed one's label with 24 and its key (6.7), and 4 of border and padding at each side.</summary>
-    private static void AssertMenuAsWideAsItsWidestItem(ShellDriver app, MenuSnapshot menu)
+    /// <summary>
+    /// The open menu is as wide as its widest item needs, a keyed one's label with 24 and its key
+    /// (6.7), and 4 of border and padding at each side; and <paramref name="width"/> ±3 at
+    /// 1100×700, as measured (Inter is the app's own font, so on every system).
+    /// </summary>
+    private static void AssertMenuAsWideAsItsWidestItem(ShellDriver app, MenuSnapshot menu, double width)
     {
         var widest = Items(app).Max(item =>
         {
@@ -157,6 +176,7 @@ public class MenuKeyColumnTests
         });
         TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"The menu \"{menu.Header}\": {menu.Bounds.Width:F1} wide; its widest item needs {widest:F1}."));
         Assert.Equal(Math.Max(widest + 8, MenuLayer.MinMenuWidth), menu.Bounds.Width, 2.0);
+        Assert.Equal(width, menu.Bounds.Width, 3.0);
     }
 
     private static IEnumerable<Avalonia.Controls.MenuItem> Items(ShellDriver app) =>
