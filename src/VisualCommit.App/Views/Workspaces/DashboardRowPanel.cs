@@ -80,12 +80,12 @@ public sealed class DashboardRowPanel : Panel
 /// A dashboard cell that UI Automation reads as a text element (docs/phase-6-design.md 15.5): its
 /// automation id names the cell (<c>DashboardRowName</c>, …), its name is what it says (the Ahead
 /// / behind cell's <c>{a} ahead, {n} behind</c>), and it carries the cell's tooltip, so that the text
-/// block inside it, cut with "…", is no target of the pointer of its own.
+/// block inside it, cut with "…", is no target of the pointer of its own. Styled as itself
+/// (<c>ws|DashboardCell</c> in <c>DashboardView</c>): a transparent background, so that the
+/// pointer finds the cell, over its text or its arrows, and its tooltip opens there.
 /// </summary>
 public sealed class DashboardCell : Border
 {
-    protected override Type StyleKeyOverride => typeof(Border);
-
     protected override AutomationPeer OnCreateAutomationPeer() => new CellAutomationPeer(this);
 
     private sealed class CellAutomationPeer(Control owner) : ControlAutomationPeer(owner)
