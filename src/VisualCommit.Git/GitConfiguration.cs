@@ -49,11 +49,6 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     private volatile string? _globalFile;
     private volatile string? _xdgFile;
 
-    /// <param name="runner">The session's git runner, waited for when a call needs it (the app's <c>GitAccess.GetRunnerAsync</c>).</param>
-    /// <param name="dataDirectory">The app's data folder, where the calls that belong to no repository run.</param>
-    /// <param name="mergeToolsFile">The kept list of merge tools (<c>AppPaths.MergeToolsFile</c>, 8.10).</param>
-    /// <param name="sessionEnvironment">The session's git environment (8.12), which the runner applies; null for none, as the desktop app runs.</param>
-    /// <param name="log">The app's log.</param>
     /// <summary>
     /// Whether <c>git mergetool --tool-help</c> runs below normal priority (8.10): true for the app.
     /// The live test of the lookup sets it false: it proves the parse and the kept list with real git,
@@ -63,6 +58,11 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     /// </summary>
     internal bool ToolHelpBelowNormal { get; init; } = true;
 
+    /// <param name="runner">The session's git runner, waited for when a call needs it (the app's <c>GitAccess.GetRunnerAsync</c>).</param>
+    /// <param name="dataDirectory">The app's data folder, where the calls that belong to no repository run.</param>
+    /// <param name="mergeToolsFile">The kept list of merge tools (<c>AppPaths.MergeToolsFile</c>, 8.10).</param>
+    /// <param name="sessionEnvironment">The session's git environment (8.12), which the runner applies; null for none, as the desktop app runs.</param>
+    /// <param name="log">The app's log.</param>
     public GitConfiguration(
         Func<CancellationToken, Task<IGitRunner>> runner,
         string dataDirectory,

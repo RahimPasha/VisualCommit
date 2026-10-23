@@ -84,9 +84,10 @@ public sealed class GitRunner : IGitRunner
     public string ExecutablePath { get; }
 
     /// <summary>
-    /// The session's git environment given to the constructor (empty for none): what the settings
-    /// screen's global file and its identity notices read over the process's own variables
-    /// (docs/phase-6-design.md 8.2, 8.6, 8.12).
+    /// The session's git environment given to the constructor (empty for none), a copy, which the
+    /// runner applies to every call (docs/phase-6-design.md 8.12). Nothing in the app reads it back:
+    /// the session gives the same variables to the settings' <c>GitConfiguration</c> itself; the tests
+    /// read it.
     /// </summary>
     public IReadOnlyDictionary<string, string?> SessionEnvironment { get; }
 

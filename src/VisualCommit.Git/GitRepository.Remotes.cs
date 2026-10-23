@@ -131,8 +131,7 @@ public sealed partial class GitRepository
     /// either way), so a terminal's change during the fetch is not seen, as with git pull; with
     /// <see cref="PullIntegration.Rebase"/> only its problem with <c>pull.ff</c> counts (thrown), and
     /// nothing is read here. Keep ignored files' check runs once
-    /// the integration is chosen, before anything is written (<see cref="KeepIgnoredInPullAsync"/>,
-    /// work package WP1's).
+    /// the integration is chosen, before anything is written (<see cref="KeepIgnoredInPullAsync"/>).
     /// </para>
     /// </summary>
     public async Task<PullResult> IntegratePullAsync(

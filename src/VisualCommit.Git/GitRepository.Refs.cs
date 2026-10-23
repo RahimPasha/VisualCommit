@@ -66,8 +66,13 @@ public sealed partial class GitRepository
     /// subsection of a <c>remote.&lt;name&gt;.&lt;var&gt;</c> key, each once, sorted ordinally; a
     /// key without one (<c>remote.pushdefault</c>) and a name starting with <c>/</c> (which git
     /// skips with a warning) name none, and neither lists a legacy <c>.git/remotes</c> file.
-    /// The <c>.fetch</c> values are the lines; one git refuses, or one without a source, is
-    /// skipped and logged. Exit 1 is no remote and no line.
+    /// The <c>.fetch</c> values are the lines. Every value the mapping leaves out but an empty one
+    /// is logged as skipped, once per repository object (10.1): a key without a value and a line
+    /// git refuses, with which git's own reads fail too (<c>for-each-ref</c>: <c>bad config
+    /// variable</c> or <c>invalid refspec</c>, 128, so this read's snapshot is never made and the
+    /// warning names the line), and a line git takes that names no source
+    /// (<c>:refs/remotes/origin/x</c>). An empty value, which git takes and which fetches into
+    /// <c>FETCH_HEAD</c> only, maps nothing and is not logged. Exit 1 is no remote and no line.
     /// </summary>
     private async Task<(List<string> Remotes, FetchRefspecs Refspecs)> ReadRemoteKeysAsync(CancellationToken cancellationToken)
     {
@@ -93,7 +98,9 @@ public sealed partial class GitRepository
                 names.Add(name);
                 if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".fetch") is not null)
                 {
-                    // An empty value is a line git takes (it fetches into FETCH_HEAD only) and maps nothing.
+                    // Logged: a key without a value, and a value the mapping cannot take (one git
+                    // refuses, or one without a source). Not an empty value, which git takes (it
+                    // fetches into FETCH_HEAD only) and which maps nothing.
                     var value = newline < 0 ? string.Empty : entry[(newline + 1)..];
                     if ((newline < 0 || (value.Length > 0 && FetchRefspec.Parse(name, value) is null))
                         && _skippedFetchLines.TryAdd(name + "\n" + value, 0))
