@@ -60,7 +60,7 @@ public class WorkingChangesInProgressTests
         Assert.Equal("Commit merge", panel.CommitButtonText);
         Assert.True(panel.CanCommit);
         Assert.True(panel.CommitCommand.CanExecute(null));
-        Assert.Null(panel.CommitToolTip);
+        Assert.Equal("Commit merge (Ctrl+Enter)", panel.CommitToolTip);
 
         // Nothing staged and no merge: phase 2's rule.
         panel.Update(Status([], [Modified], InProgressState.None), hasHead: true);
@@ -105,7 +105,7 @@ public class WorkingChangesInProgressTests
         panel.Summary = string.Empty;
         panel.Update(Status([Modified], [], PickInList), hasHead: true);
         Assert.True(panel.CanCommit);
-        Assert.Null(panel.CommitToolTip);
+        Assert.Equal("Continue cherry-pick (Ctrl+Enter)", panel.CommitToolTip);
 
         panel.Update(Status([], [Conflicted], PickInList with { Kind = InProgressKind.Revert }), hasHead: true);
         Assert.Equal("Continue revert", panel.CommitButtonText);

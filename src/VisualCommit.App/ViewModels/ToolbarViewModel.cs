@@ -1,8 +1,7 @@
 using System.ComponentModel;
-using Avalonia;
-using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
@@ -52,13 +51,15 @@ public interface IToolbarActions
 /// Stash and Pop act on the tab's repository; a tab without one has a toolbar whose commands are
 /// all disabled and have no tooltips. A disabled button's tooltip says why
 /// (<c>ToolTip.ShowOnDisabled</c>): the first reason that holds, in 4d's order. An enabled button
-/// has no tooltip. The states follow the repository's refs (<see cref="RepositoryViewModel.Refs"/>)
-/// and its working-tree status; until the refs have been read every button is disabled, without a
-/// reason.
+/// says what it does with its key, <c>{what it does} ({key})</c> (docs/phase-6-design.md 6.8,
+/// D215; phase 3's "an enabled button has no tooltip" goes): <c>Fetch all remotes (Ctrl+Shift+F)</c>,
+/// <c>Pull from origin/main (Ctrl+Shift+L)</c>. The reasons alone are the <c>XDisabledReason</c>
+/// properties, which the menus read (<see cref="ToolbarMenuState.Of"/>). The states follow the
+/// repository's refs (<see cref="RepositoryViewModel.Refs"/>) and its working-tree status; until
+/// the refs have been read every button is disabled, without a reason.
 /// <para>
-/// Phase 5's Undo, Redo and Search (docs/phase-5-design.md 1.1) have a tooltip while enabled too,
-/// which is also their automation help text: what Undo and Redo would act on is seen nowhere else,
-/// and Search's key is worth showing. Undo and Redo take their states from the repository's
+/// Phase 5's Undo, Redo and Search (docs/phase-5-design.md 1.1): what Undo and Redo would act on,
+/// with their keys while enabled. Undo and Redo take their states from the repository's
 /// operations (<see cref="RepositoryOperations.ReadUndoAvailability"/>, 7.4), read with the others,
 /// again on <see cref="UpdateUndoStates"/> and on every change of the repository's queue, so that
 /// the state after an action shows as soon as the queue has finished it; while those give no
@@ -100,6 +101,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
 
     private readonly SynchronizationContext? _ui;
     private IToolbarActions? _actions;
+    private KeyTexts _keys = KeyTexts.Current;
 
     /// <param name="repository">The tab's repository, or null for a tab without one.</param>
     public ToolbarViewModel(RepositoryViewModel? repository)
@@ -140,27 +142,49 @@ public sealed partial class ToolbarViewModel : ObservableObject
     /// <summary>What Search does (3.1). Unless set (tests), the repository's <see cref="RepositoryViewModel.OpenSearch"/>.</summary>
     public Action? SearchAction { get; set; }
 
-    /// <summary>Why Fetch is disabled, or null while it is enabled (its tooltip).</summary>
+    /// <summary>
+    /// Whose words the tooltips' keys use (docs/phase-6-design.md 6.4): <see cref="KeyTexts.Current"/>,
+    /// unless a test of another platform's texts sets its own; setting it writes the tooltips again.
+    /// </summary>
+    public KeyTexts Keys
+    {
+        get => _keys;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _keys = value;
+            if (Dashboard is null)
+            {
+                Update();
+            }
+            else
+            {
+                UpdateDashboardStates();
+            }
+        }
+    }
+
+    /// <summary>Fetch's tooltip and help text: <c>Fetch all remotes ({key})</c> while enabled, its reason while disabled (6.8).</summary>
     [ObservableProperty]
     public partial string? FetchToolTip { get; private set; }
 
-    /// <summary>Why Pull is disabled, or null while it is enabled.</summary>
+    /// <summary>Pull's: <c>Pull from {up} ({key})</c>, or its reason.</summary>
     [ObservableProperty]
     public partial string? PullToolTip { get; private set; }
 
-    /// <summary>Why Push is disabled, or null while it is enabled.</summary>
+    /// <summary>Push's: <c>Push {b} to {up} ({key})</c>, <c>Push {b} to a remote ({key})</c> without a remote upstream, or its reason.</summary>
     [ObservableProperty]
     public partial string? PushToolTip { get; private set; }
 
-    /// <summary>Why Branch is disabled, or null while it is enabled.</summary>
+    /// <summary>Branch's: <c>Create a branch at HEAD ({key})</c>, or its reason.</summary>
     [ObservableProperty]
     public partial string? BranchToolTip { get; private set; }
 
-    /// <summary>Why Stash is disabled, or null while it is enabled.</summary>
+    /// <summary>Stash's: <c>Stash your changes ({key})</c>, or its reason.</summary>
     [ObservableProperty]
     public partial string? StashToolTip { get; private set; }
 
-    /// <summary>Why Pop is disabled, or null while it is enabled.</summary>
+    /// <summary>Pop's: <c>Pop the newest stash ({key})</c>, or its reason.</summary>
     [ObservableProperty]
     public partial string? PopToolTip { get; private set; }
 
@@ -229,15 +253,26 @@ public sealed partial class ToolbarViewModel : ObservableObject
     public partial bool CanPop { get; private set; }
 
     /// <summary>
-    /// Undo's tooltip (1.1): <c>Undo {text}</c> while it is enabled, otherwise its first reason
-    /// (7.4); null while its state is not given yet.
+    /// Undo's tooltip (1.1): <c>Undo {text} ({key})</c> while it is enabled (docs/phase-6-design.md
+    /// 6.8), otherwise its first reason (7.4); null while its state is not given yet.
     /// </summary>
     [ObservableProperty]
     public partial string? UndoToolTip { get; private set; }
 
-    /// <summary>Redo's tooltip (1.1): <c>Redo {text}</c>, or its first reason; null while its state is not given yet.</summary>
+    /// <summary>Redo's tooltip (1.1): <c>Redo {text} ({key})</c>, or its first reason; null while its state is not given yet.</summary>
     [ObservableProperty]
     public partial string? RedoToolTip { get; private set; }
+
+    /// <summary>
+    /// What Undo would act on while it is enabled, without its key (<c>Undo commit "Fix the
+    /// parser"</c>): the palette's label (docs/phase-6-design.md 5.4); null while it is disabled.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? UndoText { get; private set; }
+
+    /// <summary>What Redo would act on while it is enabled, without its key; null while it is disabled.</summary>
+    [ObservableProperty]
+    public partial string? RedoText { get; private set; }
 
     /// <summary>Search's tooltip (1.1): <c>Search commits (Ctrl+F)</c>, or why it is disabled (11.2); null in a tab without a repository.</summary>
     [ObservableProperty]
@@ -331,19 +366,23 @@ public sealed partial class ToolbarViewModel : ObservableObject
 
     /// <summary>
     /// What Search's tooltip says while it is enabled (1.1): <c>Search commits (Ctrl+F)</c>, with
-    /// the key the window takes for it (1.3).
+    /// the key the window takes for it (1.3), in <see cref="KeyTexts.Current"/>'s words.
     /// </summary>
-    public static string SearchText => $"Search commits ({SearchGestureText})";
+    public static string SearchText => SearchTextFor(KeyTexts.Current);
 
     /// <summary>
-    /// The search's key in words: the platform's command modifier with F, <c>Ctrl+F</c>, or
-    /// <c>Cmd+F</c> where Avalonia's hotkey configuration gives Cmd (macOS), never from a test of
-    /// the operating system; Ctrl where it names none.
+    /// The search's key in words (docs/phase-6-design.md 6.4): the platform's command modifier with
+    /// F, <c>Ctrl+F</c>, or <c>Cmd+F</c> where the key texts are macOS's (<see cref="KeyTexts.Current"/>,
+    /// set from Avalonia's hotkey configuration, never from a test of the operating system).
     /// </summary>
-    public static string SearchGestureText =>
-        Application.Current?.PlatformSettings?.HotkeyConfiguration.CommandModifiers is { } modifiers && modifiers.HasFlag(KeyModifiers.Meta)
-            ? "Cmd+F"
-            : "Ctrl+F";
+    public static string SearchGestureText => KeyTexts.Current.Of(AppCommand.Search) ?? string.Empty;
+
+    /// <summary><see cref="SearchText"/> in <paramref name="keys"/>' words.</summary>
+    public static string SearchTextFor(KeyTexts keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        return keys.WithKey("Search commits", AppCommand.Search);
+    }
 
     /// <summary>
     /// Search, and its key (1.3), opens the search bar (3.1): not an operation, the repository's
@@ -469,17 +508,24 @@ public sealed partial class ToolbarViewModel : ObservableObject
     {
         if (Repository is not { } repository)
         {
-            (UndoToolTip, CanUndo, UndoDisabledReason) = (null, false, null);
-            (RedoToolTip, CanRedo, RedoDisabledReason) = (null, false, null);
+            (UndoToolTip, UndoText, CanUndo, UndoDisabledReason) = (null, null, false, null);
+            (RedoToolTip, RedoText, CanRedo, RedoDisabledReason) = (null, null, false, null);
             return;
         }
 
         var undo = UndoStates?.Invoke()
             ?? (repository.IsClosed ? UndoAvailability.Disabled : repository.Operations.ReadUndoAvailability());
-        (UndoToolTip, CanUndo) = (undo.UndoToolTip ?? NothingToUndoText, undo.CanUndo && undo.UndoToolTip is not null);
-        (RedoToolTip, CanRedo) = (undo.RedoToolTip ?? NothingToRedoText, undo.CanRedo && undo.RedoToolTip is not null);
-        UndoDisabledReason = CanUndo ? null : UndoToolTip;
-        RedoDisabledReason = CanRedo ? null : RedoToolTip;
+        var (undoText, canUndo) = (undo.UndoToolTip ?? NothingToUndoText, undo.CanUndo && undo.UndoToolTip is not null);
+        var (redoText, canRedo) = (undo.RedoToolTip ?? NothingToRedoText, undo.CanRedo && undo.RedoToolTip is not null);
+
+        // UndoAvailability keeps "Undo {text}"; the toolbar appends the key while enabled (6.8).
+        UndoDisabledReason = canUndo ? null : undoText;
+        RedoDisabledReason = canRedo ? null : redoText;
+        UndoText = canUndo ? undoText : null;
+        RedoText = canRedo ? redoText : null;
+        UndoToolTip = canUndo ? _keys.WithKey(undoText, AppCommand.Undo) : undoText;
+        RedoToolTip = canRedo ? _keys.WithKey(redoText, AppCommand.Redo) : redoText;
+        (CanUndo, CanRedo) = (canUndo, canRedo);
     }
 
     /// <summary>
@@ -498,7 +544,7 @@ public sealed partial class ToolbarViewModel : ObservableObject
         };
         CanSearch = Repository is not null && reason is null;
         SearchDisabledReason = Repository is null ? null : reason;
-        SearchToolTip = Repository is null ? null : reason ?? SearchText;
+        SearchToolTip = Repository is null ? null : reason ?? SearchTextFor(_keys);
     }
 
     private void Update()
@@ -508,12 +554,29 @@ public sealed partial class ToolbarViewModel : ObservableObject
         if (Repository?.Refs is not { } refs)
         {
             // No repository, or its refs are not read yet.
-            SetStates(fetch: null, pull: null, push: null, branch: null, stash: null, pop: null, enabled: false);
+            SetStates(fetch: null, pull: null, push: null, branch: null, stash: null, pop: null, enabled: false, refs: null);
             return;
         }
 
         var (fetch, pull, push, branch, stash, pop) = Reasons(refs, Repository.Status);
-        SetStates(fetch, pull, push, branch, stash, pop, enabled: true);
+        SetStates(fetch, pull, push, branch, stash, pop, enabled: true, refs);
+    }
+
+    /// <summary>
+    /// What Pull and Push say while enabled (6.8), without the key: <c>Pull from {up}</c>, and
+    /// <c>Push {b} to {up}</c> with a remote upstream or <c>Push {b} to a remote</c> without one;
+    /// the upstream named by <see cref="UpstreamText"/>.
+    /// </summary>
+    private static (string Pull, string Push) EnabledTexts(RepoRefs? refs)
+    {
+        var name = refs?.Head.BranchName ?? "HEAD";
+        var current = refs?.Head.BranchName is { } branchName
+            ? refs.Refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.FullName == "refs/heads/" + branchName)
+            : null;
+        var upstream = current is null ? null : UpstreamText(current);
+        var pull = $"Pull from {upstream}";
+        var push = upstream is not null && current is { HasLocalUpstream: false } ? $"Push {name} to {upstream}" : $"Push {name} to a remote";
+        return (pull, push);
     }
 
     private static (string? Fetch, string? Pull, string? Push, string? Branch, string? Stash, string? Pop) Reasons(RepoRefs refs, WorkingTreeStatus status)
@@ -564,14 +627,26 @@ public sealed partial class ToolbarViewModel : ObservableObject
         return (fetch, pull, push, branch, stash, pop);
     }
 
-    private void SetStates(string? fetch, string? pull, string? push, string? branch, string? stash, string? pop, bool enabled)
+    /// <summary>
+    /// Sets each button's state, its reason and its tooltip (6.8): <c>XDisabledReason ?? (CanX ?
+    /// {what it does} ({key}) : null)</c>, so that a disabled button keeps its reason alone and one
+    /// without a reason (refs not read) has none.
+    /// </summary>
+    private void SetStates(string? fetch, string? pull, string? push, string? branch, string? stash, string? pop, bool enabled, RepoRefs? refs)
     {
-        (FetchDisabledReason, FetchToolTip, CanFetch) = (fetch, fetch, enabled && fetch is null);
-        (PullDisabledReason, PullToolTip, CanPull) = (pull, pull, enabled && pull is null);
-        (PushDisabledReason, PushToolTip, CanPush) = (push, push, enabled && push is null);
-        (BranchDisabledReason, BranchToolTip, CanBranch) = (branch, branch, enabled && branch is null);
-        (StashDisabledReason, StashToolTip, CanStash) = (stash, stash, enabled && stash is null);
-        (PopDisabledReason, PopToolTip, CanPop) = (pop, pop, enabled && pop is null);
+        var (pullText, pushText) = EnabledTexts(refs);
+        (FetchDisabledReason, CanFetch) = (fetch, enabled && fetch is null);
+        (PullDisabledReason, CanPull) = (pull, enabled && pull is null);
+        (PushDisabledReason, CanPush) = (push, enabled && push is null);
+        (BranchDisabledReason, CanBranch) = (branch, enabled && branch is null);
+        (StashDisabledReason, CanStash) = (stash, enabled && stash is null);
+        (PopDisabledReason, CanPop) = (pop, enabled && pop is null);
+        FetchToolTip = fetch ?? (CanFetch ? _keys.WithKey("Fetch all remotes", AppCommand.Fetch) : null);
+        PullToolTip = pull ?? (CanPull ? _keys.WithKey(pullText, AppCommand.Pull) : null);
+        PushToolTip = push ?? (CanPush ? _keys.WithKey(pushText, AppCommand.Push) : null);
+        BranchToolTip = branch ?? (CanBranch ? _keys.WithKey("Create a branch at HEAD", AppCommand.CreateBranch) : null);
+        StashToolTip = stash ?? (CanStash ? _keys.WithKey("Stash your changes", AppCommand.Stash) : null);
+        PopToolTip = pop ?? (CanPop ? _keys.WithKey("Pop the newest stash", AppCommand.Pop) : null);
     }
 }
 

@@ -235,10 +235,11 @@ public class SettingsDialogViewTests
     [InlineData(1920, 1080)]
     public async Task Every_shortcut_row_shows_its_action_and_keys_apart_and_whole_and_the_extend_row_takes_two_lines(int width, int height)
     {
-        // The rows here come from ShortcutTable, written out by hand, not from the app's own key
-        // table (AppShortcuts.Groups), which work package WP-K fills (6.4, 6.11).
-        // WP-K: once AppShortcuts.Groups gives 6.11's groups, add the assertion that it equals
-        // ShortcutTable on Windows' words, so that the screen and the report's table cannot drift.
+        // The rows come from the app's own key table (AppShortcuts.Groups, 6.4, 6.11), which must
+        // equal ShortcutTable, written out by hand in Windows' and Linux's words (6.12), so that the
+        // screen and the report's table cannot drift.
+        var groups = AppShortcuts.Groups(CommandKey.Ctrl);
+        AssertGroups(ShortcutTable, groups);
         using var data = new TempDirectory("data");
         using var app = ShellDriver.Start(data.Path, width, height);
         await app.WaitUntilReadyAsync();
@@ -251,7 +252,7 @@ public class SettingsDialogViewTests
                 null,
                 app.Session.Services.GitSettings,
                 ToolCatalogues.Fixed,
-                ShortcutTable,
+                groups,
                 app.Folders,
                 app.Session.Services.DialogHost,
                 null,
@@ -384,4 +385,15 @@ public class SettingsDialogViewTests
 
     private static Border Card(ShellDriver app) =>
         app.TopDialogView!.GetVisualDescendants().OfType<Border>().First(border => border.Classes.Contains("settings"));
+
+    /// <summary>The settings list's groups equal <paramref name="expected"/>, title by title, row by row and note by note (the records' lists compare by reference).</summary>
+    internal static void AssertGroups(IReadOnlyList<ShortcutGroup> expected, IReadOnlyList<ShortcutGroup> actual)
+    {
+        Assert.Equal(expected.Select(group => group.Title), actual.Select(group => group.Title));
+        foreach (var (want, got) in expected.Zip(actual))
+        {
+            Assert.Equal(want.Rows, got.Rows);
+            Assert.Equal(want.Note, got.Note);
+        }
+    }
 }

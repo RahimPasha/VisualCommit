@@ -138,6 +138,29 @@
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
+  <!-- The command palette (docs/phase-6-design.md 5.2, 5.3): no dimming, the backdrop only takes
+       the press outside the card, which cancels the palette. -->
+  <Style Selector="Panel.paletteBackdrop">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- The palette's card: 600 wide at the top centre, 8 below the toolbar (y 96), with the menus'
+       shadow, which tells it from the window without dimming; 2 + 16 + 32 + 6 + 28 × rows high
+       (84 to 392). Tab goes round its box only (its list and rows take no focus). -->
+  <Style Selector="Border.paletteCard">
+    <Setter Property="KeyboardNavigation.TabNavigation" Value="Cycle" />
+    <Setter Property="Width" Value="600" />
+    <Setter Property="Margin" Value="20,96,20,20" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Background" Value="{DynamicResource VcPanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VcBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="BoxShadow" Value="{DynamicResource VcMenuShadow}" />
+  </Style>
+
   <Style Selector="TextBlock.dialogTitle">
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />

@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -60,9 +61,34 @@ public sealed partial class SearchViewModel : ObservableObject, IDisposable
     /// <summary>The mode menu's header (FD5).</summary>
     public const string ModeMenuHeader = "Search";
 
-    public const string PreviousToolTip = "Previous match (Shift+Enter)";
+    /// <summary>
+    /// <c>SearchPrevious</c>'s tooltip and help text (docs/phase-6-design.md 6.8, D199): Shift+Enter
+    /// in the box and the command's shown key everywhere, <c>Previous match (Shift+Enter, Shift+F3)</c>,
+    /// <c>Cmd+Shift+G</c> on macOS. Read with <c>x:Static</c>: <see cref="KeyTexts.Current"/> is set
+    /// before the window is made.
+    /// </summary>
+    public static string PreviousToolTip => PreviousToolTipFor(KeyTexts.Current);
 
-    public const string NextToolTip = "Next match (Enter)";
+    /// <summary><c>SearchNext</c>'s: <c>Next match (Enter, F3)</c>, <c>Cmd+G</c> on macOS.</summary>
+    public static string NextToolTip => NextToolTipFor(KeyTexts.Current);
+
+    /// <summary><c>SearchPrevious</c>'s <c>AcceleratorKey</c>: the command's shown key.</summary>
+    public static string? PreviousKey => KeyTexts.Current.Of(AppCommand.PreviousMatch);
+
+    /// <summary><c>SearchNext</c>'s <c>AcceleratorKey</c>.</summary>
+    public static string? NextKey => KeyTexts.Current.Of(AppCommand.NextMatch);
+
+    /// <summary><see cref="PreviousToolTip"/> in <paramref name="keys"/>' words.</summary>
+    public static string PreviousToolTipFor(KeyTexts keys) => MatchToolTip("Previous match", "Shift+Enter", keys, AppCommand.PreviousMatch);
+
+    /// <summary><see cref="NextToolTip"/> in <paramref name="keys"/>' words.</summary>
+    public static string NextToolTipFor(KeyTexts keys) => MatchToolTip("Next match", "Enter", keys, AppCommand.NextMatch);
+
+    private static string MatchToolTip(string text, string inTheBox, KeyTexts keys, AppCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        return keys.Of(command) is { } key ? $"{text} ({inTheBox}, {key})" : $"{text} ({inTheBox})";
+    }
 
     public const string CloseToolTip = "Close the search (Esc)";
 

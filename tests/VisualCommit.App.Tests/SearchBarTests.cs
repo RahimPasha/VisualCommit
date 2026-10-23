@@ -54,8 +54,8 @@ public class SearchBarTests
         Assert.Equal(string.Empty, bar.Count);
         Assert.False(bar.PreviousEnabled);
         Assert.False(bar.NextEnabled);
-        Assert.Equal("Previous match (Shift+Enter)", bar.PreviousToolTip);
-        Assert.Equal("Next match (Enter)", bar.NextToolTip);
+        Assert.Equal("Previous match (Shift+Enter, Shift+F3)", bar.PreviousToolTip);
+        Assert.Equal("Next match (Enter, F3)", bar.NextToolTip);
         Assert.Equal("Close the search (Esc)", bar.CloseToolTip);
         Assert.False(bar.ProgressShown);
         Assert.Equal(268, bar.ModeButtonBounds.X, 1);

@@ -276,6 +276,19 @@ public sealed partial class RepositoryViewModel
             return false;
         }
 
+        return OpenMenu(layer, DiffMenu(MenuContext, diff, hunk), position, openedBy);
+    }
+
+    /// <summary>
+    /// The diff view's menu (4b) on <paramref name="context"/>: its file's items, its selected
+    /// lines' when lines are selected, and the hunk <paramref name="hunk"/>'s when it is one of the
+    /// diff's. The right-click's menu and the palette's items of the open diff (docs/phase-6-design.md
+    /// 5.5, with no hunk) both come from here.
+    /// </summary>
+    public MenuModel DiffMenu(RepositoryMenuContext context, DiffViewModel diff, int? hunk = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(diff);
         var target = diff.Target;
         var file = new FileMenuTarget(
             new ChangedFile(target.Path, target.Kind, target.OldPath),
@@ -286,12 +299,11 @@ public sealed partial class RepositoryViewModel
             CommitParent = target.Side == DiffSide.Commit ? target.Parent : null,
         };
         var hunkInDiff = hunk is { } index && diff.Diff is { } read && index >= 0 && index < read.Hunks.Count ? hunk : null;
-        var menu = RepositoryMenus.ForDiff(
-            MenuContext,
+        return RepositoryMenus.ForDiff(
+            context,
             new DiffMenuTarget(file, target.Side, diff.HasSelectedLines, hunkInDiff, diff.ActsOnLines),
             MenuActions,
             new DiffMenuActions(diff));
-        return OpenMenu(layer, menu, position, openedBy);
     }
 
     /// <summary>

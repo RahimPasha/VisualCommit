@@ -38,8 +38,8 @@ public sealed record ShortcutRow(string Action, string Keys);
 
 /// <summary>
 /// The fixed key table (D192, D199, D213; docs/phase-6-design.md 6.1) as data: no screen changes
-/// it. Work package WP-K gives its reads their bodies (6.3, 6.4, 6.11); until then no key routes
-/// and none is shown, so every key text is null and the app behaves as in phase 5.
+/// it. The router routes by it (6.3), every key text comes from it (6.4) and the settings
+/// screen's list is made from it (6.11).
 /// </summary>
 public static class AppShortcuts
 {
@@ -107,21 +107,203 @@ public static class AppShortcuts
 
     /// <summary>
     /// The command a key on the tunnelling pass runs on <paramref name="platform"/>, with its
-    /// argument, or null: the key goes on (6.3). Work package WP-K gives it its body; until then
-    /// every key goes on.
+    /// argument (the place for Mod+1 to Mod+8, from 1), or null: the key goes on (6.3). Only the
+    /// router's own keys (<see cref="KeyPass.Tunnel"/>) route; undo and redo keep phase 5's
+    /// bubbling rules, and the views' keys are their own.
     /// </summary>
-    public static RoutedCommand? Route(Shortcut shortcut, CommandKey platform) => null;
+    public static RoutedCommand? Route(Shortcut shortcut, CommandKey platform)
+    {
+        var pressed = Normalised(shortcut, platform);
+        foreach (var binding in Bindings)
+        {
+            if (binding.Pass != KeyPass.Tunnel)
+            {
+                continue;
+            }
+
+            for (var index = 0; index < binding.Keys.Count; index++)
+            {
+                if (Normalised(binding.Keys[index], platform) == pressed)
+                {
+                    return new RoutedCommand(binding.Command, binding.Command == AppCommand.GoToTab ? index + 1 : 0);
+                }
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// The key of <paramref name="command"/> that tooltips, menus and the palette show on
-    /// <paramref name="platform"/>, or null for a command without one (6.4). Work package WP-K
-    /// gives it its body; until then none is shown.
+    /// <paramref name="platform"/>, or null for a command without one (6.4): of two keys the
+    /// binding's <see cref="ShortcutBinding.ShownOnCtrl"/> or <see cref="ShortcutBinding.ShownOnCmd"/>
+    /// (Refresh F5 and Cmd+R, Redo Ctrl+Y and Cmd+Shift+Z, the matches F3 and Cmd+G).
     /// </summary>
-    public static Shortcut? Shown(AppCommand command, CommandKey platform) => null;
+    public static Shortcut? Shown(AppCommand command, CommandKey platform) =>
+        BindingOf(command) is { Keys.Count: > 0 } binding
+            ? binding.Keys[platform == CommandKey.Cmd ? binding.ShownOnCmd : binding.ShownOnCtrl]
+            : null;
 
-    /// <summary>Every key of <paramref name="command"/> (6.4). Work package WP-K gives it its body; until then none.</summary>
-    public static IReadOnlyList<Shortcut> All(AppCommand command) => [];
+    /// <summary>Every key of <paramref name="command"/> (6.4), in the catalogue's order; none for a command without a key.</summary>
+    public static IReadOnlyList<Shortcut> All(AppCommand command) => BindingOf(command)?.Keys ?? [];
 
-    /// <summary>The settings screen's Keyboard shortcuts section on <paramref name="platform"/> (6.11). Work package WP-K gives it its body; until then no group.</summary>
-    public static IReadOnlyList<ShortcutGroup> Groups(CommandKey platform) => [];
+    /// <summary>
+    /// Every key of <paramref name="command"/> with the shown one first (6.11): what the settings
+    /// list writes, <c>F5, Ctrl+R</c> but <c>Cmd+R, F5</c> on macOS.
+    /// </summary>
+    public static IReadOnlyList<Shortcut> ShownFirst(AppCommand command, CommandKey platform)
+    {
+        if (BindingOf(command) is not { Keys.Count: > 0 } binding)
+        {
+            return [];
+        }
+
+        var shown = platform == CommandKey.Cmd ? binding.ShownOnCmd : binding.ShownOnCtrl;
+        return [binding.Keys[shown], .. binding.Keys.Where((_, index) => index != shown)];
+    }
+
+    /// <summary>
+    /// The settings screen's Keyboard shortcuts section on <paramref name="platform"/> (6.11): its
+    /// groups in order, each row 6.1's action name with its keys joined by <c>, </c>, the shown key
+    /// first, in the platform's words.
+    /// </summary>
+    public static IReadOnlyList<ShortcutGroup> Groups(CommandKey platform) =>
+        [.. SettingsGroups.Select(group => new ShortcutGroup(
+            group.Title,
+            [.. group.Rows.Select(row => new ShortcutRow(row.Action, ShortcutText.FormatAll(row.Keys(platform), platform)))],
+            group.Note?.Invoke(platform)))];
+
+    /// <summary>
+    /// The catalogue's commands each row of the settings list shows the keys of, row by row as
+    /// <see cref="Groups"/> lists them (6.11): one command for most rows, several for a row such as
+    /// <c>Previous or next conflict</c>, none for keys that are no command of the catalogue (the
+    /// graph's arrows, the dashboard's list, the dialogs').
+    /// </summary>
+    public static IReadOnlyList<(string Group, string Action, IReadOnlyList<AppCommand> Commands)> SettingsRows =>
+        [.. SettingsGroups.SelectMany(group => group.Rows.Select(row => (group.Title, row.Action, row.Commands)))];
+
+    /// <summary>The binding of <paramref name="command"/>, or null for a command without a key.</summary>
+    private static ShortcutBinding? BindingOf(AppCommand command) => Bindings.FirstOrDefault(binding => binding.Command == command);
+
+    /// <summary>
+    /// <paramref name="shortcut"/> with Control and the command modifier one where the command
+    /// modifier is Control (Windows and Linux): Ctrl+Tab is then Mod+Tab.
+    /// </summary>
+    private static Shortcut Normalised(Shortcut shortcut, CommandKey platform) =>
+        platform == CommandKey.Ctrl && shortcut.Modifiers.HasFlag(ShortcutModifiers.Control)
+            ? shortcut with { Modifiers = (shortcut.Modifiers & ~ShortcutModifiers.Control) | ShortcutModifiers.Command }
+            : shortcut;
+
+    /// <summary>A row of the settings list from the catalogue's commands: their keys in the row's order, each command's shown key first.</summary>
+    private static SettingsRow FromCommands(string action, params AppCommand[] commands) =>
+        new(action, platform => [.. commands.SelectMany(command => ShownFirst(command, platform))], commands);
+
+    /// <summary>A row of the settings list for keys that are no command of the catalogue: the same keys on every platform.</summary>
+    private static SettingsRow FromKeys(string action, params Shortcut[] keys) => new(action, _ => keys, []);
+
+    /// <summary>6.11's groups, in order, with 6.1's action names (from both of its tables).</summary>
+    private static IReadOnlyList<SettingsGroup> SettingsGroups { get; } =
+    [
+        new("App",
+        [
+            FromCommands("Command palette", AppCommand.CommandPalette),
+            FromCommands("Open settings…", AppCommand.Settings),
+            FromCommands("Show or hide the activity log", AppCommand.ToggleActivityLog),
+            FromCommands("Refresh", AppCommand.Refresh),
+        ]),
+        new("Tabs",
+        [
+            FromCommands("New tab", AppCommand.NewTab),
+            FromCommands("Close tab", AppCommand.CloseTab),
+            FromCommands("Next tab", AppCommand.NextTab),
+            FromCommands("Previous tab", AppCommand.PreviousTab),
+            FromCommands("Go to tab 1 to 8", AppCommand.GoToTab),
+            FromCommands("Go to the last tab", AppCommand.GoToLastTab),
+            FromCommands("Go to the next dashboard", AppCommand.GoToNextDashboard),
+        ]),
+        new("Repositories",
+        [
+            FromCommands("Open repository…", AppCommand.OpenRepository),
+            FromCommands("Clone repository…", AppCommand.CloneRepository),
+            FromCommands("Init repository…", AppCommand.InitRepository),
+        ]),
+        new(
+            "Repository",
+            [
+                FromCommands("Fetch all remotes", AppCommand.Fetch),
+                FromCommands("Pull", AppCommand.Pull),
+                FromCommands("Push", AppCommand.Push),
+                FromCommands("Create branch…", AppCommand.CreateBranch),
+                FromCommands("Stash changes…", AppCommand.Stash),
+                FromCommands("Pop the newest stash", AppCommand.Pop),
+                FromCommands("Undo", AppCommand.Undo),
+                FromCommands("Redo", AppCommand.Redo),
+                FromCommands("Search commits", AppCommand.Search),
+                FromCommands("Next match", AppCommand.NextMatch),
+                FromCommands("Previous match", AppCommand.PreviousMatch),
+                FromCommands("Show reflog", AppCommand.ShowReflog),
+            ],
+            _ => "On a dashboard, Fetch and Pull fetch and pull every repository of its workspace."),
+        new("Changes",
+        [
+            FromCommands("Stage all", AppCommand.StageAll),
+            FromCommands("Unstage all", AppCommand.UnstageAll),
+            FromCommands("Go to the commit message", AppCommand.GoToCommitMessage),
+            FromCommands("Commit, in the message boxes", AppCommand.Commit),
+        ]),
+        new("Files",
+        [
+            FromCommands("File history of the open diff's file", AppCommand.FileHistoryOfDiff),
+            FromCommands("Blame of the open diff's file", AppCommand.BlameOfDiff),
+            FromCommands("Close the diff, a page or the search bar", AppCommand.Close),
+        ]),
+        new(
+            "Moving around",
+            [
+                FromCommands("Filter branches and tags", AppCommand.FilterRefs),
+                FromCommands("Next region", AppCommand.NextRegion),
+                FromCommands("Previous region", AppCommand.PreviousRegion),
+
+                // A Mac keyboard has no Menu key (6.1's second table): Shift+F10 alone there.
+                new("Context menu", platform => platform == CommandKey.Cmd ? [new(F10, Shift)] : ShownFirst(AppCommand.ContextMenu, platform), [AppCommand.ContextMenu]),
+                FromKeys("Move in the graph", new(Up), new(Down), new(PageUp), new(PageDown), new(Home), new(End)),
+                FromKeys("Extend the graph's selection", new(Up, Shift), new(Down, Shift), new(PageUp, Shift), new(PageDown, Shift), new(Home, Shift), new(End, Shift)),
+            ],
+            platform => platform == CommandKey.Cmd
+                ? "On a Mac keyboard F6, Shift+F6 and Shift+F10 need Fn unless \"Use F1, F2, etc. keys as standard function keys\" is on; Home, End, PageUp and PageDown are Fn with the arrows."
+                : null),
+        new("Interactive rebase",
+        [
+            FromKeys("Move the selected row", new(Up, Alt), new(Down, Alt)),
+            FromCommands("Pick, reword, squash, fixup, drop", AppCommand.RebasePick, AppCommand.RebaseReword, AppCommand.RebaseSquash, AppCommand.RebaseFixup, AppCommand.RebaseDrop),
+        ]),
+        new("Conflict resolver",
+        [
+            FromCommands("Previous or next conflict", AppCommand.PreviousConflict, AppCommand.NextConflict),
+            FromCommands("Previous or next file", AppCommand.PreviousFile, AppCommand.NextFile),
+
+            // The result leaves Tab with Control to the window's navigation (phase 4 design 11.10): Control on every platform.
+            FromKeys("Leave the result", new Shortcut(Tab, Control)),
+        ]),
+        new("Dashboard",
+        [
+            FromKeys("Open the repository", new Shortcut(Enter)),
+
+            // On a Mac the key labelled "delete" sends Backspace, so Cmd+Backspace there too (2.7).
+            new("Remove from workspace", platform => platform == CommandKey.Cmd ? [new(Backspace, Command), new(Delete)] : [new(Delete)], []),
+            FromKeys("Move the repository", new(Up, Alt), new(Down, Alt)),
+        ]),
+        new("Dialogs and menus",
+        [
+            FromKeys("Confirm", new Shortcut(Enter)),
+            FromKeys("Confirm from a box of several lines", new Shortcut(Enter, Command)),
+            FromKeys("Cancel or close", new Shortcut(Escape)),
+        ]),
+    ];
+
+    /// <summary>One row of the settings list: its action, its keys on a platform and the catalogue's commands it lists.</summary>
+    private sealed record SettingsRow(string Action, Func<CommandKey, IReadOnlyList<Shortcut>> Keys, IReadOnlyList<AppCommand> Commands);
+
+    /// <summary>One group of the settings list: its title, its rows and its note on a platform.</summary>
+    private sealed record SettingsGroup(string Title, IReadOnlyList<SettingsRow> Rows, Func<CommandKey, string?>? Note = null);
 }

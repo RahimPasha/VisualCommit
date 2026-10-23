@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:kr="using:VisualCommit.App.Views"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:cc="using:VisualCommit.App.Controls.Conflicts"
@@ -78,14 +79,18 @@
           <Button Name="ResolverPreviousFile"
                   Theme="{StaticResource VcIconButton}"
                   Command="{Binding PreviousFileCommand}"
-                  ToolTip.Tip="Previous file"
+                  ToolTip.Tip="{x:Static cmd:ShellToolTips.PreviousFile}"
+                  AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.PreviousFile}"
+                  AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.PreviousFileKey}"
                   AutomationProperties.AutomationId="ResolverPreviousFile">
             <c:Icon Data="{StaticResource IconChevronLeft}" Width="14" Height="14" />
           </Button>
           <Button Name="ResolverNextFile"
                   Theme="{StaticResource VcIconButton}"
                   Command="{Binding NextFileCommand}"
-                  ToolTip.Tip="Next file"
+                  ToolTip.Tip="{x:Static cmd:ShellToolTips.NextFile}"
+                  AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.NextFile}"
+                  AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.NextFileKey}"
                   Margin="2,0,0,0"
                   AutomationProperties.AutomationId="ResolverNextFile">
             <c:Icon Data="{StaticResource IconChevronRight}" Width="14" Height="14" />
@@ -96,7 +101,9 @@
                 Theme="{StaticResource VcIconButton}"
                 Width="28" Height="28" Padding="7"
                 Command="{Binding CloseResolverCommand}"
-                ToolTip.Tip="Close"
+                ToolTip.Tip="{x:Static cmd:ShellToolTips.CloseResolver}"
+                AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.CloseResolver}"
+                AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.CloseResolverKey}"
                 AutomationProperties.AutomationId="ResolverCloseButton">
           <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
         </Button>
@@ -121,14 +128,18 @@
             <Button Name="ResolverPreviousConflict"
                     Theme="{StaticResource VcIconButton}"
                     Command="{Binding PreviousConflictCommand}"
-                    ToolTip.Tip="Previous conflict"
+                    ToolTip.Tip="{x:Static cmd:ShellToolTips.PreviousConflict}"
+                    AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.PreviousConflict}"
+                    AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.PreviousConflictKey}"
                     AutomationProperties.AutomationId="ResolverPreviousConflict">
               <c:Icon Data="{StaticResource IconChevronUp}" Width="14" Height="14" />
             </Button>
             <Button Name="ResolverNextConflict"
                     Theme="{StaticResource VcIconButton}"
                     Command="{Binding NextConflictCommand}"
-                    ToolTip.Tip="Next conflict"
+                    ToolTip.Tip="{x:Static cmd:ShellToolTips.NextConflict}"
+                    AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.NextConflict}"
+                    AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.NextConflictKey}"
                     Margin="2,0,0,0"
                     AutomationProperties.AutomationId="ResolverNextConflict">
               <c:Icon Data="{StaticResource IconChevronDown}" Width="14" Height="14" />

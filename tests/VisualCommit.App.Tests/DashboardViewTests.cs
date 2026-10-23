@@ -283,18 +283,10 @@ public class DashboardViewTests
         host.PressKey(Key.Back, RawInputModifiers.Meta);
         Assert.Equal(2, dashboard.Rows.Count);
 
-        // With macOS's keys it removes the row (2.7). The keys are set and put back with no await
-        // between, so that no other test on the UI thread sees them.
-        var keys = KeyTexts.Current;
-        KeyTexts.Current = new KeyTexts(CommandKey.Cmd);
-        try
-        {
-            host.PressKey(Key.Back, RawInputModifiers.Meta);
-        }
-        finally
-        {
-            KeyTexts.Current = keys;
-        }
+        // With macOS's keys it removes the row (2.7): this view's own, so that no other test sees
+        // them (the app's KeyTexts.Current stays as it is).
+        ((DashboardView)host.Window.Content!).KeysPlatform = CommandKey.Cmd;
+        host.PressKey(Key.Back, RawInputModifiers.Meta);
 
         Assert.Equal(["docs"], dashboard.Rows.Select(row => row.Name));
         Assert.Null(dashboard.SelectedRow);

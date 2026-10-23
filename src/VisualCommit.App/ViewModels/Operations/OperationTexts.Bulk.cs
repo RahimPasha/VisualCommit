@@ -80,13 +80,19 @@ public static partial class OperationTexts
     /// <summary>The log line at a run's end (4.3, 14.14): "Web: Fetch all: Fetched 8 repositories; 2 skipped".</summary>
     public static string BulkEndedLine(string workspace, BulkKind kind, string result) => $"{workspace}: {BulkName(kind)}: {result}";
 
-    /// <summary>The dashboard's enabled Fetch (4.10): "Fetch every repository of Web (Ctrl+Shift+F)", with its key (6.8).</summary>
-    public static string FetchEveryRepository(string workspace) =>
-        KeyTexts.Current.WithKey($"Fetch every repository of {workspace}", AppCommand.Fetch);
+    /// <summary>The dashboard's enabled Fetch (4.10): "Fetch every repository of Web (Ctrl+Shift+F)", with its key in <paramref name="keys"/>' words (6.8).</summary>
+    public static string FetchEveryRepository(string workspace, KeyTexts keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        return keys.WithKey($"Fetch every repository of {workspace}", AppCommand.Fetch);
+    }
 
-    /// <summary>The dashboard's enabled Pull (4.10): "Pull every repository of Web (Ctrl+Shift+L)", with its key (6.8).</summary>
-    public static string PullEveryRepository(string workspace) =>
-        KeyTexts.Current.WithKey($"Pull every repository of {workspace}", AppCommand.Pull);
+    /// <summary>The dashboard's enabled Pull (4.10): "Pull every repository of Web (Ctrl+Shift+L)", with its key in <paramref name="keys"/>' words (6.8).</summary>
+    public static string PullEveryRepository(string workspace, KeyTexts keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        return keys.WithKey($"Pull every repository of {workspace}", AppCommand.Pull);
+    }
 
     /// <summary>The dashboard's Fetch when no row would be fetched and none is being read (4.10).</summary>
     public static string NoRepositoryHasRemote(string workspace) => $"No repository of {workspace} has a remote";

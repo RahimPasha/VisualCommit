@@ -280,17 +280,33 @@ public sealed partial class Phase3ChecksA
     private static readonly string[] RepositoryButtons = ["FetchButton", "PullButton", "PushButton", "BranchButton", "StashButton", "PopButton"];
 
     /// <summary>
+    /// The enabled repository buttons' tooltips that do not depend on the branch (docs/phase-6-design.md
+    /// 6.8, D215: what the button does with its key); Pull's and Push's name the branch and its
+    /// upstream, so each check gives them.
+    /// </summary>
+    private static readonly Dictionary<string, string> EnabledTips = new()
+    {
+        ["FetchButton"] = "Fetch all remotes (Ctrl+Shift+F)",
+        ["BranchButton"] = "Create a branch at HEAD (Ctrl+B)",
+        ["StashButton"] = "Stash your changes (Ctrl+Shift+S)",
+        ["PopButton"] = "Pop the newest stash (Ctrl+Shift+O)",
+    };
+
+    /// <summary>
     /// Asserts the toolbar as 4d gives it: the buttons in <paramref name="disabled"/> disabled, each
     /// with its tooltip (<c>ToolTip.GetTip</c>, also shown while disabled) and its icon and label in
-    /// the disabled colour; the other repository buttons enabled in the primary colour with no
-    /// tooltip; Theme enabled. Phase 5 changed Undo, Redo and Search on purpose (docs/phase-5-design.md
-    /// 1.1, 7.4 and 14.1; phase 5's report, "Changes to expected results"): Search is enabled in the
-    /// primary colour with <c>Search commits (Ctrl+F)</c>; Undo and Redo show <paramref name="undo"/>
-    /// and <paramref name="redo"/> as their tooltips, enabled in the primary colour when the tooltip
-    /// is <c>Undo {text}</c> (<c>Redo {text}</c>), otherwise disabled with it as their reason (7.4).
-    /// Each one's tooltip is its help text.
+    /// the disabled colour; the other repository buttons enabled in the primary colour; Theme
+    /// enabled. Phase 5 changed Undo, Redo and Search on purpose (docs/phase-5-design.md 1.1, 7.4 and
+    /// 14.1; phase 5's report, "Changes to expected results"): Search is enabled in the primary
+    /// colour with <c>Search commits (Ctrl+F)</c>; Undo and Redo show <paramref name="undo"/> and
+    /// <paramref name="redo"/> as their tooltips, enabled in the primary colour when the tooltip is
+    /// <c>Undo {text}</c> (<c>Redo {text}</c>), otherwise disabled with it as their reason (7.4).
+    /// Phase 6 changed the enabled buttons on purpose (docs/phase-6-design.md 6.8, 16.1, D215): an
+    /// enabled button says what it does with its key, <c>Fetch all remotes (Ctrl+Shift+F)</c>, and
+    /// an enabled Undo or Redo appends its key; Pull's and Push's enabled texts are
+    /// <paramref name="enabled"/>'s. Each one's tooltip is its help text.
     /// </summary>
-    private static void AssertToolbar(ShellDriver app, IReadOnlyDictionary<string, string> disabled, string undo, string redo)
+    private static void AssertToolbar(ShellDriver app, IReadOnlyDictionary<string, string> disabled, string undo, string redo, IReadOnlyDictionary<string, string>? enabled = null)
     {
         var palette = PaletteOf(app);
         foreach (var id in RepositoryButtons)
@@ -308,8 +324,11 @@ public sealed partial class Phase3ChecksA
             }
             else
             {
+                var tip = enabled?.GetValueOrDefault(id) ?? EnabledTips.GetValueOrDefault(id)
+                    ?? throw new InvalidOperationException($"The check gives no enabled tooltip for {id}.");
                 Assert.True(button.IsEffectivelyEnabled, $"{id} is disabled: \"{ToolTip.GetTip(button)}\".");
-                AssertTip(button, null);
+                AssertTip(button, tip);
+                Assert.Equal(tip, AutomationProperties.GetHelpText(button));
                 Assert.Equal(palette.TextPrimary, (label.Foreground as ISolidColorBrush)?.Color);
                 Assert.Equal(palette.TextPrimary, (icon.Foreground as ISolidColorBrush)?.Color);
             }
@@ -322,14 +341,17 @@ public sealed partial class Phase3ChecksA
         Assert.Equal(searchText, AutomationProperties.GetHelpText(search));
         Assert.Equal(palette.TextPrimary, (search.Foreground as ISolidColorBrush)?.Color);
 
-        foreach (var (id, tip, enabledPrefix) in new[] { ("UndoButton", undo, "Undo "), ("RedoButton", redo, "Redo ") })
+        foreach (var (id, text, enabledPrefix, key) in new[] { ("UndoButton", undo, "Undo ", "Ctrl+Z"), ("RedoButton", redo, "Redo ", "Ctrl+Y") })
         {
             var button = ToolbarButton(app, id);
-            var enabled = tip.StartsWith(enabledPrefix, StringComparison.Ordinal);
-            Assert.True(enabled == button.IsEffectivelyEnabled, $"{id} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")} with \"{ToolTip.GetTip(button)}\", expected \"{tip}\".");
+            var isEnabled = text.StartsWith(enabledPrefix, StringComparison.Ordinal);
+
+            // Enabled, the text with its key (docs/phase-6-design.md 6.8); disabled, the reason alone.
+            var tip = isEnabled ? $"{text} ({key})" : text;
+            Assert.True(isEnabled == button.IsEffectivelyEnabled, $"{id} is {(button.IsEffectivelyEnabled ? "enabled" : "disabled")} with \"{ToolTip.GetTip(button)}\", expected \"{tip}\".");
             AssertTip(button, tip);
             Assert.Equal(tip, AutomationProperties.GetHelpText(button));
-            Assert.Equal(enabled ? palette.TextPrimary : palette.TextDisabled, (button.Foreground as ISolidColorBrush)?.Color);
+            Assert.Equal(isEnabled ? palette.TextPrimary : palette.TextDisabled, (button.Foreground as ISolidColorBrush)?.Color);
         }
 
         Assert.True(app.FindByAutomationId("ThemeSwitch").IsEffectivelyEnabled);

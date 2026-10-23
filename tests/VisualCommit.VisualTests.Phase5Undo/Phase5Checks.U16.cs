@@ -66,7 +66,7 @@ public sealed partial class Phase5ChecksU
         var undo = app.FindByAutomationId(ShellDriver.UndoButtonId);
         var tip = await app.RestPointerOnAsync(undo);
         Shot(app, "u16a-undo-tooltip", keepPointer: true);
-        Assert.Equal(PartU.Undo.Title(PartU.CommitText), tip);
+        Assert.Equal(PartU.Undo.ToolTip(PartU.CommitText), tip);
         AssertToolTipUnder(app, undo, tip);
 
         // Step 4: Undo: a soft move in the step's transaction, no read-tree.
@@ -500,7 +500,7 @@ public sealed partial class Phase5ChecksU
         Assert.Equal(["## main...origin/main", "?? docs/todo.md"], await StatusAsync(repo));
         AssertRestoreBar(app, null);
         Assert.Equal(PartU.ReadWholeLinesSha, await RevParseAsync(repo, "refs/heads/keep"));
-        AssertButtons(app, new UndoRedoButtons(true, PartU.Undo.Title(PartU.CreateKeepText), true, PartU.Redo.Title(PartU.RestoreText)));
+        AssertButtons(app, new UndoRedoButtons(true, PartU.Undo.ToolTip(PartU.CreateKeepText), true, PartU.Redo.ToolTip(PartU.RestoreText)));
 
         // Step 29: Redo: the discard's snapshot restored again.
         calls = await RedoAsync(app, repo, PartU.RestoreText);

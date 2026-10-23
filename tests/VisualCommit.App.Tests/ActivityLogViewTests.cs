@@ -50,8 +50,8 @@ public class ActivityLogViewTests
         // A tab without a repository: the toggle disabled, with its tooltip, not selected (1.2).
         var toggle = (Button)app.FindByAutomationId("ActivityLogToggle");
         Assert.False(toggle.IsEffectivelyEnabled);
-        Assert.Equal(ActivityLogViewModel.ShowText, ToolTip.GetTip(toggle));
-        Assert.Equal(ActivityLogViewModel.ShowText, AutomationProperties.GetHelpText(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", ToolTip.GetTip(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", AutomationProperties.GetHelpText(toggle));
         Assert.DoesNotContain("selected", toggle.Classes);
         Assert.Equal(Brush(app, "VcTextDisabledBrush"), ColorOf(toggle.Foreground));
 
@@ -82,8 +82,8 @@ public class ActivityLogViewTests
         Assert.Contains("selected", toggle.Classes);
         Assert.Equal(Brush(app, "VcControlBackgroundBrush"), ColorOf(toggle.Background));
         Assert.Equal(Brush(app, "VcTextPrimaryBrush"), ColorOf(toggle.Foreground));
-        Assert.Equal(ActivityLogViewModel.HideText, ToolTip.GetTip(toggle));
-        Assert.Equal(ActivityLogViewModel.HideText, AutomationProperties.GetHelpText(toggle));
+        Assert.Equal("Hide the activity log (Ctrl+J)", ToolTip.GetTip(toggle));
+        Assert.Equal("Hide the activity log (Ctrl+J)", AutomationProperties.GetHelpText(toggle));
         var line = app.Find<Border>("ActivityLogSplitterLine");
         AssertBounds(new Rect(260, 473, 440, 1), app.BoundsOf(line));
         Assert.Equal(Brush(app, "VcBorderBrush"), ColorOf(line.Background));
@@ -94,7 +94,7 @@ public class ActivityLogViewTests
         Assert.False(app.FindByAutomationId("ActivityLogSplitter").IsEffectivelyVisible);
         Assert.Equal(674, app.BoundsOf(graph).Bottom, 1);
         Assert.DoesNotContain("selected", toggle.Classes);
-        Assert.Equal(ActivityLogViewModel.ShowText, ToolTip.GetTip(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", ToolTip.GetTip(toggle));
         Assert.Equal(200, app.ActivityLogModel.PreferredHeight);
     }
 
