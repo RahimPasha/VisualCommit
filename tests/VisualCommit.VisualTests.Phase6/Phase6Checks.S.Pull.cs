@@ -44,7 +44,7 @@ public sealed partial class Phase6ChecksS
         ShotAtRest(app, "s19a-global-ff-only");
         AssertGitGlobal(app, layout, data, repo, name: "Test Author", email: "author@example.com", checkedPull: "PullFastForwardOnly", repositoryFolder: folder);
         await AssertScreenReadsAsync(app, start, data, repo, varExit: 0, ident: PartS.TestAuthorIdent, pull: PartS.PullReadsFastForwardOnly);
-        AssertBadBoolean(app, start, PartS.BoolPullFfCommand, PartS.BadBooleanOnly);
+        await AssertBadBooleanAsync(app, start, PartS.BoolPullFfCommand, PartS.BadBooleanOnly);
 
         // Step 2: Esc; Pull refused by pull.ff = only after its fetch (4.8, D211).
         layout.Step = "step 2";
@@ -274,8 +274,8 @@ public sealed partial class Phase6ChecksS
             ],
             PartS.FetchOriginCommand,
             PartS.RebaseCommand);
-        AssertBadBoolean(app, sequence, PartS.BoolPullFfCommand, PartS.BadBooleanOnly);
-        AssertBadBoolean(app, sequence, PartS.BoolPullRebaseCommand, PartS.BadBooleanPreserve);
+        await AssertBadBooleanAsync(app, sequence, PartS.BoolPullFfCommand, PartS.BadBooleanOnly);
+        await AssertBadBooleanAsync(app, sequence, PartS.BoolPullRebaseCommand, PartS.BadBooleanPreserve);
         var calls = app.CallsSince(sequence);
         Assert.Equal("only\n", calls.Single(call => call.CommandText == PartS.GetPullFfCommand).StandardOutput.Replace("\r\n", "\n", StringComparison.Ordinal));
         Assert.Equal("preserve\n", calls.Single(call => call.CommandText == PartS.GetPullRebaseCommand).StandardOutput.Replace("\r\n", "\n", StringComparison.Ordinal));
@@ -296,12 +296,15 @@ public sealed partial class Phase6ChecksS
         layout.AssertNone();
     }
 
-    /// <summary>The <c>--type=bool</c> read <paramref name="command"/> since <paramref name="sequence"/> refused with git's line (exit 128; the line on every git, both gits print it alike).</summary>
-    private static void AssertBadBoolean(ShellDriver app, long sequence, string command, string line)
+    /// <summary>The <c>--type=bool</c> read <paramref name="command"/> since <paramref name="sequence"/> refused (exit 128), with git's <paramref name="line"/> word for word on the report's git.</summary>
+    private static async Task AssertBadBooleanAsync(ShellDriver app, long sequence, string command, string line)
     {
         var call = app.CallsSince(sequence).Last(record => record.CommandText == command);
         Assert.Equal(128, call.ExitCode);
-        Assert.Contains(line, call.StandardError.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'));
+        if (await IsReportGitAsync())
+        {
+            Assert.Contains(line, call.StandardError.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'));
+        }
     }
 
     /// <summary><c>PullInEffect</c>'s tooltip and help text: the full path of the file it names (8.2).</summary>

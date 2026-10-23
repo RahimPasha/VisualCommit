@@ -71,8 +71,9 @@ public sealed partial class Phase6ChecksS
     /// <paramref name="seed"/> when given (<see cref="ShellDriver.SeedGlobalGitConfig"/>), a session
     /// of <paramref name="tabs"/> (the copy alone when null; null entries are empty tabs), the app at
     /// the given size in the dark theme with the fake system dark, waited for until the active tab's
-    /// graph has drawn its rows, its status is shown and its queue is idle, the pointer at the rest
-    /// point (SD2).
+    /// graph has drawn its rows, its status is shown, its clean-up at opening is decided
+    /// (<see cref="ShellDriver.WaitForTabOpenedAsync"/>) and its queue is idle, the pointer at the
+    /// rest point (SD2).
     /// </summary>
     private static async Task<ShellDriver> StartAsync(
         TempDirectory data,
@@ -91,7 +92,10 @@ public sealed partial class Phase6ChecksS
         var app = ShellDriver.StartWithTabs(data.Path, tabs ?? [repo.Path], width: width, height: height, systemDark: systemDark);
         try
         {
-            await app.WaitForRepositoryAsync(OperationChainTimeout);
+            // The opening's clean-up decided too (its backups' read, outside every operation): it
+            // starts after the first graph rows, and would otherwise land among a first step's calls.
+            var repository = await app.WaitForRepositoryAsync(OperationChainTimeout);
+            await app.WaitForTabOpenedAsync(repository.Path, OperationChainTimeout);
             Rest(app);
             return app;
         }
@@ -760,8 +764,9 @@ public sealed partial class Phase6ChecksS
         if (repo is not null)
         {
             AssertPullReadsInOrder(app, sequence, pull ?? PartS.PullReadsNothingSet, until);
-            if (varExit is 128)
+            if (varExit is 128 && await IsReportGitAsync())
             {
+                // Git's own last line, word for word on the report's git (part S's "Git's own texts").
                 foreach (var command in new[] { PartS.VarAuthorCommand, PartS.VarCommitterCommand })
                 {
                     var call = window.Last(record => record.CommandText == command);
@@ -940,10 +945,16 @@ public sealed partial class Phase6ChecksS
     /// <summary>The number of operations the session's queues have recorded.</summary>
     private static int OperationCount(ShellDriver app) => app.Session.Operations.Snapshot().Count;
 
-    /// <summary>Plain git's output as lines (the check's own reads, through <see cref="TempRepo"/>), line ends as line feeds.</summary>
+    /// <summary>
+    /// Plain git's output as lines (the check's own reads, through <see cref="TempRepo"/>), line ends
+    /// as line feeds. Each runs with <c>--no-optional-locks</c>, as the app's reads run with
+    /// <c>GIT_OPTIONAL_LOCKS=0</c>: a plain <c>git status</c> on a copy rewrites a stale index, and
+    /// while the app runs its watcher then starts a refresh whose reads land among the next step's
+    /// calls (S17 step 3's "the only git calls are the screen's reads").
+    /// </summary>
     private static async Task<string[]> GitLinesAsync(TempRepo repo, params string[] arguments)
     {
-        var text = (await repo.GitAsync(arguments)).StandardOutput.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
+        var text = (await repo.GitAsync(["--no-optional-locks", .. arguments])).StandardOutput.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
         return text.Length == 0 ? [] : text.Split('\n');
     }
 

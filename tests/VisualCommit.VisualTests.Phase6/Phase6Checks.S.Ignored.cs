@@ -90,8 +90,11 @@ public sealed partial class Phase6ChecksS
         var switched = app.CallsSince(sequence).Where(call => call.CommandText.StartsWith("git switch ", StringComparison.Ordinal)).ToList();
         var call = Assert.Single(switched);
         Assert.Equal((PartS.SwitchVendorCommand, (int?)0), (call.CommandText, call.ExitCode));
-        Assert.Equal(PartS.UpToDateWithVendor, call.StandardOutput.Trim());
-        Assert.Equal(PartS.SwitchedToVendor, call.StandardError.Trim());
+        if (await IsReportGitAsync())
+        {
+            Assert.Equal(PartS.UpToDateWithVendor, call.StandardOutput.Trim());
+            Assert.Equal(PartS.SwitchedToVendor, call.StandardError.Trim());
+        }
         Assert.DoesNotContain(app.CallsSince(sequence), record => record.CommandText.StartsWith(PartS.CheckIgnoreCommand, StringComparison.Ordinal));
         AssertStatus(app, PartS.CheckedOutVendor);
         Assert.Equal("vendor", await repo.CurrentBranchAsync());
