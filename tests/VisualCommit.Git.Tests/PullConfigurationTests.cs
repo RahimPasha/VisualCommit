@@ -344,10 +344,17 @@ public class PullConfigurationAgreementTests
         var screen = PullModes.Read(value, rebaseIsBare: false, "only");
 
         // git pull reads both keys before anything else; without a remote here nothing is fetched,
-        // and a value it accepts ends at "There is no tracking information".
+        // and a value it accepts ends at "There is no tracking information" (exit 1); one it
+        // refuses at "fatal: invalid value for 'pull.rebase'" (128), on every git. The words are
+        // asserted on the report's git only.
         var pull = await PullParity.RunGitAsync(repo, "pull");
-        var gitRefuses = pull.StandardError.Contains("invalid value for 'pull.rebase'", StringComparison.Ordinal);
-        Assert.False(pull.Succeeded);
+        Assert.True(pull.ExitCode is 1 or 128, $"git pull exited {pull.ExitCode}: {pull.StandardError}");
+        var gitRefuses = pull.ExitCode == 128;
+        if (await GitConfigTestSupport.GitIs236Async())
+        {
+            Assert.Contains(gitRefuses ? "invalid value for 'pull.rebase'" : "There is no tracking information", pull.StandardError, StringComparison.Ordinal);
+        }
+
         Assert.Equal(gitRefuses, read.ProblemKey == "pull.rebase");
         if (!gitRefuses)
         {
@@ -470,10 +477,16 @@ public class PullConfigurationIntegrationTests
         var head = await appCopy.HeadAsync();
         var upstream = (await gitCopy.GitAsync("rev-parse", "origin/main")).StandardOutput.Trim();
 
-        // git pull --rebase reads pull.ff (no --ff option given) and refuses before it fetches: foo
-        // and ONLY on every git, k on newer gits only (2.36 reads it as false, 0.3).
+        // git pull --rebase reads pull.ff (no --ff option given) and refuses before it fetches
+        // ("fatal: invalid value for 'pull.ff'", 128): foo and ONLY on every git, k on newer gits
+        // only (2.36 reads it as false, 0.3). The words are asserted on the report's git only.
         var pull = await PullParity.RunGitAsync(gitCopy, "pull", "--rebase");
-        var gitRefuses = pull.StandardError.Contains("invalid value for 'pull.ff'", StringComparison.Ordinal);
+        var gitRefuses = pull.ExitCode == 128;
+        if (gitRefuses && await GitConfigTestSupport.GitIs236Async())
+        {
+            Assert.Contains("invalid value for 'pull.ff'", pull.StandardError, StringComparison.Ordinal);
+        }
+
         if (value != "k")
         {
             Assert.True(gitRefuses, pull.StandardError);
