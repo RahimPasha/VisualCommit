@@ -1,6 +1,7 @@
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Workspaces;
@@ -122,7 +123,7 @@ public sealed partial class AppCommands
     /// <summary>
     /// The repository's items (5.5) from the menus <see cref="RepositoryMenus"/> builds on
     /// <paramref name="context"/>, in 5.5's order: every local branch (the checked-out one first,
-    /// then the refs' order), every remote branch, tag, stash and remote, the selection's commit or
+    /// then the left panel's, RefTreeOrder), every remote branch, tag, stash and remote, the selection's commit or
     /// commits (a stash row's stash), the working changes when there are any, then
     /// <paramref name="diff"/> and <paramref name="page"/>. Each item is its menu item, the menu's
     /// header as its detail; an item of a <paramref name="commands"/> entry's command and label is
@@ -186,7 +187,8 @@ public sealed partial class AppCommands
             AddMenu(RepositoryMenus.ForLocalBranch(context, current.FullName, actions));
         }
 
-        foreach (var branch in context.LocalBranches.Where(branch => !ReferenceEquals(branch, current)))
+        // Then the left panel's order (5.5, KD1): folders before branches, names by NameOrder.
+        foreach (var branch in context.LocalBranches.Where(branch => !ReferenceEquals(branch, current)).OrderBy(branch => branch.Name, RefTreeOrder.Instance))
         {
             AddMenu(RepositoryMenus.ForLocalBranch(context, branch.FullName, actions));
         }

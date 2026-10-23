@@ -13,4 +13,11 @@ internal sealed class NameOrder : IComparer<string>
         var ignoringCase = StringComparer.OrdinalIgnoreCase.Compare(x, y);
         return ignoringCase != 0 ? ignoringCase : StringComparer.Ordinal.Compare(x, y);
     }
+
+    /// <summary>The same order of two names given as spans (a folder's or a ref's name inside a longer name, <see cref="RefTreeOrder"/>).</summary>
+    public static int CompareNames(ReadOnlySpan<char> x, ReadOnlySpan<char> y)
+    {
+        var ignoringCase = x.CompareTo(y, StringComparison.OrdinalIgnoreCase);
+        return ignoringCase != 0 ? ignoringCase : x.SequenceCompareTo(y);
+    }
 }

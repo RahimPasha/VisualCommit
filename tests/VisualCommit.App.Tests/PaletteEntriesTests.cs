@@ -39,8 +39,8 @@ public class PaletteEntriesTests
 
         var items = AppCommands.RepositoryItems(context, actions, keys, hasWorkingChanges: false, diff: null, page: null, commands: []);
 
-        // 5.5's order: the checked-out branch first, then the left panel's (the refs') order; the
-        // remote branches; the tags; the stash; the remote; the selection's commit.
+        // 5.5's order: the checked-out branch first, then the left panel's order (folders first);
+        // the remote branches; the tags; the stash; the remote; the selection's commit.
         MenuModel[] menus =
         [
             RepositoryMenus.ForLocalBranch(context, "refs/heads/main", actions),
@@ -81,6 +81,25 @@ public class PaletteEntriesTests
         // The same items with macOS's key texts.
         var mac = AppCommands.RepositoryItems(context, actions, new KeyTexts(CommandKey.Cmd), false, null, null, []);
         Assert.Contains(mac, entry => (entry.Label, entry.KeyText) == ("Push main to origin/main", "Cmd+Shift+K"));
+    }
+
+    [Theory]
+    [InlineData("alpha", new[] { "alpha", "feature/x", "Main" })]
+    [InlineData("Main", new[] { "Main", "feature/x", "alpha" })]
+    [InlineData("feature/x", new[] { "feature/x", "alpha", "Main" })]
+    public void The_local_branches_come_checked_out_first_then_in_the_left_panels_order(string checkedOut, string[] expected)
+    {
+        // 5.5, KD1: the checked-out branch, then the left panel's order (RefTreeOrder): in each
+        // folder its subfolders before its branches, names compared ignoring case first. The refs'
+        // own order (for-each-ref's, by bytes) is Main, alpha, feature/x.
+        GitRef Branch(string name) => new($"refs/heads/{name}", name, RefKind.LocalBranch, MainWork, IsHead: name == checkedOut);
+        var refs = new RepoRefs(new HeadState(checkedOut, MainWork), [Branch("Main"), Branch("alpha"), Branch("feature/x")], [], []);
+        var context = new RepositoryMenuContext("order", "C:/order", refs, WorkingTreeStatus.Clean, [], ToolbarViewModel.StatesFor(refs, WorkingTreeStatus.Clean), IsOperationRunning: false);
+        var (actions, _) = RecordingActions.Create();
+
+        var items = AppCommands.RepositoryItems(context, actions, new KeyTexts(CommandKey.Ctrl), false, null, null, []);
+
+        Assert.Equal(expected, items.Select(entry => entry.Detail).Distinct());
     }
 
     [Fact]
