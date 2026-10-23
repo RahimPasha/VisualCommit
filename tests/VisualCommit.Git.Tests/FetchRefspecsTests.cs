@@ -420,6 +420,39 @@ public class FetchRefspecsTests
         Assert.Null(refs.LocalNameOf(local));
     }
 
+    [Fact]
+    public void RepoRefs_names_a_ref_it_does_not_hold_by_its_full_name_as_it_names_one_it_holds()
+    {
+        // A ref fetched since the snapshot was read (a stale menu's checkout, undo's created
+        // branch): the same rule by the fetch lines read with it, the prefix of the remote that
+        // fills it taken off; without lines phase 5's name. Not a remote-tracking ref: none.
+        var refs = new RepoRefs(new HeadState("main", null), [], [], ["fork", "pulls", "upstream", "mirror", "backup"])
+        {
+            Refspecs = Lines(
+            [
+                "fork=+refs/heads/*:refs/remotes/fork/up/*",
+                "pulls=+refs/heads/*:refs/remotes/pulls/*",
+                "pulls=+refs/pull/*/head:refs/remotes/pulls/pr/*",
+                "upstream=+refs/pull/*/head:refs/remotes/upstream/pr/*",
+                "mirror=+refs/heads/*:refs/remotes/mirror/*",
+                "backup=+refs/heads/*:refs/remotes/mirror/*",
+            ]),
+        };
+
+        Assert.Equal("feature", refs.LocalNameOf("refs/remotes/fork/up/feature"));
+        Assert.Equal("pr/7", refs.LocalNameOf("refs/remotes/upstream/pr/7"));
+        Assert.Equal("pr/1", refs.LocalNameOf("refs/remotes/pulls/pr/1"));
+        Assert.Null(refs.LocalNameOf("refs/remotes/mirror/main"));
+        Assert.Null(refs.LocalNameOf("refs/remotes/gone/topic"));
+        Assert.Null(refs.LocalNameOf("refs/heads/main"));
+        Assert.Null(refs.LocalNameOf("refs/remotes/"));
+
+        var assumed = new RepoRefs(new HeadState("main", null), [], [], ["team", "team/fork"]);
+        Assert.Equal("main", assumed.LocalNameOf("refs/remotes/team/fork/main"));
+        Assert.Equal("fork2/main", assumed.LocalNameOf("refs/remotes/team/fork2/main"));
+        Assert.Equal("topic", assumed.LocalNameOf("refs/remotes/gone/topic"));
+    }
+
     private static FetchRefspecs Lines(string[] lines) =>
         FetchRefspecs.Parse(lines.Select(line =>
         {

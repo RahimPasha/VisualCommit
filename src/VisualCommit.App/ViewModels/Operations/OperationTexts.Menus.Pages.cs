@@ -158,17 +158,9 @@ public static partial class OperationTexts
         {
             ArgumentNullException.ThrowIfNull(name);
             ArgumentNullException.ThrowIfNull(remotes);
-            var remote = remotes
-                .Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal))
-                .OrderByDescending(candidate => candidate.Length)
-                .FirstOrDefault();
-            if (remote is not null)
-            {
-                return (remote, name[(remote.Length + 1)..], true);
-            }
-
-            var slash = name.IndexOf('/', StringComparison.Ordinal);
-            return slash > 0 ? (name[..slash], name[(slash + 1)..], false) : (name, string.Empty, false);
+            var configured = RemoteBranchNames.LongestRemoteOf(name, remotes) is not null;
+            var remote = RemoteBranchNames.RemoteOf(name, remotes);
+            return remote.Length < name.Length ? (remote, name[(remote.Length + 1)..], configured) : (name, string.Empty, false);
         }
 
         /// <summary>A <c>-changes</c> snapshot of a mixed reset: the index alone, its paths not in its message (7.10).</summary>

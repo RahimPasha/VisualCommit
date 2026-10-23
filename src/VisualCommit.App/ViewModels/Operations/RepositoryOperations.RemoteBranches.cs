@@ -76,38 +76,31 @@ public sealed partial class RepositoryOperations
         target.StartsWith(RemotesPrefix, StringComparison.Ordinal) ? LocalNameOfRemoteBranch(target) : null;
 
     /// <summary>
-    /// The local name a remote branch checks out into (10.6): <see cref="RepoRefs.LocalNameOf"/>
-    /// of the ref as read, null for one two remotes fetch or none; for a ref not read yet, phase
-    /// 5's name, the part after the longest remote name it starts with.
+    /// The local name a remote branch checks out into (10.6): <see cref="RepoRefs.LocalNameOf(GitRef)"/>
+    /// of the ref as read, null for one two remotes fetch or none; for a ref the refs do not hold
+    /// (fetched since they were read), the same rule by its full name, as the fetch lines read with
+    /// the refs map it (<see cref="RepoRefs.LocalNameOf(string)"/>); before any refs are read,
+    /// phase 5's name.
     /// </summary>
     private string? LocalNameOfRemoteBranch(string remoteRef)
     {
-        if (FindRef(remoteRef) is { Kind: RefKind.RemoteBranch } gitRef && Refs is { } refs)
-        {
-            return refs.LocalNameOf(gitRef);
-        }
-
-        var name = remoteRef[RemotesPrefix.Length..];
-        var remote = RemoteNames
-            .Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal))
-            .OrderByDescending(candidate => candidate.Length)
-            .FirstOrDefault();
-        if (remote is not null)
-        {
-            return name[(remote.Length + 1)..];
-        }
-
-        var slash = name.IndexOf('/', StringComparison.Ordinal);
-        return slash >= 0 ? name[(slash + 1)..] : name;
+        var refs = Refs ?? new RepoRefs(new HeadState(null, null), [], [], []);
+        return FindRef(remoteRef) is { Kind: RefKind.RemoteBranch } gitRef ? refs.LocalNameOf(gitRef) : refs.LocalNameOf(remoteRef);
     }
 
-    /// <summary>How the remote branch <paramref name="remoteRef"/> as read is fetched (10.1), or null when the refs do not hold it.</summary>
+    /// <summary>
+    /// How the remote branch <paramref name="remoteRef"/> is fetched (10.1): as read, or for a ref
+    /// the refs do not hold by its full name, as <see cref="LocalNameOfRemoteBranch"/> maps it; null
+    /// before any refs are read.
+    /// </summary>
     private RemoteSource? SourceOfRemoteBranch(string remoteRef) =>
-        FindRef(remoteRef) is { Kind: RefKind.RemoteBranch } gitRef && Refs is { } refs ? refs.SourceOf(gitRef) : null;
+        Refs is not { } refs ? null
+        : FindRef(remoteRef) is { Kind: RefKind.RemoteBranch } gitRef ? refs.SourceOf(gitRef)
+        : refs.SourceOf(remoteRef);
 
-    /// <summary>R1 or R3 for a remote branch as read that two remotes fetch or none (10.5); null otherwise.</summary>
+    /// <summary>R1 or R3 for a remote branch that two remotes fetch or none (10.5); null otherwise.</summary>
     private string? UnfetchedReason(string remoteRef) =>
         SourceOfRemoteBranch(remoteRef) is { Kind: RemoteSourceKind.AmbiguousRemotes or RemoteSourceKind.NotFetched } source
-            ? OperationTexts.MenuTexts.RemoteSourceReason(source, FindRef(remoteRef)!.Name, needsBranch: false)
+            ? OperationTexts.MenuTexts.RemoteSourceReason(source, FindRef(remoteRef)?.Name ?? ShortName(remoteRef), needsBranch: false)
             : null;
 }

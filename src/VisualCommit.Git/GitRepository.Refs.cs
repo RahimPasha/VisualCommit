@@ -174,8 +174,7 @@ public sealed partial class GitRepository
     {
         // A remote branch's remote is the one whose fetch lines fill it (10.3). When two remotes
         // or none do, it is the longest configured name that its name starts with: remote names
-        // may contain slashes ("team/origin").
-        var remotesLongestFirst = remotes.OrderByDescending(remote => remote.Length).ToList();
+        // may contain slashes ("team/origin"); without one, its first part.
         var refs = new List<GitRef>();
         var nestedTags = new List<int>();
 
@@ -221,7 +220,7 @@ public sealed partial class GitRepository
                 var name = fullName[RemotesPrefix.Length..];
                 var remote = refspecs.SourceOf(fullName) is { Kind: RemoteSourceKind.Mapped or RemoteSourceKind.AmbiguousRefs, Remote: { } mapped }
                     ? mapped
-                    : FindRemote(name, remotesLongestFirst);
+                    : RemoteBranchNames.RemoteOf(name, remotes);
                 gitRef = new GitRef(fullName, name, RefKind.RemoteBranch, objectName, RemoteName: remote);
             }
             else if (fullName.StartsWith(TagsPrefix, StringComparison.Ordinal))
@@ -262,23 +261,6 @@ public sealed partial class GitRepository
         {
             refs[indexes[i]] = refs[indexes[i]] with { TargetSha = lines[i] };
         }
-    }
-
-    private static string FindRemote(string remoteBranchName, IReadOnlyList<string> remotesLongestFirst)
-    {
-        foreach (var remote in remotesLongestFirst)
-        {
-            if (remoteBranchName.Length > remote.Length
-                && remoteBranchName[remote.Length] == '/'
-                && remoteBranchName.StartsWith(remote, StringComparison.Ordinal))
-            {
-                return remote;
-            }
-        }
-
-        // A remote branch whose remote is no longer configured: its first part is the best guess.
-        var slash = remoteBranchName.IndexOf('/', StringComparison.Ordinal);
-        return slash > 0 ? remoteBranchName[..slash] : remoteBranchName;
     }
 
     /// <summary>

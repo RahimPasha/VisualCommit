@@ -1061,8 +1061,8 @@ public sealed partial class RepositoryOperations
     /// </summary>
     private Task PushBackAsync(string name, BackupRefInfo backup, bool isTag)
     {
-        var remote = RemoteNames.Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal)).MaxBy(candidate => candidate.Length);
-        var rest = remote is null ? name : name[(remote.Length + 1)..];
+        var remote = RemoteBranchNames.LongestRemoteOf(name, RemoteNames);
+        var rest = RemoteBranchNames.WithoutRemote(name, remote);
         var text = OperationTexts.PushBack(rest, remote ?? name);
         if (remote is null)
         {
