@@ -482,6 +482,39 @@ public class RepositoryOperationsFilesTests
     }
 
     [AvaloniaFact]
+    public async Task Open_file_checks_its_file_off_the_ui_thread()
+    {
+        // D59, 0.9, as Open in editor's: the check (and the read of the file's mode) runs on the
+        // pool while the UI thread goes on (held on a gate here); Open file opens it after.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        using var gate = new ManualResetEventSlim();
+        var checking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.FileExists = path =>
+        {
+            checking.TrySetResult(Dispatcher.UIThread.CheckAccess());
+            gate.Wait(TimeSpan.FromSeconds(30));
+            return File.Exists(path);
+        };
+
+        var opening = app.Operations.OpenFileAsync("src/helpers.py");
+        var onUiThread = await checking.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(onUiThread);
+        Assert.False(opening.IsCompleted);
+        Assert.Empty(app.Launcher.Opened);
+        gate.Set();
+        await opening.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal([Path.Combine(app.Repository.Path, "src", "helpers.py")], app.Launcher.Opened);
+
+        // A file the check finds gone opens nothing.
+        app.Services.FileExists = _ => false;
+        await app.Operations.OpenFileAsync("src/helpers.py");
+        Assert.Single(app.Launcher.Opened);
+        Assert.Contains(app.Log.Messages, message => message.EndsWith("Open file: src/helpers.py is not in the working tree.", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
     public async Task The_palettes_items_of_the_open_diff_read_no_disk_and_go_by_the_diffs_own_check()
     {
         // 5.5: the open diff's items are built at every opening of the palette and on Mod+Shift+H

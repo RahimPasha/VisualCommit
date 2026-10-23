@@ -132,6 +132,11 @@ public class AutoFetchSchedulerTests
         Assert.True(AutoFetchScheduler.Fetched(Operation("Fetch origin"), new OperationResult(OperationOutcome.Succeeded, "Fetched from origin", null)));
         Assert.False(AutoFetchScheduler.Fetched(Operation("Fetch origin"), new OperationResult(OperationOutcome.Cancelled, "Fetch origin cancelled", null)));
         Assert.False(AutoFetchScheduler.Fetched(Operation("Push main"), new OperationResult(OperationOutcome.Succeeded, "Pushed", null)));
+
+        // By the operations' own titles, without a dedupe key: Fetch, Pull, Pull (rebase).
+        Assert.All(
+            new[] { OperationTexts.FetchAll.Title, OperationTexts.Pull("origin/main", "main").Title, OperationTexts.PullRebase("origin/main", "main").Title },
+            title => Assert.True(AutoFetchScheduler.Fetched(Operation(title), new OperationResult(OperationOutcome.Succeeded, "Done", null)), $"{title} did not count as a fetch."));
     }
 
     [Fact]
