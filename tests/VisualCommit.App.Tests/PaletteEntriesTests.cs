@@ -248,6 +248,66 @@ public class PaletteEntriesTests
     }
 
     [AvaloniaFact]
+    public async Task The_commit_entry_is_the_commit_buttons_text_state_and_reason()
+    {
+        // 5.4's row 6 on ops (5.12): not listed without working changes (the 33 commands above);
+        // with a file staged and a summary typed, "Commit 1 file" enabled with its key.
+        using var repo = await Scenarios.OperationsAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "src", "core.txt"), "core\nmain work\nmore\n", TestContext.Current.CancellationToken);
+        await repo.GitAsync("add", "--", "src/core.txt");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => repository.Status.Staged.Count == 1, "the staged file's read");
+        var shell = app.Session.Shell;
+
+        // The summary empty: disabled as the button is, without a reason (6.8).
+        var empty = Command(shell, "Commit 1 file");
+        Assert.Equal((false, null, false, null), (empty.IsEnabled, empty.DisabledReason, repository.Changes.CanCommit, repository.Changes.CommitDisabledReason));
+
+        repository.Changes.Summary = "Note more core work";
+        Assert.Equal("Commit 1 file · Ctrl+Enter", Line(Command(shell, "Commit 1 file")));
+        Assert.Equal("Go to the commit message · Ctrl+Shift+M", Line(Command(shell, "Go to the commit message")));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Scenarios.ConflictsStop.Rebase)]
+    [InlineData(Scenarios.ConflictsStop.Merge)]
+    public async Task On_a_stop_with_a_conflict_the_commit_entry_and_the_commit_message_say_what_the_button_and_the_resolver_say(Scenarios.ConflictsStop stop)
+    {
+        // 5.4's rows 5 and 6, 5.12: a repository without a remote, stopped with notes.txt conflicted.
+        using var repo = await Scenarios.ConflictsStoppedAsync(stop);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
+        var shell = app.Session.Shell;
+        var changes = repository.Changes;
+
+        // Without a remote, Fetch all remotes is disabled with the empty area's reason.
+        Assert.Equal("Fetch all remotes · Ctrl+Shift+F (disabled: This repository has no remotes)", Line(Command(shell, "Fetch all remotes")));
+
+        // Row 6 is the commit button: its text, state and reason; a rebase's "Continue rebase".
+        var commit = Command(shell, changes.CommitButtonText);
+        Assert.Equal((changes.CanCommit, changes.CommitDisabledReason), (commit.IsEnabled, commit.DisabledReason));
+        Assert.False(commit.IsEnabled);
+        if (stop == Scenarios.ConflictsStop.Rebase)
+        {
+            Assert.Equal("Continue rebase · Ctrl+Enter (disabled: Resolve the conflicts first (1 file))", Line(commit));
+        }
+
+        Assert.Equal("Go to the commit message · Ctrl+Shift+M", Line(Command(shell, "Go to the commit message")));
+
+        // The resolver open: both say to close it first (ToolbarViewModel.CloseConflictResolverText).
+        repository.IsWorkingRowSelected = true;
+        repository.OpenDiff(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted), staged: false);
+        await app.WaitForResolverAsync("notes.txt");
+        Assert.True(repository.IsResolverOpen);
+        Assert.Equal($"{changes.CommitButtonText} · Ctrl+Enter (disabled: Close the conflict resolver first)", Line(Command(shell, changes.CommitButtonText)));
+        Assert.Equal("Go to the commit message · Ctrl+Shift+M (disabled: Close the conflict resolver first)", Line(Command(shell, "Go to the commit message")));
+    }
+
+    [AvaloniaFact]
     public async Task The_window_items_go_to_the_tabs_with_their_keys_and_open_each_folder_once()
     {
         using var repo = await Scenarios.OperationsAsync();
@@ -341,6 +401,10 @@ public class PaletteEntriesTests
         var line = string.Join(" · ", parts);
         return entry.IsEnabled ? line : $"{line} (disabled: {entry.DisabledReason})";
     }
+
+    /// <summary>The window's command of <paramref name="label"/> as the palette lists it now.</summary>
+    private static PaletteEntry Command(MainWindowViewModel shell, string label) =>
+        Assert.Single(shell.Commands.PaletteCommands(), entry => entry.Label == label);
 
     private static IEnumerable<string> GoTo(IEnumerable<PaletteEntry> items) =>
         items.Where(entry => entry.Label.StartsWith("Go to ", StringComparison.Ordinal)).Select(Line);
