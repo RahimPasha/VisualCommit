@@ -680,3 +680,93 @@ public class GitRunnerTests
             Entries.Enqueue((level, message, exception));
     }
 }
+
+/// <summary>
+/// The runner's tests that set git's own variables in the test process (D233), in a class of
+/// <c>GitRunnerTests.cs</c> whose collection runs alone: while a variable such as <c>GIT_DIR</c> is
+/// set, a git process another test starts without the runner would get it too.
+/// </summary>
+[Collection(GitRunnerInheritedVariablesTests.Alone)]
+public class GitRunnerInheritedVariablesTests
+{
+    /// <summary>The collection that runs with no other test of the assembly beside it.</summary>
+    public const string Alone = "Git runner inherited variables, alone";
+
+    private static readonly string GitPath =
+        GitLocator.FindExecutable(GitSearchContext.FromSystem())
+        ?? throw new InvalidOperationException("The tests need git, and no git executable was found.");
+
+    private static CancellationToken TestCancelled => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Git_variables_the_app_inherits_reach_no_call_and_a_commands_own_still_does()
+    {
+        // D233: an app started from a hook, an alias or a shell that set one of these would run
+        // every call against another repository, index, object store or namespace. Each points at
+        // another repository here; the calls run in their own.
+        using var own = await TempRepo.CreateAsync("own");
+        using var other = await TempRepo.CreateAsync("other");
+        var otherGit = Path.Combine(other.Path, ".git");
+        var variables = new Dictionary<string, string>
+        {
+            ["GIT_DIR"] = otherGit,
+            ["GIT_WORK_TREE"] = other.Path,
+            ["GIT_COMMON_DIR"] = otherGit,
+            ["GIT_INDEX_FILE"] = Path.Combine(otherGit, "index"),
+            ["GIT_OBJECT_DIRECTORY"] = Path.Combine(otherGit, "objects"),
+            ["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = Path.Combine(otherGit, "objects"),
+            ["GIT_NAMESPACE"] = "elsewhere",
+            ["GIT_PREFIX"] = "sub/",
+            ["GIT_IMPLICIT_WORK_TREE"] = "0",
+        };
+        var runner = new GitRunner(GitPath);
+        var where = new GitCommand("rev-parse", "--absolute-git-dir", "--show-toplevel", "--git-common-dir", "--git-path", "index", "--git-path", "objects") { WorkingDirectory = own.Path };
+
+        // What a shell alias sees: git sets GIT_PREFIX for one itself (empty at the top), none of the others.
+        const string Echo = "echo ${GIT_DIR-unset} ${GIT_WORK_TREE-unset} ${GIT_COMMON_DIR-unset} ${GIT_INDEX_FILE-unset} ${GIT_OBJECT_DIRECTORY-unset} ${GIT_ALTERNATE_OBJECT_DIRECTORIES-unset} ${GIT_NAMESPACE-unset} ${GIT_IMPLICIT_WORK_TREE-unset} [${GIT_PREFIX-unset}]";
+        var seen = new GitCommand("-c", $"alias.script=!{Echo}", "script") { WorkingDirectory = own.Path };
+        var withOwnIndex = new GitCommand("-c", "alias.script=!echo ${GIT_INDEX_FILE-unset}", "script")
+        {
+            WorkingDirectory = own.Path,
+            Environment = new Dictionary<string, string?> { ["GIT_INDEX_FILE"] = "own-index" },
+        };
+
+        var expected = await runner.RunAsync(where, TestCancelled);
+        Assert.True(expected.Succeeded, expected.StandardError);
+        var before = variables.Keys.ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        GitResult paths;
+        GitResult variablesSeen;
+        GitResult ownIndex;
+        try
+        {
+            foreach (var (name, value) in variables)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+
+            paths = await runner.RunAsync(where, TestCancelled);
+            variablesSeen = await runner.RunAsync(seen, TestCancelled);
+            ownIndex = await runner.RunAsync(withOwnIndex, TestCancelled);
+        }
+        finally
+        {
+            foreach (var (name, value) in before)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+
+        Assert.True(paths.Succeeded, paths.StandardError);
+        Assert.Equal(expected.StandardOutput, paths.StandardOutput);
+        Assert.Equal("unset unset unset unset unset unset unset unset []", variablesSeen.StandardOutput.Trim());
+
+        // A command's own environment comes after the runner's defaults (a snapshot's temporary index).
+        Assert.Equal("own-index", ownIndex.StandardOutput.Trim());
+    }
+}
+
+/// <summary>Runs <see cref="GitRunnerInheritedVariablesTests"/> with no other test beside it.</summary>
+[CollectionDefinition(GitRunnerInheritedVariablesTests.Alone, DisableParallelization = true)]
+public sealed class GitRunnerInheritedVariablesCollection
+{
+}

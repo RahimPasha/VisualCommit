@@ -38,6 +38,13 @@ public sealed class GitRunner : IGitRunner
     /// rebase's list of commits, which a user's <c>sequence.editor</c> would otherwise open even
     /// with <c>GIT_EDITOR</c> set (D102). Paths are taken literally, so a file named
     /// <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
+    /// <para>
+    /// The variables that point git at another repository, index, object store or namespace than
+    /// the command's working directory names are removed (D233): an app started from a hook, a
+    /// <c>git</c> alias or a shell that set one of them would otherwise run every call against that
+    /// repository. A command's own environment comes after these and may set one again (a
+    /// snapshot's temporary <c>GIT_INDEX_FILE</c>).
+    /// </para>
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string?> DefaultEnvironment = new Dictionary<string, string?>
     {
@@ -48,6 +55,15 @@ public sealed class GitRunner : IGitRunner
         ["GIT_EDITOR"] = ":",
         ["GIT_SEQUENCE_EDITOR"] = ":",
         ["GIT_LITERAL_PATHSPECS"] = "1",
+        ["GIT_DIR"] = null,
+        ["GIT_WORK_TREE"] = null,
+        ["GIT_COMMON_DIR"] = null,
+        ["GIT_INDEX_FILE"] = null,
+        ["GIT_OBJECT_DIRECTORY"] = null,
+        ["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = null,
+        ["GIT_NAMESPACE"] = null,
+        ["GIT_PREFIX"] = null,
+        ["GIT_IMPLICIT_WORK_TREE"] = null,
     };
 
     private readonly IGitCallLog? _callLog;
