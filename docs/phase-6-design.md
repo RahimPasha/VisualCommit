@@ -2392,7 +2392,13 @@ Pure, in `VisualCommit.App.Tests`:
   query, `PaletteGrowthTests`, compare 2,500 with 10,000 tags in a region without garbage
   collection, alone in the process, and allow the items' growth to the power 1.5: the collector's
   work, which follows the live items and the processor's caches, made 1,000 against 10,000 tags grow
-  29 times on CI's Windows runner, run 39936260636.) Under 20 ms per query on the laptop alone is the
+  29 times on CI's Windows runner, run 39936260636. Since status step 22's review every ratio test runs
+  that way: the matcher's moved into `PaletteGrowthTests` and the diff view's into
+  `DiffTextViewGrowthTests`, each measure taken by `GrowthMeasures.WithoutCollection` (a region without
+  collection whose budget is twice what a warm-up measure allocates, at least 64 MB) in `GrowthCollection`,
+  which runs with parallelization off; the palette build's stopwatch ceiling is a gross 20 s, as the
+  diff view's. Measured alone: 6.2 for the diff, 4.7 against a limit of 6.3 for the build, 10.0 for the
+  matcher.) Under 20 ms per query on the laptop alone is the
   indication and is not asserted: the default run's load makes a step take 5 to 8 times as long
   (`ShellDriver.cs:28-33`).
 - `CommandPaletteViewModelTests`: 5.2's members (wrapping Up and Down, PageUp and PageDown by 11 to the
@@ -2639,7 +2645,17 @@ duplicate value; `NumPad1` to `NumPad9` as the digits; `OemComma` as `Comma`; `A
 `Back` as `Backspace`) and the
 modifiers (`command` → `Command`; Control on a Meta platform → `Control`; Shift; Alt; Meta on a Control
 platform → null); `ShortcutKeys.ToGesture(Shortcut, KeyModifiers command)`, the reverse, serves the
-harnesses.
+harnesses. As built at status step 22's review: the command modifier has one source,
+`ShortcutKeys.CommandModifierOf(PlatformHotkeyConfiguration?)` (or of `KeyModifiers?`: Control when the
+platform names none), with `ShortcutKeys.CommandKeyOf(KeyModifiers)` (Cmd for Meta), which `AppSession`,
+`KeyRouter`, `DialogView`, the dashboard list and the graph's selection use; every key text goes through
+`ShortcutText.Format` (the search bar's Enter and Shift+Enter, `SearchViewModel.CloseToolTipFor(keys)`
+built by `keys.WithKey("Close the search", AppCommand.Close)`). `ShellKeys` keeps only the keys views bind
+(`Palette`, `CloseTab`, `Open`, `Clone` and `Init` went: nothing read them; the welcome page's key texts
+are `ShellToolTips`', the tab's close button's its tab's), and the members of type `KeyTexts` are named
+`KeyTexts` on `ToolbarViewModel`, `WorkingChangesViewModel` and `AppCommands` (`Keys` stays
+`MainWindowViewModel`'s `ShellKeys`). `ToolbarViewModel.SearchText` and `SearchGestureText`,
+`AppCommands`' `Resolved.IsDestructive` and `Snapshot.Context` were removed as unused.
 
 ### 6.5 Tab keys
 
@@ -6313,8 +6329,9 @@ parallel. The harnesses pass nothing.
   write outside a session fails (255, 0.10) in the test that made it. Nothing writes global
   configuration today (a `grep` of `--global`); `TempRepo`'s calls keep their own
   (`TempRepo.IsolatedEnvironment`, `TempRepo.cs:66-104`).
-- **The tripwire**: `GitIsolationTests.Nothing_wrote_a_global_configuration_outside_a_session` (and
-  `Phase6SupportTests`) fails when `<ceiling>/isolation/no-global` exists, when `<ceiling>/isolation/xdg`
+- **The tripwire**: `GitIsolationTripwireTests.Nothing_wrote_a_global_configuration_outside_a_session`
+  (and `Phase6TripwireTests`; since status step 22's review each in a collection with parallelization
+  off, which xunit runs after the parallel ones, so it looks last) fails when `<ceiling>/isolation/no-global` exists, when `<ceiling>/isolation/xdg`
   holds a `git` folder (8.12), or when the old shared `<ceiling>/isolation/gitconfig`, which a stale
   build would use, is not empty.
 - `GitIsolation.MachineIndependence` (`GitIsolation.cs:149-157`) removes `GIT_AUTHOR_NAME`,

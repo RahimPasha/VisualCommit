@@ -1867,7 +1867,18 @@ by the merged scenario code (see "How the expected git states were derived", par
   `CallsSince(sequence, worktree)` (17.2), taking `sequence` right before the step's first action,
   written as the call log's `CommandText` renders them (an argument with spaces in double quotes). No
   method of this part makes a `git mergetool` call (the fixed catalogue answers the merge-tool list,
-  12.9) or starts a program (the fake launcher records, 12.4).
+  12.9) or starts a program (the fake launcher records, 12.4). Since status step 22's review a step's
+  calls are marked only once every repository watcher is quiet (no change waiting for its quiet period
+  or for the UI thread, no refresh running: `ShellDriver.WaitForWatchersQuietAsync`), and are read
+  after waiting again. Calls of the screen's reads' forms (8.1's read, 8.6's `git var`, Pull's reader's
+  five forms) are exactly the expected set. Any other call that is not the step's own write or operation
+  passes only as whole refreshes outside every operation: `git for-each-ref --format=… refs/heads
+  refs/remotes refs/tags`, `git config --null --get-regexp ^remote\.`, `git stash list
+  --no-show-signature --no-color --encoding=UTF-8 --format=…`, `git symbolic-ref -q HEAD`, `git
+  rev-parse -q --verify HEAD` and `git status --porcelain=v2 -z --untracked-files=all --renames`, each
+  as often as the others: macOS reports a write to `.git/config` after the step that made it (run
+  39948457690). A step that reads nothing makes no call but such refreshes. "No write" and "no
+  mergetool" are unchanged; S19 step 10's nine processes are the screen's reads.
 - **An operation's calls "in this order"** (S19's pulls and saves) are the ordered subsequence of the
   operation's calls whose `CommandText` is one the list names, or one a "no …" beside it names, matched
   as written (SHAs and refs as given); the operation's other calls come between them and are not
@@ -3922,6 +3933,12 @@ or the gate finds, goes here with its reason.
   pointer moves onto the item in one move; L30 asserts the Changes cells' tooltips that design 14 and
   W0 give them (scenario facts 2.3 left them out); and a recent folder is drawn whole where it fits, as
   on CI's Linux with its short `/tmp`, else its start and "…".
+- **Part S's read-backs ("The screen's reads"), 2026-10-23.** Counted every call in the step's window, and
+  macOS's late watcher refresh after Save's `git config --local` write broke S18 and S19 (run
+  39948457690: "12 calls, not 7"). The convention now waits for every watcher to be quiet before a
+  step's mark and before reading, keeps the screen's reads exact and lets only whole refreshes
+  outside every operation pass beside them (status step 22's review, fixer D). No expected result
+  changed: the screen's reads, the writes and "no write" are the same.
 - **The dashboard row's menu (W2 step 3, W2's `w2c`/`w2d`, L30's row menu), 2026-10-23.** At status step
   22's review the lead ruled that the row menu shows the keys its row's own keys run (design 6.7):
   Open `Enter`, Move up `Alt+Up`, Move down `Alt+Down`, Remove from workspace `Delete` (Option and
