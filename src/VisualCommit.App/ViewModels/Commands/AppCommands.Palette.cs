@@ -279,12 +279,19 @@ public sealed partial class AppCommands
             folders.Add((recent.Name, recent.Path));
         }
 
+        // A workspace's saved folder is the repository's working directory as its open dashboard
+        // reads it, when it does (1.2's second rule): the recent list and the tabs hold git's
+        // spelling, which a saved folder through a link (macOS's /var for /private/var) is not.
         var workspaces = services.Workspaces.Current.Workspaces;
-        foreach (var repository in workspaces.SelectMany(workspace => workspace.Repositories))
+        foreach (var workspace in workspaces)
         {
-            if (!folders.Any(folder => WorkspacePaths.Same(folder.Path, repository.Path)))
+            foreach (var repository in workspace.Repositories)
             {
-                folders.Add((DashboardTexts.NameOf(repository.Path), repository.Path));
+                var path = _shell.OpenedWorkingDirectoryOf(workspace.Id, repository.Path) ?? repository.Path;
+                if (!folders.Any(folder => WorkspacePaths.Same(folder.Path, path)))
+                {
+                    folders.Add((DashboardTexts.NameOf(repository.Path), path));
+                }
             }
         }
 

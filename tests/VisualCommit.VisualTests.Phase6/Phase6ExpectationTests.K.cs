@@ -114,7 +114,9 @@ public sealed class Phase6ExpectationTestsK
         Assert.StartsWith(PartK.CoreDiff[0], diff[hunk], StringComparison.Ordinal);
         Assert.Equal(PartK.CoreDiff[1..], diff.Skip(hunk + 1).Where(line => line.Length > 0));
         Assert.Equal(PartK.CoreHistory.Select(entry => $"{entry.ShortSha} {entry.Subject}"), await LinesAsync(repo, "log", "--follow", "--format=%h %s", "--abbrev=7", "HEAD", "--", PartK.CoreFile));
-        var blame = await LinesAsync(repo, "blame", "-s", "--abbrev=6", "HEAD", "--", PartK.CoreFile);
+        // Whole SHAs: how many digits --abbrev gives a blame line changed after 2.36 (2.56 prints
+        // the 6 asked for, 2.36 one more; CI run 39950853606).
+        var blame = await LinesAsync(repo, "blame", "-s", "-l", "HEAD", "--", PartK.CoreFile);
         Assert.Equal(PartK.CoreBlame.Length, blame.Count);
         foreach (var (line, (text, shortSha, _)) in blame.Zip(PartK.CoreBlame))
         {
