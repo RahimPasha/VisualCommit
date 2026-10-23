@@ -50,6 +50,11 @@ public class ShellToolTipTests
             ("ActivityLogToggle", "Show every git command the app has run (Ctrl+J)", "Ctrl+J"));
         Assert.Equal("Open a new tab", AutomationProperties.GetName(app.FindByAutomationId("AddRepoButton")));
 
+        // Push's tooltip under the pointer, in the tooltip's colours (K11's k11b).
+        Assert.Equal("Push main to origin/main (Ctrl+Shift+K)", await app.RestPointerOnAsync(app.FindByAutomationId("PushButton")));
+        TestPictures.Save(app, "wpk-push-tooltip");
+        app.MoveMouse(new Point(760, 687));
+
         // Shown: the toggle hides the log.
         shell.ActivityLog.ToggleCommand.Execute(null);
         app.Settle();

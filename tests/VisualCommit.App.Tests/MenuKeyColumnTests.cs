@@ -81,6 +81,42 @@ public class MenuKeyColumnTests
     }
 
     [AvaloniaFact]
+    public async Task The_working_changes_and_the_checked_out_branchs_menus_carry_their_keys_and_another_branchs_none()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "src", "core.txt"), "core\nmain work\nmore\n");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitForRepositoryAsync();
+
+        // K11 step 4: the working-changes row's menu.
+        app.RightClick(app.WorkingRowPoint());
+        var menu = app.Menu();
+        Assert.Equal(
+            ["Working changes", "Stage all [Ctrl+Shift+A]", "Unstage all [Ctrl+Shift+X] (disabled: \"Nothing staged\")", "Discard all changes… (danger)", "—", "Stash changes… [Ctrl+Shift+S]", "Create branch here… [Ctrl+B]", "—", "Show reflog [Ctrl+Shift+R]", "Show backups", "Show in folder"],
+            menu.LinesWithKeys());
+        TestPictures.Save(app, "wpk-menu-working-changes");
+        AssertMenuAsWideAsItsWidestItem(app, menu);
+        app.PressKey(Avalonia.Input.Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+
+        // K12 step 18: main's menu by the left panel's row; feature/alpha's push is another branch's.
+        app.RightClick(await app.RefRowAsync("Local branches", "main"));
+        menu = app.Menu();
+        Assert.Equal(
+            [
+                "main", "Pull from origin/main [Ctrl+Shift+L]", "Pull from origin/main (rebase)", "—", "Push main to origin/main [Ctrl+Shift+K]", "Force push main… (danger)", "—",
+                "Create branch here…", "Create tag here…", "Rename main…", "Delete main… (disabled: \"You cannot delete the branch you are on\")", "—",
+                "Change upstream…", "Stop tracking origin/main", "—", "Show reflog of main", "Hide main (disabled: \"The checked-out branch is always shown\")", "Solo main", "—", "Copy branch name",
+            ],
+            menu.LinesWithKeys());
+        TestPictures.Save(app, "wpk-menu-main");
+        AssertMenuAsWideAsItsWidestItem(app, menu);
+        app.PressKey(Avalonia.Input.Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+    }
+
+    [AvaloniaFact]
     public async Task A_label_cut_at_the_widest_menu_keeps_its_key_whole()
     {
         using var repo = await Scenarios.OperationsAsync();
@@ -108,6 +144,19 @@ public class MenuKeyColumnTests
         Assert.True(TextBounds(app, key).Left - app.BoundsOf(block).Right >= 24 - 0.5, "The cut label keeps 24 before the key.");
         TestPictures.Save(app, "wpk-menu-long-label");
         app.PressKey(Avalonia.Input.Key.Escape);
+    }
+
+    /// <summary>The open menu is as wide as its widest item needs, a keyed one's label with 24 and its key (6.7), and 4 of border and padding at each side.</summary>
+    private static void AssertMenuAsWideAsItsWidestItem(ShellDriver app, MenuSnapshot menu)
+    {
+        var widest = Items(app).Max(item =>
+        {
+            var label = item.GetVisualDescendants().OfType<TrimmedTextBlock>().Single();
+            var key = ShellDriver.MenuKeyBlockOf(item);
+            return 10 + label.TextLayout.Width + (key is null ? 0 : 24 + key.TextLayout.Width) + 10;
+        });
+        TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"The menu \"{menu.Header}\": {menu.Bounds.Width:F1} wide; its widest item needs {widest:F1}."));
+        Assert.Equal(Math.Max(widest + 8, MenuLayer.MinMenuWidth), menu.Bounds.Width, 2.0);
     }
 
     private static IEnumerable<Avalonia.Controls.MenuItem> Items(ShellDriver app) =>
