@@ -602,6 +602,75 @@ public class RepositoryOperationsPushTests
     }
 
     [Fact]
+    public async Task A_deleted_branchs_backup_that_two_remote_names_fit_is_not_pushed_back_to_either()
+    {
+        // Remotes team and team/fork (names may hold slashes, 0.5's T): a deletion of fork/main on
+        // team and one of main on team/fork both save team/fork/main, and the longest name would
+        // push to team/fork whichever it was.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("remote", "add", "team", "../team.git");
+        await repo.GitAsync("remote", "add", "team/fork", "../team-fork.git");
+        await repo.GitAsync("update-ref", $"refs/visualcommit/backup/remote-branch-{DateTime.UtcNow:yyyyMMdd'T'HHmmssfff'Z'}/team/fork/main", Parser);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        const string Reason = "The remote this backup came from cannot be told: team/fork/main fits team/fork and team";
+        var backup = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Kind == "remote-branch");
+
+        var (actions, _) = RecordingActions.Create();
+        var restore = ViewModels.Menus.RepositoryMenus.ForBackup(app.Repository.MenuContext, backup, actions).Items.First();
+        Assert.Equal(("Push main back to team/fork…", false, Reason), (restore.Label, restore.IsEnabled, restore.DisabledReason));
+
+        app.Dialogs.CloseError();
+        await app.Operations.RestoreBackupAsync(backup);
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(Reason, error.Summary);
+        Assert.Empty(app.Dialogs.Confirmations);
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Pushing_a_branch_back_from_its_backup_or_by_undo_is_refused_when_it_would_stop_every_fetch_of_its_remote()
+    {
+        // 10.4's guard on the restores' and undo's pushes too. pr/1, a branch on origin, deleted
+        // while origin fetched its branches alone; then GitHub's pull-request line came back, and
+        // origin/pr/1 is filled from refs/pull/1/head: pr/1 brought back would stop every fetch of
+        // origin (0.5's P).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("config", "--unset", "remote.origin.fetch", "pull");
+        await repo.PushAsync("origin", setUpstream: false, "topic:refs/heads/pr/1");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm();
+        await app.Operations.DeleteRemoteBranchAsync("refs/remotes/origin/pr/1");
+        Assert.Equal("Deleted pr/1 on origin", app.StatusText);
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        await app.Repository.RefreshAsync();
+        const string Refused = "Pushing pr/1 to origin would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin.";
+        var pushes = app.Calls.Snapshot().Count(call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+
+        // "Push pr/1 back to origin…": asked, then refused before git.
+        var backup = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Kind == "remote-branch");
+        app.Dialogs.Confirm().CloseError();
+        await app.Operations.RestoreBackupAsync(backup);
+        Assert.Equal("Push pr/1 back to origin?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Equal(Refused, app.Dialogs.Errors[^1].Summary);
+
+        // Undo of the deletion: asked, then refused before its step.
+        app.Dialogs.Confirm().CloseError();
+        await app.Operations.UndoAsync();
+        Assert.Equal(Refused, app.Dialogs.Errors[^1].Summary);
+        Assert.Equal(2, app.Dialogs.Errors.Count);
+
+        Assert.Equal(pushes, app.Calls.Snapshot().Count(call => call.CommandText.StartsWith("git push", StringComparison.Ordinal)));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        Assert.Equal(0, (await repo.GitAllowingFailureAsync("fetch", "--quiet", "origin")).ExitCode);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
     public async Task A_push_that_would_stop_its_remotes_fetch_is_refused_also_when_another_remote_maps_the_ref_too()
     {
         // A mirror remote (+refs/*:refs/*) also fills refs/remotes/origin/pr/1, which makes it

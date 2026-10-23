@@ -90,6 +90,9 @@ public static partial class OperationTexts
         /// <summary>12.4: a force push's backup whose remote cannot be mapped back.</summary>
         public const string RemoteOfBackupNotFound = "The remote this backup came from cannot be found";
 
+        /// <summary>A deleted remote branch's or tag's backup that more than one configured remote name starts (<see cref="OperationTexts.RemoteOfBackupAmbiguous"/>).</summary>
+        public static string RemoteOfBackupAmbiguous(string name, IReadOnlyList<string> remotes) => OperationTexts.RemoteOfBackupAmbiguous(name, remotes);
+
         /// <summary>12.4: a force push's backup whose lease cannot be read from the remote-tracking reflog.</summary>
         public const string ForcePushCommitNotFound = "The commit your force push left can no longer be found";
 
