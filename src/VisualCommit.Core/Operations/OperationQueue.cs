@@ -268,7 +268,9 @@ public sealed class OperationQueue : IOperationQueue
     /// Cancels one operation (docs/phase-6-design.md 4.5), whatever else the queue holds: a waiting
     /// one is removed and completes as cancelled without running, as <see cref="DropWaiting"/> does;
     /// so does the one next in line whose start is posted but has not run yet (as
-    /// <see cref="Dispose"/> treats it), and the one after it takes its place. A running one is
+    /// <see cref="Dispose"/> treats it), and the one after it takes its place; unlike
+    /// <see cref="DropWaiting"/>, its cancelled result is the last result and raises
+    /// <see cref="Finished"/>, so that its tab's status bar says "{Title} cancelled". A running one is
     /// cancelled as <see cref="CancelCurrent"/> does while it can be (<see cref="CanCancel"/>: its
     /// token, then the scan for stale lock files), and otherwise runs to its end (D81). An operation
     /// that D123's dedupe merged into an entry (<see cref="RunAsync"/>) stands for that entry, so both
@@ -279,6 +281,7 @@ public sealed class OperationQueue : IOperationQueue
     {
         ArgumentNullException.ThrowIfNull(operation);
         Entry? dropped = null;
+        OperationResult? droppedResult = null;
         Entry? next = null;
         CancellationTokenSource? cancellation;
         List<TaskCompletionSource>? idle = null;
@@ -318,6 +321,11 @@ public sealed class OperationQueue : IOperationQueue
             if (dropped is not null)
             {
                 cancellation = null;
+                droppedResult = CancelledResult(dropped.Operation);
+
+                // Its tab's status bar says "{Title} cancelled", as a row of the bulk run that
+                // cancelled it does (docs/phase-6-design.md 4.5): the last result, and Finished below.
+                _lastResult = droppedResult;
                 if (_running is null && _waiting.Count == 0)
                 {
                     idle = TakeIdleWaiters();
@@ -337,8 +345,17 @@ public sealed class OperationQueue : IOperationQueue
         if (dropped is not null)
         {
             _log.Info($"{_repositoryName}: {dropped.Operation.Title}: cancelled before it started.");
-            dropped.Completion.TrySetResult(CancelledResult(dropped.Operation));
+            try
+            {
+                Finished?.Invoke(this, new OperationFinishedEventArgs(dropped.Operation, droppedResult!));
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"{_repositoryName}: a listener of the operation queue failed.", ex);
+            }
+
             RaiseChanged();
+            dropped.Completion.TrySetResult(droppedResult!);
             idle?.ForEach(waiter => waiter.TrySetResult());
             if (next is not null)
             {

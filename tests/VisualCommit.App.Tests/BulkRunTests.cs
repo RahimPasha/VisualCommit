@@ -492,9 +492,9 @@ public partial class BulkRunTests
         await SettleAsync();
 
         // One git call for both, cancelled before it started: the tab's click and the row's call
-        // both end cancelled, and the row says so (the queue records no result for an operation
-        // it never started, so the tab's status bar keeps its text).
+        // both end cancelled, and the tab's status bar and the row say so (4.5).
         Assert.Single(host.Log.Messages, message => message == "docs: Fetch: cancelled before it started.");
+        Assert.Equal("Fetch cancelled", tab.OperationStatus.Text);
         Assert.Equal(("Fetch cancelled", 0), (host.Operation("docs"), docs.Fetches));
         Assert.Equal(OperationOutcome.Cancelled, host.Bulk.Current!.Rows[0].Result?.Outcome);
         Assert.Equal("Fetched no repositories; 1 cancelled", host.Bulk.RunText);
