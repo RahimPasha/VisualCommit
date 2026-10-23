@@ -11,8 +11,9 @@ namespace VisualCommit.App.ViewModels.Operations;
 /// Fetches the active tab's repository in the background every <c>AutoFetchMinutes</c>
 /// (docs/phase-3-design.md 1.8, 2.17, 6.1, D79, D85, D109). One per <see cref="MainWindowViewModel"/>.
 /// Every 30 seconds of its clock it looks at the active tab (<see cref="Tick"/>): when the
-/// interval is above 0, the repository has a remote, its queue is idle, no dialog is open, and
-/// the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
+/// interval is above 0, the repository has a remote, its queue is idle, no dialog is open, no
+/// other queue and no bulk run's slot fetches from its common git folder (<see cref="CommonFolderBusy"/>,
+/// docs/phase-6-design.md 4.3), and the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
 /// the repository began) is at least the interval ago, it starts the fetch of every remote, each
 /// call with <c>--no-auto-maintenance</c>, as the queue's background operation: it never prompts
 /// (<see cref="PromptMode.Deny"/>), is never pre-empted, ends by itself when its connection
@@ -86,6 +87,15 @@ public sealed class AutoFetchScheduler : IDisposable
     public Func<RepositoryViewModel, TimeSpan> SinceOpening { get; init; } = repository => repository.TimeSinceOpening;
 
     /// <summary>
+    /// Whether another queue or a bulk run's slot fetches from the repository's common git folder
+    /// now (docs/phase-6-design.md 4.3, D210): the tick is skipped, to try again at a later one,
+    /// since two fetches of one common folder that overlap lose one of them on its remote-tracking
+    /// refs (0.2). The window gives <c>BulkSlots.IsCommonFolderBusy</c> over its registry; false by
+    /// default.
+    /// </summary>
+    public Func<RepositoryViewModel, bool> CommonFolderBusy { get; init; } = static _ => false;
+
+    /// <summary>
     /// The interval: the environment variable when it holds a whole number, otherwise the
     /// setting; zero (or less) turns auto-fetch off.
     /// </summary>
@@ -141,7 +151,8 @@ public sealed class AutoFetchScheduler : IDisposable
             || repository.Queue.Current is not null
             || repository.Queue.Waiting > 0
             || IsDialogOpen()
-            || now - tracked.LastFetch < interval)
+            || now - tracked.LastFetch < interval
+            || CommonFolderBusy(repository))
         {
             return;
         }

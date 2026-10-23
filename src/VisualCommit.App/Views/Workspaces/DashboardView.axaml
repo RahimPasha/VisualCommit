@@ -157,9 +157,9 @@
                        AutomationProperties.Name="Progress" />
           <c:TrimmedTextBlock Name="DashboardBulkText"
                               Classes="runText"
-                              Classes.warning="{Binding Bulk.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Warning}}"
-                              Classes.danger="{Binding Bulk.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Danger}}"
-                              Text="{Binding Bulk.Text}"
+                              Classes.warning="{Binding Bulk.RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Warning}}"
+                              Classes.danger="{Binding Bulk.RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Danger}}"
+                              Text="{Binding Bulk.RunText}"
                               IsVisible="{Binding ShowsBulkText}"
                               TextTrimming="CharacterEllipsis"
                               HorizontalAlignment="Right"

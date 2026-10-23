@@ -199,9 +199,16 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         var (operation, result) = (e.Operation, e.Result);
         OnUiThread(() =>
         {
-            if (!operation.IsBackground)
+            // The merge tool's run is over: the next local operation is judged afresh. An operation
+            // the queue cancelled before it started (docs/phase-6-design.md 4.5) ends while the
+            // merge tool still runs, the queue's current one as shown, which keeps its judgement
+            // (also once Cancel was asked, when it can no longer be cancelled).
+            var current = _queue?.Current;
+            var toolStillRuns = _mergeToolRuns
+                && current is { Kind: OperationKind.Local, IsBackground: false }
+                && string.Equals(current.Title, RunningTitle, StringComparison.Ordinal);
+            if (!operation.IsBackground && !toolStillRuns)
             {
-                // The merge tool's run is over: the next local operation is judged afresh.
                 _mergeToolRuns = false;
             }
 

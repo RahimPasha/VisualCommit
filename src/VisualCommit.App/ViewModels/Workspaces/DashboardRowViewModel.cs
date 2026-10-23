@@ -147,15 +147,20 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         : DashboardCellText.Empty;
 
     /// <summary>
-    /// What a bulk run shows in the Operation cell in place of the status (4.2, 4.5, 4.6:
-    /// <c>Waiting to fetch…</c>, a left-out row's reason, <c>Fetch cancelled</c>, a kept result); null
-    /// while no run holds the row. Work package WP-B's runs set it.
+    /// What a bulk run shows in the Operation cell in place of the status (4.2, 4.5:
+    /// <c>Waiting to fetch…</c>, a left-out row's reason, <c>Fetch cancelled</c>); null while no run
+    /// holds the row, and while its operation runs or after it ended, when the status shows it.
+    /// The runs (<see cref="BulkRun"/>) set it.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Operation), nameof(ShowsCancel), nameof(ShowsDetails))]
     public partial DashboardCellText? BulkText { get; set; }
 
-    /// <summary>The dialog a bulk run kept for the row's <c>Details…</c> and <c>Error details…</c> (4.6, D195); null for none. Work package WP-B sets it.</summary>
+    /// <summary>
+    /// The dialog a bulk run kept for the row's <c>Details…</c> and <c>Error details…</c> (4.6,
+    /// D195); null for none. It goes when the row's queue starts its next operation, when the
+    /// dashboard's next run starts, or when the row's view model changes (3.6).
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsDetails))]
     public partial DeferredDialog? KeptDialog { get; set; }
@@ -163,7 +168,7 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     /// <summary>
     /// While a running bulk run holds the row (in line, reading or running, 4.7): <c>Wait for Fetch
     /// all to finish</c> / <c>Wait for Pull all to finish</c>, the reason of its menu's Fetch, Pull
-    /// and Remove; null otherwise. Work package WP-B's runs set it.
+    /// and Remove; null otherwise. The runs set it.
     /// </summary>
     [ObservableProperty]
     public partial string? HeldByRunReason { get; set; }
@@ -189,8 +194,55 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
     /// <summary>The view model's status, for the row menu's <c>Cancel {title}</c> (2.7); null without one.</summary>
     public OperationStatusViewModel? OperationStatus => _status;
 
-    /// <summary>A click on <c>Details…</c> (4.6); the dashboard opens the kept dialog.</summary>
+    /// <summary>A click on <c>Details…</c> or the menu's <c>Error details…</c> (4.6): raised as the kept dialog opens.</summary>
     public event EventHandler? DetailsRequested;
+
+    /// <summary>The view model that ran the operation whose dialog the row keeps: it opens the dialog (4.6).</summary>
+    private RepositoryViewModel? _keptBy;
+
+    /// <summary>A run's text and kept dialog go when the row's queue starts its next operation (4.2, 4.5, 4.6).</summary>
+    private bool _clearsBulkOnNextOperation;
+
+    /// <summary>A new run starts (4.6): what the dashboard's last run left in the row goes.</summary>
+    internal void ClearBulk()
+    {
+        _clearsBulkOnNextOperation = false;
+        BulkText = null;
+        HeldByRunReason = null;
+        Forget();
+    }
+
+    /// <summary>
+    /// What a run shows in the row (4.2, 4.5): <paramref name="text"/> in place of the status (null:
+    /// the status), the menu's reason while the run holds the row, and whether both go when the
+    /// row's queue starts its next operation (a left-out row's reason, <c>Fetch cancelled</c>, a kept
+    /// result) or stay while the run holds the row.
+    /// </summary>
+    internal void ShowBulk(DashboardCellText? text, string? heldReason, bool clearsOnNextOperation)
+    {
+        _clearsBulkOnNextOperation = clearsOnNextOperation;
+        BulkText = text;
+        HeldByRunReason = heldReason;
+    }
+
+    /// <summary>The run ended (4.7): it holds the row no longer.</summary>
+    internal void ShowBulkHeld(string? heldReason) => HeldByRunReason = heldReason;
+
+    /// <summary>Keeps <paramref name="dialog"/> for Details…, opened by <paramref name="repository"/>, which ran its operation (4.6).</summary>
+    internal void Keep(DeferredDialog dialog, RepositoryViewModel repository)
+    {
+        _keptBy = repository;
+        KeptDialog = dialog;
+    }
+
+    /// <summary>The row's queue started its next operation as the run's ended (4.6): the dialog the run kept goes.</summary>
+    internal void ForgetKeptDialog() => Forget();
+
+    private void Forget()
+    {
+        _keptBy = null;
+        KeptDialog = null;
+    }
 
     /// <summary>The cells show the copied values: not before a first read, nor in a folder state or with an error (2.6).</summary>
     private bool ShowsValues => FolderState is null && ErrorText is null && !IsNotReadYet;
@@ -310,9 +362,22 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         RaiseCells();
     }
 
-    /// <summary>Asks for the kept dialog (<c>Details…</c>, <c>Error details…</c>, 4.6).</summary>
+    /// <summary>
+    /// Opens the kept dialog (<c>Details…</c>, <c>Error details…</c>, 4.6): the identical dialog the
+    /// operation would have opened, in the view model that ran it, as often as asked; nothing once
+    /// that view model closed.
+    /// </summary>
     [RelayCommand]
-    private void ShowDetails() => DetailsRequested?.Invoke(this, EventArgs.Empty);
+    private Task ShowDetails()
+    {
+        if (KeptDialog is not { } dialog || _keptBy is not { IsClosed: false } repository)
+        {
+            return Task.CompletedTask;
+        }
+
+        DetailsRequested?.Invoke(this, EventArgs.Empty);
+        return repository.Operations.ShowDeferredAsync(dialog);
+    }
 
     /// <summary>The row's own Cancel (4.5): its status's, which cancels what runs in its queue.</summary>
     [RelayCommand]
@@ -596,12 +661,13 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
         RaiseOperation();
     }
 
-    /// <summary>Stops listening to the view model, keeping the values it last showed (2.6, 3.6).</summary>
+    /// <summary>Stops listening to the view model, keeping the values it last showed (2.6, 3.6); a dialog a run kept goes with it (4.6).</summary>
     private void Detach()
     {
         if (_repository is { } repository)
         {
             repository.PropertyChanged -= OnRepositoryChanged;
+            Forget();
         }
 
         if (_status is { } status)
@@ -675,6 +741,14 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
     private void OnStatusChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(OperationStatusViewModel.RunningTitle) && _clearsBulkOnNextOperation && _status?.RunningTitle is not null)
+        {
+            // The row's next operation started (4.2, 4.5, 4.6): a run's text and kept dialog go.
+            _clearsBulkOnNextOperation = false;
+            BulkText = null;
+            Forget();
+        }
+
         switch (e.PropertyName)
         {
             case nameof(OperationStatusViewModel.CompactText):

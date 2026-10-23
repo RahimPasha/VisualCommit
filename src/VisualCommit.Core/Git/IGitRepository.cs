@@ -628,6 +628,16 @@ public interface IGitRepository
     Task<PullConfiguration> ReadPullConfigurationAsync(string branch, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// <c>pull.ff</c> alone, as <c>git pull --rebase</c> reads it before it fetches
+    /// (docs/phase-6-design.md 8.9, D231): the rebase chosen for one pull reads no rebase setting.
+    /// A boolean or <c>only</c> fills <see cref="PullConfiguration.FastForward"/> (the rebase
+    /// setting none, no value); a value git refuses fills <see cref="PullConfiguration.Problem"/>
+    /// with <c>pull.ff</c> as its key. A read: <c>git config --get pull.ff</c>, and
+    /// <c>git config --type=bool --get pull.ff</c> for an uncommon value.
+    /// </summary>
+    Task<PullConfiguration> ReadPullFastForwardSettingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Writes this repository's own settings (the settings screen's "This repository",
     /// docs/phase-6-design.md 8.3): <c>git config --local --replace-all &lt;key&gt; &lt;value&gt;</c>, or
     /// <c>--unset-all &lt;key&gt;</c> for a null value (exit 5 counting as done), one call per write,

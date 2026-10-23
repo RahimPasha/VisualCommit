@@ -469,6 +469,60 @@ public class OperationStatusViewModelTests
         await queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
     });
 
+    [Fact]
+    public Task A_waiting_operation_the_queue_cancels_says_so_and_leaves_the_merge_tools_cancel_as_it_was() => WithoutContext(async () =>
+    {
+        // docs/phase-6-design.md 4.5: Cancel all cancels a tab's waiting Fetch merged with a row's;
+        // the tab's status bar says "Fetch cancelled", as the row does.
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        var gate = new TaskCompletionSource();
+        Assert.True(queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done(string.Empty);
+        })
+        {
+            IsBackground = true,
+        }));
+        var fetch = new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Fetched from all remotes")));
+        var waiting = queue.RunAsync(fetch);
+        await WaitForAsync(() => status.Text == OperationStatusViewModel.WaitingForAutoFetchText);
+
+        queue.Cancel(fetch);
+
+        Assert.Equal(OperationOutcome.Cancelled, (await waiting.WaitAsync(Patience, TestCancelled)).Outcome);
+        await WaitForAsync(() => status.Text == "Fetch cancelled");
+        Assert.Equal(("Fetch cancelled", OperationStatusTone.Secondary), (status.CompactText, status.CompactTone));
+        Assert.Equal("Fetch cancelled", queue.LastResult?.Message);
+        gate.SetResult();
+        await queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+        Assert.Equal("Fetch cancelled", status.Text);
+
+        // While the merge tool runs, a waiting operation cancelled before it started leaves the
+        // tool's Cancel judged as it was.
+        var toolStarted = new TaskCompletionSource();
+        var tool = queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for kdiff3 to close…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            toolStarted.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Resolved notes.txt");
+        })
+        {
+            CanBeCancelled = true,
+        });
+        await toolStarted.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.CanCancel);
+        var stage = new GitOperation("Stage", "Staging…", OperationKind.Local, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Staged")));
+        var staged = queue.RunAsync(stage);
+        queue.Cancel(stage);
+        Assert.Equal(OperationOutcome.Cancelled, (await staged.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal(("Merge tool for notes.txt", true, true), (status.RunningTitle, status.RunningIsCancellable, status.CanCancel));
+        status.CancelCommand.Execute(null);
+        await tool.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(((string?)null, false), (status.RunningTitle, status.RunningIsCancellable));
+    });
+
     /// <summary>Runs a test where no synchronization context is current, so the view model updates at once.</summary>
     private static Task WithoutContext(Func<Task> test) => Task.Run(test, TestCancelled);
 

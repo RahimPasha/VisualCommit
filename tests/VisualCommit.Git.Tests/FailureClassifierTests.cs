@@ -290,6 +290,49 @@ public class FailureClassifierTests
             GitFailureKind.Other,
             []
         },
+
+        // The pull's refusals (docs/phase-6-design.md 0.2, 4.8), replayed for WP-B on Git 2.36.0 and
+        // 2.55.0 (Visual Studio's): E is pull.ff=only's git merge --ff-only of diverged branches,
+        // E5 a plain merge that merge.ff=only refuses (both exit 128); 2.55 prints nine hints before
+        // the fatal line, tab-indented under no block header, so no path is counted. D2 and D3 on
+        // 2.55 exit 2 with "Merge with strategy ort failed." after the block (128 on 2.36).
+        {
+            "E, git merge --ff-only --no-overwrite-ignore FETCH_HEAD on 2.36 (E5's git merge --no-edit the same)",
+            "fatal: Not possible to fast-forward, aborting.\n",
+            string.Empty,
+            GitFailureKind.NotFastForward,
+            []
+        },
+        {
+            "E and E5 on 2.55 (exit 128, nine hints first)",
+            "hint: Diverging branches can't be fast-forwarded, you need to either:\nhint:\nhint: \tgit merge --no-ff\nhint:\nhint: or:\nhint:\nhint: \tgit rebase\nhint:\n" +
+            "hint: Disable this message with \"git config set advice.diverging false\"\nfatal: Not possible to fast-forward, aborting.\n",
+            string.Empty,
+            GitFailureKind.NotFastForward,
+            []
+        },
+        {
+            "D2, the pull's real merge over an unstaged change, on 2.55 (exit 2)",
+            "error: Your local changes to the following files would be overwritten by merge:\n\tf.txt\n" +
+            "Please commit your changes or stash them before you merge.\nAborting\nMerge with strategy ort failed.\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByLocalChanges,
+            ["f.txt"]
+        },
+        {
+            "D3, the pull's real merge over a staged change of another file, on 2.55 (exit 2)",
+            "error: Your local changes to the following files would be overwritten by merge:\n  s.txt\nMerge with strategy ort failed.\n",
+            string.Empty,
+            GitFailureKind.MergeBlockedByStagedChanges,
+            []
+        },
+        {
+            "D3 on 2.36 (exit 128, no error:, no final line feed)",
+            "Your local changes to the following files would be overwritten by merge:\n  s.txt",
+            string.Empty,
+            GitFailureKind.MergeBlockedByStagedChanges,
+            []
+        },
     };
 
     [Theory]

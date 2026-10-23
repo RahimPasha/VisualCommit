@@ -97,6 +97,7 @@ public partial class MainWindowViewModel : ObservableObject
             _log)
         {
             ReadEnvironment = readEnvironment ?? Environment.GetEnvironmentVariable,
+            CommonFolderBusy = repository => _tabServices.BulkSlots.IsCommonFolderBusy(repository, _tabServices.OpenRepositories),
         };
         AutoFetch.Start();
     }

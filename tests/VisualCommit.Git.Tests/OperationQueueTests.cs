@@ -810,11 +810,30 @@ public class OperationQueueTests
         var waiting = queue.Queue.RunAsync(first);
         var other = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done("Staged"))));
         queue.Queue.Changed += (_, _) => Interlocked.Increment(ref changes);
+        var finished = new List<(GitOperation Operation, OperationResult Result)>();
+        queue.Queue.Finished += (_, e) =>
+        {
+            lock (finished)
+            {
+                finished.Add((e.Operation, e.Result));
+            }
+        };
 
         queue.Queue.Cancel(first);
 
         var result = await waiting.WaitAsync(Patience, TestCancelled);
         Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (result.Outcome, result.Message));
+
+        // Unlike DropWaiting, the cancel is the last result and is told as Finished, before the
+        // task completes, so that the tab's status bar says it (docs/phase-6-design.md 4.5).
+        Assert.Same(result, queue.Queue.LastResult);
+        lock (finished)
+        {
+            var (operation, told) = Assert.Single(finished);
+            Assert.Same(first, operation);
+            Assert.Same(result, told);
+        }
+
         Assert.Equal(1, queue.Queue.Waiting);
         Assert.Equal("Stage", queue.Queue.FirstWaitingTitle);
         Assert.Equal("Push main", queue.Queue.Current!.Title);

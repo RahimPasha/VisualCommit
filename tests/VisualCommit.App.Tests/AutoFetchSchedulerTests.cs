@@ -273,13 +273,158 @@ public class AutoFetchSchedulerTests
         Assert.Single(repository.Fetches);
     }
 
+    // docs/phase-6-design.md 4.3, 4.11, 4.13: a dashboard tab, and the common git folder.
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task The_windows_scheduler_fetches_nothing_while_a_dashboard_tab_is_active_and_its_repository_tab_when_it_is()
+    {
+        using var provider = new BulkProvider();
+        var api = provider.Add("api");
+        var docs = provider.Add("docs");
+        var (window, _) = WindowWithAutoFetch(provider, provider.PathOf("docs"));
+        var repoTab = window.ActiveTab;
+        Assert.True(await repoTab.OpenAsync(api.WorkingDirectory));
+        window.ShowWorkspace("web", null);
+        await DashboardTestSupport.WaitUntilAsync(() => window.ActiveTab.Dashboard?.Rows[0].HasRepository == true, "the row's read");
+        Assert.True(window.ActiveTab.IsDashboard);
+
+        // The window's own scheduler, an hour apart: nothing on a dashboard tab (4.3, D85).
+        window.AutoFetch.Tick(Opened);
+        window.AutoFetch.Tick(Opened.AddHours(1));
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal((0, 0), (api.Fetches, docs.Fetches));
+
+        // Its repository tab active: tracked at the first tick, fetched at the next one due.
+        window.ActivateTabCommand.Execute(repoTab);
+        window.AutoFetch.Tick(Opened.AddHours(1));
+        window.AutoFetch.Tick(Opened.AddHours(2));
+        await repoTab.Repository!.Queue.WhenIdleAsync();
+        Assert.Equal((1, 0), (api.Fetches, docs.Fetches));
+        window.CloseAll();
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task The_windows_scheduler_skips_a_tick_while_a_bulk_slot_fetches_from_the_common_folder()
+    {
+        using var provider = new BulkProvider();
+        var api = provider.Add("api");
+        var (window, services) = WindowWithAutoFetch(provider);
+        Assert.True(await window.ActiveTab.OpenAsync(api.WorkingDirectory));
+        window.AutoFetch.Tick(Opened);
+
+        var slot = services.BulkSlots.Request(WorktreeKey.Of(api.CommonDirectory));
+        window.AutoFetch.Tick(Opened.AddHours(1));
+        await window.ActiveTab.Repository!.Queue.WhenIdleAsync();
+        Assert.Equal(0, api.Fetches);
+
+        slot.Release();
+        window.AutoFetch.Tick(Opened.AddHours(1).AddSeconds(30));
+        await window.ActiveTab.Repository!.Queue.WhenIdleAsync();
+        Assert.Equal(1, api.Fetches);
+        window.CloseAll();
+    }
+
+    /// <summary>
+    /// A window over <paramref name="provider"/>'s fakes whose own scheduler is on (its interval's
+    /// variable read as 5 minutes, its timer on a clock that never moves), with a workspace "Web"
+    /// of <paramref name="folders"/>.
+    /// </summary>
+    private static (MainWindowViewModel Window, TabServices Services) WindowWithAutoFetch(BulkProvider provider, params string[] folders)
+    {
+        var settings = new MainWindowViewModelTests.FakeSettings();
+        var services = new TabServices(
+            provider,
+            new NoFolders(),
+            settings,
+            new DashboardTestSupport.MemorySession(),
+            new DateDisplay(TimeZoneInfo.Utc),
+            new RecordingLog(),
+            clock: new ManualTimeProvider(),
+            workspaces: DashboardTestSupport.Store(folders),
+            readClock: new ManualTimeProvider());
+        var window = new MainWindowViewModel(
+            settings,
+            new MainWindowViewModelTests.FakeThemes(),
+            _ => Task.FromResult(new GitDetection(GitAvailability.Available, "git", new GitVersion(2, 47, 1), null)),
+            services.Log,
+            services,
+            services.Session,
+            readEnvironment: name => name == AutoFetchScheduler.MinutesVariable ? "5" : null);
+        return (window, services);
+    }
+
+    [Fact]
+    public async Task No_auto_fetch_starts_while_another_worktrees_queue_fetches_from_the_common_folder_and_the_next_tick_after_it_does()
+    {
+        var clock = new ManualClock(Opened);
+        var services = AutoFetchServices();
+        var repository = new RemoteRepository();
+        var sibling = new RemoteRepository("auto-fetch-wt") { Common = repository.GitDirectory };
+        using var viewModel = await OpenAsync(repository, services);
+        using var other = await OpenAsync(sibling, services);
+        services.OpenRepositories.RegisterTab(viewModel);
+        services.OpenRepositories.RegisterTab(other);
+        using var scheduler = Scheduler(clock, () => viewModel, busy: vm => services.BulkSlots.IsCommonFolderBusy(vm, services.OpenRepositories));
+        scheduler.Tick(clock.GetUtcNow());
+
+        var finish = new TaskCompletionSource();
+        var fetching = other.Queue.RunAsync(new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            await finish.Task;
+            return OperationReport.Done("Fetched from all remotes");
+        }));
+        clock.Advance(TimeSpan.FromMinutes(5));
+        await TickAsync(scheduler, clock, viewModel);
+        Assert.Empty(repository.Fetches);
+
+        finish.SetResult();
+        await fetching;
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await TickAsync(scheduler, clock, viewModel);
+        Assert.Equal([(null, true)], repository.Fetches);
+    }
+
+    [Fact]
+    public async Task No_auto_fetch_starts_while_a_bulk_runs_slot_is_out_on_the_common_folder()
+    {
+        var clock = new ManualClock(Opened);
+        var services = AutoFetchServices();
+        var repository = new RemoteRepository();
+        using var viewModel = await OpenAsync(repository, services);
+        using var scheduler = Scheduler(clock, () => viewModel, busy: vm => services.BulkSlots.IsCommonFolderBusy(vm, services.OpenRepositories));
+        scheduler.Tick(clock.GetUtcNow());
+
+        var slot = services.BulkSlots.Request(WorktreeKey.Of(repository.CommonDirectory));
+        clock.Advance(TimeSpan.FromMinutes(5));
+        await TickAsync(scheduler, clock, viewModel);
+        Assert.Empty(repository.Fetches);
+
+        slot.Release();
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await TickAsync(scheduler, clock, viewModel);
+        Assert.Single(repository.Fetches);
+    }
+
     /// <summary>A scheduler on the manual clock, with the setting's 5 minutes; each repository began opening <paramref name="openedAgo"/> before it is first seen (none by default).</summary>
-    private static AutoFetchScheduler Scheduler(ManualClock clock, Func<RepositoryViewModel?> active, Func<RepositoryViewModel, TimeSpan>? openedAgo = null) =>
+    private static AutoFetchScheduler Scheduler(ManualClock clock, Func<RepositoryViewModel?> active, Func<RepositoryViewModel, TimeSpan>? openedAgo = null, Func<RepositoryViewModel, bool>? busy = null) =>
         new(active, () => false, new MainWindowViewModelTests.FakeSettings(), clock, new RecordingLog())
         {
             ReadEnvironment = _ => null,
             SinceOpening = openedAgo ?? (_ => TimeSpan.Zero),
+            CommonFolderBusy = busy ?? (_ => false),
         };
+
+    /// <summary>The session's services: the registry and the slots the common folder's check reads.</summary>
+    private static TabServices AutoFetchServices() =>
+        DashboardTestSupport.Services(new NoRepositories(), readClock: new ManualTimeProvider(), log: new RecordingLog());
+
+    /// <summary>Opens a view model on <paramref name="repository"/> with the session's <paramref name="services"/> and reads its refs.</summary>
+    private static async Task<RepositoryViewModel> OpenAsync(RemoteRepository repository, TabServices services)
+    {
+        var viewModel = new RepositoryViewModel(repository, services.Settings, services.Dates, services.Log, services: services);
+        await viewModel.StartAsync();
+        return viewModel;
+    }
 
     private static async Task TickAsync(AutoFetchScheduler scheduler, ManualClock clock, RepositoryViewModel viewModel)
     {
@@ -364,8 +509,29 @@ public class AutoFetchSchedulerTests
         }
     }
 
+    /// <summary>No folder is chosen.</summary>
+    private sealed class NoFolders : VisualCommit.App.Services.IFolderPicker
+    {
+        public Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+    }
+
+    /// <summary>No repository opens: the auto-fetch tests make their view models themselves.</summary>
+    private sealed class NoRepositories : IRepositoryProvider
+    {
+        public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) => throw new NotSupportedException();
+    }
+
     /// <summary>A repository with one commit and a remote; its fetches are recorded, and fail when told to.</summary>
-    private sealed class RemoteRepository : FakeRepositoryBase
+    private sealed class RemoteRepository(string name = "auto-fetch") : FakeRepositoryBase
     {
         private static readonly string Head = new('a', 40);
 
@@ -377,13 +543,16 @@ public class AutoFetchSchedulerTests
 
         public int RefsRead { get; private set; }
 
-        public override string WorkingDirectory => Path.Combine(Path.GetTempPath(), "auto-fetch");
+        /// <summary>Another worktree's git folder as its common folder (a linked worktree), or null for its own.</summary>
+        public string? Common { get; init; }
+
+        public override string WorkingDirectory => Path.Combine(Path.GetTempPath(), name);
 
         public override string GitDirectory => Path.Combine(WorkingDirectory, ".git");
 
-        public override string CommonDirectory => GitDirectory;
+        public override string CommonDirectory => Common ?? GitDirectory;
 
-        public override string Name => "auto-fetch";
+        public override string Name => name;
 
         public override Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default)
         {

@@ -939,9 +939,11 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// After a rebase's operation: opens the error dialog of a stop with nothing to look at
-    /// (<see cref="StopNotice"/>), and selects the rebased branch's new tip when 1.5 says so.
+    /// (<see cref="StopNotice"/>), and selects the rebased branch's new tip when 1.5 says so. With
+    /// <paramref name="defer"/> (a bulk run's pull, docs/phase-6-design.md 4.6, D195) the dialog is
+    /// handed to it instead of opening, for the row's Details….
     /// </summary>
-    private async Task FinishAsync(StopNotice notice, SelectionAfter selection)
+    private async Task FinishAsync(StopNotice notice, SelectionAfter selection, Action<FailureDisplay, GitFailure>? defer = null)
     {
         if (IsClosed)
         {
@@ -955,7 +957,14 @@ public sealed partial class RepositoryOperations
 
         if (notice is { Display: { } display, Failure: { } failure })
         {
-            await ShowFailureAsync(display, failure);
+            if (defer is not null)
+            {
+                defer(display, failure);
+            }
+            else
+            {
+                await ShowFailureAsync(display, failure);
+            }
         }
     }
 

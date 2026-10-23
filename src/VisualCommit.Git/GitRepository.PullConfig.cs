@@ -67,6 +67,17 @@ public sealed partial class GitRepository
     }
 
     /// <summary>
+    /// <c>pull.ff</c> alone, for the rebase chosen for one pull (8.9, D231): what
+    /// <see cref="ReadPullFastForwardAsync"/> reads, as a configuration whose rebase setting is none
+    /// and unread, or the refused value's configuration. A read.
+    /// </summary>
+    public async Task<PullConfiguration> ReadPullFastForwardSettingAsync(CancellationToken cancellationToken = default)
+    {
+        var (fastForward, value, refused) = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
+        return refused ?? new PullConfiguration(fastForward, PullRebaseSetting.None, PullConfigKeys.Rebase, null, value, null, null);
+    }
+
+    /// <summary>
     /// <c>pull.ff</c> as <c>git pull</c> reads it first, whenever no <c>--ff</c> option is given, a
     /// <c>git pull --rebase</c> included (8.9): a boolean (<see cref="ReadPullBoolAsync"/>) or
     /// <c>only</c>, with its value as set (null: unset); for a value git would refuse, the
