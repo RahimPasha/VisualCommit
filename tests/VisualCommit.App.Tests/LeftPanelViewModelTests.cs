@@ -329,6 +329,33 @@ public class LeftPanelViewModelTests
     }
 
     [Fact]
+    public async Task Branches_a_remote_fetches_into_another_namespace_are_under_that_remote_with_no_row_of_their_own()
+    {
+        // docs/phase-6-design.md 0.5's B2, 10.3: origin fetches its branches into refs/remotes/mirror/*,
+        // which git remote does not list; their remote is origin, as the fetch lines map them.
+        using var repo = await TempRepo.CreateAsync("namespace");
+        await repo.CommitFileAsync("README.md", "# namespace\n", "Initial commit");
+        await repo.AddBareRemoteAsync("origin");
+        await repo.GitAsync("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/mirror/*");
+        await repo.PushAsync("origin", setUpstream: false, "main", "main:refs/heads/feature/x");
+        var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
+        var refs = await repository.ReadRefsAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            [("refs/remotes/mirror/feature/x", "origin"), ("refs/remotes/mirror/main", "origin")],
+            refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch).Select(gitRef => (gitRef.FullName, gitRef.RemoteName)));
+
+        var panel = Updated(refs);
+        panel.Activate(Item(panel, "mirror", RefItemKind.Folder));
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 3));
+
+        Assert.Equal(
+            ["v Remotes 2", "  v origin", "    v mirror", "      v feature", "        x", "      main"],
+            Describe(panel).Skip(2).Take(6));
+        Assert.Equal(["origin"], panel.Rows.OfType<RefItemRow>().Where(row => row.Kind == RefItemKind.Remote).Select(row => row.Text));
+        Assert.Equal("mirror/main", panel.Rows.OfType<RefItemRow>().Single(row => row.Text == "main" && row.Depth == 3).ToolTip);
+    }
+
+    [Fact]
     public void An_empty_repository_shows_open_sections_with_the_count_0()
     {
         var panel = Updated(new RepoRefs(new HeadState("main", null), [], [], []));

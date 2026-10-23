@@ -215,11 +215,14 @@ public sealed partial class RepositoryOperations : IConflictActions
             && string.Equals(remoteRef, "refs/heads/" + branch, StringComparison.Ordinal)
             ? name
             : null;
+        // A remote branch is that branch when its remote's fetch lines fill it from it
+        // (docs/phase-6-design.md 10.4 #13): origin/up/main is main under a renaming line.
         List<string> atMergeHead = mergeHead is null
             ? []
             : refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch
                     && string.Equals(gitRef.TargetSha, mergeHead, StringComparison.Ordinal)
-                    && string.Equals(gitRef.Name, $"{gitRef.RemoteName}/{branch}", StringComparison.Ordinal))
+                    && refs.SourceOf(gitRef) is { IsBranch: true, Branch: { } onRemote }
+                    && string.Equals(onRemote, branch, StringComparison.Ordinal))
                 .Select(gitRef => gitRef.Name)
                 .ToList();
         return upstream is not null && atMergeHead.Contains(upstream, StringComparer.Ordinal) ? upstream : atMergeHead.FirstOrDefault() ?? upstream;

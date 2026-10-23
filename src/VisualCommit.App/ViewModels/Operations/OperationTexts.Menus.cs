@@ -245,8 +245,8 @@ public static partial class OperationTexts
 
         public static string PushToAndTrack(string branch, string remoteBranch) => $"Push {branch} to {remoteBranch} and track it";
 
-        /// <summary>4g: a remote whose fetch refspec is not the default; the branch's name there is not known.</summary>
-        public static string MapsBranchesDifferently(string remote, string branch) => $"{remote} maps its branches differently: use Push {branch}…";
+        // A drop onto a remote branch its remote fetches otherwise: R1 to R4 (docs/phase-6-design.md
+        // 10.5), in OperationTexts.Menus.Refspecs.cs.
 
         // Remotes (2.16, 2.23).
 

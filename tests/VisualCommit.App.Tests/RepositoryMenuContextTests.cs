@@ -165,8 +165,8 @@ public class RepositoryMenuContextTests
         Assert.True(loc.HasLocalUpstream);
         Assert.Equal("main", RepositoryMenuContext.UpstreamText(loc));
         var remote = context.FindRef("refs/remotes/origin/main")!;
-        Assert.Equal("main", RepositoryMenuContext.LocalNameOf(remote));
-        Assert.Null(RepositoryMenuContext.LocalNameOf(context.FindRef("refs/heads/origin/main")!));
+        Assert.Equal("main", context.Refs.LocalNameOf(remote));
+        Assert.Null(context.Refs.LocalNameOf(context.FindRef("refs/heads/origin/main")!));
     }
 
     [Fact]
