@@ -385,7 +385,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | Type | Role |
 |---|---|
 | `GitCommand` | One call: arguments (passed one by one, no shell quoting), working directory, optional standard input, extra environment variables (a null value removes a variable), optional line handlers for streamed output, and the `Encoding` of standard input and output (UTF-8, or `GitCommand.Latin1` for byte-exact content, D66). `DisplayText`, used in logs and errors, hides the credentials of a URL; `HideCredentials(text)` turns every URL's user information into `***`, `RemoveCredentials(text)` removes it (what "Copy URL" copies, D103). Since phase 5 `RecordsStandardInput`: the call's record keeps its standard input; set only for `update-ref --stdin`, whose lines name refs and SHAs and carry no secret. Since phase 6 `BelowNormalPriority`: on Windows the runner puts git, and what it has started by then, at below-normal priority right after the start (the merge-tool lookup, design 8.10); ignored elsewhere |
-| `IGitRunner` / `GitRunner` | Runs a command without blocking. A non-zero exit code is returned in the `GitResult`, not thrown; `GitResult.EnsureSuccess` turns it into a `GitException` that carries git's own standard error and, since phase 3, its standard output (`StandardOutput`: a merge writes its messages there). Since phase 5 it takes the record clock (`GitRunner(path, callLog, log, recordClock)`) for the times the activity log shows; since phase 6 also the session's git environment (`environment`, kept as `SessionEnvironment`), applied to every call after the runner's defaults and before the command's own (D220) |
+| `IGitRunner` / `GitRunner` | Runs a command without blocking. A non-zero exit code is returned in the `GitResult`, not thrown; `GitResult.EnsureSuccess` turns it into a `GitException` that carries git's own standard error and, since phase 3, its standard output (`StandardOutput`: a merge writes its messages there). Since phase 5 it takes the record clock (`GitRunner(path, callLog, log, recordClock)`) for the times the activity log shows; since phase 6 also the session's git environment (`environment`, kept as a copy in `SessionEnvironment`), applied to every call after the runner's defaults and before the command's own (D220), and its defaults remove the variables that select another repository (D233, below) |
 | `GitResult` | Exit code, standard output, standard error, duration |
 | `GitCallRecord` | The record of a call: command, folder, outcome, exit code, start and duration by the system clock, the first 16 KiB of each output stream with credentials hidden (D103), and `OperationId`, the queue's operation the call belongs to, or null for a read outside one. Phase 5 (D173): `Sequence` (a number from `RecordSequence`, the process's one counter, which operations take theirs from too, taken when the call starts), `DisplayedStart` and `DisplayedDuration` (by the record clock), `StandardInput` (for `RecordsStandardInput`, cut and with credentials hidden as the output is) and `OnTemporaryIndex` (the call ran with `GIT_INDEX_FILE` set: a snapshot's index) |
 | `IGitCallLog` / `GitCallLog` | Keeps the session's call records in two stores (phase 5, D173): an operation's calls as long as its `OperationRecord` stays in the `OperationLog` (it listens to `Evicted`), within a budget of 64 MB for all of them that drops the oldest operation's calls first (`HasDroppedCalls`); the reads, calls outside an operation, in a ring of their own of the newest 2,000. So a burst of reads never takes an operation's commands away. Events `Added` and `Removed` |
@@ -412,7 +412,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `PatchBuilder` (Core) | The patch for chosen added and removed lines (a whole hunk is all of its lines), forward to stage, in reverse to unstage or discard (D66). Unchosen changes stay as they are on the side the patch is applied to; hunks without a chosen line are left out and the ranges after them moved. Git's header lines are kept, except that a rename's, or a creation or deletion applied only in part, becomes the header of a change to the file at its path, and a patch of only some lines leaves a change of mode out. "\ No newline at end of file" stays on the side applied to as git wrote it; on the side built, a line lacks its line feed only while it is still that side's last line, and a kept line that ends the file on one side only is written as a removed and an added line. `PatchFuzzTests` checks random choices against git |
 | `WordDiff` (Core) | The words of a removed line and its paired added line that differ: a longest common sequence of words, ties matched early in the added line |
 | `DiscardSnapshot` | A snapshot taken before a discard (D67): its ref under `refs/visualcommit/backup/discard-<UTC time>` (the time from the backups' clock since phase 4, D139), its commit, the paths, and which of them existed |
-| `RepoRefs`, `GitRef`, `HeadState`, `StashEntry` | What the refs are at one moment. HEAD's commit is its branch's as `for-each-ref` listed it (phase 5's gate, see "From a repository to the screen"). `RepoRefs.Fingerprint` changes when HEAD, a ref's target or the stashes change (D52). A local branch's upstream is read as three values (D101): `UpstreamRef` (`%(upstream)`, `refs/remotes/origin/main`, or `refs/heads/main` for a local upstream), `UpstreamRemote` (`%(upstream:remotename)`, `.` for a local upstream: `HasLocalUpstream`) and `UpstreamRemoteRef` (`%(upstream:remoteref)`, the branch's name on the remote); phase 1's short `Upstream` stays for the left panel. Never cut out of `%(upstream:short)`. Since phase 6 (D222, design 10.2) `Refspecs`, every remote's fetch lines as the refs read read them (null in fakes and hand-built snapshots), `SourceOf(trackingRef)` and `SourceOf(remoteBranch)` (where a remote-tracking ref is fetched from: `Refspecs.SourceOf`, or while `Refspecs` is null exactly phase 5's assumption, the default line's mapping) and `LocalNameOf(remoteBranch)` (the local branch a remote branch checks out into, design 10.6); a remote branch's `GitRef.RemoteName` is the remote whose lines fill it, and only when two remotes or none do the longest configured name its name starts with (else its first part) |
+| `RepoRefs`, `GitRef`, `HeadState`, `StashEntry` | What the refs are at one moment. HEAD's commit is its branch's as `for-each-ref` listed it (phase 5's gate, see "From a repository to the screen"). `RepoRefs.Fingerprint` changes when HEAD, a ref's target or the stashes change (D52). A local branch's upstream is read as three values (D101): `UpstreamRef` (`%(upstream)`, `refs/remotes/origin/main`, or `refs/heads/main` for a local upstream), `UpstreamRemote` (`%(upstream:remotename)`, `.` for a local upstream: `HasLocalUpstream`) and `UpstreamRemoteRef` (`%(upstream:remoteref)`, the branch's name on the remote); phase 1's short `Upstream` stays for the left panel. Never cut out of `%(upstream:short)`. Since phase 6 (D222, design 10.2) `Refspecs`, every remote's fetch lines as the refs read read them (null in fakes and hand-built snapshots), `SourceOf(trackingRef)` and `SourceOf(remoteBranch)` (where a remote-tracking ref is fetched from: `Refspecs.SourceOf`, or while `Refspecs` is null exactly phase 5's assumption, the default line's mapping) and `LocalNameOf(remoteBranch)` and `LocalNameOf(trackingRef)` (the local branch a remote branch checks out into, design 10.6; the second for a ref the snapshot may not hold); a remote branch's `GitRef.RemoteName` is the remote whose lines fill it, and only when two remotes or none do `RemoteBranchNames.RemoteOf` (the longest configured name its name starts with, else its first part) |
 | `CommitInfo`, `CommitKind` | A row of the graph: a commit or a stash (one parent: the commit it was made on) |
 | `CommitDetails`, `ChangedFile`, `FileChangeKind` | What the details panel shows; files compared with the first parent, renames detected |
 | `CommitPager` | Internal: turns `git log` lines into pages and merges the stashes in. A date git cannot print (an ident without a time zone) is read as 1970-01-01 UTC, as git does, so such a commit is not lost. For a filtered graph (phase 5, D178, amending D54 while a filter is on) it keeps the commits it knows will be shown (the shown refs' tips and HEAD's, then the parents of every commit added while a stash waits): a stash whose base is known is placed by date as before, any other waits and goes in just above its base, and one whose base never comes is left out |
@@ -429,7 +429,8 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `WorktreeKey` (Core) | How the app tells worktrees apart (phase 5): the worktree's own git folder (`.git/worktrees/<n>` for a linked one), full, without a trailing separator, compared ignoring case on Windows and macOS. The undo histories and the activity log key by it |
 | `BackupClock` (Core), `AppClocks` (Core) | The backups' clock (D139, phase 5's D173): `NextName()` names each new backup ref and discard snapshot, `Now` is the clean-up's "now"; `BackupClock.System`, or `BackupClock.Fixed(time)`, which names each backup one second after the last, the first one second after `time` (the harnesses give 2026-01-02 09:00:00 UTC), and whose "now" follows the last name, so a harness's backups get the same names in every run, in order. `AppClocks` holds that time (`HarnessTime`), the environment variables and `FrozenClock`, the record clock that stands still |
 | `WorkingTreeFiles` (Core) | `IsInTheWayOfFile(root, path)`: a folder holding files stands where a file is to be written, or a file where one of its folders should be; `git restore --worktree` would delete either without a word (phase 5's review) |
-| `FetchRefspec`, `FetchRefspecs`, `RemoteSource`, `RemoteSourceKind` (Core, `Git/FetchRefspecs.cs`) | Phase 6's fetch refspecs (D222, design 10.1), pure. `FetchRefspec.Parse(remote, value)`: one `remote.<r>.fetch` value read as git reads a fetch refspec (force, negative, a pattern with one `*` on both sides; an exact line without a destination maps nothing; null for a value git refuses or one without a source). `FetchRefspecs`: every remote's lines in configuration order (`Parse`, `Default` for tests); `SourceOf(trackingRef)`, the reverse mapping as git's tracking setup makes it: `Mapped` (one remote from one ref: `Remote`, `RemoteRef`, `IsBranch`, `Branch`, `IsIdentity`), `AmbiguousRemotes` (two or more remotes fetch it: git's "ambiguous information"), `AmbiguousRefs` (one remote fetches it from two or more refs: stricter than git, which takes the first) or `NotFetched`; a negative line of a remote that matches a candidate makes that remote map nothing; `DestinationsOf(remote, remoteRef)`, the forward mapping that the fetch uses. `FetchRefspecsTests`, and `FetchRefspecsParityTests` against `git branch --track` and a real fetch |
+| `FetchRefspec`, `FetchRefspecs`, `RemoteSource`, `RemoteSourceKind` (Core, `Git/FetchRefspecs.cs`) | Phase 6's fetch refspecs (D222, design 10.1), pure. `FetchRefspec.Parse(remote, value)`: one `remote.<r>.fetch` value read as git reads a fetch refspec (force, negative, a pattern with one `*` on both sides; an exact line without a destination maps nothing; null for a value git refuses or one without a source). `FetchRefspecs`: every remote's lines in configuration order (`Parse`, `Default` for tests); `SourceOf(trackingRef, remote)` the same for that remote's own lines alone (`Mapped`, `AmbiguousRefs` or `NotFetched`, whatever another remote maps it to: the push guard's question); `SourceOf(trackingRef)`, the reverse mapping as git's tracking setup makes it: `Mapped` (one remote from one ref: `Remote`, `RemoteRef`, `IsBranch`, `Branch`, `IsIdentity`), `AmbiguousRemotes` (two or more remotes fetch it: git's "ambiguous information"), `AmbiguousRefs` (one remote fetches it from two or more refs: stricter than git, which takes the first) or `NotFetched`; a negative line of a remote that matches a candidate makes that remote map nothing; `DestinationsOf(remote, remoteRef)`, the forward mapping that the fetch uses. `FetchRefspecsTests`, and `FetchRefspecsParityTests` against `git branch --track` and a real fetch |
+| `RemoteBranchNames` (Core) | Phase 6 (the review at status step 22, design 10.6): the one place a remote-tracking ref's name is split by its remote's name where the fetch lines are not asked or do not tell, remote names holding slashes as they may: `WithoutRemote(name, remote)`, `RemotesOf(name, remotes)` (every configured remote it starts with, longest first; more than one means the name alone does not tell), `LongestRemoteOf`, `RemoteOf` (the longest, else the first part). The refs read, `RepoRefs` (its phase 5 assumption and its local names), `GraphFilter.RemoteOf`, the left panel, the menus, the backups list's texts and the push backs call it. `RemoteBranchNamesTests` |
 | `PullConfiguration`, `PullFastForwardSetting`, `PullRebaseSetting`, `PullIntegrationOptions` (Core, `Git/PullConfiguration.cs`) | Phase 6: Pull's settings as read before its fetch (D219, design 8.9): what `pull.ff` asks, what the rebase setting asks and which key decided it, the values as set, and `Problem` and `ProblemKey` for a value Pull does not understand, whose `NotUnderstood()` is the failure Pull reports (command `git config --get <key>`). `PullIntegrationOptions(Configuration, KeepIgnored)` is `IntegratePullAsync`'s optional last option (null: phase 4's pull) |
 | `PullModes`, `PullMode`, `GitBoolean` (Core) | Phase 6: the settings screen's pull modes (D218, design 8.7): `PullModes.Read` names the mode `pull.rebase` and `pull.ff` give together, by their effect, and `Writes(mode)` the two keys a mode writes; `GitBoolean.TryParse`, git's reading of a boolean (the words ignoring case, integers with a unit), which the pull modes and the identity's `user.useConfigOnly` use |
 | `IGitConfiguration` (Core), `GitConfiguration` (Git), `GitConfigRead`, `GitConfigValue`, `GitConfigScope`, `GitConfigWrite`, `GitIdentityRead`, `MergeToolHelp`, `MergeTool`, `GitConfigLocations` | Phase 6: git's own settings as the settings screen reads and writes them, and the merge-tool lookup (D190, D202, D217); see "Git's own settings" |
@@ -445,10 +446,18 @@ Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
   2.55; since phase 5 every such call goes through one helper, `IgnoredAmongAsync`), `git stash
   push` (D108: git removes the stashed untracked files with `git clean … :/`, which the variable
   would turn into a file name; the app passes stash push no path), and since phase 5 the search's
-  Files mode, whose glob pathspecs the variable would read as file names. Since phase 6 the
-  session's own git environment (`GitRunner.SessionEnvironment`, D220: the harnesses' global
-  configuration in the data folder, empty in the desktop app) is applied after these defaults. A
-  command's own variables override both for that call only: the interactive rebase's
+  Files mode, whose glob pathspecs the variable would read as file names. Since phase 6 (D233)
+  the defaults also remove the variables that point git at another repository, index, object
+  store or namespace than the command's working directory names (`GIT_DIR`, `GIT_WORK_TREE`,
+  `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`,
+  `GIT_NAMESPACE`, `GIT_PREFIX`, `GIT_IMPLICIT_WORK_TREE`, each set to null in
+  `GitRunner.DefaultEnvironment`), so that an app started from a hook, a `git` alias or a shell that
+  set one does not run every call against that repository. Since phase 6 the session's own git
+  environment (`GitRunner.SessionEnvironment`, a copy of what the constructor was given, D220: the
+  harnesses' global configuration in the data folder, empty in the desktop app; nothing in the app
+  reads it back, the tests do) is applied after these defaults. A command's own variables come
+  last and override both for that call only, and may set one of D233's again (a snapshot's
+  temporary `GIT_INDEX_FILE`): the interactive rebase's
   `GIT_SEQUENCE_EDITOR` (D143) and the stopped commit's `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL` and
   `GIT_AUTHOR_DATE` for a rebase's Continue (D144). Input and output are UTF-8, unless the command
   asks for Latin-1 (`GitCommand.Encoding`, D66): diffs, patches and
@@ -470,8 +479,11 @@ Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
 - Cancelling the token stops git, records the call as `Cancelled` and throws
   `OperationCanceledException`. On Windows everything git started is stopped with it, through a
   job object. On macOS and Linux only git itself is killed (D37); what it started ends when its
-  pipes to git break. Stopping never throws, and a cancelled call returns within 10 seconds even
-  if git could not be stopped. A cancel that comes after git has exited by itself (or so late that
+  pipes to git break. Since phase 6 the stop itself is queued to the thread pool
+  (`ThreadPool.UnsafeQueueUserWorkItem`), not run on the thread that cancels, often the UI thread,
+  which Cancel all makes cancel up to four calls at once (D59); a stop that comes after the call
+  has let go of git finds nothing to stop. Stopping never throws, and a cancelled call returns
+  within 10 seconds even if git could not be stopped. A cancel that comes after git has exited by itself (or so late that
   git still exits with success) and after its output was read stops nothing: the call keeps its
   result, so a push that went through is not reported as cancelled.
 - The record of a call (`GitCallRecord`) has the credentials of every URL in its output hidden
@@ -647,7 +659,7 @@ configuration write.
 | Group | Members and their git commands |
 |---|---|
 | Opening (`GitRepository.cs`, D204) | `OpenedAtTopAsync()`: whether `OpenedFolder` is the working tree's top, true with no git call when `WorktreeKey.Comparer` finds it equal to `WorkingDirectory` (an 8.3 short name was expanded by the opening's `Path.GetFullPath`), otherwise one `rev-parse --show-prefix` in it: an empty line is the top spelled another way (a junction, a symbolic link such as macOS's `/var`), anything else a folder inside; the interface's default answers true. A workspace saves a folder only at its top |
-| The refs read (`.Refs.cs`, D222, design 10.2) | `ReadRefsAsync` reads the remotes and their fetch lines with one `config --null --get-regexp ^remote\.` in place of `git remote` (not `--local`: git fetches with global lines too), so a refs read stays at five processes: a key with a subsection names a remote, each once, sorted ordinally (the names `git remote` lists); the `.fetch` values go to `FetchRefspecs.Parse`, and a line git accepts that names no source is skipped with one Warning per repository object; exit 1 is no remote. `RepoRefs.Refspecs` holds them and `GitRef.RemoteName` follows them. The Remotes dialog's `ReadRemotesAsync` keeps `git remote` |
+| The refs read (`.Refs.cs`, D222, design 10.2) | `ReadRefsAsync` reads the remotes and their fetch lines with one `config --null --get-regexp ^remote\.` in place of `git remote` (not `--local`: git fetches with global lines too), so a refs read stays at five processes: a key with a subsection names a remote, each once, sorted ordinally (the names `git remote` lists); the `.fetch` values go to `FetchRefspecs.Parse`, and every line the mapping leaves out but an empty value (an empty source, which git accepts; a key without a value or a line git refuses, after which git's own `for-each-ref` fails and the refs read with it) is logged at Warning once per repository object; exit 1 is no remote. `RepoRefs.Refspecs` holds them and `GitRef.RemoteName` follows them. `ReadFetchRefspecsAsync()` makes that one call alone, for the push guard inside its operation (the interface's default answers null: not read). The Remotes dialog's `ReadRemotesAsync` keeps `git remote` |
 | Pull's settings (`.PullConfig.cs`, D219, D231) | `ReadPullConfigurationAsync(branch)`: `pull.ff`, then `branch.<b>.rebase` or, unset, `pull.rebase`, booleans read as git reads them; a value Pull does not understand fills `Problem` instead of throwing. `ReadPullFastForwardSettingAsync()`: `pull.ff` alone, as `git pull --rebase` reads it (`config --get pull.ff`, and `config --type=bool --get pull.ff` for an uncommon value). `IntegratePullAsync(…, pullOptions)`: with `AsConfigured` the configuration given decides instead of a read of its own (its `Problem` throws `NotUnderstood()` either way); with `Rebase` only a `pull.ff` problem counts; Keep ignored files' check runs once the integration is chosen, before anything is written (see "The ignored-files guard") |
 | The repository's settings (`.Config.cs`, design 8.3) | `WriteConfigAsync(writes)`: per write `config --local --replace-all <key> <value>`, or `--unset-all <key>` for a null value (exit 5, an absent key, counting as done), in the working tree, in order; the first failure (a held `.git/config.lock`: exit 255) stops them and throws |
 | Keep ignored files (`.KeepIgnored.cs`, `.Branches.cs`, D193, D196, D221) | The five reads `FindIgnoredInTheWayOfMergeAsync(into, source)`, `FindIgnoredInTheWayOfCommitsAsync(commits, revert, mergeParent)`, `FindIgnoredInTheWayOfRebaseAsync(tip, onto)`, `FindIgnoredInTheWayOfRebaseAsync(plan)` and `FindIgnoredInTheWayOfStashAsync(stash)`, and the required `keepIgnored` of `CheckoutBranchAsync`, `CheckoutTrackingBranchAsync`, `CheckoutDetachedAsync` (one overload in place of phase 5's two), `CreateBranchAsync` and `MergeAsync`, which put `--no-overwrite-ignore` just before the positional arguments; `CreateBranchAsync` also takes a required `noTrack` (`git branch --no-track` or `switch --create <b> --no-track`, D201). See "The ignored-files guard" |
@@ -1302,18 +1314,32 @@ Phase 6's changes to these operations:
   fetches from two refs (R2) checks out the local branch of that name, or creates it without an
   upstream (`git switch --create <n> --no-track <ref>`), and says so ("Created pr/1 at origin/pr/1
   without an upstream: origin/pr/1 is fetched from more than one ref of origin"); a ref two remotes
-  fetch, or none (R1, R3), is refused before git when a stale menu reaches it. "Create branch
-  here…" from an R1 or R2 ref passes `--no-track`. The drop's two pushes and "Delete {b} on {r}…"
+  fetch, or none (R1, R3), is refused before git when a stale menu reaches it. A remote branch the
+  refs no longer hold (a menu built before a fetch removed it) is named by the fetch lines too
+  (`RepoRefs.LocalNameOf(string)`, `SourceOf(string)`: `fork/up/feature` gives `feature`). "Create
+  branch here…" from an R1 or R2 ref passes `--no-track`. The drop's two pushes and "Delete {b} on {r}…"
   act on the branch's name on its remote (`git push <r> refs/heads/<A>:refs/heads/<y>`, the lease
   and the backup `remote-branch-<t>/<r>/<y>` by that name; the renamed drop push is titled "Push {A}
-  to {T}"). The push guard (`RefuseIfPushStopsFetch`, inside Push, the push dialog's push, the
-  drop's pushes and Force push, before git, with the latest refs' fetch lines): a push whose
-  destination on the remote would give a tracking ref a second source, so that every later fetch
-  fails, is refused with "Pushing {A} to {target} would stop every fetch of {r}: …", unless one of
-  its tracking refs is already filled by a branch the remote has. A force push's backup restored
-  when no local branch tracks it finds its remote and branch by the fetch lines, else is refused
-  with "The remote this backup came from cannot be found". The resolver's remote branch name
-  (`MergedRemoteBranch`) matches by the mapping. An upstream is named by git's `%(upstream)`
+  to {T}"; `SplitRemoteBranch` gives the ref's `RemoteSource`). The push guard
+  (`RefuseIfPushStopsFetchAsync`, before git inside Push, the push dialog's push, the drop's
+  pushes, Force push, the backups list's push backs of a branch (`PushBackAsync`, also from
+  `PushForcePushBackAsync`), and undo's and redo's steps that write a branch on a remote, `RefuseIfStepStopsFetchAsync`) reads
+  the fetch lines inside the operation (`IGitRepository.ReadFetchRefspecsAsync`, one more `git
+  config --null --get-regexp ^remote\.` per such push, so a line added after the snapshot counts)
+  and asks the push's remote alone (`FetchRefspecs.SourceOf(trackingRef, remote)`, so another
+  remote's mirror line does not hide this one's two sources): a push whose destination would give
+  a tracking ref a second source on that remote, so that every later fetch of it fails, is refused
+  with "Pushing {A} to {target} would stop every fetch of {r}: …", unless one of its tracking refs is
+  already filled by a branch the remote has. Push and Force push to an upstream that is no branch
+  on its remote (`UpstreamRemoteRef` outside `refs/heads/`) are disabled with R4
+  (`ToolbarViewModel.UpstreamNotABranchReason`, in the toolbar and the branch's menu) and refused
+  before git with R4 as a sentence (`PushToNotABranch`). A remote branch's or tag's backup is pushed
+  back to the one configured remote its name starts with (`RemoteBranchNames.RemotesOf`); when more
+  than one fits, the item is disabled and the push back refused with `RemoteOfBackupAmbiguous` ("The
+  remote this backup came from cannot be told: team/fork/main fits team/fork and team"). A force
+  push's backup restored when no local branch tracks it finds its remote and branch by the fetch
+  lines, else is refused with "The remote this backup came from cannot be found". The resolver's
+  remote branch name (`MergedRemoteBranch`) matches by the mapping. An upstream is named by git's `%(upstream)`
   without `refs/remotes/` (`ToolbarViewModel.UpstreamText`, design 10.4's GD15), else
   `{remote}/{remote ref}`, so `pr/7` tracking `refs/pull/7/head` on `upstream` reads
   `upstream/pr/7` in every text that names an upstream.
@@ -1827,10 +1853,29 @@ past 32,767 characters) list the written paths from git's trees:
 - **a stash's apply or pop** (`FindIgnoredInTheWayOfStashAsync`): its changed paths less
   `StashPaths.Deleted`, and its untracked part's paths, from `ReadStashPathsAsync`'s kept read, so
   no process runs before `check-ignore`.
+- **directory renames** (design 9.6's "Directory renames"; the review at status step 22): git's
+  merge-ort writes a file one side added under a folder the other side renamed whole at its place
+  under the new folder, over an ignored file there (a merge, a pick, a revert, a rebase; a stash
+  apply on 2.55 and 2.56, while 2.36 writes it beside), and none of the reads above lists that path.
+  So when a read found nothing else in the way, and a test of the disk with no process passes
+  (`MayMoveThroughADirectoryRename`: a path it writes is missing on disk and lies in a folder, or
+  lies at the top while a top-level folder holds a file of that name), one `git diff-tree -r -z -M
+  --name-status <ours> <theirs> --` is read and `DirectoryRenames` (Git, pure) gives the paths a
+  rename either side made may write, by merge-ort's rules where the read can tell them (a folder
+  goes where most of its moved files went, counted at each level whose trailing names agree; into
+  the top too, never the top itself; no rename while the renaming side still has a file in the
+  folder) and every candidate where it cannot (a tie, folders whose other files are alike on both
+  sides); those paths go to `FindIgnoredAtAsync` too. The sides: a merge `into` against `source`,
+  its result dropped when either is an ancestor of the other; a pick HEAD against each commit, one
+  read per commit side by side; a revert HEAD against each commit's parent (or `mergeParent`), none
+  for a root commit; a rebase `onto` against the tip; a stash HEAD against the stash. Without such a
+  folder the reads make the calls they made before. Not covered: a folder renamed into the top from
+  deeper than the top level, a side the disk does not show (the branch of "Check out and rebase"),
+  and the interactive rebase and the squash.
 
 The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAsync`
 (`IgnoredWhereAddedAsync`, see "Undo and redo"). Tests: `IgnoredInTheWayTests`,
-`KeepIgnoredCheckoutTests`, `IntegratePullTests`, `RebaseTodoTests` (Git);
+`DirectoryRenamesTests`, `KeepIgnoredCheckoutTests`, `IntegratePullTests`, `RebaseTodoTests` (Git);
 `RepositoryOperationsKeepIgnoredTests` (App); the walk-through's G22 to G24 and S21.
 
 ### Prompts and credentials (D82, D115, D118, D130)
@@ -1976,8 +2021,11 @@ The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAs
   file not in the working tree). A remote branch's "Check out {T}" and "Delete {y} on {r}…" and a
   drop's two pushes follow the fetch lines: disabled with R1 to R4 (`OperationTexts.Menus.Refspecs.cs`:
   "{T} is fetched from {remotes}", "{T} is fetched from more than one ref of {r}", "{T} is not
-  fetched from any remote", "{T} is {ref} on {r}, not a branch"), R2's checkout enabled (D201);
-  "Set upstream…" lists only remote branches mapped from a branch. `DropFacts` is
+  fetched from any remote", "{T} is {ref} on {r}, not a branch"), R2's checkout enabled (D201); a
+  local branch's Push and Force push are disabled with R4 when its upstream is no branch on its
+  remote; "Set upstream…" lists only remote branches mapped from a branch; a remote branch's or
+  tag's backup whose name more than one configured remote fits has its "Push {b} back to {r}…"
+  disabled with `RemoteOfBackupAmbiguous`. `DropFacts` is
   `DropFacts(TargetIsAncestorOfSource)`: phase 5's `RemoteMapsBranchesDifferently` and its reason
   went (design 10.7). New builders: `DashboardMenus.ForRow` and `ForHeader` (see "The dashboard
   tab") and `WorkspaceMenus.ForWelcomeItem` (Open, Rename workspace…, Delete workspace…).
@@ -2350,7 +2398,9 @@ pages (below). All belong to the `RepositoryViewModel`, like the diff, so a tab 
   remotes"; Pull detached, no
   upstream, a gone upstream, an operation in progress ("Finish or abort the &lt;kind&gt; first"), no
   remotes unless the upstream is local; Push detached, unborn, "Add a remote first", "&lt;b&gt; tracks
-  a local branch"; Branch "Make the first commit first"; Stash (`StashReason`, shared with every
+  a local branch", and since phase 6 an upstream that is no branch on its remote (R4,
+  `UpstreamNotABranchReason`: "upstream/pr/7 is refs/pull/7/head on upstream, not a branch");
+  Branch "Make the first commit first"; Stash (`StashReason`, shared with every
   "Stash changes…" item and the stash operation, D119): unborn, an operation in progress, conflicts
   without one ("Resolve the conflicts first"), "There are no changes to stash"; Pop "There are no
   stashes". A button stays enabled while its operation runs: a second click queues another run, or
