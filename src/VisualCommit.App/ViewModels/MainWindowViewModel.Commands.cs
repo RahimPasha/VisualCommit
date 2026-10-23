@@ -1,4 +1,5 @@
 using VisualCommit.App.ViewModels.Commands;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
@@ -119,9 +120,12 @@ public partial class MainWindowViewModel
     /// Opens the repository at <paramref name="path"/> from the palette or a key (5.10): the tab
     /// that shows that worktree is activated and nothing opens again; else the active tab opens it
     /// when it is empty; else a new tab at the end does. A failure shows on that tab's welcome
-    /// page.
+    /// page. A workspace's saved folder (<paramref name="savedFolder"/>) opens only as the top of
+    /// its repository (D204, 1.10): a folder that lies inside another working tree (its <c>.git</c>
+    /// deleted, say) is refused there with the dashboard's words, and the outer repository is
+    /// never opened as the row's.
     /// </summary>
-    public async Task OpenRepositoryAtAsync(string path)
+    public async Task OpenRepositoryAtAsync(string path, bool savedFolder = false)
     {
         ArgumentNullException.ThrowIfNull(path);
         var showing = Tabs.FirstOrDefault(tab => (tab.RepositoryPath ?? tab.PendingPath) is { } folder && WorkspacePaths.Same(folder, path));
@@ -131,7 +135,33 @@ public partial class MainWindowViewModel
             return;
         }
 
-        await TabForOpening().OpenAsync(path);
+        var tab = TabForOpening();
+        if (savedFolder && await OuterRepositoryOfAsync(path) is { } outer)
+        {
+            _log.Info($"Not opened: {path} lies inside {outer}.");
+            tab.Welcome.ShowError(WorkspaceTexts.NotATopOf(path, outer));
+            return;
+        }
+
+        await tab.OpenAsync(path);
+    }
+
+    /// <summary>
+    /// The working tree <paramref name="path"/> lies inside, when git opens it below that tree's top
+    /// (<see cref="IGitRepository.OpenedAtTopAsync"/> false); null for a top, and for a folder git
+    /// cannot open, whose failure the tab's own open then shows.
+    /// </summary>
+    private async Task<string?> OuterRepositoryOfAsync(string path)
+    {
+        try
+        {
+            var repository = await _tabServices.Repositories.OpenAsync(path);
+            return await repository.OpenedAtTopAsync() ? null : repository.WorkingDirectory;
+        }
+        catch (Exception ex) when (ex is NotARepositoryException or GitException or GitUnavailableException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary><c>Clone repository…</c> and its key (5.10): the active tab when it is empty, else a new tab at the end, shows the clone form with the focus in its URL box.</summary>

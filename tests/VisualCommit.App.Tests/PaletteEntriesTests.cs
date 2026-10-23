@@ -352,6 +352,38 @@ public class PaletteEntriesTests
         Assert.Equal("Go to the next dashboard · Solo · Ctrl+Shift+D", Line(empty.Single(entry => entry.Label == "Go to the next dashboard")));
     }
 
+    [AvaloniaFact]
+    public async Task A_workspace_folder_inside_another_repository_is_disabled_and_never_opens_the_outer_one()
+    {
+        // D204: a workspace's folder is its repository's top or nothing. "inner" lies inside ops'
+        // working tree (its .git deleted, say): the dashboard reads it as Not a repository, the
+        // palette's item says why, and an open of the saved folder is refused, not ops opened.
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        var inner = Path.Combine(repo.Path, "inner");
+        Directory.CreateDirectory(inner);
+        var workspace = new Workspace("solo", "Solo", [new WorkspaceRepository(repo.Path), new WorkspaceRepository(inner)]);
+        using var app = ShellDriver.StartWithWorkspace(data.Path, new WorkspaceList { Workspaces = [workspace] }, openDashboardOf: "solo");
+        await app.WaitUntilReadyAsync();
+        await app.WaitForDashboardReadAsync();
+        var shell = app.Session.Shell;
+        var row = shell.ActiveTab.Dashboard!.Rows[1];
+        Assert.Equal("Not a repository", row.State.Text);
+        var reason = row.State.ToolTip!;
+        Assert.StartsWith($"{inner} is not a git repository of its own: it lies inside ", reason, StringComparison.Ordinal);
+
+        Assert.Equal(
+            ["Open repository ops · " + repo.Path, $"Open repository inner · {inner} (disabled: {reason})"],
+            shell.Commands.PaletteItems().Where(entry => entry.Label.StartsWith("Open repository ", StringComparison.Ordinal)).Select(Line));
+
+        await shell.OpenRepositoryAtAsync(inner, savedFolder: true);
+        app.Settle();
+
+        Assert.Equal(2, shell.Tabs.Count);
+        Assert.All(shell.Tabs, tab => Assert.Null(tab.Repository));
+        Assert.Equal(reason + ".", shell.ActiveTab.Welcome.ErrorText);
+    }
+
     /// <summary>An entry as the report writes a row: label · detail · key, then a disabled entry's reason.</summary>
     private static string Line(PaletteEntry entry)
     {

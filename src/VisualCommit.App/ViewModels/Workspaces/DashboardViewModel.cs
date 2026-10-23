@@ -256,6 +256,20 @@ public sealed partial class DashboardViewModel : ObservableObject, IDisposable, 
         return Rows.FirstOrDefault(row => WorkspacePaths.Same(row.Path, savedPath))?.WorkingDirectory;
     }
 
+    /// <summary>
+    /// Why the row whose saved folder is <paramref name="savedPath"/> has no repository of its own
+    /// to open, as its last read found it (its State tooltip, 1.10: a folder state, or git could not
+    /// open it); null while it has one, follows a tab, is not read yet, or there is no such row. The
+    /// palette's <c>Open repository</c> item of that folder is disabled with it (5.5, D204).
+    /// </summary>
+    public string? FolderReasonOf(string savedPath)
+    {
+        ArgumentNullException.ThrowIfNull(savedPath);
+        return Rows.FirstOrDefault(row => WorkspacePaths.Same(row.Path, savedPath)) is { FollowsTab: false } row
+            ? row.FolderState?.ToolTip ?? (row.ErrorText is not null ? row.State.ToolTip : null)
+            : null;
+    }
+
     /// <summary>A double-click or Enter on <paramref name="row"/> (2.3): opens it, or does nothing for a row without a repository.</summary>
     public void OpenRow(DashboardRowViewModel? row)
     {

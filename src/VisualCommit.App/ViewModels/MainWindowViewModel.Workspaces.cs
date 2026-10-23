@@ -64,6 +64,15 @@ public partial class MainWindowViewModel : IWorkspaceHost
         [.. Tabs.Where(tab => !tab.IsDashboard && tab.Repository is not null).Select(tab => tab.Repository!.Path)];
 
     /// <summary>
+    /// Why the workspace's saved folder <paramref name="savedPath"/> has no repository of its own to
+    /// open, as its open dashboard's last read found it (its row's State tooltip); null without an
+    /// open dashboard, a row of that folder or a reason. The palette disables its <c>Open
+    /// repository</c> item with it (5.5, D204).
+    /// </summary>
+    public string? FolderReasonOf(string workspaceId, string savedPath) =>
+        FindOpenDashboard(workspaceId)?.FolderReasonOf(savedPath);
+
+    /// <summary>
     /// The window was activated (2.10's trigger 2, Q4): the active dashboard reads its rows last
     /// read 10 s ago or more. <c>MainWindow</c>'s <c>Activated</c> handler calls it.
     /// </summary>
