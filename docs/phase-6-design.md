@@ -507,6 +507,12 @@ such row "Not a repository". A read never rewrites the saved text. Two rules:
    repository is open (3.4) reports that working directory. "Add repository…", "Add open tabs",
    "Locate…" and the scan's "Already in this workspace" ask it.
 
+As built, the palette's `Open repository` items (5.5) compare a workspace's folder by this rule too:
+by the working directory its open dashboard reads for it, else as saved. A folder saved by hand
+through a link (macOS's `/var` for git's `/private/var`) is then listed beside the recent list's
+spelling while that workspace's dashboard is closed; the app itself always saves git's spelling
+(1.7), so only a hand-written `workspaces.json` shows it (status step 22's review, a known limitation).
+
 ### 1.3 `workspaces.json` and its store (D189)
 
 `AppPaths.WorkspacesFile`, beside `SettingsFile` and `SessionFile`, indented and camelCase: `{
@@ -1226,7 +1232,11 @@ counted in a pass's `{n}`. A request that folds into "one more pass" while a pas
 as of the moment it was made, not when it runs: a row the running pass read after the request is
 fresh, so the window's activation at start, which folds into the start-up read, reads nothing twice
 however long the first pass takes (the lead's ruling of 2026-10-23, after the helpers' smoke test saw
-`read 10` in 16 s followed by `read 3` under load). So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
+`read 10` in 16 s followed by `read 3` under load). A read whose git call is still running 10 s after
+it started, on the read clock, no longer holds the pass either: it keeps its slot and completes later,
+and the pass ends and logs without it, as with a folder check that has not returned, so a share that
+stops answering after its folder check cannot hold F5, the activation's reads and trigger 6 (the
+lead's ruling at status step 22's review). So W1's `Add open tabs` (both added rows follow tabs) and W8's activations
 before the read clock moves log no pass line, and `WaitForDashboardReadAsync` is ended only by a pass
 that read; `DashboardRefreshTests` pins it (2.12). `ShellDriver.Phase6.Dashboard.cs`
 (17.2) has `WaitForDashboardReadAsync()` (the pass's line, no row `Reading…`) and `ActivateWindow()`
@@ -1447,6 +1457,11 @@ adoption and a row's acquisition cannot interleave.
 | `NetworkQueueOn(string commonKey, IOperationQueue? except)` | the first queue of a view model it holds (a tab's, a summary's, one in `Closing`) on that common git folder (`WorktreeKey.Of(CommonDirectory)`), other than `except`, whose `Current` is a network operation (`OperationSnapshot.Kind == OperationKind.Network`, background ones included), or null; read by `BulkSlots` and auto-fetch (4.3) |
 | `Changed` (the key) | a tab registered or unregistered, a summary adopted: rows follow (3.5, 3.6); it starts no read |
 | `DisposeAll()` | disposes every view model in `Summaries` (those in `Closing` are disposed already) and refuses every later acquisition (3.7) |
+
+A worktree is held while any queue on it runs an operation, a background one included, whether the
+queue's view model was a tab's that closed or a summary the registry released: a new queue never runs
+beside a running one on one worktree (the lead's ruling of 2026-10-23 at status step 22's review,
+which found `UnregisterTab` keeping background operations and `ReleaseSummary` not).
 
 ### 3.5 Rows that use a tab's view model
 
@@ -2691,7 +2706,10 @@ edge whatever Fluent's template gives) and styles `TextBlock.vcMenuKey` (`VcText
 **Sizes.** Heights stay (26 per item, `WindowLayout.MenuHeight`). A menu is as wide as its widest item,
 200 to 520 (`MenuLayer.MinMenuWidth`, `MaxMenuWidth`); a keyed item needs 10 + label + 24 + key + 10,
 so a menu of the table grows where a keyed item is its widest (16.1); at 520 the label is cut and the
-key stays whole (the `Auto` column is measured first).
+key stays whole (the `Auto` column is measured first). A dashboard row's menu shows the keys its
+selected row's own keys run (Open: Enter; Move up and Move down: Alt+Up, Alt+Down; Remove from
+workspace: Delete, Cmd+Backspace on macOS), as D192 and D215 allow (the lead's ruling at status step
+22's review; the table above had left the row out).
 
 ### 6.8 Tooltips, help texts and AcceleratorKey
 
@@ -4490,6 +4508,11 @@ Recorded in the handoff; 1 also goes to the backlog and 2 to plan.md's risks (16
    does stop every fetch (`Cannot fetch both`, 128). A terminal push still works.
 9. With a mirror line before a renaming line, git maps a branch's upstream to `refs/heads/main` and
    `git status` says `main`; the app names it `origin/main` (GD15's fallback).
+10. A fetch line that writes into `refs/heads/` (`git remote add --mirror=fetch`) overwrites local
+   branches on every fetch, Fetch all and auto-fetch included, as `git fetch` does on the command line
+   (`+ 45ce852...9d29de9 feature -> feature (forced update)`, the local commit kept by no backup; status
+   step 22's review). `FetchRefspecs.DestinationsOf` finds such lines; nothing skips or backs them up
+   yet: for the backlog and the handoff.
 
 ### 10.9 Tests
 

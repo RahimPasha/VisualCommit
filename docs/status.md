@@ -331,6 +331,15 @@ every commit.
   [39098031906](https://github.com/RahimPasha/VisualCommit/actions/runs/39098031906): all five
   jobs green with 3,235 tests (Windows' Test step 19 min 9 s, macOS's 22 min 50 s, Ubuntu's 2 min
   59 s, the containers' about 4 min 10 s).
+- 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
+  worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
+  files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
+  the 774 scripted pictures match `phase-5-pictures.sha256`, and the 22 that differ were inspected in
+  full (`reference-verdicts.md` there): 21 vary by nature (a temporary folder's name, a caret, a
+  progress bar, the number of reads, a few anti-aliased pixels, most proven by re-encoding to the
+  gate's hash), and `u23f` differs by the machine's change, matching U23 step 19 in full. Phase 1's
+  `14a`'s first `fatal:` line breaks by the temporary name's width. Note for the gate's inspectors:
+  pictures with the focus in a text box (`f10b` to `f10f` too) can catch the caret either way.
 - The default run on `eae7edc` (WP-B and WP-SET merged), with two agents building beside it: 4,689
   of 4,689 in 68 min 59 s. CI run
   [39893475197](https://github.com/RahimPasha/VisualCommit/actions/runs/39893475197) on `eae7edc`: all
