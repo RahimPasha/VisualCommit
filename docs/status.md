@@ -312,8 +312,14 @@ key texts WP-K adds; merge it after WP-K and run `--filter-class "*Phase6ChecksG
 adding to `.editorconfig` `[tests/VisualCommit.VisualTests.Phase6*/*.G.cs]` with
 `generated_code = false` (a `*.g.cs` name is taken for generated code; its three files start with
 `#nullable enable` until then) and re-timing G22 and G23 part A on a quiet machine (83 s and 91 s
-under load). Next: WP-K's review, fixes and merge, part G's merge, then WP-V's parts W, S, K and L
-and WP-R; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+under load). Part W is written on `wip/p6-walk-w` (`a3408ce`, with `wip/p6-keys` merged in, its
+worktree removed): 9 of 11 checks pass, every method under 60 s alone, 45 pictures inspected; the two
+failures are app defects handed to WP-K's fix round (the dashboard's More menu flipped instead of
+clamped, WD10; no row cell's tooltip opens, `DashboardCell`'s style key); its writer saw rows keep the
+hover colour after tab switches in W8's pictures (`w8d`, `w8f` to `w8h`), not asserted: look at it in
+the real window. Part S is being written (on `wip/p6-walk-s`, with `wip/p6-keys` merged). Next:
+WP-K's fixes and merge, then parts G and W merged with it (run `--filter-class "*Phase6ChecksG"` and
+`"*Phase6ChecksW"` on the merge), part S's merge, parts K and L, and WP-R; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 
