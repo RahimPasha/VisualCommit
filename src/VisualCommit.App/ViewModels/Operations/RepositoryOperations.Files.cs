@@ -109,11 +109,18 @@ public sealed partial class RepositoryOperations
             return;
         }
 
+        // Off the UI thread (D59): a file on a share that does not answer holds the check for minutes (0.9).
         var fullPath = FullPathOf(path);
-        if (!File.Exists(fullPath))
+        var fileExists = Services.FileExists;
+        if (!await Task.Run(() => fileExists(fullPath)))
         {
             // The menu disables the item then ("The file is not in the working tree"); it may have gone since.
             Log.Warning($"{Repository.Name}: Open in editor: {path} is not in the working tree.");
+            return;
+        }
+
+        if (IsClosed)
+        {
             return;
         }
 

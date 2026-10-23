@@ -118,6 +118,13 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // As Open repository… and its key (5.10, D215: the button's tooltip names that key): the tab
+        // that already shows the folder is activated, and nothing opens it again.
+        if (_services.ActivateTabShowing?.Invoke(path) == true)
+        {
+            return;
+        }
+
         ErrorText = null;
         await _tab.OpenAsync(path);
     }

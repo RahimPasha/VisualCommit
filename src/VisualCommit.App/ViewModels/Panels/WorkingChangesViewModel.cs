@@ -28,6 +28,18 @@ public interface IWorkingChangesHost
     /// <summary>Commits or amends with <paramref name="message"/> (D68).</summary>
     Task<string?> CommitAsync(string message, bool amend);
 
+    /// <summary>
+    /// Commits, or amends the commit <paramref name="amended"/> names (HEAD when "Amend previous
+    /// commit" was ticked, and the message it loaded is that commit's): an amend refuses inside its
+    /// operation, amending nothing, when HEAD is no longer there (D124: an operation checks what it
+    /// acts on when it runs). Null checks nothing. The default commits as
+    /// <see cref="CommitAsync(string, bool)"/>.
+    /// </summary>
+    Task<string?> CommitAsync(string message, bool amend, HeadState? amended) => CommitAsync(message, amend);
+
+    /// <summary>HEAD as the repository's refs were last read, or null before: what a ticked Amend amends.</summary>
+    HeadState? Head => null;
+
     /// <summary>HEAD's subject and body, for amending.</summary>
     Task<(string Subject, string Body)?> ReadHeadMessageAsync();
 
@@ -156,6 +168,9 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     public string SummaryCounter => (SummaryLimit - Summary.Length).ToString(CultureInfo.InvariantCulture);
 
     public bool IsSummaryOverLimit => Summary.Length > SummaryLimit;
+
+    /// <summary>HEAD when "Amend previous commit" was ticked, whose message it loaded: the commit the amend is for; null while unticked.</summary>
+    private HeadState? _amendedHead;
 
     /// <summary>The commit replaces HEAD's ("Amend previous commit").</summary>
     [ObservableProperty]
@@ -480,7 +495,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
             }
 
             var message = JoinedMessage;
-            var error = await _host.CommitAsync(message, IsAmend);
+            var error = IsAmend ? await _host.CommitAsync(message, amend: true, _amendedHead) : await _host.CommitAsync(message, amend: false);
             if (error is not null)
             {
                 ErrorText = error;
@@ -530,9 +545,14 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Ticking "Amend previous commit" fills empty boxes with HEAD's message.</summary>
+    /// <summary>
+    /// Ticking "Amend previous commit" fills empty boxes with HEAD's message, and keeps which commit
+    /// that is: the amend is for it, and refuses if HEAD moved since (a pull, an operation of another
+    /// tab, a terminal), rather than amend another commit with this one's message.
+    /// </summary>
     async partial void OnIsAmendChanged(bool value)
     {
+        _amendedHead = value ? _host.Head : null;
         if (!value || Summary.Length > 0 || Description.Length > 0)
         {
             return;

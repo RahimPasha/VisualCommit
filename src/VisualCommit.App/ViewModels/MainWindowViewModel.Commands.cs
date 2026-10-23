@@ -122,14 +122,29 @@ public partial class MainWindowViewModel
     public async Task OpenRepositoryAtAsync(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        var showing = Tabs.FirstOrDefault(tab => (tab.RepositoryPath ?? tab.PendingPath) is { } folder && WorkspacePaths.Same(folder, path));
-        if (showing is not null)
+        if (ActivateTabShowing(path))
         {
-            ActivateTabCommand.Execute(showing);
             return;
         }
 
         await TabForOpening().OpenAsync(path);
+    }
+
+    /// <summary>
+    /// 5.10's first step: activates the tab that shows the worktree at <paramref name="path"/> (or
+    /// is opening it) and returns true; false when no tab does. The welcome page's Open takes it
+    /// too (<see cref="TabServices.ActivateTabShowing"/>).
+    /// </summary>
+    private bool ActivateTabShowing(string path)
+    {
+        var showing = Tabs.FirstOrDefault(tab => (tab.RepositoryPath ?? tab.PendingPath) is { } folder && WorkspacePaths.Same(folder, path));
+        if (showing is null)
+        {
+            return false;
+        }
+
+        ActivateTabCommand.Execute(showing);
+        return true;
     }
 
     /// <summary><c>Clone repository…</c> and its key (5.10): the active tab when it is empty, else a new tab at the end, shows the clone form with the focus in its URL box.</summary>

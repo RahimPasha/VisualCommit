@@ -1,3 +1,5 @@
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -448,6 +450,76 @@ public class RepositoryOperationsFilesTests
         app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, other, "-l {line} {path}") });
         await app.Operations.OpenInEditorAsync("src/helpers.py");
         Assert.Equal(["-l", "1", Path.Combine(app.Repository.Path, "src", "helpers.py")], app.Launcher.Edits[^1].Arguments);
+    }
+
+    [AvaloniaFact]
+    public async Task Open_in_editor_checks_its_file_off_the_ui_thread()
+    {
+        // D59, 0.9: a file on a share that does not answer holds a file check for minutes; the
+        // check runs on the pool while the UI thread goes on (held on a gate here).
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        using var gate = new ManualResetEventSlim();
+        var checking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.FileExists = path =>
+        {
+            checking.TrySetResult(Dispatcher.UIThread.CheckAccess());
+            gate.Wait(TimeSpan.FromSeconds(30));
+            return File.Exists(path);
+        };
+
+        var opening = app.Operations.OpenInEditorAsync("src/helpers.py");
+        var onUiThread = await checking.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(onUiThread);
+        Assert.False(opening.IsCompleted);
+        Assert.Empty(app.Launcher.Edits);
+        gate.Set();
+        await opening.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal([Path.Combine(app.Repository.Path, "src", "helpers.py")], Assert.Single(app.Launcher.Edits).Arguments);
+    }
+
+    [AvaloniaFact]
+    public async Task The_palettes_items_of_the_open_diff_read_no_disk_and_go_by_the_diffs_own_check()
+    {
+        // 5.5: the open diff's items are built at every opening of the palette and on Mod+Shift+H
+        // and Mod+Shift+B, on the UI thread; whether the file is in the working tree comes from the
+        // diff's read, checked on the pool, never from the disk then.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var (onUiThread, onPool) = (0, 0);
+        app.Services.FileExists = path =>
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                Interlocked.Increment(ref onUiThread);
+            }
+            else
+            {
+                Interlocked.Increment(ref onPool);
+            }
+
+            return File.Exists(path);
+        };
+        var calculator = app.Operations.Status.Unstaged.Single(file => file.Path == "src/Calculator.cs");
+
+        app.Repository.OpenDiff(calculator, staged: false);
+        await DashboardTestSupport.WaitUntilAsync(() => app.Repository.Diff is { Body: not VisualCommit.App.ViewModels.Diff.DiffBody.Loading }, "the diff's read");
+
+        Assert.True(app.Repository.Diff!.ExistsInWorkingTree);
+        Assert.True(Volatile.Read(ref onPool) >= 1);
+        Assert.Equal(0, Volatile.Read(ref onUiThread));
+        for (var opening = 0; opening < 3; opening++)
+        {
+            var menu = app.Repository.DiffMenuForPalette(app.Repository.MenuContext);
+            Assert.NotNull(menu);
+            Assert.True(menu.Items.Single(item => item.Label == "Open file").IsEnabled);
+            Assert.True(menu.Items.Single(item => item.Label == "Blame").IsEnabled);
+        }
+
+        Assert.Equal(0, Volatile.Read(ref onUiThread));
     }
 
     [Fact]

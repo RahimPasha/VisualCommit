@@ -132,6 +132,66 @@ public class WorkingChangesTests
     }
 
     [Fact]
+    public async Task An_amend_ticked_before_head_moved_refuses_in_d124s_words_and_amends_nothing()
+    {
+        // Amend was ticked on HEAD's commit, whose message it loaded (phase 2's rule); then HEAD moved
+        // (a Pull all, another tab's operation, a terminal: here a commit made outside). The commit
+        // would amend the new HEAD with the old message; it refuses inside its operation instead
+        // (D124), says so in the stage panel, and the new HEAD stays as it is.
+        using var repo = await Scenarios.LinearAsync();
+        using var viewModel = await OpenAsync(repo);
+        var ticked = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
+        var tickedSubject = (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim();
+        viewModel.Changes.IsAmend = true;
+        await WaitUntilAsync(() => viewModel.Changes.Summary == tickedSubject, "HEAD's message in the boxes");
+
+        var moved = await repo.CommitFileAsync("pulled.txt", "pulled\n", "Pulled from elsewhere");
+        await viewModel.RefreshAsync();
+        Assert.True(viewModel.Changes.IsAmend);
+        Assert.True(viewModel.Changes.CanCommit);
+
+        await viewModel.Changes.CommitCommand.ExecuteAsync(null);
+
+        Assert.Equal($"main moved while this waited: it was at {ticked[..7]} and is at {moved[..7]} now. Nothing was amended.", viewModel.Changes.ErrorText);
+        Assert.Equal(moved, (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim());
+        Assert.Equal("Pulled from elsewhere", (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
+        Assert.Equal(tickedSubject, viewModel.Changes.Summary);
+
+        // Ticked again on the new HEAD, the amend goes ahead.
+        viewModel.Changes.IsAmend = false;
+        viewModel.Changes.Summary = string.Empty;
+        viewModel.Changes.Description = string.Empty;
+        viewModel.Changes.IsAmend = true;
+        await WaitUntilAsync(() => viewModel.Changes.Summary == "Pulled from elsewhere", "the new HEAD's message");
+        viewModel.Changes.Summary = "Pulled, amended";
+        await viewModel.Changes.CommitCommand.ExecuteAsync(null);
+        Assert.Null(viewModel.Changes.ErrorText);
+        Assert.Equal("Pulled, amended", (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
+        Assert.Equal(ticked, (await repo.GitAsync("rev-parse", "HEAD~1")).StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task Ticking_amend_keeps_the_head_it_was_ticked_on_for_the_commit()
+    {
+        var host = new FakeHost { HeadMessage = ("Subject", "Body"), CurrentHead = new HeadState("main", new string('a', 40)) };
+        var panel = new WorkingChangesViewModel(host, new MainWindowViewModelTests.FakeSettings());
+        panel.Update(ThreeStaged, hasHead: true);
+
+        panel.IsAmend = true;
+        await host.HeadMessageRead.Task;
+        host.CurrentHead = new HeadState("main", new string('b', 40));
+        await panel.CommitCommand.ExecuteAsync(null);
+
+        Assert.Equal(new HeadState("main", new string('a', 40)), Assert.Single(host.Amended));
+
+        // A commit that is no amend checks no HEAD.
+        panel.Summary = "Plain";
+        await panel.CommitCommand.ExecuteAsync(null);
+        Assert.Equal(("Plain", false), host.Committed[^1]);
+        Assert.Single(host.Amended);
+    }
+
+    [Fact]
     public async Task The_changes_scenario_shows_the_working_changes_row_with_its_lists()
     {
         using var repo = await Scenarios.ChangesAsync();
@@ -415,6 +475,17 @@ public class WorkingChangesTests
         Assert.All(viewModel.Changes.Unstaged.Rows, row => Assert.False(row.IsSelected));
     }
 
+    /// <summary>Waits until <paramref name="condition"/> holds, looking every few milliseconds, for at most 30 seconds.</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for {what}.");
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+    }
+
     private static async Task<RepositoryViewModel> OpenAsync(TempRepo repo, IDialogService? dialogs = null)
     {
         var repository = await GitRepository.OpenAsync(Runner, repo.Path, TestContext.Current.CancellationToken);
@@ -432,6 +503,13 @@ public class WorkingChangesTests
 
         public List<(string Message, bool Amend)> Committed { get; } = [];
 
+        /// <summary>The HEAD each amend was for, as the panel passed it.</summary>
+        public List<HeadState?> Amended { get; } = [];
+
+        public HeadState? CurrentHead { get; set; }
+
+        public HeadState? Head => CurrentHead;
+
         public TaskCompletionSource HeadMessageRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool HasHead => true;
@@ -448,6 +526,16 @@ public class WorkingChangesTests
         {
             Committed.Add((message, amend));
             return Task.FromResult(CommitError);
+        }
+
+        public Task<string?> CommitAsync(string message, bool amend, HeadState? amended)
+        {
+            if (amend)
+            {
+                Amended.Add(amended);
+            }
+
+            return CommitAsync(message, amend);
         }
 
         public Task<(string Subject, string Body)?> ReadHeadMessageAsync()

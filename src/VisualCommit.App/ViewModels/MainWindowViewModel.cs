@@ -64,6 +64,9 @@ public partial class MainWindowViewModel : ObservableObject
         // A workspace opens through the window (docs/phase-6-design.md 1.3, 2.2).
         _tabServices.WorkspaceHost = this;
 
+        // The welcome page's Open takes Open repository…'s first step too (5.10, D215).
+        _tabServices.ActivateTabShowing = ActivateTabShowing;
+
         // The theme shown follows the service: the user's choice, or the system's mode (11.6).
         FollowThemeService();
 

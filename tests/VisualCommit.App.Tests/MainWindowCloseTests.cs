@@ -205,6 +205,39 @@ public class MainWindowCloseTests
     }
 
     [AvaloniaFact]
+    public async Task The_welcome_pages_open_activates_the_tab_that_shows_the_folder_as_its_key_does()
+    {
+        // 5.10's first step, D215: the button's tooltip names Ctrl+O, so it does what the key does;
+        // it opened the folder a second time in its own tab.
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var docs = provider.Add("docs");
+        var folders = new VisualCommit.Testing.Headless.FakeFolderPicker();
+        var window = DashboardTestSupport.Window(DashboardTestSupport.Services(provider, folders: folders));
+        Assert.True(await window.ActiveTab.OpenAsync(api.WorkingDirectory));
+        window.NewTabCommand.Execute(null);
+        var empty = window.ActiveTab;
+        var opens = provider.Opens;
+
+        folders.Answer(api.WorkingDirectory);
+        await empty.Welcome.OpenCommand.ExecuteAsync(null);
+
+        Assert.Same(window.Tabs[0], window.ActiveTab);
+        Assert.Equal(2, window.Tabs.Count);
+        Assert.True(empty.IsEmpty);
+        Assert.Equal(opens, provider.Opens);
+        Assert.Equal(["Open a repository"], folders.Titles);
+
+        // A folder no tab shows opens in the welcome page's own tab, as before.
+        window.ActivateTabCommand.Execute(empty);
+        folders.Answer(docs.WorkingDirectory);
+        await empty.Welcome.OpenCommand.ExecuteAsync(null);
+        Assert.Same(empty, window.ActiveTab);
+        Assert.True(empty.RepositoryPath is { } opened && VisualCommit.Core.Workspaces.WorkspacePaths.Same(docs.WorkingDirectory, opened));
+        Assert.Equal(2, window.Tabs.Count);
+    }
+
+    [AvaloniaFact]
     public async Task Dialogs_name_their_repository_while_a_dashboard_is_open()
     {
         using var provider = new FakeProvider();
