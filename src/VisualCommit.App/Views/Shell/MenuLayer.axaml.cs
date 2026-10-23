@@ -120,19 +120,22 @@ public partial class MenuLayer : UserControl
     /// and 2 below the pointer; when it would cross the right edge it opens to the left of the
     /// pointer (its right edge 2 left of it), past the bottom above it (its bottom edge 2 above
     /// it); then it is moved to stay 4 inside the area. By the keyboard the same, without the gap
-    /// (its top-left at the point: the focused row's bottom-left corner).
+    /// (its top-left at the point: the focused row's bottom-left corner). A button's menu
+    /// (<see cref="MenuOpenedBy.Button"/>, WD10) has its top-left at the point, the button's
+    /// bottom-left corner, and is only moved to stay 4 inside the area, never flipped: a menu that
+    /// would cross the right edge keeps its top at the button's bottom with its right edge 4 inside.
     /// </summary>
     public static Point PlaceMenu(Size area, Point at, Size menu, MenuOpenedBy openedBy)
     {
         var gap = openedBy == MenuOpenedBy.Pointer ? PointerGap : 0;
         var x = at.X + gap;
         var y = at.Y + gap;
-        if (x + menu.Width > area.Width)
+        if (openedBy != MenuOpenedBy.Button && x + menu.Width > area.Width)
         {
             x = at.X - gap - menu.Width;
         }
 
-        if (y + menu.Height > area.Height)
+        if (openedBy != MenuOpenedBy.Button && y + menu.Height > area.Height)
         {
             y = at.Y - gap - menu.Height;
         }

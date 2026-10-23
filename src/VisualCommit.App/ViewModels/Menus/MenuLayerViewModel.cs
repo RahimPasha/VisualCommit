@@ -11,6 +11,14 @@ public enum MenuOpenedBy
 
     /// <summary>Shift+F10 or the Menu key: the menu opens with its top-left at the given point (the focused row's bottom-left corner).</summary>
     Keyboard,
+
+    /// <summary>
+    /// A button's own menu (the dashboard's <c>DashboardMore</c>, docs/phase-6-design.md 2.5, WD10):
+    /// the menu opens with its top-left at the given point (the button's bottom-left corner) and is
+    /// never flipped to the point's other side, only moved to stay inside the window. Logged as a
+    /// pointer's opening (a click).
+    /// </summary>
+    Button,
 }
 
 /// <summary>

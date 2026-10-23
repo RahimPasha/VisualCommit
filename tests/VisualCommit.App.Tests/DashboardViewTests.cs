@@ -157,6 +157,76 @@ public class DashboardViewTests
     }
 
     [AvaloniaFact]
+    public async Task Each_cell_shows_its_tooltip_under_the_pointer_and_a_cell_still_selects_opens_and_menus_its_row()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var app = await StartAsync(copy, data, 1100, 700);
+        var dashboard = app.ActiveDashboard!;
+        var infra = dashboard.Rows.Single(row => row.Name == "infra");
+        infra.BulkText = new DashboardCellText("HEAD is detached: check out a branch to pull", DashboardTone.Secondary, "HEAD is detached: check out a branch to pull");
+        app.Settle();
+
+        // 2.6, 15.5 (the report's W2 step 2): the pointer finds each kind of cell, over its text or
+        // its arrows, and the cell's own tooltip opens there.
+        foreach (var (name, id) in new[]
+        {
+            ("api", "DashboardRowName"), ("api", "DashboardRowAheadBehind"), ("mobile", "DashboardRowAheadBehind"),
+            ("billing", "DashboardRowChanges"), ("old-site", "DashboardRowState"), ("infra", "DashboardRowOperation"),
+        })
+        {
+            var cell = Cell(app.DashboardRowControl(name), id);
+            var tip = ToolTip.GetTip(cell) as string;
+            Assert.False(string.IsNullOrEmpty(tip), $"{name}'s {id} has a tooltip.");
+            Assert.IsType<DashboardCell>(cell);
+            Assert.Equal(tip, await app.RestPointerOnAsync(cell));
+            Assert.True(ToolTip.GetIsOpen(cell), $"{name}'s {id}'s own tooltip is open.");
+            app.MoveToNeutral();
+            await app.WaitForAsync(() => !ToolTip.GetIsOpen(cell), $"{name}'s {id}'s tooltip to close");
+        }
+
+        // On a cell, a click still selects its row, a right-click opens the row's menu and a
+        // double-click opens the row (2.7).
+        var docs = app.DashboardRowControl("docs");
+        app.Click(Cell(docs, "DashboardRowAheadBehind"));
+        Assert.Equal("docs", dashboard.SelectedRow?.Name);
+        app.RightClick(Cell(docs, "DashboardRowChanges"));
+        Assert.Equal("docs", app.Menu().Header);
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+        app.DoubleClick(Cell(docs, "DashboardRowName"));
+        await app.WaitForRepositoryAsync(Patience);
+        Assert.Equal("docs", app.Session.Shell.ActiveTab.Title);
+    }
+
+    [AvaloniaFact]
+    public async Task The_More_menu_opens_below_its_button_moved_inside_the_window_not_flipped()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var app = await StartAsync(copy, data, 1100, 700);
+
+        // 2.5, WD10 (the report's W1 step 9): its top at the button's bottom, its right edge 4
+        // inside the window, as a button's menu (MenuOpenedBy.Button), not opened to the left of
+        // the button's corner as a pointer's menu would be.
+        var more = app.BoundsOf(app.FindByAutomationId("DashboardMore"));
+        app.Click(app.FindByAutomationId("DashboardMore"));
+        var menu = app.Menu();
+        Assert.Equal(MenuOpenedBy.Button, app.Session.Shell.Menu.OpenedBy);
+        Assert.Equal(new MenuPosition(more.X, more.Bottom), app.Session.Shell.Menu.Position);
+        Assert.Equal(1096, menu.Bounds.Right, 1.0);
+        Assert.Equal(more.Bottom, menu.Bounds.Top, 1.0);
+        Assert.True(menu.Bounds.Left < more.X, $"The menu at {menu.Bounds} was moved left of the button's corner {more.X}.");
+        TestPictures.Save(app, "wpk-dashboard-more-menu");
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+
+        // The rule alone: moved, never flipped, also at the bottom edge.
+        Assert.Equal(new Point(896, 124), MenuLayer.PlaceMenu(new Size(1100, 700), new Point(1060, 124), new Size(200, 120), MenuOpenedBy.Button));
+        Assert.Equal(new Point(896, 576), MenuLayer.PlaceMenu(new Size(1100, 700), new Point(1060, 650), new Size(200, 120), MenuOpenedBy.Button));
+    }
+
+    [AvaloniaFact]
     public async Task At_1920_light_the_folder_column_shows_every_saved_folder_whole()
     {
         using var copy = await Scenarios.WorkspaceAsync();
