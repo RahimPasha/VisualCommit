@@ -534,12 +534,15 @@ public sealed class BulkRun
     }
 
     /// <summary>
-    /// 4.2's table from the row's state now: a folder state or a failed read leaves it out with
-    /// nothing new in its Operation cell; a row not read yet, or without a live view model, waits
-    /// for a read; otherwise the toolbar's rule, its first reason in <c>Reasons</c>' order.
+    /// 4.2's table from <paramref name="row"/>'s state now, for a run of <paramref name="kind"/>: a
+    /// folder state or a failed read leaves it out with nothing new in its Operation cell; a row not
+    /// read yet, or without a live view model, waits for a read; otherwise the toolbar's rule, its
+    /// first reason in <c>Reasons</c>' order. The one rule: the dashboard's toolbar asks it too
+    /// (<see cref="DashboardBulkViewModel"/>: a run would act on a row it does not leave out, 4.10).
     /// </summary>
-    private Decision Decide(DashboardRowViewModel row)
+    internal static Decision Decide(DashboardRowViewModel row, BulkKind kind)
     {
+        ArgumentNullException.ThrowIfNull(row);
         if (row.FolderState is not null || row.ErrorText is not null)
         {
             return new Decision.Skip(null);
@@ -550,15 +553,17 @@ public sealed class BulkRun
             return Decision.Read.Instance;
         }
 
-        return DecideReason(row) is { } reason ? new Decision.Skip(reason) : Decision.Go.Instance;
+        return ReasonOf(row.Refs, row.Status, kind) is { } reason ? new Decision.Skip(reason) : Decision.Go.Instance;
     }
 
-    private string? DecideReason(DashboardRowViewModel row) => ReasonOf(row.Refs, row.Status);
+    private Decision Decide(DashboardRowViewModel row) => Decide(row, Kind);
+
+    private string? DecideReason(DashboardRowViewModel row) => ReasonOf(row.Refs, row.Status, Kind);
 
     /// <summary>The toolbar's reason from <paramref name="repository"/>'s own refs and status, or null.</summary>
-    private string? ReasonOf(RepositoryViewModel repository) => ReasonOf(repository.Refs, repository.Status);
+    private string? ReasonOf(RepositoryViewModel repository) => ReasonOf(repository.Refs, repository.Status, Kind);
 
-    private string? ReasonOf(RepoRefs? refs, WorkingTreeStatus? status)
+    private static string? ReasonOf(RepoRefs? refs, WorkingTreeStatus? status, BulkKind kind)
     {
         if (refs is null || status is null)
         {
@@ -566,7 +571,7 @@ public sealed class BulkRun
         }
 
         var states = ToolbarViewModel.StatesFor(refs, status);
-        return Kind == BulkKind.Fetch ? states.Fetch.Reason : states.Pull.Reason;
+        return kind == BulkKind.Fetch ? states.Fetch.Reason : states.Pull.Reason;
     }
 
     private void Skip(BulkRunRow row, string? reason)
@@ -641,7 +646,7 @@ public sealed class BulkRun
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
     /// <summary>What 4.2's table decides for a row now.</summary>
-    private abstract record Decision
+    internal abstract record Decision
     {
         /// <summary>Left out, with the toolbar's reason, or none for a row without a repository.</summary>
         public sealed record Skip(string? Reason) : Decision;
