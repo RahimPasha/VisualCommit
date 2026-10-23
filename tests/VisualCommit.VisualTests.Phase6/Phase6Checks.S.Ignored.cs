@@ -32,7 +32,7 @@ public sealed partial class Phase6ChecksS
         Assert.Equal(PartS.BuildOutput, WorkingFile(repo, "build/out.bin"));
         Assert.Equal(PartS.Ig0Ignored, await GitLinesAsync(repo, "status", "--porcelain=v1", "--ignored"));
         AssertGraph(app, PartS.Ig0, PartS.IgLanes, working: null);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         await RefusedCheckoutAsync(app, repo, () => CheckOutVendorAsync(app), PartS.CheckOutVendor, PartS.SwitchVendorKeptCommand, PartS.IgnoredFileInTheWay("vendor"), picture: null);
         Assert.Equal(exact, await repo.ExactStateAsync());
         AssertUndo(app, PartS.NothingToUndo);
@@ -40,9 +40,9 @@ public sealed partial class Phase6ChecksS
 
         // Step 2: Keep ignored files turned off on the screen and saved: settings.json only, no git write.
         layout.Step = "step 2";
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         var screen = await app.OpenSettingsAsync();
-        var opened = app.CallMark();
+        var opened = await QuietMarkAsync(app);
         await AssertScreenReadsAsync(app, sequence, data, repo, varExit: null, until: opened);
         AssertChecked(app.SettingsSnapshot(), "KeepIgnoredCheckBox", true);
         ClickField(app, "KeepIgnoredCheckBox");
@@ -82,7 +82,7 @@ public sealed partial class Phase6ChecksS
         // Step 4: off, Check out vendor runs as git runs it: secret.env overwritten without a word (Q5).
         layout.Step = "step 4";
         var mark = app.LogMark();
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         await CheckOutVendorAsync(app);
         await WaitForOutcomeAsync(app, repo, PartS.CheckOutVendor, mark, OperationOutcome.Succeeded);
         Shot(app, "s21b-off-checkout-ran");
@@ -135,7 +135,7 @@ public sealed partial class Phase6ChecksS
     private static async Task RefusedCheckoutAsync(ShellDriver app, TempRepo repo, Func<Task> act, string title, string command, string summary, string? picture)
     {
         var mark = app.LogMark();
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         await act();
         await WaitForOutcomeAsync(app, repo, title, mark, OperationOutcome.Failed);
         if (picture is not null)

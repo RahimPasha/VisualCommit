@@ -271,6 +271,25 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>
+    /// Whether every open tab's repository watcher is quiet (<see cref="RepositoryViewModel.IsWatcherQuiet"/>):
+    /// no change it saw waits for its quiet period or the UI thread, and no refresh runs. A write
+    /// the system reports late (macOS) is not known until it is reported.
+    /// </summary>
+    public bool WatchersQuiet => Session.Shell.Tabs.Select(tab => tab.Repository).OfType<RepositoryViewModel>().All(repository => repository.IsWatcherQuiet);
+
+    /// <summary>
+    /// Waits until <see cref="WatchersQuiet"/>: a check calls it before it marks the git calls of
+    /// its next step, so that the refresh a change of the step before started (the app's own write
+    /// reported after its operation, as macOS reports it) ends before the mark, never across it.
+    /// </summary>
+    /// <exception cref="TimeoutException">A watcher was still busy when the time was up.</exception>
+    public async Task WaitForWatchersQuietAsync(TimeSpan? timeout = null)
+    {
+        await WaitForAsync(() => WatchersQuiet, "every repository watcher to be quiet: no change waiting and no refresh running", timeout);
+        Settle();
+    }
+
+    /// <summary>
     /// The active tab's stage panel has no read of the operation's message pending (phase 4 design
     /// 5.3): it fills its message boxes after a read of its own, after the status is shown.
     /// </summary>

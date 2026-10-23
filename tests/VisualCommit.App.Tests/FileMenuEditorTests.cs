@@ -23,7 +23,7 @@ public class FileMenuEditorTests
 
     private static readonly FileMenuTarget Reader = new(new ChangedFile("src/Reader.cs", FileChangeKind.Modified), IsUntracked: false, ExistsInWorkingTree: true);
 
-    public static TheoryData<string> Builders => new() { "unstaged", "staged", "commit", "diff", "compare" };
+    public static TheoryData<string> Builders => new() { "unstaged", "staged", "commit", "diff", "diff-staged", "diff-commit", "compare" };
 
     [Theory]
     [MemberData(nameof(Builders))]
@@ -104,6 +104,8 @@ public class FileMenuEditorTests
         "staged" => RepositoryMenus.ForStagedFile(context, file, actions),
         "commit" => RepositoryMenus.ForCommitFile(context, file with { CommitSha = MainWork }, actions),
         "diff" => RepositoryMenus.ForDiff(context, new DiffMenuTarget(file, DiffSide.Unstaged, HasSelectedLines: false, Hunk: null, ActsOnLines: false), actions, new NoLines()),
+        "diff-staged" => RepositoryMenus.ForDiff(context, new DiffMenuTarget(file, DiffSide.Staged, HasSelectedLines: false, Hunk: null, ActsOnLines: false), actions, new NoLines()),
+        "diff-commit" => RepositoryMenus.ForDiff(context, new DiffMenuTarget(file with { CommitSha = MainWork }, DiffSide.Commit, HasSelectedLines: false, Hunk: null, ActsOnLines: false), actions, new NoLines()),
         _ => RepositoryMenus.ForCompareFile(context, file with { CommitSha = MainWork }, actions),
     };
 

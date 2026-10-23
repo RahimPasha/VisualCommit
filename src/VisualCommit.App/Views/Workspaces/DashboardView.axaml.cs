@@ -180,5 +180,5 @@ public partial class DashboardView : UserControl
 
     /// <summary>The platform's command key, from its hotkey configuration as <see cref="KeyRouter"/> reads it: Cmd where the command modifier is Meta, Ctrl otherwise.</summary>
     private CommandKey PlatformCommandKey() =>
-        this.GetPlatformSettings()?.HotkeyConfiguration.CommandModifiers.HasFlag(KeyModifiers.Meta) == true ? CommandKey.Cmd : CommandKey.Ctrl;
+        ShortcutKeys.CommandKeyOf(ShortcutKeys.CommandModifierOf(this.GetPlatformSettings()?.HotkeyConfiguration));
 }

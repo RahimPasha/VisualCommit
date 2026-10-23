@@ -39,7 +39,7 @@ public sealed partial class Phase6ChecksS
         await repo.GitAsync("add", "--", PartS.NotesFile);
         repo.WriteFile(PartS.DraftFile, PartS.DraftText);
         using var app = await StartAsync(data, repo);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         var folder = await WorkingTreeAsync(repo);
         AssertGraph(app, PartS.St0, PartS.StLanes, PartS.St0wWorking);
         Assert.Equal(PartS.S17Status, await GitLinesAsync(repo, "status", "--porcelain=v1"));
@@ -63,9 +63,9 @@ public sealed partial class Phase6ChecksS
 
         // Step 3: .py added in General; Save writes settings.json and no git key; the reads at the opening and the read back.
         layout.Step = "step 3";
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         var screen = await app.OpenSettingsAsync();
-        var opened = app.CallMark();
+        var opened = await QuietMarkAsync(app);
         await AssertScreenReadsAsync(app, sequence, data, repo, varExit: null, until: opened);
         app.TypeInto("RunnableExtraBox", PartS.PyExtension);
         AssertGeneral(app, layout, extra: PartS.PyExtension);

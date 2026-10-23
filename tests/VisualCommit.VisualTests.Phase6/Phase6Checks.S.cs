@@ -46,7 +46,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         // Step 1: a session of two tabs, the copy active and an empty one; the seed (SD3).
         using var app = await StartAsync(data, repo, PartS.SeedConfigOnly, [repo.Path, null]);
         var configAtStart = ConfigText(repo);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         AssertGraph(app, PartS.St0, PartS.StLanes, working: null);
         Assert.Equal([PartS.Settings, "New tab"], app.Session.Shell.Tabs.Select(tab => tab.Title));
         Assert.Equal(PartS.Settings, app.Session.Shell.ActiveTab.Title);
@@ -57,7 +57,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
 
         layout.Step = "step 2";
         // Step 2: a click on Settings; the screen on General, its reads ended.
-        var sequence = app.CallMark();
+        var sequence = await QuietMarkAsync(app);
         app.Click(app.FindByAutomationId("SettingsButton"));
         var screen = await app.WaitForDialogAsync<SettingsDialogViewModel>();
         await app.WaitForSettingsReadsAsync(screen);
@@ -74,7 +74,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
 
         layout.Step = "step 3";
         // Step 3: Down twice moves the focus down the list, General still shown; Enter shows Tools and saves nothing.
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         app.PressKey(Key.Down);
         await AssertFocusAsync(app, "SettingsNavGit");
         Assert.Equal(SettingsSection.General, screen.SelectedSection);
@@ -90,7 +90,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         Assert.False(screen.IsClosed, "Enter on a section button closed the screen.");
         Assert.False(Named<TextBlock>(app, "SettingsSaving").IsEffectivelyVisible, "SettingsSaving shows.");
         AssertNoSettingsFile(data);
-        Assert.Empty(app.CallsSince(sequence));
+        await AssertNoCallsAsync(app, sequence, "The section changes");
         AssertToolsNone(app);
 
         layout.Step = "step 4";
@@ -119,7 +119,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
             pullInEffect: PartS.PullNothingSet(PartS.Main));
         Assert.Null(app.SettingsSnapshot().Field("BranchRebaseNotice"));
         AssertFits(app, layout);
-        Assert.Empty(app.CallsSince(sequence));
+        await AssertNoCallsAsync(app, sequence, "The section and scope changes");
 
         layout.Step = "step 6";
         // Step 6: each scope keeps its own edit (D200).
@@ -155,7 +155,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         layout.Step = "step 9";
         // Step 9: Browse… answered with a program that does not exist (SD16); Save refused by its validation.
         app.Folders.AnswerFile(PartS.MissingProgram);
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         app.Click(app.FindByAutomationId("EditorBrowseButton"));
         await app.WaitForAsync(() => app.Folders.FileTitles.Count == 1, "the file dialog to be asked for");
         var saved = await app.SaveSettingsAsync();
@@ -210,7 +210,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         app.Click(TabButton(app, "New tab"));
         await app.WaitForAsync(() => app.Session.Shell.ActiveTab.Title == "New tab", "the empty tab to be active");
         AssertSettingsButton(app);
-        sequence = app.CallMark();
+        sequence = await QuietMarkAsync(app);
         var third = await app.OpenSettingsAsync();
         Assert.Equal(SettingsSection.General, third.SelectedSection);
         AssertNav(app, "SettingsNavGeneral");
@@ -240,7 +240,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         // Step 14: one tab, the same seed, 1920×1080; Ctrl+,.
         using var app = await StartAsync(data, repo, PartS.SeedConfigOnly, width: 1920, height: 1080);
         var configAtStart = ConfigText(repo);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         var folder = await WorkingTreeAsync(repo);
         AssertGraph(app, PartS.St0, PartS.StLanes, working: null);
         var screen = await app.OpenSettingsAsync(SettingsOpening.Key);

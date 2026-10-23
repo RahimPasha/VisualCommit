@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels.Operations;
 using static VisualCommit.App.ViewModels.Commands.ShortcutKey;
 using static VisualCommit.App.ViewModels.Commands.ShortcutModifiers;
 
@@ -248,8 +249,8 @@ public static class AppShortcuts
             "Repository",
             [
                 FromCommands("Fetch all remotes", AppCommand.Fetch),
-                FromCommands("Pull", AppCommand.Pull),
-                FromCommands("Push", AppCommand.Push),
+                FromCommands(OperationTexts.MenuTexts.ToolbarPull, AppCommand.Pull),
+                FromCommands(OperationTexts.MenuTexts.ToolbarPush, AppCommand.Push),
                 FromCommands("Create branch…", AppCommand.CreateBranch),
                 FromCommands("Stash changes…", AppCommand.Stash),
                 FromCommands("Pop the newest stash", AppCommand.Pop),

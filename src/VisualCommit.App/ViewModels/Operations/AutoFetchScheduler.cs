@@ -231,7 +231,8 @@ public sealed class AutoFetchScheduler : IDisposable
     /// </summary>
     public static bool Fetched(GitOperation operation, OperationResult result) =>
         result.Outcome == OperationOutcome.Succeeded
-        && (operation.Title is "Fetch" or "Pull" or OperationTexts.PullRebaseTitle or Title
+        && (operation.Title == OperationTexts.FetchAll.Title
+            || operation.Title is OperationTexts.PullTitle or OperationTexts.PullRebaseTitle or Title
             || operation.Title.StartsWith("Fetch ", StringComparison.Ordinal)
             || operation.DedupeKey?.StartsWith("fetch:", StringComparison.Ordinal) == true
             || operation.DedupeKey?.StartsWith("pull:", StringComparison.Ordinal) == true);

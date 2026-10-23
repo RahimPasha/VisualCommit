@@ -243,6 +243,19 @@ public class AppShortcutsTests
     }
 
     [Fact]
+    public void The_command_modifier_and_whose_words_it_takes_come_from_the_hotkey_configuration_alone()
+    {
+        // 6.1, 6.3, 6.4: the one place the router, the dialogs' Mod+Enter and the key texts read them.
+        Assert.Equal(KeyModifiers.Meta, ShortcutKeys.CommandModifierOf(KeyModifiers.Meta));
+        Assert.Equal(KeyModifiers.Control, ShortcutKeys.CommandModifierOf(KeyModifiers.Control));
+        Assert.Equal(KeyModifiers.Control, ShortcutKeys.CommandModifierOf(KeyModifiers.None));
+        Assert.Equal(KeyModifiers.Control, ShortcutKeys.CommandModifierOf((KeyModifiers?)null));
+        Assert.Equal(KeyModifiers.Control, ShortcutKeys.CommandModifierOf((Avalonia.Input.Platform.PlatformHotkeyConfiguration?)null));
+        Assert.Equal(CommandKey.Cmd, ShortcutKeys.CommandKeyOf(KeyModifiers.Meta));
+        Assert.Equal(CommandKey.Ctrl, ShortcutKeys.CommandKeyOf(KeyModifiers.Control));
+    }
+
+    [Fact]
     public void The_commands_without_a_key_are_6_1s_list()
     {
         // D199: each reached through the palette and its menu or button. Discard all changes… is a

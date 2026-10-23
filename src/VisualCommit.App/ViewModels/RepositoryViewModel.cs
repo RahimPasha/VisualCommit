@@ -78,6 +78,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     // also a watcher made while that operation runs.
     private int _operationPauses;
     private IDisposable? _watcherPause;
+
+    /// <summary>The watcher's Changed events posted to the UI thread whose refresh has not been asked for yet.</summary>
+    private int _changesPosted;
     private DiscardSnapshot? _lastSnapshot;
     private Dictionary<string, string?>? _afterDiscard;
 
@@ -305,6 +308,20 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>The repository's operation queue (docs/phase-3-design.md 1, D81).</summary>
     public IOperationQueue Queue => _queue;
 
+    /// <summary>
+    /// Whether nothing the watcher saw is still on its way to the screen (D52): no change waits for
+    /// the watcher's quiet period or is being raised (<see cref="IRepositoryWatcher.IsQuiet"/>), none
+    /// waits for the UI thread, and no refresh or status read runs, whoever asked for it. A change
+    /// the system has not reported yet is not known: macOS reports a write a while after it, so its
+    /// refresh can still start later. The harnesses wait for it before they mark the git calls of a
+    /// check's next step, so that a refresh's calls never straddle the mark.
+    /// </summary>
+    public bool IsWatcherQuiet =>
+        (_watcher?.IsQuiet ?? true)
+        && Volatile.Read(ref _changesPosted) == 0
+        && Volatile.Read(ref _refreshing) is not { IsCompleted: false }
+        && Volatile.Read(ref _statusRefreshing) is not { IsCompleted: false };
+
     /// <summary>What the status bar shows of the operations (4e).</summary>
     public OperationStatusViewModel OperationStatus { get; }
 
@@ -455,7 +472,22 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             // off the UI thread: on Linux it walks every folder of the working tree.
             var watcher = Repository.CreateWatcher();
             UseWatcher(watcher);
-            watcher.Changed += (_, e) => OnUiThread(() => OnRepositoryChanged(e));
+            watcher.Changed += (_, e) =>
+            {
+                // Counted until its refresh has been asked for on the UI thread (IsWatcherQuiet).
+                Interlocked.Increment(ref _changesPosted);
+                OnUiThread(() =>
+                {
+                    try
+                    {
+                        OnRepositoryChanged(e);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _changesPosted);
+                    }
+                });
+            };
             var watching = Task.Run(watcher.Start, CancellationToken.None);
 
             // The refs, the history and the status are read side by side: git log does not need

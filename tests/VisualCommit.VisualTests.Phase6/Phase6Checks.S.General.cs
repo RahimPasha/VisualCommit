@@ -32,7 +32,7 @@ public sealed partial class Phase6ChecksS
         File.WriteAllText(SettingsFile(data), PartS.S16SettingsFile);
         var written = File.ReadAllBytes(SettingsFile(data));
         using var app = await StartAsync(data, repo);
-        var start = app.CallMark();
+        var start = await QuietMarkAsync(app);
         Assert.Equal(1, app.CountLogLines(AppLogFile.Containing(PartS.AutoFetchOverride)));
         AssertGraph(app, PartS.St0, PartS.StLanes, PartS.St0wWorking);
         var screen = await app.OpenSettingsAsync();

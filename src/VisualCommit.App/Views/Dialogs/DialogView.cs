@@ -113,9 +113,7 @@ public class DialogView : UserControl
             return;
         }
 
-        var command = this.GetPlatformSettings()?.HotkeyConfiguration.CommandModifiers is { } modifiers && modifiers != KeyModifiers.None
-            ? modifiers
-            : KeyModifiers.Control;
+        var command = ShortcutKeys.CommandModifierOf(this.GetPlatformSettings()?.HotkeyConfiguration);
         if (e.KeyModifiers != command)
         {
             return;

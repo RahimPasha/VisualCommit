@@ -34,7 +34,7 @@ public class ToolbarToolTipTests
             ["Fetch all remotes (Ctrl+Shift+F)", "Pull from origin/main (Ctrl+Shift+L)", "Push main to origin/main (Ctrl+Shift+K)", "Create a branch at HEAD (Ctrl+B)", "Stash your changes (Ctrl+Shift+S)", "Pop the newest stash (Ctrl+Shift+O)", "Search commits (Ctrl+F)"],
             ToolTips(toolbar));
 
-        toolbar.Keys = new KeyTexts(CommandKey.Cmd);
+        toolbar.KeyTexts = new KeyTexts(CommandKey.Cmd);
         Assert.Equal(
             ["Fetch all remotes (Cmd+Shift+F)", "Pull from origin/main (Cmd+Shift+L)", "Push main to origin/main (Cmd+Shift+K)", "Create a branch at HEAD (Cmd+B)", "Stash your changes (Cmd+Shift+S)", "Pop the newest stash (Cmd+Shift+O)", "Search commits (Cmd+F)"],
             ToolTips(toolbar));
@@ -64,7 +64,7 @@ public class ToolbarToolTipTests
         var topic = new GitRef("refs/heads/topic", "topic", RefKind.LocalBranch, Main, IsHead: true);
         using var untracked = await StartAsync(new RepoRefs(new HeadState("topic", Main), [topic], [], ["origin"]), WorkingTreeStatus.Clean);
         Assert.Equal("Push topic to a remote (Ctrl+Shift+K)", untracked.Toolbar.PushToolTip);
-        untracked.Toolbar.Keys = new KeyTexts(CommandKey.Cmd);
+        untracked.Toolbar.KeyTexts = new KeyTexts(CommandKey.Cmd);
         Assert.Equal("Push topic to a remote (Cmd+Shift+K)", untracked.Toolbar.PushToolTip);
     }
 
@@ -88,8 +88,21 @@ public class ToolbarToolTipTests
         toolbar.UpdateUndoStates();
         Assert.Equal(("Undo commit \"Fix the parser\" (Ctrl+Z)", null, "Redo checkout of main (Ctrl+Y)", null), (toolbar.UndoToolTip, toolbar.UndoDisabledReason, toolbar.RedoToolTip, toolbar.RedoDisabledReason));
         Assert.Equal(("Undo commit \"Fix the parser\"", "Redo checkout of main"), (toolbar.UndoText, toolbar.RedoText));
-        toolbar.Keys = new KeyTexts(CommandKey.Cmd);
+        toolbar.KeyTexts = new KeyTexts(CommandKey.Cmd);
         Assert.Equal(("Undo commit \"Fix the parser\" (Cmd+Z)", "Redo checkout of main (Cmd+Shift+Z)"), (toolbar.UndoToolTip, toolbar.RedoToolTip));
+    }
+
+    [Fact]
+    public async Task Branch_without_a_first_commit_keeps_its_reason_alone_which_the_menus_read()
+    {
+        // 6.8, 6.12: an unborn HEAD disables Branch with its reason, its tooltip that reason alone.
+        using var viewModel = await StartAsync(new RepoRefs(new HeadState("main", null), [], [], []), Changed);
+        var toolbar = viewModel.Toolbar;
+        Assert.Equal((false, "Make the first commit first", "Make the first commit first"), (toolbar.CanBranch, toolbar.BranchDisabledReason, toolbar.BranchToolTip));
+        Assert.Equal(new ToolbarAvailability(false, "Make the first commit first"), ToolbarMenuState.Of(toolbar).Branch);
+
+        // Search needs only the repository: no reason (11.2).
+        Assert.Equal((true, (string?)null, "Search commits (Ctrl+F)"), (toolbar.CanSearch, toolbar.SearchDisabledReason, toolbar.SearchToolTip));
     }
 
     [Fact]
@@ -99,7 +112,7 @@ public class ToolbarToolTipTests
         var toolbar = ToolbarViewModel.ForDashboard(new FixedDashboard());
         Assert.Equal(("Fetch every repository of Web (Ctrl+Shift+F)", "Pull every repository of Web (Ctrl+Shift+L)"), (toolbar.FetchToolTip, toolbar.PullToolTip));
 
-        toolbar.Keys = new KeyTexts(CommandKey.Cmd);
+        toolbar.KeyTexts = new KeyTexts(CommandKey.Cmd);
         Assert.Equal(("Fetch every repository of Web (Cmd+Shift+F)", "Pull every repository of Web (Cmd+Shift+L)"), (toolbar.FetchToolTip, toolbar.PullToolTip));
         Assert.Equal((null, null), (toolbar.FetchDisabledReason, toolbar.PullDisabledReason));
     }
@@ -133,9 +146,9 @@ public class ToolbarToolTipTests
         Assert.Null(panel.CommitToolTip);
         panel.Summary = "Note more core work";
         Assert.Equal(("Commit 1 file", null, "Commit 1 file (Ctrl+Enter)"), (panel.CommitButtonText, panel.CommitDisabledReason, panel.CommitToolTip));
-        panel.Keys = new KeyTexts(CommandKey.Cmd);
+        panel.KeyTexts = new KeyTexts(CommandKey.Cmd);
         Assert.Equal("Commit 1 file (Cmd+Enter)", panel.CommitToolTip);
-        panel.Keys = new KeyTexts(CommandKey.Ctrl);
+        panel.KeyTexts = new KeyTexts(CommandKey.Ctrl);
 
         // A merge resolved: "Commit merge (Ctrl+Enter)".
         panel.Update(Status([], [], merge), hasHead: true);

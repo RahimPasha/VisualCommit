@@ -51,6 +51,71 @@ public class EditorCommandsTests
         Assert.Equal(arguments, command.Arguments);
     }
 
+    public static TheoryData<EditorPlatform> Platforms => new() { EditorPlatform.Windows, EditorPlatform.MacOS, EditorPlatform.Linux };
+
+    [Theory]
+    [MemberData(nameof(Platforms))]
+    public void Every_editor_of_each_platforms_catalogue_starts_with_its_arguments_with_and_without_a_line(EditorPlatform platform)
+    {
+        // 12.2, 12.4, 12.10: the catalogue's entries in their order, written out by hand, each
+        // built for a file without a line and at line 12, from the program's folder on Windows
+        // and from the user's home elsewhere.
+        var windows = platform == EditorPlatform.Windows;
+        var file = windows ? File : "/src/web-app/Program.cs";
+        var program = windows ? @"C:\Tools\Editor\Ed.exe" : "/opt/tools/ed";
+        string[] Plain() => [file];
+        string[] Goto() => ["--goto", file + ":12"];
+        string[] JetBrainsLine() => ["--line", "12", file];
+        var jetBrains = new[] { "idea", "rider", "pycharm", "webstorm", "clion", "goland", "phpstorm", "rubymine", "rustrover" }
+            .Select(id => (id, Plain(), JetBrainsLine()));
+        var code = new[] { "vscode", "vscode-insiders", "cursor", "vscodium" }.Where(id => platform != EditorPlatform.Linux || id != "cursor").Select(id => (id, Plain(), Goto()));
+        (string Id, string[] Plain, string[] Line)[] expected = platform switch
+        {
+            EditorPlatform.Windows =>
+            [
+                .. code,
+                ("sublime", Plain(), [file + ":12"]),
+                ("notepadpp", Plain(), ["-n12", file]),
+                .. jetBrains,
+                ("visualstudio", ["/Edit", file], ["/Edit", file]),
+                ("gvim", Plain(), ["+12", file]),
+                ("notepad", Plain(), Plain()),
+            ],
+            EditorPlatform.MacOS =>
+            [
+                .. code,
+                ("sublime", Plain(), [file + ":12"]),
+                .. jetBrains,
+                ("bbedit", Plain(), ["+12", file]),
+                ("xcode", Plain(), ["--line", "12", file]),
+                ("textedit", ["-a", "TextEdit", file], ["-a", "TextEdit", file]),
+            ],
+            _ =>
+            [
+                .. code,
+                ("sublime", Plain(), [file + ":12"]),
+                .. jetBrains,
+                ("gvim", Plain(), ["+12", file]),
+                ("gedit", Plain(), ["+12", file]),
+                ("gnome-text-editor", Plain(), Plain()),
+                ("kate", Plain(), ["--line", "12", file]),
+                ("kwrite", Plain(), ["--line", "12", file]),
+            ],
+        };
+
+        Assert.Equal(expected.Select(entry => entry.Id), KnownEditors.For(platform).Select(editor => editor.Id));
+        foreach (var (id, plain, line) in expected)
+        {
+            var known = KnownEditors.Find(id, platform);
+            var withoutLine = EditorCommands.Build(new EditorSetting(id, program), known, file, null, platform, home: "/home/ann");
+            var atLine = EditorCommands.Build(new EditorSetting(id, program), known, file, 12, platform, home: "/home/ann");
+            Assert.True(plain.SequenceEqual(withoutLine.Arguments), $"{id} without a line: {string.Join(' ', withoutLine.Arguments)}");
+            Assert.True(line.SequenceEqual(atLine.Arguments), $"{id} at line 12: {string.Join(' ', atLine.Arguments)}");
+            Assert.Equal((program, windows ? @"C:\Tools\Editor" : "/home/ann"), (withoutLine.FileName, withoutLine.WorkingDirectory));
+            Assert.Equal([EditorCommands.ElectronRunAsNode], withoutLine.RemovedVariables);
+        }
+    }
+
     [Fact]
     public void A_known_editors_arguments_come_from_the_catalogue_never_from_the_setting()
     {

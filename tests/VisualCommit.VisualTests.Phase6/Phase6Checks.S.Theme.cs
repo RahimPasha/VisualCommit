@@ -136,7 +136,7 @@ public sealed partial class Phase6ChecksS
             async () =>
             {
                 using var app = await StartAsync(data, repo);
-                var start = app.CallMark();
+                var start = await QuietMarkAsync(app);
                 AssertVariant(app, dark: true, AppTheme.Dark);
                 var mark = app.LogMark();
                 var screen = await app.OpenSettingsAsync(SettingsOpening.Key);
