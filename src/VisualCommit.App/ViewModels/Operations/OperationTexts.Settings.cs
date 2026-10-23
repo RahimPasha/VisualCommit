@@ -22,7 +22,10 @@ public static partial class OperationTexts
     /// <summary>The error title when the chosen editor cannot start (12.7).</summary>
     public const string EditorFailedTitle = "Could not open the editor";
 
-    /// <summary>The editor failure's extra button, which opens the settings screen on Tools (12.7).</summary>
+    /// <summary>
+    /// <c>Open settings…</c>: the palette's command (5.4, 14.7) and the editor failure's extra
+    /// button, which opens the settings screen on Tools (12.7); it opens a dialog, so it ends in "…".
+    /// </summary>
     public const string OpenSettingsButton = "Open settings…";
 
     /// <summary>The summary when the editor could not be started (12.7).</summary>
@@ -37,7 +40,11 @@ public static partial class OperationTexts
         public const string OpenInEditor = "Open in editor";
     }
 
-    /// <summary>The settings screen's texts (docs/phase-6-design.md 14.8, 14.6, 7, 8, 12), one place for the view models and their tests.</summary>
+    /// <summary>
+    /// The settings screen's texts (docs/phase-6-design.md 14.8, 14.6, 7, 8, 12), one place for the view
+    /// models and the view, which binds its labels, notes and buttons to them with <c>x:Static</c>
+    /// (<c>Views/Dialogs/SettingsDialogView.axaml</c>).
+    /// </summary>
     public static class SettingsTexts
     {
         // The frame (7.1, 7.8).
