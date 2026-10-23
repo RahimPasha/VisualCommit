@@ -3869,6 +3869,19 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   launch's own `<data>\harness\global.gitconfig` (8.13) and reads each PickItem's help text, its
   detail; L34 samples the graph area at (480, 600), below ops's eight rows, where phase 0's spot falls
   on a commit row.
+- **Status step 22's review fixes, merged in `15b00c8` (fixer C), `1dfdd6d` (fixer B) and `d6a634d` (fixer
+  A).** No earlier walk-through project changed. Fixers B and C added tests and changed only phase 6's;
+  the dashboard row menu's keys are under "Changed in this report after its first commit". Fixer A:
+  phase 5's backups-menu test (`RepositoryMenusTests.Pages.cs`) asserted that the longest configured
+  remote name wins for a backup's push back; when two remote names fit the backup's name the item is
+  now disabled with `RemoteOfBackupAmbiguous` ("The remote this backup came from cannot be told:
+  origin/eu/main fits origin/eu and origin"), and the description still names the longest (design
+  10.4). Phase 6's `ToolbarToolTipTests` and `UpstreamNameTests` asserted `pr/7`'s Push enabled; Push and
+  Force push to an upstream that is not a branch are now disabled with R4, so they show the upstream
+  named by its tracking ref with a renamed branch (GD15's rule unchanged). No call log of an earlier
+  expectation of a merge, pick, rebase or stash changed; every push of a branch, and undo's and redo's
+  steps that write a branch on a remote, make one more `git config --null --get-regexp ^remote\.`
+  inside the operation, which no walk-through expectation counts.
 
 ### Changed in this report after its first commit
 
