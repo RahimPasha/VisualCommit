@@ -77,7 +77,7 @@ public sealed partial class RealApp
 
     // ---- The Pick dialog (7.7) ----
 
-    /// <summary>One option of the Pick dialog: its text (its name), its detail (empty for none), whether it is selected.</summary>
+    /// <summary>One option of the Pick dialog: its text (its name), its detail (its help text; empty for none), whether it is selected.</summary>
     public sealed record PickOption(string Text, string Detail, bool IsSelected, AutomationElement Element);
 
     /// <summary>Waits until the Pick dialog titled <paramref name="title"/> shows, stacked on what opened it, and returns its root.</summary>
@@ -94,8 +94,9 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The options of the Pick dialog <paramref name="pick"/>, top to bottom (<c>PickItem</c>, named by
-    /// its text): each with the text element after its text, its detail in the secondary colour
-    /// (7.7), read by name (the whole detail, even where it is drawn cut at its start).
+    /// its text): each with its detail (7.7) as its help text, which the view sets on each item it
+    /// makes (<c>PickDialogView</c>'s <c>ContainerPrepared</c>: the whole detail, even where it is drawn
+    /// cut at its start), empty for an option without one.
     /// </summary>
     public IReadOnlyList<PickOption> PickOptions(AutomationElement pick)
     {
@@ -103,7 +104,7 @@ public sealed partial class RealApp
         return [.. pick.FindAllDescendants(condition => condition.ByAutomationId("PickItem"))
             .Where(item => item.BoundingRectangle is { Width: > 0, Height: > 0 })
             .OrderBy(item => item.BoundingRectangle.Top)
-            .Select(item => new PickOption(item.Name, TextsIn(item).Where(text => text != item.Name).FirstOrDefault() ?? string.Empty, IsSelected(item), item))];
+            .Select(item => new PickOption(item.Name, HelpTextOf(item), IsSelected(item), item))];
     }
 
     /// <summary>

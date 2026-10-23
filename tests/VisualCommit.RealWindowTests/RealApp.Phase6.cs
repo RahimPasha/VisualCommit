@@ -187,6 +187,52 @@ public sealed partial class RealApp
         return element.Patterns.RangeValue.PatternOrDefault is { } range ? range.Value.ValueOrDefault : null;
     }
 
+    /// <summary>
+    /// The automation id of the element UI Automation reports as having the keyboard focus (its
+    /// focused element, K10's <c>FilterBox</c> and <c>GraphRows</c>), or null when there is none or it
+    /// cannot be read.
+    /// </summary>
+    public string? FocusedAutomationId()
+    {
+        try
+        {
+            return _automation.FocusedElement()?.Properties.AutomationId.ValueOrDefault;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Waits until UI Automation's focused element has the automation id <paramref name="automationId"/>.</summary>
+    public void WaitForFocusedElement(string automationId, TimeSpan timeout) =>
+        WaitForTelling(
+            () => FocusedAutomationId() == automationId,
+            $"UI Automation's focused element to be {automationId}",
+            timeout,
+            () => $"It is {FocusedAutomationId() ?? "none"}.");
+
+    /// <summary>
+    /// The text of the key a keyed menu item draws at its right (<c>ContextMenuItemKey</c>, 6.7): the
+    /// key element inside <paramref name="item"/>, or else the one on screen beside it (its vertical
+    /// centre within the item's bounds); null when the item draws no key.
+    /// </summary>
+    public string? MenuItemKeyText(AutomationElement item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.FindFirstDescendant(condition => condition.ByAutomationId("ContextMenuItemKey")) is { } inside)
+        {
+            return inside.Name;
+        }
+
+        var bounds = BoundsOf(item);
+        return ShownElements("ContextMenuItemKey")
+            .Select(key => (Key: key, Bounds: BoundsOf(key)))
+            .Where(key => key.Bounds.Top + (key.Bounds.Height / 2) > bounds.Top && key.Bounds.Top + (key.Bounds.Height / 2) < bounds.Bottom)
+            .Select(key => key.Key.Name)
+            .FirstOrDefault();
+    }
+
     /// <summary>A text box's text, read through its Value pattern.</summary>
     public string BoxText(string automationId) => Find(automationId).AsTextBox().Text;
 

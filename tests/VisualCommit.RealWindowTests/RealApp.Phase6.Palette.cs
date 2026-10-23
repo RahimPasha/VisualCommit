@@ -28,8 +28,9 @@ public sealed partial class RealApp
     /// <param name="Key">Its key's text (its accelerator key), empty for none.</param>
     /// <param name="IsHighlighted">Whether it is highlighted (selected).</param>
     /// <param name="Bounds">Where it is.</param>
+    /// <param name="InView">Whether it lies whole in the list's view (the list scrolls; rows near the view are made too).</param>
     /// <param name="Element">The row's element.</param>
-    public sealed record PaletteRowView(string Label, string Detail, string Reason, string Key, bool IsHighlighted, RectangleF Bounds, AutomationElement Element)
+    public sealed record PaletteRowView(string Label, string Detail, string Reason, string Key, bool IsHighlighted, RectangleF Bounds, bool InView, AutomationElement Element)
     {
         /// <summary>The row as one line, for a failure's message.</summary>
         public override string ToString() =>
@@ -55,7 +56,10 @@ public sealed partial class RealApp
     /// <summary>The palette's box's text (<c>CommandPaletteBox</c>, through its Value pattern).</summary>
     public string PaletteQuery() => BoxText("CommandPaletteBox");
 
-    /// <summary>The palette's rows on screen, top to bottom; empty when it shows none (<c>No matches</c>) or is closed.</summary>
+    /// <summary>
+    /// The palette's rows the list has made, top to bottom, each with whether it lies whole in the
+    /// list's view; empty when it shows none (<c>No matches</c>) or is closed.
+    /// </summary>
     public IReadOnlyList<PaletteRowView> PaletteRows()
     {
         if (ShownElements("CommandPaletteList") is not [var list])
@@ -63,8 +67,9 @@ public sealed partial class RealApp
             return [];
         }
 
+        var view = BoundsOf(list);
         return [.. list.FindAllDescendants(condition => condition.ByAutomationId("CommandPaletteItem"))
-            .Where(row => !row.IsOffscreen && row.BoundingRectangle is { Width: > 0, Height: > 0 })
+            .Where(row => row.BoundingRectangle is { Width: > 0, Height: > 0 })
             .Select(row => (Row: row, Bounds: BoundsOf(row)))
             .OrderBy(entry => entry.Bounds.Top)
             .Select(entry => new PaletteRowView(
@@ -74,11 +79,15 @@ public sealed partial class RealApp
                 AcceleratorKeyOf(entry.Row),
                 IsSelected(entry.Row),
                 entry.Bounds,
+                entry.Bounds.Top >= view.Top - 0.5f && entry.Bounds.Bottom <= view.Bottom + 0.5f,
                 entry.Row))];
     }
 
-    /// <summary>The palette's rows as one line each, for a failure's message.</summary>
-    public string DescribePaletteRows() => string.Join(" | ", PaletteRows());
+    /// <summary>The palette's rows that lie whole in the list's view, top to bottom (<see cref="PaletteRows"/>).</summary>
+    public IReadOnlyList<PaletteRowView> PaletteRowsInView() => [.. PaletteRows().Where(row => row.InView)];
+
+    /// <summary>The palette's rows in view as one line each, for a failure's message.</summary>
+    public string DescribePaletteRows() => string.Join(" | ", PaletteRowsInView());
 
     /// <summary>Whether the palette shows <c>No matches</c> in place of its list.</summary>
     public bool PaletteShowsNothing => ShownElements("CommandPaletteEmpty").Count == 1 && ShownElements("CommandPaletteList").Count == 0;
