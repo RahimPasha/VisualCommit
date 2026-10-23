@@ -305,16 +305,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The gate, status step 23, on `da54d8b` or a later code commit: after a rest, `dotnet test` at the
-root; then, after telling the owner, the real-window pass (`dotnet test --project
-tests/VisualCommit.RealWindowTests -c Release`) on the same commit; the picture list
-(`docs/test-reports/phase-6-pictures.sha256`) right after both passes; the earlier pictures compared
-with `D:/Projects/Personal/gate6-reference/` (`scripts/compare-pictures.py`); every picture inspected
-(phase 6's in full, the earlier ones against the references and 16.1's regions, the real-window
-captures with their twins); the report completed. Done ahead of the closing steps: design 16.2's
-wording in `plan.md`, `requirements.md` and this file (`290353b`; risks 10, 12, 18 and 25 and the
-phase's outcome wait for the gate); `architecture.md` for step 25 on `wip/p6-architecture`, to be
-merged once it has fixer D's changes.
+Status step 23, the gate: both passes passed on `774464d` (Notes). Next: the inspectors' verdicts
+(`D:/Projects/Personal/gate6-inspection/verdicts/`); fix what they find (a fix to anything but docs
+means both passes again, and only pictures whose bytes changed against the list need inspecting
+again); then commit the picture list, complete the report (Run, results, Found by the gate, Other
+platforms with CI's pictures), and go on with closing steps 24 to 30: CI of the gate commit
+(run 40027897278 on `774464d`), the handoff's GATE-TBD markers, `plan.md`'s outcome and risks 10, 12,
+18 and 25, the cold read, status, the owner.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -367,7 +364,24 @@ every commit.
   five refused checkouts on five scenarios in one test (12 s alone), had run 180 s under the load,
   while tests beside it took 80 to 103 s; it is one case per form since `a937ca6`. The other eight
   projects passed 3,033 of 3,033 in 49 min 22 s (App.Tests the last). The second run, on `a937ca6`,
-  is the gate's.
+  was stopped too (below).
+- The gate's second default run, on `a937ca6`: the hang watchdog stopped `VisualCommit.Git.Tests` 1,481 s
+  in on the reflog scenario's template (18 s alone with its test, past 180 s under the load), and
+  phase 3's check 23 waited 30 s for a pop of 24 git calls; every other test passed. D237 (`774464d`):
+  shared preparations held to 10 minutes of their own, the driver's default wait and phases 2's and
+  3's write waits 60 s. CI run 40019921605 on `a937ca6` and 40027897278 on `774464d`: all five jobs
+  green (on `774464d` Windows' Test step 35 min 0 s, macOS's 24 min 39 s; on `a937ca6` macOS's had
+  taken 43 min 12 s, near D232's 44).
+- **The gate's passes, on `774464d`**, after a 10-minute rest each: `dotnet test` 5,034 of 5,034 in
+  55 min 14 s (the projects ended after: phases 0 to 2's walk-through 11 min 44 s, Phase6Look 8 min
+  28 s, phase 4's 19 min 16 s, phase 5's 24 min 15 s, Phase6 28 min 45 s, Phase5Undo 37 min 23 s,
+  phase 3's 38 min 0 s, Git.Tests 45 min 59 s, App.Tests 54 min 4 s); the real-window pass 67 of 67
+  in 25 min 29 s (26 min 8 s with its build), at its first attempt, Q1 1,264 ms (467 frames, 95th
+  percentile 0.9 ms, longest 7.4 ms), 200 % scaling, work area 1500×952. The picture list
+  (`docs/test-reports/phase-6-pictures.sha256`, 1,329 files) was written right after; the comparison
+  with 17.7's references (`D:/Projects/Personal/gate6-inspection/compare/`): 1,080 earlier files
+  changed (630 in the toolbar alone), 249 new. Thirteen Opus inspectors judge every picture
+  (verdicts in `D:/Projects/Personal/gate6-inspection/verdicts/`).
 - 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
   worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
   files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
