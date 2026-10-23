@@ -39,7 +39,7 @@ public sealed class OpenRepositories
     /// <summary>The tabs' view models in registration order (3.7: the window waits for them as for its tabs').</summary>
     public IReadOnlyList<RepositoryViewModel> Tabs => [.. _tabs];
 
-    /// <summary>Raised with the worktree's key when a tab registered or unregistered, or a summary was adopted (3.5, 3.6); it starts no read.</summary>
+    /// <summary>Raised with the worktree's key when a tab registered or unregistered (an adopted summary's tab included, 3.5, 3.6); it starts no read.</summary>
     public event EventHandler<string>? Changed;
 
     /// <summary>The worktree key of <paramref name="repository"/>'s view model.</summary>
@@ -138,18 +138,15 @@ public sealed class OpenRepositories
 
     /// <summary>
     /// The worktree's summary-mode view model, removed with its holders, for a tab to adopt (3.3):
-    /// its queue, a running operation and its undo history carry over; or null.
+    /// its queue, a running operation and its undo history carry over; or null. It raises no
+    /// <see cref="Changed"/>: the adopting tab registers the view model next
+    /// (<see cref="RegisterTab"/>), whose change the rows follow, so that no row sees the summary
+    /// gone with no tab for it and lets go of what it keeps of it (3.5, 4.6: a run's kept dialog).
     /// </summary>
     public RepositoryViewModel? TryAdopt(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        if (!_summaries.Remove(key, out var summary))
-        {
-            return null;
-        }
-
-        Changed?.Invoke(this, key);
-        return summary.ViewModel;
+        return _summaries.Remove(key, out var summary) ? summary.ViewModel : null;
     }
 
     /// <summary>

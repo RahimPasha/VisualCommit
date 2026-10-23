@@ -282,9 +282,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
     /// <summary>
     /// The registry changed for <paramref name="key"/> (3.5, 3.6): a tab registered or
-    /// unregistered, a summary adopted. The row follows the first registered tab on its worktree,
-    /// keeps its own summary while it holds it, and otherwise keeps its values, counts as never
-    /// read and waits for the dashboard's next trigger. It starts no read.
+    /// unregistered, the tab that adopted the row's summary among them. The row follows the first
+    /// registered tab on its worktree (an adopted summary: the same object, with what the row keeps
+    /// of it), keeps its own summary while it holds it, and otherwise keeps its values, counts as
+    /// never read and waits for the dashboard's next trigger. It starts no read.
     /// </summary>
     internal void OnRegistryChanged(string key)
     {
@@ -307,10 +308,18 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
         if (_key is { } own && registry.TabFor(own) is { } tab)
         {
-            if (!ReferenceEquals(tab, Repository) || _owns)
+            if (ReferenceEquals(tab, Repository) && _owns)
             {
-                // A tab adopted the row's summary (the same object: the row goes on using it), or
-                // registered first on the worktree.
+                // A tab adopted the row's summary (3.3): the same object, which the row goes on
+                // using (3.5) with what it keeps of it, a run's kept dialog included (4.6); the
+                // registry holds it for the dashboard no more, so there is nothing to release.
+                _owns = false;
+                OnPropertyChanged(nameof(FollowsTab));
+                CopyFrom(tab);
+            }
+            else if (!ReferenceEquals(tab, Repository))
+            {
+                // A tab registered first on the worktree.
                 ReleaseOwn();
                 Follow(tab);
             }
@@ -330,9 +339,10 @@ public sealed partial class DashboardRowViewModel : ObservableObject, IDisposabl
 
         if (!_owns || !registry.Holds(Repository, _dashboard))
         {
-            // The tab the row followed closed with no other on the worktree (3.6), or the summary
-            // was taken away (adopted by a tab that is not registered yet): the row keeps its
-            // values, its Operation cell empties and it counts as never read.
+            // The tab the row followed closed with no other on the worktree (3.6), or the registry
+            // let the summary go: the row keeps its values, its Operation cell empties and it
+            // counts as never read. (An adoption raises no change of its own: the adopting tab's
+            // registration, above, keeps the row on the same object.)
             _owns = false;
             Detach();
             LastRead = null;

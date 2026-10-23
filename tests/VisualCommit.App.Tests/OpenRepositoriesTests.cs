@@ -106,10 +106,14 @@ public class OpenRepositoriesTests
 
         Assert.Same(summary, registry.TryAdopt(key));
 
+        // Silent: the adopting tab's registration is the change the rows follow (3.5, 4.6).
         Assert.Empty(registry.Summaries);
         Assert.False(registry.Holds(summary, holder));
-        Assert.Equal([key], changes);
+        Assert.Empty(changes);
         Assert.Null(registry.TryAdopt(key));
+        registry.RegisterTab(summary);
+        Assert.Equal([key], changes);
+        registry.UnregisterTab(summary);
 
         // A release by the old holder changes nothing now.
         registry.ReleaseSummary(summary, holder);

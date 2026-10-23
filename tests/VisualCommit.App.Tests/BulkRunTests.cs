@@ -708,6 +708,60 @@ public partial class BulkRunTests
     }
 
     [AvaloniaFact]
+    public async Task Opening_a_failed_row_keeps_the_kept_dialog_in_every_dashboard_that_shares_its_summary()
+    {
+        // 4.6: the kept dialog goes only at the row's next operation, the next run or a new view
+        // model; 3.5: an adopted view model's rows go on using the same object. Two dashboards of
+        // one workspace share the summary; the shown one's run failed in the row it opens.
+        using var provider = new BulkProvider();
+        provider.Add("api").FetchFailure = BulkRepository.CannotFetch("../remotes/missing.git");
+        var services = Services(provider, ["api"]);
+        var window = DashboardTestSupport.Window(services);
+        services.WorkspaceHost!.ShowWorkspace("web", window.ActiveTab);
+        var shown = window.ActiveTab.Dashboard!;
+        await WaitUntilAsync(() => shown.Rows[0].HasRepository, "the shown dashboard's read");
+        using var other = await BulkHost.StartAsync(provider, ["api"], services: services);
+        var summary = shown.Rows[0].Repository!;
+        Assert.Same(summary, other["api"].Repository);
+        using var dialogs = new ScriptedDialogs(services.DialogHost);
+        await shown.Bulk.FetchAllAsync().WaitAsync(Patience);
+        Assert.Empty(dialogs.Shown);
+        Assert.True(shown.Rows[0].ShowsDetails);
+        var held = new Dictionary<DashboardRowViewModel, List<RepositoryViewModel?>> { [shown.Rows[0]] = [], [other["api"]] = [] };
+        foreach (var (row, seen) in held)
+        {
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(DashboardRowViewModel.Repository))
+                {
+                    seen.Add(row.Repository);
+                }
+            };
+        }
+
+        shown.OpenRow(shown.Rows[0]);
+        await WaitUntilAsync(() => window.ActiveTab.Repository is not null, "the row's tab");
+
+        // Both rows kept the same object throughout, and the shown one its dialog.
+        Assert.Same(summary, window.ActiveTab.Repository);
+        Assert.False(summary.IsSummary);
+        foreach (var (row, seen) in held)
+        {
+            Assert.Empty(seen);
+            Assert.Same(summary, row.Repository);
+            Assert.True(row.FollowsTab);
+        }
+
+        Assert.NotNull(shown.Rows[0].KeptDialog);
+        Assert.True(shown.Rows[0].ShowsDetails);
+        dialogs.CloseError();
+        await shown.Rows[0].ShowDetailsCommand.ExecuteAsync(null);
+        var error = Assert.Single(dialogs.Errors);
+        Assert.Equal(("Fetch failed", "Git could not fetch from origin.", "api"), (error.Title, error.Summary, error.RepositoryName));
+        window.CloseAll();
+    }
+
+    [AvaloniaFact]
     public async Task A_pulls_rebase_stop_with_nothing_to_look_at_keeps_its_notice_for_Details()
     {
         // 4.6: the pull's "Rebase stopped" notice of a stop with nothing to look at (an exec that
