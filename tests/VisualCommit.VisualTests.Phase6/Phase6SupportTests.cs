@@ -344,6 +344,37 @@ public sealed class Phase6SupportTests : Phase6Checks
     }
 
     /// <summary>
+    /// Start and StartWithTabs take other tool catalogues than the fixed ones (17.2, 12.9): WP-SET's
+    /// HeldMergeTools, whose merge-tool list the session's early lookup (8.10) then waits for.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_start_takes_held_merge_tools_in_place_of_the_fixed_catalogues()
+    {
+        var held = new HeldMergeTools();
+        try
+        {
+            using (var data = new TempDirectory("data"))
+            using (var app = ShellDriver.Start(data.Path, tools: held.Catalogues))
+            {
+                await app.WaitUntilReadyAsync();
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+                await app.WaitForAsync(() => held.Requests == 1, "the session's early lookup of the merge tools");
+            }
+
+            using (var data = new TempDirectory("data"))
+            using (var app = ShellDriver.StartWithTabs(data.Path, [(string?)null], tools: held.Catalogues))
+            {
+                await app.WaitUntilReadyAsync();
+                Assert.Same(held.Catalogues, app.Session.Services.Tools);
+            }
+        }
+        finally
+        {
+            held.Release();
+        }
+    }
+
+    /// <summary>
     /// WaitForTabOpenedAsync (part W's harness additions): a repository's tab restored behind the
     /// active dashboard opens in the background; the wait ends with its history loaded, its status
     /// read, its clean-up at opening's read made outside any operation in its folder, and its queue

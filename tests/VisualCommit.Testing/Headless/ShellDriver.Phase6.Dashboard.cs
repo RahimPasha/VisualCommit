@@ -25,11 +25,12 @@ public sealed partial class ShellDriver
     public DashboardViewModel? ActiveDashboard => Session.Shell.ActiveTab.Dashboard;
 
     /// <summary>
-    /// The active dashboard as drawn (2.5, 2.6): the header, and per row its cells' texts, tones,
-    /// tooltips, automation names and whether each is cut, whether <c>Cancel</c> or
-    /// <c>Details…</c> shows, whether it is selected, whether it has a read outstanding
-    /// (<c>IsReading</c>), and whether a pass is under way (<c>IsPassRunning</c>, WD37). A row in
-    /// view is read from its drawn cells; one out of view from its view model.
+    /// The active dashboard as drawn (2.5, 2.6): the header (its texts and their colours, the run's
+    /// text, tone and bar, <c>Cancel all</c> and the buttons: its <c>Header</c>),
+    /// and per row its cells' texts, tones, tooltips, automation names and whether each is cut,
+    /// whether <c>Cancel</c> or <c>Details…</c> shows, whether it is selected, whether it has a read
+    /// outstanding (<c>IsReading</c>), and whether a pass is under way (<c>IsPassRunning</c>, WD37).
+    /// A row in view is read from its drawn cells; one out of view from its view model.
     /// </summary>
     /// <exception cref="InvalidOperationException">The active tab is no dashboard.</exception>
     public DashboardSnapshot DashboardSnapshot()
