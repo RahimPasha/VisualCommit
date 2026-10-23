@@ -104,6 +104,40 @@
     <Setter Property="MaxWidth" Value="460" />
   </Style>
 
+  <!-- The settings screen's large card (docs/phase-6-design.md 7.1): at most 860 × 680, 40 from
+       the window's edges, stretched both ways and centred by its maximum, so that at 1100×700 it
+       is 860 × 620 at (120, 40) and at 1920×1080 860 × 680 at (530, 200). -->
+  <Style Selector="Border.dialogCard.settings">
+    <Setter Property="MaxWidth" Value="860" />
+    <Setter Property="MaxHeight" Value="680" />
+    <Setter Property="Margin" Value="40" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+
+  <!-- A settings row's label, in the form's first column, top-aligned with its control's first line (7.1). -->
+  <Style Selector="TextBlock.settingsLabel">
+    <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- A settings row's explanation: a second line, secondary, 11.5, wrapping, 4 below (7.1). -->
+  <Style Selector="TextBlock.settingsNote">
+    <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="0,4,0,0" />
+  </Style>
+
+  <!-- A warning under a box: dialogError's layout in the warning colour (7.1, 8.4, 8.6). -->
+  <Style Selector="TextBlock.dialogWarning">
+    <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    <Setter Property="Margin" Value="0,6,0,0" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
   <Style Selector="TextBlock.dialogTitle">
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />

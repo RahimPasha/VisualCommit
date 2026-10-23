@@ -6,12 +6,16 @@ namespace VisualCommit.Testing.Headless;
 /// Stands in for the app's file launcher in the scripted walk-through and the headless tests
 /// (docs/phase-3-design.md 2.32, 7.4): it opens nothing and shows nothing in a file manager, and
 /// records what the app asked for, in order, for a test to assert. The default test run must
-/// never open an application on the desktop.
+/// never open an application on the desktop. Since phase 6 it records each editor start too
+/// (docs/phase-6-design.md 12.4): the program, the arguments as a list and the working directory,
+/// and checks no program; <see cref="EditFailure"/> makes the next start throw, as a program that
+/// cannot start does (12.7).
 /// </summary>
 public sealed class FakeFileLauncher : IFileLauncher
 {
     private readonly Lock _gate = new();
     private readonly List<FileLaunch> _requests = [];
+    private Exception? _editFailure;
 
     /// <summary>Everything the app asked for, in order.</summary>
     public IReadOnlyList<FileLaunch> Requests
@@ -31,18 +35,59 @@ public sealed class FakeFileLauncher : IFileLauncher
     /// <summary>The files the app asked to show in the file manager, in order ("Show in folder").</summary>
     public IReadOnlyList<string> Revealed => [.. Requests.Where(request => request.Kind == FileLaunchKind.Reveal).Select(request => request.FullPath)];
 
+    /// <summary>The editor starts the app asked for, in order ("Open in editor"), each as the command it built.</summary>
+    public IReadOnlyList<LaunchCommand> Edits => [.. Requests.Where(request => request.Kind == FileLaunchKind.Edit).Select(request => request.Command!)];
+
+    /// <summary>
+    /// Thrown by the next editor start, after it was recorded, then cleared: a
+    /// <see cref="FileNotFoundException"/> for a program that is gone, a
+    /// <see cref="System.ComponentModel.Win32Exception"/> for one that cannot start (12.7).
+    /// </summary>
+    public Exception? EditFailure
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _editFailure;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                _editFailure = value;
+            }
+        }
+    }
+
     public Task OpenAsync(string fullPath, CancellationToken cancellationToken = default) =>
-        Record(FileLaunchKind.Open, fullPath);
+        Record(new FileLaunch(FileLaunchKind.Open, fullPath));
 
     public Task RevealAsync(string fullPath, CancellationToken cancellationToken = default) =>
-        Record(FileLaunchKind.Reveal, fullPath);
+        Record(new FileLaunch(FileLaunchKind.Reveal, fullPath));
 
-    private Task Record(FileLaunchKind kind, string fullPath)
+    public Task OpenInEditorAsync(LaunchCommand command, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(fullPath);
+        ArgumentNullException.ThrowIfNull(command);
+        Exception? failure;
         lock (_gate)
         {
-            _requests.Add(new FileLaunch(kind, fullPath));
+            _requests.Add(new FileLaunch(FileLaunchKind.Edit, command.FileName, command));
+            failure = _editFailure;
+            _editFailure = null;
+        }
+
+        return failure is null ? Task.CompletedTask : Task.FromException(failure);
+    }
+
+    private Task Record(FileLaunch request)
+    {
+        ArgumentNullException.ThrowIfNull(request.FullPath);
+        lock (_gate)
+        {
+            _requests.Add(request);
         }
 
         return Task.CompletedTask;
@@ -57,9 +102,13 @@ public enum FileLaunchKind
 
     /// <summary>Show the file selected in the file manager.</summary>
     Reveal,
+
+    /// <summary>Start the chosen editor on a file (docs/phase-6-design.md 12.4).</summary>
+    Edit,
 }
 
 /// <summary>One request the app made of the file launcher.</summary>
-/// <param name="Kind">Open or show in the file manager.</param>
-/// <param name="FullPath">The full path the app passed, as it passed it.</param>
-public sealed record FileLaunch(FileLaunchKind Kind, string FullPath);
+/// <param name="Kind">Open, show in the file manager, or start the editor.</param>
+/// <param name="FullPath">The full path the app passed, as it passed it; for <see cref="FileLaunchKind.Edit"/> the editor's program.</param>
+/// <param name="Command">For <see cref="FileLaunchKind.Edit"/>, the command the app built; null otherwise.</param>
+public sealed record FileLaunch(FileLaunchKind Kind, string FullPath, LaunchCommand? Command = null);

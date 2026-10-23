@@ -1,8 +1,16 @@
+using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core;
 using VisualCommit.Core.Diff;
+using VisualCommit.Core.Settings;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Session;
+using VisualCommit.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 
@@ -291,6 +299,188 @@ public class RepositoryOperationsFilesTests
         app.AssertScriptFollowed();
     }
 
+    [Theory]
+    [InlineData("tool.MSC", true)]
+    [InlineData("script.wsh", true)]
+    [InlineData("run.py", false)]
+    [InlineData("setup.EXE", true)]
+    [InlineData("notes.txt", false)]
+    public void Open_files_question_is_the_floor_and_the_extra_extensions_case_ignored(string name, bool runs)
+    {
+        // docs/phase-6-design.md 12.8: the fixed list, then the user's and PATHEXT's extensions.
+        var extra = new HashSet<string>(RepositoryOperations.PathExtExtensions(ToolCatalogues.DefaultWindowsPathExtensions), StringComparer.Ordinal);
+
+        Assert.Equal(runs, RepositoryOperations.CanRunPrograms(name, null, extra));
+        Assert.True(RepositoryOperations.CanRunPrograms("run.PY", null, new HashSet<string> { ".py" }));
+        Assert.False(RepositoryOperations.CanRunPrograms("Makefile", null, new HashSet<string> { "." }));
+    }
+
+    [Fact]
+    public void The_fixed_list_is_12_8s_in_its_order_and_pathext_reads_lower_case_without_duplicates()
+    {
+        Assert.Equal(
+            ".exe .bat .cmd .com .ps1 .vbs .vbe .js .jse .wsf .hta .msi .scr .pif .cpl .lnk .url .reg .jar .app .command .sh .desktop",
+            string.Join(' ', RepositoryOperations.FixedRunnableExtensions));
+        Assert.Equal(
+            [".com", ".exe", ".bat", ".cmd", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".msc"],
+            RepositoryOperations.PathExtExtensions(ToolCatalogues.DefaultWindowsPathExtensions));
+        Assert.Equal([".py", ".pyw"], RepositoryOperations.PathExtExtensions(".PY; PYW;;.py"));
+        Assert.Empty(RepositoryOperations.PathExtExtensions(null));
+    }
+
+    [Fact]
+    public async Task Open_file_asks_for_an_extension_the_user_added_and_on_windows_for_pathexts()
+    {
+        // 12.8: run.py opens at once, and with .py added in the settings asks on every platform;
+        // tool.msc asks on Windows through PATHEXT, which the session's catalogues hold (12.9:
+        // the harnesses' fixed one is Windows' default, none elsewhere).
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "run.py"), "print(1)\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "tool.msc"), "x\n", TestContext.Current.CancellationToken);
+        using var app = await FixedToolsTab.OpenAsync(repo);
+        var run = Path.Combine(app.Repository.Path, "run.py");
+        var tool = Path.Combine(app.Repository.Path, "tool.msc");
+
+        await app.Repository.Operations.OpenFileAsync("run.py");
+        Assert.Equal([run], app.Launcher.Opened);
+        Assert.Empty(app.Dialogs.Confirmations);
+
+        if (OperatingSystem.IsWindows())
+        {
+            app.Dialogs.Confirm(yes: false);
+            await app.Repository.Operations.OpenFileAsync("tool.msc");
+            Assert.Equal("Open tool.msc?", Assert.Single(app.Dialogs.Confirmations).Title);
+        }
+        else
+        {
+            await app.Repository.Operations.OpenFileAsync("tool.msc");
+            Assert.Contains(tool, app.Launcher.Opened);
+        }
+
+        var asked = app.Dialogs.Confirmations.Count;
+        app.Settings.Update(settings => settings with { ExtraRunnableExtensions = ".py .pl" });
+        app.Dialogs.Confirm(yes: false);
+        await app.Repository.Operations.OpenFileAsync("run.py");
+        Assert.Equal(asked + 1, app.Dialogs.Confirmations.Count);
+        Assert.Equal("Open run.py?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Single(app.Launcher.Opened, path => path == run);
+        Assert.Empty(app.Dialogs.Problems);
+        Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Fact]
+    public async Task Without_the_sessions_catalogues_open_file_asks_by_its_lists_alone()
+    {
+        // 12.8, 12.9: PATHEXT comes from TabServices.Tools only, never from the test process's own.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "tool.msc"), "x\n", TestContext.Current.CancellationToken);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.OpenFileAsync("tool.msc");
+
+        Assert.Equal([Path.Combine(app.Repository.Path, "tool.msc")], app.Launcher.Opened);
+        Assert.Empty(app.Dialogs.Confirmations);
+    }
+
+    [Fact]
+    public async Task Open_in_editor_starts_the_chosen_editor_on_the_files_absolute_path_and_asks_nothing()
+    {
+        // 12.1, 12.4: never asking first, though Open file asks for an .exe; no operation, no undo
+        // entry; the log line names the command.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "setup.exe"), "MZ", TestContext.Current.CancellationToken);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        var file = Path.Combine(app.Repository.Path, "setup.exe");
+
+        await app.Operations.OpenInEditorAsync("setup.exe");
+
+        var command = Assert.Single(app.Launcher.Edits);
+        Assert.Equal(program, command.FileName);
+        Assert.Equal([file], command.Arguments);
+        Assert.Equal(OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code" : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), command.WorkingDirectory);
+        Assert.Equal([EditorCommands.ElectronRunAsNode], command.RemovedVariables);
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Null(app.LastResult);
+        Assert.Contains(app.Log.Messages, message => message == $"Open in editor: {command.DisplayText}");
+
+        // Other's program and arguments as stored.
+        var other = OperatingSystem.IsWindows() ? @"D:\Tools\Ed.exe" : "/usr/local/bin/ed";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, other, "-l {line} {path}") });
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        Assert.Equal(["-l", "1", Path.Combine(app.Repository.Path, "src", "helpers.py")], app.Launcher.Edits[^1].Arguments);
+    }
+
+    [Fact]
+    public async Task An_editor_that_cannot_start_opens_could_not_open_the_editor_whose_button_opens_settings_on_tools()
+    {
+        // 12.7: the dialog without git output, the repository's name, "Open settings…".
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        var opened = new List<SettingsSection>();
+        app.Services.OpenSettings = section =>
+        {
+            opened.Add(section);
+            return Task.CompletedTask;
+        };
+
+        app.Launcher.EditFailure = new System.ComponentModel.Win32Exception(5, "Access is denied.");
+        app.Dialogs.CloseError(clickExtra: true);
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Could not open the editor", "Visual Studio Code could not be started: Access is denied.", $"In {app.Repository.Name}", "Open settings…", false, false),
+            (error.Title, error.Summary, error.RepositoryText, error.ExtraAction, error.HasOutput, error.HasCommand));
+        Assert.Equal([SettingsSection.Tools], opened);
+
+        // A program that is gone (12.4's check) says so; Close opens nothing.
+        app.Launcher.EditFailure = new FileNotFoundException("gone", program);
+        app.Dialogs.CloseError();
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        Assert.Equal($"Visual Studio Code is not at {program} any more: choose an editor in Settings.", app.Dialogs.Errors[^1].Summary);
+        Assert.Equal([SettingsSection.Tools], opened);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_hand_edited_cmd_editor_says_why_in_plain_words()
+    {
+        // 12.4, 12.7: the reason alone after "{Name} could not be started:", nothing started.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, @"C:\Tools\ed.cmd", "{path}") });
+        app.Dialogs.CloseError();
+
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+
+        var reason = OperatingSystem.IsWindows()
+            ? @"C:\Tools\ed.cmd is not an .exe or .com program."
+            : @"The editor's program C:\Tools\ed.cmd is not an absolute path.";
+        Assert.Equal($"ed.cmd could not be started: {reason}", Assert.Single(app.Dialogs.Errors).Summary);
+        Assert.Empty(app.Launcher.Edits);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Open_in_editor_does_nothing_without_an_editor_with_an_unknown_one_or_for_a_file_that_is_gone()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("emacs-of-the-future", @"C:\x.exe") });
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", OperatingSystem.IsWindows() ? @"C:\x.exe" : "/x") });
+        await app.Operations.OpenInEditorAsync("docs/old-notes.txt");
+
+        Assert.Empty(app.Launcher.Edits);
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
     [Fact]
     public async Task Open_file_and_show_in_folder_ask_the_launcher_for_the_working_trees_file()
     {
@@ -429,4 +619,71 @@ public class RepositoryOperationsFilesTests
 
     private static async Task<IReadOnlyList<string>> PorcelainAllAsync(TempRepo repo) =>
         (await repo.GitAsync("status", "--porcelain", "--untracked-files=all")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// A repository's view model opened as <see cref="OperationsHarness"/> opens one, with the
+    /// session's tool catalogues fixed as the harnesses fix them (<see cref="ToolCatalogues.Fixed"/>,
+    /// 12.9), which the harness gives none.
+    /// </summary>
+    private sealed class FixedToolsTab : IDisposable
+    {
+        private FixedToolsTab(RepositoryViewModel repository, ScriptedDialogs dialogs, FakeFileLauncher launcher, MainWindowViewModelTests.FakeSettings settings)
+        {
+            Repository = repository;
+            Dialogs = dialogs;
+            Launcher = launcher;
+            Settings = settings;
+        }
+
+        public RepositoryViewModel Repository { get; }
+
+        public ScriptedDialogs Dialogs { get; }
+
+        public FakeFileLauncher Launcher { get; }
+
+        public MainWindowViewModelTests.FakeSettings Settings { get; }
+
+        public static async Task<FixedToolsTab> OpenAsync(TempRepo repo)
+        {
+            var gitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The tests need git.");
+            var git = await GitRepository.OpenAsync(new GitRunner(gitPath, new GitCallLog()), repo.Path, TestContext.Current.CancellationToken);
+            var host = new DialogHostViewModel();
+            var launcher = new FakeFileLauncher();
+            var settings = new MainWindowViewModelTests.FakeSettings();
+            var dates = new DateDisplay(TimeZoneInfo.Utc);
+            var log = new RecordingLog();
+            var services = new TabServices(new NoRepositories(), new FakeFolderPicker(), settings, new MemorySession(), dates, log, dialogs: host, launcher: launcher, tools: ToolCatalogues.Fixed);
+            var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
+            var tab = new FixedToolsTab(repository, new ScriptedDialogs(host), launcher, settings);
+            await repository.StartAsync();
+            return tab;
+        }
+
+        public void Dispose()
+        {
+            Dialogs.Dispose();
+            Repository.Dispose();
+        }
+
+        private sealed class MemorySession : ISessionStore
+        {
+            public SessionState Current { get; private set; } = new();
+
+            public void Update(Func<SessionState, SessionState> change) => Current = change(Current);
+        }
+
+        private sealed class NoRepositories : IRepositoryProvider
+        {
+            public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+            public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+            public Task<IGitRepository> CloneAsync(
+                string url,
+                string destination,
+                IProgress<CloneProgress>? progress,
+                CancellationToken cancellationToken = default,
+                IReadOnlyDictionary<string, string?>? environment = null) => throw new NotSupportedException();
+        }
+    }
 }

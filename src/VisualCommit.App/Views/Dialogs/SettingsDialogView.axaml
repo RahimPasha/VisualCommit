@@ -1,0 +1,548 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
+                  xmlns:app="using:VisualCommit.App.ViewModels"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  xmlns:settings="using:VisualCommit.App.ViewModels.Settings"
+                  xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
+                  x:Class="VisualCommit.App.Views.Dialogs.SettingsDialogView"
+                  x:DataType="vm:SettingsDialogViewModel"
+                  AutomationProperties.AutomationId="SettingsDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The settings screen (docs/phase-6-design.md 7): a large card of the dialog layer, the title,
+       14 of space, the body (the section list, 20 of space, the shown section in a scroll viewer),
+       and the buttons 20 below. No combo box and no menu (D141): radio buttons, check boxes, text
+       boxes, and Pick dialogs stacked on top (7.7). Each section is a form of rows 18 apart, the
+       labels in a column of 132, 12 of space, the controls (7.1). -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="SettingsCard" Classes="dialogCard settings">
+      <Grid RowDefinitions="Auto,14,*,Auto">
+        <TextBlock Name="SettingsTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="SettingsTitle" />
+
+        <Grid Grid.Row="2" ColumnDefinitions="176,20,*">
+
+          <!-- The section list: Up and Down move between the buttons; a click or Enter shows the
+               section without focusing into it (7.1). -->
+          <StackPanel Name="SettingsNav"
+                      Spacing="2"
+                      AutomationProperties.AutomationId="SettingsNav">
+            <Button Name="SettingsNavGeneral"
+                    Theme="{StaticResource VcFlatButton}" Classes="settingsNav"
+                    Classes.selected="{Binding ShowsGeneral}"
+                    Command="{Binding ShowSectionCommand}"
+                    CommandParameter="{x:Static app:SettingsSection.General}"
+                    AutomationProperties.HelpText="{Binding GeneralNavHelp}"
+                    AutomationProperties.AutomationId="SettingsNavGeneral"
+                    AutomationProperties.Name="General">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="General" VerticalAlignment="Center" />
+                <Ellipse Grid.Column="1" Classes="navError" IsVisible="{Binding GeneralHasError}"
+                         AutomationProperties.AutomationId="SettingsNavError" AutomationProperties.HelpText="Has an error" />
+              </Grid>
+            </Button>
+            <Button Name="SettingsNavGit"
+                    Theme="{StaticResource VcFlatButton}" Classes="settingsNav"
+                    Classes.selected="{Binding ShowsGit}"
+                    Command="{Binding ShowSectionCommand}"
+                    CommandParameter="{x:Static app:SettingsSection.Git}"
+                    AutomationProperties.HelpText="{Binding GitNavHelp}"
+                    AutomationProperties.AutomationId="SettingsNavGit"
+                    AutomationProperties.Name="Git">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Git" VerticalAlignment="Center" />
+                <Ellipse Grid.Column="1" Classes="navError" IsVisible="{Binding GitHasError}"
+                         AutomationProperties.AutomationId="SettingsNavError" AutomationProperties.HelpText="Has an error" />
+              </Grid>
+            </Button>
+            <Button Name="SettingsNavTools"
+                    Theme="{StaticResource VcFlatButton}" Classes="settingsNav"
+                    Classes.selected="{Binding ShowsTools}"
+                    Command="{Binding ShowSectionCommand}"
+                    CommandParameter="{x:Static app:SettingsSection.Tools}"
+                    AutomationProperties.HelpText="{Binding ToolsNavHelp}"
+                    AutomationProperties.AutomationId="SettingsNavTools"
+                    AutomationProperties.Name="Tools">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Tools" VerticalAlignment="Center" />
+                <Ellipse Grid.Column="1" Classes="navError" IsVisible="{Binding ToolsHasError}"
+                         AutomationProperties.AutomationId="SettingsNavError" AutomationProperties.HelpText="Has an error" />
+              </Grid>
+            </Button>
+            <Button Name="SettingsNavShortcuts"
+                    Theme="{StaticResource VcFlatButton}" Classes="settingsNav"
+                    Classes.selected="{Binding ShowsShortcuts}"
+                    Command="{Binding ShowSectionCommand}"
+                    CommandParameter="{x:Static app:SettingsSection.KeyboardShortcuts}"
+                    AutomationProperties.AutomationId="SettingsNavShortcuts"
+                    AutomationProperties.Name="Keyboard shortcuts">
+              <TextBlock Text="Keyboard shortcuts" VerticalAlignment="Center" />
+            </Button>
+          </StackPanel>
+
+          <ScrollViewer Name="SectionScroller"
+                        Grid.Column="2"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto"
+                        AutomationProperties.AutomationId="SettingsSection">
+            <!-- 14 kept clear on the right for the scroll bar (7.1). -->
+            <Panel Margin="0,0,14,0">
+
+              <!-- General (7.3). -->
+              <Panel IsVisible="{Binding ShowsGeneral}">
+              <StackPanel Name="SettingsGeneral" Spacing="18"
+                          DataContext="{Binding General}" x:DataType="settings:GeneralSettingsViewModel">
+                <Grid ColumnDefinitions="132,12,*">
+                  <TextBlock Classes="settingsLabel" Text="Theme" Margin="0,1,0,0" />
+                  <StackPanel Grid.Column="2">
+                    <StackPanel Orientation="Horizontal" Spacing="20">
+                      <RadioButton Name="SettingsThemeDark" Theme="{StaticResource VcRadioButton}" GroupName="SettingsTheme"
+                                   Content="Dark" IsChecked="{Binding IsDark}" HorizontalAlignment="Left"
+                                   AutomationProperties.AutomationId="SettingsThemeDark" AutomationProperties.Name="Dark" />
+                      <RadioButton Name="SettingsThemeLight" Theme="{StaticResource VcRadioButton}" GroupName="SettingsTheme"
+                                   Content="Light" IsChecked="{Binding IsLight}" HorizontalAlignment="Left"
+                                   AutomationProperties.AutomationId="SettingsThemeLight" AutomationProperties.Name="Light" />
+                      <RadioButton Name="SettingsThemeSystem" Theme="{StaticResource VcRadioButton}" GroupName="SettingsTheme"
+                                   Content="System" IsChecked="{Binding IsSystem}" HorizontalAlignment="Left"
+                                   AutomationProperties.AutomationId="SettingsThemeSystem" AutomationProperties.Name="System" />
+                    </StackPanel>
+                    <TextBlock Classes="settingsNote" Text="System follows your operating system's light or dark mode." />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="132,12,*">
+                  <TextBlock Classes="settingsLabel" Text="Fetching" Margin="0,7,0,0" />
+                  <StackPanel Grid.Column="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <CheckBox Name="AutoFetchCheckBox" Theme="{StaticResource VcCheckBox}" VerticalAlignment="Center"
+                                Content="Fetch in the background every" IsChecked="{Binding IsAutoFetchOn}"
+                                AutomationProperties.AutomationId="AutoFetchCheckBox" AutomationProperties.Name="Fetch in the background every" />
+                      <TextBox Name="AutoFetchMinutesBox" Width="48" TextAlignment="Center" VerticalAlignment="Center"
+                               Text="{Binding MinutesText}" IsEnabled="{Binding IsAutoFetchOn}"
+                               AutomationProperties.AutomationId="AutoFetchMinutesBox" AutomationProperties.Name="minutes" />
+                      <TextBlock Text="minutes" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Classes="settingsNote" Text="Only the active tab's repository; it never asks for a password." />
+                    <TextBlock Name="AutoFetchError" Classes="dialogError" Text="{Binding AutoFetchError}"
+                               IsVisible="{Binding AutoFetchError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               AutomationProperties.AutomationId="AutoFetchError" />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="132,12,*">
+                  <TextBlock Classes="settingsLabel" Text="Working tree" Margin="0,1,0,0" />
+                  <StackPanel Grid.Column="2">
+                    <CheckBox Name="KeepIgnoredCheckBox" Theme="{StaticResource VcCheckBox}"
+                              Content="Keep ignored files" IsChecked="{Binding KeepIgnoredFiles}"
+                              AutomationProperties.AutomationId="KeepIgnoredCheckBox" AutomationProperties.Name="Keep ignored files" />
+                    <TextBlock Classes="settingsNote"
+                               Text="A checkout, merge, rebase, cherry-pick, revert, stash apply or stash pop that would overwrite or delete an ignored file does not start. Off: they run as git runs them, which can overwrite or delete such a file without a word; checking out an older commit of the current branch, Undo and Redo still keep it." />
+                    <CheckBox Name="StashUntrackedCheckBox" Theme="{StaticResource VcCheckBox}" Margin="0,10,0,0"
+                              Content="Include untracked files when stashing" IsChecked="{Binding StashIncludeUntracked}"
+                              AutomationProperties.AutomationId="StashUntrackedCheckBox" AutomationProperties.Name="Include untracked files when stashing" />
+                    <TextBlock Classes="settingsNote" Text="The Stash changes dialog starts with this; its own check box changes it too." />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="132,12,*">
+                  <TextBlock Classes="settingsLabel" Text="Opening files" />
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Name="RunnableIntro" TextWrapping="Wrap"
+                               Text="Open file asks first before it opens a file with one of these extensions:"
+                               AutomationProperties.AutomationId="RunnableIntro" />
+                    <!-- The fixed list, a word per extension: every extension starts with a dot, before
+                         which the line breaking rules allow no break, so one text would break inside a
+                         word. Its automation name is the whole list. -->
+                    <ItemsControl Name="RunnableList" ItemsSource="{Binding RunnableExtensions}" Margin="0,4,0,0"
+                                  AutomationProperties.AutomationId="RunnableList" AutomationProperties.Name="{Binding RunnableList}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <TextBlock Classes="settingsCode" Text="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Name="RunnablePathExt" Classes="settingsNote" Text="{Binding PathExtText}" IsVisible="{Binding ShowsPathExt}"
+                               AutomationProperties.AutomationId="RunnablePathExt" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                      <TextBlock Text="Also ask for" VerticalAlignment="Center" />
+                      <TextBox Name="RunnableExtraBox" Width="320" PlaceholderText=".py .pl" Text="{Binding ExtraExtensionsText}"
+                               AutomationProperties.AutomationId="RunnableExtraBox" AutomationProperties.Name="Also ask for" />
+                    </StackPanel>
+                    <TextBlock Name="RunnableError" Classes="dialogError" Text="{Binding RunnableError}"
+                               IsVisible="{Binding RunnableError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               AutomationProperties.AutomationId="RunnableError" />
+                    <TextBlock Name="RunnableUnix" Classes="settingsNote"
+                               Text="On Linux and macOS it also asks before it opens a file marked as a program."
+                               AutomationProperties.AutomationId="RunnableUnix" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+              </Panel>
+
+              <!-- Git (7.4): the scope switch and its caption; the fields of the shown scope. -->
+              <Panel IsVisible="{Binding ShowsGit}">
+              <StackPanel Name="SettingsGit"
+                          DataContext="{Binding Git}" x:DataType="settings:GitSettingsViewModel">
+                <StackPanel Name="GitScope" Orientation="Horizontal" Spacing="4"
+                            AutomationProperties.AutomationId="GitScope">
+                  <Button Name="GitScopeGlobal" Theme="{StaticResource VcFlatButton}" Classes="settingsScope" Classes.selected="{Binding IsGlobalScope}"
+                          Content="All repositories (global)" Command="{Binding ShowGlobalCommand}"
+                          AutomationProperties.AutomationId="GitScopeGlobal" AutomationProperties.Name="All repositories (global)" />
+                  <Button Name="GitScopeRepository" Theme="{StaticResource VcFlatButton}" Classes="settingsScope" Classes.selected="{Binding IsRepositoryScope}"
+                          Content="This repository" Command="{Binding ShowRepositoryCommand}"
+                          ToolTip.Tip="{Binding RepositoryScopeToolTip}"
+                          AutomationProperties.HelpText="{Binding RepositoryScopeToolTip}"
+                          AutomationProperties.AutomationId="GitScopeRepository" AutomationProperties.Name="This repository" />
+                </StackPanel>
+                <TextBlock Name="GitScopeCaption" Classes="secondary" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="{Binding Caption}"
+                           ToolTip.Tip="{Binding CaptionToolTip}"
+                           AutomationProperties.HelpText="{Binding CaptionToolTip}"
+                           AutomationProperties.AutomationId="GitScopeCaption" />
+                <TextBlock Name="GitReading" Classes="secondary" Margin="0,14,0,0"
+                           Text="Reading git's configuration…" IsVisible="{Binding IsReading}"
+                           AutomationProperties.AutomationId="GitReading" />
+                <TextBlock Name="GitReadError" Classes="dialogError" Margin="0,14,0,0"
+                           Text="{Binding ReadError}" IsVisible="{Binding ReadError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           AutomationProperties.AutomationId="GitReadError" />
+                <TextBlock Name="GitUnavailable" Classes="dialogError" Margin="0,14,0,0"
+                           Text="{Binding Unavailable}" IsVisible="{Binding Unavailable, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           AutomationProperties.AutomationId="GitUnavailable" />
+
+                <Panel IsVisible="{Binding ShowsFields}">
+                <StackPanel Margin="0,14,0,0"
+                            DataContext="{Binding Shown}" x:DataType="settings:GitScopeViewModel">
+                  <!-- The identity (8.6). -->
+                  <Grid ColumnDefinitions="132,12,*">
+                    <TextBlock Classes="settingsLabel" Text="Name" Margin="0,6,0,0" />
+                    <StackPanel Grid.Column="2">
+                      <TextBox Name="UserNameBox" Width="320" HorizontalAlignment="Left"
+                               Text="{Binding UserName}" PlaceholderText="{Binding NamePlaceholder}"
+                               AutomationProperties.AutomationId="UserNameBox" AutomationProperties.Name="Name" />
+                      <ItemsControl ItemsSource="{Binding NameNotices}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="settings:GitNotice">
+                            <TextBlock Classes="settingsNote notice" Classes.warning="{Binding IsWarning}" Text="{Binding Text}"
+                                       ToolTip.Tip="{Binding ToolTip}" AutomationProperties.HelpText="{Binding ToolTip}"
+                                       AutomationProperties.AutomationId="UserNameOrigin" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Name="UserNameError" Classes="dialogError" Text="{Binding NameError}"
+                                 IsVisible="{Binding NameError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 AutomationProperties.AutomationId="UserNameError" />
+                    </StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="132,12,*" Margin="0,8,0,0">
+                    <TextBlock Classes="settingsLabel" Text="Email" Margin="0,6,0,0" />
+                    <StackPanel Grid.Column="2">
+                      <TextBox Name="UserEmailBox" Width="320" HorizontalAlignment="Left"
+                               Text="{Binding UserEmail}" PlaceholderText="{Binding EmailPlaceholder}"
+                               AutomationProperties.AutomationId="UserEmailBox" AutomationProperties.Name="Email" />
+                      <ItemsControl ItemsSource="{Binding EmailNotices}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="settings:GitNotice">
+                            <TextBlock Classes="settingsNote notice" Classes.warning="{Binding IsWarning}" Text="{Binding Text}"
+                                       ToolTip.Tip="{Binding ToolTip}" AutomationProperties.HelpText="{Binding ToolTip}"
+                                       AutomationProperties.AutomationId="UserEmailOrigin" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Name="UserEmailError" Classes="dialogError" Text="{Binding EmailError}"
+                                 IsVisible="{Binding EmailError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 AutomationProperties.AutomationId="UserEmailError" />
+                      <TextBlock Name="UserEmailWarning" Classes="dialogWarning" Text="{Binding EmailWarning}"
+                                 IsVisible="{Binding EmailWarning, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 AutomationProperties.AutomationId="UserEmailWarning" />
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- Who git makes commits as here (8.6): "This repository" only. -->
+                  <Grid ColumnDefinitions="132,12,*" Margin="0,6,0,0" IsVisible="{Binding IsRepository}">
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Name="IdentityInEffect" Classes="secondary" TextWrapping="Wrap"
+                                 Text="{Binding IdentityInEffect}"
+                                 IsVisible="{Binding IdentityInEffect, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 AutomationProperties.AutomationId="IdentityInEffect" />
+                      <ItemsControl ItemsSource="{Binding IdentityNotices}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="settings:GitNotice">
+                            <TextBlock Classes="settingsNote notice" Text="{Binding Text}"
+                                       ToolTip.Tip="{Binding ToolTip}" AutomationProperties.HelpText="{Binding ToolTip}"
+                                       AutomationProperties.AutomationId="IdentityNotices" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- The pull mode (8.7, 8.8): the six radios, Other for an unusual value only. -->
+                  <Grid ColumnDefinitions="132,12,*" Margin="0,18,0,0">
+                    <TextBlock Classes="settingsLabel" Text="Pull" Margin="0,1,0,0" />
+                    <StackPanel Grid.Column="2">
+                      <StackPanel Spacing="8">
+                        <RadioButton Name="PullNotSet" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     Content="{Binding NotSetLabel}" IsChecked="{Binding IsNotSet}"
+                                     ToolTip.Tip="{Binding NotSetToolTip}" AutomationProperties.HelpText="{Binding NotSetToolTip}"
+                                     AutomationProperties.AutomationId="PullNotSet" AutomationProperties.Name="{Binding NotSetLabel}" />
+                        <RadioButton Name="PullMerge" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     Content="Merge (fast-forward when possible)" IsChecked="{Binding IsMerge}"
+                                     AutomationProperties.AutomationId="PullMerge" AutomationProperties.Name="Merge (fast-forward when possible)" />
+                        <RadioButton Name="PullMergeCommit" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     Content="Merge, always with a merge commit" IsChecked="{Binding IsMergeCommit}"
+                                     AutomationProperties.AutomationId="PullMergeCommit" AutomationProperties.Name="Merge, always with a merge commit" />
+                        <RadioButton Name="PullRebase" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     Content="Rebase" IsChecked="{Binding IsRebase}"
+                                     AutomationProperties.AutomationId="PullRebase" AutomationProperties.Name="Rebase" />
+                        <RadioButton Name="PullRebaseMerges" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     Content="Rebase, keeping merge commits" IsChecked="{Binding IsRebaseMerges}"
+                                     AutomationProperties.AutomationId="PullRebaseMerges" AutomationProperties.Name="Rebase, keeping merge commits" />
+                        <RadioButton Name="PullFastForwardOnly" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     Content="Fast-forward only" IsChecked="{Binding IsFastForwardOnly}"
+                                     AutomationProperties.AutomationId="PullFastForwardOnly" AutomationProperties.Name="Fast-forward only" />
+                        <RadioButton Name="PullOther" Theme="{StaticResource VcRadioButton}" GroupName="SettingsPull" HorizontalAlignment="Left"
+                                     IsChecked="{Binding IsOther}" IsVisible="{Binding ShowsOther}"
+                                     AutomationProperties.AutomationId="PullOther" AutomationProperties.Name="{Binding OtherText}">
+                          <StackPanel>
+                            <TextBlock Text="{Binding OtherText}" TextWrapping="Wrap" />
+                            <TextBlock Classes="settingsNote" Text="{Binding OtherNote}" />
+                          </StackPanel>
+                        </RadioButton>
+                      </StackPanel>
+                      <ItemsControl ItemsSource="{Binding PullNotices}" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="settings:GitNotice">
+                            <TextBlock Classes="settingsNote notice" Classes.warning="{Binding IsWarning}" Text="{Binding Text}"
+                                       ToolTip.Tip="{Binding ToolTip}" AutomationProperties.HelpText="{Binding ToolTip}"
+                                       AutomationProperties.AutomationId="PullNotices" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Name="PullInEffect" Classes="secondary" TextWrapping="Wrap" Margin="0,6,0,0"
+                                 Text="{Binding PullInEffect.Text, FallbackValue={x:Null}}"
+                                 IsVisible="{Binding PullInEffect, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 ToolTip.Tip="{Binding PullInEffect.ToolTip, FallbackValue={x:Null}}"
+                                 AutomationProperties.HelpText="{Binding PullInEffect.ToolTip, FallbackValue={x:Null}}"
+                                 AutomationProperties.AutomationId="PullInEffect" />
+                      <StackPanel IsVisible="{Binding BranchRebase, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="0,6,0,0">
+                        <TextBlock Name="BranchRebaseNotice" Classes="dialogWarning" Margin="0" Text="{Binding BranchRebaseNoticeText}"
+                                   ToolTip.Tip="{Binding BranchRebase.ToolTip, FallbackValue={x:Null}}"
+                                   AutomationProperties.HelpText="{Binding BranchRebase.ToolTip, FallbackValue={x:Null}}"
+                                   AutomationProperties.AutomationId="BranchRebaseNotice" />
+                        <Button Name="BranchRebaseButton" Theme="{StaticResource VcActionButton}" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                Content="{Binding BranchRebaseButtonText}" Command="{Binding ToggleBranchRebaseCommand}"
+                                IsVisible="{Binding ShowsBranchRebaseButton}"
+                                AutomationProperties.AutomationId="BranchRebaseButton" AutomationProperties.Name="{Binding BranchRebaseButtonText}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- The merge tool (8.10). -->
+                  <Grid ColumnDefinitions="132,12,*" Margin="0,18,0,0">
+                    <TextBlock Classes="settingsLabel" Text="Merge tool" Margin="0,6,0,0" />
+                    <StackPanel Grid.Column="2">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Name="MergeToolValue" Text="{Binding MergeToolText}" VerticalAlignment="Center"
+                                   AutomationProperties.AutomationId="MergeToolValue" />
+                        <Button Name="MergeToolChooseButton" Theme="{StaticResource VcActionButton}"
+                                Content="Choose…"
+                                Command="{Binding ChooseMergeToolCommand}"
+                                ToolTip.Tip="{Binding MergeToolChooseToolTip}"
+                                ToolTip.ShowOnDisabled="True"
+                                AutomationProperties.AutomationId="MergeToolChooseButton" AutomationProperties.Name="Choose…" />
+                      </StackPanel>
+                      <TextBlock Name="MergeToolNote" Classes="settingsNote"
+                                 Text="Used by Merge tool… in the conflict resolver, and by git mergetool in a terminal."
+                                 AutomationProperties.AutomationId="MergeToolNote" />
+                      <TextBlock Name="MergeToolStatus" Classes="settingsNote" Text="{Binding MergeToolStatus}"
+                                 IsVisible="{Binding MergeToolStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 AutomationProperties.AutomationId="MergeToolStatus" />
+                      <ItemsControl ItemsSource="{Binding MergeToolNotices}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="settings:GitNotice">
+                            <TextBlock Classes="settingsNote notice" Classes.warning="{Binding IsWarning}" Text="{Binding Text}"
+                                       ToolTip.Tip="{Binding ToolTip}" AutomationProperties.HelpText="{Binding ToolTip}"
+                                       AutomationProperties.AutomationId="MergeToolNotices" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+                </Panel>
+              </StackPanel>
+              </Panel>
+
+              <!-- Tools (7.5, 12). -->
+              <Panel IsVisible="{Binding ShowsTools}">
+              <StackPanel Name="SettingsTools" Spacing="18"
+                          DataContext="{Binding Tools}" x:DataType="settings:ToolSettingsViewModel">
+                <Grid ColumnDefinitions="132,12,*">
+                  <TextBlock Classes="settingsLabel" Text="Editor" Margin="0,6,0,0" />
+                  <StackPanel Grid.Column="2">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                      <TextBlock Name="EditorValue" Text="{Binding EditorValue}" VerticalAlignment="Center"
+                                 AutomationProperties.AutomationId="EditorValue" />
+                      <Button Name="EditorChooseButton" Theme="{StaticResource VcActionButton}"
+                              Content="Choose…" Command="{Binding ChooseCommand}"
+                              AutomationProperties.AutomationId="EditorChooseButton" AutomationProperties.Name="Choose…" />
+                    </StackPanel>
+                    <c:TrimmedTextBlock Name="EditorProgram" Classes="secondary" Margin="0,4,0,0"
+                                        TextTrimming="LeadingCharacterEllipsis"
+                                        Text="{Binding EditorProgram}" IsVisible="{Binding ShowsEditorProgram}"
+                                        ToolTip.Tip="{Binding EditorProgram}"
+                                        AutomationProperties.AutomationId="EditorProgram" />
+                    <TextBlock Name="EditorNote" Classes="settingsNote"
+                               Text="Open in editor appears in the file menus, beside Open file, once an editor is chosen."
+                               AutomationProperties.AutomationId="EditorNote" />
+                    <TextBlock Name="EditorStatus" Classes="settingsNote" Text="Looking for editors…" IsVisible="{Binding IsLooking}"
+                               AutomationProperties.AutomationId="EditorStatus" />
+                  </StackPanel>
+                </Grid>
+
+                <!-- Other… (12.5). -->
+                <Grid ColumnDefinitions="132,12,*" IsVisible="{Binding IsOther}">
+                  <TextBlock Classes="settingsLabel" Text="Program" Margin="0,6,0,0" />
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <TextBox Name="EditorProgramBox" Width="320" Text="{Binding ProgramText}"
+                             AutomationProperties.AutomationId="EditorProgramBox" AutomationProperties.Name="Program" />
+                    <Button Name="EditorBrowseButton" Theme="{StaticResource VcActionButton}"
+                            Content="Browse…" Command="{Binding BrowseCommand}"
+                            AutomationProperties.AutomationId="EditorBrowseButton" AutomationProperties.Name="Browse…" />
+                  </StackPanel>
+                </Grid>
+                <Grid ColumnDefinitions="132,12,*" IsVisible="{Binding IsOther}">
+                  <TextBlock Classes="settingsLabel" Text="Arguments" Margin="0,6,0,0" />
+                  <StackPanel Grid.Column="2">
+                    <TextBox Name="EditorArgumentsBox" Width="320" HorizontalAlignment="Left" Text="{Binding ArgumentsText}"
+                             AutomationProperties.AutomationId="EditorArgumentsBox" AutomationProperties.Name="Arguments" />
+                    <TextBlock Name="EditorArgumentsHint" Classes="settingsNote"
+                               Text="{}{path} is the file's full path, {line} its line (1 for now). Without {path}, the path comes last."
+                               AutomationProperties.AutomationId="EditorArgumentsHint" />
+                    <TextBlock Name="EditorError" Classes="dialogError" Text="{Binding EditorError}"
+                               IsVisible="{Binding EditorError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               AutomationProperties.AutomationId="EditorError" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+              </Panel>
+
+              <!-- Keyboard shortcuts (6.11, 7.6): read-only (D192). -->
+              <StackPanel Name="SettingsShortcuts" IsVisible="{Binding ShowsShortcuts}">
+                <TextBlock Name="ShortcutsIntro" Classes="secondary" Text="These keys are fixed."
+                           AutomationProperties.AutomationId="ShortcutsIntro" />
+                <ItemsControl Name="ShortcutList" ItemsSource="{Binding Shortcuts}"
+                              AutomationProperties.AutomationId="ShortcutList">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="cmd:ShortcutGroup">
+                      <StackPanel Margin="0,12,0,0">
+                        <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,2"
+                                   AutomationProperties.AutomationId="ShortcutGroup" />
+                        <ItemsControl ItemsSource="{Binding Rows}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="cmd:ShortcutRow">
+                              <Grid ColumnDefinitions="*,16,Auto" MinHeight="22"
+                                    AutomationProperties.AutomationId="ShortcutRow">
+                                <AutomationProperties.Name>
+                                  <MultiBinding StringFormat="{}{0}: {1}">
+                                    <Binding Path="Action" />
+                                    <Binding Path="Keys" />
+                                  </MultiBinding>
+                                </AutomationProperties.Name>
+                                <TextBlock Text="{Binding Action}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Classes="shortcutKeys" Text="{Binding Keys}" />
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="settingsNote" Text="{Binding Note}"
+                                   IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Panel>
+          </ScrollViewer>
+        </Grid>
+
+        <!-- The buttons, 20 above, 30 high; SettingsSaving left of them while a save waits (7.8). -->
+        <Grid Grid.Row="3" Margin="0,20,0,0" ColumnDefinitions="*,Auto">
+          <TextBlock Name="SettingsSaving" Classes="secondary" Margin="0,0,12,0"
+                     HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     Text="{Binding SavingText}"
+                     IsVisible="{Binding SavingText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                     AutomationProperties.AutomationId="SettingsSaving" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <Button Name="CancelButton"
+                    Theme="{StaticResource VcActionButton}"
+                    Content="Cancel"
+                    Command="{Binding CancelCommand}"
+                    IsEnabled="{Binding CanCancelNow}"
+                    AutomationProperties.AutomationId="CancelButton"
+                    AutomationProperties.Name="Cancel" />
+            <Button Name="ConfirmButton"
+                    Theme="{StaticResource VcPrimaryButton}"
+                    Content="Save"
+                    Command="{Binding ConfirmCommand}"
+                    IsEnabled="{Binding CanCancelNow}"
+                    AutomationProperties.AutomationId="ConfirmButton"
+                    AutomationProperties.Name="Save" />
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Border>
+  </Panel>
+
+  <local:DialogView.Styles>
+    <!-- The section list's buttons (7.1): phase 5's flat look, 176 × 30, the text left-aligned 10 in. -->
+    <Style Selector="Button.settingsNav">
+      <Setter Property="Width" Value="176" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <!-- The error dot at the button's right (SettingsNavError). -->
+    <Style Selector="Ellipse.navError">
+      <Setter Property="Width" Value="6" />
+      <Setter Property="Height" Value="6" />
+      <Setter Property="Fill" Value="{DynamicResource VcDangerBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+    </Style>
+    <!-- The scope switch (7.4): two flat buttons, 28 high, the shown one selected. -->
+    <Style Selector="Button.settingsScope">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <!-- The fixed list of extensions: the code font, a space's width (0.6 em) between them (7.3). -->
+    <Style Selector="TextBlock.settingsCode">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Margin" Value="0,0,6.9,0" />
+    </Style>
+    <!-- A notice under a field (8.4): secondary; a "Still" one in the warning colour. -->
+    <Style Selector="TextBlock.notice.warning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <!-- A row's keys (7.6): the code font, secondary, at most 340 wide, wrapping only after ", ". -->
+    <Style Selector="TextBlock.shortcutKeys">
+      <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="MaxWidth" Value="340" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

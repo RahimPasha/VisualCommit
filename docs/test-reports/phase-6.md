@@ -3817,6 +3817,12 @@ against the subsections above (16.1's rows); a line beyond them is named with it
   calls by name, pass unchanged; WP-D's `DashboardViewTests` long-name case now runs a real Fetch all
   (accepted by the lead). `OperationQueueTests`' waiting-cancel case gains the `Finished` event and the
   last result (4.5).
+- **WP-SET (the settings screen), merged in `eae7edc`.** `Phase0/ShellExpectations.cs`: `ToolbarLabels`
+  gains `Settings` before `Search`; the enabled list `["Theme"]` becomes `["Settings", "Theme"]`; the
+  messages become "Settings, Search and Theme sit at the right end of the toolbar." and "The left group
+  ends before Settings." (16.1's Settings row). Unchanged, as 16.1 says: `Phase0RealWindowPass.cs:134-141`
+  (it finds buttons by id), phase 5's `PartA.ToolbarButtons` and `EmptyTabToolbar`, `ShellTests.cs:99`;
+  phase 3's Pick dialog pictures rendered byte-identical before and after its `PickRowPanel`.
 
 ### Changed in this report after its first commit
 

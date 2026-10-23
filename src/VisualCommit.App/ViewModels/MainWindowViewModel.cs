@@ -67,6 +67,9 @@ public partial class MainWindowViewModel : ObservableObject
         // The theme shown follows the service: the user's choice, or the system's mode (11.6).
         FollowThemeService();
 
+        // The editor failure's "Open settings…" opens the settings screen through the window (12.7).
+        WireSettings();
+
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
         // On a dashboard the log line names the workspace (docs/phase-6-design.md 2.7).
         Menu = new MenuLayerViewModel(
@@ -170,9 +173,12 @@ public partial class MainWindowViewModel : ObservableObject
         var opening = Tabs
             .Where(tab => tab.PendingPath is not null)
             .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
-            .Append(ReadActiveDashboardAtStartAsync())
-            .ToList();
-        await Task.WhenAll(opening);
+            .ToList<Task>();
+
+        // The merge tools git knows are looked up once start-up has settled: when the first
+        // restored tab's load ends, or at once without one (docs/phase-6-design.md 8.10).
+        _ = LookUpMergeToolsAfterAsync(opening);
+        await Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()));
 
         // A restored tab that could not be opened is a "New tab" now; a lone one has no close button.
         UpdateCanClose();

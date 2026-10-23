@@ -164,10 +164,11 @@ App:
   their keys shown.
 - [ ] 16. Keyboard shortcuts for every main action, keeping what phase 5 bound (D163's undo and
   redo, Ctrl+F, `EscapeOrder`).
-- [ ] 17. The settings screen: identity, pull mode, auto-fetch interval (`AutoFetchMinutes`,
+- [x] 17. The settings screen: identity, pull mode, auto-fetch interval (`AutoFetchMinutes`,
   D85), `StashIncludeUntracked`, the extensions "Open file" asks about (D130), external tools
   ("Open in editor" beside "Open file"), the merge tool, and the checkout setting of step 12; each
-  change takes effect.
+  change takes effect. (WP-SET, built, reviewed and fixed, merged in `eae7edc`; its Keyboard
+  shortcuts section fills with WP-K's list.)
 - [ ] 18. Theme polish: a sweep of every main screen in both themes (phase 5's new screens were
   pictured in the dark theme only), and the welcome page's long folder that wraps at awkward
   places (phase 1's follow-up). (WP-T, built, reviewed and fixed, merged in `e7144ec`: the theme
@@ -303,8 +304,9 @@ for a write); `VisualCommit.Git.Tests` then passed whole, 2,273 of 2,273 in 16 m
 report is committed. Wave 2 of design section 18 is under way, each package built, reviewed and
 fixed in its own worktree (`wip/p6-<name>` from this branch) and merged by the lead: WP-T
 (`e7144ec`), WP-W (`0da0eec`), WP-D (`125e792`), WP-IA (`cc3aed3`), WP-RA (`0c91d01`) and WP-B
-(`e974c35`) merged; WP-SET reviewed, its fixes being made; the lead's `Phase6Checks.Support.cs`
-helpers being built in a worktree (`wip/p6-check-helpers`). Next: WP-SET's merge, then WP-K last; then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
+(`e974c35`) and WP-SET (`eae7edc`) merged; WP-K, the last, being built; the lead's
+`Phase6Checks.Support.cs` helpers being built in a worktree (`wip/p6-check-helpers`). Next: WP-K's
+review, fixes and merge, the helpers' merge, then the default run and wave 3 (WP-V's parts, WP-R); then WP-IA, WP-RA, WP-B, WP-SET and, last, WP-K, as
 section 18's order allows (at most three built worktrees at once). Once WP-D, WP-W and WP-T are merged, the lead writes
 `Phase6Checks.Support.cs`' dashboard and theme helpers before WP-V's parts W, S and L.
 

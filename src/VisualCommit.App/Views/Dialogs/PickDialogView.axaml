@@ -1,6 +1,7 @@
 <local:DialogView xmlns="https://github.com/avaloniaui"
                   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                   xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
                   xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
                   x:Class="VisualCommit.App.Views.Dialogs.PickDialogView"
                   x:DataType="vm:PickDialogViewModel"
@@ -41,9 +42,26 @@
                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                    AutomationProperties.AutomationId="PickList"
                    AutomationProperties.Name="{Binding Title}">
+            <!-- The text as phase 3 drew it, then 12 apart its detail, if any, in the secondary
+                 colour at 11.5, cut at its start (docs/phase-6-design.md 7.7). -->
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="x:String">
-                <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" VerticalAlignment="Center" />
+                <local:PickRowPanel>
+                  <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" VerticalAlignment="Center" />
+                  <c:TrimmedTextBlock Name="PickItemDetail"
+                                      FontSize="11.5"
+                                      Foreground="{DynamicResource VcTextSecondaryBrush}"
+                                      TextTrimming="LeadingCharacterEllipsis"
+                                      VerticalAlignment="Center"
+                                      IsVisible="{Binding $self.Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <c:TrimmedTextBlock.Text>
+                      <MultiBinding Converter="{x:Static local:PickDialogView.DetailConverter}">
+                        <Binding />
+                        <Binding Path="$parent[ListBox].DataContext" />
+                      </MultiBinding>
+                    </c:TrimmedTextBlock.Text>
+                  </c:TrimmedTextBlock>
+                </local:PickRowPanel>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
