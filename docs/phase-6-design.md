@@ -2394,8 +2394,9 @@ Pure, in `VisualCommit.App.Tests`:
   work, which follows the live items and the processor's caches, made 1,000 against 10,000 tags grow
   29 times on CI's Windows runner, run 39936260636. Since status step 22's review every ratio test runs
   that way: the matcher's moved into `PaletteGrowthTests` and the diff view's into
-  `DiffTextViewGrowthTests`, each measure taken by `GrowthMeasures.WithoutCollection` (a region without
-  collection whose budget is twice what a warm-up measure allocates, at least 64 MB) in `GrowthCollection`,
+  `DiffTextViewGrowthTests`, each measure taken by `GrowthMeasures.WithoutCollection` (a full collection, then a
+  region without collection, failing the test if one ran; 64 MB for the matcher, 200 MB for the build,
+  and for the diff view twice what a warm-up measure allocates, at least 64 MB) in `GrowthCollection`,
   which runs with parallelization off; the palette build's stopwatch ceiling is a gross 20 s, as the
   diff view's. Measured alone: 6.2 for the diff, 4.7 against a limit of 6.3 for the build, 10.0 for the
   matcher.) Under 20 ms per query on the laptop alone is the
