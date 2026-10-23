@@ -179,8 +179,7 @@ public sealed partial class Phase6ChecksK
         await app.WaitForDashboardReadAsync(since: mark, timeout: OperationChainTimeout);
         await WaitForAllRowsIdleAsync(app, OperationChainTimeout);
         Assert.Contains(Messages(app, mark, "Tools: read "), line => line.StartsWith(PartK.ReadPassStart(PartK.Tools, 2), StringComparison.Ordinal));
-        var k13b = Shot(app, "k13b-next-dashboard");
-        Assert.NotNull(k13b);
+        Shot(app, "k13b-next-dashboard");
         AssertRows(app, PartK.ToolsFetched);
         AssertDashboardHeader(app, ExpectedDashboardHeader.Idle(PartK.Tools, PartK.Count(2)) with { PullAll = ExpectedHeaderButton.Disabled(PartK.NoRepositoryOfToolsCanBePulled) });
         AssertKeyed(app, new PartK.Keyed("FetchButton", true, PartK.FetchEveryRepository(PartK.Tools), "Ctrl+Shift+F"));

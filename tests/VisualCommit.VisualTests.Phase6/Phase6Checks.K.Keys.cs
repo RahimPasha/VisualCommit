@@ -102,6 +102,7 @@ public sealed partial class Phase6ChecksK
         AssertGraph(app, PartK.Ops0, PartK.Ops0Lanes, PartK.OpsWorking);
         Assert.Equal([PartK.AlphaTwoSha], Selected(app));
         Assert.False(Repository(app).IsWorkingRowSelected, "The working-changes row is selected.");
+        Assert.Null(Shown(app, "StagePanel"));
         AssertKeyed(app, PartK.StashEnabled);
         Assert.Null(app.Session.Shell.ActiveTab.Toolbar.StashDisabledReason);
 

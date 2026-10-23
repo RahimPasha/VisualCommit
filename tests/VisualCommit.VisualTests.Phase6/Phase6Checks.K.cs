@@ -140,7 +140,8 @@ public sealed partial class Phase6ChecksK : Phase6Checks
         AssertShown(app, PartK.DeleteMain, PartK.DeleteMain.Length);
         Assert.All(app.Palette.Shown, entry => Assert.Equal(PaletteEntryKind.Item, entry.Kind));
         AssertRowsInView(app, PartK.DeleteMain, highlighted: 0, k10b);
-        AssertColour(PaletteOf(app).Danger, k10b, InkPoint(app, "Delete main on origin…", PaletteOf(app).Danger), "Delete main on origin…'s label (VcDangerBrush)");
+        AssertLabelInk(app, k10b, "Delete main on origin…", PaletteOf(app).Danger, PaletteOf(app).Selection, PaletteOf(app).TextPrimary);
+        AssertLabelInk(app, k10b, "Delete main…", PaletteOf(app).TextDisabled, PaletteOf(app).Panel, PaletteOf(app).TextPrimary);
         AssertReasonWhole(app, "Delete main…", PartK.CannotDeleteCurrentBranch);
         AssertRowAutomation(app, PaletteItem(app, "Delete main on origin…"), "Delete main on origin…", "origin/main", null, null, selected: true);
         AssertRowAutomation(app, PaletteItem(app, "Delete main…"), "Delete main…", "main", PartK.CannotDeleteCurrentBranch, null, selected: false);
@@ -486,24 +487,18 @@ public sealed partial class Phase6ChecksK : Phase6Checks
         Assert.Equal(PaletteOf(app).TextDisabled, (detail.Foreground as ISolidColorBrush)?.Color);
     }
 
-    /// <summary>A pixel of <paramref name="label"/>'s row's label drawn in <paramref name="colour"/> (its ink), for a colour assertion on the picture.</summary>
-    private static Point InkPoint(ShellDriver app, string label, Color colour)
+    /// <summary>
+    /// <paramref name="label"/>'s row's label as drawn in <paramref name="picture"/>: its ink (<see cref="TextInk"/>,
+    /// subpixel smoothing and each platform's rasterizer allowed for) is <paramref name="ink"/> on
+    /// <paramref name="background"/>, not the <paramref name="instead"/> an ordinary label would have.
+    /// </summary>
+    private static void AssertLabelInk(ShellDriver app, Screenshot picture, string label, Color ink, Color background, Color instead)
     {
         var block = PaletteItem(app, label).GetVisualDescendants().OfType<TextBlock>().Single(candidate => candidate.Name == "CommandPaletteItemLabel");
         var bounds = app.BoundsOf(block);
-        var picture = app.Capture();
-        for (var y = (int)Math.Ceiling(bounds.Top); y < bounds.Bottom; y++)
-        {
-            for (var x = (int)Math.Ceiling(bounds.Left); x < bounds.Right; x++)
-            {
-                if (picture.PixelAt(x, y) == colour)
-                {
-                    return new Point(x, y);
-                }
-            }
-        }
-
-        throw new Xunit.Sdk.XunitException($"No pixel of {label}'s label is drawn in {colour}.");
+        var area = new Rect(Math.Ceiling(bounds.X), Math.Ceiling(bounds.Y), Math.Floor(bounds.Width), Math.Floor(bounds.Height));
+        var problems = TextInk.Problems(picture, area, ink, background, instead, $"{label}'s label");
+        Assert.True(problems.Count == 0, string.Join('\n', problems));
     }
 
     /// <summary>
@@ -549,6 +544,7 @@ public sealed partial class Phase6ChecksK : Phase6Checks
         var confirm = (Button)app.FindByAutomationId(view, "ConfirmButton");
         Assert.Equal((PartK.Cancel, PartK.CreateBranchTitle), (cancel.Content as string, confirm.Content as string));
         Assert.False(confirm.IsEffectivelyEnabled, "Create branch is enabled with no name.");
+        Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), confirm.Theme);
         Assert.True(app.BoundsOf(cancel).Right < app.BoundsOf(confirm).Left, "Cancel is not left of Create branch.");
         var backdrop = view.GetVisualDescendants().Prepend(view).OfType<Panel>().First(panel => panel.Classes.Contains("dialogBackdrop"));
         Assert.Equal(PaletteOf(app).Backdrop, (backdrop.Background as ISolidColorBrush)?.Color);
