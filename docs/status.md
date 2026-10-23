@@ -193,7 +193,9 @@ Visual checks:
 
 Closing:
 
-- [ ] 22. An independent review of the code before the gate; what it finds fixed, with tests.
+- [x] 22. An independent review of the code before the gate; what it finds fixed, with tests.
+  (Its findings fixed by four Opus fixers, each merged with its notes in the design and the report:
+  C `15b00c8`, B `1dfdd6d`, A `d6a634d`, D `da54d8b`.)
 - [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
   inspected, report completed.
 - [ ] 24. CI run of the gate's commit read, every job.
@@ -303,18 +305,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Status step 22, the independent review of the code: its findings went to four Opus fixers by area.
-Fixers C (the settings screen, the session, the texts; `15b00c8`), B (the dashboard, summary mode,
-the registry, bulk runs; `1dfdd6d`) and A (the git layer, refspecs, pushes, the runner; `d6a634d`) are
-merged, their notes in the design and the report. Fixer D (keys, the palette, part S's read-backs,
-the GC-sensitive timing tests, `KeyRouterTests`' Windows failure, the isolation tripwire) works on
-`wip/p6-review-keys`. Next: fixer D's merge (record part S's read-back rule in the report's
-conventions), tick step 22, the full default run, then the gate (step 23: a rested `dotnet test`
-and, after telling the owner, the real-window pass on one commit; the picture list at once; the
-comparison with `D:/Projects/Personal/gate6-reference/`; every picture inspected). Done ahead of
-the closing steps: design 16.2's wording in `plan.md`, `requirements.md` and this file (`290353b`;
-risks 10, 12, 18 and 25 and the phase's outcome wait for the gate); an architecture draft for step
-25 is being written on `wip/p6-architecture`.
+The gate, status step 23, on `da54d8b` or a later code commit: after a rest, `dotnet test` at the
+root; then, after telling the owner, the real-window pass (`dotnet test --project
+tests/VisualCommit.RealWindowTests -c Release`) on the same commit; the picture list
+(`docs/test-reports/phase-6-pictures.sha256`) right after both passes; the earlier pictures compared
+with `D:/Projects/Personal/gate6-reference/` (`scripts/compare-pictures.py`); every picture inspected
+(phase 6's in full, the earlier ones against the references and 16.1's regions, the real-window
+captures with their twins); the report completed. Done ahead of the closing steps: design 16.2's
+wording in `plan.md`, `requirements.md` and this file (`290353b`; risks 10, 12, 18 and 25 and the
+phase's outcome wait for the gate); `architecture.md` for step 25 on `wip/p6-architecture`, to be
+merged once it has fixer D's changes.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -349,6 +349,10 @@ every commit.
   four jobs green (Windows' Test step 24 min 0 s, Ubuntu's 5 min 0 s, the containers' 5 min 41 s and
   5 min 34 s); macOS failed S19 alone (its Test step 28 min 52 s): "The screen's reads are 13 calls,
   not 7", a watcher refresh after Save's `git config --local` write (fixer D's item).
+  Run 40004153661 on `57d5c7b` (fixer A merged): both containers green; Windows, macOS and
+  `ubuntu-latest` failed fixer A's new push-back test, whose `git remote add team/fork` beside `team`
+  Git 2.55 and 2.56 refuse (`is a subset of existing remote`), and macOS S19 again; the test writes the
+  remote as configuration since `6fe269c`, and S19 waits for the watchers since `da54d8b`.
 - 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
   worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
   files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
