@@ -44,7 +44,7 @@ public class UndoToolbarTests
         var undoable = new UndoAvailability(true, "Undo creation of hotfix", false, "Nothing to redo");
         AssertStates(app, undoable);
         toolbar.UpdateUndoStates();
-        Assert.Equal((true, "Undo creation of hotfix", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+        Assert.Equal((true, "Undo creation of hotfix (Ctrl+Z)", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
 
         // 1. A user operation runs: wait for it. A background one gives no reason (a click queues behind it).
         var (hold, ahead) = HoldQueue(app);

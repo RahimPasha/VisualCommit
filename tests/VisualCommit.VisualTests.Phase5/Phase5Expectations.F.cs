@@ -182,8 +182,9 @@ public static partial class Phase5Expectations
         public const string CommitsPlaceholder = "Message, author or SHA";
         public const string FilesPlaceholder = "File name or path (case ignored for A–Z)";
         public const string ChangesPlaceholder = "Text added or removed (case ignored for A–Z)";
-        public const string PreviousToolTip = "Previous match (Shift+Enter)";
-        public const string NextToolTip = "Next match (Enter)";
+        // The match buttons name the command's shown key too since phase 6 (docs/phase-6-design.md 6.8, 16.1).
+        public const string PreviousToolTip = "Previous match (Shift+Enter, Shift+F3)";
+        public const string NextToolTip = "Next match (Enter, F3)";
         public const string CloseToolTip = "Close the search (Esc)";
         public const string NoMatches = "No matches";
 

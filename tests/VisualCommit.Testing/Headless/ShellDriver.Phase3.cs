@@ -329,7 +329,8 @@ public sealed partial class ShellDriver
                         item.IsSelected,
                         ToolTip.GetTip(item) as string,
                         TextColorOf(item),
-                        BoundsOf(item)));
+                        BoundsOf(item),
+                        MenuKeyTextOf(item)));
                     break;
             }
         }
