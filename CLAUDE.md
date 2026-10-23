@@ -295,9 +295,9 @@ What to know about them:
   root takes about 2 minutes on the laptop. At phase 5's gate (run 38931127856) CI's jobs took
   27 min 50 s on Windows (its Test step 25 min 15 s), 17 min 43 s on macOS (Test step 16 min
   13 s), 4 min 48 s on Linux (Test step 3 min 26 s) and 5 min 38 s and 6 min 2 s in the
-  containers. The Test steps of Windows, macOS and Linux have a limit of 40 minutes and their jobs
-  50 (D184, amending D152); the containers' limits stay. The lead raises that limit when the
-  Windows or macOS Test step passes 32 minutes (D186). Phase 1's checks load and clone a 100k-commit repo,
+  containers. The Test steps of Windows, macOS and Linux have a limit of 55 minutes and their jobs
+  65 (D232, amending D184); the containers' limits stay. The lead raises that limit when the
+  Windows or macOS Test step passes 44 minutes, four fifths of it (D232, D186's rule). Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
