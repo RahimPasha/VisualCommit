@@ -175,7 +175,7 @@ public sealed partial class Phase6ChecksL : Phase6Checks
     private static List<string> ButtonsOf(ShellDriver app, Visual view) =>
     [
         .. view.GetVisualDescendants().OfType<Button>()
-            .Where(button => button.IsEffectivelyVisible && (button.Content is string || button.Content is TextBlock))
+            .Where(button => button.IsEffectivelyVisible && button is not Avalonia.Controls.Primitives.ToggleButton && (button.Content is string || button.Content is TextBlock))
             .OrderBy(button => app.BoundsOf(button).X)
             .Select(button => button.Content as string ?? ((TextBlock)button.Content!).Text ?? string.Empty),
     ];

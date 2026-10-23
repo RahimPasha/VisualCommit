@@ -11,7 +11,9 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views.Shell;
+using VisualCommit.App.Views.Dialogs;
 using VisualCommit.Core.Session;
+using VisualCommit.Core.Settings;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -76,6 +78,363 @@ public sealed partial class Phase6ChecksL
         app.MoveToNeutral();
         AssertWelcomePage(app, app.Capture(), PaletteOf(app), recent);
     }
+
+    /// <summary>
+    /// Check L27: the graph of "ops" with its menus, tooltips and dialogs in both themes (11.12,
+    /// 11.13, 11.14; LD4 to LD6): a branch drag's pill and outline flipped mid-drag (the drag layer
+    /// redrawn), Esc ending it; three rows selected; a danger item under the pointer; a disabled
+    /// toolbar button's and a disabled menu item's tooltips; Create branch…; the push dialog without
+    /// an upstream; Manage remotes…. Nothing changes git. "ops", System with the fake dark, 1100×700.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_L27_graph_menus_tooltips_and_dialogs_in_both_themes()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo, PartL.Size.Width, PartL.Size.Height, AppTheme.System, systemDark: true);
+        var exact = await repo.ExactStateAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+
+        // At the start: OPS0, nothing selected, the details placeholder; the toolbar; Undo "Nothing to undo".
+        AssertSystemDarkStart(app);
+        AssertGraph(app, PartL.Ops0, PartL.Ops0Lanes);
+        Assert.Equal(-1, repository.SelectedIndex);
+        Assert.True(app.FindByAutomationId("DetailsPlaceholder").IsEffectivelyVisible, "The details placeholder does not show.");
+        AssertToolbar(app, PartL.OpsToolbar);
+        Assert.Equal(UndoRedoButtons.Nothing, app.UndoRedoState());
+
+        // Step 1: press feature/alpha of row 4 and move onto main of row 3 in 5 steps, the button held.
+        var alpha = app.GraphLabelBounds(4, "feature/alpha");
+        var main = app.GraphLabelBounds(3, "main");
+        Assert.True(Math.Abs(main.Center.X - 291.4) <= 1 && Math.Abs(main.Center.Y - 207) <= 1, $"main's label is centred at {main.Center}, not (291.4, 207) (phase 3's MainLabelCentre).");
+        var logMark = app.LogMark();
+        app.PressMouse(alpha.Center);
+        Assert.Equal(4, repository.SelectedIndex);
+        app.MoveMouseHeld(main.Center, steps: 5);
+        await app.WaitForAsync(() => app.BranchDrag.IsDragging && app.BranchDrag.Target?.RefName == "refs/heads/main", "the drag of feature/alpha over main");
+        var layer = app.Find<DragLayer>("DragLayer");
+        var origin = (Vector)app.BoundsOf(layer).TopLeft;
+        await ShotInBothThemesAsync(app, "l27a-drag", keepPointer: true, assertEach: (picture, palette) =>
+        {
+            var dark = IsDark(palette);
+            Assert.True(app.BranchDrag.IsDragging, "The drag stopped.");
+            Assert.Equal(4, repository.SelectedIndex);
+            Assert.Equal(1, repository.Selection.Count);
+            Assert.StartsWith(PartL.AlphaTwo, app.Find<SelectableTextBlock>("DetailsSha").Text, StringComparison.Ordinal);
+            var pill = layer.PillBounds!.Value.Translate(origin);
+            Assert.True(
+                Math.Abs(pill.X - (main.Center.X + 8)) <= 0.5 && Math.Abs(pill.Y - (main.Center.Y + 8)) <= 0.5 && Math.Abs(pill.Height - 18) <= 0.5,
+                $"The pill is at {pill}, not 8 right of and 8 below the pointer {main.Center}, 18 high.");
+            AssertNear(PartL.PillPoint(dark), picture, new Point(Math.Floor(pill.X + 4), Math.Floor(pill.Top + 6)), PartL.BlendTolerance, "pill's left padding over the selected row");
+            AssertNear(PartL.Blend(palette.Lane(3), 0.5, palette.Selection), picture, new Point(alpha.X + 2, alpha.Center.Y), PartL.BlendTolerance, "dimmed source label feature/alpha (50 %)");
+            var outline = layer.OutlineBounds!.Value.Translate(origin);
+            AssertColour(palette.DragTarget, picture, new Point(outline.Center.X, outline.Top + 1), "outline's top stroke (VcDragTargetBrush)");
+            AssertColour(palette.DragTarget, picture, new Point(outline.X + 1, outline.Center.Y), "outline's left stroke (VcDragTargetBrush)");
+            if (!dark)
+            {
+                AssertNoPixel(picture, new Rect(0, 0, PartL.Size.Width, PartL.Size.Height), Dark.DragTarget, "The light picture");
+            }
+
+            AssertRowBackground(picture, palette.Selection, 4, "selected row 4 (VcSelectionBrush)");
+            AssertOpsColours(app, picture, palette, nodes: [1, 2, 4, 5]);
+            Assert.False(app.Session.Shell.Menu.IsOpen, "A menu is open during the drag.");
+        });
+        var flippedBack = app.Capture();
+        var outlineBack = layer.OutlineBounds!.Value.Translate(origin);
+        AssertColour(Dark.DragTarget, flippedBack, new Point(outlineBack.Center.X, outlineBack.Top + 1), "outline's top stroke after the flip back");
+        AssertColour(Dark.DragTarget, flippedBack, new Point(outlineBack.X + 1, outlineBack.Center.Y), "outline's left stroke after the flip back");
+        var pillBack = layer.PillBounds!.Value.Translate(origin);
+        AssertNear(PartL.PillPoint(dark: true), flippedBack, new Point(Math.Floor(pillBack.X + 4), Math.Floor(pillBack.Top + 6)), PartL.BlendTolerance, "pill's point after the flip back");
+
+        // Esc with the button held ends the drag; the release opens no menu.
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.BranchDrag.IsDragging, "the drag to end on Esc");
+        var ended = app.Capture();
+        Assert.Null(layer.PillBounds);
+        Assert.Null(layer.OutlineBounds);
+        AssertColour(Dark.Lane(3), ended, new Point(alpha.X + 2, alpha.Center.Y), "source label at full opacity after Esc");
+        app.ReleaseMouse(main.Center);
+        await AssertNoMenuAsync(app, logMark);
+        Assert.Equal(exact, await repo.ExactStateAsync());
+
+        // Step 2: rows 5, 6 and 7 selected by a click and two command-clicks.
+        app.Click(Near(app.GraphRowPoint(5), PartL.OpsRowPoint(5), "row 5"));
+        app.Click(Near(app.GraphRowPoint(6), PartL.OpsRowPoint(6), "row 6"), app.CommandModifier);
+        app.Click(Near(app.GraphRowPoint(7), PartL.OpsRowPoint(7), "row 7"), app.CommandModifier);
+        await app.WaitForAsync(() => Shown(app, "MultiSelectionView") is not null && repository.Selection.Count == 3, "the three commits' panel");
+        await ShotInBothThemesAsync(app, "l27b-three-selected", assertEach: (picture, palette) =>
+        {
+            Assert.Equal(
+                new[] { 5, 6, 7 }.Select(row => repository.Graph.CommitAt(row).Sha).Order(StringComparer.Ordinal),
+                repository.Selection.Shas.Order(StringComparer.Ordinal));
+            for (var row = 0; row < PartL.Ops0.Count; row++)
+            {
+                if (row >= 5)
+                {
+                    AssertRowBackground(picture, palette.Selection, row, $"selected row {row}");
+                }
+                else
+                {
+                    Assert.NotEqual(palette.Selection, picture.PixelAt(RowBackgroundPoint(row)));
+                }
+            }
+
+            Assert.Equal(PartL.ThreeSelected, app.Find<TextBlock>("MultiSelectionTitle").Text);
+            var items = app.FindByAutomationId("MultiSelectionList").GetVisualDescendants().OfType<Control>()
+                .Where(control => Avalonia.Automation.AutomationProperties.GetAutomationId(control) == "MultiSelectionItem" && control.IsEffectivelyVisible)
+                .OrderBy(control => app.BoundsOf(control).Y)
+                .Select(control => string.Join(' ', TextsIn(control)))
+                .ToList();
+            Assert.Equal(PartL.ThreeSelectedList.Select(entry => entry.Sha + " " + entry.Subject), items);
+            var shaBlock = app.FindByAutomationId("MultiSelectionList").GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == PartL.AlphaOne);
+            Assert.Equal(palette.TextSecondary, (shaBlock.Foreground as ISolidColorBrush)?.Color);
+            Assert.Equal(PartL.MultiSelectionHint, app.Find<TextBlock>("MultiSelectionHint").Text);
+            Assert.Null(Shown(app, "FileList"));
+            AssertOpsColours(app, picture, palette, nodes: [1, 2, 4, 5]);
+        });
+
+        // Step 3: feature/alpha's menu, the pointer moved onto "Delete feature/alpha…" (no tooltip: see the report).
+        app.RightClick(app.GraphLabelBounds(4, "feature/alpha").Center);
+        var menu = app.Menu();
+        Assert.Equal(4, repository.SelectedIndex);
+        Assert.Equal(1, repository.Selection.Count);
+        AssertMenu(menu, [.. PartL.AlphaMenu]);
+        AssertMenuShape(app, menu);
+        Assert.Equal(PartL.AlphaMenuHeight, menu.Bounds.Height, PartL.Tolerance);
+        Assert.Equal(4, menu.Bounds.Top, PartL.Tolerance);
+        Assert.All(menu.Items, item => Assert.Null(item.KeyText));
+        app.MoveMouse(app.MenuItemBounds(PartL.DeleteAlpha).Center);
+        app.Settle();
+        await ShotInBothThemesAsync(app, "l27c-danger-item", keepPointer: true, assertEach: (picture, palette) =>
+        {
+            var shown = app.Menu();
+            AssertHighlighted(shown, PartL.DeleteAlpha);
+            Assert.Equal("feature/alpha", shown.Header);
+            var delete = shown.Item(PartL.DeleteAlpha);
+            AssertColour(palette.Hover, picture, new Point(delete.Bounds.Right - 6, delete.Bounds.Top + 3), "Delete feature/alpha…'s background under the pointer (VcHoverBackgroundBrush)");
+            AssertInk(picture, delete.Bounds, palette.Danger, palette.Hover, "Delete feature/alpha…'s label (VcDangerBrush, 11.10)");
+            var force = shown.Item(PartL.ForcePushAlpha);
+            AssertColour(palette.Panel, picture, new Point(force.Bounds.Right - 6, force.Bounds.Top + 3), "menu's background (VcPanelBackgroundBrush)");
+            AssertInk(picture, force.Bounds, palette.Danger, palette.Panel, "Force push feature/alpha…'s label (VcDangerBrush)");
+            var disabled = shown.Item(PartL.FastForwardAlpha);
+            AssertInk(picture, disabled.Bounds, palette.TextDisabled, palette.Panel, "the disabled item's label (VcTextDisabledBrush)");
+            Assert.DoesNotContain(app.Window.GetVisualDescendants().OfType<Control>(), control => ToolTip.GetIsOpen(control));
+        });
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, logMark: null);
+
+        // Step 4: the pointer rests on the disabled Stash; its tooltip, the reason alone.
+        var stash = ToolbarButton(app, "StashButton");
+        Assert.Equal(PartL.NoChangesToStash, await app.RestPointerOnAsync(stash));
+        Assert.Equal(PartL.NoChangesToStash, Avalonia.Automation.AutomationProperties.GetHelpText(stash));
+        await ShotInBothThemesAsync(app, "l27d-disabled-tooltip", keepPointer: true, assertEach: (picture, palette) =>
+        {
+            Assert.False(stash.IsEffectivelyEnabled, "Stash is enabled.");
+            AssertToolTipInside(app, PartL.NoChangesToStash);
+            var label = stash.GetVisualDescendants().OfType<TextBlock>().First(text => text.IsEffectivelyVisible);
+            AssertInk(picture, app.BoundsOf(label), palette.TextDisabled, palette.Chrome, "Stash's label (VcTextDisabledBrush)");
+            AssertIcon(app, picture, stash, palette.TextDisabled, "Stash's icon");
+            AssertOpsColours(app, picture, palette, nodes: [1, 2, 4, 5]);
+        });
+
+        // Step 5: Main work selected; main's menu; the pointer rests on the disabled "Delete main…".
+        app.MoveToNeutral();
+        app.Click(Near(app.GraphRowPoint(3), PartL.OpsRowPoint(3), "row 3"));
+        await app.WaitForAsync(() => repository.SelectedIndex == 3, "Main work to be selected");
+        var pointer = app.GraphLabelBounds(3, "main").Center;
+        app.RightClick(pointer);
+        menu = app.Menu();
+        Assert.Equal(3, repository.SelectedIndex);
+        Assert.Equal(PartL.MainMenu, menu.LinesWithKeys());
+        AssertMenuShape(app, menu);
+        AssertMenuAtPointer(menu, pointer);
+        Assert.Equal(PartL.MainMenuHeight, menu.Bounds.Height, PartL.Tolerance);
+        AssertHighlighted(menu, PartL.PullFromOrigin);
+        Assert.Equal(PartL.CannotDeleteCurrent, await app.RestPointerOnMenuItemAsync(PartL.DeleteMain));
+        await ShotInBothThemesAsync(app, "l27e-menu-item-tooltip", keepPointer: true, assertEach: (picture, palette) =>
+        {
+            var shown = app.Menu();
+            AssertHighlighted(shown, PartL.PullFromOrigin);
+            var pull = shown.Item(PartL.PullFromOrigin);
+            AssertColour(palette.Hover, picture, new Point(pull.Bounds.Left + 4, pull.Bounds.Top + 3), "the highlighted Pull from origin/main's background (VcHoverBackgroundBrush)");
+            var delete = shown.Item(PartL.DeleteMain);
+            Assert.False(delete.IsEnabled);
+            AssertInk(picture, LabelPart(delete.Bounds), palette.TextDisabled, palette.Panel, "Delete main…'s label (VcTextDisabledBrush, not the danger colour, D114)");
+            foreach (var keyed in shown.Items.Where(item => item.KeyText is not null))
+            {
+                var block = ShellDriver.MenuKeyBlockOf(app.MenuItemControl(keyed.Label)) ?? throw new Xunit.Sdk.XunitException($"{keyed.Label} draws no key.");
+                AssertInk(picture, app.BoundsOf(block), palette.TextSecondary, keyed.IsHighlighted ? palette.Hover : palette.Panel, $"{keyed.Label}'s key (VcTextSecondaryBrush)");
+            }
+
+            AssertToolTipInside(app, PartL.CannotDeleteCurrent);
+            AssertOpsColours(app, picture, palette, nodes: [1, 2], outside: shown.Bounds);
+        });
+        app.PressKey(Key.Escape);
+        await AssertNoMenuAsync(app, logMark: null);
+
+        // Step 6: the toolbar's Branch: the name dialog.
+        app.Click(ToolbarButton(app, "BranchButton"));
+        await app.WaitForDialogAsync<NameDialogViewModel>();
+        await WaitForDialogFocusAsync(app, "NameBox");
+        await ShotInBothThemesAsync(app, "l27f-name-dialog", assertEach: (picture, palette) =>
+        {
+            AssertCard(app, picture, palette, PartL.CardWidth, PartL.CardLeft);
+            Assert.Equal(PartL.CreateBranch, DialogText(app, "NameDialogTitle"));
+            Assert.Equal(PartL.CreateBranchContext, DialogText(app, "NameDialogContext"));
+            var box = InDialog<TextBox>(app, "NameBox");
+            Assert.True(string.IsNullOrEmpty(box.Text), $"NameBox holds \"{box.Text}\".");
+            Assert.Equal(PartL.BranchNamePlaceholder, box.PlaceholderText);
+            Assert.True(box.IsFocused, "NameBox does not have the keyboard focus.");
+            Assert.True(Shown(app.TopDialogView!, "NameError") is not TextBlock { Text.Length: > 0 }, "NameError shows a text.");
+            var option = InDialog<CheckBox>(app, "NameDialogOption");
+            Assert.Equal((PartL.CheckOutTheNewBranch, true), (option.Content as string, option.IsChecked == true));
+            Assert.Equal(["Cancel", PartL.CreateBranch], ButtonsOf(app, app.TopDialogView!));
+            Assert.False(InDialog<Button>(app, "ConfirmButton").IsEffectivelyEnabled, "Create branch is enabled with no name.");
+            AssertBackdrop(picture, palette);
+        });
+        app.PressKey(Key.Escape);
+        await AssertNoDialogAsync(app);
+
+        // Step 7: feature/ff's menu, Push feature/ff…: the push dialog without an upstream.
+        app.RightClick(app.GraphLabelBounds(2, "feature/ff").Center);
+        app.Menu();
+        Assert.Equal(2, repository.SelectedIndex);
+        app.ClickMenuItem(PartL.PushFf);
+        await app.WaitForDialogAsync<PushDialogViewModel>();
+        await WaitForDialogFocusAsync(app, "PushBranchBox");
+        await ShotInBothThemesAsync(app, "l27g-push-dialog", assertEach: (picture, palette) =>
+        {
+            AssertCard(app, picture, palette, PartL.CardWidth, PartL.CardLeft);
+            Assert.Equal(PartL.PushFfTitle, DialogText(app, "PushTitle"));
+            Assert.Equal("origin", DialogText(app, "PushRemote"));
+            Assert.Contains("To", TextsIn(app.TopDialogView!));
+            var box = InDialog<TextBox>(app, "PushBranchBox");
+            Assert.Equal("feature/ff", box.Text);
+            Assert.True(box.IsFocused, "PushBranchBox does not have the keyboard focus.");
+            var upstream = InDialog<CheckBox>(app, "PushSetUpstream");
+            Assert.Equal((PartL.SetAsUpstream, true), (upstream.Content as string, upstream.IsChecked == true));
+            Assert.Equal(["Cancel", "Push"], ButtonsOf(app, app.TopDialogView!));
+            Assert.True(InDialog<Button>(app, "ConfirmButton").IsEffectivelyEnabled, "Push is disabled.");
+            AssertBackdrop(picture, palette);
+        });
+        app.PressKey(Key.Escape);
+        await AssertNoDialogAsync(app);
+        Assert.Equal(PartL.OpsRemoteHeads, await RemoteHeadsAsync(repo));
+
+        // Step 8: the Remotes section's menu, Manage remotes…: the remotes dialog.
+        app.RightClick(await app.RefRowAsync("Remotes"));
+        app.Menu();
+        app.ClickMenuItem(PartL.ManageRemotes);
+        await app.WaitForDialogAsync<RemotesDialogViewModel>();
+        var url = await OriginUrlAsync(repo);
+        await ShotInBothThemesAsync(app, "l27h-remotes-dialog", assertEach: (picture, palette) =>
+        {
+            AssertCard(app, picture, palette, PartL.WideCardWidth, PartL.WideCardLeft);
+            Assert.Equal(PartL.RemotesTitle, DialogText(app, "RemotesTitle"));
+            var rows = app.TopDialogView!.GetVisualDescendants().OfType<Control>()
+                .Where(control => control.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(control) == "RemoteRow").ToList();
+            var row = Assert.Single(rows);
+            Assert.Equal("origin", row.GetVisualDescendants().OfType<TextBlock>().First(text => text.IsEffectivelyVisible).Text);
+            var shownUrl = (TextBlock)Shown(row, "RemoteUrl")!;
+            Assert.Equal(url, shownUrl.Text);
+            Assert.Equal(url, ToolTip.GetTip(shownUrl) as string);
+            Assert.True(Shown(row, "RemoteEditButton") is Button { IsEffectivelyEnabled: true }, "Edit does not show.");
+            var remove = (Button)Shown(row, "RemoteRemoveButton")!;
+            AssertInk(picture, app.BoundsOf(remove), palette.Danger, BackgroundUnder(picture, app.BoundsOf(remove)), "Remove's label (VcDangerBrush)");
+            Assert.True(Shown(app.TopDialogView!, "AddRemoteButton") is Button { IsEffectivelyVisible: true }, "Add remote does not show.");
+            Assert.Equal("Close", InDialog<Button>(app, "CancelButton").Content as string);
+            AssertBackdrop(picture, palette);
+        });
+        app.Click(InDialog<Button>(app, "CancelButton"));
+        await AssertNoDialogAsync(app);
+
+        // At the end: nothing changed in git; no backup; Undo "Nothing to undo".
+        Assert.Equal(exact, await repo.ExactStateAsync());
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Equal(UndoRedoButtons.Nothing, app.UndoRedoState());
+    }
+
+    /// <summary>
+    /// OPS0's colours outside any open menu (L27's "In l27a, l27b and l27d, and in l27e for rows 1
+    /// and 2 only"): the nodes of <paramref name="nodes"/> in their lanes' colours (D198's light lanes
+    /// 1 and 2), the labels feature/conflict and feature/ff filled with lanes 1 and 2 with their text
+    /// in <c>VcLabelTextBrush</c>; every point also outside <paramref name="outside"/>.
+    /// </summary>
+    private static void AssertOpsColours(ShellDriver app, Screenshot picture, Palette palette, int[] nodes, Rect? outside = null)
+    {
+        foreach (var row in nodes)
+        {
+            var node = PartL.OpsNode(row);
+            Assert.False(outside is { } menu && menu.Contains(node), $"Row {row}'s node {node} lies under the open menu.");
+            AssertColour(palette.Lane(PartL.Ops0[row].Colour), picture, node, $"row {row}'s node");
+        }
+
+        foreach (var (row, label) in new[] { (1, "feature/conflict"), (2, "feature/ff") })
+        {
+            var placed = Graph(app).LabelsInRow(row)[0];
+            Assert.StartsWith(label[..9], placed.Text, StringComparison.Ordinal);
+            var bounds = app.GraphLabelBounds(row, placed.Text);
+            var fill = new Point(bounds.X + 2, bounds.Center.Y);
+            Assert.False(outside is { } menu && menu.Intersects(bounds), $"The label {label} lies under the open menu.");
+            AssertColour(palette.Lane(PartL.Ops0[row].Colour), picture, fill, $"label {label}'s fill");
+            AssertInk(picture, bounds.Deflate(new Thickness(3, 2)), palette.LabelText, palette.Lane(PartL.Ops0[row].Colour), $"label {label}'s text (VcLabelTextBrush)");
+        }
+    }
+
+    /// <summary>Where a commit row's background is sampled clear of text: x 575, 3 below the row's top (row r from y 116 + 26 r).</summary>
+    private static Point RowBackgroundPoint(int row) => new(575, 116 + (26 * row) + 3);
+
+    /// <summary>A commit row's background at <see cref="RowBackgroundPoint"/>.</summary>
+    private static void AssertRowBackground(Screenshot picture, Color colour, int row, string what) =>
+        AssertColour(colour, picture, RowBackgroundPoint(row), what);
+
+    /// <summary>A point the app's bounds give, held against the report's (±2), returned for the click.</summary>
+    private static Point Near(Point actual, Point reported, string what)
+    {
+        Assert.True(Math.Abs(actual.X - reported.X) <= PartL.Tolerance && Math.Abs(actual.Y - reported.Y) <= PartL.Tolerance, $"{what} is at {actual}; the report says {reported} (±2).");
+        return actual;
+    }
+
+    /// <summary>The left part of a menu item, where its label is drawn (left of a key column).</summary>
+    private static Rect LabelPart(Rect item) => new(item.X, item.Y, item.Width * 0.6, item.Height);
+
+    /// <summary>The colour behind a control: the most common pixel of the row 2 inside its top.</summary>
+    private static Color BackgroundUnder(Screenshot picture, Rect bounds)
+    {
+        var counts = new Dictionary<Color, int>();
+        for (var x = (int)Math.Ceiling(bounds.Left); x < (int)Math.Floor(bounds.Right); x++)
+        {
+            var pixel = picture.PixelAt(x, (int)Math.Ceiling(bounds.Top) + 2);
+            counts[pixel] = counts.GetValueOrDefault(pixel) + 1;
+        }
+
+        return counts.OrderByDescending(pair => pair.Value).First().Key;
+    }
+
+    /// <summary>The one open tooltip shows <paramref name="text"/> and lies inside the window.</summary>
+    private static void AssertToolTipInside(ShellDriver app, string text)
+    {
+        var tip = app.Window.GetVisualDescendants().OfType<ToolTip>().Single(candidate => candidate.IsEffectivelyVisible);
+        Assert.Equal(text, string.Join('\n', TextsIn(tip)));
+        var bounds = app.BoundsOf(tip);
+        var size = app.Window.ClientSize;
+        Assert.True(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= size.Width && bounds.Bottom <= size.Height, $"The tooltip at {bounds} is not inside the window.");
+    }
+
+    /// <summary>An icon's colour in a picture: the icon's bounds "contain" <paramref name="colour"/>.</summary>
+    private static void AssertIcon(ShellDriver app, Screenshot picture, Visual owner, Color colour, string what)
+    {
+        var icon = owner.GetVisualDescendants().OfType<VisualCommit.App.Controls.Icon>().First(candidate => candidate.IsEffectivelyVisible);
+        AssertContains(picture, app.BoundsOf(icon), colour, what);
+    }
+
+    /// <summary>The heads <c>ls-remote origin</c> lists, by name.</summary>
+    private static async Task<List<string>> RemoteHeadsAsync(TempRepo repo) =>
+        [.. (await repo.GitAsync("ls-remote", "--heads", "origin")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Split('\t')[1].TrimEnd('\r'))];
+
+    /// <summary>The URL of the remote origin as configured.</summary>
+    private static async Task<string> OriginUrlAsync(TempRepo repo) =>
+        (await repo.GitAsync("config", "--get", "remote.origin.url")).StandardOutput.Trim();
 
     /// <summary>
     /// L26 step 1's welcome page in the variant shown (13.1, LD3): in the graph area, its stack 392
