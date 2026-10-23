@@ -42,3 +42,8 @@ dotnet_naming_style.underscore_camel.required_prefix = _
 # Test method names use underscores to read as sentences
 [tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
+
+# Part G's files of a walk-through (Phase6Checks.G.cs and the like) are no generated code: the
+# compiler takes any *.g.cs name, in any case, for generated code and turns nullable annotations off.
+[tests/VisualCommit.VisualTests.Phase6*/*.G.cs]
+generated_code = false
