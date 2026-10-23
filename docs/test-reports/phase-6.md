@@ -3821,6 +3821,11 @@ or the gate finds, goes here with its reason.
   stack moves up 34; with three workspaces the old numbers would be 4 px off, beyond the ±2 the checks
   allow. Design 13.1 takes the same values; positions the checks give relative to the centred stack
   are unchanged.
+- **GD15's rule (G25 step 12, the decision under "Decisions this report makes"), 2026-10-22.** Written as
+  "the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under `refs/remotes/`". WP-RA built
+  it from git's own `%(upstream)`, which its review's lab showed to be what `git status` shortens in
+  every case 0.5 lists; the two differ only for a mirror line before a renaming line (design 10.8 #9),
+  which no check uses. `upstream/pr/7` in step 12 is unchanged.
 
 ## How the expected git states were derived
 
@@ -4430,9 +4435,11 @@ under "The lead's rulings on this report's open points".
   text.
 - **GD15** (design 10.4, 14; scenario facts 8, item 5; the lead's ruling 3). **G25 asserts
   `upstream/pr/7` in Pull's tooltip after `Check out upstream/pr/7`** (step 12): an upstream is named
-  by its remote-tracking ref when the fetch lines map it to one (the first of
-  `FetchRefspecs.DestinationsOf(remote, remoteRef)` under `refs/remotes/`, shown without
-  `refs/remotes/`), as `git status` names it; only when no line maps it, `{remote}/{remote ref}`. So
+  by its remote-tracking ref when the fetch lines map it to one, as `git status` names it (git's own
+  `%(upstream)` shown without `refs/remotes/` when it lies there, as WP-RA built it and design 10.4
+  now says; first written as "the first of `FetchRefspecs.DestinationsOf(remote, remoteRef)` under
+  `refs/remotes/`", which gives the same text in every scenario of part G); only when no line maps
+  it, `{remote}/{remote ref}`. So
   `pr/7`, whose upstream today's `UpstreamText` gives as `upstream/refs/pull/7/head`, shows
   `upstream/pr/7` in Pull's tooltip (`Pull from upstream/pr/7 (Ctrl+Shift+L)`), the push dialog and a
   dashboard row; with the default lines every upstream reads as today. D101 still holds (the three
