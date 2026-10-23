@@ -313,6 +313,38 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task Cancelling_stops_git_on_the_thread_pool_never_on_the_thread_that_cancels()
+    {
+        // D59: the registration runs on the thread that cancels, often the UI thread, which
+        // cancels up to four calls at once (Cancel all); a job's termination and a process tree's
+        // kill must not hold it. The canceller stands for the UI thread: a thread of its own with a
+        // synchronization context, which the stop must not go through either.
+        var stoppedOn = new TaskCompletionSource<Thread>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new GitRunner(GitPath) { StopObserver = () => stoppedOn.TrySetResult(Thread.CurrentThread) };
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = runner.RunAsync(Script("echo started; sleep 30", onOutputLine: _ => started.TrySetResult()), cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+        var context = new CountingContext();
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var canceller = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            cancellation.Cancel();
+            cancelled.SetResult();
+        });
+        canceller.Start();
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+        var stopThread = await stoppedOn.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.NotSame(canceller, stopThread);
+        Assert.True(stopThread.IsThreadPoolThread, "The stop ran on a thread of its own, not the thread pool's.");
+        Assert.Equal(0, context.Posts);
+    }
+
+    [Fact]
     public async Task A_background_process_left_behind_by_git_does_not_hold_up_the_call()
     {
         var runner = new GitRunner(GitPath);
@@ -678,6 +710,26 @@ public class GitRunnerTests
 
         public void Write(LogLevel level, string message, Exception? exception = null) =>
             Entries.Enqueue((level, message, exception));
+    }
+
+    /// <summary>A synchronization context that counts what is posted or sent to it, and runs it on the thread pool.</summary>
+    private sealed class CountingContext : SynchronizationContext
+    {
+        private int _posts;
+
+        public int Posts => Volatile.Read(ref _posts);
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            base.Post(d, state);
+        }
+
+        public override void Send(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            base.Send(d, state);
+        }
     }
 }
 

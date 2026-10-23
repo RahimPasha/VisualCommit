@@ -99,6 +99,9 @@ public sealed class GitRunner : IGitRunner
 
     public string ExecutablePath { get; }
 
+    /// <summary>A seam for the tests: called on the thread that stops a cancelled call's git, just before it does.</summary>
+    internal Action? StopObserver { get; init; }
+
     /// <summary>
     /// The session's git environment given to the constructor (empty for none), a copy, which the
     /// runner applies to every call (docs/phase-6-design.md 8.12). Nothing in the app reads it back:
@@ -141,7 +144,11 @@ public sealed class GitRunner : IGitRunner
         }
 
         using var job = OperatingSystem.IsWindows() ? WindowsJob.TryAttach(process) : null;
-        void Stop() => Kill(process, job);
+        void Stop()
+        {
+            StopObserver?.Invoke();
+            Kill(process, job);
+        }
 
         var output = new OutputCollector(command.OnOutputLine, keepAll: command.OnOutputLine is null, splitOnCarriageReturn: false);
         var error = new OutputCollector(command.OnErrorLine, keepAll: true, splitOnCarriageReturn: true);
@@ -153,13 +160,17 @@ public sealed class GitRunner : IGitRunner
         // Cancelling stops git, which ends the wait below. Should git not stop, the wait is given
         // up after StopTimeout: a call that was cancelled must return, whatever git does. A
         // cancel that comes after git has exited stops nothing (stopped stays false), so the call
-        // that finished keeps its result.
+        // that finished keeps its result. The stop itself is queued to the thread pool: the
+        // registration runs on the thread that cancels, often the UI thread, which cancels up to
+        // four calls at once (Cancel all), and a job's termination and a process tree's kill must
+        // not hold it (D59). Once the call has ended and let go of git, a stop that comes late finds
+        // nothing to stop (Kill never throws).
         var gaveUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = false;
         using var stopOnCancel = cancellationToken.Register(() =>
         {
             Volatile.Write(ref stopped, !exit.IsCompleted);
-            Stop();
+            ThreadPool.UnsafeQueueUserWorkItem(static stop => stop(), (Action)Stop, preferLocal: false);
             _ = Task.Delay(StopTimeout, CancellationToken.None)
                 .ContinueWith(_ => gaveUp.TrySetResult(), TaskScheduler.Default);
         });
@@ -465,8 +476,9 @@ public sealed class GitRunner : IGitRunner
 
     /// <summary>
     /// Stops git and everything it started (ssh, remote helpers, hooks), which would otherwise
-    /// keep running and keep the output pipes open. Never throws: it runs inside a cancellation
-    /// callback, where an exception would land on whoever cancelled.
+    /// keep running and keep the output pipes open. Never throws: it runs on the thread pool for a
+    /// cancel, where nobody would catch an exception, and may come after the call has disposed of
+    /// the process and the job.
     /// </summary>
     private static void Kill(Process process, WindowsJob? job)
     {
