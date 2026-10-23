@@ -1,6 +1,7 @@
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.Views;
 using VisualCommit.Core.Git;
 
 namespace VisualCommit.App.Controls;
@@ -28,10 +29,7 @@ public sealed partial class CommitGraphControl
     /// macOS), never a test of the operating system. Control when the control is in no window or
     /// the platform names none.
     /// </summary>
-    public KeyModifiers CommandModifiers =>
-        this.GetPlatformSettings()?.HotkeyConfiguration.CommandModifiers is { } modifiers && modifiers != KeyModifiers.None
-            ? modifiers
-            : KeyModifiers.Control;
+    public KeyModifiers CommandModifiers => ShortcutKeys.CommandModifierOf(this.GetPlatformSettings()?.HotkeyConfiguration);
 
     /// <summary>
     /// The selection as the user sees it: <see cref="Selection"/> while several rows are selected,
