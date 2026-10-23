@@ -101,8 +101,9 @@ public sealed class Phase6ExpectationTestsL : Phase6Checks
     {
         Assert.Equal(PartL.WebItemToolTip, PartL.WorkspaceToolTip(PartL.WebNames));
         Assert.Equal(TempWorkspace.DashboardOrder, PartL.WebNames);
-        Assert.Equal("Sign in to 127.0.0.1:50000", PartL.WithLookPort(PartL.CredentialsTitle, 50000));
-        Assert.Equal(PartL.CredentialsText, PartL.WithLookPort(PartL.CredentialsText, PartL.LookServerPort));
+        Assert.Equal("Sign in to 127.0.0.1:50000", WithPort(PartL.CredentialsTitle, 50000, PartL.LookServerPort));
+        Assert.Equal(PartL.CredentialsText, WithPort(PartL.CredentialsText, PartL.LookServerPort, PartL.LookServerPort));
+        Assert.Equal(PartL.CredentialsTitle, WithPort(PartL.CredentialsTitle, 50000));
         Assert.Equal(47394, PartL.LookServerPort);
         Assert.Equal(
             ["No repository open", "Open, clone or init a repository to see its history.", "Open", "Clone", "Init", "Workspaces", "New workspace…", "Web", "10 repositories", "Recent repositories", "graph", "G", "linear", "L"],

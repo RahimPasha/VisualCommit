@@ -289,8 +289,8 @@ public sealed partial class Phase6ChecksL
         await ShotInBothThemesAsync(app, "l31g-credentials", assertEach: (picture, palette) =>
         {
             AssertCard(app, picture, palette, PartL.CardWidth, PartL.CardLeft);
-            Assert.Equal(PartL.WithLookPort(PartL.CredentialsTitle, port), DialogText(app, "DialogTitle"));
-            Assert.Equal(PartL.WithLookPort(PartL.CredentialsText, port), DialogText(app, "CredentialsText"));
+            Assert.Equal(WithPort(PartL.CredentialsTitle, port, PartL.LookServerPort), DialogText(app, "DialogTitle"));
+            Assert.Equal(WithPort(PartL.CredentialsText, port, PartL.LookServerPort), DialogText(app, "CredentialsText"));
             Assert.Null(Shown(app.TopDialogView!, "DialogRepository"));
             var texts = TextsIn(app.TopDialogView!);
             Assert.True(texts.IndexOf(PartL.UserName) >= 0 && texts.IndexOf(PartL.Password) > texts.IndexOf(PartL.UserName), "User name and Password are not shown above their boxes.");
@@ -350,10 +350,12 @@ public sealed partial class Phase6ChecksL
             app.Click(InDialog<Button>(app, "CancelButton"));
             await app.WaitForIdleAsync(timeout: NetworkTimeout);
             server.Release();
-            var texts = recorder.Texts.ToList();
-            var cancelled = texts.IndexOf(PartL.FetchOriginCancelled);
-            Assert.True(cancelled >= 0 && texts.IndexOf(PartL.FetchingFromAll, cancelled) > cancelled, "The status bar did not show \"Fetch origin cancelled\" before \"Fetching from all remotes…\": " + string.Join(" | ", texts));
-            Assert.Equal(PartL.FetchCancelled, texts[^1]);
+            // The cancelled fetch's line is the log's; the status bar goes from it straight to the
+            // waiting Fetch's running text (OperationStatusViewModel's rule since phase 3; the
+            // lead's ruling on L31 step 10), so "Fetch origin cancelled" never shows there.
+            Assert.Equal(1, app.CountLogLines(AppLogFile.OperationEnded("auth", PartL.FetchOrigin, OperationOutcome.Cancelled, PartL.FetchOriginCancelled), mark));
+            Assert.Equal([PartL.FetchingFromAll, PartL.FetchCancelled], recorder.Texts);
+            Assert.DoesNotContain(PartL.FetchOriginCancelled, recorder.Texts);
         }
 
         await AssertNoDialogAsync(app);
@@ -650,7 +652,20 @@ public sealed partial class Phase6ChecksL
         Assert.Equal(caption.ToolTip, caption.HelpText);
         Assert.Equal((string.Empty, PartL.NotSet), (settings.Field("UserNameBox")?.Text ?? string.Empty, settings.Field("UserNameBox")?.Placeholder));
         Assert.Equal((string.Empty, PartL.NotSet), (settings.Field("UserEmailBox")?.Text ?? string.Empty, settings.Field("UserEmailBox")?.Placeholder));
-        foreach (var id in new[] { "UserNameOrigin", "UserNameError", "UserEmailOrigin", "UserEmailError", "UserEmailWarning", "IdentityInEffect", "PullOther", "PullNotices", "MergeToolStatus", "MergeToolNotices" })
+        // "ops" sets user.name and user.email in its own .git/config: the global scope says so under
+        // each field (design 8.4's row "A repository is open and sets its own value", SD8; the lead's
+        // ruling on L31 step 5), in the secondary colour; no error or warning line.
+        var palette = PaletteOf(app);
+        foreach (var (id, text) in new[] { ("UserNameOrigin", PartL.OpsOwnName), ("UserEmailOrigin", PartL.OpsOwnEmail) })
+        {
+            Assert.Equal([text], settings.Lines(id));
+            var line = app.Window.GetVisualDescendants().OfType<TextBlock>()
+                .Single(block => block.IsEffectivelyVisible && AutomationProperties.GetAutomationId(block) == id);
+            Assert.False(line.Classes.Contains("warning"), $"{id} is drawn as a warning.");
+            Assert.Equal(palette.TextSecondary, (line.Foreground as ISolidColorBrush)?.Color);
+        }
+
+        foreach (var id in new[] { "UserNameError", "UserEmailError", "UserEmailWarning", "IdentityInEffect", "PullOther", "PullNotices", "MergeToolStatus", "MergeToolNotices" })
         {
             Assert.False(settings.Shows(id), $"{id} shows on the global scope: \"{settings.Field(id)?.Text}\".");
         }

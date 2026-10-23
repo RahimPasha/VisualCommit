@@ -783,6 +783,15 @@ public static partial class Phase6Expectations
         public const string GlobalCaption = "Saved in your global git configuration, which git in a terminal uses too.";
         public const string NotSet = "Not set";
 
+        /// <summary>
+        /// The global scope's lines under Name and Email for "ops", which sets both in its own
+        /// <c>.git/config</c> (design 8.4's "{repository} sets its own: {value}.", SD8; the lead's
+        /// ruling on L31 step 5), in the secondary colour.
+        /// </summary>
+        public const string OpsOwnName = "ops sets its own: Test Author.";
+
+        public const string OpsOwnEmail = "ops sets its own: author@example.com.";
+
         public static IReadOnlyList<string> PullModes { get; } =
             ["Not set", "Merge (fast-forward when possible)", "Merge, always with a merge commit", "Rebase", "Rebase, keeping merge commits", "Fast-forward only"];
 
@@ -816,21 +825,12 @@ public static partial class Phase6Expectations
 
         // ---- L31 part B: "auth" and its held fetch (AUTH0, LD18) ------------------------------------
 
-        /// <summary>The port part L's server listens on (47394, the lead's ruling of 2026-10-22).</summary>
-        public const int LookServerPort = AuthRemoteServer.Phase6LookVisualChecksPort;
-
         /// <summary>
-        /// <paramref name="text"/> with the server's port in place of 47394 (<see cref="LookServerPort"/>):
-        /// part L's own <c>WithPort</c>, since the common one stands for part W's 47393 (D97, design 17.2).
+        /// The port part L's server listens on (47394, the lead's ruling of 2026-10-22): the texts
+        /// below are written with it and go through <c>WithPort(text, server.Port, LookServerPort)</c>
+        /// (D97, design 17.2).
         /// </summary>
-        public static string WithLookPort(string text, int port)
-        {
-            ArgumentNullException.ThrowIfNull(text);
-            return text.Replace(
-                LookServerPort.ToString(CultureInfo.InvariantCulture),
-                port.ToString(CultureInfo.InvariantCulture),
-                StringComparison.Ordinal);
-        }
+        public const int LookServerPort = AuthRemoteServer.Phase6LookVisualChecksPort;
 
         public const string CredentialsTitle = "Sign in to 127.0.0.1:47394";
         public const string CredentialsText = "Git needs a user name and a password or token for http://127.0.0.1:47394.";
