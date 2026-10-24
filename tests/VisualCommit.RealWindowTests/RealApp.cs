@@ -375,7 +375,7 @@ public sealed partial class RealApp : IDisposable
     /// Waits for Windows' Open dialog the app opened with <paramref name="title"/> (S14's
     /// <c>Choose the editor's program</c>, docs/phase-6-design.md 12.10, 17.2), writes
     /// <paramref name="file"/> into its file name box and confirms it, as a user does. The dialog
-    /// has the file name box with automation id 1148 and its Open button with automation id 1.
+    /// has the file name box with automation id 1148; Enter in it confirms.
     /// </summary>
     public void ChooseFileInDialog(string title, string file, TimeSpan timeout)
     {
@@ -399,7 +399,13 @@ public sealed partial class RealApp : IDisposable
         var box = name.FindFirstDescendant(condition => condition.ByControlType(FlaUI.Core.Definitions.ControlType.Edit))?.AsTextBox()
             ?? name.AsTextBox();
         box.Text = file;
-        DialogButton(dialog!, "the file dialog's Open button", timeout).Invoke();
+
+        // Enter in the box confirms the whole path, as a user does. Not the Open button: a search
+        // for it walks the whole file list first, which in a big folder (the system folder, where
+        // the dialog opens again after the first run chose notepad.exe there; one of its items has
+        // automation id 1 as well) outlasted 30 s at the phase 6 gate's second and third passes.
+        box.Focus();
+        PressKey(VirtualKeyShort.RETURN);
         WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the file dialog to close", timeout);
         WaitUntilIdle();
     }
