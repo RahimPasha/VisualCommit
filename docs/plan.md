@@ -432,6 +432,7 @@ Delivers:
 - From phase 3: on the Mac, by hand, cancelling a fetch over ssh. Cancel kills only git there (D37); ssh and the askpass helper end when their pipes break, which no automated run proves.
 - From phase 6 (design 8.5): a broken `~/.gitconfig` shows its own message. Today `git --version` fails and the app says "Git is not working"; showing git's `fatal: bad config line …` is first-run work.
 - From phase 6 (design 11.3, 11.10, 11.11, D198): a palette made for high contrast, and the dark theme's text below 4.5:1, left with the owner's consent: `VcDangerBrush` 3.64:1 on a hovered and 3.76:1 on a selected row, `VcAccentBrush` 4.13:1 on a hovered and 4.26:1 on a selected row (the renamed file's "R"), and the danger button's white label 3.38:1. A lighter dark danger colour also lowers that label (2.70:1 at about `#EA7D86`), so it comes with the dark label `#10121A`, which changes only the label in 35 earlier dark pictures: scripted phase 2 `17a`, `18a`, `19a`, `19c`; phase 3 `04b`, `09f`, `10f`, `11b3`, `12g`, `13i`, `13j`, `16h`, `16k`, `20c`, `22e`, `25c`, `25g`, `29d`, `30d`, `31a`; phase 4 `b9c`, `c13d`, `c13g`, `c13k`, `c14h`, `c16b`; phase 5 `b9i`, `b9m`, `u16i`; real-window phase 2 `17a`; phase 3 `09f`, `10f`, `22e`, `31a`; phase 4 `c16b`.
+- From phase 6 (its gate's inspection), for the accessibility pass, the move here for the owner to confirm: every text box's placeholder (the left panel's `Filter` box since phase 1, the palette's, the settings screen's, the Pick dialog's `Filter`) is drawn in `VcTextSecondaryBrush` at Fluent's watermark opacity, 0.5: `#616773` on `#272C36` dark (about 2.5:1), `#ADB2B8` on `#FFFFFF` light (about 2.1:1, lighter than the disabled colour). Phase 6 left it, as raising it would change nearly every picture with a text box.
 - From phase 6 (design 15.5), for the accessibility pass: the icon buttons without an automation name (only the page close buttons set one): `ResolverPreviousFile`, `ResolverNextFile`, `ResolverCloseButton`, `ResolverPreviousConflict`, `ResolverNextConflict`, `CloseDiffButton`, `ActivityLogClose`, `SearchPrevious`, `SearchNext`, `SearchClose`, `CompareSwap`, `CompareClose`, `RefHiddenToggle`, `RefSoloToggle`, `DismissRestoreButton`, `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`.
 - From phase 6 (design 12.2, 11.9), by hand: the macOS and Linux editor install paths and the macOS native theme observer; the macOS checklist gains design 11.8's by-hand System step.
 
@@ -459,6 +460,13 @@ refreshes a stale index (risk 29, the owner's call); undo of a remote's removal 
 --mirror=fetch`) overwrites local branches on every fetch, Fetch all and auto-fetch included, as `git
 fetch` does, with no backup: skipping or backing up such lines (10.8 #10). Profiles (O16) stay in the
 backlog.
+
+Found at phase 6's gate: the activity log draws a read whose exit 1 is git's normal answer as a
+failure, as phase 5's rule in `ActivityLogRows` draws every exit code other than 0 in the danger colour;
+since phase 6 that includes the refs read's `git config --null --get-regexp ^remote\.` in a repository
+without a remote (phase 5's `a2d-show-reads`), as it already did `git symbolic-ref -q HEAD` on a
+detached HEAD and a `git config --get` of an unset key. Drawing such a read as a success needs each
+read to say which exit codes are its normal answers.
 
 ## Risks and open decisions
 

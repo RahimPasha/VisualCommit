@@ -368,6 +368,8 @@ it amends:
 | The palette lists `Open repository` twice for a folder that a hand-written `workspaces.json` saves through a link (macOS's `/var` for git's `/private/var`) while that workspace's dashboard is closed; the app itself always saves git's spelling | Low | design 1.2, 5.12 |
 | On a Mac keyboard F6, Shift+F6 and Shift+F10 need Fn unless the function keys are set as standard keys, Home, End, PageUp and PageDown are Fn with the arrows, and the dashboard's Remove is Cmd+Backspace; IBus and Fcitx take Ctrl+Shift+E on Linux; the keys rely on Avalonia details read from its IL only | Not checked on a Mac or a Linux desktop | design 6.1, 2.7, 0.7, plan risk 22 |
 | Linux without a desktop portal: System means Light; the macOS theme observer and the macOS and Linux editor install paths are unproven | Phase 8 by hand | D223, design 11.9, 12.2 |
+| Every text box's placeholder (the `Filter` boxes since phase 1, the palette's in `l31c`, the settings screen's) is drawn in `VcTextSecondaryBrush` at Fluent's watermark opacity, 0.5: `#616773` on `#272C36` dark (about 2.5:1), `#ADB2B8` on `#FFFFFF` light (about 2.1:1, lighter than the disabled colour). Found at the gate's inspection; not changed, as it would change nearly every picture with a text box | Accessibility; moved to phase 8's accessibility pass, for the owner to confirm (Waiting on the owner) | plan.md phase 8; the report's part L "Colours" convention and L31 |
+| The activity log draws a read whose exit 1 is git's normal answer as a failure: phase 5's rule in `ActivityLogRows` draws every exit code other than 0 in the danger colour, which since phase 6 includes the refs read's `git config --null --get-regexp ^remote\.` in a repository without a remote (phase 5's `a2d-show-reads`), as for `git symbolic-ref -q HEAD` on a detached HEAD and a `git config --get` of an unset key | Cosmetic, with "Show reads" on; in plan.md's backlog | `ViewModels/Panels/ActivityLogRows.cs`; design 10.2 |
 | The run time: [GATE-TBD: the default run's and the real-window pass's times at the gate]; during the build CI's Windows Test step reached 29 min 0 s (run 39893475197) and macOS's passed 32 minutes (run 39943973579, before D232's 55) | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D134 |
 | Q1: [GATE-TBD: Q1 within the gate's pass, and how much remains below 2,000 ms] | A hot laptop fails a gate by itself | plan risk 10 |
 | The comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` gives phase 6's part as design 17.6's estimate, "about 5 to 8 minutes more" | A stale comment, unless the gate updated it: [GATE-TBD: updated or not] | fix with phase 7's first code commit |
@@ -522,7 +524,11 @@ Risks to watch:
   - design 17.5's reading of "ten repos can be checked and updated from one screen" (Result above:
     W2 reads the ten rows on one screen, one Fetch all and one Pull all each decide every row);
   - the by-hand step of the report's checklist: with System chosen, switch Windows' app mode while
-    the app runs (D224).
+    the app runs (D224);
+  - the move of the text boxes' placeholder contrast to phase 8's accessibility pass (Known issues;
+    plan.md phase 8): every placeholder is drawn in `VcTextSecondaryBrush` at Fluent's watermark
+    opacity, about 2.5:1 dark and 2.1:1 light, and the lead left it at the gate's inspection, as raising
+    it would change nearly every picture with a text box.
 - **Decisions made during the phase without the owner**, which the owner may want to look at: the
   design's own, D203 to D230 (after six reviews); D231 (the rebase chosen for one pull reads
   `pull.ff`); D232 (CI's limits 55 and 65 minutes); D233 (git calls drop `GIT_DIR` and the other
