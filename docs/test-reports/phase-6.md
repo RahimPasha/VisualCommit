@@ -3594,11 +3594,13 @@ WP0, `43751d0` (phase 2 below), which is compared like every change on the phase
   their texts (a disabled button keeps its reason) and change only in the tooltip's colours.
 - **Check C's enabled `Continue cherry-pick`** (D199): `Phase3Checks.C.Banners.cs:245` (`AssertTip(commit,
   null)`) becomes `Continue cherry-pick (Ctrl+Enter)`; no picture shows it.
-- **Keyed menus** (6.7): `03f-empty-area-menu` (200 → about 223, as part K's `k11a`),
-  `05b1-menu-above-pointer` (the same empty-area menu, as `03f`, opening above the pointer),
-  `23i-unborn-empty-area-menu`, `04l-working-row-menu` and `04m-working-row-menu-all-staged` (about 223,
-  as `k11c`), `18b1-current-branch-menu` and every menu of the checked-out branch (about 263 with `Push
-  main to origin/main [Ctrl+Shift+K]`, as `k12e`), `03b-stash-menu` on `stash@{0}` (`Pop stash
+- **Keyed menus** (6.7): `03f-empty-area-menu` (200 → 239 ±3, as part K's `k11a`; measured 239),
+  `05b1-menu-above-pointer` (the same empty-area menu, as `03f`, opening above the pointer; 239),
+  `23i-unborn-empty-area-menu` (200 → 239), `04l-working-row-menu` and `04m-working-row-menu-all-staged`
+  (200 → 234 ±3, as `k11c`; measured 235), `18b1-current-branch-menu` and every menu of the checked-out
+  branch (`main`'s 223 → 288 ±3 with `Push main to origin/main [Ctrl+Shift+K]`, as `k12e`: measured 289
+  in `02c`, `05e` and `18b1`; a branch with only one keyed item as wide as that item makes it, `loc`'s
+  200 → 218 in `02f`, `hotfix`'s 200 → 212 in `13l`), `03b-stash-menu` on `stash@{0}` (`Pop stash
   [Ctrl+Shift+O]`), the sections' and the diff's menus (`04f`, `04g`, `04h`, `04k`, `26d`), and their
   real-window twins. The tooltips over these menus in `02c` (33 px), `03d` (17), `04m` (17) and `13l` (6)
   move right by half their menu's growth ("Every phase, 0 to 5").

@@ -4203,9 +4203,11 @@ goes into the report's "Changes to expected results" in the commit that changes 
 checkout and merge command line of an earlier check gains `--no-overwrite-ignore` just before its
 positional argument (9.4, 9.11: P27's merge becomes `git merge --no-edit --no-log -m "Merge branch
 'other'" --no-overwrite-ignore refs/heads/other`, P24's `git switch --create topic
---no-overwrite-ignore 19a90447…`, check 18's `git merge --ff-only --no-overwrite-ignore FETCH_HEAD`; a
-longer line can wrap in the error dialog and change its height), and every covered operation's call log
-gains its check's reads (so does every activity-log picture with "Show reads" on). In particular: P24's
+--no-overwrite-ignore 19a90447…`, check 18's `git merge --ff-only --no-overwrite-ignore FETCH_HEAD`; the
+error dialog cuts a longer line with "…" (phase 3's design 4f), so phase 5's `p24c`, `p26a`, `p27a` and
+`p27d` keep their heights and `p26a`'s detach command, whole before, is now cut), and every covered
+operation's call log gains its check's reads (so does every activity-log picture with "Show reads" on).
+In particular: P24's
 refusals for the untracked file and the folder `notes` and phase 3's 14b refusal for the untracked
 `feature/addfile` gain `git check-ignore --stdin -z` (exit 1) with their summaries unchanged, while `14b1-checkout-failed`, refused before git, does not
 change; P26 step 2 keeps its text and button (a tracked block, no `check-ignore`) and step 3, HEAD's own
