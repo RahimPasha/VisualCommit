@@ -195,8 +195,8 @@ duplicate, design 1.2), the rest went to the fixers by area: 14 to C, 18 to B, 1
 The design's notes "As built at status step 22's review" record every behaviour the
 fixes changed.
 
-The phase is "Awaiting acceptance", with `b561b7c` as its gate commit; the commits after it change
-only docs. Only the real window at 1920×1080 cannot run on this screen, as the plan allows: W3,
+The owner accepted the phase on 2026-10-24 and it is merged into `master` (merge commit `3f34c87`);
+its gate commit is `b561b7c`, and the commits after it on the branch change only docs. Only the real window at 1920×1080 cannot run on this screen, as the plan allows: W3,
 S14's second method and every 1920×1080 step are scripted only.
 
 ## Environment
@@ -633,9 +633,9 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- **Acceptance of phase 6**: the phase is "Awaiting acceptance"; the whole gate passed on
-  `b561b7c`, its gate commit, and the commits after it change only docs.
-- **At acceptance, to confirm or answer**:
+- **Acceptance of phase 6**: given on 2026-10-24; merged into `master` (merge commit `3f34c87`). The
+  whole gate passed on `b561b7c`, its gate commit, and the commits after it change only docs.
+- **Asked at acceptance, not yet answered** (to confirm or answer):
   - design 17.5's reading of "ten repos can be checked and updated from one screen" (Result above:
     W2 reads the ten rows on one screen, one Fetch all and one Pull all each decide every row);
   - the by-hand step of the report's checklist: with System chosen, switch Windows' app mode while
@@ -645,7 +645,7 @@ Risks to watch:
     opacity, about 2.5:1 dark and 2.1:1 light, and the lead left it at the gate's inspection, as raising
     it would change nearly every picture with a text box.
 
-  The session that does the acceptance records each answer as a decision (D239 on). When the owner
+  When the owner answers, the session records each answer as a decision (D239 on). When the owner
   confirms the placeholders' move to phase 8, it removes "for the owner to confirm" from plan.md
   (phase 8's item and phase 6's "Outcome"); if the owner says no, it moves the item out of phase 8
   into phase 7, as work to do there.
