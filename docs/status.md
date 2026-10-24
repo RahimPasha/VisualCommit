@@ -212,7 +212,7 @@ Closing:
 - [x] 28. Cold-read check by a fresh agent; gaps fixed. (22 gaps, all in the docs; fixed in `54a432c`
   but the real-window csproj's stale comment, for phase 7's first code commit.)
 - [x] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
-- [ ] 30. Owner told what passed, what did not, and what needs a decision.
+- [x] 30. Owner told what passed, what did not, and what needs a decision. (2026-10-24.)
 
 ### CI
 
