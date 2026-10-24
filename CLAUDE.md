@@ -281,21 +281,22 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 45 minutes on the Windows machine with nothing else running (43 min
-  22 s at phase 5's gate on 2026-10-16, alone, 3,233 tests; 21 min 52 s at phase 4's, 2,411 tests).
-  Eight test projects run side by side since phase 6 added its walk-through (phase 5 added two and
-  an undo history whose reads every operation makes; after phase 6's harness, rested, 43 min 33 s
-  for 3,299 tests on 2026-10-19), and the run is bound by the processors,
+- The default tests take about 55 minutes on the Windows machine with nothing else running (56 min
+  25 s at phase 6's gate on 2026-10-24, rested, 5,037 tests; 43 min 22 s at phase 5's, 3,233 tests).
+  Nine test projects run side by side since phase 6 added two walk-throughs (`VisualCommit.VisualTests.Phase6`
+  and `.Phase6Look`), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
-  it, and other load or a hot laptop lengthens it. In that run, side by side, the projects ended
-  after: phases 0 to 2's walk-through 12 min 8 s, the phase 4 walk-through 26 min 15 s, the phase
-  5 walk-through (`VisualCommit.VisualTests.Phase5`) 29 min 50 s, `VisualCommit.Git.Tests` 38 min
-  19 s, the phase 5 undo walk-through (`VisualCommit.VisualTests.Phase5Undo`) 41 min 43 s, the
-  phase 3 walk-through 41 min 46 s and `VisualCommit.App.Tests` 43 min 8 s. `dotnet build` at the
-  root takes about 2 minutes on the laptop. At phase 5's gate (run 38931127856) CI's jobs took
-  27 min 50 s on Windows (its Test step 25 min 15 s), 17 min 43 s on macOS (Test step 16 min
-  13 s), 4 min 48 s on Linux (Test step 3 min 26 s) and 5 min 38 s and 6 min 2 s in the
-  containers. The Test steps of Windows, macOS and Linux have a limit of 55 minutes and their jobs
+  it, and other load or a hot laptop lengthens it (a git call took 10 to 15 times as long as alone
+  at phase 6's gate, D237). In that run, side by side, the projects ended after: part L's walk-through
+  (`VisualCommit.VisualTests.Phase6Look`) 7 min 30 s, phases 0 to 2's 15 min 14 s, phase 4's 19 min
+  56 s, phase 5's (`VisualCommit.VisualTests.Phase5`) 22 min 45 s, phase 6's
+  (`VisualCommit.VisualTests.Phase6`) 30 min 36 s, phase 5's undo walk-through
+  (`VisualCommit.VisualTests.Phase5Undo`) 35 min 20 s, phase 3's 39 min 22 s, `VisualCommit.Git.Tests`
+  47 min 28 s and `VisualCommit.App.Tests` 55 min 14 s. `dotnet build` at the
+  root takes about 2 minutes on the laptop. At phase 6's gate (run 40059391404) CI's jobs took
+  26 min 47 s on Windows (its Test step 24 min 37 s), 25 min 22 s on macOS (Test step 23 min
+  33 s; up to 43 min 12 s in an earlier run that day), 5 min 50 s on Linux (Test step 4 min 21 s)
+  and 7 min 45 s and 7 min 16 s in the containers. The Test steps of Windows, macOS and Linux have a limit of 55 minutes and their jobs
   65 (D232, amending D184); the containers' limits stay. The lead raises that limit when the
   Windows or macOS Test step passes 44 minutes, four fifths of it (D232, D186's rule). Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
@@ -312,7 +313,7 @@ What to know about them:
   `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-N-pictures.sha256`,
   and commits it once the inspection has passed.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 25 minutes (phases 0 to 5): tell the
+  app on the desktop and moves the real mouse for about 28 minutes (phases 0 to 6; 27 min 39 s at phase 6's gate): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop,
   Windows' high contrast off and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
