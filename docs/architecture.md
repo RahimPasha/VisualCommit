@@ -2851,7 +2851,10 @@ with `DashboardColumns` and `DashboardRowPanel`, in a `RepoTabViewModel` (see "R
   `DashboardRowPanel`, as `GraphColumns` is): Repository 132, Folder, Branch 150, Ahead / behind 130,
   Changes 220, State 180, Operation; with `rest = width − 812`, from `rest ≥ 468` (1280 wide)
   Operation is `clamp(300 + (rest − 468) / 2, 300, 460)` and Folder the rest, below that Folder is
-  hidden and Operation `max(rest, 180)`. Every cell is a `TrimmedTextBlock`. `DashboardTexts` (pure)
+  hidden and Operation `max(rest, 180)`. Every cell is a `TrimmedTextBlock`. A container the list
+  prepares for a row starts without a hover (`DashboardView.ClearHover` on `ContainerPrepared`):
+  Avalonia 12.1.3 recycles a container with its `IsPointerOver` when the list is emptied (another tab
+  active) and hands it to another row when the dashboard shows again (the gate's W8). `DashboardTexts` (pure)
   makes the cells from `RepoRefs` and `WorkingTreeStatus`: the branch ("Detached at {short}", a
   rebase's branch), ahead and behind as the left panel draws them or "Up to date", "{up} is gone",
   "No remote" (tested before "No upstream"), "No commits yet"; the changes ("Clean", or the counts

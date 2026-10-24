@@ -343,6 +343,7 @@ it amends:
 
 | Issue | How much it matters | Where |
 |---|---|---|
+| Avalonia 12.1.3 recycles a list's item container with its `IsPointerOver` when the list is emptied, and the exit from the hovered content stops at the detached content, so a reused container can draw another row hovered. The dashboard clears it (`DashboardView.ClearHover`, the gate's W8); the app's other lists with a `ListBoxItem:pointerover` style (the reflog and file-history pages, the command palette, the pick dialog) were not checked: they would show it only if emptied while the pointer rests on a row, and no gate picture does | Low; until the pointer crosses the row | `DashboardView.axaml.cs`; design 2.6 |
 | Undo of a remote's removal re-creates refs only under `refs/remotes/<r>/` (`UndoScope.RemoveRemote`'s `RefPrefixes`): refs of a namespace that remote fetches elsewhere (`mirror/*`) do not come back; a fetch brings them back, and the remote's backup keeps their commits | Low; in the backlog | design 10.8 #1 |
 | `remote.<r>.mirror = true` makes every push the app makes to that remote fail with `fatal: --mirror can't be combined with refspecs` (Push, the push dialog, tags, deletions, undo's remote steps); the error dialog shows git's words | Low until a report | design 10.8 #2, plan risk 30 |
 | A namespace no remote fetches any more (a refspec changed, a remote renamed by hand) still makes a remote row whose Fetch, Rename and Remove fail with git's words; its branches' items say R3 | Low | design 10.8 #3 |
