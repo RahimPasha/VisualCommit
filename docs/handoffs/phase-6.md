@@ -2,8 +2,9 @@
 
 Written at the end of phase 6 for the session that runs phase 7. That session has not seen any
 of this phase's conversation. How the app is built is in [architecture.md](../architecture.md),
-why in [decisions.md](../decisions.md) (D187 to D237 are this phase's: D187 to D202 the owner's
-answers, D203 to D230 the design's, D231 to D236 the build's and the review's, D237 the gate's); the
+why in [decisions.md](../decisions.md) (D187 to D238 are this phase's: D187 to D202 the owner's
+answers, D203 to D230 the design's, D231 to D236 the build's and the review's, D237 the gate's, D238
+recorded at the cold read); the
 phase's design, kept as history, is [phase-6-design.md](../phase-6-design.md), whose "As built" notes
 and the lead's rulings say what the build and the review before the gate settled, and whose section
 16.2 says what moved to phase 8 and the backlog. The report,
@@ -98,8 +99,7 @@ name (15.5), and by hand the macOS and Linux editor install paths and the macOS 
 from blame and the diff (12.1), editing `mergetool.<tool>.path` or `.cmd` and `merge.guitool`
 (8.10), branch keys other than `branch.<b>.rebase` (8.8), keys the user can change (D192), a write
 that refreshes a stale index (risk 29, the owner's call) and undo of a remote's removal under a
-namespace outside `refs/remotes/<r>/` (10.8 #1). Design 10.8 #10 (a fetch line into `refs/heads/`,
-Known issues below) is marked there "for the backlog", but plan.md's backlog does not list it.
+namespace outside `refs/remotes/<r>/` (10.8 #1).
 
 Limits by design, not faults: a dashboard row has no file watcher; it is read when the dashboard or
 the window becomes active (rows last read 10 s ago or more), on F5 and Refresh, after its own
@@ -205,7 +205,7 @@ S14's second method and every 1920×1080 step are scripted only.
 |---|---|
 | Machine | Windows 11 Pro 10.0.26300 on an Intel Core i7-8650U laptop; screen 3000×2000 at 200% scaling (1500×952 logical work area). The whole phase was built on this machine, partly by sub-agents in git worktrees; no cloud session worked on it |
 | .NET SDK | 10.0.303 (`global.json` stays at 10.0.100 with `latestFeature`) |
-| Git | 2.36.0.windows.1 locally, with `core.fsmonitor=true` in the owner's global configuration. Also on the machine: Visual Studio's 2.55.0.windows.5 (status.md's Notes give its path), which lacks `git http-backend` and `sleep` (plan risk 28), and a MinGit 2.56.0.windows.2 that the lead unpacked in a Claude session's scratch folder under `%TEMP%\claude\`, which may be cleared. On CI: Windows 2.56.0.windows.2, macOS 2.56.0 (Homebrew), `ubuntu-latest` 2.55.0, the two containers 2.43.0 |
+| Git | 2.36.0.windows.1 locally, with `core.fsmonitor=true` in the owner's global configuration. Also on the machine: Visual Studio's 2.55.0.windows.5 (status.md's Notes give its path), which lacks `git http-backend` and `sleep` (plan risk 28), and, during the phase, a MinGit 2.56.0.windows.2 that the lead kept in that Claude session's scratch folder under `%TEMP%\claude\`, gone with the session ("Things that cost time" says how to get it again). On CI: Windows 2.56.0.windows.2, macOS 2.56.0 (Homebrew), `ubuntu-latest` 2.55.0, the two containers 2.43.0 |
 | Packages | Unchanged since phase 2: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, D24), FlaUI.UIA3 5.0.0; phase 6 added none. New Lucide icons: layout-grid, settings, rotate-cw and ellipsis; the three that derive from Feather (settings, rotate-cw, and ellipsis from more-horizontal) are added to `THIRD-PARTY-NOTICES.md` |
 | New projects | `tests/VisualCommit.VisualTests.Phase6` (parts W, K, S and G, 38 test methods) and `tests/VisualCommit.VisualTests.Phase6Look` (part L, 9), D230: nine test processes in the default run |
 | Tools | `scripts/compare-pictures.py` needs Python with Pillow and NumPy |
@@ -270,7 +270,11 @@ off, and reference pictures for phases 0 to 5 (design 17.7):
    there): 21 vary by nature (a temporary folder's name, a caret, a progress bar, the number of
    reads, a few anti-aliased pixels) and `u23f` differs by a change of the machine since 2026-10-16.
    Pictures with the focus in a text box (`f10b` to `f10f` too) can catch the caret either way.
-   Phase 7's gate makes its own references on `master` once phase 6 is merged.
+   When phase 7 changes earlier pictures in many places, its gate makes its own references on
+   `master` once phase 6 is merged, into `D:/Projects/Personal/gate7-reference/` (outside the repo,
+   as `gate5-reference/` and `gate6-reference/` were). When it changes few,
+   `docs/test-reports/phase-6-pictures.sha256` shows which pictures changed (CLAUDE.md gives the
+   command), and those are inspected against their own phase's report.
 3. Rest the laptop, then `dotnet test` at the repo root: about 55 minutes (56 min 25 s at phase 6's
    gate). It writes
    `artifacts/visual/phase-{0,1,2,3,4,5,6}/scripted/`, emptying each first.
@@ -387,7 +391,7 @@ Rules worth keeping (phases 3 to 5's still hold):
 
 ## Deviations from the plan
 
-Phase 6's decisions are D187 to D237. The owner's answers (D187 to D194 at the start, D195 to D202
+Phase 6's decisions are D187 to D238. The owner's answers (D187 to D194 at the start, D195 to D202
 after the design's reviews) are the plan as the phase settled it, and plan.md and requirements.md
 carry them (`890408b`, `290353b`). What departs from or adds to the plan, and the earlier decisions
 it amends:
@@ -408,7 +412,7 @@ it amends:
 | The light text tokens at 4.5:1 and the light lanes 1, 2, 4 and 7 darker | D225 with D198 (amend D48) |
 | Open in editor finds editors by a fixed catalogue in their install folders, never by a `PATH` name on Windows | D226 (extends D130) |
 | The welcome page's Workspaces section; the tab strip shrinks, then scrolls | D227, D228 |
-| The scenarios and the folder server on 47393 (amends D97, as D150 did); two walk-through projects, part L in `Phase6Look` with its server on 47394 (the report's ruling 1 and the lead's ruling of 2026-10-22; 47394 has no entry of its own in decisions.md) | D229, D230 |
+| The scenarios and the folder server on 47393 (amends D97, as D150 did); two walk-through projects, part L in `Phase6Look` with its server on 47394 (the report's ruling 1 and the lead's ruling of 2026-10-22, recorded as D238 at the cold read; amends D97 as D150 and D229 did) | D229, D230, D238 |
 | "Pull from {up} (rebase)" reads `pull.ff` before its fetch and refuses a value `git pull --rebase` refuses | D231 (amends D147) |
 | CI's Test step 55 minutes and the three platforms' jobs 65 | D232 (amends D184) |
 | From the review before the gate: git calls drop the repository-selecting variables; the session's end cancels every open dialog; a ticked Amend remembers its HEAD; the app's files are flushed before their rename | D233 to D236 |
@@ -466,9 +470,10 @@ it amends:
   a remote `team` ("is a subset of existing remote"), so the test writes the remote as configuration
   (run 40004153661, `6fe269c`); Git 2.48 and later create a symbolic `refs/remotes/origin/HEAD` from
   the server's HEAD, which `FetchRefspecsParityTests` leaves out. Check a 2.56 behaviour locally
-  before pushing: put MinGit 2.56.0.windows.2's folder first on `PATH` (the lead's copy lies in a
-  Claude session's scratch folder under `%TEMP%\claude\` and may be gone; Git for Windows' releases
-  carry it). A test alias named `shell` failed where git-shell is installed, `shell` being a git
+  before pushing, with MinGit 2.56.0.windows.2. The lead's copy was kept in that session's scratch
+  folder under `%TEMP%\claude\` and is gone with it: download `MinGit-2.56.0.2-64-bit.zip`, an asset
+  of Git for Windows' release `v2.56.0.windows.2` on github.com/git-for-windows/git, unpack it into a
+  folder of its own and put its `cmd` folder first on `PATH` for the run. A test alias named `shell` failed where git-shell is installed, `shell` being a git
   command there (run 39153491762, `717bd8a`).
 - **macOS.** Its temporary folders are reached through `/var`, which git spells `/private/var`: the
   palette's entries and K10 failed until paths were compared as git spells them (runs 39936260636,
@@ -574,20 +579,30 @@ Do first:
 2. Check that no worktree, `wip/*` or `worktree-*` branch or fsmonitor daemon is left (`git worktree
    list`, `git branch --list "wip/*" "worktree-*"`, the daemons as in "Running the visual gate"), and
    that C: and D: have room for the worktrees planned.
-3. With the first code commit: `scripts/time-scripted-check.sh`'s default phase 7, the real-window
-   csproj's comment on the pass's length, which the gate left at design 17.6's estimate (the pass of
-   phases 0 to 6 took 27 min 39 s), and `ShellDriverTests`' wheel test waiting for the hit test
-   (Known issues).
-4. Write phase 7's checks into `docs/test-reports/phase-7.md` before the UI, deriving every git state
+3. Keep the order phases 5 and 6 followed (steps 1 to 3 of their Progress checklists; phases 3
+   and 4 took such steps in another order): the owner's answers to the open points below first,
+   each recorded as a decision and carried into plan.md and requirements.md; then the baseline,
+   the default run on `master` as inherited, before anything changes; then the design, `docs/phase-7-design.md` (plan.md's "Workflow": its reviews,
+   the owner's answers to the questions of taste they raise, its own decisions, its work packages);
+   then the visual checks in `docs/test-reports/phase-7.md`, committed before any UI they test.
+4. With the first code commit: the real-window csproj's comment on the pass's length, which the
+   gate left at design 17.6's estimate (the pass of phases 0 to 6 took 27 min 39 s), and
+   `ShellDriverTests`' wheel test waiting for the hit test (Known issues; plan.md's phase 7, "From
+   phase 6").
+5. Write phase 7's checks into `docs/test-reports/phase-7.md` before the UI, deriving every git state
    with real git 2.36 (and 2.55 or 2.56 where words or exit codes may differ), and decide which steps
    the real window repeats. A check cannot sign in to GitHub, Azure DevOps or GitLab from the default
    run or CI: decide early how the providers are stood in for (plan risks 4 and 5). Estimate what the
    checks add to the default run (56 minutes at phase 6's gate) and to the real-window pass (28)
    before writing them, and share app starts where scenarios allow.
-5. Give phase 7's walk-through a project of its own, as phases 4 to 6 did (D151, D181, D230): its
+6. Give phase 7's walk-through a project of its own, as phases 4 to 6 did (D151, D181, D230): its
    csproj, `AssemblyInfo.cs` and support copied from phase 6's, its line in `VisualCommit.slnx` (CI
    picks up every test project of the solution), a `Phase7Expectations*.cs` link in the real-window
-   csproj, the timing script and CLAUDE.md's Commands; a second project past about 40 methods.
+   csproj, the timing script and CLAUDE.md's Commands; a second project past about 40 methods. In
+   the commit that creates `tests/VisualCommit.VisualTests.Phase7`, and not before, set
+   `scripts/time-scripted-check.sh`'s default phase to 7: the script sends a phase above 6 to
+   `tests/VisualCommit.VisualTests.Phase<N>`, so a default of 7 before that project exists breaks
+   the script's default.
 
 Open points for phase 7 (record each as a decision; ask the owner those that are a matter of taste,
 before the design):
@@ -629,12 +644,18 @@ Risks to watch:
     plan.md phase 8): every placeholder is drawn in `VcTextSecondaryBrush` at Fluent's watermark
     opacity, about 2.5:1 dark and 2.1:1 light, and the lead left it at the gate's inspection, as raising
     it would change nearly every picture with a text box.
+
+  The session that does the acceptance records each answer as a decision (D239 on). When the owner
+  confirms the placeholders' move to phase 8, it removes "for the owner to confirm" from plan.md
+  (phase 8's item and phase 6's "Outcome"); if the owner says no, it moves the item out of phase 8
+  into phase 7, as work to do there.
 - **Decisions made during the phase without the owner**, which the owner may want to look at: the
   design's own, D203 to D230 (after six reviews); D231 (the rebase chosen for one pull reads
   `pull.ff`); D232 (CI's limits 55 and 65 minutes); D233 (git calls drop `GIT_DIR` and the other
   repository-selecting variables); D234 (the session's end cancels every open dialog); D235 (a ticked
   Amend refuses when HEAD moved); D236 (the app's files flushed before their rename); D237 (the
-  default run's waits fitted to nine projects side by side, from the gate); and the lead's
+  default run's waits fitted to nine projects side by side, from the gate); D238 (part L's server
+  on its own port 47394, recorded at the cold read); and the lead's
   rulings recorded in the design and the report: part L in a project of its own with its server on
   47394, GD24's drop-push title, GD15's upstream named by its tracking ref and a palette entry
   without a key showing no key column (`k10e`) (the report's rulings of 2026-10-19 and 2026-10-22);

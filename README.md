@@ -18,8 +18,13 @@ across renames and its blame, the reflog with restore, and an activity log of th
 ran; it searches commits by message, author, SHA, file or the text of their changes, compares two
 commits or branches, and hides or solos branches in the graph. Undo and redo step back and forward
 through the session's git actions, and a checkout that would overwrite uncommitted changes is
-refused, with an offer to stash them first. Workspaces with a dashboard, a command palette and a
-settings screen come next.
+refused, with an offer to stash them first. Workspaces group repositories on a dashboard that
+shows each one's branch, ahead/behind counts and uncommitted changes, and fetches or pulls them all
+at once. A command palette (Ctrl+Shift+P) and a fixed set of keyboard shortcuts reach every main
+action. A settings screen sets git's own identity, pull mode and merge tool, the auto-fetch
+interval and an editor, and the theme is dark, light or follows the system. A checkout, merge or
+rebase that would overwrite an ignored file is refused unless a setting allows it. Signing in to
+GitHub, Azure DevOps and GitLab, cloning from an account, and their pull requests come next.
 [docs/status.md](docs/status.md) says which phase is being built and [docs/plan.md](docs/plan.md)
 what each phase adds.
 
@@ -37,7 +42,7 @@ dotnet test
 
 `dotnet test` runs the unit and integration tests and a scripted walk-through of the whole app in
 a headless window; it saves screenshots under `artifacts/visual/`. It does not open a window and
-does not touch your settings. It takes about 45 minutes on the development laptop, and the first run builds a 100,000-commit
+does not touch your settings. It takes about 55 minutes on the development laptop, and the first run builds a 100,000-commit
 test repository in the temporary folder, which later runs reuse. The tests need Git 2.32 or
 newer. All commands, including the Windows-only real-window test pass, are
 listed in [CLAUDE.md](CLAUDE.md#commands).

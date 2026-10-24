@@ -513,26 +513,30 @@ every commit.
   containers 2.43.0. On 2.56 a `git stash pop` refused by local changes exits 128, not 1: phase 3's
   check 15b accepts both (`281dd69`), as phase 5's report records under "Changes to expected
   results" (phase 3's report says "exit 1" in 15b's step 2 and in T5). Only 2.36 and 2.55 are on
-  the development machine; CI is the only check on 2.43 and 2.56 (plan risk 26).
+  the development machine; CI is the only check on 2.43 and 2.56 (plan risk 26), unless a session
+  downloads MinGit 2.56 for a check by hand (phase 6's handoff, "Things that cost time").
 - **Git 2.55 (CI's version) is on the development machine**, inside Visual Studio:
   `C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team Explorer/Git/mingw64/bin/git.exe`.
   Put that `mingw64/bin` first on `PATH` (otherwise its child processes fall back to the 2.36 on
   `PATH`). Phase 5's research used it to check what 2.55 writes differently, which phase 4 could only
-  learn from CI runs. With it first on `PATH`, 7 fetch and pull tests of `VisualCommit.App.Tests`
-  fail locally and pass on CI, for reasons not yet known (plan risk 28).
-- Phases 1 to 5 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
-  (git-ignored); the phase 3, 4 and 5 handoffs' "Things that cost time" say what to watch
+  learn from CI runs. With it first on `PATH`, 6 of the 49 tests of `VisualCommit.App.Tests`'
+  fetch, pull, push and remotes classes, those against the credential test server, fail locally
+  and pass on CI: that trimmed git has no `git http-backend`, which the server runs (explained in
+  phase 6; plan risk 28). It also lacks `sleep`, so phase 6's fetch hold does not hold with it.
+- Phases 1 to 6 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
+  (git-ignored); the phase 3, 4, 5 and 6 handoffs' "Things that cost time" say what to watch
   for: a worktree starts from `master` and its agent must create its branch from the phase
-  branch first; merged worktrees must be removed at once (a built worktree takes about 5 GB);
-  a global `core.fsmonitor=true` leaves a git daemon per worktree running (phase 4's handoff says
-  how to list and stop them before a gate).
-- The default run takes about 45 minutes on the development laptop (43 min 22 s at phase 5's gate,
-  3,233 tests in seven projects). On CI at phase 5's gate (run 38931127856) the Windows job took
-  27 min 50 s (its Test step 25 min 15 s of 40), macOS's 17 min 43 s (Test step 16 min 13 s),
-  `ubuntu-latest`'s 4 min 48 s (Test step 3 min 26 s) and the containers' 5 min 38 s and 6 min 2 s.
-  The real-window pass takes about 25 minutes (24 min 57 s at phase 5's gate), after a rest (a hot
-  laptop fails Q1). See phase 5's handoff, "Running the visual gate", for how to run both and what
-  to stop first.
+  branch first; merged worktrees must be removed at once (a built worktree took about 6.4 GB in
+  phase 6, plan risk 27); a global `core.fsmonitor=true` leaves a git daemon per worktree running
+  (phase 4's handoff says how to list and stop them before a gate).
+- The default run takes about 55 minutes on the development laptop (56 min 25 s at phase 6's gate,
+  rested, 5,037 tests in nine projects; 43 min 22 s at phase 5's, 3,233 tests in seven). On CI at
+  phase 6's gate (run 40059391404) the Windows job took 26 min 47 s (its Test step 24 min 37 s of
+  55), macOS's 25 min 22 s (Test step 23 min 33 s; 43 min 12 s in run 40019921605 before the gate),
+  `ubuntu-latest`'s 5 min 50 s (Test step 4 min 21 s) and the containers' 7 min 45 s and 7 min 16 s.
+  The real-window pass takes about 28 minutes (27 min 39 s for phases 0 to 6 at phase 6's gate),
+  after a rest (a hot laptop fails Q1). See phase 6's handoff, "Running the visual gate", for how
+  to run both and what to stop first.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
@@ -544,13 +548,15 @@ every commit.
   real-window pass, which times Q1 (limit 2,000 ms; 937 ms on phase 4's gate commit, rested; at
   phase 5's gate 1,749 ms and 1,826 ms in its two passes, 1,147 ms alone after a rest, and
   2,613 ms on the laptop hot from the 43-minute default run, which failed that attempt; up to
-  2,268 ms on a warm machine during phase 3; plan risk 10).
+  2,268 ms on a warm machine during phase 3; at phase 6's gate, each pass after a 10-minute rest,
+  1,264 ms in round 1's pass and 1,805 ms in the counted one; plan risk 10).
 - Packages: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and
   TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
-  FlaUI.UIA3 5.0.0. Phases 3, 4 and 5 added no packages.
+  FlaUI.UIA3 5.0.0. Phases 3, 4, 5 and 6 added no packages.
 - Git 2.55 on CI writes its own files and messages differently from 2.36 here; phase 4's
-  handoff, "Rules worth keeping", lists what it found and how the checks compare git's files, and
-  phase 5's adds the exit codes and side effects that differ between versions.
+  handoff, "Rules worth keeping", lists what it found and how the checks compare git's files,
+  phase 5's adds the exit codes and side effects that differ between versions, and phase 6's
+  "Things that cost time" what 2.55 and 2.56 did to its tests.
 - Edit docs with the file tools, not with PowerShell text replacement: PowerShell 5.1 garbled
   the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
   apostrophes fails and turns `\n` in a string into a line break, and `sed -i` drops a CRLF

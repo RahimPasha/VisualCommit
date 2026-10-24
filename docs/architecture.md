@@ -3716,7 +3716,10 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   Phase 6 adds two more walk-through projects, so nine test projects run side by side; after its
   harness, rested, 3,299 tests took 43 min 33 s (2026-10-19), before its walk-through parts and
   most of its App tests. Phase 6's view tests stayed in `VisualCommit.App.Tests` (its 449 headless
-  tests took 40 % of its 21 min 16 s alone), by subject.
+  tests took 40 % of its 21 min 16 s alone), by subject. At phase 6's gate the default run was nine
+  projects and 5,037 tests in 56 min 25 s, rested (CLAUDE.md gives each project's end), with a git
+  call 10 to 15 times as long as alone (D237), and the real-window pass of phases 0 to 6 took 27 min
+  39 s (67 tests).
 - **Timing tests under load** (phase 6): a test that compares how the work grows measures the
   thread's own work (`ThreadWork`), not a stopwatch, which the other projects' load stretches, and
   compares ratios of two runs on one thread, each the best of three, interleaved.
@@ -3756,7 +3759,8 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   the scripted screenshot of the same step (at most 3% of pixels may differ, a pixel counting only when nothing within a pixel of it matches: D33, D58), saves a
   picture of the differing pixels, and writes `run.txt`. The project references
   `VisualCommit.Testing`, so it uses the same scenario repos, and compiles the scripted run's
-  `Phase3Expectations*.cs`, `Phase4Expectations*.cs` and `Phase5Expectations*.cs`, so both
+  `Phase3Expectations*.cs`, `Phase4Expectations*.cs`, `Phase5Expectations*.cs` and, since phase 6,
+  `..\VisualCommit.VisualTests.Phase6*\Phase6Expectations*.cs` (both phase 6 projects), so both
   harnesses use the same constants and texts. Its tests never
   run in parallel (they share the desktop and the mouse).
 - Phase 3's pass: `Phase3RealWindowPass.cs` (the run, `Phase3Run`, one folder and one `run.txt`
@@ -3851,7 +3855,10 @@ them again when the Windows or macOS test step passes 44 minutes, four fifths of
 them from D152's 32 and 24: phase 5's two walk-through projects and the undo history's reads took
 Windows' test step to the 24-minute limit. On phase 5's gate commit
 the test step took 25 min 15 s on Windows, 16 min 13 s on macOS, 3 min 26 s on `ubuntu-latest` and
-about 4 minutes in each container. A test project added to the solution is picked up with no
+about 4 minutes in each container. On phase 6's gate commit (run 40059391404) it took 24 min 37 s
+on Windows, 23 min 33 s on macOS, 4 min 21 s on `ubuntu-latest`, and 5 min 50 s and 4 min 56 s in
+the containers; macOS's had reached 43 min 12 s in run 40019921605 (on `a937ca6`, before the
+gate's first round), near the 44 at which the limit is raised. A test project added to the solution is picked up with no
 change to the workflow.
 
 Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`

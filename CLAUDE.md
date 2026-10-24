@@ -81,7 +81,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, and that is the current form: `git show acdac12:docs/status.md`); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -267,6 +267,7 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3), `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4), `dotnet test --project tests/VisualCommit.VisualTests.Phase5` and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (phase 5), `dotnet test --project tests/VisualCommit.VisualTests.Phase6` and `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (phase 6; both save into phase 6's one folder, so run them one after the other: one `dotnet test` at the root empties the folder once for all its projects, two separate commands at once would each empty it) |
 | Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 6 when left out, which runs `VisualCommit.VisualTests.Phase6`, or `VisualCommit.VisualTests.Phase6Look` when the filter names part L, such as `"*Check_L27*"`; for phase 5, given as `5`, it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
 | Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
+| One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |
@@ -320,10 +321,17 @@ What to know about them:
   `dotnet build` at the root does not rebuild it, and a stale build of the pass would run. Its
   screenshots, the pictures of the differences and `run.txt` (scaling, sizes, how much each
   screenshot differs from the scripted one) land under `artifacts/visual/phase-N/real-window/`.
+- One real-window check run alone (`--filter-method`) empties its phase's `real-window/` folder,
+  as the whole pass does, and takes over the mouse just the same: tell the owner before starting
+  it, and run the whole pass again before a gate writes its list of pictures.
 - To run the app without touching the real settings, set the environment variable
   `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
   folder: `%APPDATA%\VisualCommit` on Windows, `~/.config/VisualCommit` on Linux,
-  `~/Library/Application Support/VisualCommit` on macOS.
+  `~/Library/Application Support/VisualCommit` on macOS. Since phase 6 the settings screen also
+  writes git's own global configuration (D190), which that variable does not move: to keep the
+  user's `~/.gitconfig` safe too, also set `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` to an empty
+  file of its own and `XDG_CONFIG_HOME` to an empty folder, as the test harness does for every app
+  session (D220). The app's git calls inherit them.
 - A test run that hangs stops itself after 3 minutes and prints `HANG WATCHDOG` with the names of
   the tests that were running; a shared preparation (a scenario template, the 100k-commit repo) is
   held to 10 minutes of its own (D237). A test that really needs longer must raise the limit: the
@@ -334,6 +342,9 @@ What to know about them:
 - CI has five jobs: one each for Windows, macOS and Linux, and two named "bare ubuntu
   container", one for each way the set-up script has of getting the .NET SDK. A push that
   changes only docs does not start a run.
+- `gh run list` shows the duration of a run's latest attempt only. Each job's time comes from
+  `gh run view <run id>`, or from the jobs API (`curl` above), whose `steps` also give each step's
+  start and end, such as the Test step's.
 - In Windows PowerShell write `curl.exe` for the two `curl` commands: plain `curl` is a
   different command there.
 
@@ -357,3 +368,4 @@ lacks.
 | `docs/phase-3-design.md` | Phase 3's design, kept as history; phase 3's decisions (D77 to D133), report and handoff cite its sections as "design N.N" |
 | `docs/phase-4-design.md` | Phase 4's design, kept as history; phase 4's decisions (D139 to D152), report, handoff, status and plan outcome cite its sections as "design N.N"; its sections 14.1 to 14.5 say what the build and the review settled |
 | `docs/phase-5-design.md` | Phase 5's design, kept as history; phase 5's decisions (D153 to D186), report, handoff, status and plan cite its sections as "design N.N"; its sections 15.8 and 15.9 say what the report, the build, the reviews and the gate settled |
+| `docs/phase-6-design.md` | Phase 6's design, kept as history; phase 6's decisions (the design's D203 to D230), report, handoff, status and plan cite its sections as "design N.N"; its "As built" notes and the lead's rulings say what the build and the review settled (what the gate found is in the report's "Found by the gate" and the handoff); its section 16.2 holds the plan's changes, section 18 the work packages |

@@ -3,7 +3,7 @@
 The Check, Steps and Expected columns of the table below were written at the start of the phase,
 before the UI they test was built (D15), from `requirements.md` (C1, O3, O5, O9, Q4, Q5, R7),
 `plan.md`'s phase 6, `docs/phase-6-design.md` and decisions D187 to D231 (D187 to D202 the owner's
-answers, D203 to D231 the design's). The scenario facts were derived first, from the scenario
+answers, D203 to D230 the design's, D231 the build's). The scenario facts were derived first, from the scenario
 repositories as the merged scenario code builds them (`tests/VisualCommit.Testing` at `b9c29d1`),
 read through the app's own git layer with Git 2.36 and their texts replayed with Git 2.55; the checks
 were then drafted part by part (W, K, S, G and L), each part reviewed independently and revised, and
@@ -3314,7 +3314,7 @@ real window's.
 Every item of phase 6's "Delivers" list is proven by an automated test or by a visual check (the
 plan's rule). This is design 17.5's table with this report's checks; the tests are those design 17.5
 and the sections' test lists (1.12, 2.12, 3.9, 4.13, 5.12, 6.12, 7.11, 8.13, 9.17, 10.9, 11.15, 12.10,
-13.5) name. Each part's own table, with the design's decisions D203 to D231 it proves, follows under
+13.5) name. Each part's own table, with the design's decisions (D203 to D230) it proves, follows under
 "By part".
 
 | Delivers (plan.md, phase 6; design 17.5) | Visual checks | Automated tests |
