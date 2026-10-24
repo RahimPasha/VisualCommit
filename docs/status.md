@@ -15,7 +15,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 3. Branch, remote, stash and tag operations | Done | `phase/3-operations` | [phase-3](handoffs/phase-3.md) | [phase-3](test-reports/phase-3.md) |
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
-| 6. Multi-repo and productivity | In progress | `phase/6-multi-repo` | | |
+| 6. Multi-repo and productivity | Awaiting acceptance | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
 | 7. Hosting | Not started | `phase/7-hosting` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
@@ -25,17 +25,19 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 6, multi-repo and productivity: **In progress** since 2026-10-18, on `phase/6-multi-repo`,
-built on the Windows machine from `master` at `acdac12` (phase 5's merge `c299939` and the status
-commits after it). Phase 5 was accepted by the owner on 2026-10-17 and merged into `master` (merge
+Phase 6, multi-repo and productivity: **Awaiting acceptance** since 2026-10-24, on
+`phase/6-multi-repo`, built on the Windows machine from 2026-10-18 from `master` at `acdac12` (phase
+5's merge `c299939` and the status commits after it). Its visual test gate passed on `b561b7c`: the
+default run's 5,037 tests and the real-window pass's 67, every picture inspected; what was built and
+proven is in the [handoff](handoffs/phase-6.md), the gate in the [report](test-reports/phase-6.md). Phase 5 was accepted by the owner on 2026-10-17 and merged into `master` (merge
 commit `c299939`); its gate ran on `1b2e734`. Phase 4 was accepted on 2026-10-12 (merge commit
 `ce5f337`), phase 3 on 2026-10-11 (merge commit `8b33745`), phase 2 on 2026-10-10 (merge commit
 `e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit
 `b5f4723`).
 
-Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
-that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
-after it.
+Gate commit: `b561b7c`, the commit both passes of the gate ran on (with the branch at `45cc63f`,
+whose commits after `b561b7c` change docs only); "Phase 6 accepted" checks that nothing but docs
+changed after it.
 
 ### Progress
 
@@ -207,8 +209,9 @@ Closing:
   changes after it.)
 - [x] 26. `plan.md`: anything not delivered moved, risks updated. (`290353b`, `e78d2e5`.)
 - [x] 27. Handoff `docs/handoffs/phase-6.md`.
-- [ ] 28. Cold-read check by a fresh agent; gaps fixed.
-- [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
+- [x] 28. Cold-read check by a fresh agent; gaps fixed. (22 gaps, all in the docs; fixed in `54a432c`
+  but the real-window csproj's stale comment, for phase 7's first code commit.)
+- [x] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
 - [ ] 30. Owner told what passed, what did not, and what needs a decision.
 
 ### CI
@@ -327,11 +330,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Closing step 28, the cold-read check: a fresh agent given only the repo, told that phase 6 has been
-accepted and merged, says how to build, run and test the app and how it would begin phase 7; fix
-every gap it hits in the docs and commit. Then closing step 29 (this file: the phase "Awaiting
-acceptance" with gate commit `b561b7c`, the links, the CI, what waits on the owner) and step 30 (tell
-the owner). The gate passed on `b561b7c`; nothing but docs may change after it.
+Phase 6 is awaiting the owner's acceptance ("Waiting on the owner"). On "Phase 6 accepted", follow
+CLAUDE.md's row for it, with the gate commit `b561b7c`, and record the owner's answers to the
+handoff's "At acceptance, to confirm or answer" as decisions (D239 on). Then wait for "Start phase
+7"; the handoff's "For the next phase" says how to begin it.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -566,6 +568,23 @@ every commit.
 
 ## Waiting on the owner
 
+- **Phase 6's acceptance**: the gate passed on `b561b7c` (2026-10-24); the phase is "Awaiting
+  acceptance". Say "Phase 6 accepted" to merge it into `master`. At acceptance, to confirm or answer
+  (the handoff's "Waiting on the owner"): design 17.5's reading of "ten repos can be checked and
+  updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
+  row); the report's by-hand System step (switch Windows' app mode while the app runs with System
+  chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
+  about 2.5:1 dark and 2.1:1 light) to phase 8's accessibility pass, which the lead made at the
+  gate's inspection rather than change nearly every picture.
+- **Decisions made during phase 6 without the owner**, which the owner may want to look at: the
+  design's D203 to D230 (after its reviews); D231 (the rebase chosen for one pull reads `pull.ff`
+  alone); D232 (CI's limits, 55 and 65 minutes); D233 (git calls leave out the repository-selecting
+  variables); D234 (the session's end cancels every dialog; the window waits for the settings
+  screen's global writes); D235 (Amend refuses when HEAD moved); D236 (the app's own files flushed
+  before their rename); D237 (the default run's waits fit nine projects side by side); D238 (part
+  L's own test server port); and the lead's rulings recorded in the design and the report.
+- **For phase 7** (plan risks 4 and 5): a test account or token for each of GitHub, Azure DevOps and
+  GitLab, and whether public sign-in needs app registrations or personal access tokens are enough.
 - **Phase 5's acceptance**: given on 2026-10-17; merged into `master` (`c299939`). The decisions
   made during the phase without the owner, which the owner may want to look at: D182 (tooltips take
   no input), D183 (the report's rulings), D184 and D186 (CI's time limits, 40 and 50 minutes, raised
@@ -598,7 +617,8 @@ every commit.
 - Settled on 2026-10-12: the working-changes row's dashed line crossing another branch's node
   (06f) is left for now; case-only branch renames on Windows and macOS stay refused (D131);
   auto-fetch gets no ssh timeout, only Cancel by hand (D125).
-- When you have a Mac at hand: the thirteen-step checklist at the end of the
+- When you have a Mac at hand: the seven-step checklist at the end of the
+  [phase 6 test report](test-reports/phase-6.md), the thirteen-step one at the end of the
   [phase 5 test report](test-reports/phase-5.md), the eight-step one at the end of the
   [phase 4 test report](test-reports/phase-4.md), the eleven-step one at the end of the
   [phase 3 test report](test-reports/phase-3.md), the seven-step one at the end of the
