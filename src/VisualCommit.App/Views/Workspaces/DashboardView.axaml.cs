@@ -19,11 +19,15 @@ namespace VisualCommit.App.Views.Workspaces;
 /// row was removed) or the empty state's <c>Add repository…</c> when the last row went; opens a
 /// row's menu (a right-click selects the row first; Shift+F10 and the Menu key open the selected
 /// row's at its bottom-left corner) and the header's <c>…</c> menu below its button; opens a row on
-/// a double-click or Enter; and takes the list's keys: Delete (on macOS also Cmd+Backspace) removes
-/// the selected row, Alt+Up and Alt+Down move it (2.7).
+/// a double-click or Enter; takes the list's keys: Delete (on macOS also Cmd+Backspace) removes
+/// the selected row, Alt+Up and Alt+Down move it (2.7); and starts each row's container without a
+/// hover (<see cref="ClearHover"/>).
 /// </summary>
 public partial class DashboardView : UserControl
 {
+    /// <summary>The pointer named by the exits <see cref="ClearHover"/> raises: no device's, so that nothing takes them for a move of the real one.</summary>
+    private static readonly Pointer NoPointer = new(Pointer.GetNextFreeId(), PointerType.Mouse, isPrimary: false);
+
     private DashboardViewModel? _viewModel;
 
     public DashboardView()
@@ -32,7 +36,28 @@ public partial class DashboardView : UserControl
         DashboardList.AddHandler(ContextRequestedEvent, OnContextRequested);
         DashboardList.AddHandler(DoubleTappedEvent, OnDoubleTapped);
         DashboardList.AddHandler(KeyDownEvent, OnListKeyDown, RoutingStrategies.Tunnel);
+        DashboardList.ContainerPrepared += (_, e) => ClearHover(e.Container);
         DashboardMore.Click += OnMoreClick;
+    }
+
+    /// <summary>
+    /// A container the list prepares for a row starts without a hover (the phase 6 gate's W8: rows
+    /// drawn in <c>VcRowHoverBrush</c> with the pointer at the neutral point). Avalonia 12.1.3 keeps
+    /// <c>IsPointerOver</c> on a recycled container: when the list is emptied, its panel clears the
+    /// container (the row's content leaves it) and takes it out of the tree, and the pointer's exit
+    /// from the hovered content stops at that content, which has no parent left, so the container
+    /// and its presenter stay hovered. The list is emptied whenever the view's dashboard is replaced
+    /// or gone (another tab became active), the row under the pointer included, and the next
+    /// showing hands its container to another row. An exit raised on the container and on each
+    /// hovered part of it clears that; a row the pointer is really over is entered again at
+    /// Avalonia's next look at the pointer (its next move, or the next frame drawn).
+    /// </summary>
+    private static void ClearHover(Control container)
+    {
+        foreach (var element in container.GetSelfAndVisualDescendants().OfType<InputElement>().Where(element => element.IsPointerOver).ToList())
+        {
+            element.RaiseEvent(new PointerEventArgs(PointerExitedEvent, element, NoPointer, null, default, 0, PointerPointProperties.None, KeyModifiers.None));
+        }
     }
 
     /// <summary>
