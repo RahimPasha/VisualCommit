@@ -305,14 +305,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Status step 23, the gate's second round on `59b2316` (Notes): a rested `dotnet test`, then, after
-telling the owner, the real-window pass; the picture list written at once and compared with the first
-run's (`D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`): every picture whose
-bytes changed inspected (the fixes' w1e, w8d, w8f, w8g, w8h, s16b, s18a, l30c and their real-window
-twins, and whatever else changed); then commit the list, complete the report (Run, results, Found by
-the gate, Other platforms from `other-platforms.md`), and closing steps 24 to 30: the CI run of
-`59b2316`'s push (on `b7da110`), the handoff's GATE-TBD markers, `plan.md`'s outcome and risks 10, 12,
-18 and 25, the cold read, status, the owner.
+Status step 23, the gate's fourth round on `b561b7c`: a rested `dotnet test`, then, after telling
+the owner, the real-window pass; the picture list at once, compared with the first round's
+(`D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`): every picture whose bytes
+changed against it inspected in full (the fixes' w1e, w8d, w8f, w8g, w8h, s16b, s18a, l30c and their
+real-window twins, and whatever varies by nature); then commit the list, complete the report (Run,
+results, Found by the gate, Other platforms from `other-platforms.md`), and closing steps 24 to 30.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -393,6 +391,16 @@ every commit.
   the report (merged in `d0635ec`), and rendering accepted by nature. The passes run again on
   `59b2316`; the first run's list is kept as
   `D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`.
+- The gate's second round, on `59b2316` (code; `bcbdb3f`): `dotnet test` 5,037 of 5,037 in 44 min
+  34 s; the real-window pass 66 of 67 in 27 min 15 s: S14 found Windows' Open dialog by its title
+  before its Open button existed, so the harness waits for a dialog's controls (`639db4a`). CI run
+  40044430603 on `b7da110` (the code of `59b2316`): all five jobs green. The third round, on
+  `639db4a`: `dotnet test` 5,037 of 5,037 in 53 min 13 s; the real-window pass 66 of 67 in 28 min
+  5 s, S14 again, 30 s waiting for the Open button: the dialog opens again in the system folder,
+  where the first pass chose notepad.exe, and a search for the button walks its whole file list
+  first; Enter in the file name box confirms the path now (`b561b7c`; S14 alone passed in 28 s).
+  CI run 40051904024 on `639db4a`: all five jobs green. The second round's pictures are kept in
+  `D:/Projects/Personal/gate6-inspection/run2-artifacts/` (74 changed against the first round's).
 - 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
   worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
   files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
