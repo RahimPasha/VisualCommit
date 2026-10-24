@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-22
+Last updated: 2026-10-24
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -196,12 +196,17 @@ Closing:
 - [x] 22. An independent review of the code before the gate; what it finds fixed, with tests.
   (Its findings fixed by four Opus fixers, each merged with its notes in the design and the report:
   C `15b00c8`, B `1dfdd6d`, A `d6a634d`, D `da54d8b`.)
-- [ ] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
-  inspected, report completed.
-- [ ] 24. CI run of the gate's commit read, every job.
-- [ ] 25. `architecture.md` describes what is built.
-- [ ] 26. `plan.md`: anything not delivered moved, risks updated.
-- [ ] 27. Handoff `docs/handoffs/phase-6.md`.
+- [x] 23. Visual test gate: `dotnet test` and the real-window pass on one commit, every picture
+  inspected, report completed. (Passed on `b561b7c`, its fourth round: `dotnet test` 5,037 of 5,037
+  in 56 min 25 s, the real-window pass 67 of 67 in 27 min 39 s, Q1 1,805 ms; the 1,329 files of the
+  first round, on `774464d`, judged by thirteen Opus inspectors, and the 66 that changed since in
+  full by two more; what it found, and the fixes, in the report's "Found by the gate".)
+- [x] 24. CI run of the gate's commit read, every job. (Run 40059391404 on `b561b7c`: all five jobs
+  green, one container on its second attempt.)
+- [x] 25. `architecture.md` describes what is built. (`174ec4e`, with the review's and the gate's
+  changes after it.)
+- [x] 26. `plan.md`: anything not delivered moved, risks updated. (`290353b`, `e78d2e5`.)
+- [x] 27. Handoff `docs/handoffs/phase-6.md`.
 - [ ] 28. Cold-read check by a fresh agent; gaps fixed.
 - [ ] 29. `status.md`: links, CI, gate commit, waiting on the owner, state.
 - [ ] 30. Owner told what passed, what did not, and what needs a decision.
@@ -210,6 +215,23 @@ Closing:
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+The run for phase 6's gate commit `b561b7c` is
+[40059391404](https://github.com/RahimPasha/VisualCommit/actions/runs/40059391404): all five jobs
+succeeded, Windows with 5,037 tests and the others with 5,034 (three tests are Windows' own):
+`windows-latest` (26 min 47 s; its Test step 24 min 37 s of 55, and its step "Build the real-window
+pass" green), `macos-latest` (25 min 22 s; Test step 23 min 33 s), `ubuntu-latest` (5 min 50 s; Test
+step 4 min 21 s) and the two "bare ubuntu container" jobs (7 min 16 s and 7 min 45 s; Test steps 4 min
+56 s and 5 min 50 s). The container with the SDK from Ubuntu's packages passed on its second attempt:
+its first failed `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel`
+(a hit test before the window's first frame on the slow container; for phase 7), as phase 4's flaky
+test did on `master`. The commits after it change docs only, which start no run. The gate's earlier
+rounds had runs 40027897278 (`774464d`), 40044430603 (`b7da110`) and 40051904024 (`639db4a`), all five
+jobs green; macOS's Test step reached 43 min 12 s in run 40019921605 on `a937ca6`, near D232's 44.
+CI's Test step on Windows, macOS and Linux has a limit of 55 minutes and each of their jobs 65
+(D232); the containers keep 14 and 25. The owner looks again at CI's duration when the project is
+over (D134). The runs of the phase before the gate, and what each found, are in "Notes for whoever
+resumes".
 
 The run for phase 5's merge on `master` is
 [39078809291](https://github.com/RahimPasha/VisualCommit/actions/runs/39078809291), for `7bcb5c0`
@@ -305,12 +327,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Status step 23, the gate's fourth round on `b561b7c`: a rested `dotnet test`, then, after telling
-the owner, the real-window pass; the picture list at once, compared with the first round's
-(`D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`): every picture whose bytes
-changed against it inspected in full (the fixes' w1e, w8d, w8f, w8g, w8h, s16b, s18a, l30c and their
-real-window twins, and whatever varies by nature); then commit the list, complete the report (Run,
-results, Found by the gate, Other platforms from `other-platforms.md`), and closing steps 24 to 30.
+Closing step 28, the cold-read check: a fresh agent given only the repo, told that phase 6 has been
+accepted and merged, says how to build, run and test the app and how it would begin phase 7; fix
+every gap it hits in the docs and commit. Then closing step 29 (this file: the phase "Awaiting
+acceptance" with gate commit `b561b7c`, the links, the CI, what waits on the owner) and step 30 (tell
+the owner). The gate passed on `b561b7c`; nothing but docs may change after it.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
