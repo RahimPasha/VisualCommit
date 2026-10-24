@@ -305,12 +305,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Status step 23, the gate: both passes passed on `774464d` (Notes). Next: the inspectors' verdicts
-(`D:/Projects/Personal/gate6-inspection/verdicts/`); fix what they find (a fix to anything but docs
-means both passes again, and only pictures whose bytes changed against the list need inspecting
-again); then commit the picture list, complete the report (Run, results, Found by the gate, Other
-platforms with CI's pictures), and go on with closing steps 24 to 30: CI of the gate commit
-(run 40027897278 on `774464d`), the handoff's GATE-TBD markers, `plan.md`'s outcome and risks 10, 12,
+Status step 23, the gate's second round on `59b2316` (Notes): a rested `dotnet test`, then, after
+telling the owner, the real-window pass; the picture list written at once and compared with the first
+run's (`D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`): every picture whose
+bytes changed inspected (the fixes' w1e, w8d, w8f, w8g, w8h, s16b, s18a, l30c and their real-window
+twins, and whatever else changed); then commit the list, complete the report (Run, results, Found by
+the gate, Other platforms from `other-platforms.md`), and closing steps 24 to 30: the CI run of
+`59b2316`'s push (on `b7da110`), the handoff's GATE-TBD markers, `plan.md`'s outcome and risks 10, 12,
 18 and 25, the cold read, status, the owner.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
@@ -382,6 +383,16 @@ every commit.
   with 17.7's references (`D:/Projects/Personal/gate6-inspection/compare/`): 1,080 earlier files
   changed (630 in the toolbar alone), 249 new. Thirteen Opus inspectors judge every picture
   (verdicts in `D:/Projects/Personal/gate6-inspection/verdicts/`).
+- The inspection of the passes on `774464d`: all 1,329 files judged by thirteen Opus inspectors, and
+  48 of CI's pictures by a fourteenth (`other-platforms.md`); the lead's rulings in
+  `D:/Projects/Personal/gate6-inspection/findings-log.md`. Three app defects, fixed with tests: after
+  a refused Save the wrong box's text drawn selected (s16b, s18a; `d8fd9fb`); a disabled ticked box
+  drawn like an enabled one (w1e, l30c; `d8fd9fb`); dashboard rows drawn hovered after tabs opened
+  from the dashboard (w8d, w8f, w8g, w8h: Avalonia 12.1.3 recycles a list's container with its
+  `IsPointerOver`; `59b2316`). The rest were the lists of changed earlier pictures and a few texts of
+  the report (merged in `d0635ec`), and rendering accepted by nature. The passes run again on
+  `59b2316`; the first run's list is kept as
+  `D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`.
 - 17.7's references, made on 2026-10-23: phases 0 to 5's walk-throughs on `master` (`acdac12`) in a
   worktree of their own (`dotnet test`, 2,295 of 2,295 in 58 min 16 s), copied with the 306 real-window
   files to `D:/Projects/Personal/gate6-reference/` (1,080 pictures, `scripted-pictures.sha256`); 752 of
